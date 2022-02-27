@@ -600,7 +600,7 @@ LocalWindowProxy::LocalWindowProxy(v8::Isolate* isolate,
     : WindowProxy(isolate, frame, std::move(world)) {
   // Eagerly initialize the first window proxy when recording/replaying so that
   // this happens as early as possible and at a predictable point.
-  if (!gRecordReplayStateInitialized) {
+  if (recordreplay::IsRecordingOrReplaying() && !gRecordReplayStateInitialized) {
     Initialize();
   }
 }
