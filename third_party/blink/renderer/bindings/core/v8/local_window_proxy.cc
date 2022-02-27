@@ -594,14 +594,23 @@ void LocalWindowProxy::SetAbortScriptExecution(
   script_state_->GetContext()->SetAbortScriptExecution(callback);
 }
 
+// We keep track of the most recently created local window proxy
+// for ensuring that record/replay state is initialized when
+// the first paint is triggered. FIXME clean up reference.
+static LocalWindowProxy* gLatestLocalWindowProxy;
+
 LocalWindowProxy::LocalWindowProxy(v8::Isolate* isolate,
                                    LocalFrame& frame,
                                    scoped_refptr<DOMWrapperWorld> world)
     : WindowProxy(isolate, frame, std::move(world)) {
-  // Eagerly initialize the first window proxy when recording/replaying so that
-  // this happens as early as possible and at a predictable point.
+  gLatestLocalWindowProxy = this;
+}
+
+void RecordReplayStateEnsureInitialized() {
   if (recordreplay::IsRecordingOrReplaying() && !gRecordReplayStateInitialized) {
-    Initialize();
+    CHECK(gLatestLocalWindowProxy);
+    gLatestLocalWindowProxy->InitializeIfNeeded();
+    CHECK(gRecordReplayStateInitialized);
   }
 }
 
