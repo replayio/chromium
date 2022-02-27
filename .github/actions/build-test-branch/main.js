@@ -75,7 +75,7 @@ function platformTasks(platform) {
     [buildTask]
   );
 
-  return [buildTask, testTask];
+  return [buildTask, testStaticTask, testPlaywrightTask];
 }
 
 function getBranchName(refName) {
