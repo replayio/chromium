@@ -108,19 +108,13 @@ struct CompareMemberByPointerId {
 
 // For taking ordered locks when events might be disallowed. Passes through
 // events during the acquire to avoid generating a warning.
-class AutoLockMaybeEventsDisallowed {
+class SCOPED_LOCKABLE AutoLockMaybeEventsDisallowed {
  public:
-  AutoLockMaybeEventsDisallowed(base::Lock& lock) {
-    if (AreEventsDisallowed()) {
-      AutoPassThroughEvents pt;
-      auto_lock.emplace(lock);
-    } else {
-      auto_lock.emplace(lock);
-    }
-  }
+  AutoLockMaybeEventsDisallowed(base::Lock& lock) EXCLUSIVE_LOCK_FUNCTION(lock);
+  ~AutoLockMaybeEventsDisallowed() UNLOCK_FUNCTION();
 
  private:
-  base::Optional<base::AutoLock> auto_lock;
+  base::Lock& lock_;
 };
 
 } // namespace recordreplay
