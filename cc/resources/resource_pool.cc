@@ -266,6 +266,11 @@ ResourcePool::TryAcquireResourceForPartialRaster(
                                                          resource->format());
     *total_invalidated_rect = resource->invalidated_rect();
 
+    // https://linear.app/replay/issue/RUN-464
+    recordreplay::Assert("ResourcePool::TryAcquireResourceForPartialRaster #5 %d %d %d %d",
+                         total_invalidated_rect->x(), total_invalidated_rect->y(),
+                         total_invalidated_rect->width(), total_invalidated_rect->height());
+
     // Clear the invalidated rect and content ID on the resource being retunred.
     // These will be updated when raster completes successfully.
     resource->set_invalidated_rect(gfx::Rect());
