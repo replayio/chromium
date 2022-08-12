@@ -2885,7 +2885,7 @@ void Node::DispatchScopedEvent(Event& event) {
 DispatchEventResult Node::DispatchEventInternal(Event& event) {
   // https://linear.app/replay/issue/RUN-466
   recordreplay::Assert("Node::DispatchEventInternal %lu",
-                       recordreplay::PointerId(&dispatcher.GetNode()));
+                       recordreplay::PointerId(this));
 
   return EventDispatcher::DispatchEvent(*this, event);
 }
