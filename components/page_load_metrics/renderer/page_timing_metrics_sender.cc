@@ -360,8 +360,8 @@ void PageTimingMetricsSender::SendNow() {
     new_features_->css_properties.size(),
     new_features_->animated_css_properties.size(),
     resources.size(),
-    render_data_->new_layout_shifts.size(),
-    render_data_->input_timestamps.size()
+    render_data_.new_layout_shifts.size(),
+    render_data_.input_timestamps.size()
   );
 
   sender_->SendTiming(last_timing_, metadata_, std::move(new_features_),
