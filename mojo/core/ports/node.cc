@@ -256,24 +256,20 @@ int Node::GetUserData(const PortRef& port_ref,
 }
 
 int Node::ClosePort(const PortRef& port_ref) {
+  // The set of pors on a node should be the same when recording vs. replaying,
+  // so we refuse to close ports when events are disallowed and the calling
+  // code runs at non-deterministic points. This will cause ports to leak.
+  if (recordreplay::AreEventsDisallowed()) {
+    return OK;
+  }
+
   std::vector<std::unique_ptr<UserMessageEvent>> undelivered_messages;
   NodeName peer_node_name;
   PortName peer_port_name;
   uint64_t last_sequence_num = 0;
   bool was_initialized = false;
   {
-    // Avoid warnings when closing ports when events are disallowed by
-    // passing through events in this case.
-    // See also AutoLockMaybeEventsDisallowed.
-    if (recordreplay::AreEventsDisallowed()) {
-      recordreplay::BeginPassThroughEvents();
-    }
-
     SinglePortLocker locker(&port_ref);
-
-    if (recordreplay::AreEventsDisallowed()) {
-      recordreplay::EndPassThroughEvents();
-    }
 
     auto* port = locker.port();
     switch (port->state) {
@@ -785,19 +781,19 @@ int Node::OnObserveProxyAck(std::unique_ptr<ObserveProxyAckEvent> event) {
 }
 
 int Node::OnObserveClosure(std::unique_ptr<ObserveClosureEvent> event) {
-  // https://github.com/RecordReplay/backend/issues/3976
+  // https://linear.app/replay/issue/RUN-549
   recordreplay::Assert("Node::OnObserveClosure Start %lu %lu",
                        event->port_name().v1, event->port_name().v2);
 
   // OK if the port doesn't exist, as it may have been closed already.
   PortRef port_ref;
   if (GetPort(event->port_name(), &port_ref) != OK) {
-    // https://github.com/RecordReplay/backend/issues/3976
+    // https://linear.app/replay/issue/RUN-549
     recordreplay::Assert("Node::OnObserveClosure #1");
     return OK;
   }
 
-  // https://github.com/RecordReplay/backend/issues/3976
+  // https://linear.app/replay/issue/RUN-549
   recordreplay::Assert("Node::OnObserveClosure #2");
 
   // This message tells the port that it should no longer expect more messages
@@ -1019,6 +1015,10 @@ int Node::OnUserMessageReadAck(std::unique_ptr<UserMessageReadAckEvent> event) {
 }
 
 int Node::AddPortWithName(const PortName& port_name, scoped_refptr<Port> port) {
+  // https://linear.app/replay/issue/RUN-549
+  recordreplay::Assert("Node::AddPortWithName %lu %lu %lu %lu",
+                       name_.v1, name_.v2, port_name.v1, port_name.v2);
+
   PortLocker::AssertNoPortsLockedOnCurrentThread();
   base::AutoLock lock(ports_lock_);
   if (port->peer_port_name != kInvalidPortName) {
@@ -1033,6 +1033,10 @@ int Node::AddPortWithName(const PortName& port_name, scoped_refptr<Port> port) {
 }
 
 void Node::ErasePort(const PortName& port_name) {
+  // https://linear.app/replay/issue/RUN-549
+  recordreplay::Assert("Node::ErasePort %lu %lu %lu %lu",
+                       name_.v1, name_.v2, port_name.v1, port_name.v2);
+
   PortLocker::AssertNoPortsLockedOnCurrentThread();
   scoped_refptr<Port> port;
   {
