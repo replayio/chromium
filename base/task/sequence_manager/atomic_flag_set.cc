@@ -17,7 +17,8 @@ namespace internal {
 
 AtomicFlagSet::AtomicFlagSet(
     scoped_refptr<AssociatedThreadId> associated_thread)
-    : associated_thread_(std::move(associated_thread)) {}
+    : associated_thread_(std::move(associated_thread)),
+      ordered_lock_id_(recordreplay::CreateOrderedLock("AtomicFlagSet::Group")) {}
 
 AtomicFlagSet::~AtomicFlagSet() {
   DCHECK(!alloc_list_head_);
@@ -43,7 +44,12 @@ AtomicFlagSet::AtomicFlag::AtomicFlag(AtomicFlag&& other)
 
 void AtomicFlagSet::AtomicFlag::SetActive(bool active) {
   DCHECK(group_);
-  recordreplay::AutoOrderedLock lock(group_->ordered_lock_id_);
+  recordreplay::AutoOrderedLock lock(outer_->ordered_lock_id_);
+
+  // https://linear.app/replay/issue/RUN-568
+  recordreplay::Assert("AtomicFlagSet::AtomicFlag::SetActive %d %d %d",
+                       outer_->ordered_lock_id_, flag_bit_, active);
+
   if (active) {
     // Release semantics are required to ensure that all memory accesses made on
     // this thread happen-before any others done on the thread running the
@@ -60,6 +66,10 @@ void AtomicFlagSet::AtomicFlag::SetActive(bool active) {
 void AtomicFlagSet::AtomicFlag::ReleaseAtomicFlag() {
   if (!group_)
     return;
+
+  // https://linear.app/replay/issue/RUN-568
+  recordreplay::Assert("AtomicFlagSet::AtomicFlag::ReleaseAtomicFlag %d %d",
+                       outer_->ordered_lock_id_, flag_bit_);
 
   DCHECK_CALLED_ON_VALID_THREAD(outer_->associated_thread_->thread_checker);
   SetActive(false);
@@ -104,13 +114,19 @@ AtomicFlagSet::AtomicFlag AtomicFlagSet::AddFlag(RepeatingClosure callback) {
   if (group->IsFull())
     RemoveFromPartiallyFreeList(group);
 
+  // https://linear.app/replay/issue/RUN-568
+  recordreplay::Assert("AtomicFlagSet::AddFlag %d %d",
+                       ordered_lock_id_, flag_bit);
+
   return AtomicFlag(this, group, flag_bit);
 }
 
 void AtomicFlagSet::RunActiveCallbacks() const {
   DCHECK_CALLED_ON_VALID_THREAD(associated_thread_->thread_checker);
 
-  recordreplay::Assert("AtomicFlagSet::RunActiveCallbacks Start");
+  // https://linear.app/replay/issue/RUN-568
+  recordreplay::Assert("AtomicFlagSet::RunActiveCallbacks Start %d",
+                       ordered_lock_id_);
 
   for (Group* iter = alloc_list_head_.get(); iter; iter = iter->next.get()) {
     // Acquire semantics are required to guarantee that all memory side-effects
@@ -118,11 +134,12 @@ void AtomicFlagSet::RunActiveCallbacks() const {
     // synchronized with this thread before it returns from this method.
     size_t active_flags;
     {
-      recordreplay::AutoOrderedLock lock(iter->ordered_lock_id_);
+      recordreplay::AutoOrderedLock lock(ordered_lock_id_);
       active_flags = std::atomic_exchange_explicit(
         &iter->flags, size_t{0}, std::memory_order_acquire);
     }
 
+    // https://linear.app/replay/issue/RUN-568
     recordreplay::Assert("AtomicFlagSet::RunActiveCallbacks #1 %lu", active_flags);
 
     // This is O(number of bits set).
@@ -133,12 +150,12 @@ void AtomicFlagSet::RunActiveCallbacks() const {
       iter->flag_callbacks[index].Run();
     }
 
+    // https://linear.app/replay/issue/RUN-568
     recordreplay::Assert("AtomicFlagSet::RunActiveCallbacks #2");
   }
 }
 
-AtomicFlagSet::Group::Group()
-  : ordered_lock_id_(recordreplay::CreateOrderedLock("AtomicFlagSet::Group")) {}
+AtomicFlagSet::Group::Group() {}
 
 AtomicFlagSet::Group::~Group() {
   DCHECK_EQ(allocated_flags, 0u);
