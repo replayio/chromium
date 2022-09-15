@@ -78,6 +78,7 @@
 #include "content/public/renderer/content_renderer_client.h"
 #include "content/public/renderer/render_thread_observer.h"
 #include "content/public/renderer/render_view_visitor.h"
+#include "content/public/renderer/v8_value_converter.h"
 #include "content/renderer/agent_scheduling_group.h"
 #include "content/renderer/browser_exposed_renderer_interfaces.h"
 #include "content/renderer/categorized_worker_pool.h"
@@ -147,6 +148,7 @@
 #include "third_party/blink/public/web/web_security_policy.h"
 #include "third_party/blink/public/web/web_view.h"
 #include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
+#include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
 #include "third_party/boringssl/src/include/openssl/evp.h"
 #include "third_party/skia/include/core/SkGraphics.h"
 #include "ui/base/layout.h"
@@ -533,6 +535,7 @@ RenderThreadImpl::RenderThreadImpl(
       main_thread_scheduler_(std::move(scheduler)),
       categorized_worker_pool_(new CategorizedWorkerPool()),
       client_id_(client_id) {
+  fprintf(stderr, "KVKV RenderThreadImpl::RenderThreadImpl - pid=%d\n", (int) getpid());
   TRACE_EVENT0("startup", "RenderThreadImpl::Create");
   Init();
 }
@@ -1429,7 +1432,21 @@ void RenderThreadImpl::RecordReplayBrowserEvent(
     fprintf(stderr, "RecordReplayBrowserEvent not a dictionary\n");
     return;
   }
-  blink::RecordReplayDispatchBrowserEvent(name, dict);
+  fprintf(stderr, "KVKV RenderThreadImpl::RecordReplayBrowserEvent: pid=%d\n", (int)getpid());
+
+  v8::Isolate* isolate = v8::Isolate::GetCurrent();
+  if (!isolate->InContext() || blink::ScriptForbiddenScope::IsScriptForbidden()) {
+    // We're never interested in browser events sent at these times.
+    return;
+  }
+  v8::HandleScope scope(isolate);
+
+  // Convert params to v8 json object
+  v8::Local<v8::Context> context = isolate->GetCurrentContext();
+  std::unique_ptr<content::V8ValueConverter> converter =
+      content::V8ValueConverter::Create();
+  v8::Local<v8::Value> jsValue = converter->ToV8Value(&value, context);
+  blink::RecordReplayDispatchBrowserEvent(name, jsValue);
 }
 
 bool RenderThreadImpl::GetRendererMemoryMetrics(

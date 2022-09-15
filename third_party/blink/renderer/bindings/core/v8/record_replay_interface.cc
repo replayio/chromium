@@ -6,7 +6,6 @@
 
 #include "base/record_replay.h"
 #include "content/public/renderer/render_thread.h"
-#include "content/public/renderer/v8_value_converter.h"
 #include "third_party/blink/renderer/core/dom/node.h"
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
@@ -1077,8 +1076,10 @@ void RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector) {
 }
 
 void RecordReplayDispatchBrowserEvent(
-  const std::string& name, base::DictionaryValue* info) {
+  const std::string& name, v8::Local<v8::Value> info) {
   CHECK(v8::IsMainThread());
+
+  fprintf(stderr, "KVKV RecordReplayDispatchBrowserEvent - pid=%d\n", (int) getpid());
 
   v8::Isolate* isolate = v8::Isolate::GetCurrent();
   if (!isolate->InContext() || ScriptForbiddenScope::IsScriptForbidden()) {
@@ -1086,7 +1087,7 @@ void RecordReplayDispatchBrowserEvent(
     return;
   }
 
-  // Convert name to v8 string
+  // Set up arguments
   v8::HandleScope scope(isolate);
   v8::Local<v8::Value> args[2];
   args[0] = v8::String::NewFromUtf8(
@@ -1095,13 +1096,9 @@ void RecordReplayDispatchBrowserEvent(
       v8::NewStringType::kNormal,
       name.length()
   ).ToLocalChecked();
+  args[1] = info;
 
-  // Convert params to v8 json object
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
-  std::unique_ptr<content::V8ValueConverter> converter =
-      content::V8ValueConverter::Create();
-  args[1] = converter->ToV8Value(info, context);
-
   v8::Local<v8::Function> callback = gBrowserEventsCallback->Get(isolate);
   v8::MaybeLocal<v8::Value> rv = callback->Call(context, v8::Undefined(isolate), 2, args);
   CHECK(!rv.IsEmpty());
@@ -1225,6 +1222,7 @@ static int GetAPIObjectIdCallback(v8::Local<v8::Object> object) {
 extern "C" void V8RecordReplaySetAPIObjectIdCallback(int (*callback)(v8::Local<v8::Object>));
 
 void SetupRecordReplayCommands(v8::Isolate* isolate) {
+  fprintf(stderr, "KVKV SetupRecordReplayCommands - pid=%d\n", (int) getpid());
   V8RecordReplaySetAPIObjectIdCallback(GetAPIObjectIdCallback);
 
   v8::Local<v8::Context> context = isolate->GetCurrentContext();

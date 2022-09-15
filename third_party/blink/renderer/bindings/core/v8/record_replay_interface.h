@@ -22,7 +22,7 @@ void RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector);
 
 // Notify record/replay about a browser event.
 void RecordReplayDispatchBrowserEvent(
-  const std::string& name, base::DictionaryValue* info);
+  const std::string& name, v8::Local<v8::Value> info);
 
 } // namespace blink
 

@@ -1865,6 +1865,7 @@ std::unique_ptr<protocol::Network::TrustTokenParams> BuildTrustTokenParams(
 void NetworkHandler::NavigationRequestWillBeSent(
     const NavigationRequest& nav_request,
     base::TimeTicks timestamp) {
+  fprintf(stderr, "KVKV NetworkHandler NavigationRequestWillBeSent\n");
   if (!enabled_)
     return;
 
@@ -1941,6 +1942,8 @@ void NetworkHandler::NavigationRequestWillBeSent(
         BuildTrustTokenParams(*begin_params->trust_token_params));
   }
 
+  fprintf(stderr, "KVKV NetworkHandler NavigationRequestWillBeSent"
+    " calling frontend::RequestWillBeSent id=%s\n", id.c_str());
   frontend_->RequestWillBeSent(
       id, id, url_without_fragment, std::move(request), current_ticks,
       current_wall_time, std::move(initiator), std::move(redirect_response),
@@ -1956,6 +1959,8 @@ void NetworkHandler::RequestSent(
     const base::Optional<GURL>& initiator_url,
     const std::string& initiator_devtools_request_id,
     base::TimeTicks timestamp) {
+  fprintf(stderr, "KVKV NetworkHandler RequestSent - request_id=%s loader_id=%s\n",
+    request_id.c_str(), loader_id.c_str());
   if (!enabled_)
     return;
   std::unique_ptr<DictionaryValue> headers_dict(DictionaryValue::create());
@@ -1984,6 +1989,9 @@ void NetworkHandler::RequestSent(
     request_object->SetTrustTokenParams(
         BuildTrustTokenParams(request.trust_token_params.value()));
   }
+  fprintf(stderr, "KVKV NetworkHandler RequestSent"
+    " calling frontend::RequestWillBeSent request_id=%s loader_id=%s\n",
+    request_id.c_str(), loader_id.c_str());
   frontend_->RequestWillBeSent(
       request_id, loader_id, url_without_fragment, std::move(request_object),
       timestamp.since_origin().InSecondsF(), base::Time::Now().ToDoubleT(),

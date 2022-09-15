@@ -621,6 +621,7 @@ bool WillCreateURLLoaderFactory(
 
 void OnNavigationRequestWillBeSent(
     const NavigationRequest& navigation_request) {
+  fprintf(stderr, "KVKV OnNavigationRequestWillBeSent\n");
   // Note this intentionally deviates from the usual instrumentation signal
   // logic and dispatches to all agents upwards from the frame, to make sure
   // the security checks are properly applied even if no DevTools session is

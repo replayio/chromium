@@ -32,10 +32,13 @@
 
 #include <memory>
 #include <utility>
+#include <dlfcn.h>
 
 #include "base/containers/span.h"
 #include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
+#include "content/renderer/render_thread_impl.h"
+//#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "net/base/ip_address.h"
 #include "net/base/ip_endpoint.h"
@@ -1058,6 +1061,18 @@ void InspectorNetworkAgent::WillSendRequestInternal(
     const ResourceResponse& redirect_response,
     const FetchInitiatorInfo& initiator_info,
     InspectorPageAgent::ResourceType type) {
+
+  fprintf(stderr, "KVKV InspectorNetworkAgent::WillSendRequestInternal: pid=%d\n", (int)getpid());
+  /*
+  {
+    // void* sym = dlsym(RTLD_DEFAULT, "ReplayDispatchBrowserEvent");
+    content::RenderThreadImpl* render_thread = content::RenderThreadImpl::current();
+    fprintf(stderr,
+      "KVKV InspectorNetworkAgent::WillSendRequestInternal - rt: %p\n", render_thread);
+  }
+  */
+  // blink::RecordReplayDispatchBrowserEvent(name, dict);
+
   String loader_id = IdentifiersFactory::LoaderId(loader);
   String request_id =
       IdentifiersFactory::RequestId(loader, request.InspectorId());
