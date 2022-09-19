@@ -257,7 +257,7 @@ MultiBufferBlockId MultiBuffer::FindNextUnavailable(const BlockId& pos) const {
 void MultiBuffer::NotifyAvailableRange(
     const Interval<MultiBufferBlockId>& observer_range,
     const Interval<MultiBufferBlockId>& new_range) {
-  std::set<Reader*> tmp;
+  std::set<Reader*, recordreplay::CompareByPointerId> tmp;
   for (auto i = readers_.lower_bound(observer_range.begin);
        i != readers_.end() && i->first < observer_range.end; ++i) {
     tmp.insert(i->second.begin(), i->second.end());
