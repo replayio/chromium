@@ -33,7 +33,7 @@ void PendingInvalidations::ScheduleInvalidationSetsForNode(
     for (auto& invalidation_set : invalidation_lists.descendants) {
       // https://linear.app/replay/issue/RUN-556
       recordreplay::Assert("PendingInvalidations::ScheduleInvalidationSetsForNode #4 %d",
-                           recordreplay::PointerId((void*)invalidation_set));
+                           recordreplay::PointerId(invalidation_set.get()));
 
       if (invalidation_set->WholeSubtreeInvalid()) {
         auto* shadow_root = DynamicTo<ShadowRoot>(node);
