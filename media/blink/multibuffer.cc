@@ -9,6 +9,7 @@
 #include "base/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/record_replay.h"
 
 namespace media {
 
@@ -46,6 +47,15 @@ static MultiBuffer::BlockId ClosestNextEntry(
   }
   DCHECK_GE(i->first, pos);
   return i->first;
+}
+
+MultiBuffer::Reader::Reader() {
+  // Registration is needed for sorting in NotifyAvailableRange.
+  recordreplay::RegisterPointer(this);
+}
+
+MultiBuffer::Reader::~Reader() {
+  recordreplay::UnregisterPointer(this);
 }
 
 //
