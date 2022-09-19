@@ -122,8 +122,8 @@ class SCOPED_LOCKABLE AutoLockMaybeEventsDisallowed {
 // events during the acquire to avoid generating a warning.
 class SCOPED_LOCKABLE AutoUnlockMaybeEventsDisallowed {
  public:
-  AutoUnlockMaybeEventsDisallowed(base::Lock& lock) UNLOCK_FUNCTION();
-  ~AutoUnlockMaybeEventsDisallowed() EXCLUSIVE_LOCK_FUNCTION();
+  AutoUnlockMaybeEventsDisallowed(base::Lock& lock);
+  ~AutoUnlockMaybeEventsDisallowed();
 
  private:
   base::Lock& lock_;
