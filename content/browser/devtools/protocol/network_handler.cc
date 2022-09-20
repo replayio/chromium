@@ -2645,8 +2645,8 @@ void NetworkHandler::OnRequestWillBeSentExtraInfo(
     const net::CookieAccessResultList& request_cookie_list,
     const std::vector<network::mojom::HttpRawHeaderPairPtr>& request_headers,
     const network::mojom::ClientSecurityStatePtr& security_state) {
-  fprintf(stderr, "KVKV-NetworkHandler(enabled=%s, host=%s)::OnRequestWillBeSentExtraInfo\n", enabled_ ? "true" : "false",
-    host_id_.c_str());
+  fprintf(stderr, "KVKV-NetworkHandler(enabled=%s, host=%s)::OnRequestWillBeSentExtraInfo devtools_request_id=%s\n", enabled_ ? "true" : "false",
+    host_id_.c_str(), devtools_request_id.c_str());
   if (!enabled_)
     return;
 
@@ -2662,8 +2662,8 @@ void NetworkHandler::OnResponseReceivedExtraInfo(
     const std::vector<network::mojom::HttpRawHeaderPairPtr>& response_headers,
     const base::Optional<std::string>& response_headers_text,
     network::mojom::IPAddressSpace resource_address_space) {
-  fprintf(stderr, "KVKV-NetworkHandler(enabled=%s, host=%s)::OnResponseReceivedExtraInfo\n", enabled_ ? "true" : "false",
-    host_id_.c_str());
+  fprintf(stderr, "KVKV-NetworkHandler(enabled=%s, host=%s)::OnResponseReceivedExtraInfo devtools_request_id=%s\n", enabled_ ? "true" : "false",
+    host_id_.c_str(), devtools_request_id.c_str());
   if (!enabled_)
     return;
 
