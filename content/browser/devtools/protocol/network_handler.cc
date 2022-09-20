@@ -1000,6 +1000,8 @@ NetworkHandler::NetworkHandler(
       cache_disabled_(false),
       update_loader_factories_callback_(
           std::move(update_loader_factories_callback)) {
+  fprintf(stderr, "KVKV-NetworkHandler(enabled=%s, host=%s)::NetworkHandler domain_name=%s\n", enabled_ ? "true" : "false", host_id.c_str(), Network::Metainfo::domainName);
+
   DCHECK(io_context_);
   static bool have_configured_service_worker_context = false;
   if (have_configured_service_worker_context)
@@ -1212,6 +1214,7 @@ void NetworkHandler::Wire(UberDispatcher* dispatcher) {
 
 void NetworkHandler::SetRenderer(int render_process_host_id,
                                  RenderFrameHostImpl* frame_host) {
+  fprintf(stderr, "KVKV-NetworkHandler::SetRenderer\n");
   RenderProcessHost* process_host =
       RenderProcessHost::FromID(render_process_host_id);
   if (process_host) {
@@ -1229,11 +1232,13 @@ void NetworkHandler::SetRenderer(int render_process_host_id,
 Response NetworkHandler::Enable(Maybe<int> max_total_size,
                                 Maybe<int> max_resource_size,
                                 Maybe<int> max_post_data_size) {
+  fprintf(stderr, "KVKV-NetworkHandler(enabled=%s, host=%s)::Enable\n", enabled_ ? "true" : "false", host_id_.c_str());
   enabled_ = true;
   return Response::FallThrough();
 }
 
 Response NetworkHandler::Disable() {
+  fprintf(stderr, "KVKV-NetworkHandler(enabled=%s, host=%s)::Disable\n", enabled_ ? "true" : "false", host_id_.c_str());
   enabled_ = false;
   url_loader_interceptor_.reset();
   SetNetworkConditions(nullptr);
@@ -1243,6 +1248,7 @@ Response NetworkHandler::Disable() {
 }
 
 Response NetworkHandler::SetCacheDisabled(bool cache_disabled) {
+  fprintf(stderr, "KVKV-NetworkHandler(enabled=%s, host=%s)::SetCacheDisabled(%s)\n", enabled_ ? "true" : "false", host_id_.c_str(), cache_disabled ? "true" : "false");
   cache_disabled_ = cache_disabled;
   return Response::FallThrough();
 }
@@ -1290,6 +1296,7 @@ class DevtoolsClearCacheObserver
 
 void NetworkHandler::ClearBrowserCache(
     std::unique_ptr<ClearBrowserCacheCallback> callback) {
+  fprintf(stderr, "KVKV-NetworkHandler(enabled=%s, host=%s)::ClearBrowserCache\n", enabled_ ? "true" : "false", host_id_.c_str());
   if (!browser_context_) {
     callback->sendFailure(Response::InternalError());
     return;
@@ -1305,6 +1312,7 @@ void NetworkHandler::ClearBrowserCache(
 
 void NetworkHandler::ClearBrowserCookies(
     std::unique_ptr<ClearBrowserCookiesCallback> callback) {
+  fprintf(stderr, "KVKV-NetworkHandler(enabled=%s, host=%s)::ClearBrowserCookies\n", enabled_ ? "true" : "false", host_id_.c_str());
   if (!storage_partition_) {
     callback->sendFailure(Response::InternalError());
     return;
@@ -1865,7 +1873,7 @@ std::unique_ptr<protocol::Network::TrustTokenParams> BuildTrustTokenParams(
 void NetworkHandler::NavigationRequestWillBeSent(
     const NavigationRequest& nav_request,
     base::TimeTicks timestamp) {
-  fprintf(stderr, "KVKV NetworkHandler NavigationRequestWillBeSent\n");
+  fprintf(stderr, "KVKV-NetworkHandler(enabled=%s, host=%s)::NavigationRequestWillBeSent\n", enabled_ ? "true" : "false", host_id_.c_str());
   if (!enabled_)
     return;
 
@@ -1959,8 +1967,8 @@ void NetworkHandler::RequestSent(
     const base::Optional<GURL>& initiator_url,
     const std::string& initiator_devtools_request_id,
     base::TimeTicks timestamp) {
-  fprintf(stderr, "KVKV NetworkHandler RequestSent - request_id=%s loader_id=%s\n",
-    request_id.c_str(), loader_id.c_str());
+  fprintf(stderr, "KVKV-NetworkHandler(enabled=%s, host=%s)::RequestSent request_id=%s loader_id=%s\n", enabled_ ? "true" : "false",
+    host_id_.c_str(), request_id.c_str(), loader_id.c_str());
   if (!enabled_)
     return;
   std::unique_ptr<DictionaryValue> headers_dict(DictionaryValue::create());
@@ -2095,6 +2103,8 @@ void NetworkHandler::ResponseReceived(
     const char* resource_type,
     const network::mojom::URLResponseHead& head,
     Maybe<std::string> frame_id) {
+  fprintf(stderr, "KVKV-NetworkHandler(enabled=%s, host=%s)::ResponseReceived request_id=%s loader_id=%s\n", enabled_ ? "true" : "false",
+    host_id_.c_str(), request_id.c_str(), loader_id.c_str());
   if (!enabled_)
     return;
   std::unique_ptr<Network::Response> response(BuildResponse(url, head));
@@ -2109,6 +2119,8 @@ void NetworkHandler::LoadingComplete(
     const std::string& request_id,
     const char* resource_type,
     const network::URLLoaderCompletionStatus& status) {
+  fprintf(stderr, "KVKV-NetworkHandler(enabled=%s, host=%s)::LoadingComplete request_id=%s\n", enabled_ ? "true" : "false",
+    host_id_.c_str(), request_id.c_str());
   if (!enabled_)
     return;
 
@@ -2260,6 +2272,8 @@ void NetworkHandler::ContinueInterceptedRequest(
     Maybe<protocol::Network::Headers> opt_headers,
     Maybe<protocol::Network::AuthChallengeResponse> auth_challenge_response,
     std::unique_ptr<ContinueInterceptedRequestCallback> callback) {
+  fprintf(stderr, "KVKV-NetworkHandler(enabled=%s, host=%s)::ContinueInterceptedRequest interception_id=%s\n", enabled_ ? "true" : "false",
+    host_id_.c_str(), interception_id.c_str());
   scoped_refptr<net::HttpResponseHeaders> response_headers;
   scoped_refptr<base::RefCountedMemory> response_body;
   size_t body_offset = 0;
@@ -2416,6 +2430,7 @@ std::unique_ptr<Network::Request>
 NetworkHandler::CreateRequestFromResourceRequest(
     const network::ResourceRequest& request,
     const std::string& cookie_line) {
+  fprintf(stderr, "KVKV-NetworkHandler::CreateRequestFromResourceRequest\n");
   std::unique_ptr<DictionaryValue> headers_dict(DictionaryValue::create());
   for (net::HttpRequestHeaders::Iterator it(request.headers); it.GetNext();)
     headers_dict->setString(it.name(), it.value());
@@ -2485,6 +2500,8 @@ void NetworkHandler::ApplyOverrides(
 
 void NetworkHandler::RequestIntercepted(
     std::unique_ptr<InterceptedRequestInfo> info) {
+  fprintf(stderr, "KVKV-NetworkHandler(enabled=%s, host=%s)::RequestIntercepted\n", enabled_ ? "true" : "false",
+    host_id_.c_str());
   protocol::Maybe<protocol::Network::ErrorReason> error_reason;
   if (info->response_error_code < 0)
     error_reason = NetErrorToString(info->response_error_code);
@@ -2628,6 +2645,8 @@ void NetworkHandler::OnRequestWillBeSentExtraInfo(
     const net::CookieAccessResultList& request_cookie_list,
     const std::vector<network::mojom::HttpRawHeaderPairPtr>& request_headers,
     const network::mojom::ClientSecurityStatePtr& security_state) {
+  fprintf(stderr, "KVKV-NetworkHandler(enabled=%s, host=%s)::OnRequestWillBeSentExtraInfo\n", enabled_ ? "true" : "false",
+    host_id_.c_str());
   if (!enabled_)
     return;
 
@@ -2643,6 +2662,8 @@ void NetworkHandler::OnResponseReceivedExtraInfo(
     const std::vector<network::mojom::HttpRawHeaderPairPtr>& response_headers,
     const base::Optional<std::string>& response_headers_text,
     network::mojom::IPAddressSpace resource_address_space) {
+  fprintf(stderr, "KVKV-NetworkHandler(enabled=%s, host=%s)::OnResponseReceivedExtraInfo\n", enabled_ ? "true" : "false",
+    host_id_.c_str());
   if (!enabled_)
     return;
 
@@ -2660,6 +2681,8 @@ void NetworkHandler::OnLoadNetworkResourceFinished(
     bool success,
     int net_error,
     std::string content) {
+  fprintf(stderr, "KVKV-NetworkHandler(enabled=%s, host=%s)::OnLoadNetworkResourceFinished\n", enabled_ ? "true" : "false",
+    host_id_.c_str());
   auto it = loaders_.find(loader);
   CHECK(it != loaders_.end());
   auto callback = std::move(it->second);
@@ -2737,6 +2760,8 @@ void NetworkHandler::LoadNetworkResource(
     const String& url,
     std::unique_ptr<protocol::Network::LoadNetworkResourceOptions> options,
     std::unique_ptr<LoadNetworkResourceCallback> callback) {
+  fprintf(stderr, "KVKV-NetworkHandler(enabled=%s, host=%s)::LoadNetworkResource frame_id=%s url=%s\n", enabled_ ? "true" : "false",
+    host_id_.c_str(), frame_id.c_str(), url.c_str());
   GURL gurl(url);
   const bool is_gurl_valid = gurl.is_valid() && gurl.SchemeIsHTTPOrHTTPS();
   if (!is_gurl_valid) {

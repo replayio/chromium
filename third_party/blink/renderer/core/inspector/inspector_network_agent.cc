@@ -991,6 +991,7 @@ void InspectorNetworkAgent::Trace(Visitor* visitor) const {
 }
 
 void InspectorNetworkAgent::ShouldBlockRequest(const KURL& url, bool* result) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::ShouldBlockRequest\n", (int)getpid());
   if (blocked_urls_.IsEmpty())
     return;
 
@@ -1004,6 +1005,7 @@ void InspectorNetworkAgent::ShouldBlockRequest(const KURL& url, bool* result) {
 }
 
 void InspectorNetworkAgent::ShouldBypassServiceWorker(bool* result) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::ShouldBypassServiceWorker\n", (int)getpid());
   if (bypass_service_worker_.Get())
     *result = true;
 }
@@ -1015,6 +1017,7 @@ void InspectorNetworkAgent::DidBlockRequest(
     const FetchInitiatorInfo& initiator_info,
     ResourceRequestBlockedReason reason,
     ResourceType resource_type) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::DidBlockRequest\n", (int)getpid());
   InspectorPageAgent::ResourceType type =
       InspectorPageAgent::ToResourceType(resource_type);
 
@@ -1062,7 +1065,14 @@ void InspectorNetworkAgent::WillSendRequestInternal(
     const FetchInitiatorInfo& initiator_info,
     InspectorPageAgent::ResourceType type) {
 
-  fprintf(stderr, "KVKV InspectorNetworkAgent::WillSendRequestInternal: pid=%d\n", (int)getpid());
+  String loader_id = IdentifiersFactory::LoaderId(loader);
+  String request_id =
+      IdentifiersFactory::RequestId(loader, request.InspectorId());
+  NetworkResourcesData::ResourceData const* data =
+      resources_data_->Data(request_id);
+
+  fprintf(stderr, "KVKV-InspectorNetworkAgent::WillSendRequestInternal: pid=%d loader=%s request=%s\n",
+    (int)getpid(), loader_id.Utf8().c_str(), request_id.Utf8().c_str());
   /*
   {
     // void* sym = dlsym(RTLD_DEFAULT, "ReplayDispatchBrowserEvent");
@@ -1073,11 +1083,6 @@ void InspectorNetworkAgent::WillSendRequestInternal(
   */
   // blink::RecordReplayDispatchBrowserEvent(name, dict);
 
-  String loader_id = IdentifiersFactory::LoaderId(loader);
-  String request_id =
-      IdentifiersFactory::RequestId(loader, request.InspectorId());
-  NetworkResourcesData::ResourceData const* data =
-      resources_data_->Data(request_id);
   // Support for POST request redirect.
   scoped_refptr<EncodedFormData> post_data;
   if (data &&
@@ -1164,6 +1169,7 @@ void InspectorNetworkAgent::WillSendNavigationRequest(
     const KURL& url,
     const AtomicString& http_method,
     EncodedFormData* http_body) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::WillSendNavigationRequest id=%lu\n", (int)getpid(), identifier);
   String loader_id = IdentifiersFactory::LoaderId(loader);
   String request_id = loader_id;
   NetworkResourcesData::ResourceData const* data =
@@ -1204,6 +1210,7 @@ void InspectorNetworkAgent::PrepareRequest(DocumentLoader* loader,
                                            ResourceRequest& request,
                                            ResourceLoaderOptions& options,
                                            ResourceType resource_type) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::PrepareRequest\n", (int)getpid());
   // Ignore the request initiated internally.
   if (options.initiator_info.name == fetch_initiator_type_names::kInternal)
     return;
@@ -1278,6 +1285,7 @@ void InspectorNetworkAgent::WillSendRequest(
     const FetchInitiatorInfo& initiator_info,
     ResourceType resource_type,
     RenderBlockingBehavior render_blocking_behavior) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::WillSendRequest\n", (int)getpid());
   // Ignore the request initiated internally.
   if (initiator_info.name == fetch_initiator_type_names::kInternal)
     return;
@@ -1300,6 +1308,7 @@ void InspectorNetworkAgent::DidReceiveResourceResponse(
     DocumentLoader* loader,
     const ResourceResponse& response,
     const Resource* cached_resource) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::DidReceiveResourceResponse id=%lu\n", (int)getpid(), identifier);
   String request_id = IdentifiersFactory::RequestId(loader, identifier);
   bool is_not_modified = response.HttpStatusCode() == 304;
 
@@ -1373,6 +1382,7 @@ void InspectorNetworkAgent::DidReceiveData(uint64_t identifier,
                                            DocumentLoader* loader,
                                            const char* data,
                                            uint64_t data_length) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::DidReceiveData id=%lu\n", (int)getpid(), identifier);
   String request_id = IdentifiersFactory::RequestId(loader, identifier);
 
   if (data) {
@@ -1399,6 +1409,7 @@ void InspectorNetworkAgent::DidReceiveData(uint64_t identifier,
 void InspectorNetworkAgent::DidReceiveBlob(uint64_t identifier,
                                            DocumentLoader* loader,
                                            scoped_refptr<BlobDataHandle> blob) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::DidReceiveBlob id=%lu\n", (int)getpid(), identifier);
   String request_id = IdentifiersFactory::RequestId(loader, identifier);
   resources_data_->BlobReceived(request_id, std::move(blob));
 }
@@ -1407,6 +1418,7 @@ void InspectorNetworkAgent::DidReceiveEncodedDataLength(
     DocumentLoader* loader,
     uint64_t identifier,
     size_t encoded_data_length) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::DidReceiveEncodedDataLength id=%lu\n", (int)getpid(), identifier);
   String request_id = IdentifiersFactory::RequestId(loader, identifier);
   resources_data_->AddPendingEncodedDataLength(request_id, encoded_data_length);
 }
@@ -1418,6 +1430,7 @@ void InspectorNetworkAgent::DidFinishLoading(
     int64_t encoded_data_length,
     int64_t decoded_body_length,
     bool should_report_corb_blocking) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::DidFinishLoading id=%lu\n", (int)getpid(), identifier);
   String request_id = IdentifiersFactory::RequestId(loader, identifier);
   NetworkResourcesData::ResourceData const* resource_data =
       resources_data_->Data(request_id);
@@ -1457,6 +1470,7 @@ void InspectorNetworkAgent::DidReceiveCorsRedirectResponse(
     DocumentLoader* loader,
     const ResourceResponse& response,
     Resource* resource) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::DidReceiveCorsRedirectResponse id=%lu\n", (int)getpid(), identifier);
   // Update the response and finish loading
   DidReceiveResourceResponse(identifier, loader, response, resource);
   DidFinishLoading(identifier, loader, base::TimeTicks(),
@@ -1469,6 +1483,7 @@ void InspectorNetworkAgent::DidFailLoading(
     DocumentLoader* loader,
     const ResourceError& error,
     const base::UnguessableToken& devtools_frame_or_worker_token) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::DidFailLoading id=%lu\n", (int)getpid(), identifier);
   String request_id = IdentifiersFactory::RequestId(loader, identifier);
 
   // A Trust Token redemption can be served from cache if a valid
@@ -1502,11 +1517,13 @@ void InspectorNetworkAgent::DidFailLoading(
 
 void InspectorNetworkAgent::ScriptImported(uint64_t identifier,
                                            const String& source_string) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::ScriptImported id=%lu\n", (int)getpid(), identifier);
   resources_data_->SetResourceContent(
       IdentifiersFactory::SubresourceRequestId(identifier), source_string);
 }
 
 void InspectorNetworkAgent::DidReceiveScriptResponse(uint64_t identifier) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::DidReceiveScriptResponse id=%lu\n", (int)getpid(), identifier);
   resources_data_->SetResourceType(
       IdentifiersFactory::SubresourceRequestId(identifier),
       InspectorPageAgent::kScriptResource);
@@ -1524,6 +1541,7 @@ void InspectorNetworkAgent::WillLoadXHR(ExecutionContext* execution_context,
                                         bool async,
                                         const HTTPHeaderMap& headers,
                                         bool include_credentials) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::WillLoadXHR\n", (int)getpid());
   DCHECK(!pending_request_type_);
   pending_xhr_replay_data_ = MakeGarbageCollected<XHRReplayData>(
       execution_context, method, UrlWithoutFragment(url), async,
@@ -1536,10 +1554,12 @@ void InspectorNetworkAgent::WillLoadXHR(ExecutionContext* execution_context,
 }
 
 void InspectorNetworkAgent::DidFinishXHR(XMLHttpRequest* xhr) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::DidFinishXHR\n", (int)getpid());
   replay_xhrs_.erase(xhr);
 }
 
 void InspectorNetworkAgent::WillSendEventSourceRequest() {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::WillSendEventSourceRequest\n", (int)getpid());
   DCHECK(!pending_request_type_);
   pending_request_type_ = InspectorPageAgent::kEventSourceResource;
 }
@@ -1549,6 +1569,7 @@ void InspectorNetworkAgent::WillDispatchEventSourceEvent(
     const AtomicString& event_name,
     const AtomicString& event_id,
     const String& data) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::WillDispatchEventSourceData\n", (int)getpid());
   GetFrontend()->eventSourceMessageReceived(
       IdentifiersFactory::SubresourceRequestId(identifier),
       base::TimeTicks::Now().since_origin().InSecondsF(),
@@ -1560,6 +1581,7 @@ InspectorNetworkAgent::BuildInitiatorObject(
     Document* document,
     const FetchInitiatorInfo& initiator_info,
     int max_async_depth) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::BuildInitiatorObject\n", (int)getpid());
   if (initiator_info.is_imported_module && !initiator_info.referrer.IsEmpty()) {
     std::unique_ptr<protocol::Network::Initiator> initiator_object =
         protocol::Network::Initiator::create()
@@ -1639,6 +1661,7 @@ void InspectorNetworkAgent::DidCreateWebSocket(
     uint64_t identifier,
     const KURL& request_url,
     const String&) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::DidCreateWebSocket\n", (int)getpid());
   std::unique_ptr<v8_inspector::protocol::Runtime::API::StackTrace>
       current_stack_trace =
           SourceLocation::Capture(execution_context)->BuildInspectorObject();
@@ -1663,6 +1686,7 @@ void InspectorNetworkAgent::WillSendWebSocketHandshakeRequest(
     ExecutionContext*,
     uint64_t identifier,
     network::mojom::blink::WebSocketHandshakeRequest* request) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::WillSendWebSocketHandshakeRequest\n", (int)getpid());
   DCHECK(request);
   HTTPHeaderMap headers;
   for (auto& header : request->headers)
@@ -1682,6 +1706,7 @@ void InspectorNetworkAgent::DidReceiveWebSocketHandshakeResponse(
     uint64_t identifier,
     network::mojom::blink::WebSocketHandshakeRequest* request,
     network::mojom::blink::WebSocketHandshakeResponse* response) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::DidReceiveWebSocketHandshakeResponse\n", (int)getpid());
   DCHECK(response);
 
   HTTPHeaderMap response_headers;
@@ -1723,6 +1748,7 @@ void InspectorNetworkAgent::DidReceiveWebSocketHandshakeResponse(
 
 void InspectorNetworkAgent::DidCloseWebSocket(ExecutionContext*,
                                               uint64_t identifier) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::DidCloseWebSocket\n", (int)getpid());
   GetFrontend()->webSocketClosed(
       IdentifiersFactory::SubresourceRequestId(identifier),
       base::TimeTicks::Now().since_origin().InSecondsF());
@@ -1733,6 +1759,7 @@ void InspectorNetworkAgent::DidReceiveWebSocketMessage(
     int op_code,
     bool masked,
     const Vector<base::span<const char>>& data) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::DidReceiveWebSocketMessage\n", (int)getpid());
   size_t size = 0;
   for (const auto& span : data) {
     size += span.size();
@@ -1754,6 +1781,7 @@ void InspectorNetworkAgent::DidSendWebSocketMessage(uint64_t identifier,
                                                     bool masked,
                                                     const char* payload,
                                                     size_t payload_length) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::DidSendWebSocketMessage\n", (int)getpid());
   GetFrontend()->webSocketFrameSent(
       IdentifiersFactory::RequestId(nullptr, identifier),
       base::TimeTicks::Now().since_origin().InSecondsF(),
@@ -1763,6 +1791,7 @@ void InspectorNetworkAgent::DidSendWebSocketMessage(uint64_t identifier,
 void InspectorNetworkAgent::DidReceiveWebSocketMessageError(
     uint64_t identifier,
     const String& error_message) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::DidReceiveWebSocketMessageError\n", (int)getpid());
   GetFrontend()->webSocketFrameError(
       IdentifiersFactory::RequestId(nullptr, identifier),
       base::TimeTicks::Now().since_origin().InSecondsF(), error_message);
@@ -1811,6 +1840,7 @@ void InspectorNetworkAgent::WebTransportClosed(uint64_t transport_id) {
 Response InspectorNetworkAgent::enable(Maybe<int> total_buffer_size,
                                        Maybe<int> resource_buffer_size,
                                        Maybe<int> max_post_data_size) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::Enable\n", (int)getpid());
   total_buffer_size_.Set(total_buffer_size.fromMaybe(kDefaultTotalBufferSize));
   resource_buffer_size_.Set(
       resource_buffer_size.fromMaybe(kDefaultResourceBufferSize));
@@ -1829,6 +1859,7 @@ void InspectorNetworkAgent::Enable() {
 }
 
 Response InspectorNetworkAgent::disable() {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::Disable\n", (int)getpid());
   DCHECK(!pending_request_type_);
   if (IsMainThread())
     GetNetworkStateNotifier().ClearOverride();
@@ -2231,6 +2262,7 @@ InspectorNetworkAgent::InspectorNetworkAgent(
       max_post_data_size_(&agent_state_, /*default_value=*/0),
       accepted_encodings_(&agent_state_,
                           /*default_value=*/false) {
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::InspectorNetworkAgent\n", (int)getpid());
   DCHECK((IsMainThread() && !worker_global_scope_) ||
          (!IsMainThread() && worker_global_scope_));
 }
