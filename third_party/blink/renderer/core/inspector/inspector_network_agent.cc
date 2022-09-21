@@ -105,6 +105,8 @@
 using crdtp::SpanFrom;
 using crdtp::json::ConvertCBORToJSON;
 
+extern "C" void* V8RecordReplayBrowserEvent(const char* name);
+
 namespace blink {
 
 using GetRequestPostDataCallback =
@@ -1071,6 +1073,7 @@ void InspectorNetworkAgent::WillSendRequestInternal(
   NetworkResourcesData::ResourceData const* data =
       resources_data_->Data(request_id);
 
+  V8RecordReplayBrowserEvent("Network.WillSendRequest");
   fprintf(stderr, "KVKV-InspectorNetworkAgent::WillSendRequestInternal: pid=%d loader=%s request=%s MainThread=%s\n",
     (int)getpid(), loader_id.Utf8().c_str(), request_id.Utf8().c_str(), IsMainThread() ? "true": "false");
   /*

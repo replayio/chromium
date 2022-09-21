@@ -118,8 +118,8 @@ function messageCallback(message) {
 }
 
 function browserEventsCallback(name, info) {
-  const infoStr = JSON.stringify(info);
-  log(`KVKV: browserEventsCallback(${name}, ${infoStr})`);
+  // const infoStr = JSON.stringify(info);
+  log(`KVKV: browserEventsCallback(${name})`);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1075,14 +1075,16 @@ void RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector) {
   }
 }
 
-void RecordReplayDispatchBrowserEvent(
-  const std::string& name, v8::Local<v8::Value> info) {
+void RecordReplayDispatchBrowserEvent(const char* name) {
   CHECK(v8::IsMainThread());
 
-  fprintf(stderr, "KVKV RecordReplayDispatchBrowserEvent - pid=%d\n", (int) getpid());
+  fprintf(stderr, "KVKV RecordReplayDispatchBrowserEvent - pid=%d name=%s\n", (int) getpid(), name);
 
   v8::Isolate* isolate = v8::Isolate::GetCurrent();
-  if (!isolate->InContext() || ScriptForbiddenScope::IsScriptForbidden()) {
+//  if (!isolate->InContext() || ScriptForbiddenScope::IsScriptForbidden()) {
+  if (!isolate->InContext()) {
+    fprintf(stderr, "KVKV RecordReplayDispatchBrowserEvent - pid=%d name=%s inContext=%s scriptForBidden=%s\n",
+      (int) getpid(), name, isolate->InContext() ? "true" : "false", ScriptForbiddenScope::IsScriptForbidden() ? "true" : "false");
     // We're never interested in browser events sent at these times.
     return;
   }
@@ -1092,11 +1094,11 @@ void RecordReplayDispatchBrowserEvent(
   v8::Local<v8::Value> args[2];
   args[0] = v8::String::NewFromUtf8(
       isolate,
-      name.c_str(),
+      name,
       v8::NewStringType::kNormal,
-      name.length()
+      strlen(name)
   ).ToLocalChecked();
-  args[1] = info;
+  args[1] = v8::Object::New(isolate); // KVKV TODO: Fix.
 
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
   v8::Local<v8::Function> callback = gBrowserEventsCallback->Get(isolate);
@@ -1221,9 +1223,14 @@ static int GetAPIObjectIdCallback(v8::Local<v8::Object> object) {
 
 extern "C" void V8RecordReplaySetAPIObjectIdCallback(int (*callback)(v8::Local<v8::Object>));
 
+typedef void (*RecordReplayBrowserEventCallback)(const char* name);
+extern "C" void V8RecordReplayRegisterBrowserEventCallback(RecordReplayBrowserEventCallback callback);
+
 void SetupRecordReplayCommands(v8::Isolate* isolate) {
   fprintf(stderr, "KVKV SetupRecordReplayCommands - pid=%d\n", (int) getpid());
+
   V8RecordReplaySetAPIObjectIdCallback(GetAPIObjectIdCallback);
+  V8RecordReplayRegisterBrowserEventCallback(RecordReplayDispatchBrowserEvent);
 
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
 

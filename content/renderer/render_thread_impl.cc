@@ -1442,11 +1442,14 @@ void RenderThreadImpl::RecordReplayBrowserEvent(
   v8::HandleScope scope(isolate);
 
   // Convert params to v8 json object
+  /*
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
   std::unique_ptr<content::V8ValueConverter> converter =
       content::V8ValueConverter::Create();
   v8::Local<v8::Value> jsValue = converter->ToV8Value(&value, context);
   blink::RecordReplayDispatchBrowserEvent(name, jsValue);
+  */
+  blink::RecordReplayDispatchBrowserEvent(name.c_str());
 }
 
 bool RenderThreadImpl::GetRendererMemoryMetrics(
