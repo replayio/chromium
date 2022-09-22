@@ -31,6 +31,7 @@ extern "C" size_t V8RecordReplayCreateOrderedLock(const char* name);
 extern "C" void V8RecordReplayOrderedLock(int lock);
 extern "C" void V8RecordReplayOrderedUnlock(int lock);
 extern "C" void V8RecordReplayNewCheckpoint();
+extern "C" uint64_t V8RecordReplayNewBookmark();
 extern "C" bool V8RecordReplayAreEventsDisallowed();
 extern "C" void V8RecordReplayBeginPassThroughEvents();
 extern "C" void V8RecordReplayEndPassThroughEvents();
@@ -109,6 +110,10 @@ void OrderedUnlock(int lock) {
 
 void NewCheckpoint() {
   OP(V8RecordReplayNewCheckpoint());
+}
+
+uint64_t NewBookmark() {
+  return OP(V8RecordReplayNewBookmark());
 }
 
 bool AreEventsDisallowed() {

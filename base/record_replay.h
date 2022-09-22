@@ -40,6 +40,7 @@ struct AutoOrderedLock {
 
 void InvalidateRecording(const char* why);
 void NewCheckpoint();
+uint64_t NewBookmark();
 
 bool AreEventsDisallowed();
 void BeginPassThroughEvents();
