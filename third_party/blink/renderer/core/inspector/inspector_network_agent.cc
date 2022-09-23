@@ -1209,14 +1209,26 @@ void InspectorNetworkAgent::SetDevToolsIds(
                                                       request.InspectorId()));
 }
 
+extern "C" size_t V8RecordReplayNewBookmark();
+
 void InspectorNetworkAgent::PrepareRequest(DocumentLoader* loader,
                                            ResourceRequest& request,
                                            ResourceLoaderOptions& options,
                                            ResourceType resource_type) {
-  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::PrepareRequest MainThread=%s\n", (int)getpid(), IsMainThread() ? "true" : "false");
+
   // Ignore the request initiated internally.
   if (options.initiator_info.name == fetch_initiator_type_names::kInternal)
     return;
+  
+  // Take a bookmark and save it on the re
+  size_t bookmark = V8RecordReplayNewBookmark();
+  fprintf(stderr,
+    "KVKV-InspectorNetworkAgent(pid=%d)::PrepareRequest MainThread=%s ScriptForbidden=%s bookmark=%lu\n",
+    (int) getpid(),
+    IsMainThread() ? "true" : "false",
+    ScriptForbiddenScope::IsScriptForbidden() ? "true" : "false",
+    bookmark);
+  request.SetRecordReplayBookmark(bookmark);
 
   if (!extra_request_headers_.IsEmpty()) {
     for (const WTF::String& key : extra_request_headers_.Keys()) {
@@ -1288,7 +1300,12 @@ void InspectorNetworkAgent::WillSendRequest(
     const FetchInitiatorInfo& initiator_info,
     ResourceType resource_type,
     RenderBlockingBehavior render_blocking_behavior) {
-  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::WillSendRequest MainThread=%s\n", (int)getpid(), IsMainThread() ? "true" : "false");
+  base::Optional<size_t> bookmark = request.GetRecordReplayBookmark();
+  fprintf(stderr, "KVKV-InspectorNetworkAgent(pid=%d)::WillSendRequest MainThread=%s ScriptForbidden=%s Bookmark=%lu\n",
+    (int)getpid(), IsMainThread() ? "true" : "false",
+    ScriptForbiddenScope::IsScriptForbidden() ? "true" : "false",
+    bookmark.has_value() ? bookmark.value() : SIZE_MAX
+  );
   // Ignore the request initiated internally.
   if (initiator_info.name == fetch_initiator_type_names::kInternal)
     return;

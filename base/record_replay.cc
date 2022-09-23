@@ -39,6 +39,7 @@ extern "C" void V8RecordReplayRegisterPointer(const void* ptr);
 extern "C" void V8RecordReplayUnregisterPointer(const void* ptr);
 extern "C" int V8RecordReplayPointerId(const void* ptr);
 extern "C" void* V8RecordReplayIdPointer(int id);
+extern "C" size_t V8RecordReplayNewBookmark();
 
 bool IsRecordingOrReplaying() {
   return OP2(V8IsRecordingOrReplaying(), false);

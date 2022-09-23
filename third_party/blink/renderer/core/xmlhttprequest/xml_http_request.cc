@@ -1000,6 +1000,9 @@ void XMLHttpRequest::ThrowForLoadFailureIfNeeded(
 
 void XMLHttpRequest::CreateRequest(scoped_refptr<EncodedFormData> http_body,
                                    ExceptionState& exception_state) {
+  fprintf(stderr, "KVKV - XMLHttpRequest::CreateRequest scriptForbidden=%s\n",
+    ScriptForbiddenScope::IsScriptForbidden() ? "true" : "false"
+  );
   // Only GET request is supported for blob URL.
   if (url_.ProtocolIs("blob") && method_ != http_names::kGET) {
     HandleNetworkError();

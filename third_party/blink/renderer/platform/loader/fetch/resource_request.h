@@ -414,6 +414,13 @@ class PLATFORM_EXPORT ResourceRequestHead {
     devtools_accepted_stream_types_ = types;
   }
 
+  const base::Optional<size_t> GetRecordReplayBookmark() const {
+    return record_replay_bookmark_;
+  }
+  void SetRecordReplayBookmark(size_t bookmark) {
+    record_replay_bookmark_ = bookmark;
+  }
+
   const base::Optional<String>& GetDevToolsId() const { return devtools_id_; }
   void SetDevToolsId(const base::Optional<String>& devtools_id) {
     devtools_id_ = devtools_id;
@@ -658,6 +665,9 @@ class PLATFORM_EXPORT ResourceRequestHead {
   scoped_refptr<
       base::RefCountedData<base::flat_set<net::SourceStream::SourceType>>>
       devtools_accepted_stream_types_;
+  
+  // If present, the record-replay bookmark info associated with this request
+  base::Optional<size_t> record_replay_bookmark_;
 };
 
 class PLATFORM_EXPORT ResourceRequestBody {

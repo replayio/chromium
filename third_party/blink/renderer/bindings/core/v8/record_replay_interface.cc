@@ -1082,7 +1082,7 @@ void RecordReplayDispatchBrowserEvent(const char* name) {
 
   v8::Isolate* isolate = v8::Isolate::GetCurrent();
 //  if (!isolate->InContext() || ScriptForbiddenScope::IsScriptForbidden()) {
-  if (!isolate->InContext()) {
+  if (!isolate->InContext() || ScriptForbiddenScope::IsScriptForbidden()) {
     fprintf(stderr, "KVKV RecordReplayDispatchBrowserEvent - pid=%d name=%s inContext=%s scriptForBidden=%s\n",
       (int) getpid(), name, isolate->InContext() ? "true" : "false", ScriptForbiddenScope::IsScriptForbidden() ? "true" : "false");
     // We're never interested in browser events sent at these times.
