@@ -31,11 +31,11 @@ extern "C" size_t V8RecordReplayCreateOrderedLock(const char* name);
 extern "C" void V8RecordReplayOrderedLock(int lock);
 extern "C" void V8RecordReplayOrderedUnlock(int lock);
 extern "C" void V8RecordReplayNewCheckpoint();
-extern "C" size_t V8RecordReplayNewBookmark();
-extern "C" void V8RecordReplayOnNetworkRequest(const char* id, const char* kind, size_t bookmark);
+extern "C" uint64_t V8RecordReplayNewBookmark();
+extern "C" void V8RecordReplayOnNetworkRequest(const char* id, const char* kind, uint64_t bookmark);
 extern "C" void V8RecordReplayOnNetworkRequestEvent(const char* id);
 extern "C" void V8RecordReplayOnNetworkStreamStart(const char* id, const char* kind, const char* parentId);
-extern "C" void V8RecordReplayOnNetworkStreamData(const char* id, size_t offset, size_t length, size_t bookmark);
+extern "C" void V8RecordReplayOnNetworkStreamData(const char* id, size_t offset, size_t length, uint64_t bookmark);
 extern "C" void V8RecordReplayOnNetworkStreamEnd(const char* id, size_t length);
 extern "C" bool V8RecordReplayAreEventsDisallowed();
 extern "C" void V8RecordReplayBeginPassThroughEvents();
@@ -117,11 +117,11 @@ void NewCheckpoint() {
   OP(V8RecordReplayNewCheckpoint());
 }
 
-size_t NewBookmark() {
+uint64_t NewBookmark() {
   return OP(V8RecordReplayNewBookmark());
 }
 
-void OnNetworkRequest(const char* id, const char* kind, size_t bookmark) {
+void OnNetworkRequest(const char* id, const char* kind, uint64_t bookmark) {
   OP(V8RecordReplayOnNetworkRequest(id, kind, bookmark));
 }
 
@@ -133,7 +133,7 @@ void OnNetworkStreamStart(const char* id, const char* kind, const char* parentId
   OP(V8RecordReplayOnNetworkStreamStart(id, kind, parentId));
 }
 
-void OnNetworkStreamData(const char* id, size_t offset, size_t length, size_t bookmark) {
+void OnNetworkStreamData(const char* id, size_t offset, size_t length, uint64_t bookmark) {
   OP(V8RecordReplayOnNetworkStreamData(id, offset, length, bookmark));
 }
 

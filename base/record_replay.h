@@ -41,11 +41,11 @@ struct AutoOrderedLock {
 void InvalidateRecording(const char* why);
 void NewCheckpoint();
 
-size_t NewBookmark();
-void OnNetworkRequest(const char* id, const char* kind, size_t bookmark);
+uint64_t NewBookmark();
+void OnNetworkRequest(const char* id, const char* kind, uint64_t bookmark);
 void OnNetworkRequestEvent(const char* id);
 void OnNetworkStreamStart(const char* id, const char* kind, const char* parentId);
-void OnNetworkStreamData(const char* id, size_t offset, size_t length, size_t bookmark);
+void OnNetworkStreamData(const char* id, size_t offset, size_t length, uint64_t bookmark);
 void OnNetworkStreamEnd(const char* id, size_t length);
 
 bool AreEventsDisallowed();
