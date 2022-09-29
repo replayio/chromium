@@ -4,6 +4,7 @@
 #include "content/browser/devtools/devtools_instrumentation.h"
 
 #include "base/strings/stringprintf.h"
+#include "chrome/browser/devtools/devtools_window.h"
 #include "components/download/public/common/download_create_info.h"
 #include "components/download/public/common/download_item.h"
 #include "content/browser/devtools/browser_devtools_agent_host.h"
@@ -28,6 +29,7 @@
 #include "content/browser/web_package/signed_exchange_envelope.h"
 #include "content/common/navigation_params.mojom.h"
 #include "content/public/browser/browser_context.h"
+#include "content/public/browser/web_contents.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "net/base/load_flags.h"
@@ -634,9 +636,21 @@ void OnNavigationRequestWillBeSent(
       continue;
     auto* agent_host = static_cast<RenderFrameDevToolsAgentHost*>(
         RenderFrameDevToolsAgentHost::GetFor(rfh));
-    if (!agent_host)
+    if (!agent_host) {
+      scoped_refptr<DevToolsAgentHost> created_agent_host =
+        RenderFrameDevToolsAgentHost::GetOrCreateFor(rfh->frame_tree_node());
+      if (created_agent_host) {
+        agent_host = static_cast<RenderFrameDevToolsAgentHost*>(created_agent_host.get());
+        agent_host->OnNavigationRequestWillBeSent(navigation_request);
+      }
       continue;
+    }
+
     agent_host->OnNavigationRequestWillBeSent(navigation_request);
+    WebContents* web_contents = agent_host->GetWebContents();
+    if (web_contents) {
+      DevToolsWindow::OpenDevToolsWindow(web_contents);
+    }
   }
 
   // We use CachedNavigationURLLoader for BFCache navigations and don't actually
