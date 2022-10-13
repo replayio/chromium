@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/serialization/v8_script_value_serializer.h"
 
 #include "base/auto_reset.h"
+#include "base/record_replay.h"
 #include "third_party/blink/public/mojom/use_counter/metrics/web_feature.mojom-blink.h"
 #include "third_party/blink/public/platform/web_blob_info.h"
 #include "third_party/blink/renderer/bindings/core/v8/native_value_traits_impl.h"
@@ -61,6 +62,20 @@
 #include "third_party/blink/renderer/platform/wtf/text/string_utf8_adaptor.h"
 
 namespace blink {
+
+namespace {
+
+// Same algorithm as v8::internal::HashBytes in value-serializer.cc.
+int HashBytes(const void* aPtr, size_t aSize) {
+  int hash = 0;
+  const uint8_t* ptr = static_cast<const uint8_t*>(aPtr);
+  for (size_t i = 0; i < aSize; i++) {
+    hash = (((hash << 5) - hash) + ptr[i]) | 0;
+  }
+  return hash;
+}
+
+}  // namespace
 
 // The "Blink-side" serialization version, which defines how Blink will behave
 // during the serialization process, is in
@@ -280,6 +295,10 @@ scoped_refptr<SerializedScriptValue> V8ScriptValueSerializer::Serialize(
 
   // Finalize the results.
   std::pair<uint8_t*, size_t> buffer = serializer_.Release();
+  REPLAY_ASSERT(
+      "[TT-492] V8ScriptValueSerializer::Serialize %u %d",
+      static_cast<unsigned>(buffer.second),
+      HashBytes(buffer.first, buffer.second));
   serialized_script_value_->SetData(
       SerializedScriptValue::DataBufferPtr(buffer.first), buffer.second);
   return std::move(serialized_script_value_);

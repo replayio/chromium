@@ -8,6 +8,7 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "base/time/time.h"
 #include "third_party/blink/public/mojom/loader/code_cache.mojom.h"
 #include "third_party/blink/public/platform/platform.h"
@@ -180,7 +181,10 @@ class FetchDataLoaderForWasmStreaming final : public FetchDataLoader,
         streaming_(std::move(streaming)),
         script_state_(script_state),
         cache_handler_(cache_handler),
-        code_caching_callback_(std::move(code_caching_callback)) {}
+        code_caching_callback_(std::move(code_caching_callback)) {
+    REPLAY_ASSERT("FetchDataLoaderForWasmStreaming use_count %ld",
+                  streaming_.use_count());
+  }
 
   v8::WasmStreaming* streaming() const { return streaming_.get(); }
 
@@ -512,6 +516,8 @@ void StreamFromResponseCallback(
                                  "WebAssembly", "compile");
   std::shared_ptr<v8::WasmStreaming> streaming =
       v8::WasmStreaming::Unpack(args.GetIsolate(), args.Data());
+  REPLAY_ASSERT("StreamFromResponseCallback use_count %ld",
+                streaming.use_count());
   ExceptionToAbortStreamingScope exception_scope(streaming, exception_state);
 
   ScriptState* script_state = ScriptState::ForCurrentRealm(args);

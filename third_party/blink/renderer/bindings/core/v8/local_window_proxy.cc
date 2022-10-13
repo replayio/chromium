@@ -32,11 +32,13 @@
 
 #include <tuple>
 
+#include "base/auto_reset.h"
 #include "base/debug/dump_without_crashing.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/single_sample_metrics.h"
 #include "third_party/blink/renderer/bindings/core/v8/isolated_world_csp.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_controller.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
 #include "third_party/blink/renderer/bindings/core/v8/to_v8_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_context_snapshot.h"
@@ -56,6 +58,7 @@
 #include "third_party/blink/renderer/core/inspector/inspector_task_runner.h"
 #include "third_party/blink/renderer/core/inspector/main_thread_debugger.h"
 #include "third_party/blink/renderer/core/loader/frame_loader.h"
+#include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/core/script/modulator.h"
 #include "third_party/blink/renderer/platform/bindings/dom_wrapper_world.h"
 #include "third_party/blink/renderer/platform/bindings/extensions_registry.h"
@@ -72,10 +75,14 @@
 #include "third_party/blink/renderer/platform/wtf/text/string_operators.h"
 #include "v8/include/v8.h"
 
+#include "base/record_replay.h"
+#include "third_party/blink/renderer/controller/dev_tools_frontend_impl.h"
+
 namespace blink {
 
 void LocalWindowProxy::Trace(Visitor* visitor) const {
   visitor->Trace(script_state_);
+  visitor->Trace(record_replay_listener_);
   WindowProxy::Trace(visitor);
 }
 
@@ -91,6 +98,9 @@ void LocalWindowProxy::DisposeContext(Lifecycle next_status,
   // If the former, |global_proxy_| should become weak, and if the latter, the
   // necessary operations are already done so can return here.
   if (lifecycle_ == Lifecycle::kV8MemoryIsForciblyPurged) {
+    // https://linear.app/replay/issue/RUN-749
+    recordreplay::Assert("LocalWindowProxy::DisposeContext #1 %d", (int)next_status);
+
     DCHECK(next_status == Lifecycle::kGlobalObjectIsDetached ||
            next_status == Lifecycle::kFrameIsDetachedAndV8MemoryIsPurged);
     lifecycle_ = next_status;
@@ -265,6 +275,9 @@ void LocalWindowProxy::CreateContext() {
   script_state_ = MakeGarbageCollected<ScriptState>(context, world_,
                                                     GetFrame()->DomWindow());
 
+  // https://linear.app/replay/issue/RUN-749
+  recordreplay::Assert("LocalWindowProxy::CreateContext Done");
+
   DCHECK(lifecycle_ == Lifecycle::kContextIsUninitialized ||
          lifecycle_ == Lifecycle::kGlobalObjectIsDetached);
   lifecycle_ = Lifecycle::kContextIsInitialized;
@@ -427,6 +440,9 @@ void LocalWindowProxy::SetSecurityToken(const SecurityOrigin* origin) {
 }
 
 void LocalWindowProxy::UpdateDocument() {
+  // https://linear.app/replay/issue/RUN-965
+  recordreplay::Assert("LocalWindowProxy::UpdateDocument %d", (int)lifecycle_);
+
   // For an uninitialized main window proxy, there's nothing we need
   // to update. The update is done when the window proxy gets initialized later.
   if (lifecycle_ == Lifecycle::kContextIsUninitialized)
