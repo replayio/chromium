@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/callback_helpers.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/exported/web_dev_tools_agent_impl.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
@@ -96,9 +97,24 @@ class DevToolsAgent::IOAgent : public mojom::blink::DevToolsAgent {
   }
 
   // May be called from any thread.
-  void DeleteSoon() { io_task_runner_->DeleteSoon(FROM_HERE, this); }
+  void DeleteSoon() {
+    // |receiver_| is bound on the IO thread, which may not have done so yet
+    // when a worker is torn down right after starting.
+    recordreplay::Assert("[RUN-1124-1785] DevToolsAgent::IOAgent::DeleteSoon");
+    io_task_runner_->DeleteSoon(FROM_HERE, this);
+  }
 
-  ~IOAgent() override = default;
+  ~IOAgent() override {
+    recordreplay::Assert("[RUN-1124-1902] DevToolsAgent::IOAgent::~IOAgent");
+    // |receiver_| closes the pipe once this destructor's body has run, but the
+    // router can outlive it: tasks it posted to the worker's thread hold
+    // references, and are run or destroyed with the worker's task queues.
+    // Which thread drops the last reference isn't recorded, and destroying
+    // the router takes an ordered lock, so leak it.
+    if (recordreplay::EnterLeakMemory("DevToolsAgent::IOAgent")) {
+      receiver_.internal_state()->RouterForTesting()->AddRef();
+    }
+  }
 
   // mojom::blink::DevToolsAgent implementation.
   void AttachDevToolsSession(
@@ -184,7 +200,9 @@ void DevToolsAgent::Trace(Visitor* visitor) const {
 }
 
 void DevToolsAgent::Dispose() {
-  HeapHashSet<Member<DevToolsSession>> copy(sessions_);
+  HeapHashSet<Member<DevToolsSession>,
+              WTF::MemberHashRecordReplayId<DevToolsSession>>
+      copy(sessions_);
   for (auto& session : copy)
     session->Detach();
   CleanupConnection();
