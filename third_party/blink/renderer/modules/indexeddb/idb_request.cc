@@ -146,7 +146,11 @@ IDBRequest::IDBRequest(ScriptState* script_state,
       source_(source),
       event_queue_(
           MakeGarbageCollected<EventQueue>(ExecutionContext::From(script_state),
-                                           TaskType::kDatabaseAccess)) {}
+                                           TaskType::kDatabaseAccess)) {
+  record_replay_created_node_id_ = recordreplay::NewDependencyGraphNode(
+    "{\"kind\":\"newIDBRequest\"}"
+  );
+}
 
 IDBRequest::~IDBRequest() {
   if (!GetExecutionContext())
@@ -819,6 +823,17 @@ void IDBRequest::EnqueueEvent(Event* event) {
 
   if (!GetExecutionContext())
     return;
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    int node_id = recordreplay::NewDependencyGraphNode(
+      "{\"kind\":\"enqueueIDBRequestEvent\"}"
+    );
+    recordreplay::AddDependencyGraphEdge(
+      record_replay_created_node_id_, node_id, "{\"kind\":\"creator\"}"
+    );
+    execute.emplace(node_id);
+  }
 
   DCHECK(ready_state_ == PENDING || did_fire_upgrade_needed_event_)
       << "When queueing event " << event->type() << ", ready_state_ was "
