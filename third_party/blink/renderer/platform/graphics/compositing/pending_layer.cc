@@ -24,6 +24,8 @@
 #include "ui/gfx/geometry/size_conversions.h"
 #include "ui/gfx/geometry/vector2d_conversions.h"
 
+#include "cc/trees/layer_tree_host.h"
+
 namespace blink {
 
 namespace {
@@ -758,6 +760,13 @@ void PendingLayer::UpdateCompositedLayer(
   // This is used during PaintArifactCompositor::CollectPendingLayers() only.
   non_composited_scroll_translations_.clear();
 
+  recordreplay::Assert(
+      "[RUN-657-1540] PendingLayer::UpdateCompositedLayer %d %d %d %d",
+      compositing_type_, layer_tree_host ? layer_tree_host->GetId() : 0,
+      old_pending_layer && old_pending_layer->cc_layer_
+          ? old_pending_layer->cc_layer_->id()
+          : 0,
+      cc_layer_ ? cc_layer_->id() : 0);
   switch (compositing_type_) {
     case PendingLayer::kForeignLayer:
       UpdateForeignLayer();

@@ -18,6 +18,8 @@
 #include "third_party/blink/renderer/platform/scheduler/public/web_scheduling_queue_type.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 
+#include "base/record_replay.h"
+
 namespace {
 
 // Maximum number of back/forward cache blocking details to send to the browser.
@@ -85,7 +87,12 @@ class PLATFORM_EXPORT FrameOrWorkerScheduler {
     SchedulingAffectingFeatureHandle& operator=(
         SchedulingAffectingFeatureHandle&&);
 
-    inline ~SchedulingAffectingFeatureHandle() { reset(); }
+    inline ~SchedulingAffectingFeatureHandle() {
+      if (!recordreplay::AreEventsDisallowed("~SchedulingAffectingFeatureHandle")) {
+        // This might touch the recording stream during GC when using devtools.
+        reset();
+      }
+    }
 
     explicit operator bool() const { return scheduler_.get(); }
 
@@ -210,6 +217,10 @@ class PLATFORM_EXPORT FrameOrWorkerScheduler {
   virtual std::unique_ptr<WebSchedulingTaskQueue> CreateWebSchedulingTaskQueue(
       WebSchedulingQueueType,
       WebSchedulingPriority) = 0;
+
+  // Runs after FrameSchedulerImpl teardown (budget pools cleaned). Used to
+  // Release a DeterministicRetainer pin on the WebScheduling Oilpan owner.
+  virtual void SetReplaySchedulingOwnerRelease(base::OnceClosure) {}
 
   virtual FrameScheduler* ToFrameScheduler() { return nullptr; }
 
