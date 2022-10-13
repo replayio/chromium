@@ -40,14 +40,16 @@
 namespace blink {
 
 static unsigned ComputeMatchedPropertiesHash(const MatchResult& result) {
-  const MatchedPropertiesVector& properties = result.GetMatchedProperties();
+  const RecordReplayMatchedPropertiesVector properties =
+      result.GetRecordReplayMatchedProperties();
   unsigned hash = StringHasher::HashMemory(
-      properties.data(), sizeof(MatchedProperties) * properties.size());
-  auto& tree_scopes = result.GetTreeScopes();
-  WTF::AddIntToHash(hash,
-                    StringHasher::HashMemory(
-                        tree_scopes.data(),
-                        sizeof(Member<const TreeScope>) * tree_scopes.size()));
+      properties.data(),
+      sizeof(RecordReplayMatchedProperties) * properties.size());
+  // The tree scopes are Member<> pointers; a replay does not reproduce their
+  // values, so mix in their registered pointer ids instead of their bytes.
+  for (const auto& tree_scope : result.GetTreeScopes()) {
+    WTF::AddIntToHash(hash, recordreplay::PointerId(tree_scope.Get()));
+  }
   return hash;
 }
 
@@ -58,6 +60,11 @@ void CachedMatchedProperties::Set(
   for (const auto& new_matched_properties : properties) {
     matched_properties.push_back(new_matched_properties.properties);
     matched_properties_types.push_back(new_matched_properties.types_);
+
+    if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                             "CachedMatchedProperties"))
+      replay_matched_properties_strong_.push_back(
+          new_matched_properties.properties);
   }
 
   // Note that we don't cache the original ComputedStyle instance. It may be
@@ -70,6 +77,7 @@ void CachedMatchedProperties::Set(
 void CachedMatchedProperties::Clear() {
   matched_properties.clear();
   matched_properties_types.clear();
+  replay_matched_properties_strong_.clear();
   computed_style = nullptr;
   parent_computed_style = nullptr;
 }
@@ -117,7 +125,8 @@ MatchedPropertiesCache::MatchedPropertiesCache() = default;
 MatchedPropertiesCache::Key::Key(const MatchResult& result)
     : Key(result,
           result.IsCacheable() ? ComputeMatchedPropertiesHash(result)
-                               : HashTraits<unsigned>::EmptyValue()) {}
+                               : HashTraits<unsigned>::EmptyValue()) {
+}
 
 MatchedPropertiesCache::Key::Key(const MatchResult& result, unsigned hash)
     : result_(result), hash_(hash) {}
@@ -143,6 +152,7 @@ const CachedMatchedProperties* MatchedPropertiesCache::Find(
   if (*cache_item != key.result_.GetMatchedProperties()) {
     return nullptr;
   }
+
   if (cache_item->computed_style->InsideLink() !=
       style_resolver_state.InsideLink()) {
     return nullptr;
