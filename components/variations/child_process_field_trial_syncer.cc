@@ -14,6 +14,8 @@
 #include "components/variations/variations_crash_keys.h"
 #include "third_party/abseil-cpp/absl/base/attributes.h"
 
+#include "base/record_replay.h"
+
 namespace variations {
 
 namespace {
