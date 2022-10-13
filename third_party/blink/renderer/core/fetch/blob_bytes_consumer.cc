@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/core/fetch/blob_bytes_consumer.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/public/common/blob/blob_utils.h"
 #include "third_party/blink/public/mojom/blob/blob.mojom-blink.h"
 #include "third_party/blink/public/platform/task_type.h"
@@ -71,6 +72,18 @@ BytesConsumer::Result BlobBytesConsumer::BeginRead(const char** buffer,
   if (!nested_consumer_) {
     if (!blob_data_handle_)
       return Result::kDone;
+
+    // The data pipe's shared memory comes from a synchronous broker call to
+    // the browser process, which also serves the blob's contents. A diverged
+    // pause can't serve either.
+    if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
+      nested_consumer_ = BytesConsumer::CreateErrored(
+          Error("Cannot replay operation Blob read because it was not "
+                "recorded."));
+      blob_data_handle_ = nullptr;
+      client_ = nullptr;
+      return Result::kError;
+    }
 
     // Create a DataPipe to transport the data from the blob.
     MojoCreateDataPipeOptions options;
