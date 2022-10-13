@@ -1112,6 +1112,9 @@ NO_STACK_PROTECTOR int ContentMainRunnerImpl::Run() {
   // Run this logic on all child processes.
   if (!process_type.empty()) {
     if (process_type != switches::kZygoteProcess) {
+      recordreplay::Assert("[RUN-2350-2356] ContentMainRunnerImpl::Run %d",
+                           delegate_->ShouldCreateFeatureList(
+                               ContentMainDelegate::InvokedInChildProcess()));
       if (delegate_->ShouldCreateFeatureList(
               ContentMainDelegate::InvokedInChildProcess())) {
         InitializeFieldTrialAndFeatureList();
