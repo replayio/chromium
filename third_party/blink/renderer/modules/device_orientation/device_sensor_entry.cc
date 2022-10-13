@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/modules/device_orientation/device_sensor_entry.h"
 
+#include "base/record_replay.h"
 #include "services/device/public/cpp/generic_sensor/sensor_reading.h"
 #include "services/device/public/cpp/generic_sensor/sensor_reading_shared_buffer_reader.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
@@ -86,10 +87,16 @@ bool DeviceSensorEntry::GetReading(device::SensorReading* reading) {
   DCHECK(shared_buffer_reader_);
 
   if (!shared_buffer_reader_->GetReading(reading)) {
+    recordreplay::Assert(
+        "DeviceSensorEntry::GetReading type %d ok 0 ts_zero 0",
+        static_cast<int>(type_));
     HandleSensorError();
     return false;
   }
 
+  recordreplay::Assert(
+      "DeviceSensorEntry::GetReading type %d ok 1 ts_zero %d",
+      static_cast<int>(type_), reading->timestamp() == 0.0);
   return true;
 }
 

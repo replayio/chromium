@@ -333,7 +333,7 @@ void Sensor::HandleError(DOMExceptionCode code,
 void Sensor::NotifyReading() {
   DCHECK_EQ(state_, SensorState::kActivated);
   last_reported_timestamp_ = sensor_proxy_->GetReading().timestamp();
-  DispatchEvent(*Event::Create(event_type_names::kReading));
+  DispatchEvent(*Event::Create(event_type_names::kReading), "Sensor::NotifyReading");
 }
 
 void Sensor::NotifyActivated() {
@@ -351,13 +351,13 @@ void Sensor::NotifyActivated() {
                       WrapWeakPersistent(this)));
   }
 
-  DispatchEvent(*Event::Create(event_type_names::kActivate));
+  DispatchEvent(*Event::Create(event_type_names::kActivate), "Sensor::NotifyActivated");
 }
 
 void Sensor::NotifyError(DOMException* error) {
   DCHECK_NE(state_, SensorState::kIdle);
   state_ = SensorState::kIdle;
-  DispatchEvent(*SensorErrorEvent::Create(event_type_names::kError, error));
+  DispatchEvent(*SensorErrorEvent::Create(event_type_names::kError, error), "Sensor::NotifyError");
 }
 
 bool Sensor::IsIdleOrErrored() const {

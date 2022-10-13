@@ -96,7 +96,7 @@ class Database final : public ScriptWrappable {
                           SQLTransaction::OnErrorCallback*,
                           SQLTransaction::OnSuccessCallback*);
 
-  bool Opened() { return opened_.load(std::memory_order_acquire); }
+  bool Opened();
   bool IsNew() const { return new_; }
 
   const SecurityOrigin* GetSecurityOrigin() const;

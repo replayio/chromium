@@ -13,6 +13,7 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/rand_util.h"
+#include "base/record_replay.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/platform/scheduler/public/main_thread.h"
@@ -592,6 +593,11 @@ void CachedStorageArea::MaybeApplyNonLocalMutationForKey(
 void CachedStorageArea::EnsureLoaded() {
   if (map_)
     return;
+  if (recordreplay::AreEventsUnavailable()) {
+    map_ = std::make_unique<StorageAreaMap>(
+        mojom::blink::StorageArea::kPerStorageAreaQuota);
+    return;
+  }
   if (!remote_area_)
     BindStorageArea();
 
@@ -666,12 +672,20 @@ void CachedStorageArea::EnqueueStorageEvent(const String& key,
   if (!key.IsNull() && new_value == old_value)
     return;
 
-  HeapVector<Member<Source>, 1> areas_to_remove_;
+  HeapVector<Member<Source>, 1> areas_vector;
   for (const auto& area : *areas_) {
-    if (area.value != storage_area_id) {
-      bool keep = area.key->EnqueueStorageEvent(key, old_value, new_value, url);
+    areas_vector.push_back(area.key);
+  }
+  std::sort(areas_vector.begin(), areas_vector.end(),
+            recordreplay::CompareMemberByPointerId<Member<Source>>());
+  HeapVector<Member<Source>, 1> areas_to_remove_;
+  for (const Member<Source>& source : areas_vector) {
+    auto iter = areas_->find(source);
+    CHECK(iter != areas_->end());
+    if (iter->value != storage_area_id) {
+      bool keep = source->EnqueueStorageEvent(key, old_value, new_value, url);
       if (!keep)
-        areas_to_remove_.push_back(area.key);
+        areas_to_remove_.push_back(source);
     }
   }
   areas_->RemoveAll(areas_to_remove_);

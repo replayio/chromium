@@ -15,6 +15,7 @@
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/clamped_math.h"
+#include "base/record_replay.h"
 #include "base/trace_event/common/trace_event_common.h"
 #include "base/trace_event/trace_event.h"
 #include "components/viz/common/gpu/raster_context_provider.h"
@@ -303,6 +304,15 @@ VideoEncoderTraits::ParsedConfig* ParseConfigStatic(
 
 bool VerifyCodecSupportStatic(VideoEncoderTraits::ParsedConfig* config,
                               ExceptionState* exception_state) {
+  // Video encoding is unsupported while recording/replaying.
+  if (recordreplay::IsRecordingOrReplaying("no-video")) {
+    if (exception_state) {
+      exception_state->ThrowDOMException(DOMExceptionCode::kNotSupportedError,
+                                         "Unsupported codec type.");
+    }
+    return false;
+  }
+
   switch (config->codec) {
     case media::VideoCodec::kAV1:
       if (config->profile !=

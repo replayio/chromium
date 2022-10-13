@@ -408,7 +408,7 @@ void AXNodeObject::AlterSliderOrSpinButtonValue(bool increase) {
   KeyboardEvent* keydown =
       CreateKeyboardEvent(local_dom_window, WebInputEvent::Type::kRawKeyDown,
                           action, orientation, text_direction);
-  GetNode()->DispatchEvent(*keydown);
+  GetNode()->DispatchEvent(*keydown, "AXNodeObject::AlterSliderOrSpinButtonValue #1");
 
   // TODO(crbug.com/1099069): add a brief pause between keydown and keyup?
 
@@ -419,7 +419,7 @@ void AXNodeObject::AlterSliderOrSpinButtonValue(bool increase) {
   KeyboardEvent* keyup =
       CreateKeyboardEvent(local_dom_window, WebInputEvent::Type::kKeyUp, action,
                           orientation, text_direction);
-  GetNode()->DispatchEvent(*keyup);
+  GetNode()->DispatchEvent(*keyup, "AXNodeObject::AlterSliderOrSpinButtonValue #2");
 }
 
 AXObject* AXNodeObject::ActiveDescendant() {

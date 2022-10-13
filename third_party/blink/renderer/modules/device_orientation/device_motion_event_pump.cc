@@ -6,6 +6,7 @@
 
 #include <cmath>
 
+#include "base/record_replay.h"
 #include "services/device/public/cpp/generic_sensor/sensor_reading.h"
 #include "services/device/public/mojom/sensor.mojom-blink.h"
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
@@ -130,7 +131,14 @@ DeviceMotionData* DeviceMotionEventPump::GetDataFromSharedMemory() {
   DeviceMotionEventRotationRate* rotation_rate = nullptr;
 
   device::SensorReading accelerometer_reading;
-  if (accelerometer_->GetReading(&accelerometer_reading)) {
+  bool has_accelerometer_reading =
+      accelerometer_->GetReading(&accelerometer_reading);
+  recordreplay::Assert(
+      "DeviceMotionEventPump::GetDataFromSharedMemory accelerometer %d "
+      "ts_zero %d",
+      has_accelerometer_reading,
+      has_accelerometer_reading && accelerometer_reading.timestamp() == 0.0);
+  if (has_accelerometer_reading) {
     if (accelerometer_reading.timestamp() == 0.0)
       return nullptr;
 
@@ -143,8 +151,16 @@ DeviceMotionData* DeviceMotionEventPump::GetDataFromSharedMemory() {
   }
 
   device::SensorReading linear_acceleration_sensor_reading;
-  if (linear_acceleration_sensor_->GetReading(
-          &linear_acceleration_sensor_reading)) {
+  bool has_linear_acceleration_reading =
+      linear_acceleration_sensor_->GetReading(
+          &linear_acceleration_sensor_reading);
+  recordreplay::Assert(
+      "DeviceMotionEventPump::GetDataFromSharedMemory linear_acceleration %d "
+      "ts_zero %d",
+      has_linear_acceleration_reading,
+      has_linear_acceleration_reading &&
+          linear_acceleration_sensor_reading.timestamp() == 0.0);
+  if (has_linear_acceleration_reading) {
     if (linear_acceleration_sensor_reading.timestamp() == 0.0)
       return nullptr;
 
@@ -157,7 +173,12 @@ DeviceMotionData* DeviceMotionEventPump::GetDataFromSharedMemory() {
   }
 
   device::SensorReading gyroscope_reading;
-  if (gyroscope_->GetReading(&gyroscope_reading)) {
+  bool has_gyroscope_reading = gyroscope_->GetReading(&gyroscope_reading);
+  recordreplay::Assert(
+      "DeviceMotionEventPump::GetDataFromSharedMemory gyroscope %d ts_zero %d",
+      has_gyroscope_reading,
+      has_gyroscope_reading && gyroscope_reading.timestamp() == 0.0);
+  if (has_gyroscope_reading) {
     if (gyroscope_reading.timestamp() == 0.0)
       return nullptr;
 

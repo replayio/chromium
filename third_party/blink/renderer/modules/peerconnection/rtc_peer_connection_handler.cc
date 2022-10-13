@@ -231,6 +231,9 @@ class CreateSessionDescriptionRequest
         action_(action) {}
 
   void OnSuccess(webrtc::SessionDescriptionInterface* desc) override {
+    // https://linear.app/replay/issue/RUN-547
+    recordreplay::Assert("CreateSessionDescriptionRequest::OnSuccess %d", !!desc);
+
     if (!main_thread_->BelongsToCurrentThread()) {
       PostCrossThreadTask(
           *main_thread_.get(), FROM_HERE,
@@ -247,6 +250,11 @@ class CreateSessionDescriptionRequest
       if (desc) {
         desc->ToString(&value);
         value = "type: " + desc->type() + ", sdp: " + value;
+
+        // The descriptor string can differ when replaying for unknown reasons,
+        // so for now we force it to match.
+        value.resize(recordreplay::RecordReplayValue("CreateSessionDescriptionRequest::OnSuccess value length", value.length()));
+        recordreplay::RecordReplayBytes("CreateSessionDescriptionRequest::OnSuccess value contents", &value[0], value.length());
       }
       tracker->TrackSessionDescriptionCallback(
           handler_.get(), action_, "OnSuccess", String::FromUTF8(value));
@@ -995,6 +1003,8 @@ RTCPeerConnectionHandler::RTCPeerConnectionHandler(
       encoded_insertable_streams_(encoded_insertable_streams),
       task_runner_(std::move(task_runner)) {
   CHECK(client_);
+
+  INIT_RECORD_REPLAY_ID(RTCPeerConnectionHandler);
 
   GetPeerConnectionHandlers()->insert(this);
 }
