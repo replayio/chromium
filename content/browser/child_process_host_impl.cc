@@ -19,6 +19,7 @@
 #include "base/path_service.h"
 #include "base/process/process_metrics.h"
 #include "base/rand_util.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
@@ -280,6 +281,11 @@ void ChildProcessHostImpl::OnChannelError() {
 }
 
 void ChildProcessHostImpl::OnBadMessageReceived() {
+  // https://linear.app/replay/issue/RUN-1082
+  recordreplay::Diagnostic("[RUN-1082] ChildProcessHostImpl::OnBadMessageReceived %p", (void*)delegate_);
+  if (!delegate_)
+    return;
+
   delegate_->OnBadMessageReceived();
 }
 
