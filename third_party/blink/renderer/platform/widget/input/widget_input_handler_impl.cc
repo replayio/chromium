@@ -145,6 +145,9 @@ void WidgetInputHandlerImpl::RequestCompositionUpdates(bool immediate_request,
 void WidgetInputHandlerImpl::DispatchEvent(
     std::unique_ptr<WebCoalescedInputEvent> event,
     DispatchEventCallback callback) {
+  // https://linear.app/replay/issue/RUN-550
+  recordreplay::Assert("[RUN-550] WidgetInputHandlerImpl::DispatchEvent");
+
   TRACE_EVENT0("input", "WidgetInputHandlerImpl::DispatchEvent");
   input_handler_manager_->DispatchEvent(std::move(event), std::move(callback));
 }
@@ -213,8 +216,27 @@ void WidgetInputHandlerImpl::Release() {
   // invoked. Note, this method will always be called on the Mojo-bound thread
   // first and then again on the main thread, the callback will always be
   // called on the Mojo-bound thread though.
+  recordreplay::Assert("WidgetInputHandlerImpl::Release %d",
+                       !!input_processed_ack_);
   if (input_processed_ack_)
     std::move(input_processed_ack_).Run();
+
+  if (recordreplay::IsRecordingOrReplaying()) {
+    // For a composited widget this runs on the compositor thread when the
+    // browser closes the pipe, racing the main thread's WidgetBase::Shutdown,
+    // which drops the widget's own reference to the manager in a task.
+    // Whichever reference goes last destroys the manager on its thread, and
+    // nothing orders the two, so the replay can destroy it on the other
+    // thread. Drop this handler's references on the main thread instead, in a
+    // task whose order there is replayed.
+    DCHECK(input_handler_manager_->RecordReplayMainThreadDefaultTaskRunner());
+    input_handler_manager_->RecordReplayMainThreadDefaultTaskRunner()->PostTask(
+        FROM_HERE,
+        base::BindOnce([](scoped_refptr<WidgetInputHandlerManager>,
+                          scoped_refptr<MainThreadEventQueue>) {},
+                       std::move(input_handler_manager_),
+                       std::move(input_event_queue_)));
+  }
 
   delete this;
 }

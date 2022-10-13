@@ -88,6 +88,8 @@
 #include "third_party/boringssl/src/include/openssl/ssl.h"
 #include "url/origin.h"
 
+#include "base/record_replay.h"
+
 using base::Time;
 using base::TimeTicks;
 using blink::scheduler::WebResourceLoadingTaskRunnerHandle;
@@ -637,11 +639,16 @@ WebURLLoader::WebURLLoader(
                            std::move(unfreezable_task_runner_handle),
                            std::move(url_loader_factory),
                            std::move(keep_alive_handle),
-                           back_forward_cache_loader_helper)) {}
+                           back_forward_cache_loader_helper)) {
+  recordreplay::RegisterPointer("WebURLLoader", this);
+}
 
-WebURLLoader::WebURLLoader() = default;
+WebURLLoader::WebURLLoader() {
+  recordreplay::RegisterPointer("WebURLLoader", this);
+}
 
 WebURLLoader::~WebURLLoader() {
+  recordreplay::UnregisterPointer(this);
   Cancel();
 }
 

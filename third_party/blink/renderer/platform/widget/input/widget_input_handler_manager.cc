@@ -12,6 +12,7 @@
 #include "base/feature_list.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
+#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "cc/base/features.h"
 #include "cc/metrics/event_metrics.h"
@@ -248,6 +249,10 @@ WidgetInputHandlerManager::WidgetInputHandlerManager(
           power_scheduler::PowerModeArbiter::GetInstance()->NewVoter(
               "PowerModeVoter.Response")),
       allow_scroll_resampling_(allow_scroll_resampling) {
+  if (recordreplay::IsRecordingOrReplaying()) {
+    record_replay_main_thread_default_task_runner_ =
+        base::ThreadTaskRunnerHandle::Get();
+  }
 #if BUILDFLAG(IS_ANDROID)
   if (compositor_thread_default_task_runner_) {
     synchronous_compositor_registry_ =
@@ -278,7 +283,14 @@ void WidgetInputHandlerManager::InitInputHandler() {
   InputThreadTaskRunner()->PostTask(FROM_HERE, std::move(init_closure));
 }
 
-WidgetInputHandlerManager::~WidgetInputHandlerManager() = default;
+WidgetInputHandlerManager::~WidgetInputHandlerManager() {
+  REPLAY_ASSERT("WidgetInputHandlerManager::~WidgetInputHandlerManager");
+  // leak-references: skip OnVoterDestroyed at divergent last-ref (events-allowed).
+  if (recordreplay::IsRecordingOrReplaying(
+          "leak-references", "WidgetInputHandlerManager")) {
+    response_power_mode_voter_.release();
+  }
+}
 
 void WidgetInputHandlerManager::AddInterface(
     mojo::PendingReceiver<mojom::blink::WidgetInputHandler> receiver,
@@ -917,11 +929,30 @@ void WidgetInputHandlerManager::DidHandleInputEventSentToCompositor(
       }
 
       if (!dropped_event_counts_timer_->IsRunning()) {
-        dropped_event_counts_timer_->Start(
-            FROM_HERE, kEventCountsTimerDelay,
-            base::BindOnce(
-                &WidgetInputHandlerManager::SendDroppedPointerDownCounts,
-                this));
+        base::OnceClosure send_counts;
+        if (recordreplay::IsRecordingOrReplaying()) {
+          // The timer fires on the compositor thread at a time that isn't
+          // ordered with the main thread, where WidgetBase::Shutdown's cleanup
+          // checks the manager's reference count. Drop the timer's reference
+          // on the main thread instead, in a task whose order there is
+          // replayed.
+          DCHECK(RecordReplayMainThreadDefaultTaskRunner());
+          send_counts = base::BindOnce(
+              [](scoped_refptr<WidgetInputHandlerManager> manager) {
+                manager->SendDroppedPointerDownCounts();
+                manager->RecordReplayMainThreadDefaultTaskRunner()->PostTask(
+                    FROM_HERE,
+                    base::BindOnce(
+                        [](scoped_refptr<WidgetInputHandlerManager>) {},
+                        std::move(manager)));
+              },
+              base::WrapRefCounted(this));
+        } else {
+          send_counts = base::BindOnce(
+              &WidgetInputHandlerManager::SendDroppedPointerDownCounts, this);
+        }
+        dropped_event_counts_timer_->Start(FROM_HERE, kEventCountsTimerDelay,
+                                           std::move(send_counts));
       }
     }
   }

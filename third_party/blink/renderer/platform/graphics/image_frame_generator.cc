@@ -36,6 +36,8 @@
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
 #include "third_party/skia/include/core/SkData.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 SkYUVAInfo::Subsampling SubsamplingToSkiaSubsampling(
@@ -83,7 +85,8 @@ ImageFrameGenerator::ImageFrameGenerator(const SkISize& full_size,
     : full_size_(full_size),
       decoder_color_behavior_(color_behavior),
       is_multi_frame_(is_multi_frame),
-      supported_sizes_(std::move(supported_sizes)) {
+      supported_sizes_(std::move(supported_sizes)),
+      generator_lock_("ImageFrameGenerator.generator_lock_") {
 #if DCHECK_IS_ON()
   // Verify that sizes are in an increasing order, since
   // GetSupportedDecodeSize() depends on it.
@@ -96,6 +99,11 @@ ImageFrameGenerator::ImageFrameGenerator(const SkISize& full_size,
 }
 
 ImageFrameGenerator::~ImageFrameGenerator() {
+  // Sweeper / other EventsDisallowed paths must not StreamTouch the store
+  // (HasInstance / Instance / RemoveCacheIndexedByGenerator).
+  if (recordreplay::AreEventsDisallowed())
+    return;
+
   // We expect all image decoders to be unlocked and catch with DCHECKs if not.
   ImageDecodingStore::Instance().RemoveCacheIndexedByGenerator(this);
 }
@@ -158,8 +166,9 @@ bool ImageFrameGenerator::DecodeAndScale(
     return false;
   }
 
-  if (!current_decode_succeeded)
+  if (!current_decode_succeeded) {
     return false;
+  }
 
   SetHasAlpha(index, has_alpha);
   if (frame_count != 0u)

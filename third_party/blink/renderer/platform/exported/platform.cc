@@ -33,6 +33,7 @@
 #include <memory>
 
 #include "base/allocator/partition_allocator/memory_reclaimer.h"
+#include "base/record_replay.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "base/threading/thread_task_runner_handle.h"
@@ -51,6 +52,8 @@
 #include "third_party/blink/renderer/platform/bindings/parkable_string_manager.h"
 #include "third_party/blink/renderer/platform/font_family_names.h"
 #include "third_party/blink/renderer/platform/fonts/font_cache_memory_dump_provider.h"
+#include "third_party/blink/renderer/platform/graphics/image.h"
+#include "third_party/blink/renderer/platform/graphics/image_decoding_store.h"
 #include "third_party/blink/renderer/platform/graphics/parkable_image_manager.h"
 #include "third_party/blink/renderer/platform/heap/blink_gc_memory_dump_provider.h"
 #include "third_party/blink/renderer/platform/heap/gc_task_runner.h"
@@ -235,6 +238,22 @@ void Platform::InitializeMainThreadCommon(
       BlinkGCMemoryDumpProvider::HeapType::kBlinkMainThread);
 
   MemoryPressureListenerRegistry::Initialize();
+
+  if (recordreplay::IsRecordingOrReplaying("eager-initialization",
+                                           "ImageDecodingStore")) {
+    // Replay's |__cxa_guard_acquire| is unordered, so the thread that first
+    // constructs the store differs between recording and replaying. Construct
+    // it here, on the main thread, before any decode thread can reach it.
+    ImageDecodingStore::Instance();
+  }
+
+  if (recordreplay::IsRecordingOrReplaying("eager-initialization",
+                                           "SharedCCDecodeCache")) {
+    // Same for the canvas decode caches, which worker threads drawing their
+    // first canvas at the same time can otherwise race to construct.
+    Image::SharedCCDecodeCache(kN32_SkColorType);
+    Image::SharedCCDecodeCache(kRGBA_F16_SkColorType);
+  }
 
   // font_family_names are used by platform/fonts and are initialized by core.
   // In case core is not available (like on PPAPI plugins), we need to init
