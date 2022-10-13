@@ -21,6 +21,7 @@
 #include "base/compiler_specific.h"
 #include "base/containers/adapters.h"
 #include "base/files/file_path.h"
+#include "base/files/file_util.h"
 #include "base/logging.h"
 #include "base/numerics/checked_math.h"
 #include "base/numerics/safe_conversions.h"
@@ -110,7 +111,7 @@ FilePath PathForFrameworkBundleResource(const char* resource_name) {
   NSBundle* bundle = apple::FrameworkBundle();
   NSURL* resource_url = [bundle URLForResource:@(resource_name)
                                  withExtension:nil];
-  return NSURLToFilePath(resource_url);
+  return base::MakeAbsoluteFilePath(NSURLToFilePath(resource_url));
 }
 
 OSType CreatorCodeForCFBundleRef(CFBundleRef bundle) {
