@@ -35,6 +35,8 @@
 #include "third_party/abseil-cpp/absl/base/attributes.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
+#include "base/record_replay.h"
+
 namespace base {
 namespace internal {
 
@@ -582,8 +584,9 @@ scoped_refptr<TaskSource> TaskTracker::UnregisterTaskSource(
 void TaskTracker::DecrementNumItemsBlockingShutdown() {
   const bool shutdown_started_and_no_items_block_shutdown =
       state_->DecrementNumItemsBlockingShutdown();
-  if (!shutdown_started_and_no_items_block_shutdown)
+  if (!shutdown_started_and_no_items_block_shutdown) {
     return;
+  }
 
   CheckedAutoLock auto_lock(shutdown_lock_);
   DCHECK(shutdown_event_);
