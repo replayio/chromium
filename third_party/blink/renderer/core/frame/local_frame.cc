@@ -493,6 +493,11 @@ LocalFrame::~LocalFrame() {
   // the frame owner.
   DCHECK(!view_);
   DCHECK(!frame_color_overlay_);
+
+  if (record_replay_detached_local_root_id_) {
+    recordreplay::CommandDiagnostic("[RUN-2486-2577] ~LocalFrame %d",
+                                    *record_replay_detached_local_root_id_);
+  }
   if (IsAdFrame())
     InstanceCounters::DecrementCounter(InstanceCounters::kAdSubframeCounter);
 
@@ -821,6 +826,16 @@ bool LocalFrame::DetachImpl(FrameDetachType type) {
   supplements_.clear();
   frame_scheduler_.reset();
   mojo_handler_->DidDetachFrame();
+
+  if (!IsA<LocalFrame>(Tree().Parent())) {
+    record_replay_detached_local_root_id_ =
+        WeakIdentifierMap<LocalFrame>::HasIdentifier(this)
+            ? WeakIdentifierMap<LocalFrame>::ExistingIdentifier(this)
+            : -1;
+    recordreplay::CommandDiagnosticTrace(
+        "[RUN-2486-2577] LocalFrame::DetachImpl %d",
+        *record_replay_detached_local_root_id_);
+  }
   WeakIdentifierMap<LocalFrame>::NotifyObjectDestroyed(this);
 
   LocalFramesByTokenMap& local_frames_map = GetLocalFramesMap();
@@ -2000,6 +2015,9 @@ scoped_refptr<base::SingleThreadTaskRunner> LocalFrame::GetTaskRunner(
 void LocalFrame::ScheduleVisualUpdateUnlessThrottled() {
   if (ShouldThrottleRendering())
     return;
+
+  recordreplay::Assert("[RUN-1436] LocalFrame::ScheduleVisualUpdateUnlessThrottled #1");
+
   GetPage()->Animator().ScheduleVisualUpdate(this);
 }
 
@@ -3209,7 +3227,7 @@ void LocalFrame::DidResume() {
   GetDocument()->Fetcher()->SetDefersLoading(LoaderFreezeMode::kNone);
   Loader().SetDefersLoading(LoaderFreezeMode::kNone);
 
-  GetDocument()->DispatchEvent(*Event::Create(event_type_names::kResume));
+  GetDocument()->DispatchEvent(*Event::Create(event_type_names::kResume), "LocalFrame::DidResume");
   // TODO(fmeawad): Move the following logic to the page once we have a
   // PageResourceCoordinator in Blink
   if (auto* document_resource_coordinator =
@@ -4162,6 +4180,10 @@ void LocalFrame::NotifyFrameVisibilityChanged(
   for (auto observer : frame_visibility_observers_as_vector) {
     observer->FrameVisibilityChanged(visibility);
   }
+}
+
+void LocalFrame::RegisterRecordReplayAuthTokenObserver() {
+  mojo_handler_->RegisterRecordReplayAuthTokenObserver();
 }
 
 }  // namespace blink
