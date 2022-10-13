@@ -100,6 +100,10 @@ class CORE_EXPORT Agent : public GarbageCollected<Agent>,
 
   RejectedPromises& GetRejectedPromises();
 
+  virtual int RecordReplayId() const {
+    return record_replay_id_;
+  }
+
  protected:
   Agent(v8::Isolate* isolate,
         const base::UnguessableToken& cluster_id,
@@ -110,6 +114,8 @@ class CORE_EXPORT Agent : public GarbageCollected<Agent>,
 #endif
         const AgentClusterKey& agent_cluster_key,
         AgentType agent_type);
+
+  int record_replay_id_ = 0;
 
  private:
   // scheduler::EventLoopDelegate overrides:

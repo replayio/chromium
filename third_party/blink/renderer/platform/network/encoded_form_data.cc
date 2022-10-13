@@ -35,7 +35,8 @@ namespace blink {
 FormDataElement::FormDataElement() : type_(kData) {}
 
 FormDataElement::FormDataElement(const Vector<char>& array)
-    : type_(kData), data_(array) {}
+    : type_(kData), data_(array)
+{}
 
 FormDataElement::FormDataElement(Vector<char>&& array)
     : type_(kData), data_(std::move(array)) {}
@@ -166,6 +167,7 @@ scoped_refptr<EncodedFormData> EncodedFormData::DeepCopy() const {
 void EncodedFormData::AppendData(base::span<const uint8_t> bytes) {
   if (elements_.empty() || elements_.back().type_ != FormDataElement::kData)
     elements_.push_back(FormDataElement());
+
   FormDataElement& e = elements_.back();
   e.data_.append_range(bytes);
 }

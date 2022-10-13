@@ -9,6 +9,8 @@
 #include "third_party/blink/renderer/core/dom/mutation_observer.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 namespace {
@@ -65,6 +67,7 @@ Agent::Agent(v8::Isolate* isolate,
       cluster_id_(cluster_id),
       agent_cluster_key_(agent_cluster_key),
       agent_type_(agent_type) {
+  record_replay_id_ = recordreplay::NewIdAnyThread("blink::Agent");
 }
 
 Agent::~Agent() = default;
@@ -140,7 +143,13 @@ bool Agent::IsWindowAgent() const {
 }
 
 void Agent::PerformMicrotaskCheckpoint() {
+  recordreplay::Assert("[RUN-2056-2211] Agent::PerformMicrotaskCheckpoint %d Start",
+    (int) RecordReplayId());
+
   event_loop_->PerformMicrotaskCheckpoint();
+
+  recordreplay::Assert("[RUN-2056-2211] Agent::PerformMicrotaskCheckpoint %d Done",
+    (int) RecordReplayId());
 }
 
 void Agent::Dispose() {
