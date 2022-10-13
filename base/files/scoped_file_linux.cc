@@ -66,7 +66,10 @@ namespace subtle {
 
 #if !defined(COMPONENT_BUILD)
 void EnableFDOwnershipEnforcement(bool enabled) {
-  g_is_ownership_enforced = enabled;
+  // Disabled for record/replay, when replaying the ordering of calls across
+  // threads isn't preserved exactly and a fd can be closed on one thread before
+  // it is opened on another thread.
+  //g_is_ownership_enforced = enabled;
 }
 #endif  // !defined(COMPONENT_BUILD)
 
