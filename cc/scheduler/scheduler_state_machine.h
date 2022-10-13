@@ -182,7 +182,8 @@ class CC_EXPORT SchedulerStateMachine {
   // Indicates that the system has entered and left a BeginImplFrame callback.
   // The scheduler will not draw more than once in a given BeginImplFrame
   // callback nor send more than one BeginMainFrame message.
-  void OnBeginImplFrame(const viz::BeginFrameId& frame_id, bool animate_only);
+  void OnBeginImplFrame(const viz::BeginFrameId& frame_id, bool animate_only, 
+      bool replay_force_draw = false);
   // Indicates that the scheduler has entered the draw phase. The scheduler
   // will not draw more than once in a single draw phase.
   // TODO(sunnyps): Rename OnBeginImplFrameDeadline to OnDraw or similar.
@@ -319,6 +320,7 @@ class CC_EXPORT SchedulerStateMachine {
 
   void DidPrepareTiles();
   void DidLoseLayerTreeFrameSink();
+  void RecordReplayReuseLostLayerTreeFrameSink();
   void DidCreateAndInitializeLayerTreeFrameSink();
   bool HasInitializedLayerTreeFrameSink() const;
 
@@ -363,6 +365,18 @@ class CC_EXPORT SchedulerStateMachine {
   void set_is_scrolling(bool is_scrolling) { is_scrolling_ = is_scrolling; }
   void set_waiting_for_scroll_event(bool waiting_for_scroll_event) {
     waiting_for_scroll_event_ = waiting_for_scroll_event;
+  }
+
+  bool ClearReplayForceDraw() {
+    bool result = replay_force_draw_; 
+    replay_force_draw_ = false;
+    replay_repaint_pending_ = false;
+    return result;
+  }
+
+  void SetReplayRepaintPending() { replay_repaint_pending_ = true; }
+  bool RecordReplayCreatingFrameSink() const {
+    return layer_tree_frame_sink_state_ == LayerTreeFrameSinkState::CREATING;
   }
 
  protected:
@@ -520,6 +534,10 @@ class CC_EXPORT SchedulerStateMachine {
   // expecting some. Once `is_scrolling_` is false, we are no longer expecting
   // scroll events to arrive.
   bool waiting_for_scroll_event_ = false;
+  bool replay_force_draw_ = false;
+
+  // A repaint has started and its commit is coming.
+  bool replay_repaint_pending_ = false;
 };
 
 }  // namespace cc

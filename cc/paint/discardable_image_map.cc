@@ -15,6 +15,7 @@
 #include "base/memory/stack_allocated.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/no_destructor.h"
+#include "base/record_replay.h"
 #include "base/sequence_checker.h"
 #include "base/trace_event/trace_event.h"
 #include "cc/paint/image_provider.h"
@@ -327,8 +328,12 @@ class DiscardableImageMap::Generator {
 
 DiscardableImageMap::DiscardableImageMap() {
   DETACH_FROM_SEQUENCE(images_rtree_sequence_checker_);
+  recordreplay::RegisterPointer("DiscardableImageMap", this);
 }
-DiscardableImageMap::~DiscardableImageMap() = default;
+
+DiscardableImageMap::~DiscardableImageMap() {
+  recordreplay::UnregisterPointer(this);
+}
 
 void DiscardableImageMap::Generate(const PaintOpBuffer& paint_op_buffer,
                                    const gfx::Rect& bounds) {
