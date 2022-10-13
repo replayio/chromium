@@ -88,6 +88,7 @@
 #include "third_party/blink/renderer/platform/loader/fetch/resource_timing_utils.h"
 #include "third_party/blink/renderer/platform/loader/fetch/stale_revalidation_resource_client.h"
 #include "third_party/blink/renderer/platform/loader/fetch/subresource_web_bundle.h"
+#include "third_party/blink/renderer/platform/wtf/shared_buffer.h"
 #include "third_party/blink/renderer/platform/loader/fetch/subresource_web_bundle_list.h"
 #include "third_party/blink/renderer/platform/loader/fetch/unique_identifier.h"
 #include "third_party/blink/renderer/platform/mhtml/archive_resource.h"
@@ -108,6 +109,8 @@
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
+
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
 
 namespace blink {
 
@@ -928,6 +931,25 @@ void ResourceFetcher::DidLoadResourceFromMemoryCache(
         resource->GetResponse().DecodedBodyLength());
   }
 
+  recordreplay::OnNetworkReceiveResponse(request.InspectorId(), resource->GetResponse(),
+                                         /* response_from_cache = */ true);
+
+  if (recordreplay::ShouldEmitRecordReplayNetworkBrowserEvents()) {
+    if (scoped_refptr<const SharedBuffer> resource_buffer =
+            resource->ResourceBuffer()) {
+      SharedBuffer::DeprecatedFlatData flat_data(resource_buffer);
+      if (flat_data.size() > 0) {
+        recordreplay::OnNetworkReceiveData(
+            request.InspectorId(), flat_data.Data(),
+            static_cast<int>(flat_data.size()));
+      }
+    }
+  }
+
+  recordreplay::OnNetworkFinishLoading(request.InspectorId(),
+                                       resource->GetResponse().EncodedBodyLength(),
+                                       resource->GetResponse().DecodedBodyLength());
+
   if (!is_static_data) {
     base::TimeTicks now = base::TimeTicks::Now();
     ResourceResponse final_response = resource->GetResponse();
@@ -1270,6 +1292,10 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
   resource_request.SetInspectorId(identifier);
   resource_request.SetFromOriginDirtyStyleSheet(
       params.IsFromOriginDirtyStyleSheet());
+
+  recordreplay::Assert("[RUN-658-1381] ResourceFetcher::RequestResource %s",
+                       params.Url().ElidedString().Utf8().c_str());
+
   TRACE_EVENT_NESTABLE_ASYNC_BEGIN1(
       TRACE_DISABLED_BY_DEFAULT("network"), "ResourceLoad",
       TRACE_ID_WITH_SCOPE("BlinkResourceID", TRACE_ID_LOCAL(identifier)), "url",
@@ -1378,6 +1404,7 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
       prepare_helper.UpgradeForLoaderIfNecessary(pauser);
     }
     resource = MatchPreload(params, resource_type, preloads_list_iterator);
+
     if (resource) {
       policy = RevalidationPolicy::kUse;
       prepare_helper.UpgradeForLoaderIfNecessary(pauser);
@@ -1390,6 +1417,17 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
           GetCacheIdentifier(
               params.Url(),
               params.GetResourceRequest().GetSkipServiceWorker()));
+
+      // Whether there is a resource can vary when replaying due to different memory
+      // cache behavior. For now we deal with this by ignoring the resource if it
+      // is present when replaying but wasn't when recording.
+      bool recorded_has_resource =
+        recordreplay::RecordReplayValue("ResourceFetcher::RequestResource has_cached_resource", !!resource);
+
+      if (!recorded_has_resource)
+        resource = nullptr;
+
+      recordreplay::Assert("[RUN-1333] ResourceFetcher::RequestResource has_cached_resource %d", !!resource);
       if (resource) {
         policy = DetermineRevalidationPolicy(resource_type, params, *resource,
                                              is_static_data);
@@ -1709,6 +1747,9 @@ Resource* ResourceFetcher::CreateResourceForLoading(
 
   RESOURCE_LOADING_DVLOG(1) << "Loading Resource for "
                             << params.GetResourceRequest().Url().ElidedString();
+
+  // https://linear.app/replay/issue/RUN-820
+  recordreplay::Assert("[RUN-820] ResourceFetcher::CreateResourceForLoading #1");
 
   Resource* resource = factory.Create(
       params.GetResourceRequest(), params.Options(), params.DecoderOptions());
@@ -2738,8 +2779,15 @@ void ResourceFetcher::UpdateImagePrioritiesAndSpeculativeDecodes() {
       });
   MaybeStartSpeculativeImageDecode();
 
-  HeapVector<Member<Resource>> to_be_removed;
+  HeapVector<Member<Resource>> entries;
   for (Resource* resource : not_loaded_image_resources_) {
+    entries.push_back(resource);
+  }
+  std::sort(entries.begin(), entries.end(),
+            recordreplay::CompareMemberByPointerId<Member<Resource>>());
+
+  HeapVector<Member<Resource>> to_be_removed;
+  for (Resource* resource : entries) {
     if (resource->IsLoaded()) {
       to_be_removed.push_back(resource);
       continue;
@@ -2957,6 +3005,9 @@ void ResourceFetcher::StopFetchingInternal(StopFetchingTarget target) {
     }
   }
 
+  std::sort(loaders_to_cancel.begin(), loaders_to_cancel.end(),
+            recordreplay::CompareMemberByPointerId<Member<ResourceLoader>>());
+
   for (const auto& loader : loaders_to_cancel) {
     if (loaders_.Contains(loader) || non_blocking_loaders_.Contains(loader)) {
       loader->Cancel();
@@ -2973,13 +3024,26 @@ void ResourceFetcher::ScheduleStaleRevalidate(Resource* stale_resource) {
     return;
   }
   stale_resource->SetStaleRevalidationStarted();
+
+  int node_id = recordreplay::NewDependencyGraphNode("{\"kind\":\"scheduleRevalidateStaleResource\"}");
   freezable_task_runner_->PostTask(
       FROM_HERE,
       WTF::BindOnce(&ResourceFetcher::RevalidateStaleResource,
-                    WrapWeakPersistent(this), WrapPersistent(stale_resource)));
+                    WrapWeakPersistent(this), WrapPersistent(stale_resource), node_id));
 }
 
-void ResourceFetcher::RevalidateStaleResource(Resource* stale_resource) {
+void ResourceFetcher::RevalidateStaleResource(Resource* stale_resource,
+                                              int record_replay_scheduled_node_id) {
+  std::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    int node_id = recordreplay::NewDependencyGraphNode("{\"kind\":\"revalidateStaleResource\"}");
+    recordreplay::AddDependencyGraphEdge(
+      record_replay_scheduled_node_id, node_id,
+      "{\"kind\":\"scheduler\"}"
+    );
+    execute.emplace(node_id);
+  }
+
   // Creating FetchParams from Resource::GetResourceRequest doesn't create
   // the exact same request as the original one, while for revalidation
   // purpose this is probably fine.
@@ -3465,6 +3529,8 @@ ResourceFetcher::ResourcePrepareHelper::ResourcePrepareHelper(
 std::optional<ResourceRequestBlockedReason>
 ResourceFetcher::ResourcePrepareHelper::PrepareRequestForCacheAccess(
     WebScopedVirtualTimePauser& pauser) {
+  recordreplay::Assert("[RUN-749] ResourceFetcher::PrepareRequest Start");
+
 #if DCHECK_IS_ON()
   DCHECK(!determined_initial_blocked_reason_);
   determined_initial_blocked_reason_ = true;

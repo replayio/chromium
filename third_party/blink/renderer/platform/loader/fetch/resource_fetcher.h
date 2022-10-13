@@ -571,7 +571,7 @@ class PLATFORM_EXPORT ResourceFetcher
                               bool is_static_data) const;
 
   void ScheduleStaleRevalidate(Resource* stale_resource);
-  void RevalidateStaleResource(Resource* stale_resource);
+  void RevalidateStaleResource(Resource* stale_resource, int record_replay_scheduled_node_id);
 
   void WarnUnusedPreloads(
       base::OnceCallback<void(Vector<KURL> unused_preloads)> callback);
@@ -649,7 +649,7 @@ class PLATFORM_EXPORT ResourceFetcher
   // document where |Resource::IsLoaded| might be false. The is used for
   // performance optimizations and might still contain images which are actually
   // loaded.
-  HeapHashSet<WeakMember<Resource>> not_loaded_image_resources_;
+  HeapHashSet<WeakMember<Resource>, RecordReplayPointerIdHashTraits<WeakMember<Resource>>> not_loaded_image_resources_;
   HeapHashSet<WeakMember<Resource>> speculative_decode_candidate_images_;
 
   HeapHashMap<PreloadKey, Member<Resource>> preloads_;
@@ -668,13 +668,13 @@ class PLATFORM_EXPORT ResourceFetcher
   TaskHandle unused_preloads_timer_;
 
   using PendingResourceTimingInfoMap =
-      HeapHashMap<Member<Resource>, PendingResourceTimingInfo>;
+      HeapHashMap<Member<Resource>, PendingResourceTimingInfo, RecordReplayPointerIdHashTraits<Member<Resource>>>;
   PendingResourceTimingInfoMap resource_timing_info_map_;
 
   Vector<ScheduledResourceTimingInfo> scheduled_resource_timing_reports_;
 
-  HeapHashSet<Member<ResourceLoader>> loaders_;
-  HeapHashSet<Member<ResourceLoader>> non_blocking_loaders_;
+  HeapHashSet<Member<ResourceLoader>, RecordReplayPointerIdHashTraits<Member<ResourceLoader>>> loaders_;
+  HeapHashSet<Member<ResourceLoader>, RecordReplayPointerIdHashTraits<Member<ResourceLoader>>> non_blocking_loaders_;
 
   HashMap<KURL, EarlyHintsPreloadEntry> unused_early_hints_preloaded_resources_;
 

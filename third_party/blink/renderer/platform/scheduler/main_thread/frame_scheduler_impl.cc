@@ -39,6 +39,8 @@
 #include "third_party/blink/renderer/platform/scheduler/worker/worker_scheduler_proxy.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 namespace scheduler {
@@ -220,6 +222,9 @@ FrameSchedulerImpl::FrameSchedulerImpl(
           MakeNamedTrack("FrameScheduler.IsLoadEventDispatched", this),
           &tracing_controller_,
           YesNoStateToString) {
+  // Pointer registration is needed for sorting in PageSchedulerImpl.
+  recordreplay::RegisterPointer("FrameSchedulerImpl", this);
+
   frame_task_queue_controller_ = base::WrapUnique(
       new FrameTaskQueueController(main_thread_scheduler_, this, this));
   back_forward_cache_disabling_feature_tracker_.SetDelegate(delegate_);
@@ -235,6 +240,7 @@ FrameSchedulerImpl::FrameSchedulerImpl()
                          FrameType::kSubframe) {}
 
 FrameSchedulerImpl::~FrameSchedulerImpl() {
+  recordreplay::UnregisterPointer(this);
   weak_factory_.InvalidateWeakPtrs();
 
   TRACE_EVENT_END(TRACE_DISABLED_BY_DEFAULT("renderer.scheduler"), url_track_);
@@ -262,6 +268,9 @@ FrameSchedulerImpl::~FrameSchedulerImpl() {
     if (opted_out_from_aggressive_throttling())
       parent_page_scheduler_->OnThrottlingStatusUpdated();
   }
+
+  if (replay_scheduling_owner_release_)
+    std::move(replay_scheduling_owner_release_).Run();
 }
 
 AgentGroupSchedulerImpl& FrameSchedulerImpl::GetAgentGroupSchedulerImpl() {
@@ -813,6 +822,9 @@ base::WeakPtr<const FrameSchedulerImpl> FrameSchedulerImpl::GetWeakPtr() const {
 }
 
 void FrameSchedulerImpl::ReportActiveSchedulerTrackedFeatures() {
+  // https://linear.app/replay/issue/RUN-825
+  recordreplay::Assert("FrameSchedulerImpl::ReportActiveSchedulerTrackedFeatures");
+
   back_forward_cache_disabling_feature_tracker_.ReportFeaturesToDelegate();
 }
 
@@ -915,6 +927,18 @@ void FrameSchedulerImpl::UpdatePolicy() {
   if (throttling_type_ == ThrottlingType::kNone) {
     throttled_task_queue_handles_.clear();
   }
+
+  // M124 deleted MoveTaskQueuesToCorrectWakeUpBudgetPool() and folded its body
+  // into this function's loop, so the assert moves here, in front of the same
+  // loop over GetAllTaskQueuesAndVoters() it has always preceded.  The label is
+  // kept verbatim: it is a recorded-stream key, not a description of the
+  // enclosing function.  Its firing set widens, because UpdatePolicy() has more
+  // callers than the deleted function had.
+  REPLAY_ASSERT(
+      "[TT-393] "
+      "FrameSchedulerImpl::MoveTaskQueuesToCorrectWakeUpBudgetPool A %d %u",
+      recordreplay::PointerId(this),
+      frame_task_queue_controller_->GetAllTaskQueuesAndVoters().size());
 
   for (const auto& task_queue_and_voter :
        frame_task_queue_controller_->GetAllTaskQueuesAndVoters()) {
@@ -1381,6 +1405,11 @@ FrameSchedulerImpl::CreateWebSchedulingTaskQueue(
       immediate_task_queue->AsWeakPtr(), delayed_task_queue->AsWeakPtr());
 }
 
+void FrameSchedulerImpl::SetReplaySchedulingOwnerRelease(
+    base::OnceClosure release) {
+  replay_scheduling_owner_release_ = std::move(release);
+}
+
 void FrameSchedulerImpl::OnWebSchedulingTaskQueuePriorityChanged(
     MainThreadTaskQueue* queue) {
   UpdateQueuePolicy(queue,
@@ -1390,6 +1419,9 @@ void FrameSchedulerImpl::OnWebSchedulingTaskQueuePriorityChanged(
 
 void FrameSchedulerImpl::OnWebSchedulingTaskQueueDestroyed(
     MainThreadTaskQueue* queue) {
+  REPLAY_ASSERT("[TT-1465] FrameSchedulerImpl::OnWebSchedulingTaskQueueDestroyed %d",
+    recordreplay::PointerId(queue));
+
   if (queue->CanBeThrottled()) {
     RemoveThrottleableQueueFromBudgetPools(queue);
   }
