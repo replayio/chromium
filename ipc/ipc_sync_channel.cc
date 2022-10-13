@@ -32,6 +32,8 @@
 #include "ipc/trace_ipc_message.h"
 #endif
 
+#include "base/record_replay.h"
+
 using base::WaitableEvent;
 
 namespace IPC {
