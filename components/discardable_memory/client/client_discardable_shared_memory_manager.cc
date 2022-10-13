@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "base/atomic_sequence_num.h"
+#include "base/record_replay.h"
 #include "base/format_macros.h"
 #include "base/functional/bind.h"
 #include "base/memory/discardable_memory.h"
@@ -264,6 +265,11 @@ void ClientDiscardableSharedMemoryManager::OnUpdateMemoryLimit() {
 
 void ClientDiscardableSharedMemoryManager::OnReleaseMemory() {
   if (memory_limit() <= base::MemoryLimit::CriticalPressureThreshold()) {
+    // DSRC-146: the arm the fork's feature label actually names.
+    if (recordreplay::AreEventsDisallowed() &&
+      recordreplay::FeatureEnabled("leak-references", "ReleaseFreeMemory")) {
+      return;
+    }
     ReleaseFreeMemory();
   }
 }

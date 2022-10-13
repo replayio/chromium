@@ -5,6 +5,7 @@
 #include "content/renderer/skia_graphics_pressure_listener.h"
 
 #include "base/memory_coordinator/traits.h"
+#include "base/record_replay.h"
 #include "base/memory_coordinator/utils.h"
 #include "third_party/skia/include/core/SkGraphics.h"
 
@@ -43,6 +44,12 @@ void SkiaGraphicsPressureListener::OnUpdateMemoryLimit() {}
 
 void SkiaGraphicsPressureListener::OnReleaseMemory() {
   if (memory_limit() <= base::MemoryLimit::CriticalPressureThreshold()) {
+    // DSRC-146: the fork suppressed purge/release/reclaim at CRITICAL while
+    // events are disallowed and this feature is on.
+    if (recordreplay::AreEventsDisallowed() &&
+      recordreplay::FeatureEnabled("leak-references", "ReleaseFreeMemory")) {
+      return;
+    }
     SkGraphics::PurgeAllCaches();
   }
 }

@@ -372,6 +372,9 @@ class WebContents : public PageNavigator, public base::SupportsUserData {
 
     // See PrivilegedParams. Unset for ordinary WebContents.
     std::optional<PrivilegedParams> privileged_params;
+    // Indicates that the content should be recorded by the Record Replay
+    // framework.
+    bool record_replay_for_recording = false;
   };
 
   // Token that causes input to be blocked on this WebContents for at least as

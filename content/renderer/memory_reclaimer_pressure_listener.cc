@@ -5,6 +5,7 @@
 #include "content/renderer/memory_reclaimer_pressure_listener.h"
 
 #include "base/memory_coordinator/traits.h"
+#include "base/record_replay.h"
 #include "base/memory_coordinator/utils.h"
 #include "partition_alloc/memory_reclaimer.h"
 
@@ -40,6 +41,14 @@ MemoryReclaimerPressureListener::~MemoryReclaimerPressureListener() = default;
 void MemoryReclaimerPressureListener::OnUpdateMemoryLimit() {}
 
 void MemoryReclaimerPressureListener::OnReleaseMemory() {
+  // DSRC-146: this listener fires from MODERATE, where the fork's old body
+  // ran ReclaimAll UNGUARDED; only the CRITICAL case was suppressed, so the
+  // guard carries an explicit CRITICAL conjunct here and only here.
+  if (memory_limit() <= base::MemoryLimit::CriticalPressureThreshold() &&
+      recordreplay::AreEventsDisallowed() &&
+      recordreplay::FeatureEnabled("leak-references", "ReleaseFreeMemory")) {
+    return;
+  }
   if (memory_limit() <= base::MemoryLimit::ModeratePressureThreshold()) {
     ::partition_alloc::MemoryReclaimer::Instance()->ReclaimAll();
   }

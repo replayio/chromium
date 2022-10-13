@@ -51,6 +51,7 @@
 #include "content/public/common/webplugininfo.h"
 #include "content/public/renderer/content_renderer_client.h"
 #include "content/public/renderer/render_frame.h"
+#include "content/public/renderer/worker_thread.h"
 #include "content/renderer/media/audio_decoder.h"
 #include "content/renderer/media/batching_media_log.h"
 #include "content/renderer/media/inspector_media_event_handler.h"
@@ -257,6 +258,17 @@ RendererBlinkPlatformImpl::RendererBlinkPlatformImpl(
     // Match the `Wait` in destructor even if there is no IO runner.
     io_thread_id_ready_event_.Signal();
   }
+
+  if (recordreplay::IsRecordingOrReplaying("eager-initialization",
+                                           "WorkerThreadRegistry")) {
+    // The registry and the worker thread data TLS slot are LazyInstances, and
+    // which thread wins the unrecorded compare and swap creating them differs
+    // between recording and replaying when worker threads start at the same
+    // time. Create both here, on the main thread, before any worker thread
+    // starts (GetCurrentId() creates the slot and returns 0 here).
+    WorkerThreadRegistry::Instance();
+    WorkerThread::GetCurrentId();
+  }
 }
 
 RendererBlinkPlatformImpl::~RendererBlinkPlatformImpl() {
@@ -336,7 +348,10 @@ uint64_t RendererBlinkPlatformImpl::PartitionedVisitedLinkFingerprint(
 }
 
 bool RendererBlinkPlatformImpl::IsLinkVisited(uint64_t link_hash) {
-  return GetContentClient()->renderer()->IsLinkVisited(link_hash);
+  // Link status is something we want to record, to match playback.  See RUN-1442
+  // for details.
+  return (bool)recordreplay::RecordReplayValue("RendererBlinkPlatformImpl::IsLinkVisited", 
+    GetContentClient()->renderer()->IsLinkVisited(link_hash));
 }
 
 void RendererBlinkPlatformImpl::AddOrUpdateVisitedLinkSalt(
