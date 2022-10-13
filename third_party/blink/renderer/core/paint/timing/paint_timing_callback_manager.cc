@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/core/paint/timing/paint_timing_callback_manager.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/page/chrome_client.h"
 #include "third_party/blink/renderer/core/page/page.h"
@@ -16,6 +17,12 @@ namespace blink {
 void PaintTimingCallbackManagerImpl::ReportPaintTime(
     std::unique_ptr<PaintTimingCallbackManager::CallbackQueue> frame_callbacks,
     base::TimeTicks paint_time) {
+  recordreplay::Assert(
+      "[RUN-2317-2316] "
+      "PaintTimingCallbackManagerImpl::ReportPaintTime %d %d",
+      frame_view_->GetFrame().RecordReplayId(),
+      frame_view_->GetFrame().IsDetached());
+
   // Do not report any paint timings for detached frames.
   if (frame_view_->GetFrame().IsDetached()) {
     return;
@@ -36,9 +43,25 @@ void PaintTimingCallbackManagerImpl::
     return;
   }
 
-  auto combined_callback = CrossThreadBindOnce(
-      &PaintTimingCallbackManagerImpl::ReportPaintTime,
-      WrapCrossThreadWeakPersistent(this), std::move(frame_callbacks_));
+  recordreplay::Assert(
+      "[RUN-2317-2316] "
+      "PaintTimingCallbackManagerImpl::"
+      "RegisterPaintTimeCallbackForCombinedCallbacks %d",
+      frame.RecordReplayId());
+
+  // Whether a weak receiver is collected before the presentation depends on
+  // GC timing, which differs between recording and replaying, so the callback
+  // keeps the manager alive while recording/replaying.
+  auto combined_callback =
+      recordreplay::IsRecordingOrReplaying("leak-references",
+                                           "PaintTimingCallbackManagerImpl")
+          ? CrossThreadBindOnce(
+                &PaintTimingCallbackManagerImpl::ReportPaintTime,
+                WrapCrossThreadPersistent(this), std::move(frame_callbacks_))
+          : CrossThreadBindOnce(
+                &PaintTimingCallbackManagerImpl::ReportPaintTime,
+                WrapCrossThreadWeakPersistent(this),
+                std::move(frame_callbacks_));
   frame_callbacks_ =
       std::make_unique<PaintTimingCallbackManager::CallbackQueue>();
 
