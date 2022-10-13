@@ -17,6 +17,8 @@
 #include "components/services/font/public/cpp/mapped_font_file.h"
 #include "pdf/buildflags.h"
 
+#include "base/record_replay.h"
+
 namespace font_service {
 namespace internal {
 
@@ -32,6 +34,9 @@ FontServiceThread::~FontServiceThread() {
 
 void FontServiceThread::Init(
     mojo::PendingRemote<mojom::FontService> pending_font_service) {
+  // https://linear.app/replay/issue/RUN-999
+  CHECK(!recordreplay::AreEventsDisallowed());
+
   task_runner_->PostTask(FROM_HERE,
                          base::BindOnce(&FontServiceThread::InitImpl, this,
                                         std::move(pending_font_service)));
@@ -44,6 +49,14 @@ bool FontServiceThread::MatchFamilyName(
     SkString* out_family_name,
     SkFontStyle* out_style) {
   DCHECK(!task_runner_->RunsTasksInCurrentSequence());
+
+  // Every proxy below waits on a font service reply that never arrives when
+  // events are unavailable. Refuse instead of hanging: callers already handle
+  // this as a disconnected font service.
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
+    return false;
+  }
+
   bool out_valid = false;
 
   base::ElapsedTimer timer;
@@ -72,6 +85,10 @@ bool FontServiceThread::FallbackFontForCharacter(
     bool* out_is_bold,
     bool* out_is_italic) {
   DCHECK(!task_runner_->RunsTasksInCurrentSequence());
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
+    return false;
+  }
+
   bool out_valid = false;
   base::WaitableEvent done_event;
   task_runner_->PostTask(
@@ -93,6 +110,10 @@ bool FontServiceThread::FontRenderStyleForStrike(
     float device_scale_factor,
     font_service::mojom::FontRenderStylePtr* out_font_render_style) {
   DCHECK(!task_runner_->RunsTasksInCurrentSequence());
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
+    return false;
+  }
+
   bool out_valid = false;
   base::WaitableEvent done_event;
   task_runner_->PostTask(
@@ -108,6 +129,10 @@ bool FontServiceThread::MatchFontByPostscriptNameOrFullFontName(
     std::string postscript_name_or_full_font_name,
     mojom::FontIdentityPtr* out_identity) {
   DCHECK(!task_runner_->RunsTasksInCurrentSequence());
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
+    return false;
+  }
+
   bool out_valid = false;
   base::WaitableEvent done_event;
   task_runner_->PostTask(
@@ -129,6 +154,10 @@ void FontServiceThread::MatchFontWithFallback(
     uint32_t fallback_family_type,
     base::File* out_font_file_handle) {
   DCHECK(!task_runner_->RunsTasksInCurrentSequence());
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
+    return;
+  }
+
   base::WaitableEvent done_event;
   task_runner_->PostTask(
       FROM_HERE,
@@ -142,6 +171,9 @@ void FontServiceThread::MatchFontWithFallback(
 scoped_refptr<MappedFontFile> FontServiceThread::OpenStream(
     const SkFontConfigInterface::FontIdentity& identity) {
   DCHECK(!task_runner_->RunsTasksInCurrentSequence());
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
+    return nullptr;
+  }
 
   base::ElapsedTimer timer;
 
@@ -429,6 +461,9 @@ void FontServiceThread::OnFontServiceDisconnected() {
 
 void FontServiceThread::InitImpl(
     mojo::PendingRemote<mojom::FontService> pending_font_service) {
+  // https://linear.app/replay/issue/RUN-999
+  CHECK(!recordreplay::AreEventsDisallowed());
+
   font_service_.Bind(std::move(pending_font_service));
 
   // NOTE: Unretained is safe here because the callback can never be invoked
