@@ -236,6 +236,9 @@ class CONTENT_EXPORT RenderProcessHostImpl
   bool IsForGuestsOnly() override;
   bool IsJitDisabled() override;
   bool IsPdf() override;
+  bool IsRecordReplayForRecording() {
+    return !!(flags_ & RenderProcessFlags::kRecordReplayForRecording);
+  }
   StoragePartitionImpl* GetStoragePartition() override;
   bool Shutdown(int exit_code) override;
   bool ShutdownRequested() override;
@@ -334,6 +337,9 @@ class CONTENT_EXPORT RenderProcessHostImpl
   void ForceCrash() override;
   std::string GetInfoForBrowserContextDestructionCrashReporting() override;
   void WriteIntoTrace(perfetto::TracedProto<TraceProto> proto) const override;
+  void SendRecordReplayBrowserEvent(
+      const std::string& name,
+      base::Value&& value) override;
 #if BUILDFLAG(CLANG_PROFILING_INSIDE_SANDBOX)
   void DumpProfilingData(base::OnceClosure callback) override;
 #endif
@@ -918,6 +924,14 @@ class CONTENT_EXPORT RenderProcessHostImpl
     // the default font manager.
     kSkiaFontManager = 1 << 3,
 #endif
+
+    // Indicates whether the render process backing this host should
+    // be recorded using the RecordReplay infrastructure.
+    //
+    // DSRC-013's family: upstream claimed bit 3 for kSkiaFontManager at M127,
+    // so this moved to bit 4.  Unconditional, not inside the IS_WIN guard, so
+    // the value is the same on every platform.
+    kRecordReplayForRecording = 1 << 4,
   };
 
   // Use CreateRenderProcessHost() instead of calling this constructor
