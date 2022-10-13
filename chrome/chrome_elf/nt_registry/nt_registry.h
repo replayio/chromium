@@ -33,6 +33,12 @@
 
 namespace nt {
 
+// When recording/replaying the registry API gets initialized at different points
+// due to differences in dll loading behavior. For now we workaround this by
+// resetting the initialization after RecordReplayAttach is called so that the
+// function pointers loaded can be intercepted properly.
+void RecordReplayResetRegApiInitialization();
+
 // Windows registry maximum lengths (in chars).  Not including null char.
 // https://learn.microsoft.com/en-us/windows/win32/sysinfo/registry-element-size-limits
 constexpr size_t g_kRegMaxPathLen = 255;

@@ -77,6 +77,7 @@
 #include "chrome/browser/ui/webui/management/management_ui.h"
 #include "chrome/browser/ui/webui/new_tab_page/new_tab_page_ui.h"
 #include "chrome/browser/ui/webui/password_manager/password_manager_ui.h"
+#include "chrome/browser/ui/webui/record_replay/record_replay_ui.h"
 #include "chrome/browser/ui/webui/settings/settings_utils.h"
 #include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_url_info.h"
 #include "chrome/browser/web_applications/web_app_icon_manager.h"
@@ -165,6 +166,10 @@ WebUIController* NewWebUI(WebUI* web_ui, const GURL& url) {
 WebUIFactoryFunction GetWebUIFactoryFunction(WebUI* web_ui,
                                              Profile* profile,
                                              const GURL& url) {
+  // recordreplay
+  if (url.host_piece() == chrome::kChromeUIRecordReplayHost)
+    return &NewWebUI<RecordReplayUI>;
+  // /recordreplay
   // This will get called a lot to check all URLs, so do a quick check of other
   // schemes to filter out most URLs.
 #if !BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_DESKTOP_ANDROID)
@@ -357,7 +362,9 @@ bool ChromeWebUIControllerFactory::IsWebUIAllowedToMakeNetworkRequests(
       // https://crbug.com/859345
       origin.host() == chrome::kChromeUIDownloadsHost ||
       // https://crbug.com/376417346
-      origin.host() == chrome::kChromeUIExtensionsHost;
+      origin.host() == chrome::kChromeUIExtensionsHost ||
+      // recordreplay
+      origin.host() == chrome::kChromeUIRecordReplayHost;
 }
 
 ChromeWebUIControllerFactory::ChromeWebUIControllerFactory() = default;
