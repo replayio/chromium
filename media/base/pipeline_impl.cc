@@ -165,7 +165,7 @@ class PipelineImpl::RendererWrapper final : public DemuxerHost,
   // Wrapper for SharedState that enforces locking and sequencing guarantees.
   class SharedStateAccessor {
    public:
-    SharedStateAccessor() {
+    SharedStateAccessor() : lock_("PipelineImpl::RendererWrapper.shared_state_lock_") {
       // The RendererWrapper constructor will bind these to the right sequence.
       DETACH_FROM_SEQUENCE(main_sequence_checker);
       DETACH_FROM_SEQUENCE(media_sequence_checker);
