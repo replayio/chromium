@@ -21,6 +21,8 @@
 
 namespace blink {
 
+extern bool LocalDOMWindowPointerIsValid(LocalDOMWindow* window);
+
 namespace {
 
 void MeasureFetchProperties(ExecutionContext* execution_context,
@@ -214,6 +216,16 @@ ScriptPromise<Response> GlobalFetch::fetch(ScriptState* script_state,
                                            const V8RequestInfo* input,
                                            const RequestInit* init,
                                            ExceptionState& exception_state) {
+  // Workaround for invalid window pointers being used when this function was called
+  // when no creation context is available for an unknown reason.
+  //
+  // See https://linear.app/replay/issue/TT-957
+  if (!LocalDOMWindowPointerIsValid(&window)) {
+    recordreplay::Warning("GlobalFetchContextGone");
+    exception_state.ThrowTypeError("Invalid receiver.");
+    return EmptyPromise();
+  }
+
   UseCounter::Count(window.GetExecutionContext(), WebFeature::kFetch);
   if (!window.GetFrame()) {
     exception_state.ThrowTypeError("The global scope is shutting down.");
