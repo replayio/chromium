@@ -35,6 +35,8 @@
 #include "build/build_config.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
+#include "base/record_replay.h"
+
 namespace base {
 namespace internal {
 
@@ -103,6 +105,15 @@ ThreadPoolImpl::ThreadPoolImpl(StringPiece histogram_label,
             : kForegroundPoolEnvironmentParams.thread_type_hint,
         task_tracker_->GetTrackedRef(), tracked_ref_factory_.GetTrackedRef());
   }
+
+  if (recordreplay::IsRecordingOrReplaying()) {
+    recordreplay::AutoDisallowEvents disallow("ThreadPoolImpl::ThreadPoolImpl");
+    record_replay_unordered_thread_group_ = std::make_unique<ThreadGroupImpl>(
+        std::string(),
+        kBackgroundPoolEnvironmentParams.name_suffix,
+        kBackgroundPoolEnvironmentParams.thread_type_hint,
+        task_tracker_->GetTrackedRef(), tracked_ref_factory_.GetTrackedRef());
+  }
 }
 
 ThreadPoolImpl::~ThreadPoolImpl() {
@@ -114,6 +125,7 @@ ThreadPoolImpl::~ThreadPoolImpl() {
   foreground_thread_group_.reset();
   utility_thread_group_.reset();
   background_thread_group_.reset();
+  record_replay_unordered_thread_group_.reset();
 }
 
 void ThreadPoolImpl::Start(const ThreadPoolInstance::InitParams& init_params,
@@ -206,6 +218,14 @@ void ThreadPoolImpl::Start(const ThreadPoolInstance::InitParams& init_params,
                 init_params.suggested_reclaim_time, service_thread_task_runner,
                 worker_thread_observer, worker_environment,
                 g_synchronous_thread_start_for_testing);
+  }
+
+  if (record_replay_unordered_thread_group_) {
+    static_cast<ThreadGroupImpl*>(record_replay_unordered_thread_group_.get())
+        ->Start(max_best_effort_tasks, max_best_effort_tasks,
+                init_params.suggested_reclaim_time,
+                service_thread_task_runner, worker_thread_observer,
+                worker_environment, g_synchronous_thread_start_for_testing);
   }
 
   started_ = true;
@@ -462,8 +482,9 @@ bool ThreadPoolImpl::ShouldYield(const TaskSource* task_source) {
       GetThreadGroupForTraits({priority, task_source->thread_policy()});
   // A task whose priority changed and is now running in the wrong thread group
   // should yield so it's rescheduled in the right one.
-  if (!thread_group->IsBoundToCurrentThread())
+  if (!thread_group->IsBoundToCurrentThread()) {
     return true;
+  }
   return GetThreadGroupForTraits({priority, task_source->thread_policy()})
       ->ShouldYield(task_source->GetSortKey());
 }
@@ -537,6 +558,10 @@ const ThreadGroup* ThreadPoolImpl::GetThreadGroupForTraits(
 }
 
 ThreadGroup* ThreadPoolImpl::GetThreadGroupForTraits(const TaskTraits& traits) {
+  if (recordreplay::AreEventsDisallowed("unordered-tasks")) {
+    return record_replay_unordered_thread_group_.get();
+  }
+
   if (traits.priority() == TaskPriority::BEST_EFFORT &&
       traits.thread_policy() == ThreadPolicy::PREFER_BACKGROUND &&
       background_thread_group_) {
@@ -573,6 +598,8 @@ void ThreadPoolImpl::UpdateCanRunPolicy() {
     utility_thread_group_->DidUpdateCanRunPolicy();
   if (background_thread_group_)
     background_thread_group_->DidUpdateCanRunPolicy();
+  if (record_replay_unordered_thread_group_)
+    record_replay_unordered_thread_group_->DidUpdateCanRunPolicy();
   single_thread_task_runner_manager_.DidUpdateCanRunPolicy();
 }
 

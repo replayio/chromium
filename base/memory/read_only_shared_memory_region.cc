@@ -6,6 +6,7 @@
 
 #include <utility>
 
+#include "base/record_replay.h"
 #include "build/build_config.h"
 
 namespace base {
@@ -83,6 +84,11 @@ ReadOnlySharedMemoryMapping ReadOnlySharedMemoryRegion::MapAt(
   auto result = handle_.MapAt(offset, size, mapper);
   if (!result.has_value())
     return {};
+
+#ifdef OS_MAC
+  recordreplay::RecordReplayBytes("ReadOnlySharedMemoryRegion::MapAt",
+                                  result.value().data(), size);
+#endif
 
   return ReadOnlySharedMemoryMapping(result.value(), size, handle_.GetGUID(),
                                      mapper);

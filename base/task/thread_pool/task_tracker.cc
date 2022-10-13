@@ -34,6 +34,8 @@
 #include "third_party/abseil-cpp/absl/base/attributes.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
+#include "base/record_replay.h"
+
 namespace base {
 namespace internal {
 
@@ -310,6 +312,21 @@ bool TaskTracker::WillPostTask(Task* task,
   DCHECK(task->task);
 
   task->sequence_num = sequence_nums_.GetNext();
+
+  // DelayedTaskManager and Sequence break ties between equal delayed run times
+  // (common for WebRTC task queues, which snap to metronome ticks) with
+  // |sequence_num|, so the replay needs the numbers the recording handed out
+  // across threads.  Immediate tasks are never compared by it.  Up to M118
+  // this sat in Task::Task(), which assigned |sequence_num| itself; M119 moved
+  // the assignment here, so the override follows it.
+  if (!task->delayed_run_time.is_null() &&
+      recordreplay::IsRecordingOrReplaying("values",
+                                           "ThreadPoolTaskSequenceNum")) {
+    task->sequence_num = static_cast<int>(recordreplay::RecordReplayValue(
+        "ThreadPoolTaskSequenceNum",
+        static_cast<uintptr_t>(task->sequence_num)));
+  }
+
   if (state_->HasShutdownStarted()) {
     // A non BLOCK_SHUTDOWN task is allowed to be posted iff shutdown hasn't
     // started and the task is not delayed.
@@ -582,8 +599,9 @@ scoped_refptr<TaskSource> TaskTracker::UnregisterTaskSource(
 void TaskTracker::DecrementNumItemsBlockingShutdown() {
   const bool shutdown_started_and_no_items_block_shutdown =
       state_->DecrementNumItemsBlockingShutdown();
-  if (!shutdown_started_and_no_items_block_shutdown)
+  if (!shutdown_started_and_no_items_block_shutdown) {
     return;
+  }
 
   CheckedAutoLock auto_lock(shutdown_lock_);
   DCHECK(shutdown_event_);
