@@ -51,6 +51,8 @@
 #include "third_party/abseil-cpp/absl/base/attributes.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
+#include "base/record_replay.h"
+
 namespace IPC {
 
 namespace {
@@ -139,7 +141,8 @@ class ChannelAssociatedGroupController
         dispatcher_(this),
         control_message_handler_(this),
         control_message_proxy_thunk_(this),
-        control_message_proxy_(&control_message_proxy_thunk_) {
+        control_message_proxy_(&control_message_proxy_thunk_),
+        lock_("ChannelAssociatedGroupController.lock_") {
     thread_checker_.DetachFromThread();
     control_message_handler_.SetDescription(
         "IPC::mojom::Bootstrap [primary] PipeControlMessageHandler");
@@ -1038,12 +1041,14 @@ class ChannelAssociatedGroupController
 
     base::AutoLock locker(lock_);
     Endpoint* endpoint = FindEndpoint(id);
-    if (!endpoint)
+    if (!endpoint) {
       return;
+    }
 
     mojo::InterfaceEndpointClient* client = endpoint->client();
-    if (!client)
+    if (!client) {
       return;
+    }
 
     if (!endpoint->task_runner()->RunsTasksInCurrentSequence() &&
         !proxy_task_runner_->RunsTasksInCurrentSequence()) {
