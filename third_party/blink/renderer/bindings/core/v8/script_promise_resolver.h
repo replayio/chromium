@@ -273,7 +273,7 @@ class CORE_EXPORT ScriptPromiseResolver
 
   void ResolveOrRejectImmediately();
   void ScheduleResolveOrReject();
-  void ResolveOrRejectDeferred();
+  void ResolveOrRejectDeferred(int record_replay_scheduled_node_id);
 
   // ScriptWrappable
   static v8::Local<v8::Value> ToV8(ScriptWrappable* impl,
