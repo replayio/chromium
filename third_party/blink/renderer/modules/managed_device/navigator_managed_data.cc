@@ -327,7 +327,7 @@ void NavigatorManagedData::OnAttributeReceived(
 }
 
 void NavigatorManagedData::OnConfigurationChanged() {
-  DispatchEvent(*Event::Create(event_type_names::kManagedconfigurationchange));
+  DispatchEvent(*Event::Create(event_type_names::kManagedconfigurationchange), "NavigatorManagedData::OnConfigurationChanged");
 }
 
 void NavigatorManagedData::AddedEventListener(
