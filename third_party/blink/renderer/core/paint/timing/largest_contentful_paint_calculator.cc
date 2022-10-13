@@ -103,6 +103,13 @@ void LargestContentfulPaintCalculator::
 
   uint64_t text_size = largest_text_ ? largest_text_->RecordedSize() : 0u;
   uint64_t image_size = largest_image ? largest_image->RecordedSize() : 0u;
+
+  recordreplay::Assert(
+      "[RUN-2317-2316] "
+      "LargestContentfulPaintCalculator::UpdateWebExposedLargestContentfulPaintIfNeeded "
+      "%llu %llu",
+      image_size, text_size);
+
   if (image_size > text_size) {
     if (image_size > largest_reported_size_ && largest_image->HasPaintTime()) {
       UpdateWebExposedLargestContentfulImage(*largest_image);
@@ -185,6 +192,12 @@ void LargestContentfulPaintCalculator::UpdateWebExposedLargestContentfulText(
       text_element ? text_element->GetIdAttribute() : AtomicString();
 
   // Always use paint time as start time for text LCP candidate.
+
+  recordreplay::Assert(
+      "[RUN-2317-2316] "
+      "LargestContentfulPaintCalculator::UpdateWebExposedLargestContentfulText %d",
+      text_node->RecordReplayId());
+
   delegate_->EmitLcpPerformanceEntry(largest_text.PaintTimingInfo(),
                                      /*paint_size=*/largest_text.RecordedSize(),
                                      /*load_time=*/base::TimeTicks(),

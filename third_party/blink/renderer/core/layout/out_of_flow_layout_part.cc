@@ -1159,6 +1159,8 @@ void OutOfFlowLayoutPart::AddInlineContainingBlockInfo(
 
 void OutOfFlowLayoutPart::LayoutCandidates(
     const HeapVector<LogicalOofPositionedNode>& candidates) {
+  recordreplay::Assert("[RUN-1239] NGOutOfFlowLayoutPart::LayoutCandidates %d",
+                       candidates.size());
   if (!should_add_outer_fragmentainer_children_ ||
       GetConstraintSpace().IsInitialColumnBalancingPass()) {
     ComputeInlineContainingBlocks(candidates);
@@ -2373,6 +2375,15 @@ OutOfFlowLayoutPart::TryCalculateOffset(
       ToPhysicalSize(container_rect.size,
                      node_info.default_writing_direction.GetWritingMode());
 
+  recordreplay::Assert(
+      "[RUN-1239-1435] NGOutOfFlowLayoutPart::TryCalculateOffset %d %d %d %s",
+      container_physical_content_size.width.RawValue(),
+      container_physical_content_size.height.RawValue(),
+      container_physical_content_size
+          .ConvertToLogical(candidate_writing_direction.GetWritingMode())
+          .block_size.RawValue(),
+      node_info.node.ToString().Utf8().c_str());
+
   // The container insets. Don't use the position-area offsets directly as they
   // may be clamped to produce non-negative space. Instead take the difference
   // between the base, and adjusted container-info.
@@ -2502,6 +2513,9 @@ OutOfFlowLayoutPart::TryCalculateOffset(
 
   // We may have already pre-computed our block-dimensions when determining
   // our min/max sizes, only run if needed.
+  recordreplay::Assert(
+      "[RUN-1239] NGOutOfFlowLayoutPart::TryCalculateOffset D %d",
+      node_dimensions.size.block_size.RawValue());
   if (node_dimensions.size.block_size == kIndefiniteSize) {
     offset_info.initial_layout_result = ComputeOofBlockDimensions(
         node_info.node, node_info.break_token, candidate_style, space, imcb,
@@ -2509,6 +2523,11 @@ OutOfFlowLayoutPart::TryCalculateOffset(
         container_insets, container_writing_direction, &node_dimensions);
   }
 
+  recordreplay::Assert(
+      "[RUN-1239] NGOutOfFlowLayoutPart::TryCalculateOffset C %d %d",
+      try_fit_available_space,
+      node_dimensions.MarginBoxInlineStart() < imcb.inline_start ||
+          node_dimensions.MarginBoxInlineEnd() > imcb.InlineEndOffset());
   if (try_fit_available_space) {
     const PhysicalToLogicalGetter has_non_auto_inset(
         candidate_writing_direction, candidate_style,
@@ -2760,6 +2779,10 @@ const LayoutResult* OutOfFlowLayoutPart::GenerateFragment(
   const OffsetInfo& offset_info = oof_node_to_layout.offset_info;
   const BlockBreakToken* break_token = node_info.break_token;
   const BlockNode& node = node_info.node;
+  // https://linear.app/replay/issue/RUN-546
+  recordreplay::Assert("[RUN-546] NGOutOfFlowLayoutPart::GenerateFragment Start %d",
+                       node.GetLayoutBox()->RecordReplayId());
+
   const auto& style = node.Style();
   const LayoutUnit block_offset = offset_info.offset.block_offset;
 
