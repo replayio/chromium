@@ -385,6 +385,8 @@ struct SameSizeAsLayoutObject : public GarbageCollected<SameSizeAsLayoutObject>,
   unsigned bitfields2_;
   unsigned bitfields3_;
   Member<void*> members[6];
+
+  int record_replay_id_;
 };
 
 ASSERT_SIZE(LayoutObject, SameSizeAsLayoutObject);
@@ -513,6 +515,7 @@ LayoutObject::LayoutObject(Node* node)
     : is_anonymous_(!node),
       node_(node),
       fragment_(MakeGarbageCollected<FragmentDataList>()) {
+  record_replay_id_ = recordreplay::NewIdMainThread("LayoutObject");
 #if DCHECK_IS_ON()
   fragment_->SetIsFirst();
 #endif
@@ -3221,6 +3224,9 @@ static bool InvisibleBeforeAndAfterStyleChange(const LayoutObject& object,
 DISABLE_CFI_PERF
 void LayoutObject::SetStyle(const ComputedStyle& new_style,
                             ApplyStyleChanges apply_changes) {
+  recordreplay::Assert("[RUN-2300] LayoutObject::SetStyle %d %d %d",
+                       RecordReplayId(), style_ == style, (int)apply_changes);
+
   NOT_DESTROYED();
 
   const ComputedStyle* old_style = style_.Get();
@@ -3384,6 +3390,11 @@ void LayoutObject::SetStyle(const ComputedStyle& new_style,
 #endif
   }
 
+  recordreplay::Assert("[RUN-2300] LayoutObject::SetStyle #9 %d %d %d",
+                       diff.NeedsNormalPaintInvalidation(),
+                       updated_diff.NeedsNormalPaintInvalidation(),
+                       IsSVGRoot());
+
   if (diff.NeedsNormalPaintInvalidation() ||
       updated_diff.NeedsNormalPaintInvalidation()) {
     if (IsSVGRoot()) {
@@ -3392,6 +3403,7 @@ void LayoutObject::SetStyle(const ComputedStyle& new_style,
     } else if (!invisible_before_and_after_style_change) {
       // Skipped when the object paints nothing before and after the change; see
       // InvisibleBeforeAndAfterStyleChange().
+      recordreplay::Assert("[RUN-2300] LayoutObject::SetStyle #10");
       // We'll set needing geometry change later if the style change does cause
       // possible layout change or visual overflow change.
       SetShouldDoFullPaintInvalidationWithoutLayoutChange(
@@ -3421,6 +3433,9 @@ void LayoutObject::SetStyle(const ComputedStyle& new_style,
        diff.compositing_reasons_changed)) {
     SetNeedsPaintPropertyUpdate();
   }
+
+    recordreplay::Assert("[RUN-2300] LayoutObject::SetStyle #15");
+  recordreplay::Assert("[RUN-2300] LayoutObject::SetStyle Done");
 }
 
 void LayoutObject::UpdateFirstLineImageObservers(
@@ -4443,20 +4458,32 @@ void LayoutObject::WillBeDestroyed(const ComputedStyle* style) {
 
   Remove();
 
+  recordreplay::AssertMaybeEventsDisallowed(
+      "[RUN-2300] LayoutObject::WillBeDestroyed A %d %d", RecordReplayId(),
+      GetNode() ? GetNode()->RecordReplayId() : -1);
+
   // Remove the handler if node had touch-action set. Handlers are not added
   // for text nodes so don't try removing for one too. Need to check if
   // m_style is null in cases of partial construction. Any handler we added
   // previously may have already been removed by the Document independently.
   if (GetNode() && style && style->GetTouchAction() != TouchAction::kAuto) {
+    recordreplay::AssertMaybeEventsDisallowed(
+        "[RUN-2300] LayoutObject::WillBeDestroyed B %d", RecordReplayId());
     EventHandlerRegistry& registry =
         GetDocument().GetFrame()->GetEventHandlerRegistry();
     if (registry.EventHandlerTargets(EventHandlerRegistry::kTouchAction)
             ->Contains(GetNode())) {
+      recordreplay::AssertMaybeEventsDisallowed(
+          "[RUN-2300] LayoutObject::WillBeDestroyed C %d %d", RecordReplayId(),
+          GetNode()->RecordReplayId());
       registry.DidRemoveEventHandler(*GetNode(),
                                      EventHandlerRegistry::kTouchAction);
     }
   }
 
+
+  recordreplay::AssertMaybeEventsDisallowed(
+      "[RUN-2300] LayoutObject::WillBeDestroyed D", RecordReplayId());
   // Remove this object as ImageResourceObserver.
   if (style) {
     UpdateImageObservers(style, nullptr);
@@ -5410,10 +5437,17 @@ void LayoutObject::SetShouldCheckForPaintInvalidation() {
 }
 
 void LayoutObject::SetShouldCheckForPaintInvalidationWithoutLayoutChange() {
+  recordreplay::Assert("[RUN-2300] LayoutObject::SetShouldCheckForPaintInvalidationWithoutLayoutChange %d",
+                       RecordReplayId());
+
   NOT_DESTROYED();
   if (ShouldCheckForPaintInvalidation()) {
     return;
   }
+
+  recordreplay::Assert("[RUN-2300] LayoutObject::SetShouldCheckForPaintInvalidationWithoutLayoutChange #1 %d",
+                       RecordReplayId());
+
   GetFrameView()->ScheduleVisualUpdateForPaintInvalidationIfNeeded();
 
   should_check_for_paint_invalidation_ = true;
@@ -5438,6 +5472,9 @@ void LayoutObject::SetMayNeedPaintInvalidationAnimatedBackgroundImage() {
   NOT_DESTROYED();
   if (MayNeedPaintInvalidationAnimatedBackgroundImage())
     return;
+
+  recordreplay::Assert("[RUN-1641] LayoutObject::SetMayNeedPaintInvalidationAnimatedBackgroundImage #1");
+
   may_need_paint_invalidation_animated_background_image_ = true;
   SetShouldCheckForPaintInvalidationWithoutLayoutChange();
 }
@@ -5453,6 +5490,8 @@ void LayoutObject::SetShouldDelayFullPaintInvalidation() {
 
   should_delay_full_paint_invalidation_ = true;
   if (!ShouldCheckForPaintInvalidation()) {
+    recordreplay::Assert("[RUN-2300] LayoutObject::SetShouldDelayFullPaintInvalidation #1");
+
     // This will also schedule a visual update.
     SetShouldCheckForPaintInvalidationWithoutLayoutChange();
   } else {

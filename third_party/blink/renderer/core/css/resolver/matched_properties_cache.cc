@@ -83,11 +83,21 @@ CachedMatchedProperties::CachedMatchedProperties(
                                       property.data_};
                          }),
       entries({Entry{style, parent_style, layout_parent_style,
-                     originating_element_style, element_type, clock}}) {}
+                     originating_element_style, element_type, clock}}) {
+  if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                           "CachedMatchedProperties")) {
+    replay_matched_properties_strong_.ReserveInitialCapacity(properties.size());
+    for (const auto& new_matched_properties : properties) {
+      replay_matched_properties_strong_.push_back(
+          new_matched_properties.properties);
+    }
+  }
+}
 
 void CachedMatchedProperties::Clear() {
   matched_properties.clear();
   entries.clear();
+  replay_matched_properties_strong_.clear();
 }
 
 MatchedPropertiesCache::MatchedPropertiesCache() = default;

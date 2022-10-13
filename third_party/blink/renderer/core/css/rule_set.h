@@ -347,6 +347,7 @@ class RuleMap {
 class CORE_EXPORT RuleSet final : public GarbageCollected<RuleSet> {
  public:
   RuleSet();
+  ~RuleSet();
   RuleSet(const RuleSet&) = delete;
   RuleSet& operator=(const RuleSet&) = delete;
 

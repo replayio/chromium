@@ -18,6 +18,9 @@ LocalSVGResource* SVGTreeScopeResources::ResourceForId(const AtomicString& id) {
   if (id.empty()) {
     return nullptr;
   }
+  auto record_replay_it = resources_.find(id);
+  recordreplay::Assert("[RUN-2424-3227] SVGTreeScopeResources::ResourceForId %d",
+    record_replay_it != resources_.end());
   auto it = resources_.find(id);
   if (it != resources_.end()) {
     return it->value;
@@ -26,6 +29,7 @@ LocalSVGResource* SVGTreeScopeResources::ResourceForId(const AtomicString& id) {
   // shrinking the `resources_` map.
   auto* new_entry = MakeGarbageCollected<LocalSVGResource>(*tree_scope_, id);
   resources_.Set(id, new_entry);
+  replay_strong_resources_.insert(id, new_entry);
   return new_entry;
 }
 
@@ -55,6 +59,7 @@ void SVGTreeScopeResources::Trace(Visitor* visitor) const {
   visitor->template RegisterWeakCallbackMethod<
       SVGTreeScopeResources, &SVGTreeScopeResources::ProcessCustomWeakness>(
       this);
+  visitor->Trace(replay_strong_resources_);
   visitor->Trace(tree_scope_);
 }
 

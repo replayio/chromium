@@ -46,6 +46,7 @@
 #include "third_party/blink/renderer/core/paint/box_painter.h"
 #include "third_party/blink/renderer/core/paint/contoured_border_geometry.h"
 #include "third_party/blink/renderer/core/paint/fieldset_painter.h"
+#include "third_party/blink/renderer/core/paint/fragment_data.h"
 #include "third_party/blink/renderer/core/paint/fragment_painter.h"
 #include "third_party/blink/renderer/core/paint/frame_set_painter.h"
 #include "third_party/blink/renderer/core/paint/gap_decorations_painter.h"
@@ -765,6 +766,9 @@ InlinePaintContext& BoxFragmentPainter::EnsureInlineContext() {
 
 void BoxFragmentPainter::PaintFragment(const PhysicalBoxFragment& fragment,
                                        const PaintInfo& paint_info) {
+  recordreplay::Assert(
+      "[RUN-1975-2008] NgBoxFragmentPainter::PaintFragment A %d",
+      fragment.GetNode() ? fragment.GetNode()->RecordReplayId() : -1);
   if (fragment.CanTraverse()) {
     BoxFragmentPainter(fragment).Paint(paint_info);
     return;
@@ -1999,6 +2003,11 @@ void BoxFragmentPainter::PaintInlineItems(const PaintInfo& paint_info,
     const FragmentItem* item = cursor->CurrentItem();
     DCHECK(item);
     CHECK(!item->IsLayoutObjectDestroyedOrMoved());
+    recordreplay::Assert(
+        "[RUN-1975-2008] NGBoxFragmentPainter::PaintInlineItems A %llu %d %d",
+        (uint64_t)item->FragmentId(), (int)item->Type(), item->GetNode() ? item->GetNode()->RecordReplayId() : -1);
+      recordreplay::Assert(
+          "[RUN-1975-2008] NGBoxFragmentPainter::PaintInlineItems B %d", (int)item->Type());
     switch (item->Type()) {
       case FragmentItem::kText:
       case FragmentItem::kGeneratedText:
@@ -2025,6 +2034,8 @@ void BoxFragmentPainter::PaintInlineItems(const PaintInfo& paint_info,
         NOTREACHED();
     }
   }
+  recordreplay::Assert(
+      "[RUN-1975-2008] NGBoxFragmentPainter::PaintInlineItems C");
 }
 
 // Paint a line box. This function records hit test data of the line box in

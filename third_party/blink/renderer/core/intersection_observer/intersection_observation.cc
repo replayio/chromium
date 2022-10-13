@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/core/intersection_observer/intersection_observation.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/dom/node_rare_data.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/intersection_observer/element_intersection_observer_data.h"
@@ -20,7 +21,10 @@ namespace blink {
 
 IntersectionObservation::IntersectionObservation(IntersectionObserver& observer,
                                                  Element& target)
-    : observer_(observer), target_(&target) {}
+    : observer_(observer), target_(&target) {
+  // Pointer registration is needed for sorting in IntersectionObserverController::ComputeIntersections.
+  recordreplay::RegisterPointer("IntersectionObservation", this);
+}
 
 int64_t IntersectionObservation::ComputeIntersection(
     ComputeFlags compute_flags,
@@ -47,6 +51,11 @@ int64_t IntersectionObservation::ComputeIntersection(
     needs_update_ = true;
   }
 
+  REPLAY_ASSERT("[TT-1483-1499] IntersectionObservation::ComputeIntersection B %d %u %d %d",
+    needs_update_,
+    compute_flags,
+    ShouldCompute(compute_flags),
+    context.HasMonotonicTime());
   if (!CanCompute() || !ShouldCompute(compute_flags)) {
     return 0;
   }
@@ -153,6 +162,8 @@ bool IntersectionObservation::ShouldCompute(ComputeFlags flags) const {
 bool IntersectionObservation::MaybeDelayAndReschedule(
     ComputeFlags flags,
     ComputeIntersectionsContext& context) {
+  REPLAY_ASSERT("[TT-1483-1499] IntersectionObservation::MaybeDelayAndReschedule %d",
+    last_run_time_.is_null());
   if (flags.Has(kIgnoreDelay)) {
     return false;
   }

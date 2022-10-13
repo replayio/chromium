@@ -184,6 +184,12 @@ void LargestContentfulPaintCalculator::
   uint64_t image_size = largest_presented_image_
                             ? largest_presented_image_->EffectiveVisualSize()
                             : 0u;
+
+  recordreplay::Assert(
+      "[RUN-2317-2316] "
+      "LargestContentfulPaintCalculator::UpdateWebExposedLargestContentfulPaintIfNeeded "
+      "%llu %llu",
+      image_size, text_size);
   if (image_size > text_size) {
     if (image_size > largest_reported_size_) {
       CHECK(largest_presented_image_->HasPaintTime());
@@ -271,6 +277,10 @@ void LargestContentfulPaintCalculator::UpdateWebExposedLargestContentfulText(
       /*id=*/text_id,
       /*url=*/g_empty_string,
       /*element=*/text_element);
+  recordreplay::Assert(
+      "[RUN-2317-2316] "
+      "LargestContentfulPaintCalculator::UpdateWebExposedLargestContentfulText %d",
+      text_node->RecordReplayId());
 
   if (LocalDOMWindow* window = window_performance_->DomWindow()) {
     TRACE_EVENT_MARK_WITH_TIMESTAMP2(
