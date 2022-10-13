@@ -468,7 +468,7 @@ void AXNodeObject::AlterSliderOrSpinButtonValue(bool increase) {
   KeyboardEvent* keydown =
       CreateKeyboardEvent(local_dom_window, WebInputEvent::Type::kRawKeyDown,
                           action, orientation, text_direction);
-  GetNode()->DispatchEvent(*keydown);
+  GetNode()->DispatchEvent(*keydown, "AXNodeObject::AlterSliderOrSpinButtonValue #1");
 
   // The keydown handler may have caused the node to be removed.
   if (!GetNode())
@@ -487,7 +487,8 @@ void AXNodeObject::AlterSliderOrSpinButtonValue(bool increase) {
           WTF::BindOnce(
               [](Node* node, KeyboardEvent* evt) {
                 if (node) {
-                  node->DispatchEvent(*evt);
+                  node->DispatchEvent(
+                      *evt, "AXNodeObject::AlterSliderOrSpinButtonValue #2");
                 }
               },
               WrapWeakPersistent(GetNode()), WrapPersistent(keyup)),

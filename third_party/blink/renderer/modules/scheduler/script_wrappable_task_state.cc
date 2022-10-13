@@ -4,6 +4,8 @@
 
 #include "third_party/blink/renderer/modules/scheduler/script_wrappable_task_state.h"
 
+#include "base/record_replay.h"
+
 #include "third_party/blink/renderer/bindings/core/v8/native_value_traits_impl.h"
 #include "third_party/blink/renderer/bindings/core/v8/to_v8_traits.h"
 #include "third_party/blink/renderer/modules/scheduler/dom_task_signal.h"
@@ -56,6 +58,9 @@ ScriptWrappableTaskState* ScriptWrappableTaskState::GetCurrent(
 void ScriptWrappableTaskState::SetCurrent(
     ScriptState* script_state,
     ScriptWrappableTaskState* task_state) {
+  // https://linear.app/replay/issue/RUN-885
+  recordreplay::Assert("ScriptWrappableTaskState::SetCurrent");
+
   DCHECK(script_state);
   v8::Isolate* isolate = script_state->GetIsolate();
   DCHECK(isolate);
@@ -74,6 +79,9 @@ void ScriptWrappableTaskState::SetCurrent(
   if (!script_state->ContextIsValid() || !task_state) {
     isolate->SetContinuationPreservedEmbedderData(v8::Undefined(isolate));
   } else {
+    // https://linear.app/replay/issue/RUN-885
+    recordreplay::Assert("ScriptWrappableTaskState::SetCurrent #1");
+
     ScriptState::Scope scope(script_state);
     isolate->SetContinuationPreservedEmbedderData(
         ToV8Traits<ScriptWrappableTaskState>::ToV8(script_state, task_state));

@@ -167,6 +167,11 @@ bool ShouldGenerateV8CodeCache(ScriptState* script_state,
   if (!global_scope->IsInstalling())
     return false;
 
+  // Bytecode varies between recording, replaying, and regular execution
+  // and is not cached when recording/replaying.
+  if (recordreplay::IsRecordingOrReplaying("no-compile-cache", "ShouldGenerateV8CodeCache"))
+    return false;
+
   return true;
 }
 
@@ -411,6 +416,8 @@ class Cache::BarrierCallbackForPutComplete final
     MaybeReportInstalledScripts();
     int operation_count = batch_operations_.size();
     DCHECK_GE(operation_count, 1);
+
+    mojo::internal::AutoRecordReplayAssertBufferAllocations asserts("RUN-2445-3010");
     // Make sure to bind the Cache object to keep the mojo remote alive during
     // the operation. Otherwise GC might prevent the callback from ever being
     // executed.
@@ -937,6 +944,7 @@ ScriptPromise Cache::MatchImpl(ScriptState* script_state,
     in_range_fetch_event = global_scope->HasRangeFetchEvent(request->url());
   }
 
+  mojo::internal::AutoRecordReplayAssertBufferAllocations asserts("RUN-2445-3010");
   // Make sure to bind the Cache object to keep the mojo remote alive during
   // the operation. Otherwise GC might prevent the callback from ever being
   // executed.
@@ -1031,6 +1039,7 @@ ScriptPromiseTyped<IDLSequence<Response>> Cache::MatchAllImpl(
     return promise;
   }
 
+  mojo::internal::AutoRecordReplayAssertBufferAllocations asserts("RUN-2445-3010");
   // Make sure to bind the Cache object to keep the mojo remote alive during
   // the operation. Otherwise GC might prevent the callback from ever being
   // executed.
@@ -1155,6 +1164,7 @@ ScriptPromise Cache::DeleteImpl(ScriptState* script_state,
     return promise;
   }
 
+  mojo::internal::AutoRecordReplayAssertBufferAllocations asserts("RUN-2445-3010");
   // Make sure to bind the Cache object to keep the mojo remote alive during
   // the operation. Otherwise GC might prevent the callback from ever being
   // executed.
@@ -1278,6 +1288,7 @@ ScriptPromiseTyped<IDLSequence<Request>> Cache::KeysImpl(
     return promise;
   }
 
+  mojo::internal::AutoRecordReplayAssertBufferAllocations asserts("RUN-2445-3010");
   // Make sure to bind the Cache object to keep the mojo remote alive during
   // the operation. Otherwise GC might prevent the callback from ever being
   // executed.
