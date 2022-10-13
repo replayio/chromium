@@ -58,6 +58,8 @@
 #include "base/memory/nonscannable_memory.h"
 #endif  // BUILDFLAG(USE_STARSCAN)
 
+#include "base/record_replay.h"
+
 #if BUILDFLAG(IS_ANDROID)
 #include "base/system/sys_info.h"
 #endif
@@ -217,6 +219,10 @@ void RunMemoryReclaimer(scoped_refptr<SequencedTaskRunner> task_runner) {
   auto* instance = ::partition_alloc::MemoryReclaimer::Instance();
 
   {
+    // The memory reclaimer runs at consistent points when recording vs. replaying,
+    // but can behave differently.
+    recordreplay::AutoDisallowEvents disallow("RunMemoryReclaimer");
+
     // Micros, since memory reclaiming should typically take at most a few ms.
     SCOPED_UMA_HISTOGRAM_TIMER_MICROS("Memory.PartitionAlloc.MemoryReclaim");
     instance->ReclaimNormal();
