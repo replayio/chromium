@@ -172,6 +172,9 @@ static double ComputeSquaredLocalFontSizeScalingFactor(
 
 void LayoutBlock::StyleDidChange(StyleDifference diff,
                                  const ComputedStyle* old_style) {
+  recordreplay::Assert("[RUN-2300] LayoutBlock::StyleDidChange %d",
+                       RecordReplayId());
+
   NOT_DESTROYED();
   // Computes old scaling factor before PaintLayer::UpdateTransform()
   // updates Layer()->Transform().
@@ -1008,6 +1011,9 @@ void LayoutBlock::RecalcChildVisualOverflow() {
 }
 
 void LayoutBlock::RecalcVisualOverflow() {
+  // https://linear.app/replay/issue/RUN-826
+  recordreplay::Assert("[RUN-826] LayoutBlock::RecalcVisualOverflow %d", RecordReplayId());
+
   NOT_DESTROYED();
   RecalcChildVisualOverflow();
   RecalcSelfVisualOverflow();
