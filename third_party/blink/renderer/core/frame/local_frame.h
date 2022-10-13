@@ -1178,6 +1178,11 @@ class CORE_EXPORT LocalFrame final
   // If this is true, the frame cannot be crossOriginIsolated while it's still
   // on the initial empty document.
   bool coop_forbids_initial_empty_document_to_be_cross_origin_isolated_ = true;
+
+  // Set by DetachImpl when this frame is detached as a local root, to the
+  // frame's WeakIdentifierMap id (-1 if it had none). ~LocalFrame reports it
+  // from here: the parent may already be finalized by then.
+  absl::optional<int> record_replay_detached_local_root_id_;
 };
 
 inline FrameLoader& LocalFrame::Loader() const {
