@@ -70,6 +70,12 @@ class LocalWindowProxy final : public WindowProxy {
   void SetAbortScriptExecution(
       v8::Context::AbortScriptExecutionCallback callback);
 
+  // [DSRC-217] Whether this proxy's frame can be initialized at all, asked at
+  // USE time.  With RenderDocumentLevel::kAllFrames the most recently created
+  // proxy is often a provisional frame's while a still-committed frame is the
+  // one painting, so the paint route must not force-initialize it.
+  bool RecordReplayCanInitialize() const;
+
  private:
   void SetupRecordReplayWebChannel();
 
