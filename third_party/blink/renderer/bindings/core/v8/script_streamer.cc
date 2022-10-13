@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/script_streamer.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "base/memory/ptr_util.h"
@@ -45,6 +46,34 @@
 #include "third_party/blink/renderer/platform/wtf/shared_buffer.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_encoding_registry.h"
+
+#include "base/json/json_writer.h"
+#include "base/record_replay.h"
+
+namespace recordreplay {
+
+class OrderedAtomicFlag {
+ public:
+  OrderedAtomicFlag()
+    : ordered_lock_id_(recordreplay::CreateOrderedLock("OrderedAtomicFlag"))
+  {}
+
+  void Set() {
+    recordreplay::AutoOrderedLock ordered(ordered_lock_id_);
+    flag_.Set();
+  }
+
+  bool IsSet() const {
+    recordreplay::AutoOrderedLock ordered(ordered_lock_id_);
+    return flag_.IsSet();
+  }
+
+ private:
+  int ordered_lock_id_;
+  base::AtomicFlag flag_;
+};
+
+} // namespace recordreplay
 
 namespace blink {
 
@@ -394,7 +423,7 @@ class SourceStream : public v8::ScriptCompiler::ExternalSourceStream {
 
   // TODO(leszeks): Make this a DCHECK-only flag.
   base::AtomicFlag ready_to_run_;
-  base::AtomicFlag cancelled_;
+  recordreplay::OrderedAtomicFlag cancelled_;
 
   // Only used by background thread
   ResourceScriptStreamer::LoadingState load_state_ =
@@ -865,6 +894,15 @@ bool ResourceScriptStreamer::TryStartStreamingTask() {
   // This reset will also cancel the watcher.
   watcher_.reset();
 
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "scheduleScriptStreamingTask");
+    info.Set("url", ScriptURLString().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    record_replay_scheduled_node_id_ = recordreplay::NewDependencyGraphNode(json.c_str());
+  }
+
   // Script streaming tasks are high priority, as they can block the parser,
   // and they can (and probably will) block during their own execution as
   // they wait for more input.
@@ -1030,8 +1068,11 @@ void ResourceScriptStreamer::Prefinalize() {
   // https://crbug.com/905975#c34 for more details.
   watcher_.reset();
 
-  // Cancel any on-going streaming.
-  Cancel();
+  // Cancel any on-going streaming. This isn't supported at non-deterministic
+  // points while replaying as it will affect the streaming thread's behavior.
+  if (!recordreplay::AreEventsDisallowed("ResourceScriptStreamer::Prefinalize")) {
+    Cancel();
+  }
 }
 
 void ResourceScriptStreamer::Trace(Visitor* visitor) const {
@@ -1048,6 +1089,20 @@ void ResourceScriptStreamer::StreamingComplete(LoadingState loading_state) {
         inspector_parse_script_event::Data(
             std::move(context), ScriptResourceIdentifier(), ScriptURLString());
       });
+
+  std::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    int node_id = recordreplay::NewDependencyGraphNode(
+      "{\"kind\":\"scriptStreamingComplete\"}"
+    );
+    if (record_replay_scheduled_node_id_) {
+      recordreplay::AddDependencyGraphEdge(
+        record_replay_scheduled_node_id_, node_id,
+        "{\"kind\":\"scheduler\"}"
+      );
+    }
+    execute.emplace(node_id);
+  }
 
   // The background task is completed; do the necessary ramp-down in the main
   // thread.
