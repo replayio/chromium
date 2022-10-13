@@ -127,7 +127,23 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
   void CloseSoon();
   bool IsClosing() const { return is_closing_; }
 
-  using PageSet = HeapHashSet<WeakMember<Page>>;
+  // recordreplay stable hasher for the page set.
+  struct PageHash : WTF::HashTraits<WeakMember<Page>> {
+    // Hash the record replay id for the pointer, so that iteration order is
+    // the same in a replay as it was in the recording.  Raw pointers are the
+    // lookup form for a Member-keyed table, so both take an overload.
+    static unsigned GetHash(const Page* key) {
+      int record_replay_id = key ? key->RecordReplayId() : -1;
+      return WTF::GetHash(record_replay_id);
+    }
+    static unsigned GetHash(const WeakMember<Page>& key) {
+      return GetHash(key.Get());
+    }
+
+    static constexpr bool kIsRecordReplayDeterministicHash = true;
+  };
+
+  using PageSet = HeapHashSet<WeakMember<Page>, PageHash>;
 
   // Return the current set of full-fledged, ordinary pages.
   // Each created and owned by a WebView.
@@ -411,6 +427,8 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
   }
   mojom::blink::FencedFrameMode FencedFrameMode() { return fenced_frame_mode_; }
 
+  int RecordReplayId() const { return record_replay_id_; }
+
  private:
   friend class ScopedPagePauser;
 
@@ -562,6 +580,8 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
   mojom::blink::TextAutosizerPageInfo web_text_autosizer_page_info_;
 
   WebScopedVirtualTimePauser history_navigation_virtual_time_pauser_;
+
+  int record_replay_id_;
 };
 
 extern template class CORE_EXTERN_TEMPLATE_EXPORT Supplement<Page>;
