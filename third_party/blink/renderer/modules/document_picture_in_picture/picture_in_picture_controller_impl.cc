@@ -245,7 +245,7 @@ void PictureInPictureControllerImpl::OnEnteredPictureInPicture(
 
   picture_in_picture_element_->DispatchEvent(*PictureInPictureEvent::Create(
       event_type_names::kEnterpictureinpicture,
-      WrapPersistent(picture_in_picture_window_.Get())));
+      WrapPersistent(picture_in_picture_window_.Get())), "PictureInPictureControllerImpl::OnEnteredPictureInPicture");
 
   if (resolver)
     resolver->Resolve(picture_in_picture_window_);
@@ -312,7 +312,7 @@ void PictureInPictureControllerImpl::OnExitedPictureInPicture(
     element->OnExitedPictureInPicture();
     element->DispatchEvent(*PictureInPictureEvent::Create(
         event_type_names::kLeavepictureinpicture,
-        WrapPersistent(picture_in_picture_window_.Get())));
+        WrapPersistent(picture_in_picture_window_.Get())), "PictureInPictureControllerImpl::OnExitedPictureInPicture");
 
     picture_in_picture_window_ = nullptr;
 
