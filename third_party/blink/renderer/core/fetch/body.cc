@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/core/fetch/body.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "base/memory/scoped_refptr.h"
@@ -20,6 +21,7 @@
 #include "third_party/blink/renderer/core/typed_arrays/dom_array_buffer.h"
 #include "third_party/blink/renderer/core/url/url_search_params.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/v8_throw_exception.h"
 #include "third_party/blink/renderer/platform/heap/disallow_new_wrapper.h"
@@ -27,6 +29,8 @@
 #include "third_party/blink/renderer/platform/loader/fetch/text_resource_decoder_options.h"
 #include "third_party/blink/renderer/platform/network/parsed_content_type.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
+
+#include "base/json/json_writer.h"
 
 namespace blink {
 
@@ -47,10 +51,11 @@ void SendHistogram(BodyConsumerBaseFetchCheckPoint cp) {
 class BodyConsumerBase : public GarbageCollected<BodyConsumerBase>,
                          public FetchDataLoader::Client {
  public:
-  explicit BodyConsumerBase(ScriptPromiseResolverBase* resolver)
+  explicit BodyConsumerBase(ScriptPromiseResolverBase* resolver, const std::string& url)
       : resolver_(resolver),
         task_runner_(ExecutionContext::From(resolver_->GetScriptState())
-                         ->GetTaskRunner(TaskType::kNetworking)) {
+                         ->GetTaskRunner(TaskType::kNetworking)),
+          url_(url) {
     SendHistogram(BodyConsumerBaseFetchCheckPoint::kConstructor);
   }
   BodyConsumerBase(const BodyConsumerBase&) = delete;
@@ -65,6 +70,8 @@ class BodyConsumerBase : public GarbageCollected<BodyConsumerBase>,
   }
 
   void Abort() override {
+    recordreplay::Assert("[RUN-1182] BodyConsumerBase::Abort");
+
     resolver_->Reject(
         MakeGarbageCollected<DOMException>(DOMExceptionCode::kAbortError));
   }
@@ -74,6 +81,14 @@ class BodyConsumerBase : public GarbageCollected<BodyConsumerBase>,
   // TODO(yhirano): Fix this problem in a more sophisticated way.
   template <typename IDLType, typename T>
   void ResolveLater(const T& object) {
+    if (recordreplay::DependencyGraphEnabled()) {
+      base::Value::Dict info;
+      info.Set("kind", "scheduleResolveBodyConsumer");
+      info.Set("url", url_);
+      std::string json;
+      base::JSONWriter::Write(info, &json);
+      record_replay_scheduled_node_id_ = recordreplay::NewDependencyGraphNode(json.c_str());
+    }
     task_runner_->PostTask(
         FROM_HERE, WTF::BindOnce(&BodyConsumerBase::ResolveNow<IDLType, T>,
                                  WrapPersistent(this), object));
@@ -89,17 +104,47 @@ class BodyConsumerBase : public GarbageCollected<BodyConsumerBase>,
     requires(
         !std::is_same<T, Persistent<DisallowNewWrapper<ScriptValue>>>::value)
   void ResolveNow(const T& object) {
+    // M124 split ResolveNow() into two overloads selected by a requires clause
+    // on the object type.  ResolveLater() creates the scheduled node for both of
+    // them, so the execution node and its edge have to be created in both, or a
+    // ScriptValue-typed resolve would leave a scheduled node with no execution
+    // node and no edge - an incomplete dependency graph with nothing to report it.
+    std::optional<recordreplay::AutoDependencyExecution> execute;
+    if (recordreplay::DependencyGraphEnabled()) {
+      int node_id = recordreplay::NewDependencyGraphNode(
+        "{\"kind\":\"resolveBodyConsumer\"}"
+      );
+      recordreplay::AddDependencyGraphEdge(
+        record_replay_scheduled_node_id_, node_id, "{\"kind\":\"scheduler\"}"
+      );
+      execute.emplace(node_id);
+    }
+
     resolver_->DowncastTo<IDLType>()->Resolve(object);
   }
 
   template <typename IDLType, typename T>
     requires std::is_same<T, Persistent<DisallowNewWrapper<ScriptValue>>>::value
   void ResolveNow(const Persistent<DisallowNewWrapper<ScriptValue>>& object) {
+    std::optional<recordreplay::AutoDependencyExecution> execute;
+    if (recordreplay::DependencyGraphEnabled()) {
+      int node_id = recordreplay::NewDependencyGraphNode(
+        "{\"kind\":\"resolveBodyConsumer\"}"
+      );
+      recordreplay::AddDependencyGraphEdge(
+        record_replay_scheduled_node_id_, node_id, "{\"kind\":\"scheduler\"}"
+      );
+      execute.emplace(node_id);
+    }
+
     resolver_->DowncastTo<IDLType>()->Resolve(object->Value());
   }
 
   const Member<ScriptPromiseResolverBase> resolver_;
   const scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
+
+  std::string url_;
+  int record_replay_scheduled_node_id_ = 0;
 };
 class BodyBlobConsumer final : public BodyConsumerBase {
  public:
@@ -202,7 +247,9 @@ bool Body::ShouldLoadBody(ScriptState* script_state,
 }
 
 // `Consumer` must be a subclass of BodyConsumerBase which takes a
-// ScriptPromiseResolverBase* as its constructor argument. `create_loader`
+// ScriptPromiseResolverBase* and the body's url as its constructor arguments
+// (BodyConsumerBase records the url in the dependency graph; the subclasses
+// inherit its constructor). `create_loader`
 // should take no arguments and return a FetchDataLoader*. `on_no_body` should
 // take a ScriptPromiseResolverBase* object and resolve or reject it, returning
 // nothing.
@@ -224,7 +271,7 @@ ScriptPromise<typename Consumer::ResolveType> Body::LoadAndConvertBody(
   auto promise = resolver->Promise();
   if (auto* body_buffer = BodyBuffer()) {
     body_buffer->StartLoading(create_loader(),
-                              MakeGarbageCollected<Consumer>(resolver),
+                              MakeGarbageCollected<Consumer>(resolver, GetUrl()),
                               exception_state);
     if (exception_state.HadException()) {
       resolver->Detach();
@@ -250,6 +297,12 @@ ScriptPromise<DOMArrayBuffer> Body::arrayBuffer(
 
 ScriptPromise<Blob> Body::blob(ScriptState* script_state,
                                ExceptionState& exception_state) {
+  // Copying the body into a blob needs a data pipe, whose shared memory comes
+  // from a synchronous broker call to the browser process, and registering
+  // the blob needs the browser process too.
+  if (RecordReplayThrowIfEventsUnavailable("Body.blob", &exception_state))
+    return ScriptPromise<Blob>();
+
   auto create_loader = [this, script_state]() {
     ExecutionContext* context = ExecutionContext::From(script_state);
     return FetchDataLoader::CreateLoaderAsBlobHandle(
