@@ -12,6 +12,7 @@
 #include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/no_destructor.h"
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "chrome/browser/android/webapk/webapk_sync_service_factory.h"
 #include "chrome/browser/autofill/personal_data_manager_factory.h"
@@ -478,6 +479,8 @@ std::unique_ptr<KeyedService> BuildSyncService(
           GoogleGroupsManagerFactory::GetForBrowserContext(profile)) {
     groups_updater_service->OnSyncServiceInitialized(sync_service.get());
   }
+
+  recordreplay::Diagnostic("[TT-198] BuildSyncService returning a non-null service");
 
   return sync_service;
 }
