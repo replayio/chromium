@@ -15,11 +15,14 @@
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
+#include "components/viz/service/display/record_replay_render.h"
 #include "gpu/command_buffer/common/mailbox.h"
 #include "gpu/command_buffer/common/shared_image_trace_utils.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_format_service_utils.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gl/trace_util.h"
+
+#include "base/record_replay.h"
 
 namespace viz {
 
