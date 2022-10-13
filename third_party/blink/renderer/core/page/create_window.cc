@@ -57,6 +57,7 @@
 #include "third_party/blink/renderer/core/page/chrome_client.h"
 #include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/core/probe/core_probes.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_request.h"
@@ -421,6 +422,10 @@ Frame* CreateNewWindow(LocalFrame& opener_frame,
                                     kPropagatesToAuxiliaryBrowsingContexts)
           ? opener_window.GetSandboxFlags()
           : network::mojom::blink::WebSandboxFlags::kNone;
+
+  // Creating the window needs a synchronous call to the browser process.
+  if (RecordReplayThrowIfEventsUnavailable("window creation"))
+    return nullptr;
 
   SessionStorageNamespaceId new_namespace_id =
       AllocateSessionStorageNamespaceId();
