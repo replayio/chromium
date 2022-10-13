@@ -30,6 +30,7 @@
 
 #include "base/synchronization/waitable_event.h"
 #include "base/thread_annotations.h"
+#include "base/record_replay.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
@@ -426,9 +427,12 @@ const char* Database::DatabaseInfoTableName() {
 }
 
 void Database::CloseDatabase() {
-  if (!opened_.load(std::memory_order_relaxed))
+  bool opened = opened_.load(std::memory_order_relaxed);
+  REPLAY_ASSERT("Database::CloseDatabase %d %d", RecordReplayId(), opened);
+  if (!opened)
     return;
 
+  REPLAY_ASSERT("Database::opened_ store %d 0", RecordReplayId());
   opened_.store(false, std::memory_order_release);
   sqlite_database_.Close();
   // See comment at the top this file regarding calling removeOpenDatabase().
@@ -438,6 +442,12 @@ void Database::CloseDatabase() {
     base::AutoLock locker(cache.GetLock());
     cache.ReleaseGuid(guid_);
   }
+}
+
+bool Database::Opened() {
+  bool opened = opened_.load(std::memory_order_acquire);
+  REPLAY_ASSERT("Database::Opened %d %d", RecordReplayId(), opened);
+  return opened;
 }
 
 String Database::version() const {
@@ -604,6 +614,7 @@ bool Database::PerformOpenAndVerify(bool should_set_version_in_new_database,
 
   // See comment at the top this file regarding calling addOpenDatabase().
   DatabaseTracker::Tracker().AddOpenDatabase(this);
+  REPLAY_ASSERT("Database::opened_ store %d 1", RecordReplayId());
   opened_.store(true, std::memory_order_release);
 
   // Declare success:
