@@ -14,6 +14,8 @@
 #include "mojo/public/cpp/bindings/lib/test_random_mojo_delays.h"
 #endif
 
+#include "base/record_replay.h"
+
 namespace mojo {
 namespace internal {
 
@@ -60,6 +62,16 @@ void BindingStateBase::Close() {
   }
 
   weak_ptr_factory_.InvalidateWeakPtrs();
+
+  // Mojo resources must be destroyed at deterministic points,
+  // so leak them if this state is destroyed during a GC.
+  if (recordreplay::AreEventsDisallowed("BindingStateBase::Close")) {
+    if (endpoint_client_)
+      endpoint_client_->record_replay_leak();
+    endpoint_client_.release();
+    (void)router_.release();
+    return;
+  }
 
   endpoint_client_.reset();
   router_->CloseMessagePipe();
