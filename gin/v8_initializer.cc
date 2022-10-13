@@ -52,6 +52,8 @@
 #endif
 #endif  // V8_USE_EXTERNAL_STARTUP_DATA
 
+#include "base/record_replay.h"
+
 namespace gin {
 
 namespace {
