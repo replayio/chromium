@@ -649,6 +649,10 @@
     "META": {"sizes": {"includes": [50]}},
     "includes": [4665],
   },
+  "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/record_replay/resources.grd": {
+    "META": {"sizes": {"includes": [200]}},
+    "includes": [1915],
+  },
    "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/webui_toolbar/resources.grd": {
     "META": {"sizes": {"includes": [100]}},
     "includes": [4670],

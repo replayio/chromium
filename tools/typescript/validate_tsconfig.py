@@ -173,6 +173,7 @@ def validateJavaScriptAllowed(source_dir, out_dir, platform):
       # TODO(crbug.com/385341235): Migrate inspect to TypeScript.
       'chrome/browser/resources/inspect',
       'chrome/browser/resources/net_internals',
+      'chrome/browser/resources/record_replay',
       'chrome/test/data/webui',
       'components/autofill/core/browser/autofill_and_password_manager_internals',
       'components/net_log/resources',
