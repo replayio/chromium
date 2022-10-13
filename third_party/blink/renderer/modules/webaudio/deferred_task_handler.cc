@@ -39,6 +39,13 @@
 namespace blink {
 
 void DeferredTaskHandler::Lock() {
+  // Audio nodes finalized in GCs take the lock at different points when
+  // replaying, where it can't be ordered (see AudioNode::Dispose).
+  if (recordreplay::AreEventsDisallowed()) {
+    recordreplay::AutoPassThroughEvents pass_through;
+    context_graph_mutex_.Acquire();
+    return;
+  }
   context_graph_mutex_.Acquire();
 }
 
@@ -47,6 +54,12 @@ bool DeferredTaskHandler::TryLock() {
 }
 
 void DeferredTaskHandler::Unlock() {
+  // See Lock().
+  if (recordreplay::AreEventsDisallowed()) {
+    recordreplay::AutoPassThroughEvents pass_through;
+    context_graph_mutex_.Release();
+    return;
+  }
   context_graph_mutex_.Release();
 }
 
@@ -106,7 +119,7 @@ void DeferredTaskHandler::HandleDirtyAudioSummingJunctions() {
 void DeferredTaskHandler::HandleDirtyAudioNodeOutputs() {
   AssertGraphOwner();
 
-  HashSet<AudioNodeOutput*> dirty_outputs;
+  HashSet<AudioNodeOutput*, RecordReplayPointerIdHashTraits<AudioNodeOutput*>> dirty_outputs;
   dirty_audio_node_outputs_.swap(dirty_outputs);
 
   // Note: the updating of rendering state may cause output nodes
@@ -330,6 +343,7 @@ DeferredTaskHandler::DeferredTaskHandler(
       defer_pull_status_update_(base::FeatureList::IsEnabled(
           features::kWebAudioDeferPullStatusUpdate)),
       task_runner_(std::move(task_runner)),
+      context_graph_mutex_("DeferredTaskHandler"),
       audio_thread_(base::kInvalidThreadId) {
   weak_this_ = weak_ptr_factory_.GetWeakPtr();
 }
@@ -366,6 +380,19 @@ void DeferredTaskHandler::AddRenderingOrphanHandler(
   DCHECK(handler);
   DCHECK(!rendering_orphan_handlers_.Contains(handler));
   rendering_orphan_handlers_.push_back(std::move(handler));
+}
+
+void DeferredTaskHandler::RecordReplayKeepDisposedHandler(
+    scoped_refptr<AudioHandler> handler) {
+  DCHECK(IsMainThread());
+  replay_strong_disposed_handlers_.push_back(std::move(handler));
+}
+
+void DeferredTaskHandler::RecordReplayLeakDisposedHandlers() {
+  AssertGraphOwner();
+  for (scoped_refptr<AudioHandler>& handler : replay_strong_disposed_handlers_)
+    handler->AddRef();
+  replay_strong_disposed_handlers_.clear();
 }
 
 void DeferredTaskHandler::RequestToDeleteHandlersOnMainThread() {
@@ -412,6 +439,9 @@ void DeferredTaskHandler::ClearHandlersToBeDeleted() {
   finished_tail_processing_handlers_.clear();
   rendering_orphan_handlers_.clear();
   deletable_orphan_handlers_.clear();
+  // Kept handlers weren't disposed, so their outputs can still be wired to
+  // each other's inputs, and destroying them would touch freed outputs.
+  RecordReplayLeakDisposedHandlers();
   automatic_pull_handlers_.clear();
   finished_source_handlers_.clear();
   active_source_handlers_.clear();
@@ -419,6 +449,14 @@ void DeferredTaskHandler::ClearHandlersToBeDeleted() {
 
 void DeferredTaskHandler::ClearContextFromOrphanHandlers() {
   DCHECK(IsMainThread());
+
+  if (recordreplay::AreEventsDisallowed() && recordreplay::IsRecordingOrReplaying(
+          "leak-references",
+          "DeferredTaskHandler::ClearContextFromOrphanHandlers")) {
+    // This is called during GC.
+    // → Don't take the lock.
+    return;
+  }
 
   // `rendering_orphan_handlers_` and `deletable_orphan_handlers_` can
   // be modified on the audio thread.

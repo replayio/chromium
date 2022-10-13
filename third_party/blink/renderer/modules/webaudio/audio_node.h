@@ -137,6 +137,8 @@ class MODULES_EXPORT AudioNode : public EventTarget,
                                        unsigned input_index_of_destination);
   // Returns true if the specified AudioParam was connected.
   bool DisconnectFromOutputIfConnected(unsigned output_index, AudioParam&);
+  // Updates whether the context keeps this node alive for its connections.
+  void RecordReplayUpdateConnected();
 
   // https://chromium.googlesource.com/chromium/src/+/refs/heads/main/docs/media/capture/README.md#logs
   void SendLogMessage(const String& function_name, const String& message);

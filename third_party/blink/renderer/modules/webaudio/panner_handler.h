@@ -172,7 +172,7 @@ class PannerHandler final : public AudioHandler {
 
   // To synchronize `Process()` with the setting of this panner's state. (e.g.
   // position, orientation, distance, sound cone, and the listener)
-  mutable base::Lock process_lock_;
+  mutable base::Lock process_lock_{"PannerHandler"};
 };
 
 }  // namespace blink

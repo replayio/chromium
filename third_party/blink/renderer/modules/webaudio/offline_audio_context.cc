@@ -632,7 +632,8 @@ void OfflineAudioContext::FireCompletionEvent(AudioBuffer* rendered_buffer) {
     }
 
     // Call the offline rendering completion event listener.
-    DispatchEvent(*OfflineAudioCompletionEvent::Create(rendered_buffer));
+    DispatchEvent(*OfflineAudioCompletionEvent::Create(rendered_buffer),
+                  "OfflineAudioContext::FireCompletionEvent");
   }
 }
 
