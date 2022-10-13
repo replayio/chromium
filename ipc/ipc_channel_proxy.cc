@@ -22,6 +22,8 @@
 #include "ipc/param_traits_macros.h"
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
 
+#include "base/record_replay.h"
+
 namespace IPC {
 
 //------------------------------------------------------------------------------
@@ -35,6 +37,7 @@ ChannelProxy::Context::Context(
       ipc_task_runner_(ipc_task_runner),
       channel_connected_called_(false),
       peer_pid_(base::kNullProcessId) {
+  recordreplay::RegisterPointer("ChannelProxy::Context", this);
   DCHECK(ipc_task_runner_.get());
   // The Listener thread where Messages are handled must be a separate thread
   // to avoid oversubscribing the IO thread. If you trigger this error, you
@@ -46,7 +49,9 @@ ChannelProxy::Context::Context(
          (ipc_task_runner_.get() != default_listener_task_runner_.get()));
 }
 
-ChannelProxy::Context::~Context() = default;
+ChannelProxy::Context::~Context() {
+  recordreplay::UnregisterPointer(this);
+}
 
 void ChannelProxy::Context::ClearIPCTaskRunner() {
   ipc_task_runner_.reset();
