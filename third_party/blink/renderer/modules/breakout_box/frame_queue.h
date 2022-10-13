@@ -72,7 +72,9 @@ class FrameQueue
   }
 
  private:
-  base::Lock lock_;
+  // Ordered while recording/replaying: whether pull() posts a task depends on
+  // the queue being empty, which another thread changes.
+  base::Lock lock_{"FrameQueue.lock_"};
   Deque<NativeFrameType> queue_ GUARDED_BY(GetLock());
   const wtf_size_t max_size_;
 };
@@ -108,7 +110,9 @@ class FrameQueueHandle {
   }
 
  private:
-  mutable base::Lock lock_;
+  // Ordered while recording/replaying: whether QueueFrame() pushes and posts
+  // a task depends on |queue_| not having been released on another thread.
+  mutable base::Lock lock_{"FrameQueueHandle.lock_"};
   scoped_refptr<FrameQueue<NativeFrameType>> queue_ GUARDED_BY(lock_);
 };
 
