@@ -10,6 +10,7 @@
 #include "sql/sandboxed_vfs_file_impl.h"
 
 #include "base/notreached.h"
+#include "base/record_replay.h"
 #include "sql/sandboxed_vfs.h"
 
 namespace sql {
@@ -23,11 +24,17 @@ SandboxedVfsFileImpl::SandboxedVfsFileImpl(base::File file,
       sqlite_lock_mode_(SQLITE_LOCK_NONE),
       vfs_(vfs),
       file_type_(file_type),
-      file_path_(std::move(file_path)) {}
+      file_path_(std::move(file_path)) {
+  REPLAY_ASSERT("SandboxedVfsFile::Create %s %d",
+                file_path_.AsUTF8Unsafe().c_str(), file_.GetPlatformFile());
+}
 
 SandboxedVfsFileImpl::~SandboxedVfsFileImpl() = default;
 
 int SandboxedVfsFileImpl::Close() {
+  REPLAY_ASSERT("SandboxedVfsFile::Close %d %s %d",
+                recordreplay::PointerId(this),
+                file_path_.AsUTF8Unsafe().c_str(), file_.GetPlatformFile());
   file_.Close();
   delete this;
   return SQLITE_OK;
