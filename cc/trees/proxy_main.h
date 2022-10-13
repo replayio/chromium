@@ -66,6 +66,8 @@ class CC_EXPORT ProxyMain : public Proxy {
                                    std::string_view suffix) const;
   void BeginMainFrame(
       std::unique_ptr<BeginMainFrameAndCommitState> begin_main_frame_state);
+  void BeginMainFrameWithBlocking(
+      std::unique_ptr<BeginMainFrameAndCommitState> begin_main_frame_state, bool force_blocking);
   void DidChangeBeginFrameSourcePaused(bool paused);
   void DidCompleteCommit(int source_frame_number, CommitTimestamps);
   void DidPresentCompositorFrame(
@@ -103,6 +105,11 @@ class CC_EXPORT ProxyMain : public Proxy {
   bool has_sent_urgent_commit_request() const {
     return has_sent_urgent_commit_request_;
   }
+
+  void RecordReplayRepaintPending();
+  void RecordReplayRepaint();
+  // The surface this proxy's compositor submits its frames to.
+  const viz::LocalSurfaceId& RecordReplayLocalSurfaceId() const;
 
  private:
   // Proxy implementation.

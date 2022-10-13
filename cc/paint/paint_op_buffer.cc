@@ -277,6 +277,7 @@ void PaintOpBuffer::Append(
 }
 
 PaintOpBuffer::~PaintOpBuffer() {
+  recordreplay::AutoDisallowEvents disallow("~PaintOpBuffer");
   DestroyOps();
 }
 
