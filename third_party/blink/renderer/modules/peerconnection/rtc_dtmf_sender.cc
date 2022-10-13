@@ -139,7 +139,7 @@ void RTCDTMFSender::PlayoutTask() {
   // and "currentDirection" attributes as per spec.
   if (tone_buffer_.empty()) {
     Member<Event> event = MakeGarbageCollected<RTCDTMFToneChangeEvent>("");
-    DispatchEvent(*event.Release());
+    DispatchEvent(*event.Release(), "RTCDTMFSender::PlayoutTask #1");
     return;
   }
   String this_tone = tone_buffer_.Substring(0, 1);
@@ -153,7 +153,7 @@ void RTCDTMFSender::PlayoutTask() {
   }
   playout_task_is_scheduled_ = true;
   Member<Event> event = MakeGarbageCollected<RTCDTMFToneChangeEvent>(this_tone);
-  DispatchEvent(*event.Release());
+  DispatchEvent(*event.Release(), "RTCDTMFSender::PlayoutTask #2");
 }
 
 void RTCDTMFSender::DidPlayTone(const String& tone) {

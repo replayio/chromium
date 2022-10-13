@@ -36,6 +36,8 @@
 #include "third_party/blink/renderer/platform/wtf/casting.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_events.h"
+
 namespace blink {
 
 namespace {
@@ -185,6 +187,8 @@ void DOMTask::InvokeInternal(ScriptState* script_state) {
   }
 
   execution_state_ = ExecutionState::kRunningSync;
+  recordreplay::UserEventProbe replayEvent("postTask", AtomicString());
+
   ScriptValue result;
   ScriptPromise<IDLAny> pending_result;
   if (callback_->Invoke(nullptr).To(&result)) {
