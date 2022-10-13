@@ -140,6 +140,9 @@ class CC_EXPORT ProxyImpl : public LayerTreeHostImplDelegate,
 
   void NotifyNewLocalSurfaceIdExpectedWhilePaused();
 
+  void RecordReplayRepaintPending();
+  void RecordReplayRepaint();
+
  private:
   // LayerTreeHostImplDelegate implementation
   void DidLoseLayerTreeFrameSinkOnImplThread() override;
@@ -294,6 +297,9 @@ class CC_EXPORT ProxyImpl : public LayerTreeHostImplDelegate,
   std::unique_ptr<base::OneShotTimer>
       pause_rendering_until_visibility_change_timer_ =
           std::make_unique<base::OneShotTimer>();
+
+  // The frame sink a repaint initialized while the compositor waited for one.
+  std::unique_ptr<LayerTreeFrameSink> record_replay_frame_sink_;
 };
 
 }  // namespace cc
