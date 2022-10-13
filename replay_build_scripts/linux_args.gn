@@ -1,0 +1,9 @@
+use_remoteexec = true
+is_debug = false # we can't really use most debugging symbols right now
+dcheck_always_on = false # disable dchecks
+enable_nacl = false  # no native targets
+# use_allocator was deleted upstream in M109; PartitionAlloc-Everywhere and
+# the allocator shim are turned off with these instead.
+use_partition_alloc_as_malloc = false
+enable_backup_ref_ptr_support = false
+use_allocator_shim = false
