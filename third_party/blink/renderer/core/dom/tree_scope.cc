@@ -859,4 +859,8 @@ IdTargetObserverRegistry& TreeScope::EnsureIdTargetObserverRegistry() {
   return *id_target_observer_registry_;
 }
 
+int TreeScope::RecordReplayId() const {
+  return root_node_->RecordReplayId();
+}
+
 }  // namespace blink
