@@ -25,6 +25,7 @@
 
 #include "third_party/blink/renderer/core/css/css_font_face_source.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/css/css_font_face.h"
 #include "third_party/blink/renderer/platform/fonts/font_cache_key.h"
 #include "third_party/blink/renderer/platform/fonts/font_description.h"
@@ -33,7 +34,17 @@
 
 namespace blink {
 
-CSSFontFaceSource::~CSSFontFaceSource() = default;
+CSSFontFaceSource::~CSSFontFaceSource() {
+  // The GC finalizes sources at different points when recording and replaying.
+  // Leak the font data they cache, so that where it is destroyed, along with
+  // its typeface, doesn't depend on when the GC runs.
+  if (recordreplay::EnterLeakMemory("CSSFontFaceSource")) {
+    for (auto& entry : font_data_table_) {
+      if (entry.value)
+        entry.value->AddRef();
+    }
+  }
+}
 
 const SimpleFontData* CSSFontFaceSource::GetFontData(
     const FontDescription& font_description,

@@ -213,6 +213,9 @@ scoped_refptr<Image> LayoutImageResource::GetImage(
 
 scoped_refptr<Image> LayoutImageResource::GetImage(
     const gfx::SizeF& container_size) const {
+  recordreplay::Assert("[RUN-658-1901] LayoutImageResource::GetImage A %d %d %d",
+                       !!cached_image_, !cached_image_->ErrorOccurred(),
+                       cached_image_->HasImage());
   if (!cached_image_)
     return Image::NullImage();
 
@@ -229,14 +232,18 @@ scoped_refptr<Image> LayoutImageResource::GetImage(
   }
 
   auto* svg_image = DynamicTo<SVGImage>(image);
+  recordreplay::Assert(
+      "[RUN-658-1901] LayoutImageResource::GetImage B %d", !!svg_image);
   if (!svg_image)
     return image;
 
   KURL url;
   if (auto* element = DynamicTo<Element>(layout_object_->GetNode())) {
+    recordreplay::Assert("[RUN-658-1901] LayoutImageResource::GetImage C");
     const AtomicString& url_string = element->ImageSourceURL();
     url = element->GetDocument().CompleteURL(url_string);
   }
+  recordreplay::Assert("[RUN-658-1901] LayoutImageResource::GetImage D");
 
   const ComputedStyle& style = layout_object_->StyleRef();
   auto preferred_color_scheme = layout_object_->GetDocument()

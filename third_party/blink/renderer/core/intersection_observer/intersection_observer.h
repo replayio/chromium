@@ -207,7 +207,10 @@ class CORE_EXPORT IntersectionObserver final
   // sleep() calls to tests to wait for notifications to show up.
   static void SetThrottleDelayEnabledForTesting(bool);
 
-  const HeapLinkedHashSet<WeakMember<IntersectionObservation>>& Observations() {
+  const HeapLinkedHashSet<
+      WeakMember<IntersectionObservation>,
+      WTF::RecordReplayPointerIdHashTraits<WeakMember<IntersectionObservation>>
+    >& Observations() {
     return observations_;
   }
 
@@ -220,9 +223,13 @@ class CORE_EXPORT IntersectionObserver final
   // We use UntracedMember<> here to do custom weak processing.
   UntracedMember<Node> root_;
 
-  HeapLinkedHashSet<WeakMember<IntersectionObservation>> observations_;
+  HeapLinkedHashSet<
+    WeakMember<IntersectionObservation>,
+    WTF::RecordReplayPointerIdHashTraits<WeakMember<IntersectionObservation>>
+  > observations_;
+  HeapLinkedHashSet<Member<IntersectionObservation>> replay_strong_observations_;
   // Observations that have updates waiting to be delivered
-  HeapHashSet<Member<IntersectionObservation>> active_observations_;
+  HeapHashSet<Member<IntersectionObservation>, WTF::RecordReplayPointerIdHashTraits<Member<IntersectionObservation>>> active_observations_;
   const Vector<float> thresholds_;
   const DOMHighResTimeStamp delay_;
   const Vector<Length> margin_;
