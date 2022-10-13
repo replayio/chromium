@@ -257,6 +257,9 @@ base::ScopedCFTypeRef<CMFormatDescriptionRef> CreateVideoFormatVP9(
     media::VideoCodecProfile profile,
     absl::optional<gfx::HDRMetadata> hdr_metadata,
     const gfx::Size& coded_size) {
+  // FIXME Disabled due to failing to compile...
+  return base::ScopedCFTypeRef<CMFormatDescriptionRef>();
+  /*
   base::ScopedCFTypeRef<CFDictionaryRef> format_config = CreateFormatExtensions(
       kCMVideoCodecType_VP9, profile, color_space, hdr_metadata);
 
@@ -272,6 +275,7 @@ base::ScopedCFTypeRef<CMFormatDescriptionRef> CreateVideoFormatVP9(
   OSSTATUS_DLOG_IF(WARNING, status != noErr, status)
       << "CMVideoFormatDescriptionCreate()";
   return format;
+  */
 }
 
 // Create a VTDecompressionSession using the provided |format|. If
@@ -473,7 +477,8 @@ void InitializeVideoToolbox() {
   static const bool unused = []() {
     // TODO: Enable VP9 for a iOS platform(https://crbug.com/1449877)
     if (__builtin_available(macOS 11.0, *)) {
-      VTRegisterSupplementalVideoDecoderIfAvailable(kCMVideoCodecType_VP9);
+      // FIXME disabled due to build break.
+      //VTRegisterSupplementalVideoDecoderIfAvailable(kCMVideoCodecType_VP9);
     }
     return true;
   }();

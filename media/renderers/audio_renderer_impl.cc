@@ -40,6 +40,8 @@
 #include "media/filters/audio_clock.h"
 #include "media/filters/decrypting_demuxer_stream.h"
 
+#include "base/record_replay.h"
+
 namespace media {
 
 AudioRendererImpl::AudioRendererImpl(
@@ -62,6 +64,7 @@ AudioRendererImpl::AudioRendererImpl(
       is_encrypted_(false),
       last_decoded_channels_(0),
       volume_(1.0f),  // Default unmuted.
+      lock_("AudioRendererImpl.lock_"),
       playback_rate_(0.0),
       state_(kUninitialized),
       create_audio_decoders_cb_(create_audio_decoders_cb),
