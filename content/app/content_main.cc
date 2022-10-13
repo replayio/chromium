@@ -22,6 +22,7 @@
 #include "base/process/memory.h"
 #include "base/process/process.h"
 #include "base/process/set_process_title.h"
+#include "base/record_replay.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/single_thread_task_executor.h"
