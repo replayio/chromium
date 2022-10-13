@@ -278,7 +278,7 @@ class CORE_EXPORT HTMLCanvasElement final
   }
 
   DispatchEventResult HostDispatchEvent(Event* event) override {
-    return DispatchEvent(*event);
+    return DispatchEvent(*event, "HTMLCanvasElement::HostDispatchEvent");
   }
 
   void UpdateSuspendOffscreenCanvasAnimation();
