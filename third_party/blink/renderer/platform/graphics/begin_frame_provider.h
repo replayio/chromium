@@ -8,6 +8,7 @@
 #include <string>
 
 #include "base/notreached.h"
+#include "base/record_replay.h"
 #include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -79,7 +80,6 @@ class PLATFORM_EXPORT BeginFrameProvider
 
   void Trace(Visitor*) const;
 
-  ~BeginFrameProvider() override = default;
 
  private:
   void OnMojoConnectionError(uint32_t custom_reason,

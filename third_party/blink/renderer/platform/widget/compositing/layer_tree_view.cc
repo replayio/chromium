@@ -49,6 +49,8 @@
 #include "third_party/blink/renderer/platform/scheduler/public/widget_scheduler.h"
 #include "ui/gfx/presentation_feedback.h"
 
+#include "base/record_replay.h"
+
 namespace cc {
 class Layer;
 }
@@ -423,6 +425,12 @@ void LayerTreeView::DidCompletePageScaleAnimation(int source_frame_number) {
 void LayerTreeView::DidPresentCompositorFrame(
     uint32_t frame_token,
     const viz::FrameTimingDetails& frame_timing_details) {
+
+  recordreplay::Assert(
+      "[RUN-2317-2366] LayerTreeView::DidPresentCompositorFrame A %u %d %d",
+      frame_token, !!delegate_,
+      frame_timing_details.presentation_feedback.failed());
+
   if (!delegate_)
     return;
   DCHECK(layer_tree_host_->GetTaskRunnerProvider()
@@ -434,12 +442,21 @@ void LayerTreeView::DidPresentCompositorFrame(
   }
   while (!presentation_callbacks_.empty()) {
     const auto& front = presentation_callbacks_.begin();
+
+    recordreplay::Assert(
+        "[RUN-2317-2570] LayerTreeView::DidPresentCompositorFrame B %u %zu %d",
+        front->first, front->second.size(),
+        viz::FrameTokenGT(front->first, frame_token));
+
     if (viz::FrameTokenGT(front->first, frame_token))
       break;
     for (auto& callback : front->second)
       std::move(callback).Run(frame_timing_details);
     presentation_callbacks_.erase(front);
   }
+
+  recordreplay::Assert(
+      "[RUN-2317-2570] LayerTreeView::DidPresentCompositorFrame C");
 
 #if BUILDFLAG(IS_APPLE)
   while (!core_animation_error_code_callbacks_.empty()) {
