@@ -53,7 +53,13 @@ void LongTaskDetector::DidProcessTask(
     return;
 
   iterating_ = true;
+  HeapVector<Member<LongTaskObserver>> observers_vector;
   for (auto& observer : observers_) {
+    observers_vector.push_back(observer);
+  }
+  std::sort(observers_vector.begin(), observers_vector.end(),
+            recordreplay::CompareMemberByPointerId<Member<LongTaskObserver>>());
+  for (auto& observer : observers_vector) {
     observer->OnLongTaskDetected(start_time, end_time);
   }
   iterating_ = false;
