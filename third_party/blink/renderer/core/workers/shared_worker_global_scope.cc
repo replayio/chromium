@@ -207,7 +207,7 @@ void SharedWorkerGlobalScope::Connect(MessagePortChannel channel) {
       MessageEvent::Create(MakeGarbageCollected<GCedMessagePortArray>(1, port),
                            /*origin=*/nullptr, String(), port);
   event->initEvent(event_type_names::kConnect, false, false);
-  DispatchEvent(*event);
+  DispatchEvent(*event, "SharedWorkerGlobalScope::Connect");
 }
 
 void SharedWorkerGlobalScope::DidReceiveResponseForClassicScript(
