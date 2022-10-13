@@ -42,6 +42,8 @@
 
 #endif  // !BUILDFLAG(IS_NACL)
 
+#include "base/record_replay.h"
+
 #if BUILDFLAG(IS_ANDROID)
 #include "mojo/core/channel_binder.h"
 #endif
@@ -132,7 +134,8 @@ ChannelPosix::ChannelPosix(
     scoped_refptr<base::SingleThreadTaskRunner> io_task_runner)
     : Channel(delegate, handle_policy),
       self_(this),
-      io_task_runner_(io_task_runner) {
+      io_task_runner_(io_task_runner),
+      write_lock_("ChannelPosix.write_lock_") {
   socket_ = connection_params.TakeEndpoint().TakePlatformHandle().TakeFD();
   CHECK(socket_.is_valid());
 }
@@ -158,6 +161,9 @@ void ChannelPosix::ShutDownImpl() {
 }
 
 void ChannelPosix::Write(MessagePtr message) {
+  // https://linear.app/replay/issue/RUN-618
+  recordreplay::Assert("ChannelPosix::Write Start");
+
   if (ShouldRecordSubsampledHistograms()) {
     UMA_HISTOGRAM_COUNTS_100000("Mojo.Channel.WriteMessageSize",
                                 message->data_num_bytes());
@@ -170,6 +176,8 @@ void ChannelPosix::Write(MessagePtr message) {
     if (reject_writes_)
       return;
     if (outgoing_messages_.empty()) {
+      // https://linear.app/replay/issue/RUN-618
+      recordreplay::Assert("ChannelPosix::Write #1");
       if (!WriteNoLock(MessageView(std::move(message), 0)))
         reject_writes_ = write_error = true;
     } else {
