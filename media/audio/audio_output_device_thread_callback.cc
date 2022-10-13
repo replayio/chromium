@@ -6,6 +6,7 @@
 
 #include <utility>
 
+#include "base/record_replay.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/trace_event/trace_event.h"
@@ -53,17 +54,21 @@ void AudioOutputDeviceThreadCallback::Process(uint32_t control_signal) {
   media::AudioOutputBuffer* buffer =
       reinterpret_cast<media::AudioOutputBuffer*>(
           shared_memory_mapping_.memory());
-  uint32_t frames_skipped = buffer->params.frames_skipped;
+  uint32_t frames_skipped = recordreplay::RecordReplayValue(
+      "audioparams::frames_skipped", buffer->params.frames_skipped);
   buffer->params.frames_skipped = 0;
 
   TRACE_EVENT_BEGIN2("audio", "AudioOutputDevice::FireRenderCallback",
                      "callback_num", callback_num_, "frames skipped",
                      frames_skipped);
 
-  base::TimeDelta delay = base::Microseconds(buffer->params.delay_us);
+  // RUN-1667: Record the delay_us param from the shared memory buffer (this is mutated by the other end.)
+  base::TimeDelta delay = base::Microseconds(
+    recordreplay::RecordReplayValue("audioparams::delay_us", buffer->params.delay_us));
 
   base::TimeTicks delay_timestamp =
-      base::TimeTicks() + base::Microseconds(buffer->params.delay_timestamp_us);
+      base::TimeTicks() + base::Microseconds(recordreplay::RecordReplayValue(
+          "audioparams::delay_timestamp_us", buffer->params.delay_timestamp_us));
 
   DVLOG(4) << __func__ << " delay:" << delay << " delay_timestamp:" << delay
            << " frames_skipped:" << frames_skipped;
@@ -84,8 +89,24 @@ void AudioOutputDeviceThreadCallback::Process(uint32_t control_signal) {
   // frames, and ask client to render audio.  Since |output_bus_| is wrapping
   // the shared memory the Render() call is writing directly into the shared
   // memory.
-  render_callback_->Render(delay, delay_timestamp, frames_skipped,
-                           output_bus_.get());
+  // The audio service also writes this shared memory, which isn't recorded,
+  // so while recording or replaying the client renders into memory only this
+  // process writes, and the result is copied to the shared memory afterwards.
+  if (recordreplay::IsRecordingOrReplaying() &&
+      !audio_parameters_.IsBitstreamFormat()) {
+    if (!record_replay_bus_) {
+      record_replay_bus_ = media::AudioBus::Create(audio_parameters_);
+    }
+    // Like the audio service zeroing the shared memory, so a render that
+    // writes nothing outputs silence.
+    record_replay_bus_->Zero();
+    render_callback_->Render(delay, delay_timestamp, frames_skipped,
+                             record_replay_bus_.get());
+    record_replay_bus_->CopyTo(output_bus_.get());
+  } else {
+    render_callback_->Render(delay, delay_timestamp, frames_skipped,
+                             output_bus_.get());
+  }
 
   if (audio_parameters_.IsBitstreamFormat()) {
     buffer->params.bitstream_data_size = output_bus_->GetBitstreamDataSize();

@@ -9,12 +9,17 @@
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "base/thread_annotations.h"
 #include "base/time/default_tick_clock.h"
 #include "base/time/time.h"
 
 namespace media {
+
+namespace {
+constexpr base::TimeDelta kStaleFrameLimit = base::Seconds(10);
+}  // namespace
 
 class VideoFramePool::PoolImpl
     : public base::RefCountedThreadSafe<VideoFramePool::PoolImpl> {
@@ -56,6 +61,12 @@ class VideoFramePool::PoolImpl
   // least recently used entry.
   void FrameReleased(scoped_refptr<VideoFrame> frame);
 
+  // A frame's last reference can go away on any thread, and which one isn't
+  // recorded, so while recording/replaying FrameReleased doesn't read the
+  // clock: released frames are stamped and expired here instead, on the
+  // CreateFrame caller's sequence.
+  void RecordReplayExpireStaleFrames() EXCLUSIVE_LOCKS_REQUIRED(lock_);
+
   base::Lock lock_;
   bool is_shutdown_ GUARDED_BY(lock_) = false;
 
@@ -85,6 +96,9 @@ scoped_refptr<VideoFrame> VideoFramePool::PoolImpl::CreateFrame(
     base::TimeDelta timestamp) {
   base::AutoLock auto_lock(lock_);
   DCHECK(!is_shutdown_);
+
+  if (recordreplay::IsRecordingOrReplaying())
+    RecordReplayExpireStaleFrames();
 
   scoped_refptr<VideoFrame> frame;
   while (!frames_.empty()) {
@@ -128,13 +142,17 @@ void VideoFramePool::PoolImpl::FrameReleased(scoped_refptr<VideoFrame> frame) {
   if (is_shutdown_)
     return;
 
+  if (recordreplay::IsRecordingOrReplaying()) {
+    frames_.push_back({base::TimeTicks(), std::move(frame)});
+    return;
+  }
+
   const base::TimeTicks now = tick_clock_->NowTicks();
   frames_.push_back({now, std::move(frame)});
 
   // After this loop, |stale_index| is the index of the oldest non-stale frame.
   // Such an index must exist because |frame| is never stale.
   int stale_index = -1;
-  constexpr base::TimeDelta kStaleFrameLimit = base::Seconds(10);
   while (now - frames_[++stale_index].last_use_time > kStaleFrameLimit) {
     // Last frame should never be included since we just added it.
     DCHECK_LE(static_cast<size_t>(stale_index), frames_.size());
@@ -142,6 +160,17 @@ void VideoFramePool::PoolImpl::FrameReleased(scoped_refptr<VideoFrame> frame) {
 
   if (stale_index)
     frames_.erase(frames_.begin(), frames_.begin() + stale_index);
+}
+
+void VideoFramePool::PoolImpl::RecordReplayExpireStaleFrames() {
+  const base::TimeTicks now = tick_clock_->NowTicks();
+  for (FrameEntry& entry : frames_) {
+    if (entry.last_use_time.is_null())
+      entry.last_use_time = now;
+  }
+  base::EraseIf(frames_, [now](const FrameEntry& entry) {
+    return now - entry.last_use_time > kStaleFrameLimit;
+  });
 }
 
 VideoFramePool::VideoFramePool() : pool_(new PoolImpl()) {}

@@ -213,7 +213,7 @@ class MEDIA_EXPORT AudioOutputDevice : public AudioRendererSink,
 
   // In order to avoid a race between OnStreamCreated and Stop(), we use this
   // guard to control stopping and starting the audio thread.
-  base::Lock audio_thread_lock_;
+  base::Lock audio_thread_lock_{"AudioOutputDevice"};
   std::unique_ptr<AudioOutputDeviceThreadCallback> audio_callback_;
   std::unique_ptr<AudioDeviceThread> audio_thread_
       GUARDED_BY(audio_thread_lock_);

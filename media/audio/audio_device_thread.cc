@@ -7,6 +7,7 @@
 #include <limits>
 
 #include "base/check_op.h"
+#include "base/record_replay.h"
 #include "base/system/sys_info.h"
 #include "build/build_config.h"
 
@@ -78,10 +79,19 @@ void AudioDeviceThread::ThreadMain() {
   base::PlatformThread::SetName(thread_name_);
   callback_->InitializeOnAudioThread();
 
+  uint32_t record_replay_iteration_idx = 0;
   uint32_t buffer_index = 0;
   while (true) {
     uint32_t pending_data = 0;
     size_t bytes_read = socket_.Receive(&pending_data, sizeof(pending_data));
+    recordreplay::Assert(
+      "[RUN-1667-1674] AudioDeviceThread::ThreadMain %u %u %u %u",
+      (unsigned) record_replay_iteration_idx,
+      (unsigned) buffer_index,
+      (unsigned) pending_data,
+      (unsigned) bytes_read
+    );
+    record_replay_iteration_idx++;
     if (bytes_read != sizeof(pending_data))
       break;
 
@@ -93,8 +103,10 @@ void AudioDeviceThread::ThreadMain() {
     // the buffer index for synchronized buffers though.
     //
     // See comments in AudioOutputController::DoPause() for details on why.
-    if (pending_data != std::numeric_limits<uint32_t>::max())
+    if (pending_data != std::numeric_limits<uint32_t>::max()) {
+      REPLAY_ASSERT("AudioDeviceThread::ThreadMain Process %u", pending_data);
       callback_->Process(pending_data);
+    }
 
     // The usage of synchronized buffers differs between input and output cases.
     //
@@ -107,6 +119,8 @@ void AudioDeviceThread::ThreadMain() {
     // expects. For more details on how this works see
     // AudioSyncReader::WaitUntilDataIsReady().
     ++buffer_index;
+    REPLAY_ASSERT("AudioDeviceThread::ThreadMain Send %u %u", buffer_index,
+                  pending_data);
     size_t bytes_sent = socket_.Send(&buffer_index, sizeof(buffer_index));
     if (bytes_sent != sizeof(buffer_index))
       break;
