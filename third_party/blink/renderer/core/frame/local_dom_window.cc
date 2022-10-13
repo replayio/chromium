@@ -148,6 +148,7 @@
 #include "third_party/blink/renderer/core/view_transition/view_transition_supplement.h"
 #include "third_party/blink/renderer/platform/back_forward_cache_buffer_limit_tracker.h"
 #include "third_party/blink/renderer/platform/bindings/exception_messages.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/source_location.h"
 #include "third_party/blink/renderer/platform/blob/blob_url.h"
@@ -233,7 +234,15 @@ class LocalDOMWindow::NetworkStateObserver final
     AtomicString event_name =
         on_line ? event_type_names::kOnline : event_type_names::kOffline;
     auto* window = To<LocalDOMWindow>(GetExecutionContext());
-    window->DispatchEvent(*Event::Create(event_name));
+    window->DispatchEvent(*Event::Create(event_name),
+                          "LocalDOMWindow::NetworkStateObserver::OnLineStateChange");
+  }
+
+  int RecordReplayObserverId() const override {
+    // Exactly one of these exists per LocalDOMWindow, so the window's own id
+    // identifies it uniquely without minting a new one.
+    auto* context = GetExecutionContext();
+    return context ? To<LocalDOMWindow>(context)->RecordReplayId() : 0;
   }
 
   void ContextDestroyed() override { online_observer_handle_ = nullptr; }
@@ -246,6 +255,15 @@ class LocalDOMWindow::NetworkStateObserver final
   std::unique_ptr<NetworkStateNotifier::NetworkStateObserverHandle>
       online_observer_handle_;
 };
+
+static std::unordered_set<LocalDOMWindow*>* gValidDOMWindowPointers;
+
+// Workaround for invalid window pointers being used.
+//
+// See https://linear.app/replay/issue/TT-957
+bool LocalDOMWindowPointerIsValid(LocalDOMWindow* window) {
+  return gValidDOMWindowPointers && gValidDOMWindowPointers->find(window) != gValidDOMWindowPointers->end();
+}
 
 LocalDOMWindow::LocalDOMWindow(LocalFrame& frame, WindowAgent* agent)
     : DOMWindow(frame),
@@ -270,7 +288,12 @@ LocalDOMWindow::LocalDOMWindow(LocalFrame& frame, WindowAgent* agent)
       token_(frame.GetLocalFrameToken()),
       network_state_observer_(MakeGarbageCollected<NetworkStateObserver>(this)),
       closewatcher_stack_(
-          MakeGarbageCollected<CloseWatcher::WatcherStack>(this)) {}
+          MakeGarbageCollected<CloseWatcher::WatcherStack>(this)) {
+  CHECK(IsMainThread());
+  if (!gValidDOMWindowPointers)
+    gValidDOMWindowPointers = new std::unordered_set<LocalDOMWindow*>();
+  gValidDOMWindowPointers->insert(this);
+}
 
 void LocalDOMWindow::BindContentSecurityPolicy() {
   DCHECK(!GetContentSecurityPolicy()->IsBound());
@@ -328,7 +351,7 @@ void LocalDOMWindow::AcceptLanguagesChanged() {
   if (navigator_)
     navigator_->SetLanguagesDirty();
 
-  DispatchEvent(*Event::Create(event_type_names::kLanguagechange));
+  DispatchEvent(*Event::Create(event_type_names::kLanguagechange), "LocalDOMWindow::AcceptLanguagesChanged");
 }
 
 ScriptValue LocalDOMWindow::event(ScriptState* script_state) {
@@ -1038,10 +1061,15 @@ void LocalDOMWindow::DispatchPopstateEvent(
       task_attribution_scope(SetCurrentTaskStateIfTopLevel(
           task_state, this, TaskScopeType::kPopState));
   DispatchEvent(*PopStateEvent::Create(std::move(state_object), history(),
-                                       has_ua_visual_transition));
+                                       has_ua_visual_transition),
+                "LocalDOMWindow::DispatchPopstateEvent");
 }
 
-LocalDOMWindow::~LocalDOMWindow() = default;
+LocalDOMWindow::~LocalDOMWindow() {
+  CHECK(IsMainThread());
+  CHECK(gValidDOMWindowPointers);
+  gValidDOMWindowPointers->erase(this);
+}
 
 void LocalDOMWindow::Dispose() {
   BackForwardCacheBufferLimitTracker::Get()
@@ -1152,7 +1180,7 @@ void LocalDOMWindow::SendOrientationChangeEvent() {
 
   for (LocalFrame* frame : frames) {
     frame->DomWindow()->DispatchEvent(
-        *Event::Create(event_type_names::kOrientationchange));
+        *Event::Create(event_type_names::kOrientationchange), "LocalDOMWindow::SendOrientationChangeEvent");
   }
 }
 
@@ -1338,6 +1366,16 @@ void LocalDOMWindow::DispatchMessageEventWithOriginCheck(
     SourceLocation* location,
     const base::UnguessableToken& source_agent_cluster_id) {
   TRACE_EVENT0("blink", "LocalDOMWindow::DispatchMessageEventWithOriginCheck");
+
+  std::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    int node_id = recordreplay::NewDependencyGraphNode("{\"kind\":\"dispatchMessageEvent\"}");
+    int created_node_id = event->RecordReplayDependencyGraphNodeId();
+    if (created_node_id)
+      recordreplay::AddDependencyGraphEdge(created_node_id, node_id, "{\"kind\":\"messageEventCreated\"}");
+    execute.emplace(node_id);
+  }
+
   if (intended_target_origin) {
     bool valid_target =
         intended_target_origin->IsSameOriginWith(GetSecurityOrigin());
@@ -1424,7 +1462,8 @@ void LocalDOMWindow::DispatchMessageEventWithOriginCheck(
     // restore.
     EnqueueEvent(*event, TaskType::kInternalDefault);
   } else {
-    DispatchEvent(*event);
+    DispatchEvent(*event,
+                  "LocalDOMWindow::DispatchMessageEventWithOriginCheck");
   }
 }
 
@@ -1864,6 +1903,10 @@ ScriptPromise<IDLUndefined> LocalDOMWindow::scrollBy(ScriptState* script_state,
 ScriptPromise<IDLUndefined> LocalDOMWindow::scrollBy(
     ScriptState* script_state,
     const ScrollToOptions* scroll_to_options) const {
+  if (RecordReplayThrowIfEventsUnavailable("Window.scrollBy")) {
+    return CreateScrollResolvedPromise(script_state);
+  }
+
   if (!IsCurrentlyDisplayedInFrame()) {
     return CreateScrollResolvedPromise(script_state);
   }
@@ -1928,6 +1971,10 @@ ScriptPromise<IDLUndefined> LocalDOMWindow::scrollTo(ScriptState* script_state,
 ScriptPromise<IDLUndefined> LocalDOMWindow::scrollTo(
     ScriptState* script_state,
     const ScrollToOptions* scroll_to_options) const {
+  if (RecordReplayThrowIfEventsUnavailable("Window.scrollTo")) {
+    return CreateScrollResolvedPromise(script_state);
+  }
+
   if (!IsCurrentlyDisplayedInFrame()) {
     return CreateScrollResolvedPromise(script_state);
   }
