@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "base/metrics/histogram_functions.h"
+#include "base/record_replay.h"
 #include "base/uuid.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -373,10 +374,13 @@ ScriptPromise MediaDevices::enumerateDevices(ScriptState* script_state,
 
   enumerate_device_requests_.insert(result_tracker);
 
+  // There is no video capture while recording/replaying, so cameras are not
+  // listed.
+  const bool video_input = !recordreplay::IsRecordingOrReplaying("no-video");
   LocalFrame* frame = LocalDOMWindow::From(script_state)->GetFrame();
   GetDispatcherHost(frame).EnumerateDevices(
-      true /* audio input */, true /* video input */, true /* audio output */,
-      true /* request_video_input_capabilities */,
+      true /* audio input */, video_input, true /* audio output */,
+      video_input /* request_video_input_capabilities */,
       true /* request_audio_input_capabilities */,
       WTF::BindOnce(&MediaDevices::DevicesEnumerated, WrapPersistent(this),
                     WrapPersistent(result_tracker)));
@@ -831,7 +835,7 @@ void MediaDevices::DispatchScheduledEvents() {
   events.swap(scheduled_events_);
 
   for (const auto& event : events) {
-    DispatchEvent(*event);
+    DispatchEvent(*event, "MediaDevices::DispatchScheduledEvents");
   }
 }
 
@@ -845,8 +849,9 @@ void MediaDevices::StartObserving() {
     return;
   }
 
+  const bool video_input = !recordreplay::IsRecordingOrReplaying("no-video");
   GetDispatcherHost(window->GetFrame())
-      .AddMediaDevicesListener(true /* audio input */, true /* video input */,
+      .AddMediaDevicesListener(true /* audio input */, video_input,
                                true /* audio output */,
                                receiver_.BindNewPipeAndPassRemote(
                                    GetExecutionContext()->GetTaskRunner(

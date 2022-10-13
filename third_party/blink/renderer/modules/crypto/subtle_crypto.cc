@@ -319,8 +319,9 @@ ScriptPromise SubtleCrypto::digest(
   WebCryptoAlgorithm normalized_algorithm;
   if (!NormalizeAlgorithm(script_state->GetIsolate(), raw_algorithm,
                           kWebCryptoOperationDigest, normalized_algorithm,
-                          exception_state))
+                          exception_state)) {
     return ScriptPromise();
+  }
 
   auto* result = MakeGarbageCollected<CryptoResultImpl>(script_state);
   HistogramAlgorithm(ExecutionContext::From(script_state),

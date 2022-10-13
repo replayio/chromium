@@ -398,7 +398,7 @@ void ServiceWorkerRegistration::SetUpdateViaCache(
 }
 
 void ServiceWorkerRegistration::UpdateFound() {
-  DispatchEvent(*Event::Create(event_type_names::kUpdatefound));
+  DispatchEvent(*Event::Create(event_type_names::kUpdatefound), "ServiceWorkerRegistration::UpdateFound");
 }
 
 void ServiceWorkerRegistration::UpdateInternal(

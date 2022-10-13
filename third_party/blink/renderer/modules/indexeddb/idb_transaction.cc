@@ -122,6 +122,10 @@ IDBTransaction::IDBTransaction(
           &IDBTransaction::SetActive, WrapPersistent(this), false));
 
   database_->TransactionCreated(this);
+
+  record_replay_created_node_id_ = recordreplay::NewDependencyGraphNode(
+    "{\"kind\":\"newIDBTransaction\"}"
+  );
 }
 
 IDBTransaction::IDBTransaction(
@@ -149,6 +153,10 @@ IDBTransaction::IDBTransaction(
   DCHECK(scope_.empty());
 
   database_->TransactionCreated(this);
+
+  record_replay_created_node_id_ = recordreplay::NewDependencyGraphNode(
+    "{\"kind\":\"newIDBTransaction\"}"
+  );
 }
 
 IDBTransaction::~IDBTransaction() {
@@ -627,6 +635,17 @@ void IDBTransaction::EnqueueEvent(Event* event) {
       << event->type() << ".";
   if (!GetExecutionContext())
     return;
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    int node_id = recordreplay::NewDependencyGraphNode(
+      "{\"kind\":\"enqueueIDBTransactionEvent\"}"
+    );
+    recordreplay::AddDependencyGraphEdge(
+      record_replay_created_node_id_, node_id, "{\"kind\":\"creator\"}"
+    );
+    execute.emplace(node_id);
+  }
 
   event->SetTarget(this);
   event_queue_->EnqueueEvent(FROM_HERE, *event);

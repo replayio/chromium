@@ -27,7 +27,7 @@ void PictureInPictureWindow::OnResize(const gfx::Size& size) {
     return;
 
   size_ = size;
-  DispatchEvent(*Event::Create(event_type_names::kResize));
+  DispatchEvent(*Event::Create(event_type_names::kResize), "PictureInPictureWindow::OnResize");
 }
 
 const AtomicString& PictureInPictureWindow::InterfaceName() const {
