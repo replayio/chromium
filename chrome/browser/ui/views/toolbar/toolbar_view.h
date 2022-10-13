@@ -22,6 +22,7 @@
 #include "chrome/browser/ui/views/location_bar/custom_tab_bar_view.h"
 #include "chrome/browser/ui/views/location_bar/location_bar_view.h"
 #include "chrome/browser/ui/views/profiles/avatar_toolbar_button.h"
+#include "chrome/browser/ui/views/toolbar/record_replay_toolbar_button.h"
 #include "chrome/browser/ui/views/toolbar/side_panel_toolbar_button.h"
 #include "components/prefs/pref_member.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -153,6 +154,9 @@ class ToolbarView : public views::AccessiblePaneView,
     return battery_saver_button_;
   }
   media_router::CastToolbarButton* cast_button() const { return cast_; }
+  RecordReplayToolbarButton* record_replay_button() const {
+    return record_replay_button_;
+  }
   SidePanelToolbarContainer* side_panel_container() const {
     return side_panel_container_;
   }
@@ -277,6 +281,7 @@ class ToolbarView : public views::AccessiblePaneView,
   raw_ptr<ChromeLabsButton> chrome_labs_button_ = nullptr;
   raw_ptr<BatterySaverButton> battery_saver_button_ = nullptr;
   raw_ptr<media_router::CastToolbarButton> cast_ = nullptr;
+  raw_ptr<RecordReplayToolbarButton> record_replay_button_ = nullptr;
   raw_ptr<SidePanelToolbarContainer> side_panel_container_ = nullptr;
   raw_ptr<SidePanelToolbarButton> side_panel_button_ = nullptr;
   raw_ptr<AvatarToolbarButton> avatar_ = nullptr;
