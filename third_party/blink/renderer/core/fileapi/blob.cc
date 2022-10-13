@@ -33,6 +33,7 @@
 #include <memory>
 #include <utility>
 
+#include "base/record_replay.h"
 #include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_blob_property_bag.h"
@@ -46,6 +47,7 @@
 #include "third_party/blink/renderer/core/frame/web_feature.h"
 #include "third_party/blink/renderer/core/url/dom_url.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/blob/blob_url.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -140,9 +142,22 @@ Blob::Blob(scoped_refptr<BlobDataHandle> data_handle)
 Blob::~Blob() = default;
 
 // static
+Blob* Blob::Create(ExecutionContext*, ExceptionState& exception_state) {
+  if (RecordReplayThrowIfEventsUnavailable("Blob.constructor",
+                                           &exception_state))
+    return nullptr;
+  return MakeGarbageCollected<Blob>(BlobDataHandle::Create());
+}
+
+// static
 Blob* Blob::Create(ExecutionContext* context,
                    const HeapVector<Member<V8BlobPart>>& blob_parts,
-                   const BlobPropertyBag* options) {
+                   const BlobPropertyBag* options,
+                   ExceptionState& exception_state) {
+  if (RecordReplayThrowIfEventsUnavailable("Blob.constructor",
+                                           &exception_state))
+    return nullptr;
+
   DCHECK(options->hasType());
   DCHECK(options->hasEndings());
   bool normalize_line_endings_to_native = (options->endings() == "native");
@@ -254,6 +269,19 @@ ScriptPromise<IDLUSVString> Blob::text(ScriptState* script_state) {
   auto* resolver =
       MakeGarbageCollected<ScriptPromiseResolver<IDLUSVString>>(script_state);
   auto promise = resolver->Promise();
+
+  // M124 deleted ReadBlobHelper(), whose `operation_name` parameter this
+  // guard used; text() and arrayBuffer() are now separate typed-promise
+  // functions, so the guard goes in BOTH, with the operation name written
+  // out in each.  The exception message is byte-identical to the one the
+  // helper built.
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
+    resolver->Reject(MakeGarbageCollected<DOMException>(
+        DOMExceptionCode::kNotReadableError,
+        String("Cannot replay operation Blob.text because it was not recorded.")));
+    return promise;
+  }
+
   MakeGarbageCollected<BlobFileReaderClient>(
       blob_data_handle_,
       ExecutionContext::From(script_state)
@@ -266,6 +294,14 @@ ScriptPromise<DOMArrayBuffer> Blob::arrayBuffer(ScriptState* script_state) {
   auto* resolver =
       MakeGarbageCollected<ScriptPromiseResolver<DOMArrayBuffer>>(script_state);
   auto promise = resolver->Promise();
+
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
+    resolver->Reject(MakeGarbageCollected<DOMException>(
+        DOMExceptionCode::kNotReadableError,
+        String("Cannot replay operation Blob.arrayBuffer because it was not recorded.")));
+    return promise;
+  }
+
   MakeGarbageCollected<BlobFileReaderClient>(
       blob_data_handle_,
       ExecutionContext::From(script_state)

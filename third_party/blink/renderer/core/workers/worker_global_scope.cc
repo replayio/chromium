@@ -607,7 +607,7 @@ void WorkerGlobalScope::ReceiveMessage(BlinkTransferableMessage message) {
               std::move(context), GetExecutionContext(), *message_event);
         },
         perfetto::Flow::Global(message_event->GetTraceId()));
-    DispatchEvent(*message_event);
+    DispatchEvent(*message_event, "WorkerGlobalScope::ReceiveMessage");
   } else {
     DispatchEvent(*MessageEvent::CreateError());
   }
