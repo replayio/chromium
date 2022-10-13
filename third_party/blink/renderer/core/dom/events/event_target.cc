@@ -67,6 +67,10 @@
 #include "third_party/blink/renderer/platform/wtf/threading.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_events.h"
+#include "third_party/blink/renderer/core/events/keyboard_event.h"
+#include "third_party/blink/renderer/core/geometry/dom_rect.h"
+
 namespace blink {
 namespace {
 
@@ -503,6 +507,7 @@ bool EventTarget::AddEventListenerInternal(
                                                event_type);
     }
   }
+
   return added;
 }
 
@@ -703,7 +708,7 @@ bool EventTarget::dispatchEventForBindings(Event* event,
          DispatchEventResult::kCanceledByEventHandler;
 }
 
-DispatchEventResult EventTarget::DispatchEvent(Event& event) {
+DispatchEventResult EventTarget::DispatchEvent(Event& event, const char* why) {
   if (!GetExecutionContext())
     return DispatchEventResult::kCanceledBeforeDispatch;
   event.SetTrusted(true);
@@ -794,6 +799,8 @@ DispatchEventResult EventTarget::FireEventListeners(Event& event) {
   DCHECK(event.WasInitialized());
 
   EventTargetData* d = GetEventTargetData();
+  REPLAY_ASSERT("[RUN-1260] EventTarget::FireEventListeners 1 %d",
+                       !!d);
   if (!d)
     return DispatchEventResult::kNotCanceled;
 
@@ -806,6 +813,11 @@ DispatchEventResult EventTarget::FireEventListeners(Event& event) {
       d->event_listener_map.Find(event.type());
 
   bool fired_event_listeners = false;
+  REPLAY_ASSERT(
+      "[RUN-1260] EventTarget::FireEventListeners 2 %d %d %d",
+      listeners_vector ? listeners_vector->size() : -1,
+      legacy_listeners_vector ? legacy_listeners_vector->size() : -1,
+      event.isTrusted());
   if (listeners_vector) {
     fired_event_listeners = FireEventListeners(event, d, *listeners_vector);
   } else if (event.isTrusted() && legacy_listeners_vector) {
@@ -976,7 +988,7 @@ void EventTarget::DispatchEnqueuedEvent(Event* event,
     return;
   }
   probe::AsyncTask async_task(context, event->async_task_context());
-  DispatchEvent(*event);
+  DispatchEvent(*event, "EventTarget::DispatchEnqueuedEvent");
 }
 
 void EventTargetWithInlineData::Trace(Visitor* visitor) const {
