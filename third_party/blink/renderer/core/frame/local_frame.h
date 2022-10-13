@@ -1013,6 +1013,8 @@ class CORE_EXPORT LocalFrame final
     is_caret_browsing_overridden_ = overridden;
   }
 
+  void RegisterRecordReplayAuthTokenObserver();
+  
 #if BUILDFLAG(IS_ANDROID)
   void PerformFullContentSpellCheck();
 #endif  // BUILDFLAG(IS_ANDROID)
