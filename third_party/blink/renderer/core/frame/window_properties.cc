@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/core/frame/window_properties.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/bindings/core/v8/binding_security.h"
 #include "third_party/blink/renderer/bindings/core/v8/to_v8_traits.h"
 #include "third_party/blink/renderer/bindings/core/v8/window_proxy_manager.h"
@@ -93,8 +94,20 @@ v8::Local<v8::Value> WindowProperties::AnonymousNamedGetter(
     return v8::Local<v8::Value>();
   }
 
+  auto* base_doc = To<LocalDOMWindow>(window)->document();
+
+  // LocalFrame document pointers can be invalid and lead to crashes while replaying
+  // and inspecting the current state. The underlying reason here is unknown,
+  // for now we workaround the problem by watching for invalid document pointers.
+  // Documents register themselves so we can test for a pointer ID.
+  if (recordreplay::IsInReplayCode() && base_doc && !recordreplay::PointerId(base_doc)) {
+    recordreplay::Warning("NamedPropertyGetterInvalidDocument",
+                          {{"document", reinterpret_cast<uintptr_t>(base_doc)}});
+    return v8::Local<v8::Value>();
+  }
+
   // Search named items in the document.
-  auto* doc = DynamicTo<HTMLDocument>(To<LocalDOMWindow>(window)->document());
+  auto* doc = DynamicTo<HTMLDocument>(base_doc);
   if (!doc) {
     return v8::Local<v8::Value>();
   }
