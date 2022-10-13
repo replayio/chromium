@@ -414,12 +414,22 @@ void ReplaceFunctionsForStoredZones(const MallocZoneFunctions* functions) {
   g_replaced_default_zone = true;
 }
 
+static inline bool MaybeRecordingOrReplaying() {
+  return true;
+}
+
 void InterceptAllocationsMac() {
   if (g_oom_killer_enabled) {
     return;
   }
 
   g_oom_killer_enabled = true;
+
+  // Don't alter memory allocation behavior when recording/replaying.
+  if (MaybeRecordingOrReplaying()) {
+    g_replaced_default_zone = true;
+    return;
+  }
 
   // === C malloc/calloc/valloc/realloc/posix_memalign ===
 

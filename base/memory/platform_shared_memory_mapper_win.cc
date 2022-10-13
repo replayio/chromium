@@ -8,6 +8,7 @@
 
 #include "base/compiler_specific.h"
 #include "base/logging.h"
+#include "base/record_replay.h"
 #include "partition_alloc/page_allocator.h"
 
 namespace base {
@@ -47,8 +48,12 @@ std::optional<span<uint8_t>> PlatformSharedMemoryMapper::Map(
     return std::nullopt;
   }
 
-  return UNSAFE_TODO(
-      span(static_cast<uint8_t*>(address), GetMemorySectionSize(address)));
+  // Calling VirtualQuery in GetMemorySectionSize will fail when replaying,
+  // so we manually record/replay the size.
+  return UNSAFE_TODO(span(
+      static_cast<uint8_t*>(address),
+      recordreplay::RecordReplayValue("MemorySectionSize",
+                                      GetMemorySectionSize(address))));
 }
 
 void PlatformSharedMemoryMapper::Unmap(span<uint8_t> mapping) {

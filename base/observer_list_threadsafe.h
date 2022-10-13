@@ -13,6 +13,7 @@
 #include "base/check.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
+#include "base/deterministic_containers.h"
 #include "base/dcheck_is_on.h"
 #include "base/debug/stack_trace.h"
 #include "base/functional/bind.h"
@@ -128,9 +129,9 @@ class ObserverListThreadSafe : public internal::ObserverListThreadSafeBase {
     kRemainsNonEmpty,
   };
 
-  ObserverListThreadSafe() = default;
+  ObserverListThreadSafe() : lock_("ObserverListThreadSafe.lock_") {}
   explicit ObserverListThreadSafe(ObserverListPolicy policy)
-      : policy_(policy) {}
+      : policy_(policy), lock_("ObserverListThreadSafe.lock_") {}
   ObserverListThreadSafe(const ObserverListThreadSafe&) = delete;
   ObserverListThreadSafe& operator=(const ObserverListThreadSafe&) = delete;
 
@@ -323,7 +324,7 @@ class ObserverListThreadSafe : public internal::ObserverListThreadSafeBase {
 
   // Keys are observers. Values are the SequencedTaskRunners on which they must
   // be notified.
-  std::unordered_map<ObserverType*, ObserverTaskRunnerInfo> observers_
+  deterministic_unordered_map<ObserverType*, ObserverTaskRunnerInfo> observers_
       GUARDED_BY(lock_);
 };
 
