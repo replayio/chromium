@@ -12,6 +12,8 @@
 #include "third_party/skia/include/core/SkPath.h"
 #include "third_party/skia/include/core/SkStrikeRef.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 void SkFontGetGlyphWidthForHarfBuzz(const SkStrikeRef& strike_ref,
@@ -114,7 +116,11 @@ void SkFontGetGlyphExtentsForHarfBuzz(const SkFont& font,
 #if BUILDFLAG(IS_APPLE)
   // TODO(drott): Remove this once we have better metrics bounds
   // on Mac, https://bugs.chromium.org/p/skia/issues/detail?id=5328
-  if (const auto path = font.getPath(glyph)) {
+  std::optional<SkPath> path;
+  if (!recordreplay::AreEventsUnavailable("divergent-update")) {
+    path = font.getPath(glyph);
+  }
+  if (path) {
     sk_bounds = path->getBounds();
   } else {
     sk_bounds = font.getBounds(glyph, nullptr);
@@ -143,7 +149,11 @@ void SkFontGetGlyphExtentsForHarfBuzz(const SkFont& font,
 static void GetPathBoundsForGlyph(const SkFont& font,
                                   Glyph glyph,
                                   SkRect* bounds) {
-  if (const auto path = font.getPath(glyph)) {
+  std::optional<SkPath> path;
+  if (!recordreplay::AreEventsUnavailable("divergent-update")) {
+    path = font.getPath(glyph);
+  }
+  if (path) {
     *bounds = path->getBounds();
   } else {
     *bounds = font.getBounds(glyph, nullptr);

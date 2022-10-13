@@ -78,6 +78,11 @@ class PLATFORM_EXPORT FontFallbackList
     if (!cached_primary_simple_font_data_with_space_) {
       cached_primary_simple_font_data_with_space_ =
           DeterminePrimarySimpleFontData(font_description, uchar::kSpace);
+      // Inject warmed last-resort when Determine yields null.
+      if (!cached_primary_simple_font_data_with_space_) {
+        cached_primary_simple_font_data_with_space_ =
+            FontCache::ReplayLastResortSimpleFontData();
+      }
       DCHECK(cached_primary_simple_font_data_with_space_);
     }
     return cached_primary_simple_font_data_with_space_;
@@ -171,6 +176,7 @@ class PLATFORM_EXPORT FontFallbackList
   // primary font.
   Member<const ShapeResult> emphasis_mark_shape_;
   AtomicString emphasis_mark_text_;
+  HAS_RECORD_REPLAY_ID();
 };
 
 }  // namespace blink

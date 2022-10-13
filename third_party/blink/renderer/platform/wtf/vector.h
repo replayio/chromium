@@ -66,30 +66,9 @@
 
 namespace blink {
 
-#if DCHECK_IS_ON() || BUILDFLAG(ENABLE_HEAP_VECTOR_MODIFICATION_CHECKS)
-inline constexpr bool kEnableHeapVectorModificationChecks = true;
-#else
-inline constexpr bool kEnableHeapVectorModificationChecks = false;
-#endif
-
-#if DCHECK_IS_ON() || BUILDFLAG(ENABLE_VECTOR_MODIFICATION_CHECKS)
-inline constexpr bool kEnableVectorModificationChecks = true;
-#else
-inline constexpr bool kEnableVectorModificationChecks = false;
-#endif
-
-// Whether modification checks are enabled for the Allocator.
-// Allows HeapVector and Vector checks to be toggled independently.
-// In release builds, vectors with inline capacity opt out of modification
-// checks because they are typically short-lived stack buffers in hot loops and
-// rarely reallocate out-of-line.
-template <typename Allocator, bool kHasInlineCapacity>
-inline constexpr bool kEnableModificationChecks =
-    (DCHECK_IS_ON() || !kHasInlineCapacity) &&
-    ((Allocator::kIsGarbageCollected && kEnableHeapVectorModificationChecks) ||
-     (!Allocator::kIsGarbageCollected && kEnableVectorModificationChecks));
-
-#if PA_BUILDFLAG(MEMORY_TOOL_REPLACES_ALLOCATOR)
+// [Replay] Allow MEMORY_TOOL_REPLACES_ALLOCATOR to disable PartitionAlloc
+// without having this unwanted side-effect.
+#if 0  // PA_BUILDFLAG(MEMORY_TOOL_REPLACES_ALLOCATOR)
 // The allocation pool for nodes is one big chunk that ASAN has no insight
 // into, so it can cloak errors. Make it as small as possible to force nodes
 // to be allocated individually where ASAN can see them.

@@ -8,6 +8,7 @@
 #include <string>
 
 #include "base/notimplemented.h"
+#include "base/record_replay.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/platform_thread.h"
 #include "base/time/time.h"
@@ -80,7 +81,6 @@ class PLATFORM_EXPORT BeginFrameProvider
 
   void Trace(Visitor*) const;
 
-  ~BeginFrameProvider() override = default;
 
  private:
   void OnMojoConnectionError(uint32_t custom_reason,

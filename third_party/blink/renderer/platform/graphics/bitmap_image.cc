@@ -150,10 +150,18 @@ PaintImage BitmapImage::CreatePaintImage(
     PaintImage::AnimationSyncSequence sync_sequence,
     PaintImage::AnimationSequenceId reset_animation_sequence_id,
     int image_animation_repetition_count) {
+  recordreplay::Assert("[RUN-1975-2036] BitmapImage::CreatePaintImage A %u %d",
+                       reset_animation_sequence_id_, !!decoder_);
   sk_sp<PaintImageGenerator> generator =
       decoder_ ? decoder_->CreateGenerator() : nullptr;
+
+  recordreplay::Assert("[RUN-1975-2036] BitmapImage::CreatePaintImage B");
+
   if (!generator)
     return PaintImage();
+
+  recordreplay::Assert("[RUN-1975-2036] BitmapImage::CreatePaintImage C %d",
+                       all_data_received_);
 
   auto completion_state = all_data_received_
                               ? PaintImage::CompletionState::kDone
@@ -178,6 +186,8 @@ PaintImage BitmapImage::CreatePaintImage(
         std::move(gainmap_generator), gainmap_info);
   }
 
+  recordreplay::Assert("[RUN-1975-2036] BitmapImage::CreatePaintImage D %d",
+                       all_data_received_);
   return builder.TakePaintImage();
 }
 
@@ -265,6 +275,8 @@ static inline uint64_t ImageDensityInCentiBpp(gfx::Size size,
 
 Image::SizeAvailability BitmapImage::DataChanged(bool all_data_received) {
   TRACE_EVENT0("blink", "BitmapImage::dataChanged");
+
+  recordreplay::Assert("[RUN-1975-2225] BitmapImage::DataChanged %d %d", paint_image_id(), all_data_received);
 
   // If the data was updated, clear all caches to push them to the
   // compositor thread. It's necessary to clear the frames since more data
@@ -424,6 +436,9 @@ PaintImage BitmapImage::PaintImageForCurrentFrameWithInfo(
   PaintImage::AnimationSyncSequence sync_sequence =
       PaintImage::AnimationSyncSequence::kShared;
 
+  recordreplay::Assert(
+      "[RUN-1975-2225] BitmapImage::PaintImageForCurrentFrame %d",
+      paint_image_id());
   std::optional<ImageAnimationData> image_animation_data;
 
   if (image_node_animation_info) {
@@ -655,6 +670,8 @@ int BitmapImage::RepetitionCount() {
 }
 
 void BitmapImage::ResetAnimation() {
+  recordreplay::Assert("[RUN-1975-2225] BitmapImage::ResetAnimation %d %u",
+                       paint_image_id(), reset_animation_sequence_id_);
   // If no PaintImage has been created yet, there is no bitmap animation
   // timeline to rewind and no existing painted frame to invalidate.
   if (RuntimeEnabledFeatures::SvgImageAnimationResetEnabled() &&

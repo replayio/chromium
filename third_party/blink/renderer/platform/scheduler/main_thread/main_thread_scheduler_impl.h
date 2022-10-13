@@ -21,6 +21,7 @@
 #include "base/metrics/single_sample_metrics.h"
 #include "base/observer_list.h"
 #include "base/profiler/sample_metadata.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "base/task/sequence_manager/task_queue.h"
 #include "base/task/sequence_manager/task_time_observer.h"
@@ -68,6 +69,7 @@
 #include "base/threading/platform_thread.h"
 #endif
 
+#include "base/record_replay.h"
 namespace base {
 class LazyNow;
 class TaskObserver;
@@ -715,7 +717,9 @@ class PLATFORM_EXPORT MainThreadSchedulerImpl
   using TaskQueueVoterMap ALLOW_DISCOURAGED_TYPE("TODO(crbug.com/1404327)") =
       std::map<scoped_refptr<MainThreadTaskQueue>,
                std::unique_ptr<
-                   base::sequence_manager::TaskQueue::QueueEnabledVoter>>;
+                   base::sequence_manager::TaskQueue::QueueEnabledVoter>,
+               recordreplay::CompareRefptrByPointerId<
+                   scoped_refptr<MainThreadTaskQueue>>>;
 
   TaskQueueVoterMap task_runners_;
 
