@@ -106,13 +106,13 @@ void EditContext::SetVirtualKeyboardVisibilityRequest(
 void EditContext::DispatchCompositionEndEvent(const String& text) {
   auto* event = MakeGarbageCollected<CompositionEvent>(
       event_type_names::kCompositionend, DomWindow(), text);
-  DispatchEvent(*event);
+  DispatchEvent(*event, "EditContext::DispatchCompositionEndEvent");
 }
 
 bool EditContext::DispatchCompositionStartEvent(const String& text) {
   auto* event = MakeGarbageCollected<CompositionEvent>(
       event_type_names::kCompositionstart, DomWindow(), text);
-  DispatchEvent(*event);
+  DispatchEvent(*event, "EditContext::DispatchCompositionStartEvent");
   return DomWindow();
 }
 
@@ -131,7 +131,7 @@ void EditContext::DispatchTextUpdateEvent(const String& text,
   TextUpdateEvent* event = MakeGarbageCollected<TextUpdateEvent>(
       event_type_names::kTextupdate, text, update_range_start, update_range_end,
       new_selection_start, new_selection_end);
-  DispatchEvent(*event);
+  DispatchEvent(*event, "EditContext::DispatchTextUpdateEvent");
 }
 
 void EditContext::DispatchTextFormatEvent(
@@ -186,7 +186,7 @@ void EditContext::DispatchTextFormatEvent(
 
   TextFormatUpdateEvent* event = MakeGarbageCollected<TextFormatUpdateEvent>(
       event_type_names::kTextformatupdate, text_formats);
-  DispatchEvent(*event);
+  DispatchEvent(*event, "EditContext::DispatchTextFormatEvent");
 }
 
 void EditContext::Focus() {
