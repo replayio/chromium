@@ -170,8 +170,14 @@ class PageTimingMetricsSender {
 
   // Set of all resources that have completed or received a transfer
   // size update since the last timimg update.
-  base::flat_set<raw_ptr<PageResourceDataUse, CtnExperimental>>
-      modified_resources_;
+  // DSRC-007: upstream annotates this member with
+  // raw_ptr<PageResourceDataUse, CtnExperimental> at M124.  The annotation is
+  // declined, as for the three members M123 declined it for: CompareByPointerId
+  // deduces `const T*`, and deduction never applies raw_ptr's user-defined
+  // conversion, so the annotated element type does not compile with it.  Nothing
+  // in upstream's own code forces it either - every user here is insert(),
+  // clear(), or a range-for into a plain PageResourceDataUse*.
+  base::flat_set<PageResourceDataUse*, recordreplay::CompareByPointerId> modified_resources_;
 
   // Field trial for alternating page timing metrics sender buffer timer delay.
   // https://crbug.com/847269.

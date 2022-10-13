@@ -155,6 +155,9 @@ declare_args() {
 memory_tool_replaces_allocator =
     is_asan || is_hwasan || is_lsan || is_tsan || is_msan
 
+# [Replay] This primarily disables PartitionAlloc.
+memory_tool_replaces_allocator = true
+
 pa_buildflag_header("buildflags") {
   header = "buildflags.h"
   flags = [

@@ -171,6 +171,10 @@ if (generate_about_credits) {
 
     args = [
       "credits",
+      "--gn-out-dir",
+      ".",
+      "--gn-target",
+      "//chrome", # TODO(toshok) can't imagine we want this, but I'm not sure how else to do it?
       "--target-os=$target_os",
       "--depfile",
       rebase_path(depfile, root_build_dir),
