@@ -319,6 +319,11 @@ const LayoutResult* BlockNode::Layout(
     const BlockBreakToken* break_token,
     const EarlyBreak* early_break,
     const ColumnSpannerPath* column_spanner_path) const {
+  recordreplay::Assert("[RUN-1855-1862] NGBlockNode::Layout %d space(%s)",
+    RecordReplayId(),
+    constraint_space.ToString().Ascii().c_str()
+  );
+
   // The exclusion space internally is a pointer to a shared vector, and
   // equality of exclusion spaces is performed using pointer comparison on this
   // internal shared vector.
@@ -345,6 +350,7 @@ const LayoutResult* BlockNode::Layout(
   const LayoutResult* layout_result = box_->CachedLayoutResult(
       constraint_space, break_token, early_break, column_spanner_path,
       &fragment_geometry, &cache_status);
+
 
   if ((cache_status == LayoutCacheStatus::kHit ||
        cache_status == LayoutCacheStatus::kNeedsSimplifiedLayout) &&
@@ -712,6 +718,11 @@ const LayoutResult* BlockNode::CachedLayoutResultForOutOfFlowPositioned(
     LogicalSize container_content_size) const {
   DCHECK(IsOutOfFlowPositioned());
 
+  recordreplay::Assert(
+      "[RUN-1239-1384] NGBlockNode::CachedLayoutResultForOutOfFlowPositioned A %d %lu",
+      box_->NeedsLayout(),
+      box_->PhysicalFragmentCount());
+
   if (box_->NeedsLayout())
     return nullptr;
 
@@ -727,6 +738,11 @@ const LayoutResult* BlockNode::CachedLayoutResultForOutOfFlowPositioned(
 
   // The containing-block may have borders/scrollbars which might change
   // between passes affecting the final position.
+  
+  recordreplay::Assert(
+      "[RUN-1239-1384] NGBlockNode::CachedLayoutResultForOutOfFlowPositioned C %d",
+      cached_layout_result->CanUseOutOfFlowPositionedFirstTierCache());
+
   if (!cached_layout_result->CanUseOutOfFlowPositionedFirstTierCache())
     return nullptr;
 
@@ -736,6 +752,16 @@ const LayoutResult* BlockNode::CachedLayoutResultForOutOfFlowPositioned(
   // are in the correct writing mode (htb-ltr), and we have a fixed width.
   const ConstraintSpace& space =
       cached_layout_result->GetConstraintSpaceForCaching();
+
+  recordreplay::Assert(
+      "[RUN-1239-1384] NGBlockNode::CachedLayoutResultForOutOfFlowPositioned D %d %d %d %d %d %d",
+      space.PercentageResolutionSize().inline_size.RawValue(),
+      space.PercentageResolutionSize().block_size.RawValue(),
+      container_content_size.inline_size.RawValue(),
+      container_content_size.block_size.RawValue(),
+      (Style().Left().IsAuto() && Style().Right().IsAuto()),
+      (Style().Top().IsAuto() && Style().Bottom().IsAuto()));
+
   if (space.PercentageResolutionSize() != container_content_size)
     return nullptr;
 
