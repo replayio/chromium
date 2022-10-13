@@ -1072,6 +1072,10 @@ String Request::ContentType() const {
   return result;
 }
 
+std::string Request::GetUrl() const {
+  return url().GetString().Utf8();
+}
+
 mojom::blink::RequestContextType Request::GetRequestContextType() const {
   if (!request_) {
     return mojom::blink::RequestContextType::UNSPECIFIED;
