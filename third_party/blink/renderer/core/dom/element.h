@@ -25,6 +25,10 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_DOM_ELEMENT_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_DOM_ELEMENT_H_
 
+// Include these first so the default hash for ResizeObserver can be determined.
+#include "third_party/blink/renderer/core/resize_observer/resize_observer.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
+
 #include "base/check_op.h"
 #include "base/dcheck_is_on.h"
 #include "base/types/pass_key.h"
@@ -543,6 +547,10 @@ class CORE_EXPORT Element : public ContainerNode {
                                     const Element* container = nullptr,
                                     bool include_self = false);
   void scrollIntoViewIfNeeded(bool center_if_needed = true);
+  // The IDL entry point. It throws when events are unavailable; the C++
+  // callers of scrollIntoViewIfNeeded() would leave that exception pending.
+  void RecordReplayScrollIntoViewIfNeededForBinding(
+      bool center_if_needed = true);
 
   int OffsetLeft();
   int OffsetTop();

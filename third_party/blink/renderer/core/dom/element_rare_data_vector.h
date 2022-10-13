@@ -213,6 +213,10 @@ class CORE_EXPORT ElementRareDataVector final
 
   std::pair<std::reference_wrapper<CSSStyleDeclaration>, ElementRareDataVector*>
   EnsureInlineCSSStyleDeclaration(Element* owner_element);
+  // Replay edit: the existing inline CSSOM wrapper, without creating one.
+  // See Element::style(): replay-only scripts must not create blink API
+  // objects unless they have explicitly diverged.
+  CSSStyleDeclaration* GetInlineCSSStyleDeclaration() const;
 
   ShadowRoot* GetShadowRoot() const;
   [[nodiscard]] ElementRareDataVector* SetShadowRoot(ShadowRoot& shadow_root);
