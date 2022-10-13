@@ -274,13 +274,17 @@ void HTMLParserScriptRunner::PendingScriptFinished(
     return;
   }
 
+  int record_replay_scheduled_node_id = recordreplay::NewDependencyGraphNode(
+    "{\"kind\":\"scheduleNotifyScriptLoaded\"}"
+  );
+
   // Posting the script execution part to a new task so that we can allow
   // yielding for cooperative scheduling. Cooperative scheduling requires that
   // the Blink C++ stack be thin when it executes JavaScript.
   document_->GetTaskRunner(TaskType::kInternalContinueScriptLoading)
       ->PostTask(FROM_HERE, blink::BindOnce(
                                 &HTMLParserScriptRunnerHost::NotifyScriptLoaded,
-                                WrapPersistent(host_.Get())));
+                                WrapPersistent(host_.Get()), record_replay_scheduled_node_id));
 }
 
 // <specdef href="https://html.spec.whatwg.org/C/#scriptEndTag">
@@ -457,11 +461,13 @@ PendingScript* HTMLParserScriptRunner::TryTakeReadyScriptWaitingForParsing(
   return waiting_scripts->TakeFirst().Get();
 }
 
-void HTMLParserScriptRunner::ScheduleDeferredScriptExecution() {
+void HTMLParserScriptRunner::ScheduleDeferredScriptExecution(
+    int record_replay_scheduled_node_id) {
   document_->GetTaskRunner(TaskType::kInternalContinueScriptLoading)
       ->PostTask(FROM_HERE,
                  blink::BindOnce(
-                     [](HTMLParserScriptRunner* runner) {
+                     [](HTMLParserScriptRunner* runner,
+                        int record_replay_scheduled_node_id) {
                        if (!runner->document_) {
                          return;
                        }
@@ -469,10 +475,12 @@ void HTMLParserScriptRunner::ScheduleDeferredScriptExecution() {
                        if (runner->ExecuteScriptsWaitingForParsing()) {
                          // If all scripts are done, need to notify parser
                          // The parser will be resumed when it tries again
-                         runner->host_->NotifyScriptLoaded();
+                         runner->host_->NotifyScriptLoaded(
+                             record_replay_scheduled_node_id);
                        }
                      },
-                     WrapPersistent(this)));
+                     WrapPersistent(this),
+                     record_replay_scheduled_node_id));
 }
 
 // <specdef href="https://html.spec.whatwg.org/C/#stop-parsing">
@@ -527,7 +535,11 @@ bool HTMLParserScriptRunner::ExecuteScriptsWaitingForParsing() {
     // scripts. This achieves the goal of separating script execution into
     // individual tasks.
     if (!scripts_to_execute_after_parsing_.empty()) {
-      ScheduleDeferredScriptExecution();
+      int record_replay_scheduled_node_id = recordreplay::NewDependencyGraphNode(
+        "{\"kind\":\"scheduleNotifyScriptLoaded\"}"
+      );
+
+      ScheduleDeferredScriptExecution(record_replay_scheduled_node_id);
       // Return false to keep the parser paused until all scripts complete
       return false;
     }

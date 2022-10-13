@@ -145,7 +145,10 @@ class HTMLParserScriptRunner final
   // Posts a task that continues executing the deferred scripts
   // (ExecuteScriptsWaitingForParsing()) and notifies the host once they are
   // all done, so that execution yields to the event loop in between.
-  void ScheduleDeferredScriptExecution();
+  // RecordReplay: the id of the dependency-graph node for this scheduling, or 0
+  // when the caller is a path the fork does not instrument.  Defaulted so
+  // upstream's own call sites compile unchanged (the image_loader.h idiom).
+  void ScheduleDeferredScriptExecution(int record_replay_scheduled_node_id = 0);
 
   Member<HTMLParserReentryPermit> reentry_permit_;
   Member<Document> document_;
