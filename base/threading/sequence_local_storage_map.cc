@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "base/check_op.h"
+#include "base/record_replay.h"
 #include "base/sequence_token.h"
 #include "third_party/abseil-cpp/absl/base/attributes.h"
 
@@ -21,9 +22,9 @@ ABSL_CONST_INIT thread_local SequenceLocalStorageMap*
 
 }  // namespace
 
-SequenceLocalStorageMap::SequenceLocalStorageMap() = default;
+SequenceLocalStorageMap::SequenceLocalStorageMap() {}
 
-SequenceLocalStorageMap::~SequenceLocalStorageMap() = default;
+SequenceLocalStorageMap::~SequenceLocalStorageMap() {}
 
 // static
 SequenceLocalStorageMap& SequenceLocalStorageMap::GetForCurrentThread() {

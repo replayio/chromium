@@ -36,6 +36,7 @@
 #include "base/notreached.h"
 #include "base/pickle.h"
 #include "base/ranges/algorithm.h"
+#include "base/record_replay.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/synchronization/lock.h"
@@ -159,6 +160,7 @@ class Histogram::Factory {
 };
 
 HistogramBase* Histogram::Factory::Build() {
+  // recordreplay::Assert("[RUN-1217]-1310 Histogram::Factory::Build");
   HistogramBase* histogram = StatisticsRecorder::FindHistogram(name_);
   if (!histogram) {
     // constructor. Refactor code to avoid the additional call.
