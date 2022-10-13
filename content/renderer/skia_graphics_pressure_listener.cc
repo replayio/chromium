@@ -5,6 +5,7 @@
 #include "content/renderer/skia_graphics_pressure_listener.h"
 
 #include "base/memory_coordinator/utils.h"
+#include "base/record_replay.h"
 #include "third_party/skia/include/core/SkGraphics.h"
 
 namespace content {
@@ -24,6 +25,13 @@ void SkiaGraphicsPressureListener::OnUpdateMemoryLimit() {}
 
 void SkiaGraphicsPressureListener::OnReleaseMemory() {
   if (memory_limit() <= base::kCriticalMemoryPressureThreshold) {
+    // One arm of the critical-pressure body upstream split out of
+    // RenderThreadImpl::OnMemoryPressure; the label is that body's original key.
+    if (recordreplay::AreEventsDisallowed() &&
+        recordreplay::FeatureEnabled("leak-references", "ReleaseFreeMemory")) {
+      return;
+    }
+
     SkGraphics::PurgeAllCaches();
   }
 }
