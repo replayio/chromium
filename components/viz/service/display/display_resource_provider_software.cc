@@ -8,8 +8,10 @@
 #include <vector>
 
 #include "base/feature_list.h"
+#include "base/record_replay.h"
 #include "base/synchronization/waitable_event.h"
 #include "components/viz/common/features.h"
+#include "components/viz/service/display/record_replay_render.h"
 #include "components/viz/service/display/shared_bitmap_manager.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_manager.h"
 #include "third_party/skia/include/core/SkImage.h"
@@ -160,6 +162,17 @@ DisplayResourceProviderSoftware::ScopedReadLockSkImage::ScopedReadLockSkImage(
     ResourceId resource_id,
     SkAlphaType alpha_type)
     : resource_provider_(resource_provider), resource_id_(resource_id) {
+  // When recording/replaying we don't have a resource provider, and need to get
+  // the bitmap directly from the record/replay renderer.
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    SkBitmap sk_bitmap;
+    if (recordreplay::PopulateSkBitmapWithResource(&sk_bitmap, resource_id)) {
+      sk_bitmap.setImmutable();
+      sk_image_ = SkImages::RasterFromBitmap(sk_bitmap);
+    }
+    return;
+  }
+
   const ChildResource* resource = resource_provider->LockForRead(resource_id);
   DCHECK(resource);
   DCHECK(!resource->is_gpu_resource_type());
@@ -211,6 +224,9 @@ void DisplayResourceProviderSoftware::WaitSyncToken(gpu::SyncToken sync_token) {
 
 DisplayResourceProviderSoftware::ScopedReadLockSkImage::
     ~ScopedReadLockSkImage() {
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    return;
+  }
   resource_provider_->UnlockForRead(resource_id_);
 }
 
