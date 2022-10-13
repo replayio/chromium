@@ -247,6 +247,9 @@ void ReportWasmEvalViolation(
 }
 
 bool CheckAllowEval(const network::mojom::blink::CSPSourceList* directive) {
+  // Allow privileged evaluations when inspecting state while replaying.
+  if (recordreplay::IsReplaying() && recordreplay::AreEventsDisallowed())
+    return true;
   // unsafe-eval is ignored if eval hashes are present.
   return !directive ||
          (!CSPSourceListIsEvalHashPresent(*directive) && directive->allow_eval);
