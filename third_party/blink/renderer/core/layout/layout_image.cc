@@ -49,6 +49,8 @@
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "ui/gfx/geometry/size_conversions.h"
 
+#include "third_party/blink/renderer/core/paint/paint_info.h"
+
 namespace blink {
 
 LayoutImage::LayoutImage(Element* element)
@@ -216,6 +218,10 @@ void LayoutImage::PaintReplaced(const PaintInfo& paint_info,
   NOT_DESTROYED();
   if (ChildPaintBlockedByDisplayLock())
     return;
+
+  recordreplay::Assert(
+      "[RUN-1975-2008] LayoutImage::PaintReplaced %llu %s",
+      (uint64_t)paint_info.FragmentID(), paint_offset.ToString().Utf8().c_str());
   ImagePainter(*this).PaintReplaced(paint_info, paint_offset);
 }
 
