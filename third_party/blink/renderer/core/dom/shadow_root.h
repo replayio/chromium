@@ -194,6 +194,10 @@ class CORE_EXPORT ShadowRoot final : public DocumentFragment,
 
   void Trace(Visitor*) const override;
 
+  int RecordReplayId() const {
+    return DocumentFragment::RecordReplayId();
+  }
+
  protected:
   void OnAdoptedStyleSheetSet(ScriptState*,
                               V8ObservableArrayCSSStyleSheet&,
