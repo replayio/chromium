@@ -35,6 +35,7 @@
 #include "base/metrics/statistics_recorder.h"
 #include "base/notreached.h"
 #include "base/pickle.h"
+#include "base/record_replay.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/synchronization/lock.h"
@@ -157,6 +158,7 @@ class Histogram::Factory {
 };
 
 HistogramBase* Histogram::Factory::Build() {
+  // recordreplay::Assert("[RUN-1217]-1310 Histogram::Factory::Build");
   uint64_t name_hash = HashMetricName(name_);
   HistogramBase* histogram =
       StatisticsRecorder::FindHistogram(name_hash, name_);

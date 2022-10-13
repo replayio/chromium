@@ -10,6 +10,7 @@
 #include "base/synchronization/waitable_event.h"
 
 #include "base/check.h"
+#include "base/record_replay.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/trace_event/base_tracing.h"
 #include "base/tracing_buildflags.h"
@@ -17,6 +18,8 @@
 namespace base {
 
 WaitableEvent::~WaitableEvent() {
+  recordreplay::UnregisterPointer(this);
+
 #if BUILDFLAG(ENABLE_BASE_TRACING)
   // As requested in the documentation of perfetto::Flow::FromPointer, we should
   // emit a TerminatingFlow(this) from our destructor if we ever emitted a

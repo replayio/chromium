@@ -21,6 +21,7 @@
 #include "base/mac/mac_util.h"
 #include "base/notreached.h"
 #include "base/posix/eintr_wrapper.h"
+#include "base/record_replay.h"
 #include "base/task/task_features.h"
 #include "base/time/time_override.h"
 #include "build/blink_buildflags.h"
@@ -229,6 +230,7 @@ void MessagePumpKqueue::RunBatched(Delegate* delegate) {
     apple::ScopedNSAutoreleasePool pool;
 
     Delegate::NextWorkInfo next_work_info = delegate->DoWork();
+
     if (!keep_running_) {
       break;
     }
@@ -236,6 +238,7 @@ void MessagePumpKqueue::RunBatched(Delegate* delegate) {
     if (!next_work_info.is_immediate()) {
       delegate->DoIdleWork();
     }
+
     if (!keep_running_) {
       break;
     }
