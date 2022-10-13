@@ -76,6 +76,11 @@ class LocalWindowProxy final : public WindowProxy {
   // LocalWindowProxy overrides:
   bool IsLocal() const override { return true; }
   void Initialize() override;
+
+  // DSRC-217: whether this proxy's frame can be initialized at all. Asked at USE
+  // time, not construction time: IsProvisional() is DERIVED from the frame tree,
+  // so the same proxy starts answering false once its frame is swapped in.
+  bool RecordReplayCanInitialize() const;
   void DisposeContext(Lifecycle next_status, FrameReuseStatus) override;
 
   // Creates a new v8::Context with the window wrapper object as the global
