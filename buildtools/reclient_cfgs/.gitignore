@@ -1,4 +1,7 @@
 /chromium-browser-clang/
 /nacl/
+/python/
+/win-cross/
 /win-cross-experiments/
 reproxy.cfg
+reproxy.fg

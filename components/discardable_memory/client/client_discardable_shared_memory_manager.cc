@@ -16,6 +16,8 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/process/memory.h"
+#include "base/record_replay.h"
+#include "base/record_replay_atomic_sequence_num.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/system/sys_info.h"
@@ -26,6 +28,10 @@
 #include "build/build_config.h"
 #include "components/crash/core/common/crash_key.h"
 
+#if BUILDFLAG(IS_POSIX)
+#include "base/memory/madv_free_discardable_memory_posix.h"
+#endif
+
 namespace discardable_memory {
 namespace {
 
@@ -34,7 +40,7 @@ BASE_FEATURE(kShorterPeriodicPurge,
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Global atomic to generate unique discardable shared memory IDs.
-base::AtomicSequenceNumber g_next_discardable_shared_memory_id;
+::recordreplay::AtomicSequenceNumber g_next_discardable_shared_memory_id;
 
 size_t GetDefaultAllocationSize() {
   const size_t kOneMegabyteInBytes = 1024 * 1024;
@@ -79,6 +85,17 @@ void DeletedDiscardableSharedMemoryOnIO(
   (*manager_mojo)->DeletedDiscardableSharedMemory(id);
 }
 
+#if BUILDFLAG(IS_POSIX)
+// The browser's segments aren't available once the replay diverges, so memory
+// is allocated in this process instead.
+std::unique_ptr<base::DiscardableMemory>
+RecordReplayAllocateLocalDiscardableMemory(size_t size) {
+  static std::atomic<size_t> diverge_bytes_allocated{0};
+  return std::make_unique<base::MadvFreeDiscardableMemoryPosix>(
+      size, &diverge_bytes_allocated);
+}
+#endif
+
 }  // namespace
 
 constexpr base::TimeDelta
@@ -92,6 +109,7 @@ ClientDiscardableSharedMemoryManager::DiscardableMemoryImpl::
         std::unique_ptr<DiscardableSharedMemoryHeap::Span> span)
     : manager_(manager), span_(std::move(span)) {
   DCHECK_NE(manager, nullptr);
+  recordreplay::RegisterPointer("DiscardableMemoryImpl", this);
 }
 
 ClientDiscardableSharedMemoryManager::DiscardableMemoryImpl::
@@ -99,16 +117,21 @@ ClientDiscardableSharedMemoryManager::DiscardableMemoryImpl::
   base::AutoLock lock(manager_->lock_);
   if (!span_) {
     DCHECK(!is_locked());
+    recordreplay::UnregisterPointer(this);
     return;
   }
 
   manager_->UnlockAndReleaseMemory(this, std::move(span_));
+  recordreplay::UnregisterPointer(this);
 }
 
 bool ClientDiscardableSharedMemoryManager::DiscardableMemoryImpl::Lock() {
   base::AutoLock lock(manager_->lock_);
   DCHECK(!is_locked());
 
+  recordreplay::Assert(
+    "[RUN-3056-3057] ClientDiscardableSharedMemoryManager::DiscardableMemoryImpl::Lock %d",
+    span_ ? recordreplay::PointerId(span_->shared_memory()) : -1);
   if (span_ && manager_->LockSpan(span_.get()))
     last_locked_ = base::TimeTicks();
 
@@ -131,6 +154,18 @@ std::unique_ptr<DiscardableSharedMemoryHeap::Span>
 ClientDiscardableSharedMemoryManager::DiscardableMemoryImpl::Purge(
     base::TimeTicks min_ticks) {
   DCHECK(span_);
+
+  recordreplay::Assert(
+    "[TT-1252-1255] ClientDiscardableSharedMemoryManager::DiscardableMemoryImpl::Purge %d %d %d %d",
+    span_ ? span_->RecordReplayId() : -1,
+    is_locked(),
+    last_locked_ > min_ticks,
+    span_ ? 
+      (span_->shared_memory() ? 
+        recordreplay::PointerId(span_->shared_memory()) :
+        -1
+      )
+     : -2);
 
   if (is_locked())
     return nullptr;
@@ -192,6 +227,7 @@ ClientDiscardableSharedMemoryManager::ClientDiscardableSharedMemoryManager(
     : RefCountedDeleteOnSequence<ClientDiscardableSharedMemoryManager>(
           base::ThreadTaskRunnerHandle::Get()),
       task_runner_(base::ThreadTaskRunnerHandle::Get()),
+      lock_("ClientDiscardableSharedMemoryManager.lock_"),
       heap_(std::make_unique<DiscardableSharedMemoryHeap>()),
       io_task_runner_(std::move(io_task_runner)),
       manager_mojo_(nullptr) {
@@ -237,6 +273,13 @@ void ClientDiscardableSharedMemoryManager::OnBackgrounded() {
 std::unique_ptr<base::DiscardableMemory>
 ClientDiscardableSharedMemoryManager::AllocateLockedDiscardableMemory(
     size_t size) {
+  // When events unavailable, local alloc before lock_ (avoid waiting on Mojo holders).
+#if BUILDFLAG(IS_POSIX)
+  if (recordreplay::AreEventsUnavailable()) {
+    return RecordReplayAllocateLocalDiscardableMemory(size);
+  }
+#endif
+
   base::AutoLock lock(lock_);
 
   if (!is_purge_scheduled_) {
@@ -281,6 +324,14 @@ ClientDiscardableSharedMemoryManager::AllocateLockedDiscardableMemory(
     // Search free lists for suitable span.
     std::unique_ptr<DiscardableSharedMemoryHeap::Span> free_span =
         heap_->SearchFreeLists(pages, slack);
+
+    recordreplay::Assert(
+        "[RUN-3056-3057] "
+        "ClientDiscardableSharedMemoryManager::AllocateLockedDiscardableMemory "
+        "A %d %zu %zu",
+        free_span ? recordreplay::PointerId(free_span->shared_memory()) : -1,
+        pages, slack);
+
     if (!free_span)
       break;
 
@@ -337,12 +388,26 @@ ClientDiscardableSharedMemoryManager::AllocateLockedDiscardableMemory(
     return nullptr;
   }
 
+#if BUILDFLAG(IS_POSIX)
+  // The replay can diverge after the check at the top of this function, e.g.
+  // while this thread waits on |lock_|.
+  if (recordreplay::AreEventsUnavailable()) {
+    return RecordReplayAllocateLocalDiscardableMemory(size);
+  }
+#endif
+
   // Ask parent process to allocate a new discardable shared memory segment.
   std::unique_ptr<base::DiscardableSharedMemory> shared_memory =
       AllocateLockedDiscardableSharedMemory(allocation_size_in_bytes, new_id);
 
-  if (!shared_memory)
+  if (!shared_memory) {
+#if BUILDFLAG(IS_POSIX)
+    if (recordreplay::HasDivergedFromRecording()) {
+      return RecordReplayAllocateLocalDiscardableMemory(size);
+    }
+#endif
     return nullptr;
+  }
 
   // Create span for allocated memory.
   // Spans are managed by |heap_| (the member of
@@ -455,6 +520,9 @@ void ClientDiscardableSharedMemoryManager::PurgeUnlockedMemory(
 
     auto now = base::TimeTicks::Now();
 
+    recordreplay::Assert(
+      "[RUN-3056-3057] ClientDiscardableSharedMemoryManager::PurgeUnlockedMemory A %zu",
+      allocated_memory_.size());
     // Iterate this way in order to avoid invalidating the iterator while
     // removing elements from |allocated_memory_| as we iterate over it.
     for (auto it = allocated_memory_.begin(); it != allocated_memory_.end();
@@ -475,6 +543,9 @@ void ClientDiscardableSharedMemoryManager::PurgeUnlockedMemory(
       }
     }
   }
+  
+  recordreplay::Assert(
+    "[RUN-3056-3057] ClientDiscardableSharedMemoryManager::PurgeUnlockedMemory B");
 
   ReleaseFreeMemory();
 }
@@ -610,6 +681,17 @@ ClientDiscardableSharedMemoryManager::AllocateLockedDiscardableSharedMemory(
     return nullptr;
   }
 
+  // A replay that diverged before the mmap call completed (during the IPC or
+  // inside Map) maps zero-filled memory: the recorded descriptor isn't open in
+  // this process and the contents the browser wrote aren't restored. The zero
+  // header reads as an unlocked, purged segment, which another thread's
+  // ReleasePurgedMemory unmaps while it's in use.
+#if BUILDFLAG(IS_POSIX)
+  if (recordreplay::HasDivergedFromRecording()) {
+    return nullptr;
+  }
+#endif
+
   discardable_memory_ipc_error_cause.Clear();
   discardable_memory_ipc_requested_size.Clear();
   return memory;
@@ -645,6 +727,9 @@ void ClientDiscardableSharedMemoryManager::DeletedDiscardableSharedMemory(
 void ClientDiscardableSharedMemoryManager::MemoryUsageChanged(
     size_t new_bytes_total,
     size_t new_bytes_free) const {
+  recordreplay::Assert(
+    "[RUN-3056-3057] ClientDiscardableSharedMemoryManager::MemoryUsageChanged %zu",
+    new_bytes_total);
   static crash_reporter::CrashKeyString<24> discardable_memory_allocated(
       "discardable-memory-allocated");
   discardable_memory_allocated.Set(base::NumberToString(new_bytes_total));
