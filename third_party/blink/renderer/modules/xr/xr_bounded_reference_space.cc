@@ -102,7 +102,7 @@ void XRBoundedReferenceSpace::EnsureUpdated() const {
   XRBoundedReferenceSpace* mutable_this =
       const_cast<XRBoundedReferenceSpace*>(this);
   mutable_this->DispatchEvent(
-      *XRReferenceSpaceEvent::Create(event_type_names::kReset, mutable_this));
+      *XRReferenceSpaceEvent::Create(event_type_names::kReset, mutable_this), "XRBoundedReferenceSpace::EnsureUpdated");
 }
 
 std::optional<gfx::Transform> XRBoundedReferenceSpace::MojoFromNative() const {

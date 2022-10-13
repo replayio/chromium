@@ -13,6 +13,8 @@
 #include "third_party/blink/renderer/modules/xr/xr_session.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_events.h"
+
 namespace blink {
 
 XRFrameRequestCallbackCollection::XRFrameRequestCallbackCollection(
@@ -77,6 +79,8 @@ void XRFrameRequestCallbackCollection::ExecuteCallbacks(XRSession* session,
              base::NotFatalUntil::M130);
 
     probe::AsyncTask async_task(context_, it_async_task->value.get());
+    recordreplay::UserEventProbe replayEvent("XRRequestFrame", AtomicString());
+
     it_frame_request->value->InvokeAndReportException(session, timestamp,
                                                       frame);
   }
