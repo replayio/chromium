@@ -44,6 +44,7 @@ void ThreadGroup::BaseScopedCommandsExecutor::ScheduleAdjustMaxTasks() {
 
 void ThreadGroup::BaseScopedCommandsExecutor::ScheduleStart(
     scoped_refptr<WorkerThread> worker) {
+  CHECK(outer_->RecordReplayUnordered() == worker->RecordReplayUnordered());
   workers_to_start_.emplace_back(std::move(worker));
 }
 
@@ -103,11 +104,13 @@ ThreadGroup::ThreadGroup(std::string_view histogram_label,
                          TrackedRef<Delegate> delegate)
     : task_tracker_(std::move(task_tracker)),
       delegate_(std::move(delegate)),
+      lock_(recordreplay::AreEventsDisallowed() ? nullptr : "ThreadGroup.lock_"),
       unnecessary_wakeup_histogram_label_(
           StringPrintf("ThreadPool.UnnecessaryWakeup.%s", histogram_label)),
       thread_group_label_(thread_group_label),
       thread_type_hint_(thread_type_hint),
-      idle_workers_set_cv_for_testing_(lock_.CreateConditionVariable()) {
+      idle_workers_set_cv_for_testing_(lock_.CreateConditionVariable()),
+      record_replay_unordered_(recordreplay::AreEventsDisallowed()) {
   DCHECK(!thread_group_label_.empty());
 }
 
@@ -399,6 +402,7 @@ bool ThreadGroup::ShouldYield(TaskSourceSortKey sort_key) {
   max_allowed_sort_key =
       TS_UNCHECKED_READ(max_allowed_sort_key_)
           .exchange(kMaxYieldSortKey, std::memory_order_relaxed);
+
   // Another thread might have decided to yield and racily reset
   // |max_allowed_sort_key_|, in which case this thread doesn't yield.
   return max_allowed_sort_key.thread_type != ThreadType::kBackground;
@@ -497,6 +501,11 @@ size_t ThreadGroup::NumberOfIdleWorkersForTesting() const {
 }
 
 size_t ThreadGroup::GetDesiredNumAwakeWorkersLockRequired() const {
+  // Unordered thread groups can't create new workers on demand, so we use
+  // a fixed size thread pool for unordered tasks.
+  if (record_replay_unordered_)
+    return 4;
+
   // Number of BEST_EFFORT task sources that are running or queued and allowed
   // to run by the CanRunPolicy.
   const size_t num_running_or_queued_can_run_best_effort_task_sources =
