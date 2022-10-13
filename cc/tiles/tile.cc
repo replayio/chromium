@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/traced_value.h"
 #include "cc/base/math_util.h"
@@ -35,12 +36,15 @@ Tile::Tile(TileManager* tile_manager,
       tiling_i_index_(info.tiling_i_index),
       tiling_j_index_(info.tiling_j_index),
       can_use_lcd_text_(info.can_use_lcd_text),
-      id_(tile_manager->GetUniqueTileId()) {}
+      id_(tile_manager->GetUniqueTileId()) {
+  recordreplay::RegisterPointer("Tile", this);
+}
 
 Tile::~Tile() {
   TRACE_EVENT_INSTANT(TRACE_DISABLED_BY_DEFAULT("cc.debug"), "cc::Tile:deleted",
                       perfetto::TerminatingFlow::FromPointer(this, "Tile"));
   deleted_ = true;
+  recordreplay::UnregisterPointer(this);
   tile_manager_->Release(this);
 }
 

@@ -450,9 +450,11 @@ bool IOSurfaceSetColorSpace(IOSurfaceRef io_surface,
   if (color_space.GetPrimaryID() == ColorSpace::PrimaryID::BT2020 &&
       color_space.GetMatrixID() == ColorSpace::MatrixID::BT2020_NCL) {
     if (color_space.GetTransferID() == ColorSpace::TransferID::PQ) {
-      color_space_name = kCGColorSpaceITUR_2100_PQ;
+      // FIXME changed to fix build break.
+      color_space_name = kCGColorSpaceITUR_2020_PQ;
     } else if (color_space.GetTransferID() == ColorSpace::TransferID::HLG) {
-      color_space_name = kCGColorSpaceITUR_2100_HLG;
+      // FIXME changed to fix build break.
+      color_space_name = kCGColorSpaceITUR_2020_HLG;
     }
   }
 

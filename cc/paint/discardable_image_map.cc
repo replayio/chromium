@@ -14,6 +14,7 @@
 #include "base/containers/adapters.h"
 #include "base/memory/stack_allocated.h"
 #include "base/no_destructor.h"
+#include "base/record_replay.h"
 #include "base/sequence_checker.h"
 #include "base/trace_event/trace_event.h"
 #include "cc/base/features.h"
@@ -359,11 +360,15 @@ class DiscardableImageMap::Generator {
   bool collect_invisible_images_ = false;
 };  // DiscardableImageMap::Generator
 
-DiscardableImageMap::DiscardableImageMap() = default;
+DiscardableImageMap::DiscardableImageMap() {
+  recordreplay::RegisterPointer("DiscardableImageMap", this);
+}
 
 // Once a DiscardableImage is generated, it's hold in a ref-counted
 // DisplayItemList which may be destructed from any thread.
-DiscardableImageMap::~DiscardableImageMap() = default;
+DiscardableImageMap::~DiscardableImageMap() {
+  recordreplay::UnregisterPointer(this);
+}
 
 scoped_refptr<DiscardableImageMap> DiscardableImageMap::Generate(
     const PaintOpBuffer& paint_op_buffer,
