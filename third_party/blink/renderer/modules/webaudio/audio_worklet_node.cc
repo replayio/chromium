@@ -233,7 +233,7 @@ void AudioWorkletNode::FireProcessorError(
   }
   ErrorEvent* event = ErrorEvent::Create(
       error_message, CaptureSourceLocation(GetExecutionContext()), nullptr);
-  DispatchEvent(*event);
+  DispatchEvent(*event, "AudioWorkletNode::FireProcessorError");
 }
 
 scoped_refptr<AudioWorkletHandler> AudioWorkletNode::GetWorkletHandler() const {
