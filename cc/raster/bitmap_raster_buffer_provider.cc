@@ -17,10 +17,13 @@
 #include "components/viz/client/client_resource_provider.h"
 #include "components/viz/common/resources/bitmap_allocation.h"
 #include "components/viz/common/resources/shared_image_format.h"
+#include "components/viz/service/display/record_replay_render.h"
 #include "gpu/command_buffer/client/client_shared_image.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
 #include "gpu/ipc/client/client_shared_image_interface.h"
 #include "ui/gfx/color_space.h"
+
+#include "base/record_replay.h"
 
 namespace cc {
 namespace {
@@ -167,6 +170,12 @@ BitmapRasterBufferProvider::AcquireBufferForRaster(
       backing->mapping = std::move(shm.mapping);
       frame_sink_->DidAllocateSharedBitmap(std::move(shm.region),
                                            backing->shared_bitmap_id);
+    }
+
+    if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+      recordreplay::NotifyRasterBuffer(backing->shared_bitmap_id,
+                                       backing->mapping.memory(),
+                                       backing->mapping.size());
     }
 
     resource.set_software_backing(std::move(backing));
