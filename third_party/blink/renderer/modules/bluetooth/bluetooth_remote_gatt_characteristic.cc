@@ -61,7 +61,7 @@ void BluetoothRemoteGATTCharacteristic::RemoteCharacteristicValueChanged(
             value_, /*promise=*/nullptr));
   } else {
     DispatchEvent(
-        *Event::Create(event_type_names::kCharacteristicvaluechanged));
+        *Event::Create(event_type_names::kCharacteristicvaluechanged), "BluetoothRemoteGATTCharacteristic::RemoteCharacteristicValueChanged");
   }
 }
 
@@ -117,7 +117,7 @@ void BluetoothRemoteGATTCharacteristic::ReadValueCallback(
               dom_data_view, resolver));
     } else {
       DispatchEvent(
-          *Event::Create(event_type_names::kCharacteristicvaluechanged));
+          *Event::Create(event_type_names::kCharacteristicvaluechanged), "BluetoothRemoteGATTCharacteristic::ReadValueCallback");
       resolver->Resolve(dom_data_view);
     }
   } else {
