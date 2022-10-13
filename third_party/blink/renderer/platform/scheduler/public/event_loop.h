@@ -129,7 +129,7 @@ class PLATFORM_EXPORT EventLoop final {
   WeakPersistent<Delegate> delegate_;
   const raw_ptr<v8::Isolate> isolate_;
   int microtasks_pause_count_ = 0;
-  Deque<base::OnceClosure> pending_microtasks_;
+  Deque<std::pair<base::OnceClosure, int>> pending_microtasks_;
   Vector<base::OnceClosure> end_of_checkpoint_tasks_;
   Persistent<v8::MicrotaskQueue> microtask_queue_;
   v8::Global<v8::CppHeapExternal> microtask_data_;

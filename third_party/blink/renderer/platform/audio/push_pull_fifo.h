@@ -134,7 +134,7 @@ class PLATFORM_EXPORT PushPullFIFO final {
   unsigned overflow_count_ = 0;
   unsigned underflow_count_ = 0;
 
-  base::Lock lock_;
+  base::Lock lock_{"PushPullFIFO"};
 
   // To adapt the unstable callback timing. Every buffer underrun from
   // PullAndUpdateEarmarkedFrames() will increase this number.
