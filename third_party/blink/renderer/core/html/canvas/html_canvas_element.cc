@@ -587,6 +587,18 @@ CanvasRenderingContext* HTMLCanvasElement::GetCanvasRenderingContextInternal(
     return nullptr;
   }
 
+  // WebGL contexts are not currently supported when recording/replaying.
+  if (recordreplay::IsRecordingOrReplaying("no-webgl")) {
+    switch (rendering_api) {
+      case CanvasRenderingContext::CanvasRenderingAPI::kWebgl:
+      case CanvasRenderingContext::CanvasRenderingAPI::kWebgl2:
+      case CanvasRenderingContext::CanvasRenderingAPI::kWebgpu:
+        return nullptr;
+      default:
+        break;
+    }
+  }
+
   CanvasRenderingContextFactory* factory =
       GetRenderingContextFactory(static_cast<int>(rendering_api));
   if (!factory)

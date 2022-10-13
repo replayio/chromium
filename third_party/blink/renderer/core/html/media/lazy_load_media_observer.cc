@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/core/html/media/lazy_load_media_observer.h"
 
 #include <limits>
+#include <optional>
 
 #include "third_party/blink/public/platform/web_effective_connection_type.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_check_visibility_options.h"
@@ -118,6 +119,17 @@ void LazyLoadMediaObserver::LoadIfNearViewport(
     }
     if (!entry->isIntersecting()) {
       continue;
+    }
+
+    std::optional<recordreplay::AutoDependencyExecution> execute;
+    if (recordreplay::DependencyGraphEnabled()) {
+      int node_id = recordreplay::NewDependencyGraphNode(
+        "{\"kind\":\"loadLazyImageNearViewport\"}"
+      );
+      recordreplay::AddDependencyGraphEdge(
+        entry->RecordReplayCreatedNodeId(), node_id, "{\"kind\":\"observer\"}"
+      );
+      execute.emplace(node_id);
     }
 
     // Handle image elements.

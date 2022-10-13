@@ -557,7 +557,7 @@ void HTMLFormElement::PrepareForSubmission(
                     "' was implicitly closed by reaching the end of the "
                     "file. Please add an explicit end tag ('</",
                     tag_name, ">')"})));
-        DispatchEvent(*Event::Create(event_type_names::kError));
+        DispatchEvent(*Event::Create(event_type_names::kError), "HTMLFormElement::PrepareForSubmission #1");
         return;
       }
     }
@@ -604,7 +604,7 @@ void HTMLFormElement::PrepareForSubmission(
       SubmitEvent* submit_event = MakeGarbageCollected<SubmitEvent>(
           event_type_names::kSubmit, submit_event_init);
       should_submit =
-          DispatchEvent(*submit_event) == DispatchEventResult::kNotCanceled;
+          DispatchEvent(*submit_event, "HTMLFormElement::PrepareForSubmission #2") == DispatchEventResult::kNotCanceled;
       if (declarative_webmcp_call) {
         if (auto promise = submit_event->TakeRespondWithPromise()) {
           // Since we have a promise, respondWith() was called. That should only
@@ -867,7 +867,7 @@ FormData* HTMLFormElement::ConstructEntryList(
       }
     }
   }
-  DispatchEvent(*MakeGarbageCollected<FormDataEvent>(form_data));
+  DispatchEvent(*MakeGarbageCollected<FormDataEvent>(form_data), "HTMLFormElement::ConstructEntryList");
 
   if (submit_button)
     submit_button->SetActivatedSubmit(false);
@@ -881,7 +881,7 @@ void HTMLFormElement::reset() {
 
   is_in_reset_function_ = true;
 
-  if (DispatchEvent(*Event::CreateCancelableBubble(event_type_names::kReset)) !=
+  if (DispatchEvent(*Event::CreateCancelableBubble(event_type_names::kReset), "HTMLFormElement::reset") !=
       DispatchEventResult::kNotCanceled) {
     is_in_reset_function_ = false;
     return;
