@@ -47,8 +47,9 @@ bool SyncEventWatcher::SyncWatch(base::span<const bool*> stop_flags) {
   bool result = registry_->Wait(should_stop_array);
 
   // This object has been destroyed.
-  if (destroyed->data)
+  if (destroyed->data) {
     return false;
+  }
 
   DecrementRegisterCount();
   return result;

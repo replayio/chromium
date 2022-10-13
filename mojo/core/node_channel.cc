@@ -26,6 +26,8 @@
 #include "mojo/core/ipcz_driver/envelope.h"
 #include "mojo/core/request_context.h"
 
+#include "base/record_replay.h"
+
 namespace mojo {
 namespace core {
 
@@ -547,10 +549,16 @@ NodeChannel::NodeChannel(
     : base::RefCountedDeleteOnSequence<NodeChannel>(io_task_runner),
       delegate_(delegate),
       process_error_callback_(process_error_callback),
+      channel_lock_("NodeChannel.channel_lock_"),
       channel_(Channel::Create(this,
                                std::move(connection_params),
                                channel_handle_policy,
                                std::move(io_task_runner))) {
+  if (recordreplay::IsRecordingOrReplaying() &&
+      !recordreplay::AreEventsDisallowed()) {
+    record_replay_release_ordered_lock_id_ =
+        recordreplay::CreateOrderedLock("NodeChannel");
+  }
   InitializeLocalCapabilities();
 }
 
@@ -874,6 +882,36 @@ void NodeChannel::WriteChannelMessage(Channel::MessagePtr message) {
 void NodeChannel::OfferChannelUpgrade() {
   base::AutoLock lock(channel_lock_);
   channel_->OfferChannelUpgrade();
+}
+
+void NodeChannel::Release() {
+  if (!record_replay_release_ordered_lock_id_) {
+    base::RefCountedDeleteOnSequence<NodeChannel>::Release();
+    return;
+  }
+
+  bool last_reference;
+  {
+    recordreplay::AutoOrderedLock ordered(
+        record_replay_release_ordered_lock_id_);
+    last_reference = base::subtle::RefCountedThreadSafeBase::Release();
+  }
+  if (!last_reference)
+    return;
+
+  // Same as RefCountedDeleteOnSequence::DestructOnSequence(), which is
+  // private.
+  if (owning_task_runner()->RunsTasksInCurrentSequence())
+    delete this;
+  else
+    owning_task_runner()->DeleteSoon(FROM_HERE, this);
+}
+
+bool NodeChannel::RecordReplayHasOneRef() const {
+  if (!record_replay_release_ordered_lock_id_)
+    return HasOneRef();
+  recordreplay::AutoOrderedLock ordered(record_replay_release_ordered_lock_id_);
+  return HasOneRef();
 }
 
 uint64_t NodeChannel::RemoteCapabilities() const {
