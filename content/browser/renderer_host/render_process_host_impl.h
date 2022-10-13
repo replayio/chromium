@@ -256,6 +256,9 @@ class CONTENT_EXPORT RenderProcessHostImpl
   bool AreV8OptimizationsDisabled() override;
   bool DisallowV8FeatureFlagOverrides() override;
   bool IsPdf() override;
+  bool IsRecordReplayForRecording() {
+    return !!(flags_ & RenderProcessFlags::kRecordReplayForRecording);
+  }
   StoragePartitionImpl* GetStoragePartition() override;
   bool Shutdown(int exit_code) override;
   bool ShutdownRequested() override;
@@ -367,6 +370,9 @@ class CONTENT_EXPORT RenderProcessHostImpl
   void CrashHungProcess() override;
   std::string GetInfoForBrowserContextDestructionCrashReporting() override;
   void WriteIntoTrace(perfetto::TracedProto<TraceProto> proto) const override;
+  void SendRecordReplayBrowserEvent(
+      const std::string& name,
+      base::Value&& value) override;
 #if BUILDFLAG(CLANG_PROFILING_INSIDE_SANDBOX)
   void DumpProfilingData(base::OnceClosure callback) override;
 #endif
@@ -997,6 +1003,18 @@ class CONTENT_EXPORT RenderProcessHostImpl
     // running during process setup (e.g. delivery of extension content scripts)
     // can already tell that the process is privileged.
     kPrivileged = 1 << 6,
+
+    // Indicates whether the render process backing this host should
+    // be recorded using the RecordReplay infrastructure.
+    //
+    // DSRC-013's family, fourth instance: at M153 upstream claimed bit 6 for
+    // kPrivileged (absent M148-M152, present M153-M159), which is where this flag
+    // had sat since M129.  The ladder would otherwise read seven names over six
+    // distinct values.  The invariant is unchanged -- every non-zero value claimed
+    // by exactly one name -- and upstream owns this enum, so the FORK moves.  Bit 7
+    // is free at this base (upstream occupies 0..6).  Unconditional on every
+    // platform.  See DSRC-232.
+    kRecordReplayForRecording = 1 << 7,
   };
 
 #if BUILDFLAG(IS_ANDROID)

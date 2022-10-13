@@ -6,6 +6,7 @@
 
 #include "base/memory_coordinator/traits.h"
 #include "base/memory_coordinator/utils.h"
+#include "base/record_replay.h"
 #include "partition_alloc/memory_reclaimer.h"
 
 namespace content {
@@ -40,6 +41,16 @@ MemoryReclaimerPressureListener::~MemoryReclaimerPressureListener() = default;
 void MemoryReclaimerPressureListener::OnUpdateMemoryLimit() {}
 
 void MemoryReclaimerPressureListener::OnReleaseMemory() {
+  // One arm of the critical-pressure body upstream split out of
+  // RenderThreadImpl::OnMemoryPressure; the label is that body's original key.
+  // The CRITICAL conjunct is load-bearing: the old body reached ReclaimAll
+  // UNGUARDED at MODERATE, and this listener fires at every non-NONE level.
+  if (memory_limit() <= base::MemoryLimit::CriticalPressureThreshold() &&
+      recordreplay::AreEventsDisallowed() &&
+      recordreplay::FeatureEnabled("leak-references", "ReleaseFreeMemory")) {
+    return;
+  }
+
   if (memory_limit() <= base::MemoryLimit::ModeratePressureThreshold()) {
     ::partition_alloc::MemoryReclaimer::Instance()->ReclaimAll();
   }
