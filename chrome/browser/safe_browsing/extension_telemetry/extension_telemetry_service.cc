@@ -13,6 +13,7 @@
 #include "base/json/values_util.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/record_replay.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_tokenizer.h"
 #include "base/strings/utf_string_conversions.h"
@@ -331,6 +332,8 @@ void ExtensionTelemetryService::SetEnabled(bool enable) {
     return;
   }
 
+  recordreplay::Diagnostic("[TT-198] ExtensionTelemetryService::SetEnabled %s",
+                           enable ? "true" : "false");
   enabled_ = enable;
   if (enabled_) {
     // Create signal processors.
@@ -547,6 +550,8 @@ void ExtensionTelemetryService::CreateAndUploadReport() {
 void ExtensionTelemetryService::OnUploadComplete(
     bool success,
     const std::string& response_data) {
+  recordreplay::Diagnostic("[TT-198] ExtensionTelemetryService::OnUploadComplete() %s", success ? "succeeded" : "failed");
+
   // TODO(https://crbug.com/1408126): Add `config_manager_` implementation
   // to check server response and update config.
   if (success) {
@@ -602,6 +607,9 @@ void ExtensionTelemetryService::UploadPersistedFile(std::string report) {
 
 void ExtensionTelemetryService::UploadReport(
     std::unique_ptr<std::string> report) {
+
+  recordreplay::Diagnostic("[TT-198] ExtensionTelemetryService::UploadReport");
+
   auto callback = base::BindOnce(&ExtensionTelemetryService::OnUploadComplete,
                                  weak_factory_.GetWeakPtr());
   active_uploader_ = std::make_unique<ExtensionTelemetryUploader>(
