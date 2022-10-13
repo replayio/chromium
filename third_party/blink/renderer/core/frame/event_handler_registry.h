@@ -7,12 +7,19 @@
 
 #include <array>
 
+// Include these first so the default hash for EventTarget can be determined.
+#include "third_party/blink/renderer/core/dom/events/event_target.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
+
 #include "base/dcheck_is_on.h"
 #include "third_party/blink/renderer/core/core_export.h"  // TODO(sashab): Remove this.
 #include "third_party/blink/renderer/platform/heap/forward.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/wtf/hash_counted_set.h"
+
+// Used for replay_strong_targets_.
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_counted_set.h"
 
 namespace blink {
 
@@ -135,6 +142,7 @@ class CORE_EXPORT EventHandlerRegistry final
 
   Member<LocalFrame> frame_;
   std::array<EventTargetSet, kEventHandlerClassCount> targets_;
+  HeapHashCountedSet<Member<EventTarget>> replay_strong_targets_;
 };
 
 }  // namespace blink
