@@ -1,0 +1,387 @@
+env:
+  FORCE_COLOR: 1
+  GIT_TERMINAL_PROMPT: 0
+
+steps:
+  # TODO: re-enable preflight checks once builds are stable
+  # - label: "Preflight checks (lint/etc)"
+  #   key: "preflight-checks"
+  #   plugins:
+  #     - thedyrt/skip-checkout#v0.1.1:
+  #         cd: /home/ubuntu/chromium/src
+  #     - seek-oss/aws-sm#v2.3.1:
+  #         region: us-east-2
+  #         env:
+  #           BUILDEVENT_APIKEY: honeycomb-api-key
+  #           BUILDEVENT_BUILDKITE_API_TOKEN: buildkite-api-token-buildevents
+  #     - replayio/buildevents#76b6f57: ~
+  #   commands:
+  #     - "be_cmd git-fetch-origin -- git fetch origin"
+  #     - "be_cmd git-reset-branch -- git reset --hard origin/$BUILDKITE_BRANCH"
+  #     - "be_cmd update-all-repos -- node replay_build_scripts/update-all-repos.mjs"
+  #     - "pushd replay_build_scripts"
+  #     - "be_cmd npm-ci -- npm ci"
+  #     - "be_cmd lint-replay_build_scripts -- npm run lint"
+  #     - "popd"
+  #     - "be_cmd lint-replay-scripts -- node replay_build_scripts/lint.mjs"
+  #   env:
+  #     RECORD_REPLAY_BACKEND_DIR: /home/ubuntu/chromium/backend
+  #   agents:
+  #     - "runtimeType=chromiumbuild"
+  #     - "os=linux"
+  #     - "queue=runtime"
+
+  - label: "🔨 Chromium (linux-x86_64)"
+    key: "build-chromium-linux-x86_64"
+    # depends_on: "preflight-checks"
+    timeout_in_minutes: 360
+    # No cd: the job works in its own (empty) workspace, not in a checkout
+    # shared with every other build. replay_build_scripts/ci/checkout.sh picks
+    # the checkout for this tree's Chromium version and nothing else writes to
+    # it; see replay_build_scripts/ci/README.md.
+    plugins:
+      - thedyrt/skip-checkout#v0.1.1: ~
+      - seek-oss/aws-sm#v2.3.1:
+          region: us-east-2
+          env:
+            BUILDEVENT_APIKEY: honeycomb-api-key
+            BUILDEVENT_BUILDKITE_API_TOKEN: buildkite-api-token-buildevents
+          # Into the job's workspace, not next to a checkout that every build
+          # container mounts; the command below removes them when the job ends.
+          file:
+            - path: "engflow.crt"
+              secret-id: engflow-certificate
+            - path: "engflow.key"
+              secret-id: engflow-key
+      - replayio/buildevents#76b6f57: ~
+    env:
+      RBE_service: simpsonite.cluster.engflow.com:443
+      RBE_service_no_auth: "true"
+      RBE_use_application_default_credentials: "true"
+      # The buckets' region, so the upload does not depend on the agent's AWS config.
+      AWS_DEFAULT_REGION: us-east-2
+    # build-runtime=true: shared heavy-build capacity (Node + Chromium).
+    # runtimeType=chromiumbuild: the host keeps a Chromium checkout per version
+    # (checkout.sh); a job prepares its version's when the host has none.
+    agents:
+      - "build-runtime=true"
+      - "runtimeType=chromiumbuild"
+      - "os=linux"
+      - "queue=runtime"
+    artifact_paths:
+      - "build_id/linux/x86_64/**"
+    command: |
+      set -euo pipefail
+      # artifact_paths uploads build_id/** out of this workspace however the job
+      # ends, and the workspace persists between jobs on this agent. Without
+      # this, a job that fails before it builds anything uploads the PREVIOUS
+      # build's artifacts as its own: build 5566 failed in checkout-sync for
+      # m109 and published the m108 build's build_id and symbols byte for byte
+      # (identical sha1s), naming a build this job never made.
+      #
+      # Inline and first, rather than clean_artifacts.mjs where this used to be:
+      # that ran fifth, so every way of failing before it -- fetching the
+      # scripts below, the container cleanup, the checkout -- left the previous
+      # build's artifacts in place to be uploaded. This needs no scripts, no
+      # node, and nothing to have succeeded first.
+      rm -rf "$${BUILDKITE_BUILD_CHECKOUT_PATH:-$$PWD}/build_id"
+      # The EngFlow client cert and key must not outlive the job, whatever
+      # fails. They used to be written next to the shared checkout, where they
+      # stayed between jobs inside the directory every build container mounted.
+      trap 'rm -f "$$PWD/engflow.crt" "$$PWD/engflow.key"' EXIT
+      export RBE_tls_client_auth_cert="$$PWD/engflow.crt"
+      export RBE_tls_client_auth_key="$$PWD/engflow.key"
+      # This commit's build scripts and chrome/VERSION (checkout.sh key) into
+      # .ci-boot: everything after this is repository content at the commit
+      # being built, instead of whatever a shared checkout happened to hold
+      # (replayio/chromium#1544). Inline rather than from bootstrap.sh, which
+      # does the same for steps that can run it: this step has no copy of it
+      # yet, and taking one from build meta-data would tie the step to whichever
+      # upload step set it (manual-chromium-branch-build does not).
+      # - Over the agent's SSH identity ($$BUILDKITE_REPO): GitHub throttles
+      #   unauthenticated reads of this fork network (HTTP 429).
+      # - git init + fetch of the one commit, not `git clone --depth 1
+      #   --filter=blob:none`: on git 2.25 (chromium-build-1) such a clone took one
+      #   12.8 MiB pack, then repeated ~317k-object / ~49 MiB packs
+      #   (chromium-build #5838, 42 packs in ~4 min, then cancelled).
+      # - Shallow, blob-less (promisor remote), sparse (patterns, not cone
+      #   mode: git 2.25). Older git ignores the filter and fetches every blob.
+      # - Each read retried: GitHub queues authenticated reads of this fork
+      #   network under load, and a commit that does not exist looks the same
+      #   to git's exit status. Checkout with -f, so a retry overwrites what a
+      #   failed attempt left. --foreground keeps git in the job's process
+      #   group, so cancelling the job stops it.
+      case "$$(git --version)" in *\ 1.*|*\ 2.[0-9].*|*\ 2.1[0-9].*|*\ 2.2[0-4].*) echo "$$(git --version): too old for a partial fetch (2.25+)" >&2; exit 1;; esac
+      BOOT_REF="$$BUILDKITE_COMMIT"
+      if [ "$$BOOT_REF" = "HEAD" ]; then BOOT_REF="$${BUILDKITE_BRANCH:?no commit or branch to fetch}"; fi
+      github() {
+        local attempt
+        for attempt in 1 2 3 4 5; do
+          if be_cmd bootstrap-scripts -- timeout --foreground 900 "$$@"; then return 0; fi
+          if [ "$$attempt" = 5 ]; then
+            echo "reading $$BOOT_REF from GitHub failed: $$*" >&2
+            return 1
+          fi
+          sleep $$((attempt * 60))
+        done
+      }
+      rm -rf .ci-boot
+      git init -q .ci-boot
+      git -C .ci-boot remote add origin "$$BUILDKITE_REPO"
+      git -C .ci-boot config extensions.partialClone origin
+      git -C .ci-boot config remote.origin.promisor true
+      git -C .ci-boot config remote.origin.partialclonefilter blob:none
+      git -C .ci-boot config core.sparseCheckout true
+      printf '/replay_build_scripts/\n/chrome/VERSION\n' > .ci-boot/.git/info/sparse-checkout
+      github git -C .ci-boot fetch -q --filter=blob:none --depth 1 origin "$$BOOT_REF"
+      github git -C .ci-boot checkout -q -f --detach FETCH_HEAD
+      test -x .ci-boot/replay_build_scripts/ci/checkout.sh
+      echo "scripts: .ci-boot is $$(git -C .ci-boot rev-parse HEAD)"
+      # A build of HEAD (manual-chromium-branch-build from the UI) builds the
+      # branch tip fetched above, so the tree and these scripts are one commit.
+      # checkout.sh refuses a bare HEAD.
+      if [ "$$BUILDKITE_COMMIT" = "HEAD" ] && [ -z "$${CHROMIUM_REVISION:-}" ]; then
+        CHROMIUM_REVISION=$$(git -C .ci-boot rev-parse --verify HEAD)
+        export CHROMIUM_REVISION
+      fi
+      SCRIPTS=.ci-boot/replay_build_scripts
+      KEY=$$("$$SCRIPTS/ci/checkout.sh" key)
+      echo "checkout key: $$KEY"
+      # Held until the job ends: another job's reclaim, which removes the least
+      # recently used keys when the volume runs low, leaves this one alone
+      # between the steps below (checkout.sh).
+      exec {KEY_USE}>"$$("$$SCRIPTS/ci/checkout.sh" use-lock "$$KEY")"
+      flock -s "$$KEY_USE"
+      # Before anything touches the checkout, not after: a container left by a
+      # cancelled job keeps building in it (replayio/chromium#1540). Only this
+      # version's containers, so another version's build is left alone.
+      be_cmd remove-stale-build-containers -- "$$SCRIPTS/remove-stale-build-containers.sh" "$$KEY"
+      be_cmd checkout-sync -- "$$SCRIPTS/ci/checkout.sh" sync
+      # Driver and backend come from this commit's REPLAY_BACKEND_REV, however
+      # the build was started: not from build env, never the latest driver.
+      BACKEND_REV=$$("$$SCRIPTS/ci/checkout.sh" backend-rev)
+      DRIVER_REVISION=$${BACKEND_REV:0:12}
+      export DRIVER_REVISION
+      be_cmd chromium-build -- "$$SCRIPTS/ci/build-in-container.sh"
+      be_cmd upload-artifacts -- "$$SCRIPTS/ci/upload-artifacts.sh"
+      # Next to build_id: the backend that steps testing this build must use.
+      echo "$$BACKEND_REV" > "$${BUILDKITE_BUILD_CHECKOUT_PATH:-$$PWD}/build_id/linux/x86_64/backend_rev"
+
+  - label: "📝 E2E Tests (linux-x86_64)"
+    trigger: "runtime-fe-end-to-end-tests"
+    depends_on:
+      - "build-chromium-linux-x86_64"
+    build:
+      env:
+        OS: "linux"
+        ARCH: "x86_64"
+        RECORD_REPLAY_METADATA_SOURCE_COMMIT_TITLE: "${BUILDKITE_MESSAGE}"
+        RECORD_REPLAY_METADATA_SOURCE_COMMIT_ID: "${BUILDKITE_COMMIT}"
+        RECORD_REPLAY_METADATA_SOURCE_BRANCH: "${BUILDKITE_BRANCH}"
+        RECORD_REPLAY_METADATA_SOURCE_MERGE_ID: "${BUILDKITE_PULL_REQUEST}"
+        RUNTIME_REPO: "${BUILDKITE_PULL_REQUEST_REPO}"
+
+  # Parallel with E2E: inline chromium-recording (mirrors node test-node).
+  # e2e=true: only linux class with Replay Chromium runtime libs (libnss3); can_replay lacks them.
+  - label: "📝 Chromium Recording Tests (linux-x86_64)"
+    key: "chromium-recording-linux-x86_64"
+    depends_on:
+      - "build-chromium-linux-x86_64"
+    timeout_in_minutes: 30
+    # In-house suite expected to pass deterministically: take shared e2e agents before E2E jobs.
+    priority: 1
+    agents:
+      - "e2e=true"
+    plugins:
+      - thedyrt/skip-checkout#v0.1.1: ~
+      - seek-oss/aws-sm#v2.3.1:
+          region: us-east-2
+          env:
+            HASURA_ADMIN_SECRET: "prod/hasura-admin-secret"
+            RECORD_REPLAY_API_KEY: "prod/public-api-key"
+    env:
+      PLAYWRIGHT_HEADLESS: "true"
+      CI: "1"
+    command: |
+      set -euo pipefail
+      WORKDIR=$$(mktemp -d "/tmp/chromium-recording-$${BUILDKITE_JOB_ID}.XXXXXX")
+      # Short path: unix socket paths under TMPDIR are length-limited.
+      TMPDIR=$$(mktemp -d /tmp/crt.XXXXXX)
+      export TMPDIR
+      trap 'rm -rf "$$WORKDIR" "$$TMPDIR"' EXIT
+      export RECORD_REPLAY_DIRECTORY="$$WORKDIR/replay"
+      BACKEND_DIR="$$WORKDIR/backend"
+      mkdir -p "$$BACKEND_DIR" "$$RECORD_REPLAY_DIRECTORY"
+      buildkite-agent artifact download build_id/linux/x86_64/backend_rev "$$WORKDIR/"
+      PIN="$$(cat "$$WORKDIR/build_id/linux/x86_64/backend_rev")"
+      test -n "$$PIN"
+      git -C "$$BACKEND_DIR" init
+      git -C "$$BACKEND_DIR" remote add origin git@github.com:replayio/backend.git
+      git -C "$$BACKEND_DIR" fetch --depth 1 origin "$$PIN"
+      git -C "$$BACKEND_DIR" checkout FETCH_HEAD
+      # LinkerZombieLeak: sweep before tests + always after (even on failure).
+      "$$BACKEND_DIR/scripts/kill-linker-processes.sh"
+      trap '"$$BACKEND_DIR/scripts/kill-linker-processes.sh"; rm -rf "$$WORKDIR" "$$TMPDIR"' EXIT
+      buildkite-agent artifact download build_id/linux/x86_64/build_id "$$WORKDIR/"
+      BUILD_ID="$$(cat "$$WORKDIR/build_id/linux/x86_64/build_id")"
+      test -n "$$BUILD_ID"
+      cd "$$BACKEND_DIR"
+      unset REPLAY_LOCAL_DRIVER_DIR || true
+      # e2e pods still ship Node 18; Dockerfile.buildkite-e2e-agent installs the backend's Node
+      # (nodesource) but needs root. User-space tarball of the pinned backend's .nvmrc version.
+      NODE_VERSION="$$(sed 's/^v//' .nvmrc)"
+      test -n "$$NODE_VERSION"
+      NODE_PREFIX="$$WORKDIR/node-v$${NODE_VERSION}-linux-x64"
+      curl -fsSL "https://nodejs.org/dist/v$${NODE_VERSION}/node-v$${NODE_VERSION}-linux-x64.tar.xz" | tar -xJ -C "$$WORKDIR"
+      export PATH="$${NODE_PREFIX}/bin:$$PATH"
+      hash -r
+      node --version
+      # packageManager pnpm@10.11.0; agents lack global npm write (EACCES).
+      npx --yes pnpm@10.11.0 install --frozen-lockfile
+      npx tsx src/build/buildRuntime.ts test-chromium-recording --build-id "$$BUILD_ID"
+
+  # - label: "🔨 Chromium (mac-x86_64)"
+  #   key: "build-chromium-mac-x86_64"
+  #   timeout_in_minutes: 360
+  #   plugins:
+  #     - thedyrt/skip-checkout#v0.1.1:
+  #         cd: /Users/administrator/chromium/src
+  #     - seek-oss/aws-sm#v2.3.1:
+  #         region: us-east-2
+  #         env:
+  #           BUILDEVENT_APIKEY: honeycomb-api-key
+  #           BUILDEVENT_BUILDKITE_API_TOKEN: buildkite-api-token-buildevents
+  #         file:
+  #           - path: "/Users/administrator/chromium/engflow.crt"
+  #             secret-id: engflow-certificate
+  #           - path: "/Users/administrator/chromium/engflow.key"
+  #             secret-id: engflow-key
+  #     - replayio/buildevents#76b6f57: ~
+  #   commands:
+  #     - "be_cmd git-fetch-origin -- git fetch origin"
+  #     - "be_cmd git-reset-branch -- git reset --hard origin/$BUILDKITE_BRANCH"
+  #     - "be_cmd clean-artifacts-dir -- node replay_build_scripts/clean_artifacts.mjs"
+  #     - "be_cmd update-all-repos -- node replay_build_scripts/update-all-repos.mjs"
+  #     - "be_cmd chromium-build -- node buildMac.mjs"
+  #     - "be_cmd upload-artifacts -- node replay_build_scripts/upload_build_artifacts.mjs"
+  #   env:
+  #     RECORD_REPLAY_BACKEND_DIR: /Users/administrator/chromium/backend
+  #     RBE_service: simpsonite.cluster.engflow.com:443
+  #     RBE_service_no_auth: "true"
+  #     RBE_use_application_default_credentials: "true"
+  #     RBE_tls_client_auth_cert: /Users/administrator/chromium/engflow.crt
+  #     RBE_tls_client_auth_key: /Users/administrator/chromium/engflow.key
+  #   agents:
+  #     - "runtimeType=chromiumbuild"
+  #     - "os=macos"
+  #     - "queue=runtime"
+  #   artifact_paths:
+  #     - "build_id/macOS/x86_64/**"
+  # - label: "🔨 Chromium (mac-arm64)"
+  #   key: "build-chromium-mac-arm64"
+  #   timeout_in_minutes: 360
+  #   plugins:
+  #     - thedyrt/skip-checkout#v0.1.1:
+  #         cd: /Users/administrator/chromium/src
+  #     - seek-oss/aws-sm#v2.3.1:
+  #         region: us-east-2
+  #         env:
+  #           BUILDEVENT_APIKEY: honeycomb-api-key
+  #           BUILDEVENT_BUILDKITE_API_TOKEN: buildkite-api-token-buildevents
+  #         file:
+  #           - path: "/Users/administrator/chromium/engflow.crt"
+  #             secret-id: engflow-certificate
+  #           - path: "/Users/administrator/chromium/engflow.key"
+  #             secret-id: engflow-key
+  #     - replayio/buildevents#76b6f57: ~
+  #   commands:
+  #     - "be_cmd git-fetch-origin -- git fetch origin"
+  #     - "be_cmd git-reset-branch -- git reset --hard origin/$BUILDKITE_BRANCH"
+  #     - "be_cmd clean-artifacts-dir -- node replay_build_scripts/clean_artifacts.mjs"
+  #     - "be_cmd update-all-repos -- node replay_build_scripts/update-all-repos.mjs"
+  #     - "be_cmd chromium-build -- node buildMac.mjs"
+  #     - "be_cmd upload-artifacts -- node replay_build_scripts/upload_build_artifacts.mjs"
+  #   env:
+  #     REPLAY_BUILD_ARM: true
+  #     RECORD_REPLAY_BACKEND_DIR: /Users/administrator/chromium/backend
+  #     RBE_service: simpsonite.cluster.engflow.com:443
+  #     RBE_service_no_auth: "true"
+  #     RBE_use_application_default_credentials: "true"
+  #     RBE_tls_client_auth_cert: /Users/administrator/chromium/engflow.crt
+  #     RBE_tls_client_auth_key: /Users/administrator/chromium/engflow.key
+  #   agents:
+  #     - "runtimeType=chromiumbuild"
+  #     - "os=macos"
+  #     - "queue=runtime"
+  #   artifact_paths:
+  #     - "build_id/macOS/arm64/**"
+
+  # - label: "🕵️‍♀️ Verify MacOS cross-arch build integrity"
+  #   key: "verify-cross-arch-pak-sizes"
+  #   commands:
+  #     - "be_cmd download-macos-arm64-gclient_entries -- buildkite-agent artifact download build_id/macOS/arm64/entries ."
+  #     - "be_cmd download-macos-x86_64-gclient_entries -- buildkite-agent artifact download build_id/macOS/x86_64/entries ."
+  #     - "be_cmd macos-diff-gclient-entries -- diff -u build_id/macOS/arm64/entries build_id/macOS/x86_64/entries"
+  #     - "be_cmd download-macos-arm64-pak-sizes -- buildkite-agent artifact download build_id/macOS/arm64/pak-sizes ."
+  #     - "be_cmd download-macos-x86_64-pak-sizes -- buildkite-agent artifact download build_id/macOS/x86_64/pak-sizes ."
+  #     - "be_cmd macos-diff-pak-sizes -- diff -u build_id/macOS/arm64/pak-sizes build_id/macOS/x86_64/pak-sizes"
+  #   depends_on:
+  #     - "build-chromium-mac-x86_64"
+  #     - "build-chromium-mac-arm64"
+  #   plugins:
+  #     - thedyrt/skip-checkout#v0.1.1:
+  #         cd: /home/ubuntu/chromium/src
+  #     - seek-oss/aws-sm#v2.3.1:
+  #         region: us-east-2
+  #         env:
+  #           BUILDEVENT_APIKEY: honeycomb-api-key
+  #           BUILDEVENT_BUILDKITE_API_TOKEN: buildkite-api-token-buildevents
+  #     - replayio/buildevents#76b6f57: ~
+  #   agents:
+  #     - "runtimeType=chromiumbuild"
+  #     - "os=linux"
+  #     - "queue=runtime"
+
+  # # - label: "📝 Live Tests"
+  # #   trigger: "testing-runtime-e2e"
+  # #   depends_on:
+  # #     - "build-chromium-linux-x86_64"
+  # #     - "build-chromium-mac-x86_64"
+  # #     - "build-chromium-mac-arm64"
+
+  # - label: "📝 E2E Tests (macos-arm64)"
+  #   trigger: "runtime-fe-end-to-end-tests"
+  #   depends_on:
+  #     - "build-chromium-mac-x86_64"
+  #     - "build-chromium-mac-arm64"
+  #   build:
+  #     env:
+  #       OS: "macos"
+  #       ARCH: "arm64"
+  #       RECORD_REPLAY_METADATA_SOURCE_COMMIT_TITLE: "${BUILDKITE_MESSAGE}"
+  #       RECORD_REPLAY_METADATA_SOURCE_COMMIT_ID: "${BUILDKITE_COMMIT}"
+  #       RECORD_REPLAY_METADATA_SOURCE_BRANCH: "${BUILDKITE_BRANCH}"
+  #       RECORD_REPLAY_METADATA_SOURCE_MERGE_ID: "${BUILDKITE_PULL_REQUEST}"
+  #       RUNTIME_REPO: "${BUILDKITE_PULL_REQUEST_REPO}"
+  #       CI: "1"
+
+  # TODO: re-enable buildevents watch once builds are stable
+  # - wait: ~
+  #   continue_on_failure: true
+  #
+  # - label: "🕵️‍♀️ Buildevents Watch"
+  #   key: "buildevents-watch"
+  #   plugins:
+  #     - thedyrt/skip-checkout#v0.1.1:
+  #         cd: /home/ubuntu/chromium/src
+  #     - seek-oss/aws-sm#v2.3.1:
+  #         region: us-east-2
+  #         env:
+  #           BUILDEVENT_APIKEY: honeycomb-api-key
+  #           BUILDEVENT_BUILDKITE_API_TOKEN: buildkite-api-token-buildevents
+  #     - replayio/buildevents#76b6f57: ~
+  #   command: "be_watch"
+  #   agents:
+  #     - "runtimeType=chromiumbuild"
+  #     - "os=linux"
+  #     - "queue=runtime"
