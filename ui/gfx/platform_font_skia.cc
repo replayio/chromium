@@ -34,6 +34,7 @@
 #endif
 
 namespace gfx {
+
 namespace {
 
 // The font family name which is used when a user's application font for
