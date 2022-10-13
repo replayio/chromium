@@ -139,6 +139,7 @@ struct SameSizeAsLayoutBox : public LayoutBoxModelObject {
   HeapVector<Member<const NGLayoutResult>, 1> layout_results;
   wtf_size_t first_fragment_item_index_;
   Member<void*> members[2];
+  int record_replay_id;
 };
 
 ASSERT_SIZE(LayoutBox, SameSizeAsLayoutBox);
@@ -465,6 +466,7 @@ void LayoutBoxRareData::Trace(Visitor* visitor) const {
 LayoutBox::LayoutBox(ContainerNode* node)
     : LayoutBoxModelObject(node),
       intrinsic_logical_widths_initial_block_size_(LayoutUnit::Min()) {
+  record_replay_id_ = recordreplay::NewIdMainThread("LayoutBox");
   SetIsBox();
   if (blink::IsA<HTMLLegendElement>(node))
     SetIsHTMLLegendElement();
@@ -957,6 +959,10 @@ void LayoutBox::UpdateFromStyle() {
 }
 
 void LayoutBox::LayoutSubtreeRoot() {
+  // https://linear.app/replay/issue/RUN-546
+  recordreplay::Assert("LayoutBox::LayoutSubtreeRoot Start %d",
+                       RecordReplayId());
+
   NOT_DESTROYED();
 
   // Our own style may have changed which would disqualify us as a layout root
@@ -2927,6 +2933,11 @@ const NGLayoutResult* LayoutBox::GetCachedLayoutResult(
     const NGBlockBreakToken* break_token) const {
   NOT_DESTROYED();
   wtf_size_t index = FragmentIndex(break_token);
+
+  recordreplay::Assert(
+      "[RUN-1239-1384] LayoutBox::GetCachedLayoutResult %lu %lu", index,
+      layout_results_.size());
+
   if (index >= layout_results_.size())
     return nullptr;
   const NGLayoutResult* result = layout_results_[index];
