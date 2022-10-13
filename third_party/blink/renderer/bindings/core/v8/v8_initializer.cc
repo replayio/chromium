@@ -43,6 +43,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/capture_source_location.h"
 #include "third_party/blink/renderer/bindings/core/v8/isolated_world_csp.h"
 #include "third_party/blink/renderer/bindings/core/v8/native_value_traits_impl.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
 #include "third_party/blink/renderer/bindings/core/v8/referrer_script_info.h"
 #include "third_party/blink/renderer/bindings/core/v8/rejected_promises.h"
 #include "third_party/blink/renderer/bindings/core/v8/sanitize_script_errors.h"
@@ -108,6 +109,9 @@
 #include "gin/public/v8_snapshot_file_type.h"
 #endif
 
+extern "C" void V8RecordReplaySetInstrumentedScriptBeforeFirstCheckpointCallback(
+    void (*callback)(v8::Isolate*, v8::Local<v8::Context>));
+
 namespace blink {
 
 #if BUILDFLAG(IS_WIN)
@@ -155,6 +159,8 @@ const size_t kWasmWireBytesLimit = 1 << 23;
 
 }  // namespace
 
+extern "C" int V8GetMessageRecordReplayBookmark(v8::Local<v8::Message> message);
+
 void V8Initializer::MessageHandlerInMainThread(v8::Local<v8::Message> message,
                                                v8::Local<v8::Value> data) {
   DCHECK(IsMainThread());
@@ -196,6 +202,11 @@ void V8Initializer::MessageHandlerInMainThread(v8::Local<v8::Message> message,
   ErrorEvent* event = ErrorEvent::Create(
       ToCoreStringWithNullCheck(isolate, message->Get()), std::move(location),
       ScriptValue(isolate, data), &script_state->World());
+
+  int bookmark = V8GetMessageRecordReplayBookmark(message);
+  if (bookmark) {
+    event->set_record_replay_bookmark(bookmark);
+  }
 
   String message_for_console = ExtractMessageForConsole(isolate, data);
   if (!message_for_console.empty())
