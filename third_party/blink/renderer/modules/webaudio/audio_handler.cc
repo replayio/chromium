@@ -6,6 +6,7 @@
 
 #include <inttypes.h>
 
+#include "base/record_replay.h"
 #include "base/trace_event/trace_event.h"
 #include "third_party/blink/public/platform/modules/webrtc/webrtc_logging.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_node_input.h"
@@ -29,6 +30,9 @@ AudioHandler::AudioHandler(NodeType node_type,
     : node_(&node),
       context_(node.context()),
       deferred_task_handler_(&context_->GetDeferredTaskHandler()) {
+  // Registered for set/map key determinism.
+  recordreplay::RegisterPointer("AudioHandler", this);
+
   SetNodeType(node_type);
   SetInternalChannelCountMode(V8ChannelCountMode::Enum::kMax);
   SetInternalChannelInterpretation(AudioBus::kSpeakers);
@@ -57,6 +61,8 @@ AudioHandler::AudioHandler(NodeType node_type,
 
 AudioHandler::~AudioHandler() {
   DCHECK(IsMainThread());
+  recordreplay::UnregisterPointer(this);
+
   InstanceCounters::DecrementCounter(InstanceCounters::kAudioHandlerCounter);
 #if DEBUG_AUDIONODE_REFERENCES
   --node_count_[static_cast<int>(GetNodeType())];
@@ -298,6 +304,8 @@ void AudioHandler::ProcessIfNecessary(uint32_t frames_to_process) {
   DCHECK(Context()->IsAudioThread());
 
   if (!IsInitialized()) {
+    REPLAY_ASSERT("AudioHandler::ProcessIfNecessary uninit %d %d",
+                  recordreplay::PointerId(this), (int)GetNodeType());
     return;
   }
 
@@ -311,6 +319,10 @@ void AudioHandler::ProcessIfNecessary(uint32_t frames_to_process) {
   // after that we don't want to re-process, instead our output(s) will already
   // have the results cached in their bus;
   double current_time = Context()->currentTime();
+  REPLAY_ASSERT("AudioHandler::ProcessIfNecessary once %d %d %zu",
+                recordreplay::PointerId(this),
+                last_processing_time_ != current_time,
+                Context()->CurrentSampleFrame());
   if (last_processing_time_ != current_time) {
     // important to first update this time because of feedback loops in the
     // rendering graph.
@@ -319,13 +331,22 @@ void AudioHandler::ProcessIfNecessary(uint32_t frames_to_process) {
     PullInputs(frames_to_process);
 
     bool silent_inputs = InputsAreSilent();
+    REPLAY_ASSERT("AudioHandler::ProcessIfNecessary silence %d %d %d %zu",
+                  recordreplay::PointerId(this), (int)GetNodeType(),
+                  silent_inputs, Context()->CurrentSampleFrame());
     if (silent_inputs && PropagatesSilence()) {
+      REPLAY_ASSERT("AudioHandler::ProcessIfNecessary silenceArm %d %d %zu",
+                    recordreplay::PointerId(this), (int)GetNodeType(),
+                    Context()->CurrentSampleFrame());
       SilenceOutputs();
       // AudioParams still need to be processed so that the value can be updated
       // if there are automations or so that the upstream nodes get pulled if
       // any are connected to the AudioParam.
       ProcessOnlyAudioParams(frames_to_process);
     } else {
+      REPLAY_ASSERT("AudioHandler::ProcessIfNecessary processArm %d %d %d %zu",
+                    recordreplay::PointerId(this), (int)GetNodeType(),
+                    silent_inputs, Context()->CurrentSampleFrame());
       // Unsilence the outputs first because the processing of the node may
       // cause the outputs to go silent and we want to propagate that hint to
       // the downstream nodes.  (For example, a Gain node with a gain of 0 will
@@ -374,8 +395,15 @@ void AudioHandler::PullInputs(uint32_t frames_to_process) {
   DCHECK(Context()->IsAudioThread());
 
   // Process all of the AudioNodes connected to our inputs.
+  REPLAY_ASSERT("AudioHandler::PullInputs %d %u",
+                recordreplay::PointerId(this), NumberOfInputs());
+  unsigned input_index = 0;
   for (auto& input : inputs_) {
+    REPLAY_ASSERT("AudioHandler::PullInputs input %d %u %u",
+                  recordreplay::PointerId(this), input_index,
+                  input->NumberOfRenderingConnections());
     input->Pull(nullptr, frames_to_process);
+    ++input_index;
   }
 }
 
