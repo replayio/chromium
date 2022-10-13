@@ -275,6 +275,10 @@ class WebContents : public PageNavigator,
     // Options specific to WebContents created for picture-in-picture windows.
     absl::optional<blink::mojom::PictureInPictureWindowOptions>
         picture_in_picture_options;
+
+    // Indicates that the content should be recorded by the Record Replay
+    // framework.
+    bool record_replay_for_recording = false;
   };
 
   // Token that causes input to be blocked on this WebContents for at least as
