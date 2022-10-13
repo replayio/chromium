@@ -28,6 +28,8 @@
 #include "mojo/public/cpp/bindings/lib/message_fragment.h"
 #include "mojo/public/cpp/bindings/lib/unserialized_message_context.h"
 
+#include "base/record_replay.h"
+
 namespace mojo {
 
 namespace {
@@ -464,6 +466,8 @@ void Message::NotifyBadMessage(std::string_view error) {
 }
 
 void Message::SerializeHandles(AssociatedGroupController* group_controller) {
+  recordreplay::Assert("[RUN-1569] Message::SerializeHandles Start");
+
   if (mutable_handles()->empty() &&
       mutable_associated_endpoint_handles()->empty()) {
     // No handles attached, so no extra serialization work.
@@ -474,6 +478,8 @@ void Message::SerializeHandles(AssociatedGroupController* group_controller) {
     // Attaching only non-associated handles is easier since we don't have to
     // modify the message header. Faster path for that.
     bool attached = payload_buffer_.AttachHandles(mutable_handles());
+
+    recordreplay::Assert("[RUN-1569] Message::SerializeHandles #2 %d", attached);
 
     // TODO(crbug.com/1239934): Relax this assertion or fail more gracefully.
     CHECK(attached);
@@ -541,11 +547,15 @@ bool Message::DeserializeAssociatedEndpointHandles(
   bool result = true;
   for (uint32_t i = 0; i < num_ids; ++i) {
     auto handle = group_controller->CreateLocalEndpointHandle(ids[i]);
-    if (IsValidInterfaceId(ids[i]) && !handle.is_valid()) {
+    if (IsValidInterfaceId(ids[i]) && !handle.is_valid()) { 
       // |ids[i]| itself is valid but handle creation failed. In that case, mark
       // deserialization as failed but continue to deserialize the rest of
       // handles.
       result = false;
+
+      // https://linear.app/replay/issue/RUN-1228
+      recordreplay::Assert("[RUN-1228] MessageWrapper::DeserializeAssociatedEndpointHandles %u id=%u",
+        i, ids[i]);
     }
 
     endpoint_handles.push_back(std::move(handle));

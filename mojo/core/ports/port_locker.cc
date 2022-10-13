@@ -7,6 +7,7 @@
 #include <algorithm>
 
 #include "base/dcheck_is_on.h"
+#include "base/record_replay.h"
 #include "mojo/core/ports/port.h"
 
 #if DCHECK_IS_ON()
@@ -26,6 +27,18 @@ ABSL_CONST_INIT thread_local const PortLocker* port_locker = nullptr;
 }  // namespace
 #endif
 
+static uintptr_t GetPortId(Port* port) {
+  // When recording/replaying the sorted order of ports need to be consistent,
+  // so we use the ID associated with the port via RegisterPointer for sorting.
+  if (recordreplay::IsRecordingOrReplaying("pointer-ids")) {
+    uintptr_t id = recordreplay::PointerId(port);
+    CHECK(id);
+    return id;
+  } else {
+    return (uintptr_t)port;
+  }
+}
+
 PortLocker::PortLocker(const PortRef** port_refs, size_t num_ports)
     :
 #if DCHECK_IS_ON()
@@ -33,10 +46,14 @@ PortLocker::PortLocker(const PortRef** port_refs, size_t num_ports)
 #endif
       port_refs_(port_refs),
       num_ports_(num_ports) {
+  // recordreplay::Assert("[RUN-1217]-1310 PortLocker::PortLocker %d", num_ports);
+
   // Sort the ports by address to lock them in a globally consistent order.
   std::sort(
       port_refs_, port_refs_ + num_ports_,
-      [](const PortRef* a, const PortRef* b) { return a->port() < b->port(); });
+      [](const PortRef* a, const PortRef* b) {
+        return GetPortId(a->port()) < GetPortId(b->port());
+      });
   for (size_t i = 0; i < num_ports_; ++i) {
     // TODO(crbug.com/725605): Remove this CHECK.
     CHECK(port_refs_[i]->port());
