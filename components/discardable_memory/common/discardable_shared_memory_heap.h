@@ -26,6 +26,8 @@
 #include "base/trace_event/process_memory_dump.h"
 #include "components/discardable_memory/common/discardable_memory_export.h"
 
+#include "base/record_replay.h"
+
 namespace base {
 class DiscardableSharedMemory;
 }
@@ -48,6 +50,8 @@ class DISCARDABLE_MEMORY_EXPORT DiscardableSharedMemoryHeap {
     Span& operator=(const Span&) = delete;
 
     ~Span() = default;
+
+    HAS_RECORD_REPLAY_ID();
 
     base::DiscardableSharedMemory* shared_memory() { return shared_memory_; }
     void set_is_locked(bool is_locked) { is_locked_ = is_locked; }
