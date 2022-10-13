@@ -36,6 +36,8 @@
 #include "base/allocator/partition_allocator/src/partition_alloc/page_allocator.h"
 #include "base/command_line.h"
 #include "base/ranges/algorithm.h"
+#include "base/record_replay.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/binder_map.h"
@@ -144,6 +146,11 @@ void InitializeCommon(Platform* platform, mojo::BinderMap* binders) {
   std::string js_command_line_flag =
       base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
           blink::switches::kJavaScriptFlags);
+  // Apply the driver's old space limit after any --js-flags so that it wins.
+  if (size_t max_old_space_mb = ::recordreplay::MaxOldSpaceMb()) {
+    js_command_line_flag +=
+        " --max-old-space-size=" + base::NumberToString(max_old_space_mb);
+  }
   blink::V8Initializer::InitializeIsolateHolder(
       blink::V8ContextSnapshot::GetReferenceTable(), js_command_line_flag);
 
