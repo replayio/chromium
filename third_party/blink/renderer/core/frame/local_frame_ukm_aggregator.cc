@@ -10,6 +10,7 @@
 #include "base/format_macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/rand_util.h"
+#include "base/record_replay.h"
 #include "base/time/default_tick_clock.h"
 #include "cc/metrics/begin_main_frame_metrics.h"
 #include "services/metrics/public/cpp/metrics_utils.h"
@@ -66,6 +67,8 @@ LocalFrameUkmAggregator::ScopedUkmHierarchicalTimer::
     ~ScopedUkmHierarchicalTimer() {
   if (aggregator_ && base::TimeTicks::IsHighResolution() &&
       !start_time_.is_null()) {
+    // https://linear.app/replay/issue/RUN-1044
+    recordreplay::Assert("[RUN-1044] ~ScopedUkmHierarchicalTimer #1");
     aggregator_->RecordTimerSample(metric_index_, start_time_,
                                    clock_->NowTicks());
   }

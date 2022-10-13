@@ -38,6 +38,9 @@
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
 #include "third_party/blink/renderer/platform/scheduler/public/scheduling_policy.h"
 
+#include "base/json/json_writer.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_events.h"
+
 namespace blink {
 
 namespace {
@@ -82,6 +85,17 @@ DOMTimer::DOMTimer(ExecutionContext* context,
       nesting_level_(context->Timers()->TimerNestingLevel()),
       action_(action) {
   DCHECK_GT(timeout_id, 0);
+
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "timerScheduled");
+    info.Set("duration", timeout.InMillisecondsF());
+    info.Set("singleShot", single_shot);
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    record_replay_dependency_graph_node_id_ =
+      recordreplay::NewDependencyGraphNode(json.c_str());
+  }
 
   // Step 10:
   if (timeout.is_negative())
@@ -175,6 +189,12 @@ void DOMTimer::Fired() {
   // Only the first execution of a multi-shot timer should get an affirmative
   // user gesture indicator.
 
+  int dependency_graph_fired_id = recordreplay::NewDependencyGraphNode("{\"kind\":\"timerFired\"}");
+  recordreplay::AddDependencyGraphEdge(record_replay_dependency_graph_node_id_,
+                                       dependency_graph_fired_id,
+                                       "{\"kind\":\"baseTimer\"}");
+  recordreplay::AutoDependencyExecution execute(dependency_graph_fired_id);
+
   DEVTOOLS_TIMELINE_TRACE_EVENT("TimerFire", inspector_timer_fire_event::Data,
                                 context, timeout_id_);
   const bool is_interval = !RepeatInterval().is_zero();
@@ -182,6 +202,8 @@ void DOMTimer::Fired() {
                             g_null_atom, true);
   probe::AsyncTask async_task(context, &async_task_context_,
                               is_interval ? "fired" : nullptr);
+
+  recordreplay::UserEventProbe replayEvent(is_interval ? "setInterval" : "setTimeout", g_null_atom);
 
   // Simple case for non-one-shot timers.
   if (IsActive()) {
