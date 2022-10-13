@@ -323,8 +323,9 @@ ScriptPromiseTyped<IDLAny> SubtleCrypto::digest(
   WebCryptoAlgorithm normalized_algorithm;
   if (!NormalizeAlgorithm(script_state->GetIsolate(), raw_algorithm,
                           kWebCryptoOperationDigest, normalized_algorithm,
-                          exception_state))
+                          exception_state)) {
     return ScriptPromiseTyped<IDLAny>();
+  }
 
   auto* resolver =
       MakeGarbageCollected<ScriptPromiseResolverTyped<IDLAny>>(script_state);
