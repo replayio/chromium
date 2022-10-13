@@ -50,6 +50,7 @@ class CORE_EXPORT CachedMatchedProperties final
   Vector<
       std::pair<UntracedMember<CSSPropertyValueSet>, MatchedProperties::Data>>
       matched_properties;
+  HeapVector<Member<CSSPropertyValueSet>> replay_matched_properties_strong_;
 
   struct Entry {
     DISALLOW_NEW();
@@ -84,7 +85,10 @@ class CORE_EXPORT CachedMatchedProperties final
 
   void Clear();
 
-  void Trace(Visitor* visitor) const { visitor->Trace(entries); }
+  void Trace(Visitor* visitor) const {
+    visitor->Trace(entries);
+    visitor->Trace(replay_matched_properties_strong_);
+  }
 
   bool CorrespondsTo(const MatchedPropertiesVector& lookup_properties) const;
   void RefreshKey(const MatchedPropertiesVector& lookup_properties);

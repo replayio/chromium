@@ -31,6 +31,11 @@ class CORE_EXPORT ComputeIntersectionsContext {
   }
 
   base::TimeTicks GetMonotonicTime();
+  // Whether GetMonotonicTime() has already computed the time for this pass.
+  // Recorded by IntersectionObservation::ComputeIntersection's assert, which
+  // must NOT call GetMonotonicTime(): that lazily reads the clock, and a clock
+  // read is a recorded event, so asking would move the event it is reporting on.
+  bool HasMonotonicTime() const { return !monotonic_time_.is_null(); }
   DOMHighResTimeStamp GetTimeStamp(const IntersectionObserver& observer);
   std::optional<IntersectionGeometry::RootGeometry>& GetRootGeometry(
       const IntersectionObserver& observer,
@@ -99,15 +104,26 @@ class CORE_EXPORT IntersectionObserverController
   void PostTaskToDeliverNotifications();
 
   // IntersectionObserver's with a connected explicit root in this document.
-  HeapHashSet<Member<IntersectionObserver>> tracked_explicit_root_observers_;
+  HeapHashSet<Member<IntersectionObserver>,
+              RecordReplayPointerIdHashTraits<Member<IntersectionObserver>>>
+      tracked_explicit_root_observers_;
   // IntersectionObservations with an implicit root and connected target in this
-  // document, grouped by IntersectionObservers.
+  // document, grouped by IntersectionObservers.  Both the map's key order and
+  // each set's iteration order have to be deterministic while recording, so the
+  // pointer-id traits go on both.
   HeapHashMap<Member<IntersectionObserver>,
-              HeapHashSet<Member<IntersectionObservation>>>
+              HeapHashSet<Member<IntersectionObservation>,
+                          RecordReplayPointerIdHashTraits<
+                              Member<IntersectionObservation>>>,
+              RecordReplayPointerIdHashTraits<Member<IntersectionObserver>>>
       tracked_implicit_root_observations_;
+
+  HeapHashSet<Member<IntersectionObserver>> replay_strong_tracked_explicit_root_observers_;
+  HeapHashSet<Member<IntersectionObservation>> replay_strong_tracked_implicit_root_observations_;
+
   // IntersectionObservers for which this is the execution context of the
   // callback, and with unsent notifications.
-  HeapHashSet<Member<IntersectionObserver>> pending_intersection_observers_;
+  HeapHashSet<Member<IntersectionObserver>, RecordReplayPointerIdHashTraits<Member<IntersectionObserver>>> pending_intersection_observers_;
   // This is 'true' if any tracked node is the target of an observer for
   // which observer->trackVisibility() is true.
   bool needs_occlusion_tracking_;

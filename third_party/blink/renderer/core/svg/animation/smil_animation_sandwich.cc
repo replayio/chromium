@@ -46,7 +46,10 @@ struct PriorityCompare {
 
 }  // namespace
 
-SMILAnimationSandwich::SMILAnimationSandwich() = default;
+SMILAnimationSandwich::SMILAnimationSandwich() {
+  // Pointer registration is needed for sorting in ElementSMILAnimations::Apply.
+  recordreplay::RegisterPointer("SMILAnimationSandwich", this);
+}
 
 void SMILAnimationSandwich::Add(SVGAnimationElement* animation) {
   DCHECK(!sandwich_.Contains(animation));
