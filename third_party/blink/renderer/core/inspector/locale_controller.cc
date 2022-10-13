@@ -45,6 +45,10 @@ String LocaleController::SetLocaleOverride(const String& locale,
                                            bool is_claiming_override) {
   base::AutoLock locker(lock_);
 
+  recordreplay::Assert(
+      "[RUN-1537-1681] LocaleController::SetLocaleOverride A %s %s",
+      locale_override_.Utf8().c_str(), locale.Utf8().c_str());
+
   // Only allow resetting overrides set by the same agent.
   if (is_claiming_override && !locale_override_.empty()) {
     return "Another locale override is already in effect";
@@ -57,6 +61,12 @@ String LocaleController::SetLocaleOverride(const String& locale,
   } else {
     std::optional<base::i18n::LanguageTag> language_tag =
         base::i18n::GetLanguageTagFromString(locale.Ascii());
+    const std::string record_replay_lang =
+        language_tag ? std::string(language_tag->language_subtag())
+                     : std::string();
+    recordreplay::Assert(
+        "[RUN-1537-1681] LocaleController::SetLocaleOverride B %s",
+        record_replay_lang.c_str());
     if (!language_tag) {
       return "Invalid locale name";
     }
