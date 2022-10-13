@@ -4,6 +4,8 @@
 
 #include "third_party/blink/renderer/core/css/style_image_cache.h"
 
+#include "base/record_replay.h"
+
 #include "third_party/blink/renderer/core/loader/resource/image_resource_content.h"
 #include "third_party/blink/renderer/platform/loader/fetch/fetch_parameters.h"
 #include "third_party/blink/renderer/platform/loader/fetch/memory_cache.h"
@@ -33,12 +35,17 @@ ImageResourceContent* StyleImageCache::CacheImageContent(
           .stored_value->value;
   if (!image_content || !CanReuseImageContent(*image_content)) {
     image_content = ImageResourceContent::Fetch(params, fetcher);
+
+    if (recordreplay::EnterLeakMemory("StyleImageCache")) {
+      fetched_image_map_strong_.insert(image_content);
+    }
   }
   return image_content.Get();
 }
 
 void StyleImageCache::Trace(Visitor* visitor) const {
   visitor->Trace(fetched_image_map_);
+  visitor->Trace(fetched_image_map_strong_);
 }
 
 }  // namespace blink
