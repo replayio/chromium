@@ -15,6 +15,7 @@
 #include "base/mac/mach_logging.h"
 #include "base/mac/scoped_nsautorelease_pool.h"
 #include "base/posix/eintr_wrapper.h"
+#include "base/record_replay.h"
 #include "base/time/time_override.h"
 
 namespace base {
@@ -198,12 +199,14 @@ void MessagePumpKqueue::RunSimplified(Delegate* delegate) {
     mac::ScopedNSAutoreleasePool pool;
 
     Delegate::NextWorkInfo next_work_info = delegate->DoWork();
+
     if (!keep_running_)
       break;
 
     if (!next_work_info.is_immediate()) {
       delegate->DoIdleWork();
     }
+
     if (!keep_running_)
       break;
 

@@ -1636,6 +1636,8 @@ struct CallbackCancellationTraits {
   static constexpr bool is_cancellable = false;
 };
 
+extern uintptr_t CallbackRecordReplayValue(const char* why, uintptr_t value);
+
 // Specialization for method bound to weak pointer receiver.
 template <typename Functor, typename... BoundArgs>
 struct CallbackCancellationTraits<
@@ -1650,7 +1652,10 @@ struct CallbackCancellationTraits<
   static bool IsCancelled(const Functor&,
                           const Receiver& receiver,
                           const Args&...) {
-    return !receiver;
+    // Weak pointers can be cleared non-deterministically when recording/replaying,
+    // so record/replay whether they are present so that callers checking the status
+    // like TaskQueueImpl behave consistently.
+    return CallbackRecordReplayValue("WeakMethodIsCancelled", !receiver);
   }
 
   template <typename Receiver, typename... Args>

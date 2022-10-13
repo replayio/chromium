@@ -12,6 +12,7 @@
 #include "base/callback_helpers.h"
 #include "base/check_op.h"
 #include "base/memory/ptr_util.h"
+#include "base/record_replay.h"
 #include "base/notreached.h"
 #include "base/task/common/checked_lock.h"
 #include "base/task/task_features.h"
@@ -64,6 +65,10 @@ JobTaskSource::State::Value JobTaskSource::State::Load() const {
   return {value_.load(std::memory_order_relaxed)};
 }
 
+JobTaskSource::State::Value JobTaskSource::State::RecordReplayLoadUnordered() const {
+  return {value_.load_unordered(std::memory_order_relaxed)};
+}
+
 JobTaskSource::JoinFlag::JoinFlag() = default;
 JobTaskSource::JoinFlag::~JoinFlag() = default;
 
@@ -93,6 +98,7 @@ JobTaskSource::JobTaskSource(const Location& from_here,
                              MaxConcurrencyCallback max_concurrency_callback,
                              PooledTaskRunnerDelegate* delegate)
     : TaskSource(traits, nullptr, TaskSourceExecutionMode::kJob),
+      worker_lock_(recordreplay::AreEventsDisallowed() ? nullptr : "JobTaskSource.worker_lock_"),
       from_here_(from_here),
       max_concurrency_callback_(std::move(max_concurrency_callback)),
       worker_task_(std::move(worker_task)),
@@ -224,6 +230,7 @@ TaskSource::RunStatus JobTaskSource::WillRunTask() {
 
   const size_t max_concurrency =
       GetMaxConcurrency(state_before_add.worker_count());
+
   if (state_before_add.worker_count() < max_concurrency)
     state_before_add = state_.IncrementWorkerCount();
   const size_t worker_count_before_add = state_before_add.worker_count();
@@ -240,7 +247,7 @@ TaskSource::RunStatus JobTaskSource::WillRunTask() {
 size_t JobTaskSource::GetRemainingConcurrency() const {
   // It is safe to read |state_| without a lock since this variable is atomic,
   // and no other state is synchronized with GetRemainingConcurrency().
-  const auto state = TS_UNCHECKED_READ(state_).Load();
+  const auto state = TS_UNCHECKED_READ(state_).RecordReplayLoadUnordered();
   if (state.is_canceled())
     return 0;
   const size_t max_concurrency = GetMaxConcurrency(state.worker_count());
@@ -347,8 +354,9 @@ bool JobTaskSource::DidProcessTask(TaskSource::Transaction* /*transaction*/) {
     worker_released_condition_->Signal();
 
   // A canceled task source should never get re-enqueued.
-  if (state_before_sub.is_canceled())
+  if (state_before_sub.is_canceled()) {
     return false;
+  }
 
   DCHECK_GT(state_before_sub.worker_count(), 0U);
 

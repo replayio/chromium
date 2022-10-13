@@ -5,6 +5,7 @@
 #include "base/task/sequence_manager/work_queue_sets.h"
 
 #include "base/check_op.h"
+#include "base/record_replay.h"
 #include "base/task/sequence_manager/task_order.h"
 #include "base/task/sequence_manager/work_queue.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
