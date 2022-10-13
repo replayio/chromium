@@ -577,6 +577,10 @@ FetchHeaderList* Response::InternalHeaderList() const {
   return response_->InternalHeaderList();
 }
 
+std::string Response::GetUrl() const {
+  return url().Utf8();
+}
+
 void Response::Trace(Visitor* visitor) const {
   ScriptWrappable::Trace(visitor);
   Body::Trace(visitor);
