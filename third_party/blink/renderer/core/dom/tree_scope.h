@@ -199,6 +199,8 @@ class CORE_EXPORT TreeScope : public GarbageCollectedMixin {
                          const CreateElementFlags,
                          const AtomicString& is);
 
+  int RecordReplayId() const;
+
  protected:
   explicit TreeScope(ContainerNode&,
                      Document&,
