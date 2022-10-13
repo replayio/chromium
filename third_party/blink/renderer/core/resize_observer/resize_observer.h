@@ -105,6 +105,8 @@ class CORE_EXPORT ResizeObserver final
   // True if observations were skipped gatherObservations
   bool skipped_observations_;
 
+  int record_replay_created_node_id_ = 0;
+
   WeakMember<ResizeObserverController> controller_;
 };
 

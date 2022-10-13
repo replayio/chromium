@@ -173,7 +173,7 @@ class CORE_EXPORT OffscreenCanvas final
   bool IsOpaque() const final;
 
   DispatchEventResult HostDispatchEvent(Event* event) override {
-    return DispatchEvent(*event);
+    return DispatchEvent(*event, "OffscreenCanvas::HostDispatchEvent");
   }
 
   TextDirection GetTextDirection(const ComputedStyle*) override;

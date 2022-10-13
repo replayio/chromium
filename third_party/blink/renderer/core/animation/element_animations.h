@@ -46,8 +46,10 @@ namespace blink {
 
 class CSSAnimations;
 
-using AnimationCountedSet = HeapHashCountedSet<WeakMember<Animation>>;
-using WorkletAnimationSet = HeapHashSet<WeakMember<WorkletAnimationBase>>;
+using AnimationCountedSet =
+    HeapHashCountedSet<WeakMember<Animation>>;
+using WorkletAnimationSet =
+    HeapHashSet<WeakMember<WorkletAnimationBase>>;
 
 class CORE_EXPORT ElementAnimations final
     : public GarbageCollected<ElementAnimations>,
