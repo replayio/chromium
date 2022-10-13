@@ -68,7 +68,14 @@ size_t MessageEvent::SizeOfExternalMemoryInBytes() {
   }
 }
 
-MessageEvent::MessageEvent() : data_type_(kDataTypeScriptValue) {}
+void MessageEvent::RecordReplayInitDependencyGraphNodeId() {
+  record_replay_dependency_graph_node_id_ =
+    recordreplay::NewDependencyGraphNode("{\"kind\":\"newMessageEvent\"}");
+}
+
+MessageEvent::MessageEvent() : data_type_(kDataTypeScriptValue) {
+  RecordReplayInitDependencyGraphNodeId();
+}
 
 MessageEvent::MessageEvent(const AtomicString& type,
                            const MessageEventInit* initializer)
@@ -100,6 +107,7 @@ MessageEvent::MessageEvent(const AtomicString& type,
   if (initializer->hasUserActivation())
     user_activation_ = initializer->userActivation();
   DCHECK(IsValidSource(source_.Get()));
+  RecordReplayInitDependencyGraphNodeId();
 }
 
 MessageEvent::MessageEvent(const String& origin,
@@ -113,6 +121,7 @@ MessageEvent::MessageEvent(const String& origin,
       source_(source),
       ports_(ports) {
   DCHECK(IsValidSource(source_.Get()));
+  RecordReplayInitDependencyGraphNodeId();
 }
 
 MessageEvent::MessageEvent(scoped_refptr<SerializedScriptValue> data,
@@ -130,9 +139,15 @@ MessageEvent::MessageEvent(scoped_refptr<SerializedScriptValue> data,
       source_(source),
       ports_(ports),
       user_activation_(user_activation) {
+  recordreplay::Assert(
+    "[RUN-2037-2901] MessageEvent::MessageEvent A %d %d %s",
+    source ? source->RecordReplayId() : -1,
+    data ? (int)data->DataLengthInBytes() : -1,
+    last_event_id.Utf8().c_str());
   DCHECK(IsValidSource(source_.Get()));
   serialized_data_memory_accounter_.Increase(v8::Isolate::GetCurrent(),
                                              SizeOfExternalMemoryInBytes());
+  RecordReplayInitDependencyGraphNodeId();
 }
 
 MessageEvent::MessageEvent(
@@ -153,9 +168,15 @@ MessageEvent::MessageEvent(
       channels_(std::move(channels)),
       user_activation_(user_activation),
       delegated_capability_(delegated_capability) {
+  recordreplay::Assert(
+    "[RUN-2037-2901] MessageEvent::MessageEvent B %d %d %s",
+    source ? source->RecordReplayId() : -1,
+    data ? (int)data->DataLengthInBytes() : -1,
+    last_event_id.Utf8().c_str());
   DCHECK(IsValidSource(source_.Get()));
   serialized_data_memory_accounter_.Increase(v8::Isolate::GetCurrent(),
                                              SizeOfExternalMemoryInBytes());
+  RecordReplayInitDependencyGraphNodeId();
 }
 
 MessageEvent::MessageEvent(const String& origin, EventTarget* source)
@@ -164,6 +185,7 @@ MessageEvent::MessageEvent(const String& origin, EventTarget* source)
       origin_(origin),
       source_(source) {
   DCHECK(IsValidSource(source_.Get()));
+  RecordReplayInitDependencyGraphNodeId();
 }
 
 MessageEvent::MessageEvent(const String& data, const String& origin)
@@ -173,6 +195,7 @@ MessageEvent::MessageEvent(const String& data, const String& origin)
       origin_(origin) {
   serialized_data_memory_accounter_.Increase(v8::Isolate::GetCurrent(),
                                              SizeOfExternalMemoryInBytes());
+  RecordReplayInitDependencyGraphNodeId();
 }
 
 MessageEvent::MessageEvent(Blob* data, const String& origin)
@@ -182,6 +205,7 @@ MessageEvent::MessageEvent(Blob* data, const String& origin)
       origin_(origin) {
   serialized_data_memory_accounter_.Increase(v8::Isolate::GetCurrent(),
                                              SizeOfExternalMemoryInBytes());
+  RecordReplayInitDependencyGraphNodeId();
 }
 
 MessageEvent::MessageEvent(DOMArrayBuffer* data, const String& origin)
@@ -191,6 +215,7 @@ MessageEvent::MessageEvent(DOMArrayBuffer* data, const String& origin)
       origin_(origin) {
   serialized_data_memory_accounter_.Increase(v8::Isolate::GetCurrent(),
                                              SizeOfExternalMemoryInBytes());
+  RecordReplayInitDependencyGraphNodeId();
 }
 
 MessageEvent::~MessageEvent() {
@@ -205,6 +230,7 @@ MessageEvent* MessageEvent::Create(const AtomicString& type,
         "The optional 'source' property is neither a Window nor MessagePort.");
     return nullptr;
   }
+
   return MakeGarbageCollected<MessageEvent>(type, initializer);
 }
 
@@ -246,6 +272,14 @@ void MessageEvent::initMessageEvent(
     MessagePortArray* ports,
     UserActivation* user_activation,
     mojom::blink::DelegatedCapability delegated_capability) {
+
+  recordreplay::Assert("[RUN-2037-2901] MessageEvent::initMessageEvent %d %d %d %s %s",
+    source ? source->RecordReplayId() : -1,
+    (int)eventPhase(),
+    data ? (int)data->DataLengthInBytes() : -1,
+    last_event_id.Utf8().c_str(),
+    type.Utf8().c_str());
+
   if (IsBeingDispatched())
     return;
 
@@ -293,7 +327,6 @@ void MessageEvent::initMessageEvent(const AtomicString& type,
 
 ScriptValue MessageEvent::data(ScriptState* script_state) {
   is_data_dirty_ = false;
-
   v8::Isolate* isolate = script_state->GetIsolate();
   v8::Local<v8::Value> value;
   switch (data_type_) {
@@ -309,7 +342,11 @@ ScriptValue MessageEvent::data(ScriptState* script_state) {
       break;
 
     case MessageEvent::kDataTypeSerializedScriptValue:
+
       if (data_as_serialized_script_value_) {
+        recordreplay::Assert("[RUN-2037-2976] MessageEvent::data %d %zu",
+          RecordReplayId(),
+          data_as_serialized_script_value_->Value()->DataLengthInBytes());
         // The data is put on the V8 GC heap here, and therefore the V8 GC does
         // the accounting from here on. We unregister the registered memory to
         // avoid double accounting.
