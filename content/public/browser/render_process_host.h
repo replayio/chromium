@@ -782,6 +782,11 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Listener,
   virtual void WriteIntoTrace(
       perfetto::TracedProto<TraceProto> proto) const = 0;
 
+  // Send a record-replay event to the render process.
+  virtual void SendRecordReplayBrowserEvent(
+    const std::string& name,
+    base::Value&& value) = 0;
+
 #if BUILDFLAG(CLANG_PROFILING_INSIDE_SANDBOX)
   // Ask the renderer process to dump its profiling data to disk. Invokes
   // |callback| once this has completed.

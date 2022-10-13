@@ -26,6 +26,7 @@
 #include "base/memory/safe_ref.h"
 #include "base/observer_list.h"
 #include "base/process/kill.h"
+#include "base/record_replay.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
 #include "base/types/pass_key.h"
@@ -2789,6 +2790,8 @@ class CONTENT_EXPORT WebContentsImpl
   const UniqueToken web_contents_token_;
   const base::trace_event::TrackRegistration<perfetto::NamedTrack>
       tracing_track_;
+
+  bool record_replay_for_recording_ = false;
 
   base::WeakPtrFactory<WebContentsImpl> loading_weak_factory_{this};
   base::WeakPtrFactory<WebContentsImpl> weak_factory_{this};
