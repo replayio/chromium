@@ -270,6 +270,13 @@ void RendererResourceCoordinatorImpl::DispatchOnV8ContextCreated(
             WTF::CrossThreadUnretained(this), std::move(v8_desc),
             std::move(iframe_attribution_data)));
   } else {
+    if (recordreplay::IsInReplayCode() &&
+        recordreplay::FeatureEnabled(
+            "replay-code",
+            "RendererResourceCoordinatorImpl::DispatchOnV8ContextCreated")) {
+      // RUN-2621: Don't try to track this context when in Replay-only code.
+      return;
+    }
     service_->OnV8ContextCreated(std::move(v8_desc),
                                  std::move(iframe_attribution_data));
   }
@@ -292,6 +299,11 @@ void RendererResourceCoordinatorImpl::DispatchOnV8ContextDetached(
 void RendererResourceCoordinatorImpl::DispatchOnV8ContextDestroyed(
     const blink::V8ContextToken& token) {
   DCHECK(service_);
+
+  // Avoid sending IPC messages at non-deterministic points.
+  if (recordreplay::AreEventsDisallowed("RendererResourceCoordinatorImpl::DispatchOnV8ContextDestroyed"))
+    return;
+
   // See DispatchOnV8ContextCreated for why this is both needed and safe.
   if (!service_task_runner_->RunsTasksInCurrentSequence()) {
     blink::PostCrossThreadTask(

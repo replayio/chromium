@@ -4,6 +4,7 @@
 
 #include "third_party/blink/public/common/loader/throttling_url_loader.h"
 
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -27,6 +28,8 @@
 #include "services/network/public/mojom/early_hints.mojom.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
 #include "third_party/blink/public/mojom/origin_trials/origin_trial_feature.mojom-shared.h"
+
+#include "base/json/json_writer.h"
 
 namespace blink {
 
@@ -293,6 +296,8 @@ std::unique_ptr<ThrottlingURLLoader> ThrottlingURLLoader::CreateLoaderAndStart(
 }
 
 ThrottlingURLLoader::~ThrottlingURLLoader() {
+  recordreplay::UnregisterPointer(this);
+
   TRACE_EVENT_WITH_FLOW0("loading", "ThrottlingURLLoader::~ThrottlingURLLoader",
                          TRACE_ID_LOCAL(this), TRACE_EVENT_FLAG_FLOW_IN);
   if (inside_delegate_calls_ > 0) {
@@ -406,6 +411,7 @@ ThrottlingURLLoader::ThrottlingURLLoader(
     : forwarding_client_(client),
       client_receiver_delegate_(std::move(client_receiver_delegate)),
       traffic_annotation_(traffic_annotation) {
+  recordreplay::RegisterPointer("ThrottlingURLLoader", this);
   TRACE_EVENT_WITH_FLOW0("loading", "ThrottlingURLLoader::ThrottlingURLLoader",
                          TRACE_ID_LOCAL(this), TRACE_EVENT_FLAG_FLOW_OUT);
   throttles_.reserve(throttles.size());
@@ -490,6 +496,11 @@ void ThrottlingURLLoader::Start(
           static_cast<int>(
               mojom::OriginTrialFeature::kDeviceBoundSessionCredentials))) {
     url_request->allows_device_bound_session_registration = true;
+  }
+
+  if (recordreplay::IsInReplayCode()) {
+    // [TT-1422] Special treatment for Replay-only requests.
+    options |= network::mojom::kURLLoadOptionReplayRequest;
   }
 
   start_info_ = std::make_unique<StartInfo>(factory, request_id, options,
@@ -725,6 +736,19 @@ void ThrottlingURLLoader::OnReceiveRedirect(
   DCHECK(deferring_throttles_.empty());
   if (start_info_ && start_info_->url_request.keepalive) {
     base::UmaHistogramBoolean("FetchKeepAlive.Renderer.Total.Redirected", true);
+  }
+
+  // Keep track of network requests triggered by the download message we are
+  // handling from the browser process.
+  std::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "receivedRedirect");
+    info.Set("original_url", original_url_.spec());
+    info.Set("new_url", redirect_info.new_url.spec());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
   }
 
   if (!throttles_.empty()) {
