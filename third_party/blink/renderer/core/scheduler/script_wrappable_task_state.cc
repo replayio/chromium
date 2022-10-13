@@ -5,6 +5,8 @@
 #include "third_party/blink/renderer/core/scheduler/script_wrappable_task_state.h"
 
 #include "base/feature_list.h"
+#include "base/record_replay.h"
+
 #include "third_party/blink/renderer/bindings/core/v8/native_value_traits_impl.h"
 #include "third_party/blink/renderer/bindings/core/v8/to_v8_traits.h"
 #include "third_party/blink/renderer/core/scheduler/script_wrappable_task_state.h"
@@ -78,6 +80,9 @@ ScriptWrappableTaskStateBase* ScriptWrappableTaskState::GetCurrent(
 void ScriptWrappableTaskState::SetCurrent(
     ScriptState* script_state,
     ScriptWrappableTaskStateBase* task_state) {
+  // https://linear.app/replay/issue/RUN-885
+  recordreplay::Assert("ScriptWrappableTaskState::SetCurrent");
+
   DCHECK(script_state);
   v8::Isolate* isolate = script_state->GetIsolate();
   DCHECK(isolate);
@@ -97,6 +102,9 @@ void ScriptWrappableTaskState::SetCurrent(
     isolate->SetContinuationPreservedEmbedderDataV2(v8::Undefined(isolate));
   } else if (base::FeatureList::IsEnabled(
                  kTaskAttributionUsesV8CppHeapExternal)) {
+    // https://linear.app/replay/issue/RUN-885
+    recordreplay::Assert("ScriptWrappableTaskState::SetCurrent #1");
+
     v8::HandleScope handle_scope(isolate);
     isolate->SetContinuationPreservedEmbedderDataV2(
         v8::CppHeapExternal::New<WrappableTaskState>(

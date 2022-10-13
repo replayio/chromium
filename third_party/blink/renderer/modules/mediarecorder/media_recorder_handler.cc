@@ -16,6 +16,7 @@
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/record_replay.h"
 #include "base/system/sys_info.h"
 #include "base/task/bind_post_task.h"
 #include "base/task/sequenced_task_runner.h"
@@ -359,8 +360,20 @@ bool MediaRecorderHandler::CanSupportMimeType(const String& type,
         video ? std::end(kVideoCodecsForMP4) : std::end(kAudioCodecsForMp4);
   }
 
+  // While recording/replaying no video encoder is available: |video| types
+  // only support audio codecs, and need them listed because their default
+  // codecs include a video one.
+  const bool no_video_codecs =
+      video && recordreplay::IsRecordingOrReplaying("no-video");
+  if (no_video_codecs) {
+    relevant_codecs_begin = std::begin(kAudioCodecs);
+    relevant_codecs_end = std::end(kAudioCodecs);
+  }
   std::vector<std::string> codecs_list;
   media::SplitCodecs(web_codecs.Utf8(), &codecs_list);
+
+  if (no_video_codecs && codecs_list.empty())
+    return false;
 
   for (const auto& codec : codecs_list) {
     // For `video/x-matroska`, `video/webm`, and `audio/webm`, trim the content
