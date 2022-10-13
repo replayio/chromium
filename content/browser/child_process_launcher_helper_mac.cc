@@ -229,7 +229,7 @@ void ChildProcessLauncherHelper::ForceNormalProcessTerminationSync(
   CHECK(CurrentlyOnProcessLauncherTaskRunner(), base::NotFatalUntil::M159);
   // Client has gone away, so just kill the process.  Using exit code 0 means
   // that UMA won't treat this as a crash.
-  process.process.Terminate(RESULT_CODE_NORMAL_EXIT, false);
+  //process.process.Terminate(RESULT_CODE_NORMAL_EXIT, false);
   base::EnsureProcessTerminated(std::move(process.process));
 }
 
