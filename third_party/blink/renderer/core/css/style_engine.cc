@@ -1240,8 +1240,12 @@ CSSStyleSheet* StyleEngine::CreateSheet(
   CSSStyleSheet* style_sheet = nullptr;
   CSSParserContext* inline_context = CSSStyleSheet::InlineParserContext(
       GetDocument(), NullUrl(), GetDocument().Encoding());
-  if (StyleSheetContents* cached =
-          FindStyleSheetContents(text, inline_context)) {
+  StyleSheetContents* cached = FindStyleSheetContents(text, inline_context);
+  // Divergence is between the cached-contents path and a fresh parse
+  // within this method. Assert the value that introduces the codepath
+  // divergence.
+  recordreplay::Assert("[RUN-1065-1390] StyleEngine::CreateSheet %d", !!cached);
+  if (cached) {
     cached->SetRenderBlocking(render_blocking_behavior);
     style_sheet = CSSStyleSheet::CreateInline(cached, element, start_position);
   } else {
@@ -1260,6 +1264,9 @@ CSSStyleSheet* StyleEngine::CreateSheet(
   }
 
   DCHECK(style_sheet);
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "StyleEngine")) {
+    style_sheet_contents_strong_.insert(style_sheet->Contents());
+  }
   if (!element.IsInShadowTree()) {
     String title = element.title();
     if (!title.empty()) {
@@ -2303,7 +2310,15 @@ void StyleEngine::ApplyRuleSetInvalidationForElement(
   unsigned rule_set_group_index = 0;
   RuleSetGroup rule_set_group(rule_set_group_index++);
   bool matched_any = false;
-  for (const Member<RuleSet>& rule_set : rule_sets) {
+
+  HeapVector<Member<RuleSet>> rule_sets_vector;
+  for (const auto& rule_set : rule_sets) {
+    rule_sets_vector.push_back(rule_set);
+  }
+  std::sort(rule_sets_vector.begin(), rule_sets_vector.end(),
+            recordreplay::CompareMemberByPointerId<Member<RuleSet>>());
+
+  for (const Member<RuleSet>& rule_set : rule_sets_vector) {
     rule_set_group.AddRuleSet(rule_set.Get());
     if (rule_set_group.IsFull()) {
       MatchRequest match_request(rule_set_group, &tree_scope.RootNode(),
@@ -4290,6 +4305,10 @@ void StyleEngine::UpdateStyleAndLayoutTree() {
 
   UpdateViewportStyle();
 
+  recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle A %d %d",
+                       !!GetDocument().documentElement(),
+                       NeedsStyleRecalc());
+
   if (GetDocument().documentElement()) {
     UpdateViewportSize();
     NthIndexCache nth_index_cache(GetDocument());
@@ -4298,6 +4317,7 @@ void StyleEngine::UpdateStyleAndLayoutTree() {
       SCOPED_BLINK_UMA_HISTOGRAM_TIMER_HIGHRES("Style.RecalcTime");
       Element* viewport_defining = GetDocument().ViewportDefiningElement();
       RecalcStyle();
+      recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle B");
       if (viewport_defining != GetDocument().ViewportDefiningElement()) {
         ViewportDefiningElementDidChange();
       }
@@ -4950,6 +4970,7 @@ void StyleEngine::Trace(Visitor* visitor) const {
   visitor->Trace(user_rule_set_groups_);
   visitor->Trace(functional_media_query_results_);
   visitor->Trace(functional_navigation_query_results_);
+  visitor->Trace(style_sheet_contents_strong_);
   visitor->Trace(random_base_value_cache_);
   visitor->Trace(element_keeps_random_caching_key_alive_);
   visitor->Trace(navigation_locations_);
