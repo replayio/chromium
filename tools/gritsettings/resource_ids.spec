@@ -601,6 +601,10 @@
     "META": {"sizes": {"includes": [20]}},
     "includes": [4660],
   },
+  "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/record_replay/resources.grd": {
+    "META": {"sizes": {"includes": [200]}},
+    "includes": [1915],
+  },
    "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/reload_button/resources.grd": {
     "META": {"sizes": {"includes": [10]}},
     "includes": [4670],

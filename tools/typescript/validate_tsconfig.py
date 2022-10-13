@@ -167,6 +167,7 @@ def validateJavaScriptAllowed(source_dir, out_dir, platform):
       # TODO(crbug.com/385341235): Migrate inspect to TypeScript.
       'chrome/browser/resources/inspect',
       'chrome/browser/resources/net_internals',
+      'chrome/browser/resources/record_replay',
       'chrome/test/data/webui',
       # TODO(crbug.com/40848285): Migrate bluetooth-internals to TypeScript and
       # remove exception.
