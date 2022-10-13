@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/modules/webaudio/realtime_audio_destination_handler.h"
 
 #include "base/feature_list.h"
+#include "base/record_replay.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/platform/web_audio_latency_hint.h"
 #include "third_party/blink/public/web/web_local_frame.h"
@@ -184,6 +185,8 @@ void RealtimeAudioDestinationHandler::Render(
   }
 
   context->GetDeferredTaskHandler().SetAudioThreadToCurrentThread();
+  DeferredTaskHandler::RecordReplayRenderTimelinesLocker replay_timelines(
+      context->GetDeferredTaskHandler());
 
   // If this node is not initialized yet, pass silence to the platform audio
   // destination. It is for the case where this node is in the middle of
@@ -198,12 +201,21 @@ void RealtimeAudioDestinationHandler::Render(
   // Only pull on the audio graph if we have not stopped the destination.  It
   // takes time for the destination to stop, but we want to stop pulling before
   // the destination has actually stopped.
-  if (IsPullingAudioGraphAllowed()) {
+  // The main thread allows or stops pulling while the audio thread renders, so
+  // which render quantum sees the change is recorded.
+  bool allow_pulling_audio_graph = recordreplay::RecordReplayValue(
+      "RealtimeAudioDestinationHandler::Render allow_pulling_audio_graph",
+      IsPullingAudioGraphAllowed());
+  if (allow_pulling_audio_graph) {
     // Renders the graph by pulling all the inputs to this node. This will in
     // turn pull on their inputs, all the way backwards through the graph.
     scoped_refptr<AudioBus> rendered_bus =
         Input(0).Pull(destination_bus, number_of_frames);
 
+    REPLAY_ASSERT(
+        "RealtimeAudioDestinationHandler::Render afterPull %d %d %d %u",
+        !!rendered_bus.get(), rendered_bus.get() == destination_bus,
+        destination_bus->IsSilent(), destination_bus->NumberOfChannels());
     DCHECK(rendered_bus);
     if (!rendered_bus) {
       // AudioNodeInput might be in the middle of destruction. Then the internal

@@ -9,6 +9,7 @@
 #include <atomic>
 
 #include "base/memory/scoped_refptr.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/typed_arrays/array_buffer_view_helpers.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_typed_array.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_param_timeline.h"
@@ -172,7 +173,12 @@ class AudioParamHandler final : public ThreadSafeRefCounted<AudioParamHandler>,
   void CalculateSampleAccurateValues(float* values, unsigned number_of_values);
 
   float IntrinsicValue() const {
-    return intrinsic_value_.load(std::memory_order_relaxed);
+    float value = intrinsic_value_.load(std::memory_order_relaxed);
+    // The main thread sets the value while the render thread computes it from
+    // the timeline, so reads are recorded.
+    recordreplay::RecordReplayBytes("AudioParamHandler::IntrinsicValue",
+                                    &value, sizeof(value));
+    return value;
   }
 
  private:
