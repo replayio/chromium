@@ -12,6 +12,7 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/rand_util.h"
+#include "base/record_replay.h"
 #include "base/strings/strcat.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
@@ -23,6 +24,7 @@
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/web_feature.h"
 #include "third_party/blink/renderer/core/probe/core_probes.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/heap/persistent.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
@@ -75,10 +77,16 @@ void CookieJar::Trace(Visitor* visitor) const {
   visitor->Trace(document_);
 }
 
-bool CookieJar::SetCookie(const String& value) {
+bool CookieJar::SetCookie(const String& value,
+                          ExceptionState& exception_state) {
   TRACE_EVENT("blink", "CookieJar::SetCookie");
   KURL cookie_url = document_->CookieURL();
   if (cookie_url.IsEmpty()) {
+    return false;
+  }
+
+  if (RecordReplayThrowIfEventsUnavailable("document.cookie",
+                                           &exception_state)) {
     return false;
   }
 
@@ -118,11 +126,16 @@ void CookieJar::OnBackendDisconnect() {
   InvalidateCache();
 }
 
-String CookieJar::Cookies() {
+String CookieJar::Cookies(ExceptionState& exception_state) {
   TRACE_EVENT("blink", "CookieJar::Cookies");
   KURL cookie_url = document_->CookieURL();
   if (cookie_url.IsEmpty())
     return String();
+
+  if (RecordReplayThrowIfEventsUnavailable("document.cookie",
+                                           &exception_state)) {
+    return String();
+  }
 
   base::ElapsedTimer timer;
 
@@ -221,6 +234,11 @@ String CookieJar::Cookies() {
 bool CookieJar::CookiesEnabled() {
   KURL cookie_url = document_->CookieURL();
   if (cookie_url.IsEmpty())
+    return false;
+
+  // Cookie IPC never completes after diverge. No throw: callers are
+  // promise-returning.
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect"))
     return false;
 
   base::ElapsedTimer timer;

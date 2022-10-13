@@ -216,6 +216,8 @@ class CORE_EXPORT TreeScope : public GarbageCollectedMixin {
   // should be dispatched to.
   Element* ElementForHitTest(Node*, HitTestPointType) const;
 
+  int RecordReplayId() const;
+
  protected:
   TreeScope(ContainerNode&, Document&);
   explicit TreeScope(Document&);
