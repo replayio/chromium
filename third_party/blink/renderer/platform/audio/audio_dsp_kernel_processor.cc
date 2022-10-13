@@ -29,6 +29,7 @@
  */
 
 #include "third_party/blink/renderer/platform/audio/audio_dsp_kernel_processor.h"
+
 #include "third_party/blink/renderer/platform/audio/audio_dsp_kernel.h"
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
 
