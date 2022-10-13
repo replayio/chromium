@@ -19,6 +19,7 @@
 #include "base/logging.h"
 #include "base/metrics/metrics_hashes.h"
 #include "base/ranges/algorithm.h"
+#include "base/record_replay.h"
 #include "base/time/time.h"
 #include "base/trace_event/base_tracing.h"
 #include "base/tracing_buildflags.h"
