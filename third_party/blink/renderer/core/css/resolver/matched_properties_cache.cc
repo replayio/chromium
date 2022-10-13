@@ -76,11 +76,24 @@ CachedMatchedProperties::CachedMatchedProperties(
                                       property.data_};
                          }),
       entries({Entry{style, parent_style, layout_parent_style,
-                     originating_element_style, element_type, clock}}) {}
+                     originating_element_style, element_type, clock}}) {
+  // Replay edit: M148 rebuilt this constructor as an initialiser-list transform,
+  // removing the loop this fork mechanism lived in. The strong references are
+  // still declared, traced and cleared, so the fill site is RE-HOMED here rather
+  // than dropped. The condition is loop-invariant and is hoisted out of the loop.
+  if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                           "CachedMatchedProperties")) {
+    for (const auto& new_matched_properties : properties) {
+      replay_matched_properties_strong_.push_back(
+          new_matched_properties.properties);
+    }
+  }
+}
 
 void CachedMatchedProperties::Clear() {
   matched_properties.clear();
   entries.clear();
+  replay_matched_properties_strong_.clear();
 }
 
 MatchedPropertiesCache::MatchedPropertiesCache() = default;
