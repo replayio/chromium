@@ -275,6 +275,8 @@ class CORE_EXPORT ImageResourceContent final
 
   HeapHashCountedSet<WeakMember<ImageResourceObserver>> observers_;
   HeapHashCountedSet<WeakMember<ImageResourceObserver>> finished_observers_;
+  HeapHashCountedSet<Member<ImageResourceObserver>> replay_strong_observers_;
+  HeapHashCountedSet<Member<ImageResourceObserver>> replay_strong_finished_observers_;
 
   // This is updated during ResourceFetcher::UpdateResourceInfoFromObservers
   // when layout is clean and cached for use when layout may not be clean.
