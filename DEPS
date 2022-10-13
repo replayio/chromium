@@ -264,7 +264,7 @@ vars = {
   # reclient CIPD package
   'reclient_package': 'infra/rbe/client/',
   # reclient CIPD package version
-  'reclient_version': 're_client_version:0.101.0.6210d0d-gomaip',
+  'reclient_version': 're_client_version:0.126.0.4aaef37-gomaip',
 
   # Fetch siso CIPD package
   'checkout_siso': False,
@@ -3953,6 +3953,7 @@ deps = {
     'dep_type': 'cipd',
     'condition': 'checkout_mac',
   },
+  'src/third_party/reclient_configs': 'https://github.com/EngFlow/reclient-configs.git@c7c2f495ab4637bf5977a8f8f7c65ded468843b3',
 }
 
 
@@ -5148,6 +5149,11 @@ hooks = [
                '--rbe_instance',
                Var('rbe_instance'),
                ],
+  },
+  {
+    'name': 'configure_reclient',
+    'pattern': '.',
+    'action': ['python3', 'src/third_party/reclient_configs/configure_reclient.py', '--src_dir=src'],
   },
 ]
 
