@@ -11,6 +11,7 @@
 #include "base/check_op.h"
 #include "base/containers/span.h"
 #include "base/memory/ptr_util.h"
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
@@ -210,6 +211,10 @@ AudioParamHandler::AudioParamHandler(BaseAudioContext& context,
           AudioBus::Create(1,
                            GetDeferredTaskHandler().RenderQuantumFrames(),
                            false)) {
+  if (recordreplay::IsRecordingOrReplaying()) {
+    RecordReplaySetHandler(&GetDeferredTaskHandler());
+  }
+
   // An AudioParam needs the destination handler to run the timeline.  But the
   // destination may have been destroyed (e.g. page gone), so the destination is
   // null.  However, if the destination is gone, the AudioParam will never get
@@ -368,6 +373,8 @@ void AudioParamHandler::CalculateFinalValues(base::span<float> values,
   // If there are any connections, sum all of the audio-rate connections
   // together (unity-gain summing junction).  Note that connections would
   // normally be mono, but we mix down to mono if necessary.
+  REPLAY_ASSERT("AudioParamHandler::CalculateFinalValues connections %u %d",
+                NumberOfRenderingConnections(), sample_accurate);
   if (NumberOfRenderingConnections() > 0) {
     DCHECK_LE(values.size(), GetDeferredTaskHandler().RenderQuantumFrames());
 
@@ -993,6 +1000,10 @@ bool AudioParamHandler::HasSampleAccurateValues() const {
     return true;
   }
 
+  if (!RecordReplayMayRead()) {
+    // Like failing to take the lock below.
+    return true;
+  }
   base::AutoTryLock try_locker(events_lock_);
 
   if (try_locker.is_acquired()) {
@@ -1253,6 +1264,9 @@ std::tuple<bool, float> AudioParamHandler::ValueForContextTime(
     float max_value,
     unsigned render_quantum_frames) {
   {
+    if (!RecordReplayMayRead()) {
+      return std::make_tuple(false, default_value);
+    }
     base::AutoTryLock try_locker(events_lock_);
     if (!try_locker.is_acquired() || !events_.size() ||
         audio_destination.CurrentTime() < events_[0]->Time()) {
@@ -1282,6 +1296,11 @@ float AudioParamHandler::ValuesForFrameRange(size_t start_frame,
                                              float min_value,
                                              float max_value,
                                              unsigned render_quantum_frames) {
+  if (!RecordReplayMayRead()) {
+    // Like failing to take the lock below.
+    std::ranges::fill(values, default_value);
+    return default_value;
+  }
   // We can't contend the lock in the realtime audio thread.
   base::AutoTryLock try_locker(events_lock_);
   if (!try_locker.is_acquired()) {
@@ -2323,6 +2342,11 @@ void AudioParamHandler::RemoveOldEvents(wtf_size_t event_count) {
   if (n_events > 1) {
     events_.EraseAt(0, std::min(event_count, n_events - 1));
   }
+}
+
+bool AudioParamHandler::RecordReplayMayRead() const {
+  return !record_replay_handler_ || !record_replay_handler_->IsAudioThread() ||
+         record_replay_handler_->RecordReplayRenderHoldsTimelines();
 }
 
 }  // namespace blink
