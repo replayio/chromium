@@ -100,6 +100,7 @@ class CORE_EXPORT URL final : public ScriptWrappable,
   void UpdateSearchParams(const String&);
 
   KURL url_;
+  Member<URLSearchParams> replay_strong_search_params_;
   WeakMember<URLSearchParams> search_params_;
 };
 

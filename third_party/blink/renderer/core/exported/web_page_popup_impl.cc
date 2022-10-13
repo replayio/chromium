@@ -639,7 +639,7 @@ void WebPagePopupImpl::PostMessageToPopup(const String& message) {
     return;
   }
   ScriptForbiddenScope::AllowUserAgentScript allow_script;
-  MainFrame().DomWindow()->DispatchEvent(*MessageEvent::Create(message));
+  MainFrame().DomWindow()->DispatchEvent(*MessageEvent::Create(message), "WebPagePopupImpl::PostMessageToPopup");
 }
 
 void WebPagePopupImpl::Update() {
