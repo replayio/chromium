@@ -55,8 +55,9 @@ bool SyncEventWatcher::SyncWatch(
   bool result = registry_->Wait(should_stop_array, should_stop_array.size());
 
   // This object has been destroyed.
-  if (destroyed->data)
+  if (destroyed->data) {
     return false;
+  }
 
   DecrementRegisterCount();
   return result;
