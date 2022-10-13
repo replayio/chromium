@@ -9,6 +9,8 @@
 #include <utility>
 
 #include "base/check_op.h"
+#include "base/record_replay.h"
+#include "base/strings/stringprintf.h"
 #include "base/strings/to_string.h"
 #include "base/synchronization/lock.h"
 #include "base/time/time.h"
@@ -176,7 +178,13 @@ void MediaStreamAudioTrack::OnData(const media::AudioBus& audio_bus,
 
   // Note: Using relaxed ordering because the timing of when the audio thread
   // sees a changed |is_enabled_| value can be relaxed.
-  const bool deliver_data = is_enabled_.load(std::memory_order_relaxed);
+  // The main thread enables or disables the track while this runs, so which
+  // delivery sees the change is recorded.
+  const bool deliver_data = recordreplay::RecordReplayValue(
+      "MediaStreamAudioTrack::OnData deliver_data",
+      is_enabled_.load(std::memory_order_relaxed));
+  REPLAY_ASSERT("MediaStreamAudioTrack::OnData %d %d", (int)deliver_data,
+                audio_bus.frames());
 
   if (deliver_data) {
     UpdateFrameStats(audio_bus, reference_time, glitch_info);

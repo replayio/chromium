@@ -34,6 +34,7 @@
 #include <utility>
 #include <variant>
 
+#include "base/base64.h"
 #include "base/compiler_specific.h"
 #include "base/containers/span.h"
 #include "base/feature_list.h"
@@ -105,6 +106,9 @@
 #include "third_party/blink/renderer/platform/wtf/text/strcat.h"
 #include "third_party/perfetto/include/perfetto/tracing/track.h"
 #include "url/url_constants.h"
+
+#include "net/base/net_errors.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
 
 namespace blink {
 
@@ -225,6 +229,8 @@ ResourceLoader::ResourceLoader(ResourceFetcher* fetcher,
       cancel_timer_(fetcher_->GetUnfreezableTaskRunner(),
                     this,
                     &ResourceLoader::CancelTimerFired) {
+  // Pointer registration is needed for sorting in ResourceFetcher.
+  recordreplay::RegisterPointer("ResourceLoader", this);
   DCHECK(resource_);
   DCHECK(fetcher_);
 
@@ -251,7 +257,9 @@ ResourceLoader::ResourceLoader(ResourceFetcher* fetcher,
   resource_->SetLoader(this);
 }
 
-ResourceLoader::~ResourceLoader() = default;
+ResourceLoader::~ResourceLoader() {
+  recordreplay::UnregisterPointer(this);
+}
 
 void ResourceLoader::Trace(Visitor* visitor) const {
   visitor->Trace(fetcher_);
@@ -549,6 +557,14 @@ bool ResourceLoader::WillFollowRedirect(
                             GURL(new_url.GetString().Utf8()), removed_headers);
   }
 
+  const ResourceResponse& redirect_response(
+      passed_redirect_response.ToResourceResponse());
+
+  // Record the redirect response once here before follow/block handling
+  // splits. The redirected PrepareRequest then only needs to model the new hop.
+  recordreplay::OnNetworkReceiveResponse(resource_->InspectorId(),
+                                         redirect_response);
+
   if (is_cache_aware_loading_activated_) {
     // Fail as cache miss if cached response is a redirect.
     HandleError(
@@ -585,9 +601,6 @@ bool ResourceLoader::WillFollowRedirect(
       initial_request.GetCredentialsMode();
 
   const ResourceLoaderOptions& options = resource_->Options();
-
-  const ResourceResponse& redirect_response(
-      passed_redirect_response.ToResourceResponse());
 
   const KURL& url_before_redirects = initial_request.Url();
 
@@ -981,6 +994,8 @@ void ResourceLoader::DidReceiveResponseInternal(
 
   resource_->ResponseReceived(response);
 
+  recordreplay::OnNetworkReceiveResponse(resource_->InspectorId(), response);
+
   if (resource_->Loader() && fetcher_->GetProperties().IsDetached()) {
     // If the fetch context is already detached, we don't need further signals,
     // so let's cancel the request.
@@ -1024,6 +1039,12 @@ void ResourceLoader::DidReceiveResponseInternal(
 }
 
 void ResourceLoader::DidReceiveData(base::span<const char> data) {
+  recordreplay::Assert("[RUN-1436] ResourceLoader::DidReceiveData %d",
+                       (int)data.size());
+
+  recordreplay::OnNetworkReceiveData(resource_->InspectorId(), data.data(),
+                                     (int)data.size());
+
   DidReceiveDataImpl(data);
 }
 
@@ -1130,6 +1151,13 @@ void ResourceLoader::DidFinishLoading(base::TimeTicks response_end_time,
       perfetto::NamedTrack("BlinkResourceID", resource_->InspectorId()),
       "outcome", RequestOutcomeToString(RequestOutcome::kSuccess));
 
+  // Emit finish only once the deferred body-drain path has resolved. This
+  // matches the real DevTools loadingFinished timing more closely and avoids
+  // reporting the same request completion twice.
+  recordreplay::OnNetworkFinishLoading(resource_->InspectorId(),
+                                       encoded_body_length,
+                                       decoded_body_length);
+
   fetcher_->HandleLoaderFinish(resource_.Get(), response_end_time,
                                ResourceFetcher::kDidFinishLoading,
                                inflight_keepalive_bytes_);
@@ -1153,6 +1181,9 @@ void ResourceLoader::CountFeature(blink::mojom::WebFeature feature) {
 }
 
 void ResourceLoader::HandleError(const ResourceError& error) {
+  recordreplay::OnNetworkFail(resource_->InspectorId(),
+                              static_cast<WebURLError>(error));
+
   if (resource_->GetResourceRequest().GetKeepalive()) {
     FetchUtils::LogFetchKeepAliveRequestMetric(
         resource_->GetResourceRequest().GetRequestContext(),
@@ -1253,6 +1284,11 @@ void ResourceLoader::RequestSynchronously() {
       response_out = WrappedResourceResponse(response);
       data_out = std::move(data);
     }
+  } else if (recordreplay::AreEventsUnavailable()) {
+    DidFail(WebURLError(net::ERR_FAILED, resource_->Url()),
+            base::TimeTicks::Now(),
+            URLLoaderClient::kUnknownEncodedDataLength, 0, 0);
+    return;
   } else {
     CHECK(network_resource_request_);
     CHECK(loader_);
@@ -1306,6 +1342,14 @@ void ResourceLoader::RequestSynchronously() {
 }
 
 void ResourceLoader::RequestAsynchronously() {
+  // When events are unavailable we can't access system resources anymore.
+  if (recordreplay::AreEventsUnavailable()) {
+    DidFail(WebURLError(net::ERR_FAILED, resource_->Url()),
+            base::TimeTicks::Now(),
+            URLLoaderClient::kUnknownEncodedDataLength, 0, 0);
+    return;
+  }
+
   if (resource_->Url().ProtocolIsData()) {
     CHECK(!network_resource_request_);
     CHECK(!loader_);
@@ -1317,6 +1361,23 @@ void ResourceLoader::RequestAsynchronously() {
   }
   CHECK(loader_);
   CHECK(network_resource_request_);
+
+  // M122 moved the network::ResourceRequest construction (and with it
+  // PopulateResourceRequest) out of this function into CreateNetworkRequest(),
+  // which Start() also calls on the synchronous path.  The assert stays here, on
+  // the asynchronous path only, so its firing set and recorded values are what
+  // they were; nothing between CreateNetworkRequest() and here touches these
+  // four fields.
+  recordreplay::Assert(
+      "[RUN-1725-1852] ResourceLoader::RequestAsynchronously %zu %zu %zu %zu",
+      network_resource_request_->method.size(),
+      network_resource_request_->fetch_integrity.size(),
+      network_resource_request_->devtools_request_id
+          ? network_resource_request_->devtools_request_id->size()
+          : 0,
+      network_resource_request_->devtools_stack_id
+          ? network_resource_request_->devtools_stack_id->size()
+          : 0);
 
   // When `loader_` is a BackgroundURLLoader and
   // kBackgroundResponseProcessorBackground feature param is enabled, creates a

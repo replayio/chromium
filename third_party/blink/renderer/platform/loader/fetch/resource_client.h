@@ -35,6 +35,8 @@
 #include "third_party/blink/renderer/platform/wtf/forward.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
+#include "base/record_replay.h"
+
 namespace base {
 class SingleThreadTaskRunner;
 }
@@ -47,8 +49,13 @@ class PLATFORM_EXPORT ResourceClient : public GarbageCollectedMixin {
   USING_PRE_FINALIZER(ResourceClient, Prefinalize);
 
  public:
-  ResourceClient() = default;
-  virtual ~ResourceClient() = default;
+  ResourceClient() {
+    // Pointer registration is needed by ResourceClientWalker and in Resource::AddClient.
+    recordreplay::RegisterPointer("ResourceClient", this);
+  }
+  virtual ~ResourceClient() {
+    recordreplay::UnregisterPointer(this);
+  }
 
   // DataReceived() is called each time a chunk of data is received.
   // For cache hits, the data is replayed before NotifyFinished() is called.
@@ -74,6 +81,10 @@ class PLATFORM_EXPORT ResourceClient : public GarbageCollectedMixin {
   virtual String DebugName() const = 0;
 
   void Trace(Visitor* visitor) const override;
+
+  int RecordReplayId() const {
+    return recordreplay::PointerId(this);
+  }
 
  protected:
   void ClearResource() { SetResource(nullptr, nullptr); }
