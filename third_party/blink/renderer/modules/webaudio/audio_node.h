@@ -134,6 +134,8 @@ class MODULES_EXPORT AudioNode : public EventTarget,
                                        unsigned input_index_of_destination);
   // Returns true if the specified AudioParam was connected.
   bool DisconnectFromOutputIfConnected(unsigned output_index, AudioParam&);
+  // Updates whether the context keeps this node alive for its connections.
+  void RecordReplayUpdateConnected();
 
   // Any derived node may implement this method to handle the destination
   // connection.

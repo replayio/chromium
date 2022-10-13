@@ -29,6 +29,7 @@
 #include <memory>
 
 #include "base/memory/ptr_util.h"
+#include "base/record_replay.h"
 #include "media/base/audio_bus.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_node_output.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_node_wiring.h"
@@ -149,6 +150,9 @@ scoped_refptr<AudioBus> AudioNodeInput::Pull(AudioBus* in_place_bus,
   DCHECK(IsAudioThread());
 
   // Handle single connection case.
+  recordreplay::Assert(
+      "AudioNodeInput::Pull connections %u channel_count_mode %d",
+      NumberOfRenderingConnections(), Handler().InternalChannelCountMode());
   if (NumberOfRenderingConnections() == 1 &&
       Handler().InternalChannelCountMode() == V8ChannelCountMode::Enum::kMax) {
     // The output will optimize processing using inPlaceBus if it's able.
@@ -158,6 +162,8 @@ scoped_refptr<AudioBus> AudioNodeInput::Pull(AudioBus* in_place_bus,
 
   scoped_refptr<AudioBus> internal_summing_bus = InternalSummingBus();
 
+  recordreplay::Assert("AudioNodeInput::Pull connections %u",
+                       NumberOfRenderingConnections());
   if (!NumberOfRenderingConnections()) {
     // At least, generate silence if we're not connected to anything.
     // FIXME: if we wanted to get fancy, we could propagate a 'silent hint' here
