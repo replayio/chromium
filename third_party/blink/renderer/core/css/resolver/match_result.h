@@ -84,6 +84,17 @@ struct CORE_EXPORT MatchedProperties {
 static_assert(sizeof(MatchedProperties) <= 12,
               "MatchedProperties should not grow without thinking");
 
+// This is a duplicate of the above, except that we do not have a pointer for 'properties'.
+// Instead, we store the id of the pointer, for deterministic replay.  We cannot alter
+// the above struct, because the Member<> is required for garbage collection tracing.
+struct CORE_EXPORT RecordReplayMatchedProperties {
+  DISALLOW_NEW();
+
+ public:
+  int record_replay_id_properties;
+  MatchedProperties::Data data_;
+};
+
 }  // namespace blink
 
 WTF_ALLOW_MOVE_AND_INIT_WITH_MEM_FUNCTIONS(blink::MatchedProperties)
@@ -91,6 +102,7 @@ WTF_ALLOW_MOVE_AND_INIT_WITH_MEM_FUNCTIONS(blink::MatchedProperties)
 namespace blink {
 
 using MatchedPropertiesVector = HeapVector<MatchedProperties, 64>;
+using RecordReplayMatchedPropertiesVector = Vector<RecordReplayMatchedProperties, 64>;
 
 class CORE_EXPORT MatchResult {
   STACK_ALLOCATED();
@@ -196,6 +208,18 @@ class CORE_EXPORT MatchResult {
 
   const MatchedPropertiesVector& GetMatchedProperties() const {
     return matched_properties_;
+  }
+
+  RecordReplayMatchedPropertiesVector GetRecordReplayMatchedProperties() const {
+    RecordReplayMatchedPropertiesVector result;
+    result.resize(matched_properties_.size());
+
+    for (WTF::wtf_size_t i = 0; i < matched_properties_.size(); ++i) {
+      memcpy(&result[i].data_, &matched_properties_[i].data_, sizeof(MatchedProperties::Data));
+      result[i].record_replay_id_properties = recordreplay::PointerId(matched_properties_[i].properties.Get());
+    }
+
+    return result;
   }
 
   // Reset the MatchResult to its initial state, as if no MatchedProperties
