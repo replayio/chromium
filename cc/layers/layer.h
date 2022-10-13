@@ -1260,6 +1260,14 @@ class CC_EXPORT Layer : public base::RefCounted<Layer>,
   static constexpr gfx::RoundedCornersF kNoRoundedCornersF{};
 };
 
+// stl comparator that compares layers by ID. Used when recording/replaying
+// to get a deterministic sort order.
+struct CompareLayersById {
+  bool operator()(const Layer* a, const Layer* b) const {
+    return a->id() < b->id();
+  }
+};
+
 }  // namespace cc
 
 #endif  // CC_LAYERS_LAYER_H_

@@ -243,6 +243,7 @@ PaintRecord PaintOpBuffer::DeepCopyAsRecord() {
 }
 
 PaintOpBuffer::~PaintOpBuffer() {
+  recordreplay::AutoDisallowEvents disallow("~PaintOpBuffer");
   DestroyOps();
 }
 
