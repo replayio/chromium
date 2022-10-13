@@ -94,8 +94,9 @@ bool IsDirtyControl(const ListedElement& control) {
 void FormControlState::SerializeTo(Vector<String>& state_vector) const {
   DCHECK(!IsFailure());
   state_vector.push_back(String::Number(values_.size()));
-  for (const auto& value : values_)
+  for (const auto& value : values_) {
     state_vector.push_back(value.IsNull() ? g_empty_string : value);
+  }
 }
 
 FormControlState FormControlState::Deserialize(
@@ -118,6 +119,33 @@ FormControlState FormControlState::Deserialize(
 }
 
 // ----------------------------------------------------------------------------
+
+static int CompareStrings(StringImpl* a, StringImpl* b) {
+  if (a->length() != b->length()) {
+    return a->length() - b->length();
+  }
+  if (a->Is8Bit() != b->Is8Bit()) {
+    return a->Is8Bit() ? -1 : 1;
+  }
+  if (a->Is8Bit()) {
+    return memcmp(a->Span8().data(), b->Span8().data(), a->length());
+  }
+  return memcmp(a->Span16().data(), b->Span16().data(), a->length() * 2);
+}
+
+// RecordReplay: upstream moved ControlKey into control_key.h at M133, so
+// the fork's member operator< moved out of the class with it.  The ordering
+// is passed to std::sort explicitly rather than injected as a namespace-scope
+// operator<, so that removing this block is a compile error instead of a silent
+// change to the order SavedFormState::SerializeTo records.  CompareStrings is
+// unchanged: its exact ordering is a recorded value.
+static bool ControlKeyLessThan(const ControlKey& a, const ControlKey& b) {
+  int compare_name = CompareStrings(a.GetName().Impl(), b.GetName().Impl());
+  if (compare_name != 0) {
+    return compare_name < 0;
+  }
+  return CompareStrings(a.GetType().Impl(), b.GetType().Impl()) < 0;
+}
 
 // SavedFormState represents a set of FormControlState.
 // It typically manages controls associated to a single <form>.  Controls
@@ -184,9 +212,15 @@ std::unique_ptr<SavedFormState> SavedFormState::Deserialize(
 
 void SavedFormState::SerializeTo(Vector<String>& state_vector) const {
   state_vector.push_back(String::Number(control_state_count_));
+  std::vector<ControlKey> keys;
   for (const auto& form_control : state_for_new_controls_) {
-    const ControlKey& key = form_control.key;
-    const Deque<FormControlState>& queue = form_control.value;
+    keys.push_back(form_control.key);
+  }
+  std::sort(keys.begin(), keys.end(), ControlKeyLessThan);
+  for (const ControlKey& key : keys) {
+    const auto& it = state_for_new_controls_.find(key);
+    CHECK(it != state_for_new_controls_.end());
+    const Deque<FormControlState>& queue = it->value;
     for (const FormControlState& form_control_state : queue) {
       state_vector.push_back(key.GetName());
       state_vector.push_back(key.GetType());
