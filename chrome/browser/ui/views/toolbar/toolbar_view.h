@@ -24,6 +24,7 @@
 #include "chrome/browser/ui/views/location_bar/location_bar_view.h"
 #include "chrome/browser/ui/views/profiles/avatar_toolbar_button.h"
 #include "chrome/browser/ui/views/toolbar/overflow_button.h"
+#include "chrome/browser/ui/views/toolbar/record_replay_toolbar_button.h"
 #include "components/prefs/pref_member.h"
 #include "ui/base/accelerators/accelerator.h"
 #include "ui/base/metadata/metadata_header_macros.h"
@@ -160,6 +161,9 @@ class ToolbarView : public views::AccessiblePaneView,
   }
   PerformanceInterventionButton* performance_intervention_button() const {
     return performance_intervention_button_;
+  }
+  RecordReplayToolbarButton* record_replay_button() const {
+    return record_replay_button_;
   }
   media_router::CastToolbarButton* cast_button() const { return cast_; }
   PinnedToolbarActionsContainer* pinned_toolbar_actions_container() const {
@@ -301,6 +305,7 @@ class ToolbarView : public views::AccessiblePaneView,
   raw_ptr<PerformanceInterventionButton> performance_intervention_button_ =
       nullptr;
   raw_ptr<media_router::CastToolbarButton> cast_ = nullptr;
+  raw_ptr<RecordReplayToolbarButton> record_replay_button_ = nullptr;
   raw_ptr<PinnedToolbarActionsContainer> pinned_toolbar_actions_container_ =
       nullptr;
   raw_ptr<AvatarToolbarButton> avatar_ = nullptr;
