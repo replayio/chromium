@@ -18,6 +18,8 @@
 #include "mojo/public/cpp/bindings/lib/task_runner_helper.h"
 #include "mojo/public/cpp/system/message_pipe.h"
 
+#include "base/record_replay.h"
+
 namespace mojo {
 
 namespace internal {
@@ -30,6 +32,14 @@ void AssociatedReceiverBase::SetFilter(std::unique_ptr<MessageFilter> filter) {
 }
 
 void AssociatedReceiverBase::reset() {
+  // Endpoint clients must be destroyed at deterministic points, so leak the endpoint
+  // if we are reset e.g. during a GC.
+  if (recordreplay::AreEventsDisallowed("AssociatedReceiverBase::reset")) {
+    if (endpoint_client_)
+      endpoint_client_->record_replay_leak();
+    endpoint_client_.release();
+  }
+
   endpoint_client_.reset();
 }
 
@@ -66,7 +76,14 @@ void AssociatedReceiverBase::FlushForTesting() {
   endpoint_client_->FlushForTesting();  // IN-TEST
 }
 
-AssociatedReceiverBase::~AssociatedReceiverBase() = default;
+AssociatedReceiverBase::~AssociatedReceiverBase() {
+  // Leak the endpoint client if necessary, as in reset().
+  if (recordreplay::AreEventsDisallowed("~AssociatedReceiverBase")) {
+    if (endpoint_client_)
+      endpoint_client_->record_replay_leak();
+    endpoint_client_.release();
+  }
+}
 
 void AssociatedReceiverBase::BindImpl(
     ScopedInterfaceEndpointHandle handle,

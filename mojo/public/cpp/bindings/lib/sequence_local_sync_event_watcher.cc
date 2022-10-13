@@ -16,6 +16,8 @@
 #include "base/threading/sequence_local_storage_slot.h"
 #include "mojo/public/cpp/bindings/sync_event_watcher.h"
 
+#include "base/record_replay.h"
+
 namespace mojo {
 
 namespace {
@@ -57,7 +59,8 @@ class SequenceLocalSyncEventWatcher::SequenceLocalState {
                base::WaitableEvent::InitialState::NOT_SIGNALED),
         event_watcher_(&event_,
                        base::BindRepeating(&SequenceLocalState::OnEventSignaled,
-                                           base::Unretained(this))) {
+                                           base::Unretained(this))),
+        ready_watchers_lock_("SequenceLocalState.ready_watchers_lock_") {
     // We always allow this event handler to be awoken during any sync event on
     // the sequence. Individual watchers still must opt into having such
     // wake-ups propagated to them.
