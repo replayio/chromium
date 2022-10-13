@@ -994,6 +994,15 @@ CSSStyleSheet* StyleEngine::CreateSheet(
 
   auto result = text_to_sheet_cache_.insert(key, nullptr);
   StyleSheetContents* contents = result.stored_value->value;
+
+  // Divergence is between a call to ParseSheet and a call to
+  // CreateInline within this method. Assert the values that
+  // introduce the codepath divergence.
+  recordreplay::Assert("[RUN-1065-1390] StyleEngine::CreateSheet %d %d %d %lu",
+                       result.is_new_entry, !!contents,
+                       contents && contents->IsCacheableForStyleElement(),
+                       WTF::GetHash(key));
+
   if (result.is_new_entry || !contents ||
       !contents->IsCacheableForStyleElement()) {
     result.stored_value->value = nullptr;
@@ -1001,6 +1010,10 @@ CSSStyleSheet* StyleEngine::CreateSheet(
         ParseSheet(element, text, start_position, render_blocking_behavior);
     if (style_sheet->Contents()->IsCacheableForStyleElement()) {
       result.stored_value->value = style_sheet->Contents();
+
+      if (recordreplay::IsRecordingOrReplaying("leak-references", "StyleEngine")) {
+        style_sheet_contents_strong_.insert(style_sheet->Contents());
+      }
     }
   } else {
     DCHECK(contents);
@@ -1866,8 +1879,15 @@ void StyleEngine::ScheduleRuleSetInvalidationsForElement(
     class_names = &element.ClassNames();
   }
 
-  InvalidationLists invalidation_lists;
+  HeapVector<Member<RuleSet>> rule_sets_vector;
   for (const auto& rule_set : rule_sets) {
+    rule_sets_vector.push_back(rule_set);
+  }
+  std::sort(rule_sets_vector.begin(), rule_sets_vector.end(),
+            recordreplay::CompareMemberByPointerId<Member<RuleSet>>());
+
+  InvalidationLists invalidation_lists;
+  for (const auto& rule_set : rule_sets_vector) {
     if (!id.IsNull()) {
       rule_set->Features().CollectInvalidationSetsForId(invalidation_lists,
                                                         element, id);
@@ -1891,8 +1911,15 @@ void StyleEngine::ScheduleRuleSetInvalidationsForElement(
 void StyleEngine::ScheduleTypeRuleSetInvalidations(
     ContainerNode& node,
     const HeapHashSet<Member<RuleSet>>& rule_sets) {
-  InvalidationLists invalidation_lists;
+  HeapVector<Member<RuleSet>> rule_sets_vector;
   for (const auto& rule_set : rule_sets) {
+    rule_sets_vector.push_back(rule_set);
+  }
+  std::sort(rule_sets_vector.begin(), rule_sets_vector.end(),
+            recordreplay::CompareMemberByPointerId<Member<RuleSet>>());
+
+  InvalidationLists invalidation_lists;
+  for (const auto& rule_set : rule_sets_vector) {
     rule_set->Features().CollectTypeRuleInvalidationSet(invalidation_lists,
                                                         node);
   }
@@ -1928,6 +1955,7 @@ void StyleEngine::ScheduleCustomElementInvalidations(
     invalidation_set->AddTagName(tag_name);
   }
   invalidation_set->SetTreeBoundaryCrossing();
+
   InvalidationLists invalidation_lists;
   invalidation_lists.descendants.push_back(invalidation_set);
   pending_invalidations_.ScheduleInvalidationSetsForNode(invalidation_lists,
@@ -3310,6 +3338,10 @@ void StyleEngine::UpdateStyleAndLayoutTree() {
 
   UpdateViewportStyle();
 
+  recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle A %d %d",
+                       !!GetDocument().documentElement(),
+                       NeedsStyleRecalc());
+
   if (GetDocument().documentElement()) {
     UpdateViewportSize();
     NthIndexCache nth_index_cache(GetDocument());
@@ -3318,6 +3350,7 @@ void StyleEngine::UpdateStyleAndLayoutTree() {
       SCOPED_BLINK_UMA_HISTOGRAM_TIMER_HIGHRES("Style.RecalcTime");
       Element* viewport_defining = GetDocument().ViewportDefiningElement();
       RecalcStyle();
+      recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle B");
       if (viewport_defining != GetDocument().ViewportDefiningElement()) {
         ViewportDefiningElementDidChange();
       }
@@ -3857,6 +3890,7 @@ void StyleEngine::Trace(Visitor* visitor) const {
   visitor->Trace(style_image_cache_);
   visitor->Trace(fill_or_clip_path_uri_value_cache_);
   visitor->Trace(style_containment_scope_tree_);
+  visitor->Trace(style_sheet_contents_strong_);
   FontSelectorClient::Trace(visitor);
 }
 

@@ -92,6 +92,7 @@ class CORE_EXPORT CSSFontSelector : public CSSFontSelectorBase {
   // See crbug.com/383860 for details.
   WeakMember<const TreeScope> tree_scope_;
   HeapHashSet<WeakMember<FontSelectorClient>> clients_;
+  HeapHashSet<Member<FontSelectorClient>> record_replay_strong_clients_;
 };
 
 }  // namespace blink
