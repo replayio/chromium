@@ -139,7 +139,7 @@ dictionary CheckVisibilityOptions {
     readonly attribute long clientHeight;
 
     // Non-standard API
-    [MeasureAs=ElementScrollIntoViewIfNeeded] void scrollIntoViewIfNeeded(optional boolean centerIfNeeded);
+    [MeasureAs=ElementScrollIntoViewIfNeeded, ImplementedAs=RecordReplayScrollIntoViewIfNeededForBinding] void scrollIntoViewIfNeeded(optional boolean centerIfNeeded);
 
     // The Pop-up API
     [MeasureAs=ElementShowPopup,RuntimeEnabled=HTMLPopupAttribute,RaisesException] void showPopUp();
