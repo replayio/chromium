@@ -285,11 +285,11 @@ vars = {
   # Three lines of non-changing comments so that
   # the commit queue can handle CLs rolling Skia
   # and whatever else without interference from each other.
-  'skia_revision': '95449a75506a28ae31ae7eb383f44bdddbe036e6',
+  'skia_revision': 'eecfc91004cfd6ccbb6b875e7cf2dbb26165e265',
   # Three lines of non-changing comments so that
   # the commit queue can handle CLs rolling V8
   # and whatever else without interference from each other.
-  'v8_revision': '8a8a1e7086dacc426965d3875914efa66663c431',
+  'v8_revision': '9a0377fa50a1d450229014cdb119b133c3ce60f4',
   # Three lines of non-changing comments so that
   # the commit queue can handle CLs rolling ANGLE
   # and whatever else without interference from each other.
@@ -308,7 +308,7 @@ vars = {
   #
   # Note this revision should be updated with
   # third_party/boringssl/roll_boringssl.py, not roll-dep.
-  'boringssl_revision': '4b6d950d8921d6dd5365de0797fcc97302b9561b',
+  'boringssl_revision': '7057bea00c5a1dd724b68b3535eb9e5eb904ca7d',
   # Three lines of non-changing comments so that
   # the commit queue can handle CLs rolling Fuchsia sdk
   # and whatever else without interference from each other.
@@ -1117,7 +1117,7 @@ deps = {
     Var('chromium_git') + '/external/github.com/google/benchmark.git' + '@' + 'b177433f3ee2513b1075140c723d73ab8901790f',
 
   'src/third_party/boringssl/src':
-    Var('boringssl_git') + '/boringssl.git' + '@' +  Var('boringssl_revision'),
+    'https://github.com/replayio/boringssl' + '@' +  Var('boringssl_revision'),
 
   'src/third_party/breakpad/breakpad':
     Var('chromium_git') + '/breakpad/breakpad.git' + '@' + 'bfde407de559c10d6cef861b3873ff287c24e761',
@@ -1768,7 +1768,7 @@ deps = {
     Var('chromium_git') + '/external/github.com/google/ruy.git' + '@' + '363f252289fb7a1fba1703d99196524698cb884d',
 
   'src/third_party/skia':
-    Var('skia_git') + '/skia.git' + '@' +  Var('skia_revision'),
+    'https://github.com/replayio/chromium-skia.git' + '@' +  Var('skia_revision'),
 
   'src/third_party/smhasher/src':
     Var('chromium_git') + '/external/smhasher.git' + '@' + 'e87738e57558e0ec472b2fc3a643b838e5b6e88f',
@@ -1872,7 +1872,7 @@ deps = {
     Var('chromium_git') + '/external/github.com/gpuweb/cts.git' + '@' + '7d2d22292ce5af280c8c5849ed7f0679d7ab70e9',
 
   'src/third_party/webrtc':
-    Var('webrtc_git') + '/src.git' + '@' + 'df7df199abd619e75b9f1d9a7e12fc3f3f748775',
+    'https://github.com/replayio/chromium-webrtc.git' + '@' + '12418976438a5b80c3577516dee7559194a7ef29',
 
   # Wuffs' canonical repository is at github.com/google/wuffs, but we use
   # Skia's mirror of Wuffs, the same as in upstream Skia's DEPS file.
@@ -1959,7 +1959,7 @@ deps = {
   },
 
   'src/v8':
-    Var('chromium_git') + '/v8/v8.git' + '@' +  Var('v8_revision'),
+    'https://github.com/replayio/chromium-v8.git' + '@' +  Var('v8_revision'),
 
   'src-internal': {
     'url': Var('chrome_git') + '/chrome/src-internal.git@cf7298cdbec74bcc39e5575f925bb7fb84e19e89',
