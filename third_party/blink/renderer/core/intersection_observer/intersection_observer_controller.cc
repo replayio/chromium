@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/core/intersection_observer/intersection_observer_controller.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/element.h"
@@ -178,6 +179,10 @@ bool IntersectionObserverController::ComputeIntersections(
   }
   for (auto& observer : observers_to_remove) {
     tracked_explicit_root_observers_.erase(observer);
+    if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                             "IntersectionObserverController")) {
+      replay_strong_tracked_explicit_root_observers_.erase(observer);
+    }
   }
 
   for (auto& [observer, observations] : tracked_implicit_root_observations_) {
@@ -210,6 +215,9 @@ void IntersectionObserverController::AddTrackedObserver(
   if (observer.RootIsImplicit() || !observer.HasObservations())
     return;
   tracked_explicit_root_observers_.insert(&observer);
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "IntersectionObserverController")) {
+    replay_strong_tracked_explicit_root_observers_.insert(&observer);
+  }
   if (observer.trackVisibility()) {
     needs_occlusion_tracking_ = true;
     if (LocalFrameView* frame_view = observer.root()->GetDocument().View()) {
@@ -232,6 +240,9 @@ void IntersectionObserverController::RemoveTrackedObserver(
   // compelling reason to do it here, so we avoid the iteration through
   // observers and observations here.
   tracked_explicit_root_observers_.erase(&observer);
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "IntersectionObserverController")) {
+    replay_strong_tracked_explicit_root_observers_.erase(&observer);
+  }
 }
 
 void IntersectionObserverController::AddTrackedObservation(
@@ -241,8 +252,14 @@ void IntersectionObserverController::AddTrackedObservation(
   if (!observer->RootIsImplicit())
     return;
   tracked_implicit_root_observations_
-      .insert(observer, HeapHashSet<Member<IntersectionObservation>>())
+      .insert(observer,
+              HeapHashSet<Member<IntersectionObservation>,
+                          WTF::RecordReplayPointerIdHashTraits<
+                              Member<IntersectionObservation>>>())
       .stored_value->value.insert(&observation);
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "IntersectionObserverController")) {
+    replay_strong_tracked_implicit_root_observations_.insert(&observation);
+  }
   if (observer->trackVisibility()) {
     needs_occlusion_tracking_ = true;
     if (LocalFrameView* frame_view =
@@ -267,6 +284,9 @@ void IntersectionObserverController::RemoveTrackedObservation(
       tracked_implicit_root_observations_.erase(it);
     }
   }
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "IntersectionObserverController")) {
+    replay_strong_tracked_implicit_root_observations_.erase(&observation);
+  }
 }
 
 wtf_size_t
@@ -281,6 +301,8 @@ IntersectionObserverController::GetTrackedObservationCountForTesting() const {
 void IntersectionObserverController::Trace(Visitor* visitor) const {
   visitor->Trace(tracked_explicit_root_observers_);
   visitor->Trace(tracked_implicit_root_observations_);
+  visitor->Trace(replay_strong_tracked_explicit_root_observers_);
+  visitor->Trace(replay_strong_tracked_implicit_root_observations_);
   visitor->Trace(pending_intersection_observers_);
   ExecutionContextClient::Trace(visitor);
 }
