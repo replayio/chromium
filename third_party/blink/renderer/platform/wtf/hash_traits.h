@@ -31,6 +31,7 @@
 
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/platform/wtf/hash_functions.h"
 #include "third_party/blink/renderer/platform/wtf/hash_table_deleted_value_type.h"
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
@@ -170,7 +171,9 @@ struct GenericHashTraitsBase {
 
   // The starting table size. Can be overridden when we know beforehand that a
   // hash table will have at least N entries.
-#if defined(MEMORY_TOOL_REPLACES_ALLOCATOR)
+  // [Replay] Allow MEMORY_TOOL_REPLACES_ALLOCATOR to disable PartitionAlloc
+  // without having this unwanted side-effect.
+#if 0  // defined(MEMORY_TOOL_REPLACES_ALLOCATOR)
   // The allocation pool for nodes is one big chunk that ASAN has no insight
   // into, so it can cloak errors. Make it as small as possible to force nodes
   // to be allocated individually where ASAN can see them.
@@ -640,6 +643,72 @@ unsigned GetHash(const T& key) {
   return HashTraits<T>::GetHash(key);
 }
 
+// Hash traits for a container whose keys are pointers (raw, Member<> or
+// scoped_refptr<>) to objects that carry no record/replay id of their own: they
+// hash by the pointer's registered id instead, so that iteration order is the
+// same in a replay as it was in the recording. Everything other than the hash
+// is the key type's default traits.
+template <typename ValueType>
+struct RecordReplayPointerIdHashTraits : HashTraits<ValueType> {
+  using Base = HashTraits<ValueType>;
+
+  template <typename P, std::enable_if_t<std::is_pointer_v<P>>* = nullptr>
+  static unsigned GetHash(P key) {
+    if (recordreplay::IsRecordingOrReplaying("pointer-ids")) {
+      int id = recordreplay::PointerId(key);
+      if (id) {
+        return WTF::GetHash(id);
+      }
+    }
+    return Base::GetHash(key);
+  }
+
+  // Member<T>, WeakMember<T> and UntracedMember<T>.
+  template <typename M, typename = decltype(std::declval<const M&>().Get())>
+  static unsigned GetHash(const M& m) {
+    return GetHash(m.Get());
+  }
+
+  template <typename T>
+  static unsigned GetHash(const scoped_refptr<T>& p) {
+    return GetHash(p.get());
+  }
+
+  static constexpr bool kIsRecordReplayDeterministicHash = true;
+};
+
+// WTF looks a `scoped_refptr<T>`-keyed table up through
+// `GenericHashTraits<scoped_refptr<T>>::PeekInType`, which is the class
+// `RefPtrValuePeeker` and only *implicitly converts* to `T*`.  Template
+// argument deduction never applies an implicit conversion, so none of the
+// primary template's `GetHash` function templates above can be deduced for a
+// peeker argument, and because they are declared in the derived class they
+// also hide the base's `GetHash`.  Upstream's own
+// `GenericHashTraits<scoped_refptr<T>>::GetHash(T*)` works precisely because
+// it is not a template, so this specialization keeps that shape: the overloads
+// below take `T*` and `const scoped_refptr<T>&` concretely.
+template <typename T>
+struct RecordReplayPointerIdHashTraits<scoped_refptr<T>>
+    : HashTraits<scoped_refptr<T>> {
+  using Base = HashTraits<scoped_refptr<T>>;
+
+  static unsigned GetHash(T* key) {
+    if (recordreplay::IsRecordingOrReplaying("pointer-ids")) {
+      int id = recordreplay::PointerId(key);
+      if (id) {
+        return WTF::GetHash(id);
+      }
+    }
+    return Base::GetHash(key);
+  }
+
+  static unsigned GetHash(const scoped_refptr<T>& key) {
+    return GetHash(key.get());
+  }
+
+  static constexpr bool kIsRecordReplayDeterministicHash = true;
+};
+
 }  // namespace WTF
 
 using WTF::AlreadyHashedTraits;
@@ -651,6 +720,7 @@ using WTF::IntHashTraits;
 using WTF::IntWithZeroKeyHashTraits;
 using WTF::OneFieldHashTraits;
 using WTF::PairHashTraits;
+using WTF::RecordReplayPointerIdHashTraits;
 using WTF::SimpleClassHashTraits;
 using WTF::TwoFieldsHashTraits;
 

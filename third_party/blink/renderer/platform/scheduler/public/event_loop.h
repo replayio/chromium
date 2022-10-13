@@ -110,7 +110,7 @@ class PLATFORM_EXPORT EventLoop final : public WTF::RefCounted<EventLoop> {
   v8::Isolate* isolate_;
   bool loop_enabled_ = true;
   bool register_complete_callback_ = false;
-  Deque<base::OnceClosure> pending_microtasks_;
+  Deque<std::pair<base::OnceClosure, int>> pending_microtasks_;
   Vector<base::OnceClosure> end_of_checkpoint_tasks_;
   std::unique_ptr<v8::MicrotaskQueue> microtask_queue_;
   HashSet<FrameOrWorkerScheduler*> schedulers_;

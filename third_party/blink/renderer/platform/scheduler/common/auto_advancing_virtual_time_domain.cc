@@ -10,6 +10,8 @@
 #include "build/build_config.h"
 #include "third_party/blink/renderer/platform/scheduler/common/scheduler_helper.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 namespace scheduler {
 

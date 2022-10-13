@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/memory/read_only_shared_memory_region.h"
+#include "base/record_replay.h"
 #include "base/task/single_thread_task_runner.h"
 #include "cc/paint/paint_flags.h"
 #include "components/power_scheduler/power_mode_voter.h"
@@ -170,7 +171,7 @@ class PLATFORM_EXPORT CanvasResourceDispatcher
 
   CanvasResourceDispatcherClient* client_;
 
-  std::unique_ptr<power_scheduler::PowerModeVoter> animation_power_mode_voter_;
+  recordreplay::unique_leaky_ptr<power_scheduler::PowerModeVoter> animation_power_mode_voter_;
 
   scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
   scoped_refptr<base::SingleThreadTaskRunner>
