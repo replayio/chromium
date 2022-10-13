@@ -185,6 +185,10 @@ class CORE_EXPORT ElementRareDataVector final : public NodeRareData {
   PseudoElementData::PseudoElementVector GetPseudoElements() const;
 
   CSSStyleDeclaration& EnsureInlineCSSStyleDeclaration(Element* owner_element);
+  // Replay edit: the existing inline CSSOM wrapper, without creating one.
+  // See Element::style(): replay-only scripts must not create blink API
+  // objects unless they have explicitly diverged.
+  CSSStyleDeclaration* GetInlineCSSStyleDeclaration() const;
 
   ShadowRoot* GetShadowRoot() const;
   void SetShadowRoot(ShadowRoot& shadow_root);
