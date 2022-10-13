@@ -44,6 +44,8 @@
 #include "ui/gfx/geometry/transform_util.h"
 #include "ui/gfx/geometry/vector2d_conversions.h"
 
+#include "base/record_replay.h"
+
 namespace {
 
 template <typename T>
@@ -82,6 +84,7 @@ LayerImpl::LayerImpl(LayerTreeImpl* tree_impl,
       needs_show_scrollbars_(false),
       raster_even_if_not_drawn_(false),
       has_transform_node_(false) {
+  recordreplay::RegisterPointer("LayerImpl", this);
   DCHECK_GT(layer_id_, 0);
 
   DCHECK(layer_tree_impl_);
@@ -91,6 +94,7 @@ LayerImpl::LayerImpl(LayerTreeImpl* tree_impl,
 }
 
 LayerImpl::~LayerImpl() {
+  recordreplay::UnregisterPointer(this);
   layer_tree_impl_->UnregisterLayer(this);
   TRACE_EVENT_OBJECT_DELETED_WITH_ID(
       TRACE_DISABLED_BY_DEFAULT("cc.debug"), "cc::LayerImpl", this);
@@ -122,6 +126,8 @@ void LayerImpl::UpdateDebugInfo(LayerDebugInfo* debug_info) {
 
 void LayerImpl::SetTransformTreeIndex(int index) {
   transform_tree_index_ = index;
+  recordreplay::Assert("[RUN-550-1329] LayerImpl::SetTransformTreeIndex %d %d",
+                       layer_id_, index);
 }
 
 void LayerImpl::SetClipTreeIndex(int index) {
@@ -376,6 +382,9 @@ bool LayerImpl::IsSnappedToPixelGridInTarget() {
 
 void LayerImpl::PushPropertiesTo(LayerImpl* layer) {
   DCHECK(layer->IsActive());
+
+  recordreplay::Assert("[RUN-550-1329] LayerImpl::PushPropertiesTo %d %d %llu",
+                       transform_tree_index_, layer_id_, element_id_.GetStableId());
 
   // The element id should be set first because other setters may
   // depend on it. Referencing element id on a layer is
@@ -783,7 +792,11 @@ gfx::Transform LayerImpl::ScreenSpaceTransform() const {
 }
 
 int LayerImpl::GetSortingContextId() const {
-  return GetTransformTree().Node(transform_tree_index())->sorting_context_id;
+  int rv = GetTransformTree().Node(transform_tree_index())->sorting_context_id;
+
+  recordreplay::Assert("[RUN-550] LayerImpl::GetSortingContextId %d %d", transform_tree_index(), rv);
+
+  return rv;
 }
 
 Region LayerImpl::GetInvalidationRegionForDebugging() {

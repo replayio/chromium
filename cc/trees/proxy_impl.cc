@@ -27,6 +27,7 @@
 #include "cc/paint/paint_worklet_layer_painter.h"
 #include "cc/trees/compositor_commit_data.h"
 #include "cc/trees/layer_tree_frame_sink.h"
+#include "cc/trees/layer_tree_frame_sink_client.h"
 #include "cc/trees/layer_tree_host.h"
 #include "cc/trees/layer_tree_impl.h"
 #include "cc/trees/mutator_host.h"
@@ -34,11 +35,15 @@
 #include "cc/trees/render_frame_metadata_observer.h"
 #include "cc/trees/task_runner_provider.h"
 #include "components/power_scheduler/power_mode_arbiter.h"
+#include "components/viz/common/frame_sinks/begin_frame_source.h"
 #include "components/viz/common/frame_sinks/delay_based_time_source.h"
 #include "components/viz/common/frame_timing_details.h"
 #include "components/viz/common/gpu/context_provider.h"
+#include "components/viz/service/display/record_replay_render.h"
 #include "gpu/command_buffer/client/gles2_interface.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
+
+#include "base/record_replay.h"
 
 namespace cc {
 
@@ -47,6 +52,69 @@ namespace {
 // Measured in seconds.
 constexpr auto kSmoothnessTakesPriorityExpirationDelay =
     base::Milliseconds(250);
+
+// [RecordReplay] A LayerTreeFrameSink for repaints that only draws in this
+// process. A tab that closes can lose its frame sink before the renderer
+// finishes recording, which then ends while the compositor waits for a new
+// frame sink. None comes once a replay has diverged, and the compositor can't
+// draw without one.
+class RecordReplayRepaintFrameSink : public LayerTreeFrameSink,
+                                     public viz::ExternalBeginFrameSourceClient {
+ public:
+  explicit RecordReplayRepaintFrameSink(
+      scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner)
+      : LayerTreeFrameSink(nullptr, nullptr, std::move(compositor_task_runner),
+                           nullptr) {}
+
+  bool BindToClient(LayerTreeFrameSinkClient* client) override {
+    if (!LayerTreeFrameSink::BindToClient(client)) {
+      return false;
+    }
+    begin_frame_source_ = std::make_unique<viz::ExternalBeginFrameSource>(this);
+    client->SetBeginFrameSource(begin_frame_source_.get());
+    return true;
+  }
+
+  void DetachFromClient() override {
+    weak_factory_.InvalidateWeakPtrs();
+    client_->SetBeginFrameSource(nullptr);
+    begin_frame_source_.reset();
+    LayerTreeFrameSink::DetachFromClient();
+  }
+
+  void SetLocalSurfaceId(const viz::LocalSurfaceId& local_surface_id) override {
+    local_surface_id_ = local_surface_id;
+  }
+
+  void SubmitCompositorFrame(viz::CompositorFrame frame,
+                             bool hit_test_data_changed) override {
+    recordreplay::SubmitCompositorFrame(local_surface_id_, frame);
+    compositor_task_runner_->PostTask(
+        FROM_HERE,
+        base::BindOnce(&RecordReplayRepaintFrameSink::DidReceiveAck,
+                       weak_factory_.GetWeakPtr()));
+  }
+
+  void DidNotProduceFrame(const viz::BeginFrameAck& ack,
+                          FrameSkippedReason reason) override {}
+  void DidAllocateSharedBitmap(base::ReadOnlySharedMemoryRegion region,
+                               const viz::SharedBitmapId& id) override {}
+  void DidDeleteSharedBitmap(const viz::SharedBitmapId& id) override {}
+
+  // viz::ExternalBeginFrameSourceClient
+  void OnNeedsBeginFrames(bool needs_begin_frames) override {}
+
+ private:
+  void DidReceiveAck() {
+    if (client_) {
+      client_->DidReceiveCompositorFrameAck();
+    }
+  }
+
+  viz::LocalSurfaceId local_surface_id_;
+  std::unique_ptr<viz::ExternalBeginFrameSource> begin_frame_source_;
+  base::WeakPtrFactory<RecordReplayRepaintFrameSink> weak_factory_{this};
+};
 
 }  // namespace
 
@@ -180,6 +248,15 @@ void ProxyImpl::InitializeLayerTreeFrameSinkOnImpl(
   DCHECK(IsImplThread());
 
   proxy_main_frame_sink_bound_weak_ptr_ = proxy_main_frame_sink_bound_weak_ptr;
+
+  // [RecordReplay] A repaint's frame sink stays once installed, and the main
+  // thread is told this one initialized.
+  if (record_replay_frame_sink_) {
+    MainThreadTaskRunner()->PostTask(
+        FROM_HERE, base::BindOnce(&ProxyMain::DidInitializeLayerTreeFrameSink,
+                                  proxy_main_weak_ptr_, true));
+    return;
+  }
 
   LayerTreeHostImpl* host_impl = host_impl_.get();
   bool success = host_impl->InitializeFrameSink(layer_tree_frame_sink);
@@ -335,6 +412,26 @@ void ProxyImpl::NotifyReadyToCommitOnImpl(
     bool scroll_and_viewport_changes_synced,
     CommitTimestamps* commit_timestamps,
     bool commit_timeout) {
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    recordreplay::OnReadyToCommit();
+
+    // A commit after diverging from the recording is a repaint's. The
+    // recording can end with the compositor's frame sink lost, e.g. when its
+    // tab closes, and the scheduler then drops the repaint's frame instead of
+    // drawing it. No new frame sink comes after diverging: making one needs
+    // the main thread, which waits for the repaint. A lost frame sink stays
+    // with the compositor until it's replaced or released and still submits
+    // frames to recordreplay::SubmitCompositorFrame, which is all a repaint
+    // needs, so the repaint commits to it and draws with it. This doesn't
+    // help a compositor that has no frame sink at all, and a repaint whose
+    // commit creates a UI resource comes back empty: LayerTreeHostImpl counts
+    // it as evicted while its frame sink is lost and can't draw.
+    if (recordreplay::HasDivergedFromRecording() && host_impl_ &&
+        host_impl_->layer_tree_frame_sink()) {
+      scheduler_->RecordReplayReuseLostLayerTreeFrameSink();
+    }
+  }
+
   {
     TRACE_EVENT_WITH_FLOW0(
         "viz,benchmark", "MainFrame.NotifyReadyToCommitOnImpl",
@@ -639,6 +736,10 @@ void ProxyImpl::DidPresentCompositorFrameOnImplThread(
   host_impl_->NotifyDidPresentCompositorFrameOnImplThread(
       frame_token, std::move(activated.compositor_thread_callbacks), details);
 
+  recordreplay::Assert(
+      "[RUN-2317-2366] ProxyImpl::DidPresentCompositorFrameOnImplThread %u",
+      frame_token);
+
   MainThreadTaskRunner()->PostTask(
       FROM_HERE, base::BindOnce(&ProxyMain::DidPresentCompositorFrame,
                                 proxy_main_weak_ptr_, frame_token,
@@ -788,6 +889,7 @@ void ProxyImpl::ScheduledActionCommit() {
 
   auto* commit_state = data_for_commit_->commit_state.get();
   auto* unsafe_state = data_for_commit_->unsafe_state.get();
+
   host_impl_->BeginCommit(commit_state->source_frame_number,
                           commit_state->trace_id);
   host_impl_->FinishCommit(*commit_state, *unsafe_state);
@@ -797,6 +899,9 @@ void ProxyImpl::ScheduledActionCommit() {
   data_for_commit_->commit_completion_event->SetFinishTime(finish_time);
 
   if (commit_state->commit_waits_for_activation) {
+    recordreplay::CommandDiagnosticTrace(
+      "[RUN-2110-2761] ProxyImpl::ScheduledActionCommit 1");
+
     // For some layer types in impl-side painting, the commit is held until the
     // sync tree is activated.  It's also possible that the sync tree has
     // already activated if there was no work to be done.
@@ -1001,6 +1106,54 @@ bool ProxyImpl::DataForCommit::IsValid() const {
   return commit_completion_event.get() && commit_state.get() && unsafe_state &&
          (base::FeatureList::IsEnabled(features::kNonBlockingCommit) ||
           commit_timestamps);
+}
+
+// Sequence number used for frames triggered while repainting when replaying.
+static const uint64_t RepaintSequenceNumber = UINT32_MAX;
+
+void ProxyImpl::RecordReplayRepaintPending() {
+  // A frame sink the main thread gave before the repaint was initialized
+  // first, since its task was posted first. A frame sink lost while frames
+  // keep the scheduler from asking for another isn't replaced, and the repaint
+  // times out.
+  if (scheduler_->RecordReplayCreatingFrameSink() &&
+      !record_replay_frame_sink_) {
+    auto frame_sink = std::make_unique<RecordReplayRepaintFrameSink>(
+        task_runner_provider_->ImplThreadTaskRunner());
+    if (host_impl_->InitializeFrameSink(frame_sink.get())) {
+      record_replay_frame_sink_ = std::move(frame_sink);
+      scheduler_->DidCreateAndInitializeLayerTreeFrameSink();
+    }
+  }
+  scheduler_->RecordReplayRepaintPending();
+}
+
+void ProxyImpl::RecordReplayRepaint() {
+  // When repainting, the main thread has already updated the layout tree and committed
+  // any changes, but the OnBeginFrame IPC message instructing the compositor to do
+  // the resulting paint will not be received, because we're diverged from the recording
+  // and won't get any IPC messages triggered by activity in this process. So, we trigger
+  // a new frame in the scheduler directly, which will hopefully be sufficient to perform
+  // a paint shortly with the special repaint sequence number that will cause the main
+  // thread to be notified about the repaint result.
+  base::TimeTicks now = base::TimeTicks::Now();
+  // Animations tick to the frame time, which stays that of the last frame the
+  // recording began, as the page's animation time does while paused.
+  const viz::BeginFrameArgs& last_args = host_impl_->CurrentBeginFrameArgs();
+  if (last_args.IsValid())
+    now = last_args.frame_time;
+  viz::BeginFrameArgs args = viz::BeginFrameArgs::Create(BEGINFRAME_FROM_HERE,
+                                                         viz::BeginFrameArgs::kManualSourceId,
+                                                         RepaintSequenceNumber,
+                                                         now,
+                                                         now,
+                                                         viz::BeginFrameArgs::DefaultInterval(),
+                                                         viz::BeginFrameArgs::NORMAL, 
+                                                         true /*replay_force_draw*/);
+  // The page may not have changed since its last draw, and a frame without
+  // damage isn't drawn at all.
+  host_impl_->SetFullViewportDamage();
+  scheduler_->OnBeginFrameDerivedImpl(args);
 }
 
 }  // namespace cc

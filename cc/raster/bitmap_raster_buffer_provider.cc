@@ -19,6 +19,9 @@
 #include "cc/trees/layer_tree_frame_sink.h"
 #include "components/viz/common/resources/bitmap_allocation.h"
 #include "components/viz/common/resources/platform_color.h"
+#include "components/viz/service/display/record_replay_render.h"
+
+#include "base/record_replay.h"
 
 namespace cc {
 namespace {
@@ -123,6 +126,12 @@ BitmapRasterBufferProvider::AcquireBufferForRaster(
     backing->mapping = std::move(shm.mapping);
     frame_sink_->DidAllocateSharedBitmap(std::move(shm.region),
                                          backing->shared_bitmap_id);
+
+    if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+      recordreplay::NotifyRasterBuffer(backing->shared_bitmap_id,
+                                       backing->mapping.memory(),
+                                       backing->mapping.size());
+    }
 
     resource.set_software_backing(std::move(backing));
   }
