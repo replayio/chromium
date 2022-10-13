@@ -6,6 +6,7 @@
 
 #include <tuple>
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_node_output.h"
 
 namespace blink {
@@ -120,6 +121,10 @@ void ConstantSourceHandler::HandleStoppableSourceNode() {
   // definitely past the end time, we can stop this node.  (This handles the
   // case where the this source is not connected to the destination and we want
   // to stop it.)
+  REPLAY_ASSERT(
+      "ConstantSourceHandler::HandleStoppableSourceNode %d %d %d %f %f",
+      recordreplay::PointerId(this), end_time_ != kUnknownTime,
+      IsPlayingOrScheduled(), now, end_time_);
   if (end_time_ != kUnknownTime && IsPlayingOrScheduled() &&
       now >= end_time_ + kExtraStopFrames / Context()->sampleRate()) {
     Finish();

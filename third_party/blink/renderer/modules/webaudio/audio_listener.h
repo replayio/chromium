@@ -189,7 +189,7 @@ class AudioListener : public ScriptWrappable, public InspectorHelperMixin {
   AudioFloatArray up_z_values_;
 
   // Synchronize a panner's process() with setting of the state of the listener.
-  mutable base::Lock listener_lock_;
+  mutable base::Lock listener_lock_{"AudioListener"};
   // List for pannerNodes in context. This is updated only in the main thread,
   // and can be referred in audio thread.
   // These raw pointers are safe because PannerHandler::uninitialize()

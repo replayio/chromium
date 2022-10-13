@@ -703,6 +703,10 @@ void AudioParamTimeline::InsertEvent(std::unique_ptr<ParamEvent> event,
 bool AudioParamTimeline::HasValues(size_t current_frame,
                                    double sample_rate,
                                    unsigned render_quantum_frames) const {
+  if (!RecordReplayMayRead()) {
+    // Like failing to take the lock below.
+    return true;
+  }
   base::AutoTryLock try_locker(events_lock_);
 
   if (try_locker.is_acquired()) {
@@ -953,6 +957,9 @@ std::tuple<bool, float> AudioParamTimeline::ValueForContextTime(
     float max_value,
     unsigned render_quantum_frames) {
   {
+    if (!RecordReplayMayRead()) {
+      return std::make_tuple(false, default_value);
+    }
     base::AutoTryLock try_locker(events_lock_);
     if (!try_locker.is_acquired() || !events_.size() ||
         audio_destination.CurrentTime() < events_[0]->Time()) {
@@ -983,6 +990,15 @@ float AudioParamTimeline::ValuesForFrameRange(size_t start_frame,
                                               float min_value,
                                               float max_value,
                                               unsigned render_quantum_frames) {
+  if (!RecordReplayMayRead()) {
+    // Like failing to take the lock below.
+    if (values) {
+      for (unsigned i = 0; i < number_of_values; ++i) {
+        values[i] = default_value;
+      }
+    }
+    return default_value;
+  }
   // We can't contend the lock in the realtime audio thread.
   base::AutoTryLock try_locker(events_lock_);
   if (!try_locker.is_acquired()) {
@@ -2048,6 +2064,11 @@ void AudioParamTimeline::RemoveOldEvents(wtf_size_t event_count) {
   if (n_events > 1) {
     events_.EraseAt(0, std::min(event_count, n_events - 1));
   }
+}
+
+bool AudioParamTimeline::RecordReplayMayRead() const {
+  return !record_replay_handler_ || !record_replay_handler_->IsAudioThread() ||
+         record_replay_handler_->RecordReplayRenderHoldsTimelines();
 }
 
 }  // namespace blink
