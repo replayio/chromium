@@ -22,6 +22,7 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/clamped_math.h"
 #include "base/ranges/algorithm.h"
+#include "base/record_replay.h"
 #include "base/sequence_token.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
@@ -97,17 +98,21 @@ bool ContainsWorker(
 class ThreadGroupImpl::ScopedCommandsExecutor
     : public ThreadGroup::BaseScopedCommandsExecutor {
  public:
-  explicit ScopedCommandsExecutor(ThreadGroupImpl* outer) : outer_(outer) {}
+  explicit ScopedCommandsExecutor(ThreadGroupImpl* outer) : outer_(outer) {
+    DCHECK(!recordreplay::AreEventsDisallowed() || outer_->RecordReplayUnordered());
+  }
 
   ScopedCommandsExecutor(const ScopedCommandsExecutor&) = delete;
   ScopedCommandsExecutor& operator=(const ScopedCommandsExecutor&) = delete;
   ~ScopedCommandsExecutor() { FlushImpl(); }
 
   void ScheduleWakeUp(scoped_refptr<WorkerThreadWaitableEvent> worker) {
+    CHECK(outer_->RecordReplayUnordered() == worker->RecordReplayUnordered());
     workers_to_wake_up_.AddWorker(std::move(worker));
   }
 
   void ScheduleStart(scoped_refptr<WorkerThreadWaitableEvent> worker) {
+    CHECK(outer_->RecordReplayUnordered() == worker->RecordReplayUnordered());
     workers_to_start_.AddWorker(std::move(worker));
   }
 
@@ -210,7 +215,7 @@ class ThreadGroupImpl::WorkerThreadDelegateImpl
 
   // OnMainExit() handles the thread-affine cleanup; WorkerThreadDelegateImpl
   // can thereafter safely be deleted from any thread.
-  ~WorkerThreadDelegateImpl() override = default;
+  ~WorkerThreadDelegateImpl() override {}
 
   // WorkerThreadWaitableEvent::Delegate:
   WorkerThread::ThreadLabel GetThreadLabel() const override;
@@ -760,6 +765,9 @@ bool ThreadGroupImpl::WorkerThreadDelegateImpl::CanCleanupLockRequired(
   if (!is_excess())
     return false;
 
+  if (worker->RecordReplayUnordered())
+    return false;
+
   const TimeTicks last_used_time = worker->GetLastUsedTime();
   return !last_used_time.is_null() &&
          subtle::TimeTicksNowIgnoringOverride() - last_used_time >=
@@ -1033,6 +1041,10 @@ void ThreadGroupImpl::MaintainAtLeastOneIdleWorkerLockRequired(
   if (workers_.size() >= max_tasks_)
     return;
 
+  // Workers can't be created / started non-deterministically.
+  if (recordreplay::AreEventsDisallowed("ThreadGroupImpl::MaintainAtLeastOneIdleWorkerLockRequired"))
+    return;
+
   scoped_refptr<WorkerThreadWaitableEvent> new_worker =
       CreateAndRegisterWorkerLockRequired(executor);
   DCHECK(new_worker);
@@ -1046,6 +1058,10 @@ ThreadGroupImpl::CreateAndRegisterWorkerLockRequired(
   DCHECK_LT(workers_.size(), max_tasks_);
   DCHECK_LT(workers_.size(), kMaxNumberOfWorkers);
   DCHECK(idle_workers_set_.IsEmpty());
+
+  absl::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (record_replay_unordered_)
+    disallow.emplace("ThreadGroupImpl::CreateAndRegisterWorkerLockRequired");
 
   // WorkerThread needs |lock_| as a predecessor for its thread lock because in
   // GetWork(), |lock_| is first acquired and then the thread lock is acquired
@@ -1075,6 +1091,11 @@ size_t ThreadGroupImpl::GetNumAwakeWorkersLockRequired() const {
 }
 
 size_t ThreadGroupImpl::GetDesiredNumAwakeWorkersLockRequired() const {
+  // Unordered thread groups can't create new workers on demand, so we use
+  // a fixed size thread pool for unordered tasks.
+  if (record_replay_unordered_)
+    return 4;
+
   // Number of BEST_EFFORT task sources that are running or queued and allowed
   // to run by the CanRunPolicy.
   const size_t num_running_or_queued_can_run_best_effort_task_sources =
@@ -1130,8 +1151,9 @@ void ThreadGroupImpl::OnShutdownStarted() {
 void ThreadGroupImpl::EnsureEnoughWorkersLockRequired(
     BaseScopedCommandsExecutor* base_executor) {
   // Don't do anything if the thread group isn't started.
-  if (max_tasks_ == 0 || UNLIKELY(join_for_testing_started_))
+  if (max_tasks_ == 0 || UNLIKELY(join_for_testing_started_)) {
     return;
+  }
 
   ScopedCommandsExecutor* executor =
       static_cast<ScopedCommandsExecutor*>(base_executor);
@@ -1147,9 +1169,11 @@ void ThreadGroupImpl::EnsureEnoughWorkersLockRequired(
   // Wake up the appropriate number of workers.
   for (size_t i = 0; i < num_workers_to_wake_up; ++i) {
     MaintainAtLeastOneIdleWorkerLockRequired(executor);
-    WorkerThreadWaitableEvent* worker_to_wakeup = idle_workers_set_.Take();
-    DCHECK(worker_to_wakeup);
-    executor->ScheduleWakeUp(worker_to_wakeup);
+    if (!idle_workers_set_.IsEmpty()) {
+      WorkerThreadWaitableEvent* worker_to_wakeup = idle_workers_set_.Take();
+      DCHECK(worker_to_wakeup);
+      executor->ScheduleWakeUp(worker_to_wakeup);
+    }
   }
 
   // In the case where the loop above didn't wake up any worker and we don't
