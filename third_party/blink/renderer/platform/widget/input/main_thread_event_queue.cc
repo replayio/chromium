@@ -9,6 +9,7 @@
 #include "base/bind.h"
 #include "base/containers/circular_deque.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/record_replay.h"
 #include "cc/metrics/event_metrics.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/input/web_coalesced_input_event.h"
@@ -263,6 +264,7 @@ MainThreadEventQueue::MainThreadEventQueue(
       needs_low_latency_(false),
       needs_unbuffered_input_for_debugger_(false),
       allow_raf_aligned_input_(allow_raf_aligned_input),
+      shared_state_lock_("MainThreadEventQueue.shared_state_lock_"),
       main_task_runner_(main_task_runner),
       widget_scheduler_(std::move(widget_scheduler)) {
   DCHECK(widget_scheduler_);
@@ -429,6 +431,7 @@ void MainThreadEventQueue::PossiblyScheduleMainFrame() {
 }
 
 void MainThreadEventQueue::DispatchEvents() {
+  recordreplay::AssertMaybeEventsDisallowed("[TT-1179-1180] MainThreadEventQueue::DispatchEvents");
   size_t events_to_process;
   size_t queue_size;
 
@@ -575,6 +578,7 @@ void MainThreadEventQueue::DispatchRafAlignedInput(base::TimeTicks frame_time) {
 }
 
 void MainThreadEventQueue::PostTaskToMainThread() {
+  recordreplay::AssertMaybeEventsDisallowed("[TT-1179-1180] MainThreadEventQueue::PostTaskToMainThread");
   main_task_runner_->PostTask(
       FROM_HERE, base::BindOnce(&MainThreadEventQueue::DispatchEvents, this));
 }
@@ -700,6 +704,11 @@ bool MainThreadEventQueue::HandleEventOnMainThread(
 }
 
 void MainThreadEventQueue::SetNeedsMainFrame() {
+  recordreplay::AssertMaybeEventsDisallowed(
+    "[TT-1179-1180] MainThreadEventQueue::SetNeedsMainFrame %d %d",
+    main_task_runner_->BelongsToCurrentThread(),
+    !!client_
+  );
   if (main_task_runner_->BelongsToCurrentThread()) {
     if (raf_fallback_timer_) {
       raf_fallback_timer_->Start(

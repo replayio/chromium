@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "base/check_op.h"
+#include "base/record_replay.h"
 #include "base/strings/stringprintf.h"
 #include "media/base/audio_bus.h"
 #include "third_party/blink/public/platform/modules/mediastream/web_media_stream_audio_sink.h"
@@ -159,7 +160,13 @@ void MediaStreamAudioTrack::OnData(const media::AudioBus& audio_bus,
 
   // Note: Using NoBarrier_Load because the timing of when the audio thread sees
   // a changed |is_enabled_| value can be relaxed.
-  const bool deliver_data = !!base::subtle::NoBarrier_Load(&is_enabled_);
+  // The main thread enables or disables the track while this runs, so which
+  // delivery sees the change is recorded.
+  const bool deliver_data = recordreplay::RecordReplayValue(
+      "MediaStreamAudioTrack::OnData deliver_data",
+      !!base::subtle::NoBarrier_Load(&is_enabled_));
+  REPLAY_ASSERT("MediaStreamAudioTrack::OnData %d %d", (int)deliver_data,
+                audio_bus.frames());
 
   if (deliver_data) {
     deliverer_.OnData(audio_bus, reference_time);

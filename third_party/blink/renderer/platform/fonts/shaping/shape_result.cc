@@ -40,6 +40,7 @@
 #include "base/containers/adapters.h"
 #include "base/memory/ptr_util.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "third_party/blink/renderer/platform/fonts/character_range.h"
 #include "third_party/blink/renderer/platform/fonts/font.h"
@@ -1528,6 +1529,12 @@ scoped_refptr<ShapeResult> ShapeResult::CreateForSpacesInternal(
     float per_glyph_width) {
   DCHECK_GT(length, 0u);
   const SimpleFontData* font_data = font->PrimaryFont();
+  if (!font_data) {
+    recordreplay::Diagnostic(
+        "CreateForSpacesInternal PrimaryFont null start=%u length=%u",
+        start_index, length);
+    return ShapeResult::Create(font, start_index, length, direction);
+  }
   DCHECK(font_data);
   scoped_refptr<ShapeResult> result =
       ShapeResult::Create(font, start_index, length, direction);

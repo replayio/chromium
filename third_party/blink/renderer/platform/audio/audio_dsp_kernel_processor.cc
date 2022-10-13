@@ -29,6 +29,8 @@
  */
 
 #include "third_party/blink/renderer/platform/audio/audio_dsp_kernel_processor.h"
+
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/platform/audio/audio_dsp_kernel.h"
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
 
@@ -125,7 +127,14 @@ void AudioDSPKernelProcessor::Reset() {
   // Forces snap to parameter values - first time.
   // Any processing depending on this value must set it to false at the
   // appropriate time.
-  has_just_reset_ = true;
+  if (recordreplay::IsRecordingOrReplaying()) {
+    // Set under the lock the audio thread reads it under, so which render
+    // quantum sees the reset is ordered.
+    base::AutoLock locker(process_lock_);
+    has_just_reset_ = true;
+  } else {
+    has_just_reset_ = true;
+  }
 
   base::AutoLock locker(process_lock_);
   for (auto& kernel : kernels_) {

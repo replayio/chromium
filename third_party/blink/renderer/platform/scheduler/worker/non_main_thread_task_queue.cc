@@ -8,6 +8,8 @@
 #include "third_party/blink/renderer/platform/scheduler/common/throttling/budget_pool.h"
 #include "third_party/blink/renderer/platform/scheduler/worker/non_main_thread_scheduler_base.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 namespace scheduler {
 
@@ -20,6 +22,9 @@ NonMainThreadTaskQueue::NonMainThreadTaskQueue(
     bool can_be_throttled)
     : task_queue_(base::MakeRefCounted<TaskQueue>(std::move(impl), spec)),
       non_main_thread_scheduler_(non_main_thread_scheduler) {
+  // Pointer registration is needed for sorting in TaskQueueVoterMap.
+  recordreplay::RegisterPointer("NonMainThreadTaskQueue", this);
+
   // Throttling needs |should_notify_observers| to get task timing.
   DCHECK(!can_be_throttled || spec.should_notify_observers)
       << "Throttled queue is not supported with |!should_notify_observers|";
@@ -34,7 +39,9 @@ NonMainThreadTaskQueue::NonMainThreadTaskQueue(
   }
 }
 
-NonMainThreadTaskQueue::~NonMainThreadTaskQueue() = default;
+NonMainThreadTaskQueue::~NonMainThreadTaskQueue() {
+  recordreplay::UnregisterPointer(this);
+}
 
 void NonMainThreadTaskQueue::ShutdownTaskQueue() {
   non_main_thread_scheduler_ = nullptr;

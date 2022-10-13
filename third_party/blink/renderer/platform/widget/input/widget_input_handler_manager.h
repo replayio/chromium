@@ -8,6 +8,7 @@
 #include <atomic>
 #include <memory>
 
+#include "base/record_replay.h"
 #include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "cc/trees/paint_holding_reason.h"
@@ -195,6 +196,12 @@ class PLATFORM_EXPORT WidgetInputHandlerManager final
     return main_thread_task_runner_.get();
   }
 
+  // Set only while recording/replaying.
+  const scoped_refptr<base::SingleThreadTaskRunner>&
+  RecordReplayMainThreadDefaultTaskRunner() const {
+    return record_replay_main_thread_default_task_runner_;
+  }
+
  protected:
   friend class base::RefCountedThreadSafe<WidgetInputHandlerManager>;
   ~WidgetInputHandlerManager() override;
@@ -312,6 +319,10 @@ class PLATFORM_EXPORT WidgetInputHandlerManager final
   // Any thread can access these variables.
   scoped_refptr<MainThreadEventQueue> input_event_queue_;
   scoped_refptr<base::SingleThreadTaskRunner> main_thread_task_runner_;
+  // The main thread's default task runner, which unlike the widget's input
+  // task runner outlives the widget.
+  scoped_refptr<base::SingleThreadTaskRunner>
+      record_replay_main_thread_default_task_runner_;
   scoped_refptr<base::SingleThreadTaskRunner>
       compositor_thread_default_task_runner_;
   scoped_refptr<base::SingleThreadTaskRunner>
@@ -378,7 +389,7 @@ class PLATFORM_EXPORT WidgetInputHandlerManager final
   // the input handling thread (i.e. on the compositor thread if it exists).
   bool has_seen_first_gesture_scroll_update_after_begin_ = false;
 
-  std::unique_ptr<power_scheduler::PowerModeVoter> response_power_mode_voter_;
+  recordreplay::unique_leaky_ptr<power_scheduler::PowerModeVoter> response_power_mode_voter_;
 
   // Timer for count dropped events.
   std::unique_ptr<base::OneShotTimer> dropped_event_counts_timer_;

@@ -23,6 +23,11 @@ scoped_refptr<FontFallbackList> FontFallbackMap::Get(
     const FontDescription& font_description) {
   AutoLockForParallelTextShaping guard(lock_);
   auto iter = fallback_list_for_description_.find(font_description);
+  recordreplay::Assert("[RUN-3109-3229] FontFallbackMap::Get %d %d %d %u",
+                       iter != fallback_list_for_description_.end(),
+                       iter != fallback_list_for_description_.end() ? iter->value->RecordReplayId() : -1,
+                       iter != fallback_list_for_description_.end() ? iter->value->IsValid() : -1,
+                       font_description.GetHash());
   if (iter != fallback_list_for_description_.end()) {
     DCHECK(iter->value->IsValid());
     return iter->value;
@@ -33,16 +38,29 @@ scoped_refptr<FontFallbackList> FontFallbackMap::Get(
 }
 
 void FontFallbackMap::Remove(const FontDescription& font_description) {
+    if (recordreplay::IsRecordingOrReplaying("leak-references","FontFallbackMap::Remove")) {
+    // [RUN-3109] Leak FontFallbackList.
+    return;
+  }
   AutoLockForParallelTextShaping guard(lock_);
   auto iter = fallback_list_for_description_.find(font_description);
   DCHECK_NE(iter, fallback_list_for_description_.end());
   DCHECK(iter->value->IsValid());
   DCHECK(iter->value->HasOneRef());
+  recordreplay::Assert("[RUN-3109-3229] FontFallbackMap::Remove %u",
+                       font_description.GetHash());
   fallback_list_for_description_.erase(iter);
 }
 
 void FontFallbackMap::InvalidateAll() {
+    if (recordreplay::AreEventsDisallowed("leak-references")) {
+    // Leak fallback_list_for_description_ contents.
+    return;
+  }
   lock_.AssertAcquired();
+
+  recordreplay::Assert("[RUN-3109-3229] FontFallbackMap::InvalidateAll");
+
   for (auto& entry : fallback_list_for_description_)
     entry.value->MarkInvalid();
   fallback_list_for_description_.clear();
@@ -58,11 +76,27 @@ void FontFallbackMap::InvalidateInternal(Predicate predicate) {
       entry.value->MarkInvalid();
     }
   }
+
+  if (recordreplay::IsRecordingOrReplaying() && !recordreplay::AreAssertsDisabled()) {
+    std::ostringstream ss;
+    for (auto& entry : invalidated) {
+      ss << entry.GetHash() << ",";
+    }
+    recordreplay::Assert(
+      "[RUN-3109-3229] FontFallbackMap::InvalidateInternal %s", ss.str().c_str());
+  }
+
   fallback_list_for_description_.RemoveAll(invalidated);
 }
 
 void FontFallbackMap::FontsNeedUpdate(FontSelector*,
                                       FontInvalidationReason reason) {
+  if (recordreplay::AreEventsDisallowed("leak-references")) {
+    // Leak fallback_list_for_description_ contents to avoid divergence down the
+    // road.
+    return;
+  }
+
   AutoLockForParallelTextShaping guard(lock_);
   switch (reason) {
     case FontInvalidationReason::kFontFaceLoaded:

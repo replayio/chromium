@@ -12,6 +12,8 @@
 #include "third_party/blink/renderer/platform/bindings/source_location.h"
 #include "v8/include/v8-isolate.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 namespace {
@@ -127,9 +129,15 @@ void FrameOrWorkerScheduler::RemoveLifecycleObserver(
 }
 
 void FrameOrWorkerScheduler::NotifyLifecycleObservers() {
-  for (const auto& observer : lifecycle_observers_) {
-    observer.value->GetCallback().Run(
-        CalculateLifecycleState(observer.value->GetObserverType()));
+  std::vector<ObserverState*> observers;
+  for (const auto& observer : lifecycle_observers_)
+    observers.push_back(observer.value.get());
+  std::sort(observers.begin(), observers.end(),
+            recordreplay::CompareByPointerId());
+
+  for (auto* observer : observers) {
+    observer->GetCallback().Run(
+        CalculateLifecycleState(observer->GetObserverType()));
   }
 }
 
@@ -140,8 +148,14 @@ base::WeakPtr<FrameOrWorkerScheduler> FrameOrWorkerScheduler::GetWeakPtr() {
 FrameOrWorkerScheduler::ObserverState::ObserverState(
     FrameOrWorkerScheduler::ObserverType observer_type,
     FrameOrWorkerScheduler::OnLifecycleStateChangedCallback callback)
-    : observer_type_(observer_type), callback_(callback) {}
+    : observer_type_(observer_type), callback_(callback) {
+  // Pointer registration is needed for sorting in
+  // FrameOrWorkerScheduler::NotifyLifecycleObservers.
+  recordreplay::RegisterPointer("FrameOrWorkerScheduler::ObserverState", this);
+}
 
-FrameOrWorkerScheduler::ObserverState::~ObserverState() = default;
+FrameOrWorkerScheduler::ObserverState::~ObserverState() {
+  recordreplay::UnregisterPointer(this);
+}
 
 }  // namespace blink

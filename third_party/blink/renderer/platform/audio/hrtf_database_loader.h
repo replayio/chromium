@@ -91,7 +91,7 @@ class PLATFORM_EXPORT HRTFDatabaseLoader final
 
   // |lock_| MUST be held when accessing |hrtf_database_| or |thread_| because
   // it can be accessed by multiple threads (e.g multiple AudioContexts).
-  base::Lock lock_;
+  base::Lock lock_{"HRTFDatabaseLoader"};
   std::unique_ptr<HRTFDatabase> hrtf_database_ GUARDED_BY(lock_);
   std::unique_ptr<NonMainThread> thread_ GUARDED_BY(lock_);
 

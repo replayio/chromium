@@ -32,6 +32,7 @@
 #include <algorithm>
 #include <cmath>
 #include "base/feature_list.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/platform/fonts/alternate_font_family.h"
 #include "third_party/blink/renderer/platform/fonts/font_cache.h"
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
@@ -195,17 +196,26 @@ FontPlatformDataCache::SizedFontPlatformDataSet::GetOrCreateFontPlatformData(
                                 : size_to_data_map_.begin()->value.get();
   const auto add_result = size_to_data_map_.insert(rounded_size, nullptr);
   std::unique_ptr<FontPlatformData>* found = &add_result.stored_value->value;
-  if (!add_result.is_new_entry)
-    return found->get();
+  if (!add_result.is_new_entry) {
+    // Sticky nullptr under AreEventsUnavailable must not block retry.
+    if (found->get() ||
+        !recordreplay::AreEventsUnavailable("SizedFontPlatformDataSet"))
+      return found->get();
+  }
 
   if (!another_size) {
     *found = font_cache->CreateFontPlatformData(
         font_description, creation_params, size, alternate_font_name);
-    return found->get();
+  } else {
+    *found = font_cache->ScaleFontPlatformData(*another_size, font_description,
+                                               creation_params, size);
   }
 
-  *found = font_cache->ScaleFontPlatformData(*another_size, font_description,
-                                             creation_params, size);
+  if (!found->get() &&
+      recordreplay::AreEventsUnavailable("SizedFontPlatformDataSet")) {
+    size_to_data_map_.erase(rounded_size);
+    return nullptr;
+  }
   return found->get();
 }
 
