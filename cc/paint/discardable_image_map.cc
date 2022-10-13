@@ -14,6 +14,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/no_destructor.h"
+#include "base/record_replay.h"
 #include "base/trace_event/trace_event.h"
 #include "cc/paint/image_provider.h"
 #include "cc/paint/paint_filter.h"
@@ -356,8 +357,13 @@ class DiscardableImageGenerator {
 
 }  // namespace
 
-DiscardableImageMap::DiscardableImageMap() = default;
-DiscardableImageMap::~DiscardableImageMap() = default;
+DiscardableImageMap::DiscardableImageMap() {
+  recordreplay::RegisterPointer("DiscardableImageMap", this);
+}
+
+DiscardableImageMap::~DiscardableImageMap() {
+  recordreplay::UnregisterPointer(this);
+}
 
 void DiscardableImageMap::Generate(const PaintOpBuffer* paint_op_buffer,
                                    const gfx::Rect& bounds) {
