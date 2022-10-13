@@ -62,6 +62,13 @@ void LargestContentfulPaintCalculator::
         bool is_triggered_by_soft_navigation) {
   uint64_t text_size = largest_text ? largest_text->recorded_size : 0u;
   uint64_t image_size = largest_image ? largest_image->recorded_size : 0u;
+
+  recordreplay::Assert(
+      "[RUN-2317-2316] "
+      "LargestContentfulPaintCalculator::UpdateWebExposedLargestContentfulPaintIfNeeded "
+      "%llu %llu",
+      image_size, text_size);
+
   if (image_size > text_size) {
     if (image_size > largest_reported_size_ &&
         largest_image->paint_time > base::TimeTicks()) {
@@ -175,6 +182,12 @@ void LargestContentfulPaintCalculator::UpdateWebExposedLargestContentfulText(
   const AtomicString& text_id =
       text_element ? text_element->GetIdAttribute() : AtomicString();
   // Always use paint time as start time for text LCP candidate.
+
+  recordreplay::Assert(
+      "[RUN-2317-2316] "
+      "LargestContentfulPaintCalculator::UpdateWebExposedLargestContentfulText %d",
+      text_node->RecordReplayId());
+
   window_performance_->OnLargestContentfulPaintUpdated(
       /*start_time=*/largest_text.paint_time,
       /*render_time=*/largest_text.paint_time,
