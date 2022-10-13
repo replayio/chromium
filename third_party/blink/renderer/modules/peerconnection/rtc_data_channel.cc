@@ -216,6 +216,12 @@ RTCDataChannel::Observer::Observer(
       blink_channel_(blink_channel),
       webrtc_channel_(std::move(channel)) {
   CHECK(webrtc_channel_.get());
+
+  // Because we avoid unregistering this observer non-deterministically,
+  // we also leak a reference to the observer to ensure it isn't destroyed
+  // without having been unregistered first.
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "RTCDataChannel::Observer::Observer"))
+    AddRef();
 }
 
 RTCDataChannel::Observer::~Observer() {
@@ -234,6 +240,17 @@ bool RTCDataChannel::Observer::is_registered() const {
 
 void RTCDataChannel::Observer::Unregister() {
   DCHECK(main_thread_->BelongsToCurrentThread());
+
+  // Avoid changing channel observers non-deterministically.  Upstream no longer
+  // null-checks the channel here, so the guard has to short-circuit the whole
+  // body rather than just the UnregisterObserver() call.  `webrtc_channel_` is
+  // const from M117 on, so the reference cannot be dropped here; the Observer's
+  // own leak-references AddRef() is what keeps the channel alive.
+  if (recordreplay::AreEventsDisallowed("RTCDataChannel::Observer::Unregister")) {
+    blink_channel_ = nullptr;
+    return;
+  }
+
   webrtc_channel_->UnregisterObserver();
   blink_channel_ = nullptr;
 }
@@ -653,7 +670,7 @@ void RTCDataChannel::SetStateToOpenWithoutEvent() {
 }
 
 void RTCDataChannel::DispatchOpenEvent() {
-  DispatchEvent(*Event::Create(event_type_names::kOpen));
+  DispatchEvent(*Event::Create(event_type_names::kOpen), "RTCDataChannel::DispatchOpenEvent");
 }
 
 void RTCDataChannel::OnStateChange(
@@ -678,11 +695,11 @@ void RTCDataChannel::OnStateChange(
     case webrtc::DataChannelInterface::kOpen:
       IncrementCounter(DataChannelCounters::kOpened);
       CreateFeatureHandleForScheduler();
-      DispatchEvent(*Event::Create(event_type_names::kOpen));
+      DispatchEvent(*Event::Create(event_type_names::kOpen), "RTCDataChannel::OnStateChange #1");
       break;
     case webrtc::DataChannelInterface::kClosing:
       if (!closed_from_owner_) {
-        DispatchEvent(*Event::Create(event_type_names::kClosing));
+        DispatchEvent(*Event::Create(event_type_names::kClosing), "RTCDataChannel::OnStateChange #2");
       }
       break;
     case webrtc::DataChannelInterface::kClosed: {
@@ -699,9 +716,9 @@ void RTCDataChannel::OnStateChange(
 
         IncrementErrorCounter(error);
         DispatchEvent(*MakeGarbageCollected<RTCErrorEvent>(
-            event_type_names::kError, error));
+            event_type_names::kError, error), "RTCDataChannel::OnStateChange");
       }
-      DispatchEvent(*Event::Create(event_type_names::kClose));
+      DispatchEvent(*Event::Create(event_type_names::kClose), "RTCDataChannel::OnStateChange #4");
       break;
     }
     default:
@@ -718,7 +735,8 @@ void RTCDataChannel::OnBufferedAmountChange(unsigned sent_data_size) {
 
   if (previous_amount > buffered_amount_low_threshold_ &&
       buffered_amount_ <= buffered_amount_low_threshold_) {
-    DispatchEvent(*Event::Create(event_type_names::kBufferedamountlow));
+    DispatchEvent(*Event::Create(event_type_names::kBufferedamountlow),
+                "RTCDataChannel::OnBufferedAmountChange");
   }
 }
 
@@ -738,7 +756,8 @@ void RTCDataChannel::OnMessage(webrtc::DataBuffer buffer) {
       }
       case V8BinaryType::Enum::kArraybuffer: {
         DOMArrayBuffer* dom_buffer = DOMArrayBuffer::Create(buffer.data);
-        DispatchEvent(*MessageEvent::Create(dom_buffer));
+        DispatchEvent(*MessageEvent::Create(dom_buffer),
+                      "RTCDataChannel::OnMessage #1");
         return;
       }
     }
@@ -750,7 +769,8 @@ void RTCDataChannel::OnMessage(webrtc::DataBuffer buffer) {
       LOG(ERROR) << "Failed convert received data to UTF16";
       return;
     }
-    DispatchEvent(*MessageEvent::Create(text));
+    DispatchEvent(*MessageEvent::Create(text),
+                  "RTCDataChannel::OnMessage #2");
   }
 }
 

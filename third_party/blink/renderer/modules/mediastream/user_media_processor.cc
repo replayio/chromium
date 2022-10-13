@@ -21,6 +21,7 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/not_fatal_until.h"
 #include "base/ranges/algorithm.h"
+#include "base/record_replay.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
@@ -952,6 +953,12 @@ void UserMediaProcessor::SetupVideoInput() {
       request->exclude_monitor_type_surfaces();
 
   if (blink::IsDeviceMediaType(video_controls.stream_type)) {
+    // There is no video capture while recording/replaying: requests fail the
+    // way they do on a machine without cameras.
+    if (recordreplay::IsRecordingOrReplaying("no-video")) {
+      SelectVideoDeviceSettings(request, {});
+      return;
+    }
     current_request_info_->StartTrace("GetVideoInputCapabilities");
     GetMediaDevicesDispatcher()->GetVideoInputCapabilities(
         WTF::BindOnce(&UserMediaProcessor::SelectVideoDeviceSettings,
@@ -1147,6 +1154,12 @@ void UserMediaProcessor::SelectVideoContentSettings() {
 
   current_request_info_->SetVideoCaptureSettings(settings,
                                                  true /* is_content_capture */);
+  // There is no video capture while recording/replaying: screen and tab
+  // capture fail the way they do when the user cancels the picker.
+  if (recordreplay::IsRecordingOrReplaying("no-video")) {
+    GetUserMediaRequestFailed(MediaStreamRequestResult::PERMISSION_DENIED);
+    return;
+  }
   GenerateStreamForCurrentRequestInfo();
 }
 
