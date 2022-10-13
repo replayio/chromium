@@ -889,6 +889,8 @@ class CORE_EXPORT LocalFrame final
 
   bool IsSameOrigin();
 
+  void RegisterRecordReplayAuthTokenObserver();
+  
  private:
   friend class FrameNavigationDisabler;
   // LocalFrameMojoHandler is a part of LocalFrame.
