@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "base/atomic_sequence_num.h"
+#include "base/record_replay.h"
 
 namespace base {
 namespace internal {
@@ -47,6 +48,18 @@ Task::Task(const Location& posted_from,
   // big change and faking it here isn't too bad for now (posting tasks is full
   // of atomic ops already).
   this->sequence_num = g_sequence_nums_for_tracing.GetNext();
+
+  // DelayedTaskManager and Sequence break ties between equal delayed run times
+  // (common for WebRTC task queues, which snap to metronome ticks) with
+  // |sequence_num|, so the replay needs the numbers the recording handed out
+  // across threads. Immediate tasks are never compared by it.
+  if (!this->delayed_run_time.is_null() &&
+      recordreplay::IsRecordingOrReplaying("values",
+                                           "ThreadPoolTaskSequenceNum")) {
+    this->sequence_num = static_cast<int>(recordreplay::RecordReplayValue(
+        "ThreadPoolTaskSequenceNum",
+        static_cast<uintptr_t>(this->sequence_num)));
+  }
 }
 
 // This should be "= default but MSVC has trouble with "noexcept = default" in

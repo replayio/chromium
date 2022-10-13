@@ -13,6 +13,7 @@
 #include "base/apple/bundle_locations.h"
 #include "base/containers/adapters.h"
 #include "base/files/file_path.h"
+#include "base/files/file_util.h"
 #include "base/logging.h"
 #include "base/mac/mac_logging.h"
 #include "base/notreached.h"
@@ -99,7 +100,7 @@ FilePath PathForFrameworkBundleResource(const char* resource_name) {
   NSBundle* bundle = apple::FrameworkBundle();
   NSURL* resource_url = [bundle URLForResource:@(resource_name)
                                  withExtension:nil];
-  return NSURLToFilePath(resource_url);
+  return base::MakeAbsoluteFilePath(NSURLToFilePath(resource_url));
 }
 
 OSType CreatorCodeForCFBundleRef(CFBundleRef bundle) {

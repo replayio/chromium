@@ -9,6 +9,7 @@
 #include "base/check.h"
 #include "base/pickle.h"
 #include "base/rand_util.h"
+#include "base/record_replay.h"
 #include "base/strings/stringprintf.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -16,6 +17,9 @@ namespace base {
 
 // static
 Token Token::CreateRandom() {
+  // https://linear.app/replay/issue/BAC-2424
+  recordreplay::Assert("Token::CreateRandom");
+
   Token token;
 
   // Use base::RandBytes instead of crypto::RandBytes, because crypto calls the
