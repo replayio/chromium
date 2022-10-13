@@ -24,6 +24,8 @@
 #include "mojo/public/cpp/bindings/sync_call_restrictions.h"
 #include "url/gurl.h"
 
+#include "base/record_replay.h"
+
 using base::AutoLock;
 
 namespace gpu {
@@ -51,6 +53,7 @@ GpuChannelHost::GpuChannelHost(
           this,
           static_cast<int32_t>(
               GpuChannelReservedRoutes::kImageDecodeAccelerator)),
+      deferred_message_lock_("GpuChannelHost.context_lock_"),
       sync_point_graph_validation_enabled_(
           features::IsSyncPointGraphValidationEnabled()) {
   mojo::PendingAssociatedRemote<mojom::GpuChannel> channel;
