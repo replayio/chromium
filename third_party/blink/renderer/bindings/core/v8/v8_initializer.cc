@@ -891,6 +891,11 @@ void V8Initializer::InitializeMainThread(
   V8PerIsolateData::From(isolate)->SetThreadDebugger(
       std::make_unique<MainThreadDebugger>(isolate));
 
+  // Replay: instrumented JS before the first checkpoint can start the
+  // recording.
+  V8RecordReplaySetInstrumentedScriptBeforeFirstCheckpointCallback(
+      RecordReplayOnInstrumentedScriptBeforeFirstCheckpoint);
+
   // The ArrayBuffer partition is placed inside V8's virtual memory cage if it
   // is enabled. For that reason, the partition can only be initialized after V8
   // has been initialized.
