@@ -231,6 +231,11 @@ void NodeRareData::ClearColumnPseudoElements(wtf_size_t to_keep) {
   data->ClearColumnPseudoElements(to_keep);
 }
 
+CSSStyleDeclaration* NodeRareData::GetInlineCSSStyleDeclaration() {
+  return static_cast<InlineCSSStyleDeclaration*>(
+      GetField(FieldId::kCssomWrapper));
+}
+
 RareDataUpdate<CSSStyleDeclaration>
 NodeRareData::EnsureInlineCSSStyleDeclaration(Element* owner_element) {
   return EnsureField<InlineCSSStyleDeclaration>(FieldId::kCssomWrapper,

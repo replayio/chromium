@@ -37,6 +37,8 @@
 #include "third_party/blink/renderer/core/dom/node.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
+
 namespace blink {
 
 class MutationObserverInterestGroup;
@@ -95,6 +97,8 @@ class ChildListMutationScope final {
 
  public:
   explicit ChildListMutationScope(Node& target) : target_(&target) {
+    list_node_id_ = RecordReplayOnDOMMutation(target, "childList");
+
     Document& document = target.GetDocument();
     if (!document.MayHaveMutationObserversOfType(kMutationTypeChildList) ||
         document.UnobservedChildListMutationTarget() == &target) {
@@ -136,12 +140,22 @@ class ChildListMutationScope final {
 
   void ChildAdded(Node& child) {
     if (accumulator_) {
+    int node_id = RecordReplayOnDOMMutation(child, "childAdded");
+    if (node_id != -1) {
+      recordreplay::AddDependencyGraphEdge(list_node_id_, node_id,
+                                           "{\"kind\":\"mutationScope\"}");
+    }
       accumulator_->ChildAdded(child);
     }
   }
 
   void WillRemoveChild(Node& child) {
     if (accumulator_) {
+    int node_id = RecordReplayOnDOMMutation(child, "willRemoveChild");
+    if (node_id != -1) {
+      recordreplay::AddDependencyGraphEdge(list_node_id_, node_id,
+                                           "{\"kind\":\"mutationScope\"}");
+    }
       accumulator_->WillRemoveChild(child);
     }
   }
@@ -152,6 +166,7 @@ class ChildListMutationScope final {
   // The document whose UnobservedChildListMutationTarget() this scope set to
   // |target_|, if it did; the destructor resets it.
   Document* cached_unobserved_document_ = nullptr;
+  int list_node_id_ = -1;
 };
 
 }  // namespace blink

@@ -208,6 +208,10 @@ class CORE_EXPORT NodeRareData final : public GarbageCollected<NodeRareData> {
   ColumnPseudoElement* GetColumnPseudoElement(wtf_size_t idx) const;
   void ClearColumnPseudoElements(wtf_size_t to_keep);
 
+  // [Replay] Non-creating accessor, mirroring GetInlineStylePropertyMap() below:
+  // Element::style() must not CREATE a CSSOM wrapper while replay-only script is
+  // running, but may return one that already exists. See [RUN-1764].
+  CSSStyleDeclaration* GetInlineCSSStyleDeclaration();
   RareDataUpdate<CSSStyleDeclaration> EnsureInlineCSSStyleDeclaration(
       Element* owner_element);
 
