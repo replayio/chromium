@@ -6,12 +6,15 @@
 
 #include <stddef.h>
 
+#include <optional>
 #include <string_view>
 
 #include "base/check.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/win/resource_util.h"
 #include "ui/base/resource/resource_scale_factor.h"
+
+#include "base/record_replay.h"
 
 namespace ui {
 
@@ -35,6 +38,11 @@ std::optional<std::string_view> ResourceDataDLL::GetStringPiece(
     uint16_t resource_id) const {
   void* data_ptr;
   size_t data_size;
+
+  // RUN-2620
+  if (recordreplay::IsInReplayCode("ResourceDataDLL::GetStringPiece"))
+    return std::nullopt;
+
   if (base::win::GetDataResourceFromModule(module_,
                                            resource_id,
                                            &data_ptr,

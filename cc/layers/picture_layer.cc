@@ -23,6 +23,8 @@
 #include "third_party/skia/include/core/SkPictureRecorder.h"
 #include "ui/gfx/geometry/rect_conversions.h"
 
+#include "base/record_replay.h"
+
 namespace cc {
 
 scoped_refptr<PictureLayer> PictureLayer::Create(ContentLayerClient* client) {
@@ -57,9 +59,12 @@ void PictureLayer::PushPropertiesTo(
       commit_state.device_viewport_rect.size());
   layer_impl->SetIsBackdropFilterMask(is_backdrop_filter_mask());
 
+  recordreplay::Assert("[RUN-2104-2296] PictureLayer::PushPropertiesTo B");
   layer_impl->UpdateRasterSource(CreateRasterSource(),
                                  &last_updated_invalidation_.Write(*this),
                                  nullptr, nullptr);
+  recordreplay::Assert("[RUN-2104-2296] PictureLayer::PushPropertiesTo C");
+
   DCHECK(last_updated_invalidation_.Read(*this).IsEmpty());
 }
 
@@ -213,6 +218,10 @@ void PictureLayer::CaptureContent(const gfx::Rect& rect,
 
 void PictureLayer::DropRecordingSourceContentIfInvalid(
     int source_frame_number) {
+  // https://linear.app/replay/issue/RUN-885
+  recordreplay::Assert("PictureLayer::DropRecordingSourceContentIfInvalid %d %d",
+                       this->id(), source_frame_number);
+
   gfx::Size recording_source_size = recording_source_.Read(*this).size();
 
   gfx::Size layer_bounds = bounds();
