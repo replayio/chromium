@@ -176,6 +176,10 @@ class BASE_EXPORT WorkerThread : public RefCountedThreadSafe<WorkerThread>,
 
   size_t sequence_num() const { return sequence_num_; }
 
+  bool RecordReplayUnordered() const {
+    return record_replay_unordered_;
+  }
+
  protected:
   friend class RefCountedThreadSafe<WorkerThread>;
   class Thread;
@@ -258,6 +262,9 @@ class BASE_EXPORT WorkerThread : public RefCountedThreadSafe<WorkerThread>,
 
   // Used to terminate WorkerThread::WakeUp trace event flows.
   const intptr_t flow_terminator_;
+
+  // Whether operations on this worker thread may be unordered when recording/replaying.
+  bool record_replay_unordered_ = false;
 
   // Service thread task runner.
   scoped_refptr<SingleThreadTaskRunner> io_thread_task_runner_;

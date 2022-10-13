@@ -23,6 +23,7 @@
 #include "base/observer_list.h"
 #include "base/rand_util.h"
 #include "base/ranges/algorithm.h"
+#include "base/record_replay.h"
 #include "base/task/sequence_manager/enqueue_order.h"
 #include "base/task/sequence_manager/task_queue_impl.h"
 #include "base/task/sequence_manager/task_time_observer.h"
@@ -187,6 +188,7 @@ SequenceManagerImpl::SequenceManagerImpl(
       empty_queues_to_reload_(associated_thread_),
       main_thread_only_(this, associated_thread_, settings_, settings_.clock),
       clock_(settings_.clock) {
+  recordreplay::RegisterPointer("SequenceManagerImpl", this);
   TRACE_EVENT_OBJECT_CREATED_WITH_ID(
       TRACE_DISABLED_BY_DEFAULT("sequence_manager"), "SequenceManager", this);
   main_thread_only().selector.SetTaskQueueSelectorObserver(this);
@@ -198,6 +200,9 @@ SequenceManagerImpl::SequenceManagerImpl(
 }
 
 SequenceManagerImpl::~SequenceManagerImpl() {
+  recordreplay::Assert("[RUN-2217-2269] ~SequenceManagerImpl %d", recordreplay::PointerId(this));
+
+  recordreplay::UnregisterPointer(this);
   DCHECK_CALLED_ON_VALID_THREAD(associated_thread_->thread_checker);
   TRACE_EVENT_OBJECT_DELETED_WITH_ID(
       TRACE_DISABLED_BY_DEFAULT("sequence_manager"), "SequenceManager", this);
@@ -493,6 +498,11 @@ void SequenceManagerImpl::ScheduleWork() {
 void SequenceManagerImpl::SetNextWakeUp(LazyNow* lazy_now,
                                         absl::optional<WakeUp> wake_up) {
   auto next_wake_up = AdjustWakeUp(wake_up, lazy_now);
+
+  recordreplay::Assert(
+    "[RUN-2801-2978] SequenceManagerImpl::SetNextWakeUp %d",
+    next_wake_up && next_wake_up->is_immediate());
+
   if (next_wake_up && next_wake_up->is_immediate()) {
     ScheduleWork();
   } else {
@@ -611,6 +621,7 @@ SequenceManagerImpl::SelectNextTaskImpl(LazyNow& lazy_now,
   while (true) {
     internal::WorkQueue* work_queue =
         main_thread_only().selector.SelectWorkQueueToService(option);
+
     TRACE_EVENT_OBJECT_SNAPSHOT_WITH_ID(
         TRACE_DISABLED_BY_DEFAULT("sequence_manager.debug"), "SequenceManager",
         this,
@@ -620,9 +631,17 @@ SequenceManagerImpl::SelectNextTaskImpl(LazyNow& lazy_now,
     if (!work_queue)
       return absl::nullopt;
 
+    REPLAY_ASSERT(
+        "[RUN-1124-1803] SequenceManagerImpl::SelectNextTaskImpl A %zu %s %d",
+        work_queue->Size(), work_queue->name(),
+        work_queue->GetFrontTask()->RecordReplayId());
+
     // If the head task was canceled, remove it and run the selector again.
     if (UNLIKELY(work_queue->RemoveAllCanceledTasksFromFront()))
       continue;
+
+    recordreplay::Assert(
+        "[RUN-1124-1803] SequenceManagerImpl::SelectNextTaskImpl B");
 
     if (UNLIKELY(work_queue->GetFrontTask()->nestable ==
                      Nestable::kNonNestable &&
@@ -638,6 +657,9 @@ SequenceManagerImpl::SelectNextTaskImpl(LazyNow& lazy_now,
           std::move(deferred_task));
       continue;
     }
+
+    recordreplay::Assert(
+        "[RUN-1124-1803] SequenceManagerImpl::SelectNextTaskImpl C");
 
 #if DCHECK_IS_ON() && !BUILDFLAG(IS_NACL)
     LogTaskDebugInfo(work_queue);
@@ -657,6 +679,11 @@ SequenceManagerImpl::SelectNextTaskImpl(LazyNow& lazy_now,
       executing_task.pending_task.task = DoNothing();
     }
 
+    REPLAY_ASSERT(
+        "[RUN-1124-1803] SequenceManagerImpl::SelectNextTaskImpl D %zu %s %d",
+        work_queue->Size(), work_queue->name(),
+        executing_task.pending_task.RecordReplayId());
+
     return SelectedTask(
         executing_task.pending_task,
         executing_task.task_queue->task_execution_trace_logger(),
@@ -671,8 +698,10 @@ void SequenceManagerImpl::DidRunTask(LazyNow& lazy_now) {
       *main_thread_only().task_execution_stack.rbegin();
 
   NotifyDidProcessTask(&executing_task, &lazy_now);
+  REPLAY_ASSERT("SequenceManagerImpl::DidRunTask nesting_depth %d %d",
+                       main_thread_only().nesting_depth,
+                       executing_task.pending_task.RecordReplayId());
   main_thread_only().task_execution_stack.pop_back();
-
   if (main_thread_only().nesting_depth == 0)
     CleanUpQueues();
 }
@@ -736,6 +765,7 @@ absl::optional<WakeUp> SequenceManagerImpl::AdjustWakeUp(
   DCHECK_CALLED_ON_VALID_THREAD(associated_thread_->thread_checker);
   if (!wake_up)
     return absl::nullopt;
+
   // Overdue work needs to be run immediately.
   if (lazy_now->Now() >= wake_up->earliest_time())
     return WakeUp{};
@@ -984,7 +1014,22 @@ bool SequenceManagerImpl::GetAndClearSystemIsQuiescentBit() {
 }
 
 EnqueueOrder SequenceManagerImpl::GetNextSequenceNumber() {
-  return enqueue_order_generator_.GenerateNext();
+  EnqueueOrder rv = enqueue_order_generator_.GenerateNext();
+
+  // Use a zero enqueue order for all unordered tasks when recording/replaying.
+  if (recordreplay::AreEventsDisallowed("unordered-tasks") ||
+      recordreplay::AreEventsPassedThrough("unordered-tasks")) {
+    memset(&rv, 0, sizeof(rv));
+    return rv;
+  }
+
+  // EnqueueOrders need to be the same when replaying as when recording,
+  // because they affect the order in which tasks will run. We could use
+  // an ordered lock here, but it's more efficient to just record/replay
+  // the EnqueueOrders which were created when recording.
+  recordreplay::RecordReplayBytes("GetNextSequenceNumber", &rv, sizeof(rv));
+
+  return rv;
 }
 
 std::unique_ptr<trace_event::ConvertableToTraceFormat>
@@ -1063,6 +1108,8 @@ void SequenceManagerImpl::ReclaimMemory() {
 
 void SequenceManagerImpl::CleanUpQueues() {
   main_thread_only().queues_to_delete.clear();
+
+  recordreplay::Assert("[RUN-2217] SequenceManagerImpl::CleanUpQueues Done");
 }
 
 WeakPtr<SequenceManagerImpl> SequenceManagerImpl::GetWeakPtr() {
@@ -1075,7 +1122,7 @@ void SequenceManagerImpl::SetDefaultTaskRunner(
 }
 
 const TickClock* SequenceManagerImpl::GetTickClock() const {
-  return any_thread_clock();
+  return any_thread_clock_maybe_events_disallowed();
 }
 
 TimeTicks SequenceManagerImpl::NowTicks() const {

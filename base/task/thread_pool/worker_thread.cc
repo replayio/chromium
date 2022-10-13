@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <optional>
 #include <utility>
 
 #include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc_buildflags.h"
@@ -40,6 +41,8 @@
     PA_CONFIG(THREAD_CACHE_SUPPORTED)
 #include "base/allocator/partition_allocator/src/partition_alloc/thread_cache.h"
 #endif
+
+#include "base/record_replay.h"
 
 namespace base::internal {
 
@@ -147,7 +150,8 @@ WorkerThread::WorkerThread(ThreadType thread_type_hint,
       sequence_num_(sequence_num),
       flow_terminator_(flow_terminator == nullptr
                            ? reinterpret_cast<intptr_t>(this)
-                           : reinterpret_cast<intptr_t>(flow_terminator)) {
+                           : reinterpret_cast<intptr_t>(flow_terminator)),
+      record_replay_unordered_(recordreplay::AreEventsDisallowed()) {
   DCHECK(task_tracker_);
   DCHECK(CanUseBackgroundThreadTypeForWorkerThread() ||
          thread_type_hint_ != ThreadType::kBackground);
@@ -266,6 +270,10 @@ void WorkerThread::UpdateThreadType(ThreadType desired_thread_type) {
 }
 
 void WorkerThread::ThreadMain() {
+  std::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (record_replay_unordered_)
+    disallow.emplace("WorkerThread::ThreadMain");
+
 #if (BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_NACL)) || BUILDFLAG(IS_FUCHSIA)
   DCHECK(io_thread_task_runner_);
   FileDescriptorWatcher file_descriptor_watcher(io_thread_task_runner_);
