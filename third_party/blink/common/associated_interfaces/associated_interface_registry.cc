@@ -4,6 +4,8 @@
 
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_registry.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 AssociatedInterfaceRegistry::AssociatedInterfaceRegistry() = default;
@@ -24,8 +26,9 @@ bool AssociatedInterfaceRegistry::TryBindInterface(
     const std::string& name,
     mojo::ScopedInterfaceEndpointHandle* handle) {
   auto it = interfaces_.find(name);
-  if (it == interfaces_.end())
+  if (it == interfaces_.end()) {
     return false;
+  }
   it->second.Run(std::move(*handle));
   return true;
 }
