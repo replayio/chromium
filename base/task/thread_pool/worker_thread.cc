@@ -41,6 +41,8 @@
 #include "base/allocator/partition_allocator/src/partition_alloc/thread_cache.h"
 #endif
 
+#include "base/record_replay.h"
+
 namespace base::internal {
 
 constexpr TimeDelta WorkerThread::Delegate::kPurgeThreadCacheIdleDelay;
@@ -139,7 +141,8 @@ WorkerThread::WorkerThread(ThreadType thread_type_hint,
       task_tracker_(std::move(task_tracker)),
       thread_type_hint_(thread_type_hint),
       current_thread_type_(GetDesiredThreadType()),
-      sequence_num_(sequence_num) {
+      sequence_num_(sequence_num),
+      record_replay_unordered_(recordreplay::AreEventsDisallowed()) {
   DCHECK(task_tracker_);
   DCHECK(CanUseBackgroundThreadTypeForWorkerThread() ||
          thread_type_hint_ != ThreadType::kBackground);
@@ -256,6 +259,10 @@ void WorkerThread::UpdateThreadType(ThreadType desired_thread_type) {
 }
 
 void WorkerThread::ThreadMain() {
+  absl::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (record_replay_unordered_)
+    disallow.emplace("WorkerThread::ThreadMain");
+
 #if (BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_NACL)) || BUILDFLAG(IS_FUCHSIA)
   DCHECK(io_thread_task_runner_);
   FileDescriptorWatcher file_descriptor_watcher(io_thread_task_runner_);

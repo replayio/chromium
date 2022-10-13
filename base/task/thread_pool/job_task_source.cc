@@ -11,6 +11,7 @@
 #include "base/check_op.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
+#include "base/record_replay.h"
 #include "base/notreached.h"
 #include "base/task/common/checked_lock.h"
 #include "base/task/thread_pool/pooled_task_runner_delegate.h"
@@ -33,7 +34,15 @@ static_assert(
 
 }  // namespace
 
-JobTaskSourceNew::State::State() = default;
+// [RecordReplay] The ordered-lock name that used to be attached to
+// JobTaskSource::worker_lock_ in the constructor init list.  Upstream deleted
+// worker_lock_ at M121 when it rewrote this class; the only CheckedLock left is
+// this one, and without a name CheckedLock(UniversalSuccessor) leaves it
+// unordered, which is exactly the determinism this commit exists to provide.
+// The in-class initializer stays as upstream wrote it and is overridden here,
+// as the fork did for worker_lock_.
+JobTaskSourceNew::State::State()
+    : increment_worker_count_lock_(recordreplay::AreEventsDisallowed() ? nullptr : "JobTaskSourceNew::State.increment_worker_count_lock_") {}
 JobTaskSourceNew::State::~State() = default;
 
 JobTaskSourceNew::State::Value JobTaskSourceNew::State::Cancel() {
@@ -119,6 +128,11 @@ bool JobTaskSourceNew::State::WillReenqueue() {
 
 JobTaskSourceNew::State::Value JobTaskSourceNew::State::Load() const {
   return {value_.load(std::memory_order_relaxed)};
+}
+
+JobTaskSourceNew::State::Value
+JobTaskSourceNew::State::RecordReplayLoadUnordered() const {
+  return {value_.load_unordered(std::memory_order_relaxed)};
 }
 
 JobTaskSourceNew::JobTaskSourceNew(
@@ -312,7 +326,7 @@ TaskSource::RunStatus JobTaskSourceNew::WillRunTask() {
 size_t JobTaskSourceNew::GetRemainingConcurrency() const {
   // It is safe to read |state_| without a lock since this variable is atomic,
   // and no other state is synchronized with GetRemainingConcurrency().
-  const auto state = state_.Load();
+  const auto state = state_.RecordReplayLoadUnordered();
   if (state.canceled()) {
     return 0;
   }

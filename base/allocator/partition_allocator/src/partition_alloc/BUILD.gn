@@ -771,7 +771,7 @@ if (is_clang_or_gcc) {
       "//build/config/compiler:wexit_time_destructors",
     ]
 
-    deps = []
+    deps = [ "//base:debugging_buildflags" ]
     if (is_fuchsia) {
       public_deps += [ "//third_party/fuchsia-sdk/sdk/pkg/fit" ]
     }
