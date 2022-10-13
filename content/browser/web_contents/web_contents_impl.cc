@@ -37,6 +37,7 @@
 #include "base/observer_list.h"
 #include "base/process/process.h"
 #include "base/ranges/algorithm.h"
+#include "base/record_replay.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
@@ -1310,6 +1311,13 @@ std::unique_ptr<WebContentsImpl> WebContentsImpl::CreateWithOpener(
   }
   std::unique_ptr<WebContentsImpl> new_contents(
       new WebContentsImpl(params.browser_context));
+
+  // Forward flag indicating that this web-contents is being created
+  // for a replay.io recording.
+  if (params.record_replay_for_recording) {
+    new_contents->record_replay_for_recording_ = true;
+  }
+
   new_contents->SetOpenerForNewContents(opener, params.opener_suppressed);
   new_contents->SetDelegate(params.delegate);
 
@@ -3448,6 +3456,13 @@ void WebContentsImpl::Init(const WebContents::CreateParams& params,
     last_active_time_ = params.last_active_time;
   }
 
+  // RecordReplay [RUN-2762]
+  // If the `record_replay_for_recording` flag is set on the params, then
+  // `site_instance` on params should be null.
+  if (params.record_replay_for_recording) {
+    CHECK(params.site_instance.get() == nullptr);
+  }
+
   scoped_refptr<SiteInstanceImpl> site_instance =
       static_cast<SiteInstanceImpl*>(params.site_instance.get());
   if (!site_instance) {
@@ -3455,6 +3470,15 @@ void WebContentsImpl::Init(const WebContents::CreateParams& params,
   }
   if (params.desired_renderer_state == CreateParams::kNoRendererProcess) {
     site_instance->PreventAssociationWithSpareProcess();
+  }
+  if (params.record_replay_for_recording) {
+    // RecordReplay [RUN-2762]
+    // If the `record_replay_for_recording` flag is set on the params, then
+    // we need to tell the site instance that was created that
+    static_cast<SiteInstanceImpl*>(site_instance.get())
+        ->PreventAssociationWithSpareProcess();
+    static_cast<SiteInstanceImpl*>(site_instance.get())
+        ->RecordReplaySetForRecording();
   }
 
   // Iniitalize the primary FrameTree.
