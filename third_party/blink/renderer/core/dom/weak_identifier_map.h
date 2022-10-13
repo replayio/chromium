@@ -44,6 +44,10 @@ class WeakIdentifierMap final
     return result;
   }
 
+  static bool HasIdentifier(T* object) {
+    return Instance().object_to_identifier_.Contains(object);
+  }
+
   // If the object is not found, returns 0 which is not a valid identifier.
   static IdentifierType ExistingIdentifier(T* object) {
     auto it_result = Instance().object_to_identifier_.find(object);
