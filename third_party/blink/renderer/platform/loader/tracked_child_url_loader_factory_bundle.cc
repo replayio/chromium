@@ -151,7 +151,7 @@ HostChildURLLoaderFactoryBundle::HostChildURLLoaderFactoryBundle(
                             "on the main renderer thread";
 }
 
-HostChildURLLoaderFactoryBundle::~HostChildURLLoaderFactoryBundle() = default;
+HostChildURLLoaderFactoryBundle::~HostChildURLLoaderFactoryBundle() {}
 
 std::unique_ptr<network::PendingSharedURLLoaderFactory>
 HostChildURLLoaderFactoryBundle::Clone() {
