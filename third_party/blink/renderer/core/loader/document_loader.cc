@@ -177,6 +177,8 @@
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
+
 namespace blink {
 namespace {
 
@@ -228,6 +230,35 @@ WebVector<WebString> CopyForceEnabledOriginTrials(
 bool IsPagePopupRunningInWebTest(LocalFrame* frame) {
   return frame && frame->GetPage()->GetChromeClient().IsPopup() &&
          WebTestSupport::IsRunningWebTest();
+}
+
+ResourceRequest BuildRecordReplayNavigationRequest(
+    const KURL& url,
+    const LocalFrame* frame,
+    uint64_t inspector_id,
+    const AtomicString& http_method,
+    const scoped_refptr<EncodedFormData>& http_body,
+    const AtomicString& http_content_type,
+    const AtomicString& referrer) {
+  ResourceRequest request(url);
+  if (inspector_id) {
+    request.SetInspectorId(inspector_id);
+  }
+  request.SetHttpMethod(http_method);
+  if (http_body) {
+    request.SetHttpBody(http_body);
+  }
+  if (!http_content_type.IsNull()) {
+    request.SetHTTPContentType(http_content_type);
+  }
+  if (!referrer.IsNull()) {
+    request.SetReferrerString(referrer);
+  }
+  request.SetMode(network::mojom::RequestMode::kNavigate);
+  request.SetRequestDestination(frame && frame->Owner()
+                                    ? network::mojom::RequestDestination::kIframe
+                                    : network::mojom::RequestDestination::kDocument);
+  return request;
 }
 
 struct SameSizeAsDocumentLoader
@@ -1186,6 +1217,8 @@ void DocumentLoader::BodyDataReceivedImpl(BodyData& data) {
     probe::DidReceiveData(probe::ToCoreProbeSink(GetFrame()),
                           main_resource_identifier_, this, encoded_data.data(),
                           encoded_data.size());
+    recordreplay::OnNetworkReceiveData(main_resource_identifier_,
+                                       encoded_data.data(), (int)encoded_data.size());
   }
 
   TRACE_EVENT1("loading", "DocumentLoader::HandleData", "length",
@@ -1220,6 +1253,9 @@ void DocumentLoader::BodyLoadingFinished(
     probe::DidFinishLoading(
         probe::ToCoreProbeSink(GetFrame()), main_resource_identifier_, this,
         completion_time, total_encoded_data_length, total_decoded_body_length);
+    recordreplay::OnNetworkFinishLoading(main_resource_identifier_,
+                                         total_encoded_data_length,
+                                         total_decoded_body_length);
 
     DOMWindowPerformance::performance(*frame_->DomWindow())
         ->OnBodyLoadFinished(total_encoded_body_length,
@@ -1259,6 +1295,7 @@ void DocumentLoader::BodyLoadingFinished(
   probe::DidFailLoading(probe::ToCoreProbeSink(GetFrame()),
                         main_resource_identifier_, this, resource_error,
                         frame_->GetDevToolsFrameToken());
+  recordreplay::OnNetworkFail(main_resource_identifier_, *error);
   GetFrame()->Console().DidFailLoading(this, main_resource_identifier_,
                                        resource_error);
   LoadFailed(resource_error);
@@ -1361,6 +1398,15 @@ void DocumentLoader::HandleRedirect(
   probe::WillSendNavigationRequest(
       probe::ToCoreProbeSink(GetFrame()), main_resource_identifier_, this,
       url_after_redirect, http_method_, http_body_.get());
+  if (recordreplay::IsRecordingOrReplaying("notify-network")) {
+    ResourceRequest request = BuildRecordReplayNavigationRequest(
+        url_after_redirect, frame_.Get(), 0, http_method_, http_body_,
+        http_content_type_, referrer_);
+    recordreplay::OnNetworkNavigationRedirect(main_resource_identifier_,
+                                              url_after_redirect,
+                                              request,
+                                              redirect_response);
+  }
 
   DCHECK(!GetTiming().FetchStart().is_null());
   GetTiming().AddRedirect(url_before_redirect, url_after_redirect);
@@ -1821,6 +1867,13 @@ void DocumentLoader::StartLoadingInternal() {
   // so we don't MarkFetchStart here.
   main_resource_identifier_ = CreateUniqueIdentifier();
 
+  if (recordreplay::IsRecordingOrReplaying("notify-network")) {
+    ResourceRequest request = BuildRecordReplayNavigationRequest(
+        url_, frame_.Get(), main_resource_identifier_, http_method_, http_body_,
+        http_content_type_, referrer_);
+    recordreplay::OnNetworkPrepareRequest(nullptr, nullptr, request);
+  }
+
   virtual_time_pauser_ =
       frame_->GetFrameScheduler()->CreateWebScopedVirtualTimePauser(
           url_.GetString(),
@@ -1852,6 +1905,7 @@ void DocumentLoader::StartLoadingInternal() {
   probe::DidReceiveResourceResponse(probe::ToCoreProbeSink(GetFrame()),
                                     main_resource_identifier_, this, response_,
                                     nullptr /* resource */);
+  recordreplay::OnNetworkReceiveResponse(main_resource_identifier_, response_);
 
   HandleResponse();
 
@@ -1884,6 +1938,14 @@ void DocumentLoader::StartLoadingResponse() {
   CHECK_GE(state_, kCommitted);
 
   CreateParserPostCommit();
+
+  // The above call will initialize the LocalWindowProxy for the initial
+  // document which creates the first record/replay checkpoint. Nodes/edges
+  // we create before this point will be ignored so we indicate the document
+  // is starting to load right afterwards.
+  recordreplay::AutoDependencyExecution execute(
+    recordreplay::NewDependencyGraphNode("{\"kind\":\"documentStartLoadingResponse\"}")
+  );
 
   // The main document from an MHTML archive is not loaded from its HTTP
   // response, but from the main resource within the archive (in the response).
@@ -2887,6 +2949,9 @@ void DocumentLoader::CommitNavigation() {
 }
 
 void DocumentLoader::CreateParserPostCommit() {
+  // https://linear.app/replay/issue/BAC-2424
+  recordreplay::Assert("DocumentLoader::CreateParserPostCommit");
+
   SpeculationRulesHeader::ProcessHeadersForDocumentResponse(
       response_, *frame_->DomWindow());
 
