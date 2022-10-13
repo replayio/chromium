@@ -29,6 +29,8 @@
 #include "third_party/blink/renderer/platform/wtf/text/ascii_ctype.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 static const std::array<DateTimeFormat::FieldType, 26>
@@ -102,6 +104,8 @@ static DateTimeFormat::FieldType MapCharacterToFieldType(const UChar ch) {
 }
 
 bool DateTimeFormat::Parse(const String& source, TokenHandler& token_handler) {
+  recordreplay::Assert("[RUN-1548] DateTimeFormat::Parse %s", source.Utf8().c_str());
+
   enum State {
     kStateInQuote,
     kStateInQuoteQuote,
