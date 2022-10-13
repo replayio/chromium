@@ -256,6 +256,8 @@ void DirectRenderer::DrawFrame(
   output_surface_->SetNeedsMeasureNextDrawLatency();
   BeginDrawingFrame();
 
+  recordreplay::AssertMaybeEventsDisallowed("[RUN-2847-3001] DirectRenderer::DrawFrame A");
+
   if (!base::FeatureList::IsEnabled(features::kRpdqFilterLookupOptimizations)) {
     // Determine the output rects for render passes with pixel-moving backdrop
     // filters.
@@ -283,6 +285,8 @@ void DirectRenderer::DrawFrame(
       }
     }
   }
+
+  recordreplay::AssertMaybeEventsDisallowed("[RUN-2847-3001] DirectRenderer::DrawFrame B");
 
   gfx::ColorSpace frame_color_space =
       RenderPassColorSpace(current_frame()->root_render_pass);
@@ -408,6 +412,8 @@ void DirectRenderer::DrawFrame(
   DecideRenderPassAllocationsForFrame(*render_passes_in_draw_order,
                                       skip_root_render_pass_allocation);
 
+  recordreplay::AssertMaybeEventsDisallowed("[RUN-2847-3001] DirectRenderer::DrawFrame C");
+
   // Draw all non-root render passes except for the root render pass.
   total_pixels_rendered_this_frame_ = 0;
   for (const auto& pass : *render_passes_in_draw_order) {
@@ -415,6 +421,8 @@ void DirectRenderer::DrawFrame(
       break;
     DrawRenderPassAndExecuteCopyRequests(pass.get(), tracked_element_rects);
   }
+
+  recordreplay::AssertMaybeEventsDisallowed("[RUN-2847-3001] DirectRenderer::DrawFrame D");
 
   bool skip_drawing_root_render_pass =
       current_frame()->root_damage_rect.IsEmpty() && use_partial_swap_ &&
@@ -463,6 +471,8 @@ void DirectRenderer::DrawFrame(
 
   if (overlay_processor_)
     overlay_processor_->ScheduleOverlays(resource_provider_);
+    
+  recordreplay::AssertMaybeEventsDisallowed("[RUN-2847-3001] DirectRenderer::DrawFrame E");
 
   // The current drawing frame is valid only during the duration of this
   // function. Clear the pointers held inside to avoid holding dangling
@@ -603,10 +613,14 @@ void DirectRenderer::DrawRenderPassAndExecuteCopyRequests(
     return;
   }
 
+  recordreplay::AssertMaybeEventsDisallowed("[RUN-2847-3001] DirectRenderer::DrawRenderPassAndExecuteCopyRequests A");
+
   // Repeated draw to simulate a slower device for the evaluation of performance
   // improvements in UI effects.
   for (int i = 0; i < settings_->slow_down_compositing_scale_factor; ++i)
     DrawRenderPass(render_pass);
+    
+  recordreplay::AssertMaybeEventsDisallowed("[RUN-2847-3001] DirectRenderer::DrawRenderPassAndExecuteCopyRequests B");
 
   for (auto& request : render_pass->copy_requests) {
     // Finalize the source subrect (output_rect, result_bounds,

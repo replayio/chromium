@@ -25,9 +25,12 @@
 #include "components/viz/common/gpu/raster_context_provider.h"
 #include "components/viz/common/hit_test/hit_test_region_list.h"
 #include "components/viz/common/quads/compositor_frame.h"
+#include "components/viz/service/display/record_replay_render.h"
 #include "services/viz/public/mojom/compositing/thread.mojom.h"
 #include "third_party/perfetto/include/perfetto/tracing/track.h"
 #include "third_party/perfetto/include/perfetto/tracing/track_event_args.h"
+
+#include "base/record_replay.h"
 
 namespace cc {
 namespace mojo_embedder {
@@ -287,6 +290,10 @@ void AsyncLayerTreeFrameSink::SubmitCompositorFrame(
     frame.metadata.begin_frame_ack.frame_id.source_id =
         viz::BeginFrameArgs::kManualSourceId;
   }
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    recordreplay::SubmitCompositorFrame(local_surface_id_, frame);
+  }
+
   compositor_frame_sink_ptr_->SubmitCompositorFrame(
       local_surface_id_, std::move(frame), std::move(hit_test_region_list), 0);
 
@@ -375,6 +382,14 @@ void AsyncLayerTreeFrameSink::OnBeginFrame(
     const viz::BeginFrameArgs& args,
     const viz::FrameTimingDetailsMap& timing_details,
     std::vector<viz::ReturnedResource> resources) {
+  // After diverging from the recording, the only paints we want to perform are
+  // repaints, which are triggered from the main thread rather than OnBeginFrame
+  // IPC messages. Ignore any IPC messages replayed from the recording so that
+  // we can get to the repainting frame faster.
+  if (recordreplay::HasDivergedFromRecording()) {
+    return;
+  }
+
   viz::BeginFrameArgs adjusted_args = args;
   adjusted_args.client_arrival_time = base::TimeTicks::Now();
 
