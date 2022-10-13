@@ -313,7 +313,7 @@ void GPUDevice::OnUncapturedError(WGPUErrorType cErrorType,
     return;
   }
   DispatchEvent(*GPUUncapturedErrorEvent::Create(
-      event_type_names::kUncapturederror, init));
+      event_type_names::kUncapturederror, init), "GPUDevice::OnUncapturedError");
 }
 
 void GPUDevice::OnLogging(WGPULoggingType cLoggingType, const char* message) {
