@@ -24,6 +24,7 @@
  */
 
 #include <limits.h>
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/modules/webaudio/biquad_dsp_kernel.h"
 #include "third_party/blink/renderer/platform/audio/audio_utilities.h"
 #include "third_party/blink/renderer/platform/wtf/math_extras.h"
@@ -51,6 +52,14 @@ bool HasConstantValues(float* values, int frames_to_process) {
 }  // namespace
 
 void BiquadDSPKernel::UpdateCoefficientsIfNecessary(int frames_to_process) {
+  // The processor only assigns its audio-rate flag along with sample-accurate
+  // values, so read it the way the code below does.
+  REPLAY_ASSERT(
+      "BiquadDSPKernel::UpdateCoefficientsIfNecessary %d %d %d",
+      GetBiquadProcessor()->FilterCoefficientsDirty(),
+      GetBiquadProcessor()->HasSampleAccurateValues(),
+      GetBiquadProcessor()->HasSampleAccurateValues() &&
+          GetBiquadProcessor()->IsAudioRate());
   if (GetBiquadProcessor()->FilterCoefficientsDirty()) {
     float cutoff_frequency[RenderQuantumFrames()];
     float q[RenderQuantumFrames()];
