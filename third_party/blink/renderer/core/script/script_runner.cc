@@ -26,6 +26,7 @@
 #include "third_party/blink/renderer/core/script/script_runner.h"
 
 #include <algorithm>
+#include <optional>
 
 #include "base/feature_list.h"
 #include "base/metrics/histogram_functions.h"
@@ -46,6 +47,8 @@
 #include "third_party/blink/renderer/platform/scheduler/public/thread.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
+
+#include "base/json/json_writer.h"
 
 namespace {
 
@@ -223,11 +226,25 @@ void ScriptRunner::RemoveDelayReasonFromScript(PendingScript* pending_script,
     return;
   }
 
+  int record_replay_scheduled_node_id = 0;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "scheduleExecuteAsyncScript");
+    if (pending_script->IsEligibleForLowPriorityAsyncScriptExecution()) {
+      double timeout = features::kTimeoutForLowPriorityAsyncScriptExecution.Get().InMillisecondsF();
+      info.Set("lowPriorityTimeout", timeout);
+    }
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    record_replay_scheduled_node_id = recordreplay::NewDependencyGraphNode(json.c_str());
+  }
+
   // Script is really ready to evaluate.
   pending_async_scripts_.erase(it);
   base::OnceClosure task = WTF::BindOnce(
       &ScriptRunner::ExecuteAsyncPendingScript, WrapWeakPersistent(this),
-      WrapPersistent(pending_script), base::TimeTicks::Now());
+      WrapPersistent(pending_script), base::TimeTicks::Now(),
+      record_replay_scheduled_node_id);
   if (pending_script->IsEligibleForLowPriorityAsyncScriptExecution()) {
     PostTaskWithLowPriorityUntilTimeout(
         FROM_HERE, std::move(task),
@@ -240,7 +257,17 @@ void ScriptRunner::RemoveDelayReasonFromScript(PendingScript* pending_script,
 
 void ScriptRunner::ExecuteAsyncPendingScript(
     PendingScript* pending_script,
-    base::TimeTicks ready_to_evaluate_time) {
+    base::TimeTicks ready_to_evaluate_time,
+    int record_replay_scheduled_node_id) {
+  std::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    int node_id = recordreplay::NewDependencyGraphNode("{\"kind\":\"executeAsyncScript\"}");
+    recordreplay::AddDependencyGraphEdge(
+      record_replay_scheduled_node_id, node_id, "{\"kind\":\"scheduler\"}"
+    );
+    execute.emplace(node_id);
+  }
+
   base::UmaHistogramMediumTimes(
       "Blink.Script.AsyncScript.FromReadyToStartExecution.Time",
       base::TimeTicks::Now() - ready_to_evaluate_time);
@@ -322,6 +349,9 @@ void ScriptRunner::ExecutePendingScript(PendingScript* pending_script) {
 
   DCHECK(!document_->domWindow() || !document_->domWindow()->IsContextPaused());
   DCHECK(pending_script);
+
+  int node_id = recordreplay::NewDependencyGraphNode("{\"kind\":\"executePendingScript\"}");
+  recordreplay::AutoDependencyExecution execute(node_id);
 
   pending_script->ExecuteScriptBlock();
 
