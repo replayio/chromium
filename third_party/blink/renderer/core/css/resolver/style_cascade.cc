@@ -9,6 +9,7 @@
 
 #include "base/containers/adapters.h"
 #include "base/notreached.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/animation/css/css_animations.h"
 #include "third_party/blink/renderer/core/animation/css_interpolation_environment.h"
 #include "third_party/blink/renderer/core/animation/interpolation_types_map.h"
@@ -326,6 +327,9 @@ void StyleCascade::Apply(CascadeFilter filter) {
   if (resolver.RejectedFlags() & CSSProperty::kLegacyOverlapping) {
     state_.SetRejectedLegacyOverlapping();
   }
+
+  recordreplay::Assert("[RUN-2424-3053] StyleCascade::Apply %d",
+                       state_.GetElement().RecordReplayId());
 
   ApplyUnresolvedEnv(resolver);
 }

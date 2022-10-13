@@ -440,6 +440,9 @@ void SVGElement::AddInstance(SVGElement* instance) {
   DCHECK(!instances.Contains(instance));
 
   instances.insert(instance);
+  if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                           "SVGElement"))
+    EnsureSVGRareData()->ReplayStrongElementInstances().insert(instance);
 }
 
 void SVGElement::RemoveInstance(SVGElement* instance) {
@@ -451,6 +454,9 @@ void SVGElement::RemoveInstance(SVGElement* instance) {
       SvgRareData()->ElementInstances();
 
   instances.erase(instance);
+
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "SVGElement"))
+    EnsureSVGRareData()->ReplayStrongElementInstances().erase(instance);
 }
 
 static HeapHashSet<WeakMember<SVGElement>>& EmptyInstances() {
@@ -687,7 +693,7 @@ bool SVGElement::SendSVGLoadEventIfPossible() {
     return false;
   if ((IsStructurallyExternal() || IsA<SVGSVGElement>(*this)) &&
       HasLoadListener(this))
-    DispatchEvent(*Event::Create(event_type_names::kLoad));
+    DispatchEvent(*Event::Create(event_type_names::kLoad), "SVGElement::SendSVGLoadEventIfPossible");
   return true;
 }
 
@@ -952,6 +958,9 @@ void SVGElement::InvalidateInstances() {
   }
 
   SvgRareData()->ElementInstances().clear();
+
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "SVGElement"))
+    EnsureSVGRareData()->ReplayStrongElementInstances().clear();
 }
 
 void SVGElement::SetNeedsStyleRecalcForInstances(
@@ -961,7 +970,12 @@ void SVGElement::SetNeedsStyleRecalcForInstances(
   if (set.empty())
     return;
 
+  std::vector<SVGElement*> members;
   for (SVGElement* instance : set)
+    members.push_back(instance);
+  std::sort(members.begin(), members.end(), recordreplay::CompareByRecordReplayId());
+
+  for (SVGElement* instance : members)
     instance->SetNeedsStyleRecalc(change_type, reason);
 }
 

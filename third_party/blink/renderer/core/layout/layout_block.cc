@@ -116,6 +116,9 @@ void LayoutBlock::StyleDidChange(
     const ComputedStyle* old_style,
     const ComputedStyle& new_style,
     const StyleChangeContext& style_change_context) {
+  recordreplay::Assert("[RUN-2300] LayoutBlock::StyleDidChange %d",
+                       RecordReplayId());
+
   NOT_DESTROYED();
   // Computes old scaling factor before PaintLayer::UpdateTransform()
   // updates Layer()->Transform().
@@ -609,6 +612,9 @@ LayoutBlock* LayoutBlock::CreateAnonymousWithParentAndDisplay(
 }
 
 void LayoutBlock::RecalcVisualOverflow() {
+  // https://linear.app/replay/issue/RUN-826
+  recordreplay::Assert("[RUN-826] LayoutBlock::RecalcVisualOverflow %d", RecordReplayId());
+
   NOT_DESTROYED();
   if (!PhysicalFragmentCount()) {
     ClearVisualOverflow();
