@@ -192,6 +192,13 @@ inline LayoutUnit ResolveMainBlockLength(
     const Length* auto_length,
     IntrinsicBlockSizeFunctionRef intrinsic_block_size_func,
     LayoutUnit override_available_size = kIndefiniteSize) {
+  // M124 rewrote this overload into a pure delegation to
+  // ResolveBlockLengthInternal() and renamed Length::IsContentOrIntrinsic() to
+  // HasContentOrIntrinsic(); the assert keeps its label and its recorded value,
+  // but it now fires on every call, because the BlockLengthUnresolvable early
+  // return it used to sit behind moved into ResolveBlockLengthInternal().
+  recordreplay::Assert("[RUN-1239] ResolveMainBlockLength %d",
+                       length.HasContentOrIntrinsic());
   return ResolveBlockLengthInternal(
       constraint_space, style, border_padding, length, auto_length,
       /* use_intrinsic_size */ true, override_available_size,
