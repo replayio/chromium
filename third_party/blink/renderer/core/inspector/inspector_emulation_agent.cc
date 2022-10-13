@@ -239,6 +239,10 @@ protocol::Response InspectorEmulationAgent::disable() {
 
   hardware_concurrency_override_.Clear();
   setUserAgentOverride(String(), std::nullopt, std::nullopt, nullptr);
+
+  recordreplay::Assert("[RUN-1537-1538] InspectorEmulationAgent::disable %d %d",
+                       !!locale_override_.Get().empty(),
+                       !!web_local_frame_);
   if (!locale_override_.Get().empty())
     setLocaleOverride(String());
   if (!web_local_frame_)
@@ -504,6 +508,7 @@ protocol::Response InspectorEmulationAgent::setFocusEmulationEnabled(
   if (enabled == emulate_focus_.Get()) {
     return response;
   }
+
   emulate_focus_.Set(enabled);
   // During shutdown, the page and/or main frame might already be detached.
   // We must guard against accessing a null document.
@@ -898,6 +903,9 @@ protocol::Response InspectorEmulationAgent::setUserAgentOverride(
 
 protocol::Response InspectorEmulationAgent::setLocaleOverride(
     std::optional<String> maybe_locale) {
+  recordreplay::Assert(
+      "[RUN-1537-1538] InspectorEmulationAgent::setLocaleOverride A");
+
   // Only allow resetting overrides set by the same agent.
   if (locale_override_.Get().empty() &&
       LocaleController::instance().has_locale_override()) {
@@ -906,6 +914,9 @@ protocol::Response InspectorEmulationAgent::setLocaleOverride(
   }
   String locale = maybe_locale.value_or(String());
   String error = LocaleController::instance().SetLocaleOverride(locale);
+  recordreplay::Assert(
+      "[RUN-1537-1538] InspectorEmulationAgent::setLocaleOverride B %d %s",
+      error.empty(), locale.Utf8().c_str());
   if (!error.empty())
     return protocol::Response::ServerError(error.Utf8());
   locale_override_.Set(locale);
