@@ -21,6 +21,7 @@
 #include "base/win/base_win_buildflags.h"
 #include "base/win/current_module.h"
 #include "base/win/scoped_handle.h"
+#include "base/record_replay_inline.h"
 #include "third_party/abseil-cpp/absl/base/attributes.h"
 
 extern "C" {
@@ -137,6 +138,10 @@ void ScopedHandleVerifier::ThreadSafeAssignOrCreateScopedHandleVerifier(
 
 // static
 void ScopedHandleVerifier::InstallVerifier() {
+  // Workaround for mismatches in this function when replaying. The verifier seems
+  // to get installed at different points due to different dll initialization behavior.
+  RecordReplayAutoPassThroughEvents pt;
+
 #if BUILDFLAG(SINGLE_MODULE_MODE_HANDLE_VERIFIER)
   // Component build has one Active Verifier per module.
   ThreadSafeAssignOrCreateScopedHandleVerifier(nullptr, true);
