@@ -163,7 +163,28 @@ bool SnapCoordinator::UpdateSnapContainerData(LayoutBox& snap_container) {
                            old_target_ids);
   } else {
     for (auto& fragment : snap_container.PhysicalFragments()) {
-      for (const auto& item : fragment.SnapAreas()) {
+      // Visit the snap areas in record/replay id order so a replay sees them
+      // in the same order the recording did; upstream's own order is the
+      // layout propagation order, which the fork does not rely on.
+      const auto& snap_areas = fragment.SnapAreas();
+      std::vector<wtf_size_t> snap_area_order;
+      snap_area_order.reserve(snap_areas.size());
+      for (wtf_size_t i = 0; i < snap_areas.size(); ++i) {
+        snap_area_order.push_back(i);
+      }
+      std::sort(snap_area_order.begin(), snap_area_order.end(),
+                [&snap_areas](wtf_size_t a, wtf_size_t b) {
+                  Element* element_a = snap_areas[a].GetElementIfConsumed();
+                  Element* element_b = snap_areas[b].GetElementIfConsumed();
+                  if (!element_a || !element_b) {
+                    return element_a && !element_b;
+                  }
+                  return recordreplay::CompareByRecordReplayId()(element_a,
+                                                                 element_b);
+                });
+
+      for (wtf_size_t snap_area_index : snap_area_order) {
+        const auto& item = snap_areas[snap_area_index];
         if (Element* snap_area = item.GetElementIfConsumed()) {
           cc::SnapAreaData snap_area_data = CalculateSnapAreaData(
               *snap_area, snap_container, item.ConsumedAxes(),
