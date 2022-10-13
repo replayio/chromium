@@ -259,7 +259,7 @@ vars = {
   # reclient CIPD package
   'reclient_package': 'infra/rbe/client/',
   # reclient CIPD package version
-  'reclient_version': 're_client_version:0.179.0.28341fc7-gomaip',
+  'reclient_version': 're_client_version:0.126.0.4aaef37-gomaip',
 
   # screen-ai CIPD packages
   'screen_ai_linux': 'version:140.02',
@@ -3991,6 +3991,7 @@ deps = {
         'e4bd19f95afa6483a54906c2a3e5d329d2d81690',
       'condition': 'checkout_src_internal',
   },
+  'src/third_party/reclient_configs': 'https://github.com/EngFlow/reclient-configs.git@c7c2f495ab4637bf5977a8f8f7c65ded468843b3',
 }
 
 
@@ -4799,6 +4800,11 @@ hooks = [
                'src/chromeos/tast_control_disabled_tests_public_builders.txt'],
   },
 
+  {
+    'name': 'configure_reclient',
+    'pattern': '.',
+    'action': ['python3', 'src/third_party/reclient_configs/configure_reclient.py', '--src_dir=src'],
+  },
 ]
 
 # Add any corresponding DEPS files from this list to chromium.exclusions in
