@@ -1,0 +1,17 @@
+use_remoteexec = true
+# On a FRESH out dir build/toolchain/siso.gni defaults use_siso to true (its
+# condition is .sisoenv present && build_with_chromium && no .ninja_deps
+# yet), and siso takes its RBE project from the generated
+# build/config/siso/.sisoenv, which names a Google-internal instance
+# autoninja refuses off-corp. The fork configures remote execution through
+# reclient (third_party/reclient_configs), so pin the backend rather than
+# inherit a default that depends on whether the out dir has been used.
+use_siso = false
+is_debug = false # we can't really use most debugging symbols right now
+dcheck_always_on = false # disable dchecks
+enable_nacl = false  # no native targets
+# use_allocator was deleted upstream in M109; PartitionAlloc-Everywhere and
+# the allocator shim are turned off with these instead.
+use_partition_alloc_as_malloc = false
+enable_backup_ref_ptr_support = false
+use_allocator_shim = false
