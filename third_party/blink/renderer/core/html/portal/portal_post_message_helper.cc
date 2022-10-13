@@ -97,7 +97,7 @@ void PortalPostMessageHelper::CreateAndDispatchMessageEvent(
   ThreadDebugger* debugger = MainThreadDebugger::Instance(isolate);
   if (debugger)
     debugger->ExternalAsyncTaskStarted(message.sender_stack_trace_id);
-  event_target->DispatchEvent(*event);
+  event_target->DispatchEvent(*event, "PortalPostMessageHelper::CreateAndDispatchMessageEvent");
   if (debugger)
     debugger->ExternalAsyncTaskFinished(message.sender_stack_trace_id);
 }
