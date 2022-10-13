@@ -16,6 +16,7 @@
 #include "base/hash/md5.h"
 #include "base/logging.h"
 #include "base/ranges/algorithm.h"
+#include "base/record_replay.h"
 #include "base/sys_byteorder.h"
 #include "base/time/time.h"
 #include "base/trace_event/base_tracing.h"

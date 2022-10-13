@@ -26,6 +26,7 @@
 #include "base/observer_list.h"
 #include "base/pending_task.h"
 #include "base/rand_util.h"
+#include "base/record_replay.h"
 #include "base/run_loop.h"
 #include "base/synchronization/lock.h"
 #include "base/task/current_thread.h"
@@ -46,6 +47,8 @@
 #include "base/values.h"
 #include "build/build_config.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+
+#include "base/record_replay_ordered_atomic.h"
 
 namespace base {
 
@@ -328,9 +331,16 @@ class BASE_EXPORT SequenceManagerImpl
     //   internal scheduling code does not expect queues to be pulled
     //   from underneath.
 
-    std::set<raw_ptr<internal::TaskQueueImpl, SetExperimental>> active_queues;
+    // DSRC-007: upstream's raw_ptr<..., SetExperimental> element type cannot be
+    // compared by recordreplay::CompareByPointerId, whose call operator deduces
+    // `const T*` and so never sees raw_ptr's implicit conversion.  The
+    // annotation is a dangling-pointer *detection* aid; the comparator is the
+    // determinism this commit exists to provide.
+    std::set<internal::TaskQueueImpl*,
+             recordreplay::CompareByPointerId> active_queues;
 
-    std::map<internal::TaskQueueImpl*, std::unique_ptr<internal::TaskQueueImpl>>
+    std::map<internal::TaskQueueImpl*, std::unique_ptr<internal::TaskQueueImpl>,
+             recordreplay::CompareByPointerId>
         queues_to_delete;
 
     bool task_was_run_on_quiescence_monitored_queue = false;
@@ -491,7 +501,7 @@ class BASE_EXPORT SequenceManagerImpl
   // |clock_| either refers to the TickClock representation of |time_domain|
   // (same object) if any, or to |default_clock| otherwise. It is maintained as
   // an atomic pointer here for multi-threaded usage.
-  std::atomic<const base::TickClock*> clock_;
+  recordreplay::OrderedAtomic<const base::TickClock*> clock_;
   const base::TickClock* main_thread_clock() const {
     DCHECK_CALLED_ON_VALID_THREAD(associated_thread_->thread_checker);
     return clock_.load(std::memory_order_relaxed);
@@ -503,6 +513,14 @@ class BASE_EXPORT SequenceManagerImpl
     // but that's not an issue since |time_domain| contractually outlives
     // SequenceManagerImpl even if it's reset.
     return clock_.load(std::memory_order_acquire);
+  }
+
+  const base::TickClock* any_thread_clock_maybe_events_disallowed() const {
+    if (recordreplay::AreEventsDisallowed()) {
+      recordreplay::AutoPassThroughEvents pt;
+      return any_thread_clock();
+    }
+    return any_thread_clock();
   }
 
   WeakPtrFactory<SequenceManagerImpl> weak_factory_{this};
