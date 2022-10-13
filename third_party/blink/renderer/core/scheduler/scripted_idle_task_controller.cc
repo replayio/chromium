@@ -19,6 +19,8 @@
 #include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_events.h"
+
 using DecrementOnDelete = blink::ScriptedIdleTaskController::DecrementOnDelete;
 
 namespace base {
@@ -249,6 +251,9 @@ void ScriptedIdleTaskController::SchedulerIdleTask(
     CallbackId id,
     DecrementOnDelete decrement_on_delete,
     base::TimeTicks deadline) {
+  recordreplay::Assert("[RUN-2419] IdleRequestCallbackWrapper::IdleTaskFired %d %d",
+                       id,
+                       !!idle_tasks_.Contains(id));
   CHECK_GT(num_scheduler_idle_tasks_->data, 0u, base::NotFatalUntil::M136);
 
   if (!idle_tasks_.Contains(id)) {
@@ -275,6 +280,9 @@ void ScriptedIdleTaskController::SchedulerIdleTask(
 }
 
 void ScriptedIdleTaskController::SchedulerTimeoutTask(CallbackId id) {
+  recordreplay::Assert(
+      "[RUN-2419] IdleRequestCallbackWrapper::TimeoutFired %d %d",
+      id, !!idle_tasks_.Contains(id));
   if (!idle_tasks_.Contains(id)) {
     return;
   }
@@ -294,6 +302,14 @@ void ScriptedIdleTaskController::RunIdleTask(
     IdleDeadline::CallbackType callback_type) {
   DCHECK(!paused_);
 
+  recordreplay::Assert(
+      "[RUN-2419] ScriptedIdleTaskController::RunCallback A %d",
+      id);
+
+  recordreplay::AutoDependencyExecution execute(
+    recordreplay::NewDependencyGraphNode("{\"kind\":\"executeIdleCallback\"}")
+  );
+
   // Keep the idle task in |idle_tasks_| so that it's still wrapper-traced.
   // TODO(https://crbug.com/796145): Remove this hack once on-stack objects
   // get supported by either of wrapper-tracing or unified GC.
@@ -304,6 +320,10 @@ void ScriptedIdleTaskController::RunIdleTask(
   IdleTask* idle_task = idle_task_iter->value;
   DCHECK(idle_task);
 
+  recordreplay::Assert(
+      "[RUN-2419] ScriptedIdleTaskController::RunCallback B %d %d",
+      id, idle_task->RecordReplayId());
+
   base::TimeDelta allotted_time =
       std::max(deadline - base::TimeTicks::Now(), base::TimeDelta());
 
@@ -311,6 +331,9 @@ void ScriptedIdleTaskController::RunIdleTask(
                               idle_task->async_task_context());
   probe::UserCallback probe(GetExecutionContext(), "requestIdleCallback",
                             AtomicString(), true);
+
+  recordreplay::UserEventProbe replayEvent("requestIdleCallback",
+                                           AtomicString());
 
   bool cross_origin_isolated_capability =
       GetExecutionContext()
@@ -348,6 +371,11 @@ void ScriptedIdleTaskController::RemoveAllIdleTasks() {
 }
 
 void ScriptedIdleTaskController::ContextDestroyed() {
+  if (idle_tasks_.size())
+    recordreplay::Assert(
+        "[RUN-2419] ScriptedIdleTaskController::ContextDestroyed %lu %d",
+        idle_tasks_.size(),
+        idle_tasks_.begin()->value->RecordReplayId());
   RemoveAllIdleTasks();
 }
 
