@@ -283,6 +283,8 @@ class CORE_EXPORT ImageResourceContent final
 
   HeapHashCountedSet<WeakMember<ImageResourceObserver>> observers_;
   HeapHashCountedSet<WeakMember<ImageResourceObserver>> finished_observers_;
+  HeapHashCountedSet<Member<ImageResourceObserver>> replay_strong_observers_;
+  HeapHashCountedSet<Member<ImageResourceObserver>> replay_strong_finished_observers_;
 
   // Keep one-byte members together to avoid wasting space on padding.
 
