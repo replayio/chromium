@@ -4,6 +4,7 @@
 
 #include "base/pending_task.h"
 
+#include "base/record_replay.h"
 #include "base/task/task_features.h"
 
 namespace base {
@@ -19,7 +20,19 @@ TaskMetadata::TaskMetadata(const Location& posted_from,
       queue_time(queue_time),
       delayed_run_time(delayed_run_time),
       leeway(leeway),
-      delay_policy(delay_policy) {}
+      delay_policy(delay_policy) {
+  // [RecordReplay] RUN-1219: the task id is minted here rather than in
+  // PendingTask, because from M121 upstream splits PendingTask into this
+  // TaskMetadata base plus the closure, and this is the one constructor every
+  // "a task is created at a posting site" path goes through.  Minting in
+  // PendingTask(const TaskMetadata&, OnceClosure) instead would make copying a
+  // TaskMetadata change its identity, which its defaulted copy constructor
+  // does not.
+  if (!recordreplay::AreEventsUnavailable() &&
+      !recordreplay::AreEventsPassedThrough()) {
+    record_replay_id = recordreplay::NewIdAnyThread("PendingTask");
+  }
+}
 
 TaskMetadata::TaskMetadata(TaskMetadata&& other) = default;
 TaskMetadata::TaskMetadata(const TaskMetadata& other) = default;
