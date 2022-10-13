@@ -272,6 +272,8 @@ class CORE_EXPORT ResourceScriptStreamer final : public ScriptStreamer {
   std::unique_ptr<v8_compile_hints::V8CrowdsourcedCompileHintsConsumer::
                       DataAndScriptNameHash>
       compile_hint_callback_data_;
+
+  int record_replay_scheduled_node_id_ = 0;
 };
 
 // BackgroundInlineScriptStreamer allows parsing and compiling inline scripts in
