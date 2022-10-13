@@ -6,6 +6,7 @@
 
 #include "base/auto_reset.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/record_replay.h"
 #include "base/sequence_token.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
@@ -34,7 +35,9 @@ class ThreadGroupImpl::ScopedCommandsExecutor
     : public ThreadGroup::BaseScopedCommandsExecutor {
  public:
   explicit ScopedCommandsExecutor(ThreadGroupImpl* outer)
-      : BaseScopedCommandsExecutor(outer) {}
+      : BaseScopedCommandsExecutor(outer) {
+    DCHECK(!recordreplay::AreEventsDisallowed() || outer_->RecordReplayUnordered());
+  }
 
   ScopedCommandsExecutor(const ScopedCommandsExecutor&) = delete;
   ScopedCommandsExecutor& operator=(const ScopedCommandsExecutor&) = delete;
@@ -48,6 +51,7 @@ class ThreadGroupImpl::ScopedCommandsExecutor
   }
 
   void ScheduleWakeUp(scoped_refptr<WorkerThreadWaitableEvent> worker) {
+    CHECK(outer_->RecordReplayUnordered() == worker->RecordReplayUnordered());
     workers_to_wake_up_.emplace_back(std::move(worker));
   }
 
@@ -71,7 +75,7 @@ class ThreadGroupImpl::WaitableEventWorkerDelegate
   // OnMainExit() handles the thread-affine cleanup;
   // WaitableEventWorkerDelegate can thereafter safely be deleted from any
   // thread.
-  ~WaitableEventWorkerDelegate() override = default;
+  ~WaitableEventWorkerDelegate() override {}
 
   // ThreadGroup::Delegate:
   void OnMainEntry(WorkerThread* worker) override;
@@ -502,6 +506,9 @@ bool ThreadGroupImpl::WaitableEventWorkerDelegate::CanCleanupLockRequired(
     return false;
   }
 
+  if (worker->RecordReplayUnordered())
+    return false;
+
   const TimeTicks last_used_time = worker->GetLastUsedTime();
   return !last_used_time.is_null() &&
          subtle::TimeTicksNowIgnoringOverride() - last_used_time >=
@@ -608,6 +615,10 @@ void ThreadGroupImpl::MaintainAtLeastOneIdleWorkerLockRequired(
     return;
   }
 
+  // Workers can't be created / started non-deterministically.
+  if (recordreplay::AreEventsDisallowed("ThreadGroupImpl::MaintainAtLeastOneIdleWorkerLockRequired"))
+    return;
+
   scoped_refptr<WorkerThreadWaitableEvent> new_worker =
       CreateAndRegisterWorkerLockRequired(executor);
   DCHECK(new_worker);
@@ -621,6 +632,10 @@ ThreadGroupImpl::CreateAndRegisterWorkerLockRequired(
   DCHECK_LT(workers_.size(), max_tasks_);
   DCHECK_LT(workers_.size(), kMaxNumberOfWorkers);
   DCHECK(idle_workers_set_.IsEmpty());
+
+  absl::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (record_replay_unordered_)
+    disallow.emplace("ThreadGroupImpl::CreateAndRegisterWorkerLockRequired");
 
   // WorkerThread needs |lock_| as a predecessor for its thread lock because in
   // GetWork(), |lock_| is first acquired and then the thread lock is acquired
@@ -699,9 +714,11 @@ void ThreadGroupImpl::EnsureEnoughWorkersLockRequired(
   // Wake up the appropriate number of workers.
   for (size_t i = 0; i < num_workers_to_wake_up; ++i) {
     MaintainAtLeastOneIdleWorkerLockRequired(executor);
-    WorkerThreadWaitableEvent* worker_to_wakeup = idle_workers_set_.Take();
-    DCHECK(worker_to_wakeup);
-    executor->ScheduleWakeUp(worker_to_wakeup);
+    if (!idle_workers_set_.IsEmpty()) {
+      WorkerThreadWaitableEvent* worker_to_wakeup = idle_workers_set_.Take();
+      DCHECK(worker_to_wakeup);
+      executor->ScheduleWakeUp(worker_to_wakeup);
+    }
   }
 
   // In the case where the loop above didn't wake up any worker and we don't

@@ -11,6 +11,7 @@
 #include "base/feature_list.h"
 #include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/record_replay.h"
 #include "base/task/task_features.h"
 #include "base/time/time.h"
 
@@ -332,7 +333,13 @@ void Sequence::ReleaseTaskRunner() {
 Sequence::Sequence(const TaskTraits& traits,
                    SequencedTaskRunner* task_runner,
                    TaskSourceExecutionMode execution_mode)
-    : TaskSource(traits, execution_mode), task_runner_(task_runner) {}
+    : TaskSource(traits, execution_mode), task_runner_(task_runner) {
+  // Leak sequences when recording/replaying to avoid problems with destructor
+  // behavior running at non-deterministic points due to the threadsafe refcount.
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "Sequence::Sequence")) {
+    AddRef();
+  }
+}
 
 Sequence::~Sequence() = default;
 
