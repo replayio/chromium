@@ -154,9 +154,9 @@ bool ScriptedAnimationController::DispatchEvents(DispatchFilter filter) {
     probe::AsyncTask async_task(event_target->GetExecutionContext(),
                                 event->async_task_context());
     if (LocalDOMWindow* window = event_target->ToLocalDOMWindow())
-      window->DispatchEvent(*event, nullptr);
+      window->DispatchEvent(*event, (EventTarget*)nullptr);
     else
-      event_target->DispatchEvent(*event);
+      event_target->DispatchEvent(*event, "ScriptedAnimationController::DispatchEvents");
   }
 
   return did_dispatch;
