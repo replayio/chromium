@@ -2232,6 +2232,7 @@ EXPORTS
     ?Rebuild@CordRepBtree@cord_internal@absl@@CAXPEAPEAV123@PEAV123@_N@Z
     ?Rebuild@CordRepBtree@cord_internal@absl@@SAPEAV123@PEAV123@@Z
     ?RecordInsertSlow@container_internal@absl@@YAXPEAUHashtablezInfo@12@_K1@Z
+    ?RecordReplayInitializeMutexSlowPath@absl@@YAXXZ
     ?Ref@CordRep@cord_internal@absl@@SAPEAU123@PEAU123@@Z
     ?Ref@Status@absl@@CAX_K@Z
     ?RefCordRep@CordzInfo@cord_internal@absl@@QEBAPEAUCordRep@23@XZ
