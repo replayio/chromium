@@ -13,6 +13,8 @@
 #include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 namespace {
 
