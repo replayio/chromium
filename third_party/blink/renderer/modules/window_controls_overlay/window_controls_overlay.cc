@@ -80,7 +80,7 @@ void WindowControlsOverlay::WindowControlsOverlayChanged(
   DispatchEvent(
       *(MakeGarbageCollected<WindowControlsOverlayGeometryChangeEvent>(
           event_type_names::kGeometrychange, DOMRect::FromRect(rect),
-          !rect.IsEmpty())));
+          !rect.IsEmpty())), "WindowControlsOverlay::WindowControlsOverlayChanged");
 }
 
 void WindowControlsOverlay::Trace(blink::Visitor* visitor) const {
