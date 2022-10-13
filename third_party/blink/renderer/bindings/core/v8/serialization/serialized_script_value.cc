@@ -64,6 +64,8 @@
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "third_party/blink/renderer/platform/wtf/wtf_size_t.h"
 
+namespace v8 { extern std::string RecordReplayGetScriptedCaller(); }
+
 namespace blink {
 
 scoped_refptr<SerializedScriptValue> SerializedScriptValue::Serialize(
@@ -71,6 +73,7 @@ scoped_refptr<SerializedScriptValue> SerializedScriptValue::Serialize(
     v8::Local<v8::Value> value,
     const SerializeOptions& options,
     ExceptionState& exception) {
+
   return SerializedScriptValueFactory::Instance().Create(isolate, value,
                                                          options, exception);
 }
