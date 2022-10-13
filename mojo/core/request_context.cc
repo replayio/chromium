@@ -5,6 +5,7 @@
 #include "mojo/core/request_context.h"
 
 #include "base/check.h"
+#include "base/record_replay.h"
 #include "third_party/abseil-cpp/absl/base/attributes.h"
 
 namespace mojo {
