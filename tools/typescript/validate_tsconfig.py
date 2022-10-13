@@ -122,6 +122,7 @@ def validateJavaScriptAllowed(source_dir, out_dir, is_ios):
   migrating_directories = [
       'chrome/browser/resources/bluetooth_internals',
       'chrome/browser/resources/chromeos/accessibility',
+      'chrome/browser/resources/record_replay',
       'chrome/browser/resources/chromeos/emoji_picker',
       'chrome/browser/resources/ntp4',
       'chrome/test/data/webui',

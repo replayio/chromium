@@ -10,6 +10,7 @@
 #include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/no_destructor.h"
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/bookmarks/bookmark_model_factory.h"
@@ -184,6 +185,8 @@ std::unique_ptr<KeyedService> BuildSyncService(
   if (password_store) {
     password_store->OnSyncServiceInitialized(sync_service.get());
   }
+
+  recordreplay::Diagnostic("[TT-198] BuildSyncService returning a non-null service");
 
   return sync_service;
 }
