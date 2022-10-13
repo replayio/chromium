@@ -8,6 +8,7 @@
 #include <array>
 
 #include "base/check.h"
+#include "base/record_replay.h"
 #include "mojo/public/cpp/bindings/array_traits.h"
 #include "mojo/public/cpp/bindings/union_traits.h"
 #include "ui/gfx/geometry/mojom/geometry_mojom_traits.h"

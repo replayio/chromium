@@ -21,6 +21,7 @@
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/traced_value.h"
+#include "base/record_replay.h"
 #include "cc/base/devtools_instrumentation.h"
 #include "cc/base/features.h"
 #include "cc/metrics/begin_main_frame_metrics.h"
@@ -31,9 +32,12 @@
 #include "cc/scheduler/webview_scheduler_state_machine.h"
 #include "components/viz/common/features.h"
 #include "components/viz/common/frame_sinks/delay_based_time_source.h"
+#include "components/viz/service/display/record_replay_render.h"
 #include "services/tracing/public/cpp/perfetto/macros.h"
 #include "third_party/perfetto/include/perfetto/tracing/track_event_args.h"
 #include "third_party/perfetto/protos/perfetto/trace/track_event/chrome_compositor_scheduler_state.pbzero.h"
+
+#include "base/record_replay.h"
 
 namespace cc {
 
@@ -77,6 +81,7 @@ Scheduler::Scheduler(
   // We want to handle animate_only BeginFrames.
   wants_animate_only_begin_frames_ = true;
 
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::Scheduler");
   ProcessScheduledActions();
 }
 
@@ -106,6 +111,7 @@ void Scheduler::SetNeedsImplSideInvalidation(
     state_machine_->SetNeedsImplSideInvalidation(
         needs_first_draw_on_activation);
   }
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::Stop");
   ProcessScheduledActions();
 }
 
@@ -119,6 +125,7 @@ base::TimeTicks Scheduler::Now() const {
 void Scheduler::SetVisible(bool visible) {
   state_machine_->SetVisible(visible);
   UpdateCompositorTimingHistoryRecordingEnabled();
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::SetVisible");
   ProcessScheduledActions();
 }
 
@@ -129,6 +136,7 @@ void Scheduler::SetShouldWarmUp() {
 
 void Scheduler::SetCanDraw(bool can_draw) {
   state_machine_->SetCanDraw(can_draw);
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::SetCanDraw");
   ProcessScheduledActions();
 }
 
@@ -137,6 +145,7 @@ void Scheduler::NotifyReadyToActivate() {
     compositor_timing_history_->ReadyToActivate();
   }
 
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::NotifyReadyToActivate");
   ProcessScheduledActions();
 }
 
@@ -147,6 +156,7 @@ bool Scheduler::IsReadyToActivate() {
 void Scheduler::NotifyReadyToDraw() {
   // Future work might still needed for crbug.com/352894.
   state_machine_->NotifyReadyToDraw();
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::NotifyReadyToDraw");
   ProcessScheduledActions();
 }
 
@@ -165,32 +175,43 @@ void Scheduler::SetBeginFrameSource(viz::BeginFrameSource* source) {
 void Scheduler::NotifyAnimationWorkletStateChange(AnimationWorkletState state,
                                                   TreeType tree) {
   state_machine_->NotifyAnimationWorkletStateChange(state, tree);
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::NotifyAnimationWorkletStateChange");
   ProcessScheduledActions();
 }
 
 void Scheduler::NotifyPaintWorkletStateChange(PaintWorkletState state) {
   state_machine_->NotifyPaintWorkletStateChange(state);
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::NotifyPaintWorkletStateChange");
   ProcessScheduledActions();
 }
 
 void Scheduler::SetNeedsBeginMainFrame(bool now) {
   state_machine_->SetNeedsBeginMainFrame(now);
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::SetNeedsBeginMainFrame");
   ProcessScheduledActions();
 }
 
 void Scheduler::SetNeedsOneBeginImplFrame() {
   state_machine_->SetNeedsOneBeginImplFrame();
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::SetNeedsOneBeginImplFrame");
+  ProcessScheduledActions();
+}
+
+void Scheduler::RecordReplayRepaintPending() {
+  state_machine_->SetReplayRepaintPending();
   ProcessScheduledActions();
 }
 
 void Scheduler::SetNeedsRedraw() {
   state_machine_->SetNeedsRedraw();
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::SetNeedsRedraw");
   ProcessScheduledActions();
 }
 
 void Scheduler::SetNeedsPrepareTiles() {
   DCHECK(!IsInsideAction(SchedulerStateMachine::Action::PREPARE_TILES));
   state_machine_->SetNeedsPrepareTiles();
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::SetNeedsPrepareTiles");
   ProcessScheduledActions();
 }
 
@@ -221,6 +242,7 @@ void Scheduler::DidReceiveCompositorFrameAck() {
     DCHECK_GT(state_machine_->pending_submit_frames(), 0);
   }
   state_machine_->DidReceiveCompositorFrameAck();
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::DidReceiveCompositorFrameAck");
   ProcessScheduledActions();
 }
 
@@ -230,6 +252,7 @@ void Scheduler::SetTreePrioritiesAndScrollState(
     bool is_current_scroll_main_painted) {
   state_machine_->SetTreePrioritiesAndScrollState(
       tree_priority, scroll_handler_state, is_current_scroll_main_painted);
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::SetTreePrioritiesAndScrollState");
   ProcessScheduledActions();
 }
 
@@ -243,6 +266,7 @@ void Scheduler::NotifyReadyToCommit(
     state_machine_->NotifyReadyToCommit();
     next_commit_origin_frame_args_ = last_dispatched_begin_main_frame_args_;
   }
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::NotifyReadyToCommit");
   ProcessScheduledActions();
 }
 
@@ -257,6 +281,7 @@ void Scheduler::BeginMainFrameAborted(CommitEarlyOutReason reason) {
 
     state_machine_->BeginMainFrameAborted(reason);
   }
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::BeginMainFrameAborted");
   ProcessScheduledActions();
 }
 
@@ -277,7 +302,13 @@ void Scheduler::DidLoseLayerTreeFrameSink() {
     state_machine_->DidLoseLayerTreeFrameSink();
     UpdateCompositorTimingHistoryRecordingEnabled();
   }
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::DidLoseLayerTreeFrameSink");
   ProcessScheduledActions();
+}
+
+void Scheduler::RecordReplayReuseLostLayerTreeFrameSink() {
+  state_machine_->RecordReplayReuseLostLayerTreeFrameSink();
+  UpdateCompositorTimingHistoryRecordingEnabled();
 }
 
 void Scheduler::DidCreateAndInitializeLayerTreeFrameSink() {
@@ -288,6 +319,7 @@ void Scheduler::DidCreateAndInitializeLayerTreeFrameSink() {
     state_machine_->DidCreateAndInitializeLayerTreeFrameSink();
     UpdateCompositorTimingHistoryRecordingEnabled();
   }
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::DidCreateAndInitializeLayerTreeFrameSink");
   ProcessScheduledActions();
 }
 
@@ -377,6 +409,7 @@ void Scheduler::PostPendingBeginFrameTask() {
 
   if (is_idle && needs_begin_frames && has_pending_begin_frame_args &&
       has_no_pending_begin_frame_task) {
+    recordreplay::Assert("[RUN-1230] Scheduler::PostPendingBeginFrameTask #1");
     pending_begin_frame_task_.Reset(base::BindOnce(
         &Scheduler::HandlePendingBeginFrame, base::Unretained(this)));
     task_runner_->PostTask(FROM_HERE, pending_begin_frame_task_.callback());
@@ -384,6 +417,12 @@ void Scheduler::PostPendingBeginFrameTask() {
 }
 
 void Scheduler::OnBeginFrameSourcePausedChanged(bool paused) {
+  // [RecordReplay] A repaint draws in this process and doesn't need the
+  // browser's begin frames. The begin frame source of a lost frame sink that a
+  // repaint reuses repeats its pause when the scheduler starts observing it
+  // again.
+  if (paused && recordreplay::HasDivergedFromRecording())
+    return;
   if (state_machine_->begin_frame_source_paused() == paused) {
     return;
   }
@@ -393,6 +432,7 @@ void Scheduler::OnBeginFrameSourcePausedChanged(bool paused) {
     state_machine_->SetBeginFrameSourcePaused(paused);
     client_->DidChangeBeginFrameSourcePaused(paused);
   }
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::OnBeginFrameSourcePausedChanged");
   ProcessScheduledActions();
 }
 
@@ -462,6 +502,7 @@ bool Scheduler::OnBeginFrameDerivedImpl(const viz::BeginFrameArgs& args) {
     // deadline has already run. If we're already inside
     // ProcessScheduledActions() this call will be a nop and the above will
     // happen at end of the top most call to ProcessScheduledActions().
+    recordreplay::Assert("[RUN-1230-1710] Scheduler::OnBeginFrameDerivedImpl");
     ProcessScheduledActions();
   } else {
     // This starts the begin frame immediately, and puts us in the
@@ -475,6 +516,7 @@ bool Scheduler::OnBeginFrameDerivedImpl(const viz::BeginFrameArgs& args) {
 
 void Scheduler::SetVideoNeedsBeginFrames(bool video_needs_begin_frames) {
   state_machine_->SetVideoNeedsBeginFrames(video_needs_begin_frames);
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::SetVideoNeedsBeginFrames");
   ProcessScheduledActions();
 }
 
@@ -504,6 +546,7 @@ void Scheduler::OnDrawForLayerTreeFrameSink(bool resourceless_software_draw,
   OnBeginImplFrameDeadline();
 
   state_machine_->OnBeginImplFrameIdle();
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::OnDrawForLayerTreeFrameSink");
   ProcessScheduledActions();
   state_machine_->SetResourcelessSoftwareDraw(false);
 }
@@ -690,6 +733,7 @@ void Scheduler::FinishImplFrame() {
 
   begin_impl_frame_tracker_.Finish();
 
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::FinishImplFrame");
   ProcessScheduledActions();
   DCHECK(!inside_scheduled_action_);
   {
@@ -737,6 +781,7 @@ void Scheduler::BeginImplFrame(const viz::BeginFrameArgs& args,
       state_machine_->AbortDraw();
   }
 
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::BeginImplFrame");
   ProcessScheduledActions();
 }
 
@@ -786,7 +831,13 @@ void Scheduler::ScheduleBeginImplFrameDeadline() {
     }
     case DeadlineMode::REGULAR:
       // We are animating the active tree but we're also waiting for commit.
-      new_deadline = begin_impl_frame_tracker_.Current().deadline;
+
+      // This deadline is derived from time-since-reboot, which means if we're replaying on
+      // something vastly different from recording, we might see times deep into the future,
+      // which will block our ability to render divergent frames.
+      if (!recordreplay::HasDivergedFromRecording()) {
+        new_deadline = begin_impl_frame_tracker_.Current().deadline;
+      }
       break;
     case DeadlineMode::IMMEDIATE:
       // Avoid using Now() for immediate deadlines because it's expensive, and
@@ -854,6 +905,7 @@ void Scheduler::OnBeginImplFrameDeadline() {
     state_machine_->OnBeginImplFrameDeadline();
     client_->OnBeginImplFrameDeadline();
   }
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::OnBeginImplFrameDeadline");
   ProcessScheduledActions();
 
   if (settings_.using_synchronous_renderer_compositor)
@@ -905,6 +957,7 @@ void Scheduler::SetDeferBeginMainFrame(bool defer_begin_main_frame) {
                  "defer_begin_main_frame", defer_begin_main_frame);
     state_machine_->SetDeferBeginMainFrame(defer_begin_main_frame);
   }
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::SetDeferBeginMainFrame");
   ProcessScheduledActions();
 }
 
@@ -914,12 +967,14 @@ void Scheduler::SetPauseRendering(bool pause_rendering) {
                  pause_rendering);
     state_machine_->SetPauseRendering(pause_rendering);
   }
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::SetPauseRendering");
   ProcessScheduledActions();
 }
 
 void Scheduler::SetMainThreadWantsBeginMainFrameNotExpected(bool new_state) {
   state_machine_->SetMainThreadWantsBeginMainFrameNotExpectedMessages(
       new_state);
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::SetMainThreadWantsBeginMainFrameNotExpected");
   ProcessScheduledActions();
 }
 
@@ -1003,6 +1058,9 @@ void Scheduler::ProcessScheduledActions() {
         break;
       case SchedulerStateMachine::Action::DRAW_FORCED:
         DrawForced();
+        if (state_machine_->ClearReplayForceDraw()) {
+          recordreplay::OnRepaintFinished();
+        }
         break;
       case SchedulerStateMachine::Action::DRAW_ABORT:
         // No action is actually performed, but this allows the state machine to
@@ -1089,6 +1147,7 @@ viz::BeginFrameAck Scheduler::CurrentBeginFrameAckForActiveTree() const {
 void Scheduler::ClearHistory() {
   // Ensure we reset decisions based on history from the previous navigation.
   compositor_timing_history_->ClearHistory();
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::ClearHistory");
   ProcessScheduledActions();
 }
 

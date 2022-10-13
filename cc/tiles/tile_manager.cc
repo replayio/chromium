@@ -53,6 +53,8 @@
 #include "ui/gfx/geometry/axis_transform2d.h"
 #include "ui/gfx/geometry/rect_conversions.h"
 
+#include "base/record_replay.h"
+
 namespace cc {
 namespace {
 
@@ -1447,6 +1449,13 @@ scoped_refptr<TileTask> TileManager::CreateRasterTask(
   ResourcePool::InUsePoolResource resource;
   uint64_t resource_content_id = 0;
   gfx::Rect invalidated_rect = tile->invalidated_content_rect();
+
+  // https://linear.app/replay/issue/RUN-464
+  recordreplay::Assert("TileManager::CreateRasterTask #2 %d %d %d %d %d",
+                       (int)tile->id(),
+                       invalidated_rect.x(), invalidated_rect.y(),
+                       invalidated_rect.width(), invalidated_rect.height());
+
   if (UsePartialRaster(msaa_sample_count) && tile->invalidated_id()) {
     const std::string& debug_name =
         prioritized_tile.source_tiling()->raster_source()->debug_name();
@@ -1794,8 +1803,9 @@ bool TileManager::IsReadyToDraw() const {
 void TileManager::ScheduleCheckRasterFinishedQueries() {
   DCHECK(has_pending_queries_);
 
-  if (!check_pending_tile_queries_callback_.IsCancelled())
+  if (!check_pending_tile_queries_callback_.IsCancelled()) {
     return;
+  }
 
   check_pending_tile_queries_callback_.Reset(base::BindOnce(
       &TileManager::CheckRasterFinishedQueries, base::Unretained(this)));
@@ -1819,6 +1829,7 @@ void TileManager::CheckRasterFinishedQueries() {
     has_pending_queries_ =
         pending_raster_queries_->CheckRasterFinishedQueries();
   }
+
   if (has_pending_queries_)
     ScheduleCheckRasterFinishedQueries();
 }

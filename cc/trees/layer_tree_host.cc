@@ -84,6 +84,8 @@
 #include "ui/gfx/presentation_feedback.h"
 #include "ui/latency/latency_info.h"
 
+#include "base/record_replay.h"
+
 namespace {
 static base::AtomicSequenceNumber s_layer_tree_host_sequence_number;
 static base::AtomicSequenceNumber s_image_decode_sequence_number;
@@ -482,6 +484,7 @@ void LayerTreeHost::WaitForCommitCompletion(bool for_protected_sequence) const {
   // We should not be running code that modifies commit state just prior to the
   // impl commit.
   CHECK(!inside_will_begin_impl_commit_);
+
   if (commit_completion_event_) {
     TRACE_EVENT0("cc", "LayerTreeHost::WaitForCommitCompletion");
     commit_completion_event_->Wait();
@@ -1749,6 +1752,7 @@ void LayerTreeHost::RegisterLayer(Layer* layer) {
   DCHECK(IsMainThread());
   DCHECK(!LayerById(layer->id()));
   DCHECK(!in_paint_layer_contents_);
+
   layer_id_map_[layer->id()] = layer;
 }
 
@@ -1756,7 +1760,10 @@ void LayerTreeHost::UnregisterLayer(Layer* layer) {
   DCHECK(IsMainThread());
   DCHECK(LayerById(layer->id()));
   DCHECK(!in_paint_layer_contents_);
-  pending_commit_state()->layers_that_should_push_properties.erase(layer);
+
+  CommitState* commit_state = pending_commit_state();
+
+  commit_state->layers_that_should_push_properties.erase(layer);
   layer_id_map_.erase(layer->id());
 }
 
@@ -1797,7 +1804,9 @@ void LayerTreeHost::RemoveSurfaceRange(const viz::SurfaceRange& surface_range) {
 }
 
 void LayerTreeHost::AddLayerShouldPushProperties(Layer* layer) {
-  pending_commit_state()->layers_that_should_push_properties.insert(layer);
+  CommitState* commit_state = pending_commit_state();
+
+  commit_state->layers_that_should_push_properties.insert(layer);
 }
 
 void LayerTreeHost::SetPageScaleFromImplSide(float page_scale) {
