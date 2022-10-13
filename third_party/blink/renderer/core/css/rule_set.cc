@@ -713,6 +713,9 @@ void RuleSet::AddChildRules(const HeapVector<Member<StyleRuleBase>>& rules,
                             const ContainerQuery* container_query,
                             CascadeLayer* cascade_layer,
                             const StyleScope* style_scope) {
+  // https://linear.app/replay/issue/RUN-968
+  recordreplay::Assert("RuleSet::AddChildRules Start");
+
   for (StyleRuleBase* rule : rules) {
     if (auto* style_rule = DynamicTo<StyleRule>(rule)) {
       AddStyleRule(style_rule, medium, add_rule_flags, container_query,
@@ -800,6 +803,9 @@ void RuleSet::AddChildRules(const HeapVector<Member<StyleRuleBase>>& rules,
                     cascade_layer, style_scope);
     }
   }
+
+  // https://linear.app/replay/issue/RUN-968
+  recordreplay::Assert("RuleSet::AddChildRules Done");
 }
 
 bool RuleSet::MatchMediaForAddRules(const MediaQueryEvaluator& evaluator,
