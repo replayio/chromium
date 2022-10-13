@@ -14,7 +14,7 @@ namespace blink {
 
 namespace {
 
-using AudioNodeOutputSet = HashSet<AudioNodeOutput*>;
+using AudioNodeOutputSet = HashSet<AudioNodeOutput*, WTF::RecordReplayPointerIdHashTraits<AudioNodeOutput*>>;
 
 struct FindOutputResult {
   const raw_ref<AudioNodeOutputSet, ExperimentalRenderer> output_set;
