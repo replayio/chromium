@@ -330,7 +330,7 @@ void HTMLFormElement::PrepareForSubmission(
                     "' was implicitly closed by reaching the end of the "
                     "file. Please add an explicit end tag ('</",
                     tag_name, ">')"})));
-        DispatchEvent(*Event::Create(event_type_names::kError));
+        DispatchEvent(*Event::Create(event_type_names::kError), "HTMLFormElement::PrepareForSubmission #1");
         return;
       }
     }
@@ -369,7 +369,7 @@ void HTMLFormElement::PrepareForSubmission(
       submit_event_init->setSubmitter(
           submit_button ? &submit_button->ToHTMLElement() : nullptr);
       should_submit = DispatchEvent(*MakeGarbageCollected<SubmitEvent>(
-                          event_type_names::kSubmit, submit_event_init)) ==
+          event_type_names::kSubmit, submit_event_init), "HTMLFormElement::PrepareForSubmission #2") ==
                       DispatchEventResult::kNotCanceled;
     }
   }
@@ -610,7 +610,7 @@ FormData* HTMLFormElement::ConstructEntryList(
       }
     }
   }
-  DispatchEvent(*MakeGarbageCollected<FormDataEvent>(form_data));
+  DispatchEvent(*MakeGarbageCollected<FormDataEvent>(form_data), "HTMLFormElement::ConstructEntryList");
 
   if (submit_button)
     submit_button->SetActivatedSubmit(false);
@@ -624,7 +624,7 @@ void HTMLFormElement::reset() {
 
   is_in_reset_function_ = true;
 
-  if (DispatchEvent(*Event::CreateCancelableBubble(event_type_names::kReset)) !=
+  if (DispatchEvent(*Event::CreateCancelableBubble(event_type_names::kReset), "HTMLFormElement::reset") !=
       DispatchEventResult::kNotCanceled) {
     is_in_reset_function_ = false;
     return;
