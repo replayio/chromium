@@ -280,6 +280,10 @@ class WebContents : public PageNavigator,
     // Enable preview mode that shows a page with a capability restriction
     // for previewing the page.
     bool preview_mode = false;
+
+    // Indicates that the content should be recorded by the Record Replay
+    // framework.
+    bool record_replay_for_recording = false;
   };
 
   // Token that causes input to be blocked on this WebContents for at least as
