@@ -26,6 +26,7 @@
 #include "base/memory/safe_ref.h"
 #include "base/observer_list.h"
 #include "base/process/kill.h"
+#include "base/record_replay.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -2440,6 +2441,8 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
 
   // Indicates accessibility had an unrecoverable error.
   bool accessibility_fatal_error_ = false;
+
+  bool record_replay_for_recording_ = false;
 
   base::WeakPtrFactory<WebContentsImpl> loading_weak_factory_{this};
   base::WeakPtrFactory<WebContentsImpl> weak_factory_{this};
