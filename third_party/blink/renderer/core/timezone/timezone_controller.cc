@@ -52,7 +52,7 @@ void NotifyTimezoneChangeOnWorkerThread(WorkerThread* worker_thread) {
   if (RuntimeEnabledFeatures::TimeZoneChangeEventEnabled() &&
       worker_thread->GlobalScope()->IsWorkerGlobalScope()) {
     worker_thread->GlobalScope()->DispatchEvent(
-        *Event::Create(event_type_names::kTimezonechange));
+        *Event::Create(event_type_names::kTimezonechange), "NotifyTimezoneChangeOnWorkerThread");
   }
 }
 
