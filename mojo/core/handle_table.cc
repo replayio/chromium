@@ -11,6 +11,8 @@
 #include "base/cpu_reduction_experiment.h"
 #include "base/trace_event/memory_dump_manager.h"
 
+#include "base/record_replay.h"
+
 namespace mojo {
 namespace core {
 
@@ -105,7 +107,7 @@ HandleTable::EntriesAccessor::GetUnderlyingMap() const {
   return handles_;
 }
 
-HandleTable::HandleTable() = default;
+HandleTable::HandleTable() : lock_("HandleTable.lock_") {}
 
 HandleTable::~HandleTable() = default;
 

@@ -16,6 +16,40 @@
 namespace font_service {
 namespace internal {
 
+namespace {
+
+// When the browser goes away, the IO thread posts the main thread a task that
+// finishes the recording and then sleeps. A main thread waiting here for a
+// font service reply never runs that task, because the browser no longer
+// answers, and Chromium kills the renderer before the recording is finished.
+// As in SyncHandleRegistry::Wait, the recorder wakes this wait and the
+// recording is finished from here. Other threads don't hold up the finish, so
+// they wait as upstream does. Leaving the wait clears the recorder's one
+// callback, so a lookup nested in an outer SyncHandleRegistry::Wait leaves
+// that outer wait unwakeable, as nested SyncHandleRegistry waits already do.
+void RecordReplayWaitForReply(base::WaitableEvent& done_event) {
+  if (!recordreplay::IsRecordingOrReplaying() ||
+      !recordreplay::IsMainThread()) {
+    done_event.Wait();
+    return;
+  }
+  base::WaitableEvent quit_event;
+  recordreplay::MaybeTerminate(
+      [](void* data) { static_cast<base::WaitableEvent*>(data)->Signal(); },
+      &quit_event);
+  base::WaitableEvent* events[] = {&done_event, &quit_event};
+  if (base::WaitableEvent::WaitMany(events, 2) == 1) {
+    // Finishes the recording and doesn't return, unless it can't be finished
+    // here. The font service task still signals done_event, which lives on
+    // the caller's stack, so the wait goes on until it does.
+    recordreplay::MaybeTerminate(nullptr, nullptr);
+    done_event.Wait();
+  }
+  recordreplay::MaybeTerminate(nullptr, nullptr);
+}
+
+}  // namespace
+
 FontServiceThread::FontServiceThread()
     : task_runner_(base::ThreadPool::CreateSequencedTaskRunner(
           {base::TaskPriority::USER_VISIBLE, base::MayBlock()})) {}
@@ -50,7 +84,7 @@ bool FontServiceThread::MatchFamilyName(
       base::BindOnce(&FontServiceThread::MatchFamilyNameImpl, this, &done_event,
                      family_name, requested_style, &out_valid,
                      out_font_identity, out_family_name, out_style));
-  done_event.Wait();
+  RecordReplayWaitForReply(done_event);
 
   return out_valid;
 }
@@ -71,7 +105,7 @@ bool FontServiceThread::FallbackFontForCharacter(
                      &done_event, character, std::move(locale), &out_valid,
                      out_font_identity, out_family_name, out_is_bold,
                      out_is_italic));
-  done_event.Wait();
+  RecordReplayWaitForReply(done_event);
 
   return out_valid;
 }
@@ -91,7 +125,7 @@ bool FontServiceThread::FontRenderStyleForStrike(
       base::BindOnce(&FontServiceThread::FontRenderStyleForStrikeImpl, this,
                      &done_event, family, size, is_italic, is_bold,
                      device_scale_factor, &out_valid, out_font_render_style));
-  done_event.Wait();
+  RecordReplayWaitForReply(done_event);
   return out_valid;
 }
 
@@ -107,7 +141,7 @@ bool FontServiceThread::MatchFontByPostscriptNameOrFullFontName(
           &FontServiceThread::MatchFontByPostscriptNameOrFullFontNameImpl, this,
           &done_event, &out_valid, std::move(postscript_name_or_full_font_name),
           out_identity));
-  done_event.Wait();
+  RecordReplayWaitForReply(done_event);
   return out_valid;
 }
 
@@ -126,7 +160,7 @@ void FontServiceThread::MatchFontWithFallback(
       base::BindOnce(&FontServiceThread::MatchFontWithFallbackImpl, this,
                      &done_event, std::move(family), is_bold, is_italic,
                      charset, fallback_family_type, out_font_file_handle));
-  done_event.Wait();
+  RecordReplayWaitForReply(done_event);
 }
 #endif  // BUILDFLAG(ENABLE_PDF)
 
@@ -141,7 +175,7 @@ scoped_refptr<MappedFontFile> FontServiceThread::OpenStream(
   task_runner_->PostTask(
       FROM_HERE, base::BindOnce(&FontServiceThread::OpenStreamImpl, this,
                                 &done_event, &stream_file, identity.fID));
-  done_event.Wait();
+  RecordReplayWaitForReply(done_event);
 
   if (!stream_file.IsValid()) {
     // The font-service may have been killed.
