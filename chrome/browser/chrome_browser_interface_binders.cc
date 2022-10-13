@@ -47,6 +47,8 @@
 #include "chrome/browser/ui/webui/omnibox/omnibox.mojom.h"
 #include "chrome/browser/ui/webui/omnibox/omnibox_ui.h"
 #include "chrome/browser/ui/webui/privacy_sandbox/privacy_sandbox_internals_ui.h"
+#include "chrome/browser/ui/webui/record_replay/record_replay_manager.mojom.h"
+#include "chrome/browser/ui/webui/record_replay/record_replay_ui.h"
 #include "chrome/browser/ui/webui/segmentation_internals/segmentation_internals_ui.h"
 #include "chrome/browser/ui/webui/suggest_internals/suggest_internals.mojom.h"
 #include "chrome/browser/ui/webui/suggest_internals/suggest_internals_ui.h"
@@ -81,6 +83,8 @@
 #include "components/prefs/pref_service.h"
 #include "components/privacy_sandbox/privacy_sandbox_features.h"
 #include "components/reading_list/features/reading_list_switches.h"
+#include "components/record_replay/services/auth_token/public/mojom/auth_token.mojom.h"
+#include "components/record_replay/services/auth_token/public/cpp/auth_token_service_factory.h"
 #include "components/safe_browsing/buildflags.h"
 #include "components/search_engines/search_engine_choice_utils.h"
 #include "components/security_state/content/content_utils.h"
@@ -463,6 +467,22 @@
 namespace chrome::internal {
 
 using content::RegisterWebUIControllerInterfaceBinder;
+
+void BindRecordReplayAuthTokenStore(
+    content::RenderFrameHost* frame_host,
+    mojo::PendingReceiver<auth_token::mojom::RecordReplayAuthTokenStore> receiver) {
+
+  // we only bind the receiver if the frame's origin is app.replay.io
+  if (frame_host->GetLastCommittedOrigin().host() != "app.replay.io") {
+    return;
+  }
+
+  content::BrowserContext* browser_context =
+      frame_host->GetProcess()->GetBrowserContext();
+
+  auth_token::RecordReplayAuthTokenServiceFactory::GetForBrowserContext(browser_context)
+      ->BindAuthTokenStore(std::move(receiver));
+}
 
 #if BUILDFLAG(ENABLE_UNHANDLED_TAP)
 void BindUnhandledTapWebContentsObserver(
@@ -899,6 +919,12 @@ class CrosAppsApiFrameBinderMap {
 void PopulateChromeFrameBinders(
     mojo::BinderMapWithContext<content::RenderFrameHost*>* map,
     content::RenderFrameHost* render_frame_host) {
+
+  if (getenv("CHROMIUM_UI")) {
+    map->Add<auth_token::mojom::RecordReplayAuthTokenStore>(
+        base::BindRepeating(&BindRecordReplayAuthTokenStore));
+  }
+
   map->Add<image_annotation::mojom::Annotator>(
       base::BindRepeating(&BindImageAnnotator));
 
@@ -1095,6 +1121,11 @@ void PopulateChromeWebUIFrameBinders(
 
   RegisterWebUIControllerInterfaceBinder<::mojom::OmniboxPageHandler,
                                          OmniboxUI>(map);
+
+  if (getenv("CHROMIUM_UI")) {
+    RegisterWebUIControllerInterfaceBinder<::mojom::RecordReplayManagerHandler,
+                                          RecordReplayUI>(map);
+  }
 
   RegisterWebUIControllerInterfaceBinder<
       site_engagement::mojom::SiteEngagementDetailsProvider, SiteEngagementUI>(
