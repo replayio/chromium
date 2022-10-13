@@ -89,6 +89,15 @@ class PLATFORM_EXPORT NetworkStateNotifier {
         bool save_data) {}
     virtual void OnLineStateChange(bool on_line) {}
 
+    // Replay edit: a deterministic tie-break for NotifyObservers().  From
+    // M113 upstream keys the observer map by the observer pointer, so its
+    // iteration order is not reproducible, and the task runner alone is not a
+    // total order: every same-agent frame's observer shares the main-thread
+    // runner.  The production implementors derive this from an id they already
+    // carry, so no new ids are minted and id-allocation order is untouched.
+    // The test-only implementors keep 0 and register one observer each.
+    virtual int RecordReplayObserverId() const { return 0; }
+
    protected:
     NetworkStateObserver() = default;
 
