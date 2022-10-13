@@ -20,6 +20,7 @@
 #include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "base/numerics/byte_conversions.h"
+#include "base/record_replay.h"
 #include "base/strings/stringprintf.h"
 #include "base/types/cxx23_to_underlying.h"
 
@@ -641,6 +642,12 @@ MachPortRendezvousClientMac::MachPortRendezvousClientMac()
 
 MachPortRendezvousClientMac::~MachPortRendezvousClientMac() = default;
 
+static __attribute__((noinline)) void BusyWait() {
+  fprintf(stderr, "Busy-waiting ... (pid %d)\n", getpid());
+  volatile int x = 1;
+  while (x) {}
+}
+
 bool MachPortRendezvousClientMac::AcquirePorts() {
   AutoLock lock(lock_);
 
@@ -652,6 +659,13 @@ bool MachPortRendezvousClientMac::AcquirePorts() {
   if (kr != KERN_SUCCESS) {
     BOOTSTRAP_LOG(ERROR, kr) << "bootstrap_look_up " << bootstrap_name;
     return false;
+  }
+
+  // If we wait for a debugger to attach at process startup, the rendezvous
+  // above will fail. This environment variable can be used to attach and watch
+  // for crashes later in the process.
+  if (recordreplay::IsRecordingOrReplaying() && getenv("CHROMIUM_WAIT_AT_START")) {
+    BusyWait();
   }
 
   mach_msg_id_t message_id = kMachRendezvousMsgIdRequest;

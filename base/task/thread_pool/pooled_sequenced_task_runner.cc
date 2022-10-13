@@ -5,6 +5,7 @@
 #include "base/task/thread_pool/pooled_sequenced_task_runner.h"
 
 #include "base/message_loop/message_pump.h"
+#include "base/record_replay.h"
 #include "base/sequence_token.h"
 #include "base/task/default_delayed_task_handle_delegate.h"
 
@@ -18,9 +19,12 @@ PooledSequencedTaskRunner::PooledSequencedTaskRunner(
       sequence_(MakeRefCounted<Sequence>(traits,
                                          this,
                                          TaskSourceExecutionMode::kSequenced)) {
+  recordreplay::RegisterPointer("PooledSequencedTaskRunner", this);
 }
 
-PooledSequencedTaskRunner::~PooledSequencedTaskRunner() = default;
+PooledSequencedTaskRunner::~PooledSequencedTaskRunner() {
+  recordreplay::UnregisterPointer(this);
+}
 
 bool PooledSequencedTaskRunner::PostDelayedTask(const Location& from_here,
                                                 OnceClosure closure,

@@ -42,6 +42,8 @@
 #include "partition_alloc/thread_cache.h"  // nogncheck
 #endif
 
+#include "base/record_replay.h"
+
 namespace base::internal {
 
 constexpr TimeDelta WorkerThread::Delegate::kPurgeThreadCacheIdleDelay;
@@ -149,6 +151,7 @@ WorkerThread::WorkerThread(ThreadType thread_type_hint,
       flow_terminator_(flow_terminator == nullptr
                            ? reinterpret_cast<intptr_t>(this)
                            : reinterpret_cast<intptr_t>(flow_terminator)),
+      record_replay_unordered_(recordreplay::AreEventsDisallowed()),
       delegate_(std::move(delegate)) {
   DCHECK(task_tracker_);
   DCHECK(CanUseBackgroundThreadTypeForWorkerThread() ||
@@ -307,6 +310,10 @@ void WorkerThread::UpdateThreadType(ThreadType desired_thread_type) {
 }
 
 void WorkerThread::ThreadMain() {
+  std::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (record_replay_unordered_)
+    disallow.emplace("WorkerThread::ThreadMain");
+
 #if (BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_NACL)) || BUILDFLAG(IS_FUCHSIA)
   DCHECK(io_thread_task_runner_);
   FileDescriptorWatcher file_descriptor_watcher(io_thread_task_runner_);

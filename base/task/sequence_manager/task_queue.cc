@@ -62,6 +62,10 @@ void TaskQueue::TaskTiming::RecordTaskEnd(LazyNow* now) {
   state_ = State::Finished;
 
   if (has_wall_time()) {
+    // https://linear.app/replay/issue/RUN-618
+    // https://linear.app/replay/issue/RUN-821
+    // https://linear.app/replay/issue/RUN-852
+    recordreplay::Assert("TaskQueue::TaskTiming::RecordTaskEnd #1");
     end_time_ = now->Now();
   }
 }
@@ -93,6 +97,19 @@ void TaskQueue::Handle::reset() {
     task_queue_.reset();
     return;
   }
+
+  // [RUN-2217] Leak the TaskQueueImpl rather than unregistering it while events
+  // are disallowed: UnregisterTaskQueueImpl() mutates the sequence manager's
+  // selector, active_queues and queues_to_delete unconditionally, and a Blink
+  // owner of this handle can drop it inside a GC.  Up to M114 this guard lived
+  // in SequenceManagerImpl::ShutdownTaskQueueGracefully, which M115 deleted
+  // along with the queues_to_gracefully_shutdown map; M115-M118 it lived in
+  // ~TaskQueue(), which M119 replaced with this handle.
+  if (recordreplay::AreEventsDisallowed("ShutdownTaskQueueGracefully")) {
+    task_queue_.release();
+    return;
+  }
+
   CHECK(sequence_manager_);
   sequence_manager_->UnregisterTaskQueueImpl(std::move(task_queue_));
 }
