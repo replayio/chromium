@@ -221,6 +221,9 @@ class CONTENT_EXPORT SiteInstance : public base::RefCounted<SiteInstance> {
   // assignment.
   virtual bool IsSameSiteWithURL(const GURL& url) = 0;
 
+  // Returns true if this site instance is for a site that should be recorded.
+  virtual bool RecordReplayForRecording() = 0;
+
   // Returns how this SiteInstance was assigned to a renderer process the most
   // recent time that such an assignment was done. This allows the content
   // embedder to collect metrics on how renderer process starting or reuse
