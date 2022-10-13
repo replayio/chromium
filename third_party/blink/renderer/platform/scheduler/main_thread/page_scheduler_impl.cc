@@ -176,6 +176,11 @@ PageSchedulerImpl::PageSchedulerImpl(
       unimportant_timers_throttled_wake_up_interval_(base::Milliseconds(
           features::kUnimportantFrameTimersThrottledWakeUpIntervalMills
               .Get())) {
+  // Pointer registration is needed for sorting in MainThreadSchedulerImpl.
+  recordreplay::RegisterPointer("PageSchedulerImpl", this);
+
+  REPLAY_ASSERT("[TT-1367-1386] PageSchedulerImpl::PageSchedulerImpl %d", !!delegate_);
+
   do_throttle_cpu_time_callback_.Reset(base::BindRepeating(
       &PageSchedulerImpl::DoThrottleCPUTime, base::Unretained(this)));
   do_intensively_throttle_wake_ups_callback_.Reset(
@@ -189,6 +194,8 @@ PageSchedulerImpl::PageSchedulerImpl(
 }
 
 PageSchedulerImpl::~PageSchedulerImpl() {
+  recordreplay::UnregisterPointer(this);
+
   // TODO(alexclarke): Find out why we can't rely on the web view outliving the
   // frame.
   {
@@ -200,6 +207,12 @@ PageSchedulerImpl::~PageSchedulerImpl() {
   }
 
   main_thread_scheduler_->RemovePageScheduler(this);
+}
+
+void
+PageSchedulerImpl::BreakLinkages() {
+  REPLAY_ASSERT("[TT-1367-1386] PageSchedulerImpl::BreakLinkages %d", !!delegate_);
+  delegate_ = nullptr;
 }
 
 // static
@@ -425,6 +438,10 @@ bool PageSchedulerImpl::OptedOutFromAggressiveThrottling() const {
 
 bool PageSchedulerImpl::RequestBeginMainFrameNotExpected(bool new_state) {
   CHECK(!base::FeatureList::IsEnabled(kUseWidgetSchedulerForIdlePeriodSignals));
+  REPLAY_ASSERT(
+      "[TT-1367-1371] "
+      "PageSchedulerImpl::RequestBeginMainFrameNotExpected %d",
+      !!delegate_);
   if (!delegate_)
     return false;
   return delegate_->RequestBeginMainFrameNotExpected(new_state);
@@ -772,7 +789,14 @@ void PageSchedulerImpl::UpdateWakeUpBudgetPools(base::LazyNow* lazy_now) {
 }
 
 void PageSchedulerImpl::UpdatePolicy() {
+  std::vector<FrameSchedulerImpl*> frame_scheduler_vector;
   for (FrameSchedulerImpl* frame_scheduler : frame_schedulers_) {
+    frame_scheduler_vector.push_back(frame_scheduler);
+  }
+  std::sort(frame_scheduler_vector.begin(), frame_scheduler_vector.end(),
+            recordreplay::CompareByPointerId());
+
+  for (FrameSchedulerImpl* frame_scheduler : frame_scheduler_vector) {
     frame_scheduler->UpdatePolicy();
   }
 
