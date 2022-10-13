@@ -891,6 +891,8 @@ void MatchElementScopeRules(const Element& element,
                             StyleRuleUsageTracker* tracker) {
   ScopedStyleResolver* element_scope_resolver = ScopedResolverFor(element);
   UAShadowPseudoResult spr = UAShadowPseudoCascading(element);
+  recordreplay::Assert("[RUN-2424-3230] MatchElementScopeRules %d",
+                        !!element_scope_resolver);
   collector.BeginAddingAuthorRulesForTreeScope(element.GetTreeScope());
   if (element_scope_resolver) {
     collector.ClearMatchedRules();
@@ -1021,6 +1023,10 @@ void MatchOuterScopeRules(const Element& matching_element,
       }
     }
   }
+  recordreplay::Assert(
+      "[RUN-2424-3231] MatchElementScopeRules inline style %d",
+      element.IsStyledElement() && element.InlineStyle() &&
+          collector.GetPseudoId() == kPseudoIdNone);
 }
 
 }  // namespace
@@ -1341,6 +1347,10 @@ const ComputedStyle* StyleResolver::ResolveStyle(
     Element* element,
     const StyleRecalcContext& style_recalc_context,
     const StyleRequest& style_request) {
+  recordreplay::Assert("[RUN-2424-3005] StyleResolver::ResolveStyle %d %d", 
+    ((ScriptWrappable*)&GetDocument())->RecordReplayId(),
+    element ? element->RecordReplayId() : -1
+  );
   if (!element) {
     DCHECK(style_request.IsPseudoStyleRequest());
     return nullptr;
@@ -1781,6 +1791,9 @@ void StyleResolver::ApplyBaseStyleNoCache(
     }
   }
 
+  recordreplay::Assert(
+      "[RUN-2424-3229] StyleResolver::ApplyBaseStyleNoCache %d",
+      style_request.rules_to_include == StyleRequest::kUAOnly);
   if (style_request.rules_to_include == StyleRequest::kUAOnly) {
     MatchUARules(*element, collector);
   } else {
@@ -1912,6 +1925,8 @@ void StyleResolver::ApplyBaseStyle(
     StyleCascade& cascade) {
   DCHECK(style_request.pseudo_id != kPseudoIdFirstLineInherited);
 
+  recordreplay::Assert("[RUN-2424-3005] StyleResolver::ApplyBaseStyle %d",
+                        state.CanTriggerAnimations() && CanReuseBaseComputedStyle(state));
   if (state.CanTriggerAnimations() && CanReuseBaseComputedStyle(state)) {
     const ComputedStyle* animation_base_computed_style =
         CachedAnimationBaseComputedStyle(state);
@@ -1948,6 +1963,10 @@ void StyleResolver::ApplyBaseStyle(
     return;
   }
 
+  recordreplay::Assert(
+      "[RUN-2424-3228] StyleResolver::ApplyBaseStyle incremental %d",
+      style_recalc_context.can_use_incremental_style &&
+          CanApplyInlineStyleIncrementally(element, state, style_request));
   if (style_recalc_context.can_use_incremental_style &&
       CanApplyInlineStyleIncrementally(element, state, style_request)) {
     // We are in a situation where we can reuse the old style
@@ -2992,6 +3011,7 @@ void StyleResolver::ApplyPropertiesFromCascade(StyleResolverState& state,
     const ComputedStyle* non_legacy_style = state.StyleBuilder().CloneStyle();
     // Re-apply all overlapping properties (both legacy and non-legacy).
     cascade.Apply(filter.Add(CSSProperty::kOverlapping, false));
+
     UseCountLegacyOverlapping(GetDocument(), *non_legacy_style,
                               state.StyleBuilder());
   }

@@ -32,6 +32,7 @@
 #include <utility>
 
 #include "base/containers/span.h"
+#include "base/record_replay.h"
 #include "base/substring_set_matcher/substring_set_matcher.h"
 #include "base/trace_event/common/trace_event_common.h"
 #include "third_party/blink/public/mojom/use_counter/metrics/web_feature.mojom-shared.h"
@@ -740,6 +741,8 @@ namespace {
 
 base::span<const Attribute> GetAttributes(const Element& element,
                                           bool need_style_synchronized) {
+  recordreplay::Assert("[RUN-2424-3237] GetAttributes need_style_synchronized %d",
+                        need_style_synchronized);
   if (need_style_synchronized) {
     const AttributeCollection collection = element.Attributes();
     return base::span(collection);
@@ -859,6 +862,8 @@ DISABLE_CFI_PERF bool ElementRuleCollector::CollectMatchingRulesInternal(
   }
 
   // Collect rules from attribute selector buckets, if we have any.
+  recordreplay::Assert("[RUN-2424-3236] CollectMatchingRules any attr rules %d",
+                        match_request.HasAnyRuleSetsWithAttrRules());
   if (match_request.HasAnyRuleSetsWithAttrRules()) {
     // HTML documents have case-insensitive attribute matching
     // (so we need to lowercase), non-HTML documents have

@@ -887,6 +887,9 @@ void RuleSet::AddChildRules(StyleRule* parent_rule,
                             CascadeLayer* cascade_layer,
                             const StyleScope* style_scope,
                             bool within_mixin) {
+  // https://linear.app/replay/issue/RUN-968
+  recordreplay::Assert("RuleSet::AddChildRules Start");
+
   for (StyleRuleBase* rule : rules) {
     if (auto* style_rule = DynamicTo<StyleRule>(rule)) {
       AddStyleRule(style_rule, parent_rule, medium, add_rule_flags,
@@ -995,6 +998,9 @@ void RuleSet::AddChildRules(StyleRule* parent_rule,
                    style_scope);
     }
   }
+
+  // https://linear.app/replay/issue/RUN-968
+  recordreplay::Assert("RuleSet::AddChildRules Done");
 }
 
 bool RuleSet::MatchMediaForAddRules(const MediaQueryEvaluator& evaluator,
