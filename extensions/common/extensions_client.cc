@@ -8,6 +8,7 @@
 
 #include "base/check.h"
 #include "base/notreached.h"
+#include "base/record_replay.h"
 #include "extensions/common/extension_icon_set.h"
 #include "extensions/common/extensions_api_provider.h"
 #include "extensions/common/features/feature_provider.h"
@@ -125,6 +126,7 @@ void ExtensionsClient::DoInitialize() {
 
   DCHECK(!ManifestHandler::IsRegistrationFinalized());
   PermissionsInfo* permissions_info = PermissionsInfo::GetInstance();
+
   for (const auto& provider : api_providers_) {
     provider->RegisterManifestHandlers();
     provider->RegisterPermissions(permissions_info);
