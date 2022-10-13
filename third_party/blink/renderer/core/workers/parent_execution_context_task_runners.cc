@@ -17,7 +17,8 @@ ParentExecutionContextTaskRunners* ParentExecutionContextTaskRunners::Create(
 
 ParentExecutionContextTaskRunners::ParentExecutionContextTaskRunners(
     ExecutionContext& context)
-    : ExecutionContextLifecycleObserver(&context) {
+    : ExecutionContextLifecycleObserver(&context),
+      lock_("ParentExecutionContextTaskRunners.lock_") {
   DCHECK(context.IsContextThread());
   InitializeTaskRunnersForContext(context);
 }

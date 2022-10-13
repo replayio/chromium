@@ -216,6 +216,10 @@ void DedicatedWorkerMessagingProxy::PostMessageToWorkerObject(
   if (!worker_object_ || AskedToTerminate())
     return;
 
+  recordreplay::AutoMarkerDependencyExecution execute(
+    "ScriptExecution", "DedicatedWorkerMessagingProxy::PostMessageToWorkerObject"
+  );
+
   ThreadDebugger* debugger =
       ThreadDebugger::From(GetExecutionContext()->GetIsolate());
   MessagePortArray* ports = MessagePort::EntanglePorts(
@@ -223,7 +227,8 @@ void DedicatedWorkerMessagingProxy::PostMessageToWorkerObject(
   debugger->ExternalAsyncTaskStarted(message.sender_stack_trace_id);
   if (message.message->CanDeserializeIn(GetExecutionContext())) {
     worker_object_->DispatchEvent(
-        *MessageEvent::Create(ports, std::move(message.message)));
+        *MessageEvent::Create(ports, std::move(message.message)),
+        "DedicatedWorkerMessagingProxy::PostMessageToWorkerObject");
   } else {
     worker_object_->DispatchEvent(*MessageEvent::CreateError());
   }
@@ -248,7 +253,7 @@ void DedicatedWorkerMessagingProxy::DispatchErrorEvent(
   // https://html.spec.whatwg.org/C/#runtime-script-errors-2
   ErrorEvent* event =
       ErrorEvent::Create(error_message, location->Clone(), nullptr);
-  if (worker_object_->DispatchEvent(*event) !=
+  if (worker_object_->DispatchEvent(*event, "DedicatedWorkerMessagingProxy::DispatchErrorEvent") !=
       DispatchEventResult::kNotCanceled)
     return;
 
