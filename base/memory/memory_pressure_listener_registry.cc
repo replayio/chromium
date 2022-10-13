@@ -9,6 +9,7 @@
 #include "base/feature_list.h"
 #include "base/memory/memory_pressure_level.h"
 #include "base/metrics/field_trial_params.h"
+#include "base/record_replay.h"
 #include "base/trace_event/interned_args_helper.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/memory_pressure_level_proto.h"
@@ -77,6 +78,9 @@ void MemoryPressureListenerRegistry::RemoveObserver(
 
 void MemoryPressureListenerRegistry::DoNotifyMemoryPressure(
     MemoryPressureLevel memory_pressure_level) {
+  recordreplay::AutoDisallowEvents disallow(
+      "MemoryPressureListenerRegistry::DoNotifyMemoryPressure");
+
   if (base::FeatureList::IsEnabled(kSuppressMemoryListeners)) {
     int start = kSuppressMemoryListenersStart.Get();
     int end = kSuppressMemoryListenersEnd.Get();

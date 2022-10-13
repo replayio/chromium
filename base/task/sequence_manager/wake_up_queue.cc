@@ -67,6 +67,10 @@ void WakeUpQueue::SetNextWakeUpForQueue(internal::TaskQueueImpl* queue,
 
   std::optional<WakeUp> new_wake_up = GetNextDelayedWakeUp();
 
+  recordreplay::Assert(
+    "[RUN-2801-2978] WakeUpQueue::SetNextWakeUpForQueue %d",
+    new_wake_up != previous_wake_up);
+
   if (new_wake_up != previous_wake_up) {
     OnNextWakeUpChanged(lazy_now, GetNextDelayedWakeUp());
   }

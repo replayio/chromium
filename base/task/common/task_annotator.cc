@@ -17,6 +17,7 @@
 #include "base/debug/alias.h"
 #include "base/logging.h"
 #include "base/metrics/metrics_hashes.h"
+#include "base/record_replay.h"
 #include "base/time/time.h"
 #include "base/trace_event/heap_profiler.h"
 #include "base/trace_event/interned_args_helper.h"

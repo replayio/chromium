@@ -44,7 +44,7 @@ class LOCKABLE BASE_EXPORT Lock {
 #if !DCHECK_IS_ON()
   // Optimized wrapper implementation
 
-  Lock() = default;
+  Lock(const char* ordered_name = nullptr) : lock_(ordered_name) {}
   // The provided `check_invariants` will be ignored. Using a templated method
   // here instead of `explicit Lock(FunctionRef<void()>)` avoids a compile error
   // about instantiation of an undefined template when code that neither
@@ -74,6 +74,10 @@ class LOCKABLE BASE_EXPORT Lock {
   void AssertNotHeld() const {}
 #else
   Lock();
+  // The fork's named-ordered-lock ctor, in BOTH arms: >=10 fork call sites construct
+  // Lock with a name and compile in every configuration.  No default argument here,
+  // so `Lock l;` still selects upstream's `Lock()`.
+  Lock(const char* ordered_name) : lock_(ordered_name) {}
   // The provided `check_invariants` will be invoked just after the mutex is
   // acquired and just before the mutex is released. It should have no
   // side-effects and should DCHECK whatever holder-specific invariants
