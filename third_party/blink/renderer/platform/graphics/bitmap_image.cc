@@ -141,10 +141,18 @@ PaintImage BitmapImage::PaintImageForTesting() {
 }
 
 PaintImage BitmapImage::CreatePaintImage() {
+  recordreplay::Assert("[RUN-1975-2036] BitmapImage::CreatePaintImage A %u %d",
+                       reset_animation_sequence_id_, !!decoder_);
   sk_sp<PaintImageGenerator> generator =
       decoder_ ? decoder_->CreateGenerator() : nullptr;
+
+  recordreplay::Assert("[RUN-1975-2036] BitmapImage::CreatePaintImage B");
+
   if (!generator)
     return PaintImage();
+
+  recordreplay::Assert("[RUN-1975-2036] BitmapImage::CreatePaintImage C %d",
+                       all_data_received_);
 
   auto completion_state = all_data_received_
                               ? PaintImage::CompletionState::kDone
@@ -166,6 +174,8 @@ PaintImage BitmapImage::CreatePaintImage() {
         std::move(gainmap_generator), gainmap_info);
   }
 
+  recordreplay::Assert("[RUN-1975-2036] BitmapImage::CreatePaintImage D %d",
+                       all_data_received_);
   return builder.TakePaintImage();
 }
 
@@ -255,6 +265,8 @@ static inline uint64_t ImageDensityInCentiBpp(gfx::Size size,
 
 Image::SizeAvailability BitmapImage::DataChanged(bool all_data_received) {
   TRACE_EVENT0("blink", "BitmapImage::dataChanged");
+
+  recordreplay::Assert("[RUN-1975-2225] BitmapImage::DataChanged %d %d", paint_image_id(), all_data_received);
 
   // If the data was updated, clear the |cached_frame_| to push it to the
   // compositor thread. Its necessary to clear the frame since more data
@@ -404,6 +416,9 @@ PaintImage BitmapImage::PaintImageForCurrentFrame() {
   if (cached_frame_ && cached_frame_.GetAlphaType() == alpha_type)
     return cached_frame_;
 
+  recordreplay::Assert(
+      "[RUN-1975-2225] BitmapImage::PaintImageForCurrentFrame %d",
+      paint_image_id());
   cached_frame_ = CreatePaintImage();
 
   // BitmapImage should not be texture backed.
@@ -483,6 +498,8 @@ int BitmapImage::RepetitionCount() {
 }
 
 void BitmapImage::ResetAnimation() {
+  recordreplay::Assert("[RUN-1975-2225] BitmapImage::ResetAnimation %d %u",
+                       paint_image_id(), reset_animation_sequence_id_);
   cached_frame_ = PaintImage();
   reset_animation_sequence_id_++;
 }
