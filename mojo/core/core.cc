@@ -17,6 +17,7 @@
 #include "base/memory/ptr_util.h"
 #include "base/memory/writable_shared_memory_region.h"
 #include "base/rand_util.h"
+#include "base/record_replay.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
@@ -263,6 +264,13 @@ MojoTimeTicks Core::GetTimeTicksNow() {
 }
 
 MojoResult Core::Close(MojoHandle handle) {
+  // Refuse to close handles at non-deterministic points, as this requires a lot
+  // of interaction with other mojo components.
+  if (recordreplay::AreEventsDisallowed() &&
+      recordreplay::FeatureEnabled("leak-references", "Core::Close")) {
+    return MOJO_RESULT_OK;
+  }
+
   RequestContext request_context;
   scoped_refptr<Dispatcher> dispatcher;
   {
@@ -384,6 +392,7 @@ MojoResult Core::DestroyMessage(MojoMessageHandle message_handle) {
 
   RequestContext request_context;
   delete reinterpret_cast<ports::UserMessageEvent*>(message_handle);
+
   return MOJO_RESULT_OK;
 }
 
@@ -591,16 +600,21 @@ MojoResult Core::WriteMessage(MojoHandle message_pipe_handle,
                               MojoMessageHandle message_handle,
                               const MojoWriteMessageOptions* options) {
   RequestContext request_context;
+  recordreplay::Assert("[RUN-1647-2207] Core::WriteMessage A handle=%d", (int) !!message_handle);
   if (!message_handle) {
     return MOJO_RESULT_INVALID_ARGUMENT;
   }
   auto message_event = base::WrapUnique(
       reinterpret_cast<ports::UserMessageEvent*>(message_handle));
   auto* message = message_event->GetMessage<UserMessageImpl>();
+  recordreplay::Assert("[RUN-1647-2207] Core::WriteMessage B msg=%d txable=%d",
+    (int) !!message, (int) (message && message->IsTransmittable()));
   if (!message || !message->IsTransmittable()) {
     return MOJO_RESULT_INVALID_ARGUMENT;
   }
   auto dispatcher = GetDispatcher(message_pipe_handle);
+  recordreplay::Assert("[RUN-1647-2207] Core::WriteMessage C dispatcher=%d",
+    (int) !!dispatcher);
   if (!dispatcher) {
     return MOJO_RESULT_INVALID_ARGUMENT;
   }
