@@ -102,6 +102,11 @@ uint32_t SpinLock::SpinLoop() {
   return lock_value;
 }
 
+void SpinLock::RecordReplayInitializeSlowPath() {
+  SpinLock lock(base_internal::SCHEDULE_KERNEL_ONLY);
+  lock.SpinLoop();
+}
+
 void SpinLock::SlowLock() {
   uint32_t lock_value = SpinLoop();
   lock_value = TryLockInternal(lock_value, 0);
