@@ -192,7 +192,7 @@ class CORE_EXPORT OffscreenCanvas final
   bool EnableAcceleration() final;
 
   DispatchEventResult HostDispatchEvent(Event* event) override {
-    return DispatchEvent(*event);
+    return DispatchEvent(*event, "OffscreenCanvas::HostDispatchEvent");
   }
 
   bool IsWebGL1Enabled() const override { return true; }
