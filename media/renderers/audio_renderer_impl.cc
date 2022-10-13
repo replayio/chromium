@@ -42,6 +42,8 @@
 #include "media/filters/decrypting_demuxer_stream.h"
 #include "third_party/perfetto/include/perfetto/tracing/track.h"
 
+#include "base/record_replay.h"
+
 namespace media {
 
 namespace {
@@ -229,6 +231,7 @@ AudioRendererImpl::AudioRendererImpl(
       last_decoded_sample_rate_(0),
       is_encrypted_(false),
       volume_(1.0f),  // Default unmuted.
+      lock_("AudioRendererImpl.lock_"),
       playback_rate_(0.0),
       state_(kUninitialized),
       create_audio_decoders_cb_(create_audio_decoders_cb),
