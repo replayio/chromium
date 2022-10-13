@@ -573,7 +573,7 @@ void PresentationConnection::DidReceiveTextMessage(const WebString& message) {
   if (state_ != mojom::blink::PresentationConnectionState::CONNECTED)
     return;
 
-  DispatchEvent(*MessageEvent::Create(message));
+  DispatchEvent(*MessageEvent::Create(message), "PresentationConnection::DidReceiveTextMessage");
 }
 
 void PresentationConnection::DidReceiveBinaryMessage(
@@ -587,12 +587,12 @@ void PresentationConnection::DidReceiveBinaryMessage(
       blob_data->AppendBytes(data);
       auto* blob = MakeGarbageCollected<Blob>(
           BlobDataHandle::Create(std::move(blob_data), data.size()));
-      DispatchEvent(*MessageEvent::Create(blob));
+      DispatchEvent(*MessageEvent::Create(blob), "PresentationConnection::DidReceiveBinaryMessage #1");
       return;
     }
     case kBinaryTypeArrayBuffer:
       DOMArrayBuffer* buffer = DOMArrayBuffer::Create(data);
-      DispatchEvent(*MessageEvent::Create(buffer));
+      DispatchEvent(*MessageEvent::Create(buffer), "PresentationConnection::DidReceiveBinaryMessage #2");
       return;
   }
   NOTREACHED_IN_MIGRATION();
