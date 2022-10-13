@@ -44,6 +44,9 @@ LocaleController::LocaleController()
 String LocaleController::SetLocaleOverride(const String& locale,
                                            bool is_claiming_override) {
   base::AutoLock locker(lock_);
+  recordreplay::Assert(
+      "[RUN-1537-1681] LocaleController::SetLocaleOverride A %s %s",
+      locale_override_.Utf8().c_str(), locale.Utf8().c_str());
 
   // Only allow resetting overrides set by the same agent.
   if (is_claiming_override && !locale_override_.empty()) {
@@ -57,6 +60,8 @@ String LocaleController::SetLocaleOverride(const String& locale,
   } else {
     icu::Locale locale_object(locale.Ascii().data());
     const char* lang = locale_object.getLanguage();
+    recordreplay::Assert(
+        "[RUN-1537-1681] LocaleController::SetLocaleOverride B %s", lang ? lang : "");
     if (!lang || *lang == '\0')
       return "Invalid locale name";
     UpdateLocale(locale);
