@@ -17,6 +17,7 @@
 #include "base/message_loop/message_pump_wakeup_counter.h"
 #include "base/notreached.h"
 #include "base/posix/eintr_wrapper.h"
+#include "base/record_replay.h"
 #include "base/task/task_features.h"
 #include "base/time/time_override.h"
 #include "build/blink_buildflags.h"
