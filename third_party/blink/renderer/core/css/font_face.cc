@@ -31,6 +31,7 @@
 #include "third_party/blink/renderer/core/css/font_face.h"
 
 #include "base/metrics/histogram_macros.h"
+#include "base/record_replay.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_font_face_descriptors.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_arraybuffer_arraybufferview_string.h"
@@ -245,12 +246,15 @@ FontFace::FontFace(ExecutionContext* context,
     : ExecutionContextClient(context),
       style_rule_(style_rule),
       status_(kUnloaded),
-      is_user_style_(is_user_style) {}
+      is_user_style_(is_user_style) {
+  recordreplay::RegisterPointer("FontFace", this);
+}
 
 FontFace::FontFace(ExecutionContext* context,
                    const AtomicString& family,
                    const FontFaceDescriptors* descriptors)
     : ExecutionContextClient(context), family_(family), status_(kUnloaded) {
+  recordreplay::RegisterPointer("FontFace", this);
   SetPropertyFromString(context, descriptors->style(),
                         AtRuleDescriptorID::FontStyle);
   SetPropertyFromString(context, descriptors->weight(),
@@ -275,7 +279,9 @@ FontFace::FontFace(ExecutionContext* context,
                         AtRuleDescriptorID::SizeAdjust);
 }
 
-FontFace::~FontFace() = default;
+FontFace::~FontFace() {
+  recordreplay::UnregisterPointer(this);
+}
 
 String FontFace::style() const {
   return style_ ? style_->CssText() : "normal";

@@ -26,6 +26,7 @@
 #include <bitset>
 
 #include "base/memory/values_equivalent.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/animation/css/css_animation_data.h"
 #include "third_party/blink/renderer/core/css/css_custom_property_declaration.h"
 #include "third_party/blink/renderer/core/css/css_grid_template_areas_value.h"
@@ -222,6 +223,8 @@ String StylePropertySerializer::AsText() const {
 
   unsigned size = property_set_.PropertyCount();
   unsigned num_decls = 0;
+  recordreplay::Assert("[RUN-2424-3241] StylePropertySerializer::AsText size %u",
+                        size);
   for (unsigned n = 0; n < size; ++n) {
     if (!property_set_.ShouldProcessPropertyAt(n))
       continue;

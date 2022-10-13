@@ -249,12 +249,26 @@ String CSSNumericLiteralValue::CustomCSSText() const {
       constexpr int kMaxInteger = 999999;
       double value = To<CSSNumericLiteralValue>(this)->DoubleValue();
       // If the value is small integer, go the fast path.
-      if (value < kMinInteger || value > kMaxInteger ||
-          std::trunc(value) != value) {
-        if (std::isinf(value) || std::isnan(value)) {
+      bool is_non_integer_or_out_of_range =
+          value < kMinInteger || value > kMaxInteger ||
+          std::trunc(value) != value;
+      recordreplay::Assert("[RUN-2424-3239] CSSNumericLiteralValue::CustomCSSText %d",
+                            is_non_integer_or_out_of_range);
+      if (is_non_integer_or_out_of_range) {
+        bool is_inf_or_nan = std::isinf(value) || std::isnan(value);
+        recordreplay::Assert("[RUN-2424-3240] CSSNumericLiteralValue::CustomCSSText inf/nan %d",
+                              is_inf_or_nan);
+        if (is_inf_or_nan) {
           text = FormatInfinityOrNaN(value, UnitTypeToString(GetType()));
         } else {
           text = FormatNumber(value, UnitTypeToString(GetType()));
+
+          if (!recordreplay::AreEventsDisallowed()) {
+            // [RUN-1918] Workaround divergent floating point sprintf.
+            std::string textStr = text.Ascii();
+            recordreplay::RecordReplayString("CSSNumericLiteralValue::CustomCSSText", textStr);
+            text = String::FromUTF8(&textStr[0], textStr.length());
+          }
         }
       } else {
         StringBuilder builder;

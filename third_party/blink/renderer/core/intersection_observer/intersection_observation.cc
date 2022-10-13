@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/core/intersection_observer/intersection_observation.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/dom/element_rare_data.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/intersection_observer/intersection_geometry.h"
@@ -37,6 +38,8 @@ IntersectionObservation::IntersectionObservation(IntersectionObserver& observer,
       // should be -1, but since last_threshold_index_ is unsigned, we use a
       // different sentinel value.
       last_threshold_index_(kMaxThresholdIndex - 1) {
+  // Pointer registration is needed for sorting in IntersectionObserverController::ComputeIntersections.
+  recordreplay::RegisterPointer("IntersectionObservation", this);
   if (!observer.RootIsImplicit())
     cached_rects_ = std::make_unique<IntersectionGeometry::CachedRects>();
 }
@@ -51,6 +54,13 @@ int64_t IntersectionObservation::ComputeIntersection(
                                    : kExplicitRootObserversNeedUpdate)) {
     needs_update_ = true;
   }
+
+  REPLAY_ASSERT("[TT-1483-1499] IntersectionObservation::ComputeIntersection A %d %u %d %d",
+    needs_update_,
+    compute_flags,
+    ShouldCompute(compute_flags),
+    monotonic_time.has_value());
+
   if (!ShouldCompute(compute_flags))
     return 0;
   if (!monotonic_time.has_value())
@@ -78,6 +88,12 @@ int64_t IntersectionObservation::ComputeIntersection(
                                    : kExplicitRootObserversNeedUpdate)) {
     needs_update_ = true;
   }
+
+  REPLAY_ASSERT("[TT-1483-1499] IntersectionObservation::ComputeIntersection B %d %u %d %d",
+    needs_update_,
+    compute_flags,
+    ShouldCompute(compute_flags),
+    monotonic_time.has_value());
   if (!ShouldCompute(compute_flags))
     return 0;
   if (!monotonic_time.has_value())
@@ -162,6 +178,8 @@ bool IntersectionObservation::ShouldCompute(unsigned flags) const {
 bool IntersectionObservation::MaybeDelayAndReschedule(
     unsigned flags,
     DOMHighResTimeStamp timestamp) {
+  REPLAY_ASSERT("[TT-1483-1499] IntersectionObservation::MaybeDelayAndReschedule %d",
+    timestamp == -1);
   if (timestamp == -1)
     return true;
   base::TimeDelta delay = base::Milliseconds(observer_->GetEffectiveDelay() -

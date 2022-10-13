@@ -76,11 +76,13 @@
 #include "third_party/blink/renderer/platform/graphics/paint/paint_canvas.h"
 #include "third_party/blink/renderer/platform/graphics/paint/paint_record.h"
 #include "third_party/blink/renderer/platform/graphics/paint/paint_record_builder.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/instrumentation/histogram.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
 #include "third_party/blink/renderer/platform/scheduler/public/main_thread.h"
 #include "third_party/blink/renderer/platform/scheduler/public/main_thread_scheduler.h"
+#include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size_conversions.h"
 #include "ui/gfx/geometry/skia_conversions.h"
@@ -207,7 +209,10 @@ SVGImage::SVGImage(ImageObserver* observer, bool is_multipart)
                                  ->Scheduler()
                                  ->ToMainThreadScheduler()
                                  ->CreateAgentGroupScheduler()),
-      has_pending_timeline_rewind_(false) {}
+      has_pending_timeline_rewind_(false) {
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "SVGImage"))
+    replay_strong_image_observer_ = observer;
+}
 
 SVGImage::~SVGImage() {
   AllowDestroyingLayoutObjectInFinalizerScope scope;
@@ -215,17 +220,38 @@ SVGImage::~SVGImage() {
   if (frame_client_)
     frame_client_->ClearImage();
 
+  // Leak the agent_group_scheduler_ when removed during GC.
+  // See https://linear.app/replay/issue/RUN-2056#comment-f827701f.
+  if (recordreplay::AreEventsDisallowed("~SVGImage") &&
+      recordreplay::EnterLeakMemory("SVGImage"))
+    agent_group_scheduler_.release();
+
   if (page_) {
-    // It is safe to allow UA events within this scope, because event
-    // dispatching inside the SVG image's document doesn't trigger JavaScript
-    // execution. All script execution is forbidden when an SVG is loaded as an
-    // image subresource - see SetScriptEnabled in SVGImage::DataChanged().
-    EventDispatchForbiddenScope::AllowUserAgentEvents allow_events;
-    // Store m_page in a local variable, clearing m_page, so that
-    // SVGImageChromeClient knows we're destructed.
-    Page* current_page = page_.Release();
-    // Break both the loader and view references to the frame
-    current_page->WillBeDestroyed();
+    // Leak the Page during nondeterministic GC sweep: WillBeDestroyed() would
+    // erase it from AllPages(), diverging membership at iteration time.
+    if (recordreplay::AreEventsDisallowed("~SVGImage") &&
+        recordreplay::EnterLeakMemory("SVGImage")) {
+      DEFINE_STATIC_LOCAL(Persistent<HeapHashSet<Member<Page>>>, leaked_pages,
+                          (MakeGarbageCollected<HeapHashSet<Member<Page>>>()));
+      leaked_pages->insert(page_.Release());
+      // Null dangling image_ that WillBeDestroyed() would have cleared (UAF).
+      chrome_client_->ChromeDestroyed();
+      // Warn once if the leak grows large.
+      if (leaked_pages->size() == 500) {
+        recordreplay::Warning("ManyLeakedSVGImagePages");
+      }
+    } else {
+      // It is safe to allow UA events within this scope, because event
+      // dispatching inside the SVG image's document doesn't trigger JavaScript
+      // execution. All script execution is forbidden when an SVG is loaded as an
+      // image subresource - see SetScriptEnabled in SVGImage::DataChanged().
+      EventDispatchForbiddenScope::AllowUserAgentEvents allow_events;
+      // Store m_page in a local variable, clearing m_page, so that
+      // SVGImageChromeClient knows we're destructed.
+      Page* current_page = page_.Release();
+      // Break both the loader and view references to the frame
+      current_page->WillBeDestroyed();
+    }
   }
 
   // Verify that page teardown destroyed the Chrome

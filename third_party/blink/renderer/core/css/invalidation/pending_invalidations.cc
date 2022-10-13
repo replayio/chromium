@@ -33,6 +33,7 @@ void PendingInvalidations::ScheduleInvalidationSetsForNode(
       if (invalidation_set->WholeSubtreeInvalid()) {
         auto* shadow_root = DynamicTo<ShadowRoot>(node);
         auto* subtree_root = shadow_root ? &shadow_root->host() : &node;
+
         subtree_root->SetNeedsStyleRecalc(
             kSubtreeStyleChange, StyleChangeReasonForTracing::Create(
                                      style_change_reason::kStyleInvalidator));

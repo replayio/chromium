@@ -62,8 +62,9 @@ void CSSFontFace::DidBeginLoad() {
 }
 
 bool CSSFontFace::FontLoaded(CSSFontFaceSource* source) {
-  if (!IsValid() || source != sources_.front())
+  if (!IsValid() || source != sources_.front()) {
     return false;
+  }
 
   if (LoadStatus() == FontFace::kLoading) {
     if (source->IsValid()) {
@@ -79,6 +80,7 @@ bool CSSFontFace::FontLoaded(CSSFontFaceSource* source) {
 
   for (CSSSegmentedFontFace* segmented_font_face : segmented_font_faces_)
     segmented_font_face->FontFaceInvalidated();
+
   return true;
 }
 
