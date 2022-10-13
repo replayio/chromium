@@ -576,7 +576,8 @@ void WorkerGlobalScope::ReceiveMessage(BlinkTransferableMessage message) {
           message.user_activation->was_active);
     }
     DispatchEvent(*MessageEvent::Create(ports, std::move(message.message),
-                                        user_activation));
+                                        user_activation),
+                  "WorkerGlobalScope::ReceiveMessage");
   } else {
     DispatchEvent(*MessageEvent::CreateError());
   }
