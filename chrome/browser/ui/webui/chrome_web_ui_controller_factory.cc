@@ -92,6 +92,7 @@
 #include "chrome/browser/ui/webui/ntp/new_tab_ui.h"
 #include "chrome/browser/ui/webui/ntp/ntp_resource_cache.h"
 #include "chrome/browser/ui/webui/password_manager/password_manager_ui.h"
+#include "chrome/browser/ui/webui/record_replay/record_replay_ui.h"
 #include "chrome/browser/ui/webui/settings/settings_utils.h"
 #include "chrome/browser/ui/webui/signin/sync_confirmation_ui.h"
 #include "components/password_manager/core/common/password_manager_features.h"
@@ -306,6 +307,10 @@ WebUIFactoryFunction GetWebUIFactoryFunction(WebUI* web_ui,
   }
 #endif  // !BUILDFLAG(IS_ANDROID)
 
+  // recordreplay
+  if (url.host_piece() == chrome::kChromeUIRecordReplayHost)
+    return &NewWebUI<RecordReplayUI>;
+  // /recordreplay
   return nullptr;
 }
 
@@ -417,7 +422,9 @@ bool ChromeWebUIControllerFactory::IsWebUIAllowedToMakeNetworkRequests(
       // https://crbug.com/831813
       origin.host() == chrome::kChromeUIInspectHost ||
       // https://crbug.com/859345
-      origin.host() == chrome::kChromeUIDownloadsHost;
+      origin.host() == chrome::kChromeUIDownloadsHost ||
+      // recordreplay
+      origin.host() == chrome::kChromeUIRecordReplayHost;
 }
 
 ChromeWebUIControllerFactory::ChromeWebUIControllerFactory() = default;
