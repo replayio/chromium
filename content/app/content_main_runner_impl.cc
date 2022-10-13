@@ -46,6 +46,7 @@
 #include "base/process/process.h"
 #include "base/process/process_handle.h"
 #include "base/rand_util.h"
+#include "base/record_replay.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/task/execution_fence.h"
@@ -1176,6 +1177,9 @@ NO_STACK_PROTECTOR int ContentMainRunnerImpl::Run() {
       // through the normal child process launch path. GetPseudonymizationSalt()
       // has a DCHECK to catch issues in debug builds.
 
+      recordreplay::Assert("[RUN-2350-2356] ContentMainRunnerImpl::Run %d",
+                           delegate_->ShouldCreateFeatureList(
+                               ContentMainDelegate::InvokedInChildProcess()));
       if (delegate_->ShouldCreateFeatureList(
               ContentMainDelegate::InvokedInChildProcess())) {
         InitializeFieldTrialAndFeatureList();
