@@ -26,6 +26,7 @@
 #include "third_party/blink/renderer/modules/webaudio/base_audio_context.h"
 
 #include "base/metrics/histogram_functions.h"
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "media/base/audio_bus.h"
 #include "third_party/blink/public/mojom/devtools/console_message.mojom-blink.h"
@@ -745,6 +746,14 @@ void BaseAudioContext::SetContextState(V8AudioContextState::Enum new_state) {
 
   if (new_state == V8AudioContextState::Enum::kClosed) {
     GetDeferredTaskHandler().StopAcceptingTailProcessing();
+    // Nothing renders a closed context, so its connected nodes no longer have
+    // to be kept while recording or replaying. Its disposed handlers are
+    // leaked instead (see RecordReplayKeepDisposedHandler).
+    if (recordreplay::IsRecordingOrReplaying()) {
+      replay_strong_connected_nodes_.clear();
+      GraphAutoLocker locker(this);
+      GetDeferredTaskHandler().RecordReplayLeakDisposedHandlers();
+    }
   }
 
   // Notify context that state changed
@@ -759,7 +768,7 @@ void BaseAudioContext::SetContextState(V8AudioContextState::Enum new_state) {
 }
 
 void BaseAudioContext::NotifyStateChange() {
-  DispatchEvent(*Event::Create(event_type_names::kStatechange));
+  DispatchEvent(*Event::Create(event_type_names::kStatechange), "BaseAudioContext::NotifyStateChange");
 }
 
 void BaseAudioContext::NotifySourceNodeFinishedProcessing(
@@ -796,15 +805,20 @@ void BaseAudioContext::HandleStoppableSourceNodes() {
   DCHECK(IsAudioThread());
   AssertGraphOwner();
 
-  HashSet<scoped_refptr<AudioHandler>>* active_source_handlers =
+  HashSet<scoped_refptr<AudioHandler>, RecordReplayPointerIdHashTraits<scoped_refptr<AudioHandler>>>* active_source_handlers =
       GetDeferredTaskHandler().GetActiveSourceHandlers();
 
+  REPLAY_ASSERT("BaseAudioContext::HandleStoppableSourceNodes size %u",
+                active_source_handlers->size());
   if (active_source_handlers->size()) {
     // Find source handlers to see if we can stop playing them.  Note: this
     // check doesn't have to be done every render quantum, if this checking
     // becomes to expensive.  It's ok to do this on a less frequency basis as
     // long as the active nodes eventually get stopped if they're done.
     for (const auto& handler : *active_source_handlers) {
+      REPLAY_ASSERT("BaseAudioContext::HandleStoppableSourceNodes %d %d",
+                    recordreplay::PointerId(handler.get()),
+                    (int)handler->GetNodeType());
       switch (handler->GetNodeType()) {
         case AudioHandler::NodeType::kNodeTypeAudioBufferSource:
         case AudioHandler::NodeType::kNodeTypeOscillator:
@@ -896,6 +910,30 @@ void BaseAudioContext::StartRendering() {
   }
 }
 
+void BaseAudioContext::RecordReplaySetConnectedNode(AudioNode* node,
+                                                    bool connected) {
+  if (connected && control_thread_state_ != V8AudioContextState::Enum::kClosed) {
+    replay_strong_connected_nodes_.insert(node);
+  } else {
+    replay_strong_connected_nodes_.erase(node);
+  }
+}
+
+void BaseAudioContext::RecordReplayKeepDisposedHandler(
+    scoped_refptr<AudioHandler> handler) {
+  if (control_thread_state_ != V8AudioContextState::Enum::kClosed) {
+    GetDeferredTaskHandler().RecordReplayKeepDisposedHandler(std::move(handler));
+    return;
+  }
+  // Destroying a disposed handler has effects outside the graph even when
+  // nothing renders it anymore: a MediaStreamAudioSource handler removes its
+  // sink from the track, changing the sinks the audio capture thread delivers
+  // to. Which handlers the GC disposes before the context closes, and when,
+  // depends on GC timing, so once the context is closed none of them is
+  // destroyed.
+  handler->AddRef();
+}
+
 void BaseAudioContext::Trace(Visitor* visitor) const {
   visitor->Trace(destination_node_);
   visitor->Trace(listener_);
@@ -906,6 +944,7 @@ void BaseAudioContext::Trace(Visitor* visitor) const {
   visitor->Trace(periodic_wave_sawtooth_);
   visitor->Trace(periodic_wave_triangle_);
   visitor->Trace(audio_worklet_);
+  visitor->Trace(replay_strong_connected_nodes_);
   InspectorHelperMixin::Trace(visitor);
   EventTarget::Trace(visitor);
   ExecutionContextLifecycleStateObserver::Trace(visitor);
