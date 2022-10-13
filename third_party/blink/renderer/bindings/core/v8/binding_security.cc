@@ -82,6 +82,9 @@ bool CanAccessWindow(const LocalDOMWindow* accessing_window,
   SECURITY_CHECK(!(target_window && target_window->GetFrame()) ||
                  target_window == target_window->GetFrame()->DomWindow());
 
+  if (recordreplay::IsInReplayCode())
+    return true;
+
   // It's important to check that target_window is a LocalDOMWindow: it's
   // possible for a remote frame and local frame to have the same security
   // origin, depending on the model being used to allocate Frames between
@@ -183,6 +186,10 @@ bool BindingSecurity::ShouldAllowAccessTo(
     const LocalDOMWindow* accessing_window,
     const Location* target) {
   DCHECK(target);
+
+  if (recordreplay::IsInReplayCode())
+    return true;
+
   bool can_access = CanAccessWindow(accessing_window, target->DomWindow());
 
   if (!can_access && accessing_window) [[unlikely]] {
@@ -210,6 +217,9 @@ bool BindingSecurity::ShouldAllowAccessToV8ContextInternal(
     ScriptState* target_script_state) {
   // Workers and worklets do not support multiple contexts, so both of
   // |accessing_context| and |target_context| must be windows at this point.
+
+  if (recordreplay::IsInReplayCode())
+    return true;
 
   const DOMWrapperWorld& accessing_world = accessing_script_state->World();
   const DOMWrapperWorld& target_world = target_script_state->World();
