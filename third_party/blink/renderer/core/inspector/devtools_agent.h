@@ -154,7 +154,9 @@ class CORE_EXPORT DevToolsAgent : public GarbageCollected<DevToolsAgent>,
   HeapHashSet<Member<DevToolsSession>> sessions_;
   scoped_refptr<InspectorTaskRunner> inspector_task_runner_;
   scoped_refptr<base::SingleThreadTaskRunner> io_task_runner_;
-  HashMap<WorkerThread*, std::unique_ptr<WorkerData>>
+  HashMap<WorkerThread*,
+          std::unique_ptr<WorkerData>,
+          RecordReplayPointerIdHashTraits<WorkerThread*>>
       unreported_child_worker_threads_;
   raw_ptr<IOAgent, UnprotectedInRelease | DanglingUntriaged> io_agent_{nullptr};
   bool report_child_workers_ = false;
