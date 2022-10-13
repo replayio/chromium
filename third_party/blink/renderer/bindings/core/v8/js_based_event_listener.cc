@@ -100,6 +100,15 @@ void JSBasedEventListener::Invoke(
     // https://html.spec.whatwg.org/C/#event-handler-value
     v8::Local<v8::Value> listener = GetListenerObject(*event->currentTarget());
 
+    // https://linear.app/replay/issue/RUN-1084
+    void** raw = *reinterpret_cast<void***>(&listener);
+    bool zapped = raw && *raw == (void*)0x1baffed00baffedf;
+    bool recordedZapped = recordreplay::RecordReplayValue("JSBasedEventListener::Invoke zapped", zapped);
+    if (recordedZapped)
+      return;
+    if (zapped)
+      return;
+
     if (listener.IsEmpty() || !listener->IsObject())
       return;
   }

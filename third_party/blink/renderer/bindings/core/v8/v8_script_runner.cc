@@ -69,6 +69,8 @@
 #include "third_party/blink/renderer/platform/scheduler/public/event_loop.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_encoding.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_events.h"
+
 namespace blink {
 
 namespace {
@@ -506,6 +508,9 @@ v8::MaybeLocal<v8::Value> V8ScriptRunner::RunCompiledScript(
     String url = ToCoreString(isolate, script_url);
     probe::ExecuteScript probe(context, isolate->GetCurrentContext(), url,
                                script->GetUnboundScript()->GetId());
+
+    recordreplay::UserEventProbe replayEvent;
+
     result = script->Run(isolate->GetCurrentContext(), host_defined_options);
   }
 
@@ -933,6 +938,8 @@ ScriptEvaluationResult V8ScriptRunner::EvaluateModule(
                                        record->IsSourceTextModule()
                                    ? record->ScriptId()
                                    : v8::UnboundScript::kNoScriptId);
+
+    recordreplay::UserEventProbe replayEvent;
 
     TRACE_EVENT0("v8,devtools.timeline", "v8.evaluateModule");
     RUNTIME_CALL_TIMER_SCOPE(isolate, RuntimeCallStats::CounterId::kV8);
