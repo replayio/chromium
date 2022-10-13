@@ -18,6 +18,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 #include "base/observer_list.h"
+#include "base/record_replay.h"
 #include "base/strings/string_util.h"
 #include "components/bookmarks/browser/bookmark_load_details.h"
 #include "components/bookmarks/browser/bookmark_model_observer.h"
@@ -798,6 +799,8 @@ const BookmarkNode* BookmarkModel::AddURL(
     absl::optional<base::Time> creation_time,
     absl::optional<base::GUID> guid,
     bool added_by_user) {
+  recordreplay::Diagnostic("[TT-198] BookmarkModel::AddURL");
+
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(loaded_);
   DCHECK(url.is_valid());
