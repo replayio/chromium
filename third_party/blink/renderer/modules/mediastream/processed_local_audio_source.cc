@@ -12,6 +12,7 @@
 #include "base/logging.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/record_replay.h"
 #include "base/strings/stringprintf.h"
 #include "build/build_config.h"
 #include "build/chromecast_buildflags.h"
@@ -504,6 +505,9 @@ void ProcessedLocalAudioSource::Capture(const media::AudioBus* audio_bus,
                audio_capture_time);
   // Maximum number of channels used by the sinks.
   int num_preferred_channels = NumPreferredChannels();
+  REPLAY_ASSERT("ProcessedLocalAudioSource::Capture %d %d",
+                (int)!!media_stream_audio_processor_,
+                (int)!!audio_processor_proxy_);
   if (media_stream_audio_processor_) {
     // Figure out if the pre-processed data has any energy or not. This
     // information will be passed to the level calculator to force it to report
@@ -578,6 +582,9 @@ void ProcessedLocalAudioSource::DeliverProcessedAudio(
     absl::optional<double> new_volume) {
   TRACE_EVENT1("audio", "ProcessedLocalAudioSource::DeliverProcessedAudio",
                "capture-time", audio_capture_time);
+  REPLAY_ASSERT("ProcessedLocalAudioSource::DeliverProcessedAudio %d %d %d %d",
+                processed_audio.channels(), processed_audio.frames(),
+                (int)!!new_volume, (int)force_report_nonzero_energy_);
   level_calculator_.Calculate(processed_audio, force_report_nonzero_energy_);
   DeliverDataToTracks(processed_audio, audio_capture_time);
 

@@ -169,7 +169,9 @@ File* CreateSampleFile(ExecutionContext* context,
 
   FilePropertyBag file_property_bag;
   file_property_bag.setType(content_type);
-  return File::Create(context, blob_parts, file_name, &file_property_bag);
+  NonThrowableExceptionState exception_state;
+  return File::Create(context, blob_parts, file_name, &file_property_bag,
+                      exception_state);
 }
 
 TEST_F(NavigatorShareTest, ShareFile) {

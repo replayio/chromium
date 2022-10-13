@@ -147,7 +147,12 @@ class MODULES_EXPORT TransferredMediaStreamTrack : public MediaStreamTrack {
   WeakMember<ExecutionContext> execution_context_;
   TransferredValues data_;
   Member<EventPropagator> event_propagator_;
-  HeapHashSet<WeakMember<MediaStreamTrack::Observer>> observers_;
+  // SetImplementation() notifies the observers in iteration order, which the
+  // registered pointer ids keep the same when replaying.
+  HeapHashSet<
+      WeakMember<MediaStreamTrack::Observer>,
+      WTF::MemberHashRecordReplayRegisteredPointerId<MediaStreamTrack::Observer>>
+      observers_;
 };
 
 }  // namespace blink
