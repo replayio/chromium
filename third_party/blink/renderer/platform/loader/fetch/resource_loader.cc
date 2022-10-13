@@ -32,6 +32,7 @@
 #include <algorithm>
 #include <utility>
 
+#include "base/base64.h"
 #include "base/feature_list.h"
 #include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
@@ -96,6 +97,9 @@
 #include "third_party/blink/renderer/platform/wtf/shared_buffer.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 #include "url/url_constants.h"
+
+#include "net/base/net_errors.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
 
 namespace blink {
 
@@ -476,6 +480,8 @@ ResourceLoader::ResourceLoader(ResourceFetcher* fetcher,
       cancel_timer_(fetcher_->GetTaskRunner(),
                     this,
                     &ResourceLoader::CancelTimerFired) {
+  // Pointer registration is needed for sorting in ResourceFetcher.
+  recordreplay::RegisterPointer("ResourceLoader", this);
   DCHECK(resource_);
   DCHECK(fetcher_);
 
@@ -508,7 +514,9 @@ ResourceLoader::ResourceLoader(ResourceFetcher* fetcher,
   resource_->SetLoader(this);
 }
 
-ResourceLoader::~ResourceLoader() = default;
+ResourceLoader::~ResourceLoader() {
+  recordreplay::UnregisterPointer(this);
+}
 
 void ResourceLoader::Trace(Visitor* visitor) const {
   visitor->Trace(fetcher_);
@@ -842,6 +850,14 @@ bool ResourceLoader::WillFollowRedirect(
                             GURL(new_url.GetString().Utf8()), removed_headers);
   }
 
+  const ResourceResponse& redirect_response(
+      passed_redirect_response.ToResourceResponse());
+
+  // Record the redirect response once here before follow/block handling
+  // splits. The redirected PrepareRequest then only needs to model the new hop.
+  recordreplay::OnNetworkReceiveResponse(resource_->InspectorId(),
+                                         redirect_response);
+
   if (is_cache_aware_loading_activated_) {
     // Fail as cache miss if cached response is a redirect.
     HandleError(
@@ -878,9 +894,6 @@ bool ResourceLoader::WillFollowRedirect(
       initial_request.GetCredentialsMode();
 
   const ResourceLoaderOptions& options = resource_->Options();
-
-  const ResourceResponse& redirect_response(
-      passed_redirect_response.ToResourceResponse());
 
   const KURL& url_before_redirects = initial_request.Url();
 
@@ -1172,6 +1185,8 @@ void ResourceLoader::DidReceiveResponseInternal(
 
   resource_->ResponseReceived(response);
 
+  recordreplay::OnNetworkReceiveResponse(resource_->InspectorId(), response);
+
   if (resource_->Loader() && fetcher_->GetProperties().IsDetached()) {
     // If the fetch context is already detached, we don't need further signals,
     // so let's cancel the request.
@@ -1239,6 +1254,11 @@ void ResourceLoader::DidStartLoadingResponseBody(
 }
 
 void ResourceLoader::DidReceiveData(const char* data, size_t length) {
+  recordreplay::Assert("[RUN-1436] ResourceLoader::DidReceiveData %d", (int)length);
+
+  recordreplay::OnNetworkReceiveData(resource_->InspectorId(), data,
+                                     (int)length);
+
   if (auto* observer = fetcher_->GetResourceLoadObserver()) {
     observer->DidReceiveData(resource_->InspectorId(),
                              base::make_span(data, length));
@@ -1327,6 +1347,13 @@ void ResourceLoader::DidFinishLoading(
                           TRACE_ID_LOCAL(resource_->InspectorId())),
       "outcome", RequestOutcomeToString(RequestOutcome::kSuccess));
 
+  // Emit finish only once the deferred body-drain path has resolved. This
+  // matches the real DevTools loadingFinished timing more closely and avoids
+  // reporting the same request completion twice.
+  recordreplay::OnNetworkFinishLoading(resource_->InspectorId(),
+                                       encoded_body_length,
+                                       decoded_body_length);
+
   fetcher_->HandleLoaderFinish(
       resource_.Get(), response_end_time, ResourceFetcher::kDidFinishLoading,
       inflight_keepalive_bytes_, should_report_corb_blocking,
@@ -1361,6 +1388,9 @@ void ResourceLoader::CountFeature(blink::mojom::WebFeature feature) {
 }
 
 void ResourceLoader::HandleError(const ResourceError& error) {
+  recordreplay::OnNetworkFail(resource_->InspectorId(),
+                              static_cast<WebURLError>(error));
+
   if (error.CorsErrorStatus() &&
       error.CorsErrorStatus()
           ->has_authorization_covered_by_wildcard_on_preflight) {
@@ -1449,6 +1479,11 @@ void ResourceLoader::RequestSynchronously(const ResourceRequestHead& request) {
       response_out = WrappedResourceResponse(response);
       data_out = std::move(data);
     }
+  } else if (recordreplay::AreEventsUnavailable()) {
+    DidFail(WebURLError(net::ERR_FAILED, resource_->Url()),
+            base::TimeTicks::Now(),
+            URLLoaderClient::kUnknownEncodedDataLength, 0, 0);
+    return;
   } else {
     // Don't do mime sniffing for fetch (crbug.com/2016)
     bool no_mime_sniffing = request.GetRequestContext() ==
@@ -1496,6 +1531,14 @@ void ResourceLoader::RequestSynchronously(const ResourceRequestHead& request) {
 }
 
 void ResourceLoader::RequestAsynchronously(const ResourceRequestHead& request) {
+  // When events are unavailable we can't access system resources anymore.
+  if (recordreplay::AreEventsUnavailable()) {
+    DidFail(WebURLError(net::ERR_FAILED, resource_->Url()),
+            base::TimeTicks::Now(),
+            URLLoaderClient::kUnknownEncodedDataLength, 0, 0);
+    return;
+  }
+
   DCHECK(loader_);
   if (CanHandleDataURLRequestLocally(request)) {
     DCHECK(!code_cache_request_);
@@ -1513,6 +1556,18 @@ void ResourceLoader::RequestAsynchronously(const ResourceRequestHead& request) {
   scoped_refptr<EncodedFormData> form_body = request_body_.FormBody();
   PopulateResourceRequest(request, std::move(request_body_),
                           network_resource_request.get());
+
+  recordreplay::Assert(
+      "[RUN-1725-1852] ResourceLoader::RequestAsynchronously %zu %zu %zu %zu",
+      network_resource_request->method.size(),
+      network_resource_request->fetch_integrity.size(),
+      network_resource_request->devtools_request_id
+          ? network_resource_request->devtools_request_id->size()
+          : 0,
+      network_resource_request->devtools_stack_id
+          ? network_resource_request->devtools_stack_id->size()
+          : 0);
+
   if (form_body)
     request_body_ = ResourceRequestBody(std::move(form_body));
   loader_->LoadAsynchronously(
