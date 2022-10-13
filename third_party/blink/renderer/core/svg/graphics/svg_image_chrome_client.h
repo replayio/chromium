@@ -96,6 +96,8 @@ class CORE_EXPORT SVGImageChromeClient final : public IsolatedSVGChromeClient {
     kSuspendedWithAnimationPending,
   } timeline_state_;
 
+  friend class SVGImage;
+
   FRIEND_TEST_ALL_PREFIXES(SVGImageTest, TimelineSuspendAndResume);
   FRIEND_TEST_ALL_PREFIXES(SVGImageTest, ResetAnimation);
   FRIEND_TEST_ALL_PREFIXES(SVGImageTest,

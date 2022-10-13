@@ -35,6 +35,7 @@
 #include "base/dcheck_is_on.h"
 #include "base/gtest_prod_util.h"
 #include "base/notreached.h"
+#include "base/record_replay.h"
 #include "base/types/strong_alias.h"
 #include "third_party/blink/public/mojom/scroll/scroll_into_view_params.mojom-blink-forward.h"
 #include "third_party/blink/renderer/core/core_export.h"
@@ -367,6 +368,11 @@ class CORE_EXPORT LayoutObject : public GarbageCollected<LayoutObject>,
   String DebugName() const final;
 
   // End of DisplayItemClient methods.
+
+  int RecordReplayId() const {
+    NOT_DESTROYED();
+    return record_replay_id_;
+  }
 
   LayoutObject* Parent() const {
     NOT_DESTROYED();
@@ -4121,6 +4127,11 @@ class CORE_EXPORT LayoutObject : public GarbageCollected<LayoutObject>,
   Member<LayoutObject> previous_;
   Member<LayoutObject> next_;
   Member<FragmentDataList> fragment_;
+
+  // A deterministic ID is needed for hashing in the following places:
+  // FragmentPaintPropertyTreeBuilder::UpdateTransform
+  // LayoutObjectWithDepth ordering
+  int record_replay_id_ = 0;
 
 #if DCHECK_IS_ON()
   friend class CachedTextInputInfo;
