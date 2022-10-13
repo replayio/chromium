@@ -193,6 +193,7 @@ SourceLocation* CaptureSourceLocation(const String& url,
 SourceLocation* CaptureSourceLocation() {
   std::unique_ptr<v8_inspector::V8StackTrace> stack_trace =
       SourceLocation::CaptureStackTraceInternal(false);
+
   if (stack_trace && !stack_trace->isEmpty()) {
     return SourceLocation::CreateFromNonEmptyV8StackTraceInternal(
         std::move(stack_trace));

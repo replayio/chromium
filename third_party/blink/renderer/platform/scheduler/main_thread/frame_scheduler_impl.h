@@ -14,6 +14,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/record_replay.h"
 #include "base/task/sequence_manager/task_queue.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
@@ -194,6 +195,7 @@ class PLATFORM_EXPORT FrameSchedulerImpl : public FrameScheduler,
   std::unique_ptr<WebSchedulingTaskQueue> CreateWebSchedulingTaskQueue(
       WebSchedulingQueueType,
       WebSchedulingPriority) override;
+  void SetReplaySchedulingOwnerRelease(base::OnceClosure) override;
   void OnWebSchedulingTaskQueuePriorityChanged(MainThreadTaskQueue*);
   void OnWebSchedulingTaskQueueDestroyed(MainThreadTaskQueue*);
 
@@ -397,6 +399,8 @@ class PLATFORM_EXPORT FrameSchedulerImpl : public FrameScheduler,
   TraceableState<bool, TRACE_DISABLED_BY_DEFAULT("renderer.scheduler")>
       waiting_for_meaningful_paint_;
   base::TimeTicks first_meaningful_paint_timestamp_;
+
+  base::OnceClosure replay_scheduling_owner_release_;
 
   using TaskRunnerMap =
       HashMap<TaskType, scoped_refptr<base::SingleThreadTaskRunner>>;

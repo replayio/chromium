@@ -13,6 +13,8 @@
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 // The class for objects that can be associated with display items. A
@@ -22,15 +24,25 @@ namespace blink {
 // dereferenced unless we can make sure the client is still alive.
 class PLATFORM_EXPORT DisplayItemClient : public GarbageCollectedMixin {
  public:
+  HAS_RECORD_REPLAY_ID();
+
   DisplayItemClient()
       : paint_invalidation_reason_(
             static_cast<uint8_t>(PaintInvalidationReason::kJustCreated)),
-        marked_for_validation_(0) {}
+        marked_for_validation_(0) {
+    record_replay_id_ = recordreplay::NewIdMainThread("DisplayItemClient");
+  }
   DisplayItemClient(const DisplayItemClient&) = delete;
   DisplayItemClient& operator=(const DisplayItemClient&) = delete;
   virtual ~DisplayItemClient() = default;
 
   DisplayItemClientId Id() const {
+    // When recording/replaying, get a deterministic key based on the pointer ID
+    // which will behave consistently when used in hashtables or comparing the
+    // keys of possibly dead clients.
+    if (recordreplay::IsRecordingOrReplaying("pointer-ids")) {
+      return record_replay_id_;
+    }
     return reinterpret_cast<DisplayItemClientId>(this);
   }
 
