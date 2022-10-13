@@ -40,6 +40,8 @@
 #include "base/win/win_util.h"
 #endif
 
+#include "base/record_replay.h"
+
 #if BUILDFLAG(IS_ANDROID)
 #include "mojo/core/channel_binder.h"
 #endif
@@ -812,6 +814,13 @@ class Channel::ReadBuffer {
 
   // Marks the first |num_bytes| unoccupied bytes as occupied.
   void Claim(size_t num_bytes) {
+    // On windows, the system calls which record/replay async I/O calls don't
+    // record/replay any data read asynchronously. Do this manually.
+#if BUILDFLAG(IS_WIN)
+    recordreplay::RecordReplayBytes("Channel::ReadBuffer::Claim",
+                                    data_.get() + num_occupied_bytes_, num_bytes);
+#endif
+
     DCHECK_LE(num_occupied_bytes_ + num_bytes, size_);
     num_occupied_bytes_ += num_bytes;
   }
