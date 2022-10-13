@@ -162,7 +162,7 @@ void VirtualKeyboard::VirtualKeyboardOverlayChanged(
       UADefinedVariable::kKeyboardInsetHeight,
       StyleEnvironmentVariables::FormatPx(visible_keyboard_rect.height()));
   DispatchEvent(*(MakeGarbageCollected<VirtualKeyboardGeometryChangeEvent>(
-      event_type_names::kGeometrychange)));
+      event_type_names::kGeometrychange)), "VirtualKeyboard::VirtualKeyboardOverlayChanged");
 }
 
 void VirtualKeyboard::show() {
