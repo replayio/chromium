@@ -66,6 +66,7 @@ group("resources") {
       "privacy_sandbox/internals:resources",
       "private_ai_internals:resources",
       "profile_internals:resources",
+      "record_replay:resources",
       "search_engine_choice:resources",
       "settings:resources",
       "settings_shared:resources",
