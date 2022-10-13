@@ -69,7 +69,7 @@ void AppBannerController::BannerPromptRequest(
   mojom::AppBannerPromptReply reply =
       local_dom_window_->DispatchEvent(*BeforeInstallPromptEvent::Create(
           event_type_names::kBeforeinstallprompt, *local_dom_window_,
-          std::move(service_remote), std::move(event_receiver), platforms)) ==
+          std::move(service_remote), std::move(event_receiver), platforms), "AppBannerController::BannerPromptRequest") ==
               DispatchEventResult::kNotCanceled
           ? mojom::AppBannerPromptReply::NONE
           : mojom::AppBannerPromptReply::CANCEL;

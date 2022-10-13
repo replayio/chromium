@@ -322,7 +322,10 @@ class MODULES_EXPORT PeerConnectionTracker
   Member<LocalDOMWindow> local_dom_window_;
 
   // This map stores the local ID assigned to each RTCPeerConnectionHandler.
-  typedef HashMap<RTCPeerConnectionHandler*, int> PeerConnectionLocalIdMap;
+  typedef HashMap<
+        RTCPeerConnectionHandler*,
+        int
+    > PeerConnectionLocalIdMap;
   PeerConnectionLocalIdMap peer_connection_local_id_map_;
   mojom::blink::DeviceThermalState current_thermal_state_ =
       mojom::blink::DeviceThermalState::kUnknown;
