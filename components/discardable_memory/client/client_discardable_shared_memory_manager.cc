@@ -16,6 +16,7 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/process/memory.h"
+#include "base/record_replay.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/system/sys_info.h"
@@ -239,6 +240,13 @@ void ClientDiscardableSharedMemoryManager::OnBackgrounded() {
 void ClientDiscardableSharedMemoryManager::OnMemoryPressure(
     base::MemoryPressureLevel level) {
   if (level == base::MEMORY_PRESSURE_LEVEL_CRITICAL) {
+    // One arm of the critical-pressure body upstream split out of
+    // RenderThreadImpl::OnMemoryPressure; the label is that body's original key.
+    if (recordreplay::AreEventsDisallowed() &&
+        recordreplay::FeatureEnabled("leak-references", "ReleaseFreeMemory")) {
+      return;
+    }
+
     ReleaseFreeMemory();
   }
 }

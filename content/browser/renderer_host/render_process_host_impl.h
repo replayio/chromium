@@ -251,6 +251,9 @@ class CONTENT_EXPORT RenderProcessHostImpl
   bool AreV8OptimizationsDisabled() override;
   bool DisallowV8FeatureFlagOverrides() override;
   bool IsPdf() override;
+  bool IsRecordReplayForRecording() {
+    return !!(flags_ & RenderProcessFlags::kRecordReplayForRecording);
+  }
   StoragePartitionImpl* GetStoragePartition() override;
   bool Shutdown(int exit_code) override;
   bool ShutdownRequested() override;
@@ -361,6 +364,9 @@ class CONTENT_EXPORT RenderProcessHostImpl
   void ForceCrash() override;
   std::string GetInfoForBrowserContextDestructionCrashReporting() override;
   void WriteIntoTrace(perfetto::TracedProto<TraceProto> proto) const override;
+  void SendRecordReplayBrowserEvent(
+      const std::string& name,
+      base::Value&& value) override;
 #if BUILDFLAG(CLANG_PROFILING_INSIDE_SANDBOX)
   void DumpProfilingData(base::OnceClosure callback) override;
 #endif
@@ -976,6 +982,21 @@ class CONTENT_EXPORT RenderProcessHostImpl
     // Only used on desktop.
     kForInitialWebUI = 1 << 5,
 #endif  // !BUILDFLAG(IS_ANDROID)
+
+    // Indicates whether the render process backing this host should
+    // be recorded using the RecordReplay infrastructure.
+    //
+    // DSRC-013's family: upstream keeps claiming, and sometimes
+    // un-claiming, the bits below this one -- it took bit 3 at M127,
+    // bit 4 at M129 and bit 5 at M134, so this entry moved 3 -> 4 ->
+    // 5 -> 6; then at M135 it deleted one of those (and the
+    // platform guard around it) and compacted, leaving its highest at
+    // 4 and bit 5 unused.  This entry deliberately STAYS at 6 rather
+    // than chasing that churn: the invariant is that every non-zero
+    // value in the ladder is claimed by exactly one name, which 6
+    // satisfies, and moving a value nothing requires to move is a
+    // gratuitous change.  Unconditional on every platform.
+    kRecordReplayForRecording = 1 << 6,
   };
 
 #if BUILDFLAG(IS_ANDROID)

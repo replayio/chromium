@@ -334,6 +334,10 @@ class WebContents : public PageNavigator, public base::SupportsUserData {
     // default network will be used.
     net::handles::NetworkHandle target_network =
         net::handles::kInvalidNetworkHandle;
+
+    // Indicates that the content should be recorded by the Record Replay
+    // framework.
+    bool record_replay_for_recording = false;
   };
 
   // Token that causes input to be blocked on this WebContents for at least as
