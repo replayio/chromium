@@ -95,6 +95,8 @@ class CORE_EXPORT DevToolsSession : public GarbageCollected<DevToolsSession>,
   void PaintTiming(Document* document, const char* name, double timestamp);
   void DomContentLoadedEventFired(LocalFrame*);
 
+  int RecordReplayId() const { return record_replay_id_; }
+
  private:
   class IOSession;
 
@@ -175,6 +177,8 @@ class CORE_EXPORT DevToolsSession : public GarbageCollected<DevToolsSession>,
   // This is only relevant until the initial attach to v8 and is never reset
   // once the session stops waiting.
   const bool session_waits_for_debugger_;
+
+  int record_replay_id_ = 0;
 };
 
 }  // namespace blink
