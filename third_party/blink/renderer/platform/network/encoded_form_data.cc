@@ -19,6 +19,8 @@
  * Boston, MA 02110-1301, USA.
  */
 
+#include "base/hash/md5.h"
+#include "base/strings/string_piece_forward.h"
 #include "third_party/blink/renderer/platform/network/encoded_form_data.h"
 
 #include "base/check_is_test.h"
@@ -35,7 +37,8 @@ namespace blink {
 FormDataElement::FormDataElement() : type_(kData) {}
 
 FormDataElement::FormDataElement(const Vector<char>& array)
-    : type_(kData), data_(array) {}
+    : type_(kData), data_(array)
+{}
 
 FormDataElement::FormDataElement(Vector<char>&& array)
     : type_(kData), data_(std::move(array)) {}
@@ -190,6 +193,7 @@ EncodedFormData::FormDataType EncodedFormData::GetType() const {
 void EncodedFormData::AppendData(base::span<const uint8_t> bytes) {
   if (elements_.empty() || elements_.back().type_ != FormDataElement::kData)
     elements_.push_back(FormDataElement());
+
   FormDataElement& e = elements_.back();
   e.data_.AppendSpan(bytes);
 }
