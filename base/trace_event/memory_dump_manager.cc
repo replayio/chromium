@@ -54,6 +54,8 @@
 #include "base/trace_event/address_space_dump_provider.h"
 #endif
 
+#include "base/record_replay.h"
+
 namespace base::trace_event {
 
 namespace {
@@ -369,6 +371,13 @@ void MemoryDumpManager::ContinueAsyncProcessDump(
   // reference to a scoped_refptr. Using a scoped_refptr instead of a unique_ptr
   // allows us to retain a reference until we know the PostTask succeeded. If
   // not we can skip the hop and move on.
+
+  // Don't generate process dumps when recording/replaying, to avoid mismatched
+  // behavior issues when accessing memory dump state.
+  if (recordreplay::IsRecordingOrReplaying("gc-changes", "MemoryDumpManager::ContinueAsyncProcessDump")) {
+    FinishAsyncProcessDump(std::move(pmd_async_state));
+    return;
+  }
 
   auto get_effective_task_runner = [&](const MeasuredMemoryDumpProviderInfo&
                                            mdpinfo) {
