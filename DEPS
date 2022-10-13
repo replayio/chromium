@@ -282,7 +282,7 @@ vars = {
   # reclient CIPD package
   'reclient_package': 'infra/rbe/client/',
   # reclient CIPD package version
-  'reclient_version': 're_client_version:0.99.0.3f95625-gomaip',
+  'reclient_version': 're_client_version:0.126.0.4aaef37-gomaip',
 
   # Fetch dependencies needed to build Rust toolchain. Not needed if developing
   # Rust code in Chromium; instead enable checkout_rust
@@ -3918,6 +3918,7 @@ deps = {
     'dep_type': 'cipd',
     'condition': 'checkout_win and checkout_bazel',
   },
+  'src/third_party/reclient_configs': 'https://github.com/EngFlow/reclient-configs.git@c7c2f495ab4637bf5977a8f8f7c65ded468843b3',
 }
 
 
@@ -5081,6 +5082,11 @@ hooks = [
                '--quiet',
                '--hook',
                ],
+  },
+  {
+    'name': 'configure_reclient',
+    'pattern': '.',
+    'action': ['python3', 'src/third_party/reclient_configs/configure_reclient.py', '--src_dir=src'],
   },
 ]
 
