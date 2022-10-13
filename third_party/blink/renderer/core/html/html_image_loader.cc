@@ -21,6 +21,7 @@
 
 #include "third_party/blink/renderer/core/html/html_image_loader.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
 #include "third_party/blink/renderer/core/html/forms/html_input_element.h"
@@ -50,7 +51,7 @@ void HTMLImageLoader::DispatchLoadEvent() {
     error_occurred = (GetContent()->GetResponse().HttpStatusCode() >= 400);
   }
   GetElement()->DispatchEvent(*Event::Create(
-      error_occurred ? event_type_names::kError : event_type_names::kLoad));
+      error_occurred ? event_type_names::kError : event_type_names::kLoad), "HTMLImageLoader::DispatchLoadEvent");
 }
 
 void HTMLImageLoader::NoImageResourceToLoad() {
