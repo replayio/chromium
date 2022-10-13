@@ -136,6 +136,7 @@ class CORE_EXPORT ElementRareDataVector final : public ElementRareDataBase {
 
   CSSStyleDeclaration& EnsureInlineCSSStyleDeclaration(
       Element* owner_element) override;
+  CSSStyleDeclaration* GetInlineCSSStyleDeclaration() const override;
 
   ShadowRoot* GetShadowRoot() const override;
   void SetShadowRoot(ShadowRoot& shadow_root) override;
