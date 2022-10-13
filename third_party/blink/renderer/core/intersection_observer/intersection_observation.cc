@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/core/intersection_observer/intersection_observation.h"
 
 #include "base/metrics/histogram_macros.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/dom/element_rare_data_vector.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/intersection_observer/element_intersection_observer_data.h"
@@ -33,7 +34,10 @@ IntersectionObservation::IntersectionObservation(IntersectionObserver& observer,
                                                  Element& target)
     : observer_(observer),
       target_(&target),
-      last_run_time_(-observer.GetEffectiveDelay()) {}
+      last_run_time_(-observer.GetEffectiveDelay()) {
+  // Pointer registration is needed for sorting in IntersectionObserverController::ComputeIntersections.
+  recordreplay::RegisterPointer("IntersectionObservation", this);
+}
 
 int64_t IntersectionObservation::ComputeIntersection(
     unsigned compute_flags,
@@ -63,6 +67,11 @@ int64_t IntersectionObservation::ComputeIntersection(
     needs_update_ = true;
   }
 
+  REPLAY_ASSERT("[TT-1483-1499] IntersectionObservation::ComputeIntersection B %d %u %d %d",
+    needs_update_,
+    compute_flags,
+    ShouldCompute(compute_flags),
+    monotonic_time.has_value());
   if (!ShouldCompute(compute_flags)) {
     return 0;
   }
@@ -239,6 +248,8 @@ bool IntersectionObservation::ShouldCompute(unsigned flags) const {
 bool IntersectionObservation::MaybeDelayAndReschedule(
     unsigned flags,
     DOMHighResTimeStamp timestamp) {
+  REPLAY_ASSERT("[TT-1483-1499] IntersectionObservation::MaybeDelayAndReschedule %d",
+    timestamp == -1);
   if (timestamp == -1)
     return true;
   base::TimeDelta delay = base::Milliseconds(observer_->GetEffectiveDelay() -
