@@ -117,6 +117,11 @@ class PLATFORM_EXPORT FontCache final {
       AlternateFontName = AlternateFontName::kAllowAlternate);
   const SimpleFontData* GetLastResortFallbackFont(const FontDescription&);
 
+  // Retain last-resort SimpleFontData before first checkpoint for post-diverge
+  // PrimaryFont inject when Determine yields null.
+  static void WarmReplayLastResortFont();
+  static const SimpleFontData* ReplayLastResortSimpleFontData();
+
   // Should be used in determining whether family names listed in font-family:
   // ... are available locally. Only returns true if family name matches.
   bool IsPlatformFamilyMatchAvailable(const FontDescription&,
