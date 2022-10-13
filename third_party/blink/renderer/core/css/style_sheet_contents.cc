@@ -495,6 +495,8 @@ bool StyleSheetContents::LoadCompleted() const {
 }
 
 void StyleSheetContents::CheckLoaded() {
+  recordreplay::Assert("[RUN-1116] StyleSheetContents::CheckLoaded FunctionEntry");
+
   if (IsLoading()) {
     return;
   }

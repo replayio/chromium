@@ -150,6 +150,9 @@ PaintLayerScrollableArea::PaintLayerScrollableArea(PaintLayer& layer)
       resizer_(nullptr),
       scroll_anchor_(this),
       non_composited_main_thread_scrolling_reasons_(0) {
+  // For RUN-550, to ensure that we iterate over the scrollable area sets in the same order.
+  record_replay_id_ = recordreplay::NewIdAnyThread("PaintLayerScrollableArea");
+
   if (auto* element = DynamicTo<Element>(GetLayoutBox()->GetNode())) {
     // We save and restore only the scrollOffset as the other scroll values are
     // recalculated.
@@ -1971,7 +1974,6 @@ PaintLayerScrollableArea::GetSnapPositionAndSetTarget(
   if (data.SetTargetSnapAreaElementIds(snap.target_element_ids)) {
     GetLayoutBox()->SetNeedsPaintPropertyUpdate();
   }
-
   return snap_point;
 }
 
