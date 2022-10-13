@@ -257,6 +257,12 @@ inline constexpr char16_t kChromeUIPrivacySandboxTopicsURL[] =
 inline constexpr char kChromeUIProfileInternalsHost[] = "profile-internals";
 inline constexpr char kChromeUIQuitHost[] = "quit";
 inline constexpr char kChromeUIQuitURL[] = "chrome://quit/";
+// recordreplay
+inline constexpr char kChromeUIRecordReplayHost[] = "recordreplay";
+inline constexpr char kChromeUIRecordReplayIconHost[] = "recordreplayicon";
+inline constexpr char kChromeUIRecordReplayPageHost[] = "recordreplay";
+inline constexpr char kChromeUIRecordReplayPageURL[] = "chrome://recordreplay/";
+// /recordreplay
 inline constexpr char kChromeUIResetPasswordHost[] = "reset-password";
 inline constexpr char kChromeUIResetPasswordURL[] = "chrome://reset-password/";
 inline constexpr char kChromeUIRestartHost[] = "restart";
