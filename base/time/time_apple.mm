@@ -87,7 +87,21 @@ int64_t ComputeCurrentTicks() {
   return MachTimeToMicroseconds(mach_absolute_time());
 }
 
+static inline bool MaybeRecordingOrReplaying() {
+  return true;
+}
+
 int64_t ComputeThreadTicks() {
+  // The fork has always returned 0 from this function; up to M118 the stated
+  // reason was that the mach thread_info() trap, which it used to call below,
+  // is unsupported while recording/replaying.  M119 reimplemented the function
+  // on clock_gettime(CLOCK_THREAD_CPUTIME_ID), so that reason no longer
+  // applies, but the guard is kept rather than dropped because dropping it
+  // would change what every Mac recording sees for ThreadTicks.
+  if (MaybeRecordingOrReplaying()) {
+    return 0;
+  }
+
   struct timespec ts = {};
   CHECK(clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts) == 0);
   base::CheckedNumeric<int64_t> absolute_micros(ts.tv_sec);
