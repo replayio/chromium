@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "base/containers/span.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
@@ -252,7 +253,7 @@ class BiquadProcessor final {
   const unsigned render_quantum_frames_;
 
   Vector<std::unique_ptr<BiquadDSPKernel>> kernels_ GUARDED_BY(process_lock_);
-  mutable base::Lock process_lock_;
+  mutable base::Lock process_lock_{"AudioDSPKernelProcessor"};
 };
 
 // BiquadDSPKernel is is responsible for filtering one channel of a
@@ -345,6 +346,14 @@ void BiquadDSPKernel::Process(const float* source,
   {
     base::AutoTryLock try_locker(process_lock_);
     if (try_locker.is_acquired()) {
+      // The processor only assigns its audio-rate flag along with sample-accurate
+      // values, so read it the way the code below does.
+      REPLAY_ASSERT(
+          "BiquadDSPKernel::UpdateCoefficientsIfNecessary %d %d %d",
+          kernel_processor_->AreFilterCoefficientsDirty(),
+          kernel_processor_->HasSampleAccurateValues(),
+          kernel_processor_->HasSampleAccurateValues() &&
+              kernel_processor_->IsAudioRate());
       if (kernel_processor_->AreFilterCoefficientsDirty()) {
         // TODO(crbug.com/40637820): Eventually, the render quantum size will no
         // longer be hardcoded as 128. At that point, we'll need to switch from
@@ -601,7 +610,13 @@ double BiquadProcessor::TailTime() const {
 
 void BiquadProcessor::SetType(V8BiquadFilterType::Enum type) {
   if (type != type_) {
-    type_ = type;
+    {
+      // The audio thread reads the type under the same lock, which is ordered
+      // while recording or replaying.
+      base::AutoLockMaybe locker(
+          recordreplay::IsRecordingOrReplaying() ? &process_lock_ : nullptr);
+      type_ = type;
+    }
     Reset();  // The filter state must be reset only if the type has changed.
   }
 }
@@ -771,6 +786,8 @@ void BiquadFilterHandler::ProcessOnlyAudioParams(uint32_t frames_to_process) {
 void BiquadFilterHandler::PullInputs(uint32_t frames_to_process) {
   // Render input stream - suggest to the input to render directly into output
   // bus for in-place processing in process() if possible.
+  REPLAY_ASSERT("AudioBasicProcessorHandler::PullInputs %d %d",
+                recordreplay::PointerId(this), (int)GetNodeType());
   Input(0).Pull(Output(0).Bus(), frames_to_process);
 }
 
