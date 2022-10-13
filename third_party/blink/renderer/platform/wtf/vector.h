@@ -85,7 +85,9 @@ inline constexpr bool kEnableModificationChecks =
     (Allocator::kIsGarbageCollected && kEnableHeapVectorModificationChecks) ||
     (!Allocator::kIsGarbageCollected && kEnableVectorModificationChecks);
 
-#if PA_BUILDFLAG(MEMORY_TOOL_REPLACES_ALLOCATOR)
+// [Replay] Allow MEMORY_TOOL_REPLACES_ALLOCATOR to disable PartitionAlloc
+// without having this unwanted side-effect.
+#if 0 //PA_BUILDFLAG(MEMORY_TOOL_REPLACES_ALLOCATOR)
 // The allocation pool for nodes is one big chunk that ASAN has no insight
 // into, so it can cloak errors. Make it as small as possible to force nodes
 // to be allocated individually where ASAN can see them.
