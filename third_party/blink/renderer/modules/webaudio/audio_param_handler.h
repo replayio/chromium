@@ -11,6 +11,7 @@
 #include <tuple>
 
 #include "base/memory/scoped_refptr.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "third_party/blink/renderer/core/typed_arrays/array_buffer_view_helpers.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_typed_array.h"
@@ -178,7 +179,12 @@ class AudioParamHandler final : public ThreadSafeRefCounted<AudioParamHandler>,
   void CalculateSampleAccurateValues(base::span<float> values);
 
   float IntrinsicValue() const {
-    return intrinsic_value_.load(std::memory_order_relaxed);
+    float value = intrinsic_value_.load(std::memory_order_relaxed);
+    // The main thread sets the value while the render thread computes it from
+    // the timeline, so reads are recorded.
+    recordreplay::RecordReplayBytes("AudioParamHandler::IntrinsicValue",
+                                    &value, sizeof(value));
+    return value;
   }
 
   base::Lock& RateLock() const { return rate_lock_; }
@@ -386,6 +392,12 @@ class AudioParamHandler final : public ThreadSafeRefCounted<AudioParamHandler>,
                             float min_value,
                             float max_value,
                             unsigned render_quantum_frames);
+
+  // Orders this timeline's accesses through the handler's render-wide lock
+  // while recording or replaying.
+  void RecordReplaySetHandler(DeferredTaskHandler* handler) {
+    record_replay_handler_ = handler;
+  }
 
   // Returns true if the event was inserted, false if an exception occurred and
   // the event was not inserted.
@@ -608,6 +620,11 @@ class AudioParamHandler final : public ThreadSafeRefCounted<AudioParamHandler>,
   HashSet<ParamEvent*> new_events_ GUARDED_BY(events_lock_);
 
   mutable base::Lock events_lock_;
+
+  DeferredTaskHandler* record_replay_handler_ = nullptr;
+
+  // Whether the audio thread may read the timeline in this render.
+  bool RecordReplayMayRead() const;
 
   // The destination node used to get necessary information like the sample
   // rate and context time.
