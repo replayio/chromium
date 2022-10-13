@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/core/css/style_recalc_change.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/dom/pseudo_element.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
