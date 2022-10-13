@@ -11,6 +11,7 @@
 #include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/ranges/algorithm.h"
+#include "base/record_replay.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
@@ -114,6 +115,7 @@ void WebRtcAudioSink::OnData(const media::AudioBus& audio_bus,
   // will be a joint effort, and should be carefully carried out.
   last_estimated_capture_time_ = estimated_capture_time;
 
+  REPLAY_ASSERT("WebRtcAudioSink::OnData %d", audio_bus.frames());
   if (base::FeatureList::IsEnabled(
           features::kWebRtcAudioSinkUseTimestampAligner)) {
     adapter_->UpdateTimestampAligner(estimated_capture_time);
@@ -174,7 +176,8 @@ WebRtcAudioSink::Adapter::Adapter(
       label_(label),
       source_(std::move(source)),
       signaling_task_runner_(std::move(signaling_task_runner)),
-      main_task_runner_(std::move(main_task_runner)) {
+      main_task_runner_(std::move(main_task_runner)),
+      lock_("WebRtcAudioSink::Adapter") {
   DCHECK(signaling_task_runner_);
   DCHECK(main_task_runner_);
   SendLogMessage(
