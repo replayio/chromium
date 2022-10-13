@@ -243,6 +243,9 @@ class CONTENT_EXPORT RenderProcessHostImpl
   bool IsJitDisabled() override;
   bool AreV8OptimizationsDisabled() override;
   bool IsPdf() override;
+  bool IsRecordReplayForRecording() {
+    return !!(flags_ & RenderProcessFlags::kRecordReplayForRecording);
+  }
   StoragePartitionImpl* GetStoragePartition() override;
   bool Shutdown(int exit_code) override;
   bool ShutdownRequested() override;
@@ -346,6 +349,9 @@ class CONTENT_EXPORT RenderProcessHostImpl
   void ForceCrash() override;
   std::string GetInfoForBrowserContextDestructionCrashReporting() override;
   void WriteIntoTrace(perfetto::TracedProto<TraceProto> proto) const override;
+  void SendRecordReplayBrowserEvent(
+      const std::string& name,
+      base::Value&& value) override;
 #if BUILDFLAG(CLANG_PROFILING_INSIDE_SANDBOX)
   void DumpProfilingData(base::OnceClosure callback) override;
 #endif
@@ -930,6 +936,15 @@ class CONTENT_EXPORT RenderProcessHostImpl
 
     // Indicates whether v8 optimizations are disabled in this renderer process.
     kV8OptimizationsDisabled = 1 << 4,
+
+    // Indicates whether the render process backing this host should
+    // be recorded using the RecordReplay infrastructure.
+    //
+    // DSRC-013's family, third instance: upstream claimed bit 3 for
+    // kSkiaFontManager at M127 and bit 4 for kV8OptimizationsDisabled at
+    // M129, so this moved 3 -> 4 -> 5.  Unconditional, not inside the
+    // IS_WIN guard, so the value is the same on every platform.
+    kRecordReplayForRecording = 1 << 5,
   };
 
   // A RenderProcessHostImpl's IO thread implementation of the
