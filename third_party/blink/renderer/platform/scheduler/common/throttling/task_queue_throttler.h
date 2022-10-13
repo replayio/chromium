@@ -15,6 +15,8 @@
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
 
+#include "third_party/blink/renderer/platform/heap/member.h"
+
 namespace base {
 class LazyNow;
 namespace trace_event {
@@ -119,7 +121,9 @@ class PLATFORM_EXPORT TaskQueueThrottler final
 
   base::sequence_manager::TaskQueue* const task_queue_;
   size_t throttling_ref_count_ = 0;
-  HashSet<BudgetPool*> budget_pools_;
+  HashSet<BudgetPool*,
+          WTF::RecordReplayPointerIdHashTraits<BudgetPool*>>
+    budget_pools_;
   const base::TickClock* tick_clock_;
 };
 
