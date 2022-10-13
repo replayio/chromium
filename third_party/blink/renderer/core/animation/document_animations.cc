@@ -67,8 +67,10 @@ void UpdateAnimationTiming(
     Document& document,
     HeapHashSet<WeakMember<AnimationTimeline>>& timelines,
     TimingUpdateReason reason) {
-  for (auto& timeline : timelines)
+  for (auto& timeline : timelines) {
+    recordreplay::Assert("[RUN-1436-2225] UpdateAnimationTiming %d", timeline->RecordReplayId());
     timeline->ServiceAnimations(reason);
+  }
   document.GetWorkletAnimationController().UpdateAnimationTimings(reason);
 }
 }  // namespace
