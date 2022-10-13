@@ -906,6 +906,8 @@ class CORE_EXPORT LocalFrame final
     return coop_forbids_initial_empty_document_to_be_cross_origin_isolated_;
   }
 
+  void RegisterRecordReplayAuthTokenObserver();
+  
  private:
   friend class FrameNavigationDisabler;
   // LocalFrameMojoHandler is a part of LocalFrame.
