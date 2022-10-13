@@ -291,6 +291,7 @@ TaskGraphWorkQueue::PrioritizedTask TaskGraphWorkQueue::GetNextTaskToRun(
 
   // Add task to |running_tasks|.
   task.task->state().DidStart();
+  task.task->RecordReplayEnter();
   task_namespace->running_tasks.push_back(
       std::make_pair(task.category, task.task));
 
