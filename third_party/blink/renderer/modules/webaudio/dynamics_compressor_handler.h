@@ -9,6 +9,7 @@
 #include <memory>
 
 #include "base/gtest_prod_util.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_node.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_param.h"
@@ -38,7 +39,12 @@ class MODULES_EXPORT DynamicsCompressorHandler final : public AudioHandler {
   void Initialize() override;
 
   float ReductionValue() const {
-    return reduction_.load(std::memory_order_relaxed);
+    float reduction = reduction_.load(std::memory_order_relaxed);
+    // The render thread updates the reduction while the main thread reads it,
+    // so reads are recorded.
+    recordreplay::RecordReplayBytes("DynamicsCompressorHandler::ReductionValue",
+                                    &reduction, sizeof(reduction));
+    return reduction;
   }
 
   void SetChannelCount(unsigned, ExceptionState&) final;
