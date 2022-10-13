@@ -704,6 +704,10 @@ class CORE_EXPORT PaintLayerScrollableArea final
     return last_scrolled_vertical_;
   }
 
+  int RecordReplayId() const { 
+    return record_replay_id_; 
+  }
+
   struct StyleBasedScrollbarData {
     EOverflow overflow_x;
     EOverflow overflow_y;
@@ -922,6 +926,8 @@ class CORE_EXPORT PaintLayerScrollableArea final
   // The used pointer events value that was in effect at last paint
   // invalidation. Used to invalidate paint!
   EPointerEvents last_used_pointer_events_ = EPointerEvents::kAuto;
+
+  int record_replay_id_ = 0;
 
   class ScrollingBackgroundDisplayItemClient final
       : public GarbageCollected<ScrollingBackgroundDisplayItemClient>,
