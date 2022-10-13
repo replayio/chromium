@@ -37,6 +37,7 @@
 #include "base/check_op.h"
 #include "base/containers/contains.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/record_replay.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/default_clock.h"
 #include "base/time/default_tick_clock.h"
@@ -294,6 +295,8 @@ Performance::Performance(
           &Performance::FireResourceTimingBufferFull) {
   unix_at_zero_monotonic_ =
       GetUnixAtZeroMonotonic(base::DefaultClock::GetInstance(), tick_clock_);
+  recordreplay::RegisterPointer("Performance", this);
+
   // |context| may be null in tests.
   if (context) {
     background_tracing_helper_ =
@@ -306,7 +309,9 @@ Performance::Performance(
   }
 }
 
-Performance::~Performance() = default;
+Performance::~Performance() {
+  recordreplay::UnregisterPointer(this);
+}
 
 const AtomicString& Performance::InterfaceName() const {
   return event_target_names::kPerformance;
@@ -684,7 +689,7 @@ void Performance::FireResourceTimingBufferFull(TimerBase*) {
     int excess_entries_before = resource_timing_secondary_buffer_.size();
     if (!CanAddResourceTimingEntry()) {
       DispatchEvent(
-          *Event::Create(event_type_names::kResourcetimingbufferfull));
+          *Event::Create(event_type_names::kResourcetimingbufferfull), "Performance::FireResourceTimingBufferFull");
     }
     CopySecondaryBuffer();
     int excess_entries_after = resource_timing_secondary_buffer_.size();
@@ -1136,6 +1141,10 @@ void Performance::SuspendObserver(PerformanceObserver& observer) {
 }
 
 void Performance::DeliverObservationsTimerFired(TimerBase*) {
+  recordreplay::AutoMarkerDependencyExecution execute(
+    "ScriptExecution", "Performance::DeliverObservationsTimerFired"
+  );
+
   if (HasObserverFor(PerformanceEntry::kContainer)) {
     PopulateContainerTimingEntries();
   }
@@ -1195,6 +1204,7 @@ DOMHighResTimeStamp Performance::MonotonicTimeToDOMHighResTimeStamp(
 }
 
 DOMHighResTimeStamp Performance::now() const {
+  recordreplay::Assert("[RUN-2860-2933] Performance::now");
   return MonotonicTimeToDOMHighResTimeStamp(tick_clock_->NowTicks());
 }
 
