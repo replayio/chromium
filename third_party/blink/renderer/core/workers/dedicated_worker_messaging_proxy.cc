@@ -313,6 +313,10 @@ void DedicatedWorkerMessagingProxy::PostMessageToWorkerObject(
   if (!worker_object_ || AskedToTerminate())
     return;
 
+  recordreplay::AutoMarkerDependencyExecution execute(
+    "ScriptExecution", "DedicatedWorkerMessagingProxy::PostMessageToWorkerObject"
+  );
+
   ThreadDebugger* debugger =
       ThreadDebugger::From(GetExecutionContext()->GetIsolate());
   GCedMessagePortArray* ports = MessagePort::EntanglePorts(
@@ -331,7 +335,8 @@ void DedicatedWorkerMessagingProxy::PostMessageToWorkerObject(
               std::move(context), GetExecutionContext(), *event);
         },
         perfetto::Flow::Global(event->GetTraceId()));
-    worker_object_->DispatchEvent(*event);
+    worker_object_->DispatchEvent(
+        *event, "DedicatedWorkerMessagingProxy::PostMessageToWorkerObject");
   } else {
     worker_object_->DispatchEvent(*MessageEvent::CreateError());
   }
@@ -367,7 +372,8 @@ void DedicatedWorkerMessagingProxy::DispatchErrorEvent(
       effective_sanitize == SanitizeScriptErrors::kSanitize
           ? ErrorEvent::CreateSanitizedError()
           : event;
-  if (worker_object_->DispatchEvent(*event_for_worker_object) !=
+  if (worker_object_->DispatchEvent(*event_for_worker_object,
+                                    "DedicatedWorkerMessagingProxy::DispatchErrorEvent") !=
       DispatchEventResult::kNotCanceled) {
     return;
   }
