@@ -71,7 +71,11 @@ class RTC_EXPORT CoalescedTasks {
     uint64_t unique_id;
   };
 
-  mutable base::Lock lock_;
+  // Ordered while recording/replaying: tasks are queued from other threads
+  // than the one running them, and whether QueueDelayedTask's caller is the
+  // one that schedules a tick, and which tasks a tick runs, depend on which
+  // thread takes the lock first.
+  mutable base::Lock lock_{"CoalescedTasks.lock_"};
   std::set<base::TimeTicks> scheduled_ticks_ GUARDED_BY(lock_);
   uint64_t next_unique_id_ GUARDED_BY(lock_) = 0;
   std::map<UniqueTimeTicks, absl::AnyInvocable<void() &&>> delayed_tasks_

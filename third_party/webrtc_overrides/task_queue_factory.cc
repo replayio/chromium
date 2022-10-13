@@ -54,7 +54,9 @@ class WebRtcTaskQueue : public base::RefCountedThreadSafe<WebRtcTaskQueue>,
   // Kept during task execution to guarantee Delete semantics. Only contended
   // in case both Delete and a task runs concurrently. All tasks run and get
   // destroyed serially.
-  base::Lock alive_lock_;
+  // Ordered while recording/replaying: whether a task runs depends on Delete,
+  // usually called on another thread, having taken it first.
+  base::Lock alive_lock_{"WebRtcTaskQueue.alive_lock_"};
   // Turns to false in Delete.
   bool alive_ GUARDED_BY(alive_lock_) = true;
 

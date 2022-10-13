@@ -678,6 +678,7 @@ EXPORTS
     ?Rebuild@CordRepBtree@cord_internal@absl@@CAXPEAPEAV123@PEAV123@_N@Z
     ?Rebuild@CordRepBtree@cord_internal@absl@@SAPEAV123@PEAV123@@Z
     ?RecordInsertSlow@container_internal@absl@@YAXPEAUHashtablezInfo@12@_K1@Z
+    ?RecordReplayInitializeMutexSlowPath@absl@@YAXXZ
     ?Register@CycleClockSource@base_internal@absl@@CAXP6A_JXZ@Z
     ?RegisterAbortHook@raw_log_internal@absl@@YAXP6AXPEBDH000@Z@Z
     ?RegisterCondVarTracer@absl@@YAXP6AXPEBDPEBX@Z@Z
