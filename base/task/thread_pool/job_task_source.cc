@@ -13,6 +13,7 @@
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
+#include "base/record_replay.h"
 #include "base/notreached.h"
 #include "base/task/common/checked_lock.h"
 #include "base/task/task_features.h"
@@ -68,6 +69,10 @@ JobTaskSource::State::Value JobTaskSource::State::Load() const {
   return {value_.load(std::memory_order_relaxed)};
 }
 
+JobTaskSource::State::Value JobTaskSource::State::RecordReplayLoadUnordered() const {
+  return {value_.load_unordered(std::memory_order_relaxed)};
+}
+
 JobTaskSource::JoinFlag::JoinFlag() = default;
 JobTaskSource::JoinFlag::~JoinFlag() = default;
 
@@ -108,6 +113,7 @@ JobTaskSource::JobTaskSource(const Location& from_here,
                  TaskSourceExecutionMode::kJob,
                  originating_thread_type,
                  g_inherit_task_importance_by_default),
+      worker_lock_(recordreplay::AreEventsDisallowed() ? nullptr : "JobTaskSource.worker_lock_"),
       max_concurrency_callback_(std::move(max_concurrency_callback)),
       worker_task_(std::move(worker_task)),
       primary_task_(base::BindRepeating(
@@ -286,7 +292,7 @@ TaskSource::RunStatus JobTaskSource::WillRunTask() {
 size_t JobTaskSource::GetRemainingConcurrency() const {
   // It is safe to read |state_| without a lock since this variable is atomic,
   // and no other state is synchronized with GetRemainingConcurrency().
-  const auto state = TS_UNCHECKED_READ(state_).Load();
+  const auto state = TS_UNCHECKED_READ(state_).RecordReplayLoadUnordered();
   if (state.is_canceled()) {
     return 0;
   }

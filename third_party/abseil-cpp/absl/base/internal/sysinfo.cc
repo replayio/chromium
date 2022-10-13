@@ -73,6 +73,40 @@
 #include <task.h>
 #endif
 
+#ifndef _WIN32
+#include <dlfcn.h>
+#endif
+
+static void* LookupRecordReplaySymbol(const char* name) {
+#ifndef _WIN32
+  void* fnptr = dlsym(RTLD_DEFAULT, name);
+#else
+  HMODULE module = GetModuleHandleA("windows-recordreplay.dll");
+  void* fnptr = module ? (void*)GetProcAddress(module, name) : nullptr;
+#endif
+  return fnptr ? fnptr : reinterpret_cast<void*>(1);
+}
+
+static void RecordReplayBeginDisallowEventsWithLabel(const char* label) {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayBeginDisallowEventsWithLabel");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    reinterpret_cast<void(*)(const char*)>(fnptr)(label);
+  }
+}
+
+static void RecordReplayEndDisallowEvents() {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayEndDisallowEvents");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    reinterpret_cast<void(*)()>(fnptr)();
+  }
+}
+
 namespace absl {
 ABSL_NAMESPACE_BEGIN
 namespace base_internal {
@@ -318,6 +352,28 @@ static double MeasureTscFrequency() {
   return last_measurement;
 }
 
+// Passes events through for its lifetime. Both bindings are looked up before
+// events are passed through: dlsym is passed through as well then, and the real
+// dlsym doesn't find them.
+struct RecordReplayAutoPassThroughEvents {
+  void* begin;
+  void* end;
+
+  RecordReplayAutoPassThroughEvents() {
+    begin = LookupRecordReplaySymbol("RecordReplayBeginPassThroughEvents");
+    end = LookupRecordReplaySymbol("RecordReplayEndPassThroughEvents");
+    if (begin != reinterpret_cast<void*>(1)) {
+      reinterpret_cast<void(*)()>(begin)();
+    }
+  }
+
+  ~RecordReplayAutoPassThroughEvents() {
+    if (end != reinterpret_cast<void*>(1)) {
+      reinterpret_cast<void(*)()>(end)();
+    }
+  }
+};
+
 #endif  // ABSL_INTERNAL_UNSCALED_CYCLECLOCK_FREQUENCY_IS_CPU_FREQUENCY
 
 static double GetNominalCPUFrequency() {
@@ -346,6 +402,10 @@ static double GetNominalCPUFrequency() {
   // value with a higher frequency than that of the real TSC
   // rate. Because of this, we prefer to measure the TSC rate
   // ourselves on i386 and x86-64.
+  //
+  // How many clock reads and sleeps the measurement takes depends on the TSC,
+  // so it can't be replayed; it runs outside the recording.
+  RecordReplayAutoPassThroughEvents pass_through;
   return MeasureTscFrequency();
 #else
 
@@ -370,7 +430,12 @@ ABSL_CONST_INIT static int num_cpus = 0;
 // initialized, therefore this must not allocate memory.
 int NumCPUs() {
   base_internal::LowLevelCallOnce(
-      &init_num_cpus_once, []() { num_cpus = GetNumCPUs(); });
+      &init_num_cpus_once, []() {
+        // The thread which ends up calling this can vary when replaying.
+        RecordReplayBeginDisallowEventsWithLabel("NumCPUs");
+        num_cpus = GetNumCPUs();
+        RecordReplayEndDisallowEvents();
+      });
   return num_cpus;
 }
 

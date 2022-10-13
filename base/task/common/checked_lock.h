@@ -65,7 +65,7 @@ namespace internal {
 // ConditionVariable CreateConditionVariable()
 //     Creates a condition variable using this as a lock.
 
-#if DCHECK_IS_ON()
+#if 0 // DCHECK_IS_ON()
 class LOCKABLE CheckedLock : public CheckedLockImpl {
  public:
   CheckedLock() = default;
@@ -80,6 +80,7 @@ class LOCKABLE CheckedLock : public CheckedLockImpl {
 class LOCKABLE CheckedLock : public Lock {
  public:
   CheckedLock() = default;
+  CheckedLock(const char* ordered_name) : Lock(ordered_name) {}
   explicit CheckedLock(const CheckedLock*) {}
   explicit CheckedLock(UniversalPredecessor) {}
   explicit CheckedLock(UniversalSuccessor) {}

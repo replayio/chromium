@@ -31,6 +31,11 @@ class LOCKABLE BASE_EXPORT Lock {
   static const LockMetricTagList& GetBaseLockMetricTagList();
 
   Lock() = default;
+  // The fork's named-ordered-lock ctor. Upstream hoisted its own default ctor out
+  // of both EXPENSIVE_DCHECKS arms, and `internal::LockImpl lock_;` is declared once,
+  // so ONE ctor now serves every configuration where the fork carried two. No default
+  // argument here, so `Lock l;` still selects upstream's.
+  Lock(const char* ordered_name) : lock_(ordered_name) {}
 
   Lock(const Lock&) = delete;
   Lock& operator=(const Lock&) = delete;

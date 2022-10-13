@@ -53,6 +53,8 @@
 #include "base/trace_event/address_space_dump_provider.h"
 #endif
 
+#include "base/record_replay.h"
+
 namespace base::trace_event {
 
 namespace {
@@ -385,6 +387,13 @@ void MemoryDumpManager::ContinueAsyncProcessDump(
   for (size_t i = 0; i < pending_providers.size(); ++i) {
     pending_providers[i].set_num_following_providers(pending_providers.size() -
                                                      i - 1);
+  }
+
+  // Don't generate process dumps when recording/replaying, to avoid mismatched
+  // behavior issues when accessing memory dump state.
+  if (recordreplay::IsRecordingOrReplaying("gc-changes", "MemoryDumpManager::ContinueAsyncProcessDump")) {
+    FinishAsyncProcessDump(std::move(pmd_async_state));
+    return;
   }
 
   while (!pending_providers.empty()) {
