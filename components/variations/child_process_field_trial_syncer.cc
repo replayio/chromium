@@ -12,6 +12,8 @@
 #include "base/metrics/field_trial_list_including_low_anonymity.h"
 #include "components/variations/variations_crash_keys.h"
 
+#include "base/record_replay.h"
+
 namespace variations {
 
 namespace {
