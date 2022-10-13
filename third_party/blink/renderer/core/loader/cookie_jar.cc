@@ -8,6 +8,7 @@
 #include "base/feature_list.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/record_replay.h"
 #include "base/strings/strcat.h"
 #include "net/base/features.h"
 #include "net/cookies/parsed_cookie.h"
@@ -19,6 +20,7 @@
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/web_feature.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl_hash.h"
 #include "third_party/blink/renderer/platform/wtf/hash_functions.h"
@@ -88,10 +90,16 @@ void CookieJar::Trace(Visitor* visitor) const {
   visitor->Trace(document_);
 }
 
-void CookieJar::SetCookie(const String& value) {
+void CookieJar::SetCookie(const String& value,
+                          ExceptionState& exception_state) {
   KURL cookie_url = document_->CookieURL();
   if (cookie_url.IsEmpty())
     return;
+
+  if (RecordReplayThrowIfEventsUnavailable("document.cookie",
+                                           &exception_state)) {
+    return;
+  }
 
   base::ElapsedTimer timer;
   bool requested = RequestRestrictedCookieManagerIfNeeded();
@@ -145,10 +153,15 @@ void CookieJar::SetCookie(const String& value) {
   }
 }
 
-String CookieJar::Cookies() {
+String CookieJar::Cookies(ExceptionState& exception_state) {
   KURL cookie_url = document_->CookieURL();
   if (cookie_url.IsEmpty())
     return String();
+
+  if (RecordReplayThrowIfEventsUnavailable("document.cookie",
+                                           &exception_state)) {
+    return String();
+  }
 
   base::ElapsedTimer timer;
   bool requested = RequestRestrictedCookieManagerIfNeeded();
@@ -168,6 +181,11 @@ String CookieJar::Cookies() {
 bool CookieJar::CookiesEnabled() {
   KURL cookie_url = document_->CookieURL();
   if (cookie_url.IsEmpty())
+    return false;
+
+  // Cookie IPC never completes after diverge. No throw: callers are
+  // promise-returning.
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect"))
     return false;
 
   base::ElapsedTimer timer;
