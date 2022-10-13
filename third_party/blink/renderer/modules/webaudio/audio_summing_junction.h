@@ -27,6 +27,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_WEBAUDIO_AUDIO_SUMMING_JUNCTION_H_
 
 #include "third_party/blink/renderer/platform/audio/audio_bus.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
@@ -75,7 +76,7 @@ class AudioSummingJunction {
   // These raw pointers are safe. Owner AudioNodes of these AudioNodeOutputs
   // manage their lifetime, and AudioNode::dispose() disconnects all of
   // connections.
-  HashSet<AudioNodeOutput*> outputs_;
+  HashSet<AudioNodeOutput*, WTF::MemberHashRecordReplayRegisteredPointerId<AudioNodeOutput>> outputs_;
 
   // `rendering_outputs_` is a copy of `outputs_` which will never be modified
   // during the graph rendering on the audio thread.  This is the list which
