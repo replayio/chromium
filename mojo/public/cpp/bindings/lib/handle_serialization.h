@@ -57,6 +57,10 @@ ScopedInterfaceEndpointHandle DeserializeAssociatedEndpointHandle(
     const AssociatedEndpointHandle_Data& data,
     Message& message);
 
+// Forces recorded POSIX fd identity for Mojo-transferred PlatformHandles.
+COMPONENT_EXPORT(MOJO_CPP_BINDINGS_BASE)
+PlatformHandle RecordReplayIncomingPlatformHandle(PlatformHandle handle);
+
 template <typename T>
 ScopedHandleBase<T> DeserializeHandleAs(const Handle_Data& data,
                                         Message& message) {
@@ -92,8 +96,8 @@ struct Serializer<PlatformHandle, PlatformHandle> {
   static bool Deserialize(Handle_Data* input,
                           PlatformHandle* output,
                           Message* message) {
-    *output =
-        UnwrapPlatformHandle(DeserializeHandleAs<Handle>(*input, *message));
+    *output = RecordReplayIncomingPlatformHandle(
+        UnwrapPlatformHandle(DeserializeHandleAs<Handle>(*input, *message)));
     return true;
   }
 };
