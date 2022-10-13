@@ -5,9 +5,11 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_FRAME_LOCAL_FRAME_MOJO_HANDLER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_FRAME_LOCAL_FRAME_MOJO_HANDLER_H_
 
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "components/power_scheduler/power_mode_voter.h"
 #include "services/device/public/mojom/device_posture_provider.mojom-blink.h"
+#include "components/record_replay/services/auth_token/public/mojom/auth_token.mojom-blink.h"
 #include "third_party/blink/public/mojom/frame/back_forward_cache_controller.mojom-blink.h"
 #include "third_party/blink/public/mojom/frame/frame.mojom-blink.h"
 #include "third_party/blink/public/mojom/media/fullscreen_video_element.mojom-blink.h"
@@ -46,7 +48,8 @@ class LocalFrameMojoHandler
       public mojom::blink::LocalMainFrame,
       public mojom::blink::HighPriorityLocalFrame,
       public mojom::blink::FullscreenVideoElementHandler,
-      public device::mojom::blink::DevicePostureProviderClient {
+      public device::mojom::blink::DevicePostureProviderClient,
+      public auth_token::mojom::blink::RecordReplayAuthTokenStoreObserver {
  public:
   explicit LocalFrameMojoHandler(blink::LocalFrame& frame);
   void Trace(Visitor* visitor) const;
@@ -72,6 +75,7 @@ class LocalFrameMojoHandler
 
   device::mojom::blink::DevicePostureType GetDevicePosture();
 
+  void RegisterRecordReplayAuthTokenObserver();
  private:
   Page* GetPage() const;
   LocalDOMWindow* DomWindow() const;
@@ -86,6 +90,9 @@ class LocalFrameMojoHandler
   void BindFullscreenVideoElementReceiver(
       mojo::PendingAssociatedReceiver<
           mojom::blink::FullscreenVideoElementHandler> receiver);
+  void BindRecordReplayAuthTokenStoreObserver(
+      mojo::PendingReceiver<
+          auth_token::mojom::blink::RecordReplayAuthTokenStoreObserver> receiver);
 
   // blink::mojom::LocalFrame overrides:
   void GetTextSurroundingSelection(
@@ -242,6 +249,9 @@ class LocalFrameMojoHandler
   // DevicePostureServiceClient implementation:
   void OnPostureChanged(device::mojom::blink::DevicePostureType posture) final;
 
+  // RecordReplayAuthTokenStoreObserver implementation:
+  void OnRecordReplayAuthTokenChanged(const WTF::String& token) final;
+
   Member<blink::LocalFrame> frame_;
 
   HeapMojoAssociatedRemote<mojom::blink::BackForwardCacheControllerHost>
@@ -260,6 +270,9 @@ class LocalFrameMojoHandler
   HeapMojoAssociatedRemote<mojom::blink::LocalFrameHost>
       local_frame_host_remote_{nullptr};
 
+  HeapMojoRemote<auth_token::mojom::blink::RecordReplayAuthTokenStore>
+      auth_token_store_{nullptr};
+
   // LocalFrameMojoHandler can be reused by multiple ExecutionContext.
   HeapMojoAssociatedReceiver<mojom::blink::LocalFrame, LocalFrameMojoHandler>
       local_frame_receiver_{this, nullptr};
@@ -274,6 +287,11 @@ class LocalFrameMojoHandler
   HeapMojoAssociatedReceiver<mojom::blink::FullscreenVideoElementHandler,
                              LocalFrameMojoHandler>
       fullscreen_video_receiver_{this, nullptr};
+  // LocalFrameMojoHandler can be reused by multiple ExecutionContext.
+  HeapMojoReceiver<auth_token::mojom::blink::RecordReplayAuthTokenStoreObserver,
+                   LocalFrameMojoHandler>
+      auth_token_store_observer_receiver_{this, nullptr};
+
 
   // LocalFrameMojoHandler can be reused by multiple ExecutionContext.
   HeapMojoReceiver<device::mojom::blink::DevicePostureProviderClient,
@@ -283,7 +301,7 @@ class LocalFrameMojoHandler
   device::mojom::blink::DevicePostureType current_device_posture_ =
       device::mojom::blink::DevicePostureType::kContinuous;
 
-  std::unique_ptr<power_scheduler::PowerModeVoter>
+  recordreplay::unique_leaky_ptr<power_scheduler::PowerModeVoter>
       script_execution_power_mode_voter_;
 };
 

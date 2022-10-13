@@ -39,6 +39,7 @@
 #include "third_party/blink/renderer/core/loader/frame_loader.h"
 #include "third_party/blink/renderer/core/url/dom_url_utils_read_only.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/bindings/v8_dom_activity_logger.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
@@ -279,6 +280,11 @@ void Location::SetLocation(const String& url,
     argv.push_back(entered_document->Url());
     argv.push_back(completed_url);
     activity_logger->LogEvent("blinkSetAttribute", argv.size(), argv.data());
+  }
+
+  // Shared by Location.assign / replace / href and URL-part setters.
+  if (RecordReplayThrowIfEventsUnavailable("Location.set", exception_state)) {
+    return;
   }
 
   FrameLoadRequest request(incumbent_window, ResourceRequest(completed_url));

@@ -38,6 +38,7 @@
 
 #if !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_WIN)
 #include <sys/utsname.h>
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/platform/wtf/thread_specific.h"
 #include "third_party/blink/renderer/platform/wtf/threading.h"
 #endif
@@ -69,6 +70,9 @@ String NavigatorID::platform() const {
   struct utsname osname;
   DEFINE_THREAD_SAFE_STATIC_LOCAL(ThreadSpecific<String>, platform_name, ());
   if (platform_name->IsNull()) {
+    // uname is unrecorded after diverge. Don't cache.
+    if (recordreplay::AreEventsUnavailable("divergent-side-effect"))
+      return String("");
     StringBuilder result;
     if (uname(&osname) >= 0) {
       result.Append(osname.sysname);
