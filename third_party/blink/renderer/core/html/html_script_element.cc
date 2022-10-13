@@ -323,11 +323,14 @@ DOMNodeId HTMLScriptElement::GetDOMNodeId() {
 }
 
 void HTMLScriptElement::DispatchLoadEvent() {
-  DispatchEvent(*Event::Create(event_type_names::kLoad));
+  // https://linear.app/replay/issue/RUN-822
+  recordreplay::Assert("HTMLScriptElement::DispatchLoadEvent");
+
+  DispatchEvent(*Event::Create(event_type_names::kLoad), "HTMLScriptElement::DispatchLoadEvent");
 }
 
 void HTMLScriptElement::DispatchErrorEvent() {
-  DispatchEvent(*Event::Create(event_type_names::kError));
+  DispatchEvent(*Event::Create(event_type_names::kError), "HTMLScriptElement::DispatchErrorEvent");
 }
 
 ScriptElementBase::Type HTMLScriptElement::GetScriptElementType() {

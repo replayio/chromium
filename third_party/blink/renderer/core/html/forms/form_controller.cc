@@ -90,8 +90,9 @@ bool IsDirtyControl(const ListedElement& control) {
 void FormControlState::SerializeTo(Vector<String>& state_vector) const {
   DCHECK(!IsFailure());
   state_vector.push_back(String::Number(values_.size()));
-  for (const auto& value : values_)
+  for (const auto& value : values_) {
     state_vector.push_back(value.IsNull() ? g_empty_string : value);
+  }
 }
 
 FormControlState FormControlState::Deserialize(
@@ -113,6 +114,19 @@ FormControlState FormControlState::Deserialize(
 
 // ----------------------------------------------------------------------------
 
+static int CompareStrings(StringImpl* a, StringImpl* b) {
+  if (a->length() != b->length()) {
+    return a->length() - b->length();
+  }
+  if (a->Is8Bit() != b->Is8Bit()) {
+    return a->Is8Bit() ? -1 : 1;
+  }
+  if (a->Is8Bit()) {
+    return memcmp(a->Characters8(), b->Characters8(), a->length());
+  }
+  return memcmp(a->Characters16(), b->Characters16(), a->length() * 2);
+}
+
 class ControlKey {
  public:
   ControlKey(StringImpl* = nullptr, StringImpl* = nullptr);
@@ -128,6 +142,14 @@ class ControlKey {
   ControlKey(WTF::HashTableDeletedValueType) : name_(HashTableDeletedValue()) {}
   bool IsHashTableDeletedValue() const {
     return name_ == HashTableDeletedValue();
+  }
+
+  bool operator<(const ControlKey& o) const {
+    int compare_name = CompareStrings(name_, o.name_);
+    if (compare_name != 0) {
+      return compare_name < 0;
+    }
+    return CompareStrings(type_, o.type_) < 0;
   }
 
  private:
@@ -269,9 +291,15 @@ std::unique_ptr<SavedFormState> SavedFormState::Deserialize(
 
 void SavedFormState::SerializeTo(Vector<String>& state_vector) const {
   state_vector.push_back(String::Number(control_state_count_));
+  std::vector<ControlKey> keys;
   for (const auto& form_control : state_for_new_controls_) {
-    const ControlKey& key = form_control.key;
-    const Deque<FormControlState>& queue = form_control.value;
+    keys.push_back(form_control.key);
+  }
+  std::sort(keys.begin(), keys.end());
+  for (const ControlKey& key : keys) {
+    const auto& it = state_for_new_controls_.find(key);
+    CHECK(it != state_for_new_controls_.end());
+    const Deque<FormControlState>& queue = it->value;
     for (const FormControlState& form_control_state : queue) {
       state_vector.push_back(key.GetName());
       state_vector.push_back(key.GetType());
