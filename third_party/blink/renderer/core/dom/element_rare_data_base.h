@@ -56,6 +56,10 @@ class ElementRareDataBase : public NodeRareData {
 
   virtual CSSStyleDeclaration& EnsureInlineCSSStyleDeclaration(
       Element* owner_element) = 0;
+  // Replay edit: the existing inline CSSOM wrapper, without creating one.
+  // See Element::style(): replay-only scripts must not create blink API
+  // objects unless they have explicitly diverged.
+  virtual CSSStyleDeclaration* GetInlineCSSStyleDeclaration() const = 0;
 
   virtual ShadowRoot* GetShadowRoot() const = 0;
   virtual void SetShadowRoot(ShadowRoot& shadow_root) = 0;
