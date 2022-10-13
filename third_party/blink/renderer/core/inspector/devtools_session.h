@@ -114,6 +114,8 @@ class CORE_EXPORT DevToolsSession
 
   bool client_is_trusted() const { return client_is_trusted_; }
 
+  int RecordReplayId() const { return record_replay_id_; }
+
  private:
   class IOSession;
 
@@ -201,6 +203,8 @@ class CORE_EXPORT DevToolsSession
   // once the session stops waiting.
   const bool session_waits_for_debugger_;
   Member<InspectorInjectedScriptManager> injected_script_manager_;
+
+  int record_replay_id_ = 0;
 };
 
 }  // namespace blink
