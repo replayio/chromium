@@ -151,6 +151,12 @@ declare_args() {
 memory_tool_replaces_allocator =
     is_asan || is_hwasan || is_lsan || is_tsan || is_msan
 
+# [Replay] This primarily disables PartitionAlloc.  Upstream's conditional above is left intact
+# and overridden: PA_BUILDFLAG(MEMORY_TOOL_REPLACES_ALLOCATOR) is what forwards every
+# PartitionRoot to malloc/free, and from M152 it reads this gn global rather than the fork's
+# global -DMEMORY_TOOL_REPLACES_ALLOCATOR define.
+memory_tool_replaces_allocator = true
+
 pa_buildflag_header("buildflags") {
   header = "buildflags.h"
   flags = [
