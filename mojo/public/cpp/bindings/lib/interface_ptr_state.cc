@@ -10,6 +10,7 @@
 
 #include "base/containers/span.h"
 #include "base/functional/bind.h"
+#include "base/record_replay.h"
 #include "base/task/sequenced_task_runner.h"
 #include "mojo/public/cpp/bindings/interface_endpoint_client.h"
 #include "mojo/public/cpp/bindings/lib/task_runner_helper.h"
@@ -20,6 +21,16 @@ namespace internal {
 InterfacePtrStateBase::InterfacePtrStateBase() = default;
 
 InterfacePtrStateBase::~InterfacePtrStateBase() {
+  // Let the mojo resources leak if this is being destroyed at a non-deterministic
+  // point. Mojo resources must be destroyed deterministically.
+  if (recordreplay::AreEventsDisallowed("~InterfacePtrStateBase")) {
+    if (endpoint_client_)
+      endpoint_client_->record_replay_leak();
+    endpoint_client_.release();
+    (void)router_.release();
+    return;
+  }
+
   endpoint_client_.reset();
   if (router_) {
     router_->CloseMessagePipe();
@@ -170,6 +181,11 @@ MessageReceiverWithResponder* InterfacePtrStateBase::InitializeEndpointClient(
     const char* interface_name,
     MessageToMethodInfoCallback method_info_callback,
     MessageToMethodNameCallback method_name_callback) {
+  // https://linear.app/replay/issue/RUN-999
+  CHECK(!recordreplay::AreEventsDisallowed() ||
+        recordreplay::HasDivergedFromRecording() ||
+        recordreplay::HasDisabledFeatures());
+
   // The object hasn't been bound.
   if (!handle_.is_valid()) {
     return nullptr;

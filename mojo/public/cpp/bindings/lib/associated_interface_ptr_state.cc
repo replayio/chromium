@@ -11,6 +11,7 @@
 
 #include "base/containers/span.h"
 #include "base/functional/bind.h"
+#include "base/record_replay.h"
 #include "base/task/sequenced_task_runner.h"
 #include "mojo/public/cpp/bindings/interface_endpoint_client.h"
 #include "mojo/public/cpp/bindings/lib/task_runner_helper.h"
@@ -20,7 +21,15 @@ namespace internal {
 
 AssociatedInterfacePtrStateBase::AssociatedInterfacePtrStateBase() = default;
 
-AssociatedInterfacePtrStateBase::~AssociatedInterfacePtrStateBase() = default;
+AssociatedInterfacePtrStateBase::~AssociatedInterfacePtrStateBase() {
+  // Endpoint clients must be destroyed at deterministic points, so leak the endpoint
+  // if this state is destroyed during a GC.
+  if (recordreplay::AreEventsDisallowed("~AssociatedInterfacePtrStateBase")) {
+    if (endpoint_client_)
+      endpoint_client_->record_replay_leak();
+    endpoint_client_.release();
+  }
+}
 
 void AssociatedInterfacePtrStateBase::QueryVersion(
     base::OnceCallback<void(uint32_t)> callback) {
