@@ -11,6 +11,7 @@
 
 #include <memory>
 
+#include "base/record_replay.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/trace_event/trace_event.h"
 #include "third_party/blink/public/platform/platform.h"
@@ -43,6 +44,7 @@ ScriptProcessorHandler::ScriptProcessorHandler(
     const HeapVector<Member<AudioBuffer>>& input_buffers,
     const HeapVector<Member<AudioBuffer>>& output_buffers)
     : AudioHandler(kNodeTypeScriptProcessor, node, sample_rate),
+      buffer_lock_("ScriptProcessorHandler"),
       buffer_size_(buffer_size),
       number_of_input_channels_(number_of_input_channels),
       number_of_output_channels_(number_of_output_channels),
