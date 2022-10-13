@@ -35,6 +35,7 @@
 
 #include "base/containers/contains.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/record_replay.h"
 #include "base/time/default_clock.h"
 #include "base/time/default_tick_clock.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
@@ -220,6 +221,8 @@ Performance::Performance(
           &Performance::FireResourceTimingBufferFull) {
   unix_at_zero_monotonic_ =
       GetUnixAtZeroMonotonic(base::DefaultClock::GetInstance(), tick_clock_);
+  recordreplay::RegisterPointer("Performance", this);
+
   // |context| may be null in tests.
   if (context) {
     background_tracing_helper_ =
@@ -232,7 +235,9 @@ Performance::Performance(
   }
 }
 
-Performance::~Performance() = default;
+Performance::~Performance() {
+  recordreplay::UnregisterPointer(this);
+}
 
 const AtomicString& Performance::InterfaceName() const {
   return event_target_names::kPerformance;
@@ -349,6 +354,11 @@ PerformanceEntryVector Performance::GetEntriesByTypeForCurrentFrame(
       PerformanceEntry::ToEntryTypeEnum(entry_type);
   if (!PerformanceEntry::IsValidTimelineEntryType(type)) {
     PerformanceEntryVector empty_entries;
+    // A removed frame's window has no execution context to warn on. Upstream
+    // guards this since chromium/chromium@8c7919b9400a (crbug.com/1401223, in
+    // 109.0.5414.120 and 110.0.5481.177); drop this once rebased past it.
+    if (!GetExecutionContext() && recordreplay::IsRecordingOrReplaying())
+      return empty_entries;
     String message = "Deprecated API for given entry type.";
     GetExecutionContext()->AddConsoleMessage(
         MakeGarbageCollected<ConsoleMessage>(
@@ -744,7 +754,7 @@ void Performance::FireResourceTimingBufferFull(TimerBase*) {
     int excess_entries_before = resource_timing_secondary_buffer_.size();
     if (!CanAddResourceTimingEntry()) {
       DispatchEvent(
-          *Event::Create(event_type_names::kResourcetimingbufferfull));
+          *Event::Create(event_type_names::kResourcetimingbufferfull), "Performance::FireResourceTimingBufferFull");
     }
     CopySecondaryBuffer();
     int excess_entries_after = resource_timing_secondary_buffer_.size();
@@ -1135,6 +1145,10 @@ void Performance::SuspendObserver(PerformanceObserver& observer) {
 }
 
 void Performance::DeliverObservationsTimerFired(TimerBase*) {
+  recordreplay::AutoMarkerDependencyExecution execute(
+    "ScriptExecution", "Performance::DeliverObservationsTimerFired"
+  );
+
   decltype(active_observers_) observers;
   active_observers_.Swap(observers);
   for (const auto& observer : observers) {
@@ -1209,6 +1223,7 @@ base::TimeDelta Performance::MonotonicTimeToTimeDelta(
 }
 
 DOMHighResTimeStamp Performance::now() const {
+  recordreplay::Assert("[RUN-2860-2933] Performance::now");
   return MonotonicTimeToDOMHighResTimeStamp(tick_clock_->NowTicks());
 }
 

@@ -14,6 +14,7 @@
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 
 namespace blink {
 
@@ -108,7 +109,7 @@ class CORE_EXPORT AnimationTimeline : public ScriptWrappable {
   void ClearOutdatedAnimation(Animation*);
 
   virtual wtf_size_t AnimationsNeedingUpdateCount() const;
-  const HeapHashSet<WeakMember<Animation>>& GetAnimations() const {
+  const HeapHashSet<WeakMember<Animation>, WTF::MemberHashRecordReplayId<Animation>>& GetAnimations() const {
     return animations_;
   }
 
@@ -143,9 +144,15 @@ class CORE_EXPORT AnimationTimeline : public ScriptWrappable {
   unsigned outdated_animation_count_;
   // Animations which will be updated on the next frame
   // i.e. current, in effect, or had timing changed
-  HeapHashSet<Member<Animation>> animations_needing_update_;
+  HeapHashSet<Member<Animation>, WTF::MemberHashRecordReplayId<Animation>>
+      animations_needing_update_;
   // All animations attached to this timeline.
-  HeapHashSet<WeakMember<Animation>> animations_;
+  HeapHashSet<WeakMember<Animation>, WTF::MemberHashRecordReplayId<Animation>> animations_;
+
+  // Strongly held references on animations when recording/replaying. Updating the
+  // animations can interact with the recording and the animations should be consistent
+  // between recording and replaying.
+  HeapHashSet<Member<Animation>> record_replay_animations_strong_;
 
   scoped_refptr<cc::AnimationTimeline> compositor_timeline_;
 
