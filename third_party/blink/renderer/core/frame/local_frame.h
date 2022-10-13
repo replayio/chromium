@@ -952,6 +952,8 @@ class CORE_EXPORT LocalFrame final
   void SetLinkPreviewTriggererForTesting(
       std::unique_ptr<WebLinkPreviewTriggerer> trigger);
 
+  void RegisterRecordReplayAuthTokenObserver();
+  
  private:
   friend class FrameNavigationDisabler;
   // LocalFrameMojoHandler is a part of LocalFrame.
