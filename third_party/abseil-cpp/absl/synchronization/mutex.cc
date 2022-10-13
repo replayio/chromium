@@ -68,6 +68,49 @@
 #include <sys/time.h>
 #endif
 
+#ifndef _WIN32
+#include <dlfcn.h>
+#endif
+
+static void* LookupRecordReplaySymbol(const char* name) {
+#ifndef _WIN32
+  void* fnptr = dlsym(RTLD_DEFAULT, name);
+#else
+  HMODULE module = GetModuleHandleA("windows-recordreplay.dll");
+  void* fnptr = module ? (void*)GetProcAddress(module, name) : nullptr;
+#endif
+  return fnptr ? fnptr : reinterpret_cast<void*>(1);
+}
+
+static void RecordReplayBeginDisallowEventsWithLabel(const char* label) {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayBeginDisallowEventsWithLabel");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    reinterpret_cast<void(*)(const char*)>(fnptr)(label);
+  }
+}
+
+static void RecordReplayEndDisallowEvents() {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayEndDisallowEvents");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    reinterpret_cast<void(*)()>(fnptr)();
+  }
+}
+
+struct RecordReplayAutoDisallowEvents {
+  RecordReplayAutoDisallowEvents(const char* label) {
+    RecordReplayBeginDisallowEventsWithLabel(label);
+  }
+  ~RecordReplayAutoDisallowEvents() {
+    RecordReplayEndDisallowEvents();
+  }
+};
+
 using absl::base_internal::CurrentThreadIdentityIfPresent;
 using absl::base_internal::CycleClock;
 using absl::base_internal::PerThreadSynch;
@@ -179,6 +222,20 @@ const MutexGlobals& GetMutexGlobals() {
   return globals;
 }
 }  // namespace
+
+void RecordReplayInitializeMutexSlowPath() {
+  // Spin and sleep limits (NumCPUs).
+  GetMutexGlobals();
+  // NominalCPUFrequency, which reads /sys/devices/system/cpu/cpu0/tsc_freq_khz
+  // (or measures the TSC) for the waiter priority refresh in Enqueue.
+  base_internal::CycleClock::Frequency();
+  // The adaptive spin count of the SpinLocks guarding the thread identity
+  // freelist and LowLevelAlloc's arenas.
+  base_internal::SpinLock::RecordReplayInitializeSlowPath();
+  // The thread identity key and LowLevelAlloc's global arenas, which the
+  // first thread to take the slow path or wait creates.
+  GetOrCreateCurrentThreadIdentity();
+}
 
 namespace synchronization_internal {
 // Returns the Mutex delay on iteration `c` depending on the given `mode`.
@@ -1989,6 +2046,10 @@ static inline bool EvalConditionIgnored(Mutex* mu, const Condition* cond) {
 //   Await,  LockWhen) so contention profiling should be suppressed.
 bool Mutex::LockSlowWithDeadline(MuHow how, const Condition* cond,
                                  KernelTimeout t, int flags) {
+  // The current time can be read a non-deterministic number of times while locking.
+  // Note that currently absl mutexes don't support ordering.
+  RecordReplayAutoDisallowEvents disallow("absl::Mutex::LockSlowWithDeadline");
+
   intptr_t v = mu_.load(std::memory_order_relaxed);
   bool unlock = false;
   if ((v & how->fast_need_zero) == 0 &&  // try fast acquire
@@ -2181,6 +2242,10 @@ void Mutex::LockSlowLoop(SynchWaitParams* waitp, int flags) {
 // or it is in the process of blocking on a condition variable; it must requeue
 // itself on the mutex/condvar to wait for its condition to become true.
 ABSL_ATTRIBUTE_NOINLINE void Mutex::UnlockSlow(SynchWaitParams* waitp) {
+  // The current time can be read a non-deterministic number of times while unlocking.
+  // Note that currently absl mutexes don't support ordering.
+  RecordReplayAutoDisallowEvents disallow("absl::Mutex::UnlockSlow");
+
   SchedulingGuard::ScopedDisable disable_rescheduling;
   intptr_t v = mu_.load(std::memory_order_relaxed);
   this->AssertReaderHeld();

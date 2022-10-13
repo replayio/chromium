@@ -31,6 +31,13 @@ class LOCKABLE BASE_EXPORT Lock {
   static const LockMetricTagList& GetBaseLockMetricTagList();
 
   Lock() = default;
+  // The fork's named-ordered-lock ctor: >=10 fork call sites construct Lock with a
+  // name.  M145 hoisted upstream's ctors out of the two DCHECK_IS_ON() arms into one
+  // class-scope `Lock() = default;`, so this is re-homed there from the two arms it
+  // used to live in.  NO DEFAULT ARGUMENT: `Lock l;` must keep selecting upstream's
+  // `Lock()`, and a defaulted parameter here would make that call ambiguous.  Nothing
+  // is lost by that, because LockImpl's own ctor defaults ordered_name to nullptr.
+  Lock(const char* ordered_name) : lock_(ordered_name) {}
 
   Lock(const Lock&) = delete;
   Lock& operator=(const Lock&) = delete;
