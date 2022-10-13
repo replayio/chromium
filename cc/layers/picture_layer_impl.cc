@@ -47,6 +47,8 @@
 #include "ui/gfx/geometry/rect_conversions.h"
 #include "ui/gfx/geometry/size_conversions.h"
 
+#include "base/record_replay.h"
+
 namespace cc {
 namespace {
 // This must be > 1 as we multiply or divide by this to find a new raster
@@ -144,6 +146,9 @@ void PictureLayerImpl::PushPropertiesTo(LayerImpl* base_layer) {
   layer_impl->has_non_animated_image_update_rect_ =
       has_non_animated_image_update_rect_;
 
+  // https://linear.app/replay/issue/RUN-465
+  recordreplay::Assert("PictureLayerImpl::PushPropertiesTo");
+
   // This hs to be cached before calling LayerImpl::PushPropertiesTo because it
   // reset the flag.
   bool changed_other_props = GetChangeFlag(kChangedGeneralProperty);
@@ -217,6 +222,9 @@ void PictureLayerImpl::PushPropertiesTo(LayerImpl* base_layer) {
   }
 
   layer_impl->SanityCheckTilingState();
+
+  // https://linear.app/replay/issue/RUN-465
+  recordreplay::Assert("PictureLayerImpl::PushPropertiesTo Done");
 }
 
 void PictureLayerImpl::AppendQuadsForResourcelessSoftwareDraw(
@@ -286,6 +294,7 @@ void PictureLayerImpl::AppendQuadsSpecialization(
 
   // Keep track of the tilings that were used so that tilings that are
   // unused can be considered for removal.
+  recordreplay::Assert("[RUN-550-1536] PictureLayerImpl::AppendQuads A");
   last_append_quads_tilings_.clear();
 
   // Ignore missing tiles outside of viewport for tile priority. This is
@@ -464,10 +473,13 @@ void PictureLayerImpl::AppendQuadsSpecialization(
     produced_tile_last_append_quads_ = true;
 
     if (last_append_quads_tilings_.empty() ||
-        last_append_quads_tilings_.back() != iter.CurrentTiling()) {
-      last_append_quads_tilings_.push_back(iter.CurrentTiling());
+        last_append_quads_tilings_.back() != iter.CurrentTiling()->tile_id) {
+      recordreplay::Assert("[RUN-550-1536] PictureLayerImpl::AppendQuads B %d",
+                           iter.CurrentTiling()->record_replay_id_);
+      last_append_quads_tilings_.push_back(iter.CurrentTiling()->tile_id);
     }
   }
+  recordreplay::Assert("[RUN-550-1536] PictureLayerImpl::AppendQuads C");
 
   if (missing_tile_count) {
     append_quads_data->num_missing_tiles += missing_tile_count;
@@ -486,7 +498,13 @@ void PictureLayerImpl::AppendQuadsSpecialization(
 }
 
 bool PictureLayerImpl::UpdateTiles() {
+  // https://linear.app/replay/issue/RUN-550
+  recordreplay::Assert("[RUN-550] PictureLayerImpl::UpdateTiles Start %d", id());
+
   if (!CanHaveTilings()) {
+    // https://linear.app/replay/issue/RUN-550
+    recordreplay::Assert("[RUN-550] PictureLayerImpl::UpdateTiles #1");
+
     ideal_page_scale_ = 0.f;
     ideal_device_scale_ = 0.f;
     ideal_contents_scale_ = gfx::Vector2dF(0.f, 0.f);
@@ -500,6 +518,10 @@ bool PictureLayerImpl::UpdateTiles() {
   // only have the high-res tiling, so only clean up the active layer. This
   // cleans it up here in case AppendQuads didn't run.  If it did run, this
   // would not remove any additional tilings.
+
+  // https://linear.app/replay/issue/RUN-550
+  recordreplay::Assert("[RUN-550-1409] PictureLayerImpl::UpdateTiles #2 %d",
+    (int) layer_tree_impl()->IsActiveTree());
   if (layer_tree_impl()->IsActiveTree()) {
     CleanUpTilingsOnActiveLayer();
   }
@@ -507,6 +529,8 @@ bool PictureLayerImpl::UpdateTiles() {
   UpdateIdealScales();
 
   const bool should_adjust_raster_scale = ShouldAdjustRasterScale();
+  recordreplay::Assert("[RUN-550-1409] PictureLayerImpl::UpdateTiles #3 %d",
+    (int) should_adjust_raster_scale);
   if (should_adjust_raster_scale)
     RecalculateRasterScales();
   UpdateTilingsForRasterScaleAndTranslation(should_adjust_raster_scale);
@@ -561,6 +585,10 @@ bool PictureLayerImpl::UpdateTiles() {
       occlusion_in_content_space, can_require_tiles_for_activation);
   DCHECK_GT(tilings_->num_tilings(), 0u);
   SanityCheckTilingState();
+
+  // https://linear.app/replay/issue/RUN-550
+  recordreplay::Assert("[RUN-550] PictureLayerImpl::UpdateTiles Done %d", updated);
+
   return updated;
 }
 
@@ -662,6 +690,7 @@ void PictureLayerImpl::UpdateRasterSourceInternal(
               current_display_item_list->content_color_usage()) !=
           layer_tree_impl()->GetTargetColorParams(
               new_display_item_list->content_color_usage());
+
       if (needs_full_invalidation) {
         new_invalidation->Union(gfx::Rect(raster_source->size()));
       }
@@ -722,14 +751,24 @@ void PictureLayerImpl::UpdateRasterSourceInternal(
   // with a null LayerTreeFrameSink, which can give incorrect results or maybe
   // crash.
   if (pending_set) {
+    recordreplay::Assert(
+        "[RUN-2104-2296] PictureLayerImpl::UpdateRasterSource C %d",
+        raster_source_->HasOneRef());
     tilings_->UpdateTilingsToCurrentRasterSourceForActivation(
         raster_source_, pending_set, invalidation_, MinimumContentsScale(),
         MaximumContentsScale());
+    recordreplay::Assert(
+        "[RUN-2104-2296] PictureLayerImpl::UpdateRasterSource D %d",
+        raster_source_->HasOneRef());
   } else {
     tilings_->UpdateTilingsToCurrentRasterSourceForCommit(
         raster_source_, invalidation_, MinimumContentsScale(),
         MaximumContentsScale());
   }
+
+  recordreplay::Assert(
+      "[RUN-2104-2296] PictureLayerImpl::UpdateRasterSource E %d",
+      raster_source_->HasOneRef());
 }
 
 void PictureLayerImpl::SetRasterSourceForTesting(
@@ -1256,6 +1295,10 @@ void PictureLayerImpl::UpdateTilingsForRasterScaleAndTranslation(
   PictureLayerTiling* high_res =
       tilings_->FindTilingWithScaleKey(raster_contents_scale_key());
 
+  recordreplay::Assert("[RUN-550] PictureLayerImpl::UpdateTilingsForRasterScaleAndTranslation Start %d %d %.2f %.2f",
+                       recordreplay::PointerId(this), !!high_res,
+                       raster_contents_scale_.x(), raster_contents_scale_.y());
+
   gfx::Vector2dF raster_translation;
   bool raster_translation_aligns_pixels =
       CalculateRasterTranslation(raster_translation);
@@ -1280,6 +1323,9 @@ void PictureLayerImpl::UpdateTilingsForRasterScaleAndTranslation(
         !layer_tree_impl()->HasPendingTree();
 
     if (should_recreate_high_res) {
+      // https://linear.app/replay/issue/RUN-550
+      recordreplay::Assert("PictureLayerImpl::UpdateTilingsForRasterScaleAndTranslation #1");
+
       tilings_->Remove(high_res);
       high_res = nullptr;
     } else if (can_request_invalidation_for_high_res) {
@@ -1289,6 +1335,9 @@ void PictureLayerImpl::UpdateTilingsForRasterScaleAndTranslation(
       // an impl-side invalidation (if needed).
       layer_tree_impl()->RequestImplSideInvalidationForRerasterTiling();
     } else if (!has_adjusted_raster_scale) {
+      // https://linear.app/replay/issue/RUN-550
+      recordreplay::Assert("PictureLayerImpl::UpdateTilingsForRasterScaleAndTranslation #2");
+
       // Nothing changed, no need to update tilings.
       DCHECK_EQ(HIGH_RESOLUTION, high_res->resolution());
       SanityCheckTilingState();
@@ -1323,6 +1372,9 @@ void PictureLayerImpl::UpdateTilingsForRasterScaleAndTranslation(
   }
 
   SanityCheckTilingState();
+
+  // https://linear.app/replay/issue/RUN-550
+  recordreplay::Assert("PictureLayerImpl::UpdateTilingsForRasterScaleAndTranslation Done");
 }
 
 bool PictureLayerImpl::ShouldAdjustRasterScale() const {
@@ -1585,6 +1637,7 @@ void PictureLayerImpl::AdjustRasterScaleForTransformAnimation(
 }
 
 void PictureLayerImpl::CleanUpTilingsOnActiveLayer() {
+
   DCHECK(layer_tree_impl()->IsActiveTree());
   if (tilings_->num_tilings() == 0) {
     return;
@@ -1617,13 +1670,21 @@ void PictureLayerImpl::CleanUpTilingsOnActiveLayer() {
   for (size_t i = 0; i < tilings_->num_tilings(); ++i) {
     PictureLayerTiling* tiling = tilings_->tiling_at(i);
     // Keep all tilings within the min/max scales.
+
+    auto rect = tiling->GetCurrentVisibleRectForTesting();
+    recordreplay::Assert(
+        "[RUN-550-1469] PictureLayerTilingSet::CleanUpTilings A %f, %d %d, %d %d %d %d",
+        tiling->contents_scale_key(),
+        (int)tiling->resolution(), base::Contains(last_append_quads_tilings_, tiling->tile_id),
+        rect.x(), rect.y(), rect.width(), rect.height());
+
     if (tiling->contents_scale_key() >= min_acceptable_high_res_scale &&
         tiling->contents_scale_key() <= max_acceptable_high_res_scale) {
       continue;
     }
 
     // Don't remove tilings that are required based on most recent draw.
-    if (base::Contains(last_append_quads_tilings_, tiling)) {
+    if (base::Contains(last_append_quads_tilings_, tiling->tile_id)) {
       continue;
     }
 
@@ -1636,6 +1697,8 @@ void PictureLayerImpl::CleanUpTilingsOnActiveLayer() {
       to_remove.push_back(tiling);
     }
   }
+
+  recordreplay::Assert("[RUN-550-1469] PictureLayerTilingSet::CleanUpTilings B %zu", to_remove.size());
 
   if (layer_tree_impl()->settings().TreesInVizInClientProcess()) {
     return;
@@ -2008,6 +2071,13 @@ PictureLayerImpl::InvalidateRegionForImages(
     has_animated_image_update_rect_ = true;
   } else {
     has_non_animated_image_update_rect_ = true;
+  }
+
+  // https://linear.app/replay/issue/RUN-467
+  recordreplay::Assert("PictureLayerImpl::InvalidateRegionForImages #5");
+  for (gfx::Rect rect : invalidation) {
+    recordreplay::Assert("PictureLayerImpl::InvalidateRegionForImages #5.1 %d %d %d %d",
+                         rect.x(), rect.y(), rect.width(), rect.height());
   }
 
   invalidation_.Union(invalidation);

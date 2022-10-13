@@ -202,8 +202,7 @@ class CC_EXPORT PictureLayerImpl
     raster_contents_scale_ = gfx::Vector2dF(scale, scale);
   }
 
-  std::vector<raw_ptr<PictureLayerTiling, VectorExperimental>>&
-  GetLastAppendQuadsTilingsForTesting() {
+  std::vector<int>& GetLastAppendQuadsTilingsForTesting() {
     return last_append_quads_tilings_;
   }
 
@@ -381,11 +380,8 @@ class CC_EXPORT PictureLayerImpl
 
   // List of tilings that were used last time we appended quads. This can be
   // used as an optimization not to remove tilings if they are still being
-  // drawn. Note that accessing this vector should only be done in the context
-  // of comparing pointers, since objects pointed to are not guaranteed to
-  // exist.
-  std::vector<raw_ptr<PictureLayerTiling, VectorExperimental>>
-      last_append_quads_tilings_;
+  // drawn.
+  std::vector<int> last_append_quads_tilings_;
 
   // The set of PaintWorkletInputs that are part of this PictureLayerImpl, and
   // their painted results (if any). During commit, Blink hands us a set of

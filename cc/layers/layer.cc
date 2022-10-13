@@ -41,6 +41,8 @@
 #include "ui/gfx/geometry/rect_conversions.h"
 #include "ui/gfx/geometry/vector2d_conversions.h"
 
+#include "base/record_replay.h"
+
 #if BUILDFLAG(IS_CHROMEOS)
 #include "base/debug/dump_without_crashing.h"
 #endif
@@ -122,7 +124,8 @@ Layer::Layer()
       ignore_set_needs_commit_for_test_(false),
       subtree_property_changed_(false),
       bitflags_(0u),
-      changed_properties_(0u) {}
+      changed_properties_(0u) {
+}
 
 Layer::~Layer() {
   // Our parent should be holding a reference to us so there should be no
@@ -471,6 +474,12 @@ void Layer::RemoveAllChildren() {
   }
 }
 
+struct LayerHash {
+   size_t operator() (const Layer* layer) const {
+     return std::hash<int>{}(layer->id());
+   }
+};
+
 void Layer::SetChildLayerList(LayerList new_children) {
   DCHECK(IsUsingLayerLists());
 
@@ -481,7 +490,7 @@ void Layer::SetChildLayerList(LayerList new_children) {
 
   // Remove existing children that will not be in the new child list.
   {
-    std::unordered_set<Layer*> children_to_remove;
+    std::unordered_set<Layer*, LayerHash> children_to_remove;
     for (auto& existing_child : children())
       children_to_remove.insert(existing_child.get());
     for (auto& new_child : new_children)
@@ -1251,6 +1260,10 @@ void Layer::SetTransformTreeIndex(int index) {
   if (transform_tree_index_.Read(*this) == index)
     return;
   SetHasTransformNode(index != kInvalidPropertyNodeId);
+
+  recordreplay::Assert("[RUN-550-1469] Layer::SetTransformTreeIndex %d %d",
+                       layer_id_, index);
+
   transform_tree_index_.Write(*this) = index;
   SetNeedsPushProperties(kChangedPropertyTreeIndex);
 }
