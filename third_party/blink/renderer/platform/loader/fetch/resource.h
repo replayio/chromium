@@ -66,6 +66,10 @@
 #include "third_party/blink/renderer/platform/wtf/text/text_encoding.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
+// Replay includes: we need these because their hash function depends on |RecordReplayId|.
+#include "third_party/blink/renderer/platform/loader/fetch/resource_client.h"
+#include "third_party/blink/renderer/platform/loader/fetch/resource_finish_observer.h"
+
 namespace base {
 class Clock;
 }
@@ -247,7 +251,15 @@ class PLATFORM_EXPORT Resource : public GarbageCollected<Resource>,
   bool IsUnusedPreload() const { return is_unused_preload_; }
 
   ResourceStatus GetStatus() const { return status_; }
-  void SetStatus(ResourceStatus status) { status_ = status; }
+  void SetStatus(ResourceStatus status) {
+    status_ = status;
+
+    if (IsLoaded()) {
+      record_replay_dependency_node_ids_.push_back(
+        recordreplay::NewDependencyGraphNode("{\"kind\":\"resourceFinished\"}")
+      );
+    }
+  }
   virtual ResourceStatus GetContentStatus() const { return status_; }
 
   size_t size() const { return EncodedSize() + DecodedSize() + OverheadSize(); }
@@ -532,7 +544,8 @@ class PLATFORM_EXPORT Resource : public GarbageCollected<Resource>,
   // Returns the memory dump name used for tracing. See Resource::OnMemoryDump.
   String GetMemoryDumpName() const;
 
-  const HeapHashCountedSet<WeakMember<ResourceClient>>& Clients() const {
+  const HeapHashCountedSet<WeakMember<ResourceClient>>&
+  Clients() const {
     return clients_;
   }
 
@@ -621,6 +634,13 @@ class PLATFORM_EXPORT Resource : public GarbageCollected<Resource>,
   HeapHashCountedSet<WeakMember<ResourceClient>> finished_clients_;
   HeapHashSet<WeakMember<ResourceFinishObserver>> finish_observers_;
 
+  // RUN-1724: Keep strong references to prevent above data structures from becoming
+  // divergent.
+  // [RUN-1457 cleanup]
+  HeapHashSet<Member<ResourceClient>> replay_clients_strong_;
+  // [RUN-1457 cleanup]
+  HeapHashSet<Member<ResourceFinishObserver>> replay_finish_observers_strong_;
+
   ResourceLoaderOptions options_;
 
   base::Time response_timestamp_;
@@ -641,6 +661,8 @@ class PLATFORM_EXPORT Resource : public GarbageCollected<Resource>,
   scoped_refptr<SharedBuffer> data_;
 
   WebScopedVirtualTimePauser virtual_time_pauser_;
+
+  Vector<int> record_replay_dependency_node_ids_;
 
   MemoryConsumerRegistration memory_consumer_registration_;
 };

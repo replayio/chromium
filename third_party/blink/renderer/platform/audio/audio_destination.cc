@@ -452,6 +452,7 @@ AudioDestination::AudioDestination(
           AudioBus::TryCreate(number_of_output_channels,
                               render_quantum_frames)),
       callback_(callback),
+      device_state_lock_("AudioDestination"),
       uma_reporter_(
           AudioDestinationUmaReporter(latency_hint,
                                       callback_buffer_size_,
@@ -473,6 +474,8 @@ AudioDestination::AudioDestination(
   SendLogMessage(
       __func__,
       StrCat({"=> (FIFO size=", String::Number(fifo_->length()), " bytes)"}));
+
+  recordreplay::Assert("[RUN-1345] callback_buffer_size_ is big: %d", (callback_buffer_size_ > render_quantum_frames_ * 2));
 
   SendLogMessage(__func__,
                  StrCat({"=> (device callback buffer size=",
