@@ -1186,6 +1186,11 @@ class CORE_EXPORT LocalFrame final
 
   Member<v8_compile_hints::V8LocalCompileHintsProducer>
       v8_local_compile_hints_producer_;
+
+  // Set by DetachImpl when this frame is detached as a local root, to the
+  // frame's WeakIdentifierMap id (-1 if it had none). ~LocalFrame reports it
+  // from here: the parent may already be finalized by then.
+  absl::optional<int> record_replay_detached_local_root_id_;
 };
 
 inline FrameLoader& LocalFrame::Loader() const {
