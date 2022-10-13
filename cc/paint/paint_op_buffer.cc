@@ -245,6 +245,7 @@ PaintOpBuffer& PaintOpBuffer::operator+=(const PaintOpBuffer& other) {
 }
 
 PaintOpBuffer::~PaintOpBuffer() {
+  recordreplay::AutoDisallowEvents disallow("~PaintOpBuffer");
   DestroyOps();
 }
 

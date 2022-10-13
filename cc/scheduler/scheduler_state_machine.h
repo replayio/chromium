@@ -332,6 +332,7 @@ class CC_EXPORT SchedulerStateMachine {
 
   void DidPrepareTiles();
   void DidLoseLayerTreeFrameSink();
+  void RecordReplayReuseLostLayerTreeFrameSink();
   void DidCreateAndInitializeLayerTreeFrameSink();
   bool HasInitializedLayerTreeFrameSink() const;
 
@@ -381,6 +382,18 @@ class CC_EXPORT SchedulerStateMachine {
   }
 
   void SetRequestHighFramerate(bool flag);
+
+  bool ClearReplayForceDraw() {
+    bool result = replay_force_draw_; 
+    replay_force_draw_ = false;
+    replay_repaint_pending_ = false;
+    return result;
+  }
+
+  void SetReplayRepaintPending() { replay_repaint_pending_ = true; }
+  bool RecordReplayCreatingFrameSink() const {
+    return layer_tree_frame_sink_state_ == LayerTreeFrameSinkState::CREATING;
+  }
 
  protected:
   bool BeginFrameRequiredForAction() const;
@@ -547,6 +560,10 @@ class CC_EXPORT SchedulerStateMachine {
   bool waiting_for_scroll_event_ = false;
 
   uint64_t high_framerate_requests_count_ = 0;
+  bool replay_force_draw_ = false;
+
+  // A repaint has started and its commit is coming.
+  bool replay_repaint_pending_ = false;
 };
 
 }  // namespace cc
