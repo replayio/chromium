@@ -61,7 +61,16 @@ void ElementIntersectionObserverData::StopTrackingWithController(
 
 void ElementIntersectionObserverData::ComputeIntersectionsForTarget() {
   ComputeIntersectionsContext context;
+
+  // Intersections need to be computed in a consistent order.
+  HeapVector<Member<IntersectionObservation>> observations_to_process;
   for (auto& [observer, observation] : observations_) {
+    observations_to_process.push_back(observation);
+  }
+  std::sort(observations_to_process.begin(), observations_to_process.end(),
+            recordreplay::CompareMemberByPointerId<Member<IntersectionObservation>>());
+
+  for (auto& observation : observations_to_process) {
     observation->ComputeIntersectionImmediately(context);
   }
 }

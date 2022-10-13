@@ -74,12 +74,18 @@ CachedMatchedProperties::CachedMatchedProperties(
   for (const auto& new_matched_properties : properties) {
     matched_properties.emplace_back(new_matched_properties.properties,
                                     new_matched_properties.data_);
+
+    if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                             "CachedMatchedProperties"))
+      replay_matched_properties_strong_.push_back(
+          new_matched_properties.properties);
   }
 }
 
 void CachedMatchedProperties::Clear() {
   matched_properties.clear();
   entries.clear();
+  replay_matched_properties_strong_.clear();
 }
 
 MatchedPropertiesCache::MatchedPropertiesCache() = default;
@@ -87,7 +93,8 @@ MatchedPropertiesCache::MatchedPropertiesCache() = default;
 MatchedPropertiesCache::Key::Key(const MatchResult& result)
     : Key(result,
           result.IsCacheable() ? ComputeMatchedPropertiesHash(result)
-                               : HashTraits<unsigned>::EmptyValue()) {}
+                               : HashTraits<unsigned>::EmptyValue()) {
+}
 
 MatchedPropertiesCache::Key::Key(const MatchResult& result, unsigned hash)
     : result_(result), hash_(hash) {}

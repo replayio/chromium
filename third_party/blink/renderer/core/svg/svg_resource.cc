@@ -23,6 +23,15 @@
 
 namespace blink {
 
+SVGResourceClient::SVGResourceClient() {
+  // Pointer registration is needed for sorting after Keys() calls.
+  recordreplay::RegisterPointer("SVGResourceClient", this);
+}
+
+SVGResourceClient::~SVGResourceClient() {
+  recordreplay::UnregisterPointer(this);
+}
+
 SVGResource::SVGResource() = default;
 
 SVGResource::~SVGResource() = default;
@@ -116,6 +125,8 @@ void SVGResource::NotifyContentChanged() {
   InvalidateCycleCache();
 
   HeapVector<Member<SVGResourceClient>> clients(clients_.Keys());
+  std::sort(clients.begin(), clients.end(),
+            recordreplay::CompareMemberByPointerId<Member<SVGResourceClient>>());
   for (SVGResourceClient* client : clients)
     client->ResourceContentChanged(this);
 }
@@ -194,6 +205,7 @@ LocalSVGResource::LocalSVGResource(TreeScope& tree_scope,
 }
 
 void LocalSVGResource::Unregister() {
+  recordreplay::Assert("[RUN-2424-3227] LocalSVGResource::Unregister");
   SVGURIReference::UnobserveTarget(id_observer_);
 }
 
@@ -201,6 +213,8 @@ void LocalSVGResource::NotifyFilterPrimitiveChanged(
     SVGFilterPrimitiveStandardAttributes& primitive,
     const QualifiedName& attribute) {
   HeapVector<Member<SVGResourceClient>> clients(clients_.Keys());
+  std::sort(clients.begin(), clients.end(),
+            recordreplay::CompareMemberByPointerId<Member<SVGResourceClient>>());
   for (SVGResourceClient* client : clients)
     client->FilterPrimitiveChanged(this, primitive, attribute);
 }
