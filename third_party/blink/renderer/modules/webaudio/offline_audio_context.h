@@ -173,7 +173,7 @@ class MODULES_EXPORT OfflineAudioContext final : public BaseAudioContext {
   // protected by the offline context lock.
   SuspendMap scheduled_suspends_;
 
-  base::Lock suspend_frames_lock_;
+  base::Lock suspend_frames_lock_{"OfflineAudioContext"};
   // Holds copies of `quantized_frame` in `scheduled_suspends_` to ensure
   // a safe access from the audio thread.
   HashSet<size_t, IntWithZeroKeyHashTraits<size_t>> scheduled_suspend_frames_

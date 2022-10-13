@@ -10,6 +10,7 @@
 #include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/record_replay.h"
 #include "base/strings/strcat.h"
 #include "base/strings/to_string.h"
 #include "base/trace_event/trace_event.h"
@@ -1719,6 +1720,12 @@ void AudioContext::HandleAudibility(AudioBus* destination_bus) {
     accumulated_silence_time_.store(silence_time, std::memory_order_relaxed);
   }
 
+  REPLAY_ASSERT("AudioContext::HandleAudibility bus %d %u %u",
+                destination_bus && destination_bus->IsSilent(),
+                destination_bus ? destination_bus->NumberOfChannels() : 0u,
+                destination_bus ? destination_bus->length() : 0u);
+  REPLAY_ASSERT("AudioContext::HandleAudibility %d %d",
+                was_audible_.load(std::memory_order_relaxed), is_audible);
   unsigned sequence_id =
       audibility_sequence_id_.load(std::memory_order_relaxed);
   bool previous_audible = was_audible_.load(std::memory_order_relaxed);
