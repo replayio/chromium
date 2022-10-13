@@ -30,7 +30,7 @@ class BASE_EXPORT TimeDomain : public TickClock {
  public:
   TimeDomain(const TimeDomain&) = delete;
   TimeDomain& operator=(const TimeDomain&) = delete;
-  ~TimeDomain() override = default;
+  ~TimeDomain() override;
 
   // Invoked when the thread reaches idle. Gives an opportunity to a virtual
   // time domain impl to fast-forward time and return true to indicate that
@@ -43,7 +43,7 @@ class BASE_EXPORT TimeDomain : public TickClock {
   DictValue AsValue() const;
 
  protected:
-  TimeDomain() = default;
+  TimeDomain();
 
   virtual const char* GetName() const = 0;
 
