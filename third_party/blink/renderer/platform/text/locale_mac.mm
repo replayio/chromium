@@ -42,6 +42,8 @@
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 #include "ui/base/ui_base_features.h"
 
+#include "base/record_replay.h"
+
 #if !defined(__has_feature) || !__has_feature(objc_arc)
 #error "This file requires ARC support."
 #endif
@@ -192,9 +194,16 @@ NSDateFormatter* LocaleMac::DateTimeFormatterWithoutSeconds() {
 }
 
 String LocaleMac::DateFormat() {
-  if (!date_format_.IsNull())
+  if (!date_format_.IsNull()) {
+    recordreplay::Assert("[RUN-1548] LocaleMac::DateFormat #1 %s",
+                         date_format_.Utf8().c_str());
     return date_format_;
+  }
   date_format_ = ShortDateFormatter().dateFormat;
+
+  recordreplay::Assert("[RUN-1548] LocaleMac::DateFormat #2 %s",
+                       date_format_.Utf8().c_str());
+
   return date_format_;
 }
 

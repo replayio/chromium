@@ -35,6 +35,8 @@
 #include "third_party/blink/renderer/platform/scheduler/worker/worker_scheduler_proxy.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 namespace scheduler {
@@ -175,6 +177,9 @@ FrameSchedulerImpl::FrameSchedulerImpl(
                                     "FrameScheduler.WaitingForMeaningfulPaint",
                                     &tracing_controller_,
                                     YesNoStateToString) {
+  // Pointer registration is needed for sorting in PageSchedulerImpl.
+  recordreplay::RegisterPointer("FrameSchedulerImpl", this);
+
   frame_task_queue_controller_ = base::WrapUnique(
       new FrameTaskQueueController(main_thread_scheduler_, this, this));
   back_forward_cache_disabling_feature_tracker_.SetDelegate(delegate_);
@@ -188,6 +193,7 @@ FrameSchedulerImpl::FrameSchedulerImpl()
                          FrameType::kSubframe) {}
 
 FrameSchedulerImpl::~FrameSchedulerImpl() {
+  recordreplay::UnregisterPointer(this);
   weak_factory_.InvalidateWeakPtrs();
 
   for (const auto& task_queue_and_voter :
@@ -207,6 +213,9 @@ FrameSchedulerImpl::~FrameSchedulerImpl() {
     if (opted_out_from_aggressive_throttling())
       parent_page_scheduler_->OnThrottlingStatusUpdated();
   }
+
+  if (replay_scheduling_owner_release_)
+    std::move(replay_scheduling_owner_release_).Run();
 }
 
 void FrameSchedulerImpl::DetachFromPageScheduler() {
@@ -254,6 +263,13 @@ void FrameSchedulerImpl::MoveTaskQueuesToCorrectWakeUpBudgetPool() {
   //
   // For each throttled queue, check if it should be in a different
   // WakeUpBudgetPool and make the necessary adjustments.
+
+  REPLAY_ASSERT(
+      "[TT-393] "
+      "FrameSchedulerImpl::MoveTaskQueuesToCorrectWakeUpBudgetPool A %d %u",
+      recordreplay::PointerId(this),
+      frame_task_queue_controller_->GetAllTaskQueuesAndVoters().size());
+
   for (const auto& task_queue_and_voter :
        frame_task_queue_controller_->GetAllTaskQueuesAndVoters()) {
     auto* task_queue = task_queue_and_voter.first;
@@ -265,7 +281,6 @@ void FrameSchedulerImpl::MoveTaskQueuesToCorrectWakeUpBudgetPool() {
     if (task_queue->GetWakeUpBudgetPool() == new_wake_up_budget_pool) {
       continue;
     }
-
     parent_page_scheduler_->RemoveQueueFromWakeUpBudgetPool(task_queue,
                                                             &lazy_now);
     parent_page_scheduler_->AddQueueToWakeUpBudgetPool(
@@ -643,6 +658,9 @@ base::WeakPtr<const FrameSchedulerImpl> FrameSchedulerImpl::GetWeakPtr() const {
 }
 
 void FrameSchedulerImpl::ReportActiveSchedulerTrackedFeatures() {
+  // https://linear.app/replay/issue/RUN-825
+  recordreplay::Assert("FrameSchedulerImpl::ReportActiveSchedulerTrackedFeatures");
+
   back_forward_cache_disabling_feature_tracker_.ReportFeaturesToDelegate();
 }
 
@@ -1143,6 +1161,11 @@ FrameSchedulerImpl::CreateWebSchedulingTaskQueue(
       immediate_task_queue->AsWeakPtr(), delayed_task_queue->AsWeakPtr());
 }
 
+void FrameSchedulerImpl::SetReplaySchedulingOwnerRelease(
+    base::OnceClosure release) {
+  replay_scheduling_owner_release_ = std::move(release);
+}
+
 void FrameSchedulerImpl::OnWebSchedulingTaskQueuePriorityChanged(
     MainThreadTaskQueue* queue) {
   UpdateQueuePolicy(queue,
@@ -1151,6 +1174,9 @@ void FrameSchedulerImpl::OnWebSchedulingTaskQueuePriorityChanged(
 
 void FrameSchedulerImpl::OnWebSchedulingTaskQueueDestroyed(
     MainThreadTaskQueue* queue) {
+  REPLAY_ASSERT("[TT-1465] FrameSchedulerImpl::OnWebSchedulingTaskQueueDestroyed %d",
+    recordreplay::PointerId(queue));
+
   if (queue->CanBeThrottled()) {
     RemoveThrottleableQueueFromBudgetPools(queue);
   }
