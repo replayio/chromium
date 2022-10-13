@@ -23,6 +23,8 @@
 #include "third_party/skia/include/core/SkPictureRecorder.h"
 #include "ui/gfx/geometry/rect_conversions.h"
 
+#include "base/record_replay.h"
+
 namespace cc {
 
 scoped_refptr<PictureLayer> PictureLayer::Create(ContentLayerClient* client) {
@@ -63,6 +65,8 @@ void PictureLayer::PushPropertiesTo(
   // TODO(enne): http://crbug.com/918126 debugging
   CHECK(this);
   if (!recording_source_.Read(*this)) {
+    recordreplay::Assert(
+        "[RUN-2104-2296] PictureLayer::PushPropertiesTo A");
     bool valid_host = layer_tree_host();
     bool has_parent = parent();
     bool parent_has_host = parent() && parent()->layer_tree_host();
@@ -75,9 +79,12 @@ void PictureLayer::PushPropertiesTo(
     base::debug::DumpWithoutCrashing();
   }
 
+  recordreplay::Assert("[RUN-2104-2296] PictureLayer::PushPropertiesTo B");
   layer_impl->UpdateRasterSource(CreateRasterSource(),
                                  &last_updated_invalidation_.Write(*this),
                                  nullptr, nullptr);
+  recordreplay::Assert("[RUN-2104-2296] PictureLayer::PushPropertiesTo C");
+
   DCHECK(last_updated_invalidation_.Read(*this).IsEmpty());
 }
 
@@ -239,6 +246,10 @@ void PictureLayer::CaptureContent(const gfx::Rect& rect,
 
 void PictureLayer::DropRecordingSourceContentIfInvalid(
     int source_frame_number) {
+  // https://linear.app/replay/issue/RUN-885
+  recordreplay::Assert("PictureLayer::DropRecordingSourceContentIfInvalid %d %d",
+                       this->id(), source_frame_number);
+
   gfx::Size recording_source_size = recording_source_.Read(*this)->size();
 
   gfx::Size layer_bounds = bounds();
