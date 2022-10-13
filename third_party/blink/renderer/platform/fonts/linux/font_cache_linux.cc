@@ -24,6 +24,7 @@
 
 #include "third_party/blink/renderer/platform/fonts/font_cache.h"
 
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "third_party/blink/public/platform/linux/web_sandbox_support.h"
 #include "third_party/blink/public/platform/platform.h"
@@ -68,6 +69,11 @@ const SimpleFontData* FontCache::PlatformFallbackFontForCharacter(
     UChar32 c,
     const SimpleFontData*,
     FontFallbackPriority fallback_priority) {
+  if (recordreplay::AreEventsUnavailable("PlatformFallbackFontForCharacter")) {
+    // Post-diverge font-service Mojo cannot complete; return no fallback.
+    return nullptr;
+  }
+
   if (IsEmojiPresentationEmoji(fallback_priority)) {
     // FIXME crbug.com/591346: We're overriding the fallback character here
     // with the FAMILY emoji in the hope to find a suitable emoji font.

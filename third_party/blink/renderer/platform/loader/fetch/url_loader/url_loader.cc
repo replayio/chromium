@@ -68,6 +68,8 @@
 #include "third_party/blink/renderer/platform/wtf/shared_buffer.h"
 #include "third_party/perfetto/include/perfetto/tracing/track_event_args.h"
 
+#include "base/record_replay.h"
+
 using base::Time;
 using base::TimeTicks;
 
@@ -422,11 +424,16 @@ URLLoader::URLLoader(
                                              std::move(url_loader_factory),
                                              std::move(keep_alive_handle),
                                              back_forward_cache_loader_helper,
-                                             std::move(throttles))) {}
+                                             std::move(throttles))) {
+  recordreplay::RegisterPointer("URLLoader", this);
+}
 
-URLLoader::URLLoader() = default;
+URLLoader::URLLoader() {
+  recordreplay::RegisterPointer("URLLoader", this);
+}
 
 URLLoader::~URLLoader() {
+  recordreplay::UnregisterPointer(this);
   Cancel();
 }
 
