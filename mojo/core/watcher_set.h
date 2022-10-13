@@ -12,6 +12,8 @@
 #include "mojo/core/handle_signals_state.h"
 #include "mojo/core/watcher_dispatcher.h"
 
+#include "base/record_replay.h"
+
 namespace mojo {
 namespace core {
 
@@ -64,7 +66,7 @@ class WatcherSet {
   };
 
   const raw_ptr<Dispatcher> owner_;
-  base::flat_map<WatcherDispatcher*, Entry> watchers_;
+  base::flat_map<WatcherDispatcher*, Entry, recordreplay::CompareByPointerId> watchers_;
   std::optional<HandleSignalsState> last_known_state_;
 };
 
