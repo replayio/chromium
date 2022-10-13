@@ -24,6 +24,8 @@
 #include "cc/base/switches.h"
 #include "cc/raster/task_category.h"
 
+#include "base/record_replay.h"
+
 namespace cc {
 namespace {
 
@@ -142,6 +144,17 @@ CategorizedWorkerPoolJob::CategorizedWorkerPoolJob() = default;
 CategorizedWorkerPoolJob::~CategorizedWorkerPoolJob() = default;
 
 void CategorizedWorkerPoolJob::Start(int max_concurrency_foreground) {
+  // Using multiple threads for raster tasks runs into ordering problems within
+  // Skia when recording/replaying. For now we avoid this by only creating one thread.
+  if (recordreplay::IsRecordingOrReplaying("no-render-workers")) {
+    max_concurrency_foreground = 1;
+  }
+
+  recordreplay::Assert(
+      "[RUN-2353-2358] CategorizedWorkerPoolImpl::Start %d %d %d",
+      max_concurrency_foreground, recordreplay::IsRecordingOrReplaying(),
+      recordreplay::FeatureEnabled("no-render-workers"));
+
   max_concurrency_foreground_ = max_concurrency_foreground;
   background_job_handle_ = base::CreateJob(
       FROM_HERE,
@@ -440,7 +453,8 @@ CategorizedWorkerPool* CategorizedWorkerPool::GetOrCreate(Delegate* delegate) {
 }
 
 CategorizedWorkerPool::CategorizedWorkerPool()
-    : namespace_token_(GenerateNamespaceToken()),
+    : lock_("CategorizedWorkerPool.lock_"),
+      namespace_token_(GenerateNamespaceToken()),
       has_namespaces_with_finished_running_tasks_cv_(&lock_),
       workers_are_idle_cv_(&lock_) {}
 
