@@ -273,6 +273,8 @@ class AssociatedRemote {
     return &internal_state_;
   }
 
+  void record_replay_leak() const { internal_state_.record_replay_leak(); }
+
  private:
   using State = internal::AssociatedInterfacePtrState<Interface>;
   mutable State internal_state_;
