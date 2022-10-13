@@ -37,6 +37,7 @@
 #include "base/functional/callback_helpers.h"
 #include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
+#include "base/record_replay.h"
 #include "cc/input/main_thread_scrolling_reason.h"
 #include "cc/input/scroll_snap_data.h"
 #include "cc/input/scroll_utils.h"
@@ -508,6 +509,11 @@ bool ScrollableArea::InitiateScrollAnimation(
     mojom::blink::ScrollBehavior scroll_behavior,
     gfx::Vector2d animation_adjustment,
     cc::ScrollSourceType source_type) {
+  // Layout C++ callers share this; JS APIs throw at their IDL entry points.
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
+    return false;
+  }
+
   bool should_use_animation =
       scroll_behavior == mojom::blink::ScrollBehavior::kSmooth &&
       ScrollAnimatorEnabled();
@@ -618,8 +624,9 @@ void ScrollableArea::ScrollOffsetChanged(const ScrollOffset& offset,
 
   // If the layout object has been detached as a result of updating the scroll
   // this object will be cleaned up shortly.
-  if (HasBeenDisposed())
+  if (HasBeenDisposed()) {
     return;
+  }
 
   // Tell the scrollbars to update their thumb postions.
   // If the scrollbar does not have its own layer, it must always be

@@ -35,7 +35,12 @@
 // should have a default value.
 [Exposed=(Window,Worker)]
 interface Performance : EventTarget {
-    [Affects=Nothing, NoAllocDirectCall] DOMHighResTimeStamp now();
+    // [Replay] We removed [Affects=Nothing] from |now|, and from M129
+    // [NoAllocDirectCall] too: the fork's Performance::now() records an
+    // assert, so it is not side-effect free, which is requirement 3 of
+    // [NoAllocDirectCall] (IDLExtendedAttributes.md) and the reason
+    // [Affects=Nothing] was removed in the first place.
+    DOMHighResTimeStamp now();
     readonly attribute DOMHighResTimeStamp timeOrigin;
 
     // Performance Timeline

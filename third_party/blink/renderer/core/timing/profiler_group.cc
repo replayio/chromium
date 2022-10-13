@@ -152,7 +152,7 @@ void ProfilerGroup::DispatchSampleBufferFullEvent(String profiler_id) {
   for (const auto& profiler : profilers_) {
     if (profiler->ProfilerId() == profiler_id) {
       profiler->DispatchEvent(
-          *Event::Create(event_type_names::kSamplebufferfull));
+          *Event::Create(event_type_names::kSamplebufferfull), "ProfilerGroup::DispatchSampleBufferFullEvent");
       break;
     }
   }
