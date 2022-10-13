@@ -79,6 +79,7 @@ DOMOrigin* URL::GetDOMOrigin(LocalDOMWindow*) const {
 
 void URL::Trace(Visitor* visitor) const {
   visitor->Trace(search_params_);
+  visitor->Trace(replay_strong_search_params_);
   ScriptWrappable::Trace(visitor);
 }
 
@@ -146,7 +147,15 @@ String URL::CreatePublicURL(ExecutionContext* execution_context,
 
 URLSearchParams* URL::searchParams() {
   if (!search_params_) {
+    if (recordreplay::IsRecordingOrReplaying() && !recordreplay::AreAssertsDisabled()) {
+      recordreplay::Assert("[RUN-2324-2325] DOMURL::searchParams %s",
+                           Url().GetString().Utf8().c_str());
+    }
+
     search_params_ = URLSearchParams::Create(Url().Query().ToString(), this);
+    if (recordreplay::IsRecordingOrReplaying("leak-references", "DOMURL::searchParams_")) {
+      replay_strong_search_params_ = search_params_;
+    }
   }
 
   return search_params_.Get();
