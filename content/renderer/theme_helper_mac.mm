@@ -6,6 +6,7 @@
 
 #include <Cocoa/Cocoa.h>
 
+#include "base/record_replay.h"
 #include "base/strings/sys_string_conversions.h"
 
 extern "C" {

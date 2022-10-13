@@ -51,6 +51,7 @@
 #include "base/process/process_handle.h"
 #include "base/rand_util.h"
 #include "base/ranges/algorithm.h"
+#include "base/record_replay.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/supports_user_data.h"
 #include "base/system/sys_info.h"
@@ -272,6 +273,8 @@
 #include "content/public/common/profiling_utils.h"
 #endif
 
+#include "base/values.h"
+
 // VLOG additional statements in Fuchsia release builds.
 #if BUILDFLAG(IS_FUCHSIA)
 #define MAYBEVLOG VLOG
@@ -397,6 +400,10 @@ SiteProcessMap* GetSiteProcessMapForBrowserContext(BrowserContext* context) {
   auto* new_map_ptr = new_map.get();
   context->SetUserData(kSiteProcessMapKeyName, std::move(new_map));
   return new_map_ptr;
+}
+
+static inline bool MaybeRecordingOrReplaying() {
+  return true;
 }
 
 // This class manages spare RenderProcessHosts.
@@ -1448,6 +1455,9 @@ RenderProcessHost* RenderProcessHostImpl::CreateRenderProcessHost(
     if (site_instance->IsPdf()) {
       flags |= RenderProcessFlags::kPdf;
     }
+    if (site_instance->RecordReplayIsForRecording()) {
+      flags |= RenderProcessFlags::kRecordReplayForRecording;
+    }
   }
 
   return new RenderProcessHostImpl(browser_context, storage_partition_impl,
@@ -1642,8 +1652,9 @@ bool RenderProcessHostImpl::Init() {
       browser_command_line.GetSwitchValueNative(switches::kRendererCmdPrefix);
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-  int flags = renderer_prefix.empty() ? ChildProcessHost::CHILD_ALLOW_SELF
-                                      : ChildProcessHost::CHILD_NORMAL;
+  int flags = (renderer_prefix.empty() && !MaybeRecordingOrReplaying())
+    ? ChildProcessHost::CHILD_ALLOW_SELF
+    : ChildProcessHost::CHILD_NORMAL;
 #elif BUILDFLAG(IS_MAC)
   int flags = ChildProcessHost::CHILD_RENDERER;
 #else
@@ -2241,6 +2252,14 @@ void RenderProcessHostImpl::WriteIntoTrace(
   // Can be null in the unittests.
   if (ChildProcessSecurityPolicyImpl::GetInstance())
     dict.Add("process_lock", GetProcessLock().ToString());
+}
+
+void RenderProcessHostImpl::SendRecordReplayBrowserEvent(
+    const std::string& name,
+    base::Value&& value) {
+  fprintf(stderr, "SendRecordReplayBrowserEvent CRASH\n");
+  CHECK(0);
+  //GetRendererInterface()->RecordReplayBrowserEvent(name, std::move(value));
 }
 
 void RenderProcessHostImpl::RegisterMojoInterfaces() {
@@ -3164,6 +3183,10 @@ void RenderProcessHostImpl::AppendRendererCommandLine(
   if (IsPdf())
     command_line->AppendSwitch(switches::kPdfRenderer);
 
+  if (IsRecordReplayForRecording()) {
+    command_line->AppendSwitch("--record-replay-for-recording");
+  }
+
 #if BUILDFLAG(IS_WIN)
   command_line->AppendArg(switches::kPrefetchArgumentRenderer);
 #endif  // BUILDFLAG(IS_WIN)
@@ -3181,7 +3204,8 @@ void RenderProcessHostImpl::AppendRendererCommandLine(
   // A non-empty RendererCmdPrefix implies that Zygote is disabled.
   if (!base::CommandLine::ForCurrentProcess()
            ->GetSwitchValueNative(switches::kRendererCmdPrefix)
-           .empty()) {
+           .empty() ||
+      MaybeRecordingOrReplaying()) {
     command_line->AppendSwitch(switches::kNoZygote);
   }
 
@@ -4460,6 +4484,8 @@ void RenderProcessHostImpl::RegisterSoleProcessHostForSite(
 // static
 RenderProcessHost* RenderProcessHostImpl::GetProcessHostForSiteInstance(
     SiteInstanceImpl* site_instance) {
+  bool record_replay_is_for_recording = site_instance->RecordReplayIsForRecording();
+
   const SiteInfo& site_info = site_instance->GetSiteInfo();
   SiteInstanceImpl::ProcessReusePolicy process_reuse_policy =
       site_instance->process_reuse_policy();
@@ -4467,6 +4493,11 @@ RenderProcessHost* RenderProcessHostImpl::GetProcessHostForSiteInstance(
 
   bool is_unmatched_service_worker = site_instance->is_for_service_worker();
   BrowserContext* browser_context = site_instance->GetBrowserContext();
+
+  // [RecordReplay] NOTE: When spawning processes for recording, we may
+  // need to skip the following policy check.  It hasn't been necessary
+  // yet so we haven't done anything here.. but leaving a note for
+  // future reference.
 
   // First, attempt to reuse an existing RenderProcessHost if necessary.
   switch (process_reuse_policy) {
@@ -4510,13 +4541,16 @@ RenderProcessHost* RenderProcessHostImpl::GetProcessHostForSiteInstance(
         UnmatchedServiceWorkerProcessTracker::MatchWithSite(site_instance);
   }
 
+  // [RecordReplay] NOTE: When spawning processes for recording, we need
+  // to make sure we skip the following logic.
+
   // If a process hasn't been selected yet, check whether there is a process
   // tracked by the SiteInstanceGroupManager that could be reused by this
   // SiteInstance.  This method is used to place all SiteInstances within a
   // group into a single process. It also allows the SiteInstanceGroupManager to
   // place SiteInstances with similar requirements in different groups, but
   // still allow them to share a process (e.g. default process mode).
-  if (!render_process_host) {
+  if (!render_process_host && !record_replay_is_for_recording) {
     render_process_host =
         site_instance->GetSiteInstanceGroupProcessIfAvailable();
   }
@@ -4526,10 +4560,13 @@ RenderProcessHost* RenderProcessHostImpl::GetProcessHostForSiteInstance(
         SiteInstanceProcessAssignment::REUSED_EXISTING_PROCESS);
   }
 
+  // [RecordReplay] NOTE: When spawning processes for recording, we need
+  // to make sure we skip the next logic for selecting spare process.
+
   // See if the spare RenderProcessHost can be used.
   auto& spare_process_manager = SpareRenderProcessHostManager::GetInstance();
   bool spare_was_taken = false;
-  if (!render_process_host) {
+  if (!render_process_host && !record_replay_is_for_recording) {
     render_process_host = spare_process_manager.MaybeTakeSpareRenderProcessHost(
         browser_context, site_instance);
     if (render_process_host) {
@@ -4539,9 +4576,12 @@ RenderProcessHost* RenderProcessHostImpl::GetProcessHostForSiteInstance(
     }
   }
 
+  // [RecordReplay] NOTE: When spawning processes for recording, we need
+  // to make sure we skip the next logic for selecting existing process.
+
   // If not (or if none found), see if we should reuse an existing process.
-  if (!render_process_host && ShouldTryToUseExistingProcessHost(
-                                  browser_context, site_info.site_url())) {
+  if (!render_process_host && !record_replay_is_for_recording &&
+      ShouldTryToUseExistingProcessHost(browser_context, site_info.site_url())) {
     render_process_host = GetExistingProcessHost(site_instance);
     if (render_process_host) {
       site_instance->set_process_assignment(
