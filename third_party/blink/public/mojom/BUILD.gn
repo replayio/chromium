@@ -281,6 +281,7 @@ mojom("mojom_platform") {
     "//components/attribution_reporting:mojom",
     "//components/attribution_reporting:registration_mojom",
     "//components/payments/mojom",
+    "//components/record_replay/services/auth_token/public/mojom",
     "//components/schema_org/common:mojom",
     "//components/services/filesystem/public/mojom",
     "//device/bluetooth/public/mojom",
