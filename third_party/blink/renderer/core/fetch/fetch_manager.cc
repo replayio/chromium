@@ -10,6 +10,7 @@
 #include "base/feature_list.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "base/strings/strcat.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/unguessable_token.h"
@@ -27,6 +28,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_response_init.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_throw_dom_exception.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
 #include "third_party/blink/renderer/core/dom/abort_signal.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
@@ -84,6 +86,8 @@
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "v8/include/v8.h"
+
+#include "base/json/json_writer.h"
 
 using network::mojom::CredentialsMode;
 using network::mojom::FetchResponseType;
@@ -515,12 +519,35 @@ void FetchManager::Loader::DidFinishLoading(uint64_t) {
   NotifyFinished();
 }
 
+static void ReportFetchFailed(const ResourceError& error) {
+  if (!recordreplay::IsRecordingOrReplaying() || !v8::IsMainThread()) {
+    return;
+  }
+
+  std::string annotationContents;
+  if (recordreplay::IsReplaying()) {
+    base::Value::Dict info;
+    info.Set("error_code", error.ErrorCode());
+    info.Set("failing_url", error.FailingURL().Utf8());
+    info.Set("error_message", error.LocalizedDescription().Utf8());
+    if (error.CorsErrorStatus()) {
+      std::ostringstream oss;
+      oss << *error.CorsErrorStatus();
+      info.Set("cors_error_status", oss.str());
+    }
+    base::JSONWriter::Write(info, &annotationContents);
+  }
+  recordreplay::OnAnnotation("FetchManagerFailed", annotationContents.c_str());
+}
+
 void FetchManager::Loader::DidFail(uint64_t identifier,
                                    const ResourceError& error) {
   if (fetch_request_data_ && fetch_request_data_->TrustTokenParams()) {
     HistogramNetErrorForTrustTokensOperation(
         fetch_request_data_->TrustTokenParams()->type, error.ErrorCode());
   }
+
+  ReportFetchFailed(error);
 
   if (error.TrustTokenOperationError() !=
       network::mojom::blink::TrustTokenOperationStatus::kOk) {
@@ -578,6 +605,12 @@ void FetchManager::Loader::Start() {
   }
 
   const KURL& url = fetch_request_data_->Url();
+
+  if (recordreplay::IsInReplayCode()) {
+    // [TT-1422] Always allow |fetch| from Replay code.
+    PerformSchemeFetch();
+    return;
+  }
   // "- |request|'s url's origin is same origin with |request|'s origin,
   //    |request|'s tainted origin flag is unset, and the CORS flag is unset"
   // Note tainted origin flag is always unset here.
@@ -660,6 +693,21 @@ void FetchManager::Loader::Dispose() {
 }
 
 void FetchManager::Loader::Abort() {
+  // FetchManager::Fetch binds this to the signal through a WeakPersistent.
+  // While fetch_manager_ is set, its loaders_ holds this loader, so this runs
+  // at the same point when recording and replaying, and everything below
+  // interacts with the recording as usual. Dispose() clears fetch_manager_ once
+  // the loader finished, failed or lost its context, which happens at the same
+  // point in both. From then on nothing holds the loader strongly, and the GC,
+  // whose timing differs between recording and replaying, decides whether this
+  // runs at all. It must not interact with the recording then, and it has
+  // nothing to do: resolver_ is cleared, settled or belongs to a destroyed
+  // context, so Reject() would only allocate a DOMException it ignores,
+  // threadable_loader_ was cleared by Dispose(), and NotifyFinished() needs
+  // fetch_manager_. Returning early makes both outcomes of the GC identical.
+  if (recordreplay::IsRecordingOrReplaying() && !fetch_manager_)
+    return;
+
   if (resolver_) {
     resolver_->Reject(
         MakeGarbageCollected<DOMException>(DOMExceptionCode::kAbortError));
@@ -923,6 +971,8 @@ void FetchManager::Loader::Failed(
       resolver_->Reject(value);
     }
   }
+
+  recordreplay::Assert("[TT-187-819] Loader::Failed B");
   NotifyFinished();
 }
 
@@ -949,6 +999,14 @@ ScriptPromise FetchManager::Fetch(ScriptState* script_state,
 
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   ScriptPromise promise = resolver->Promise();
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
+    resolver->Reject(V8ThrowException::CreateTypeError(
+        script_state->GetIsolate(),
+        "This evaluation tried to read network contents that were not captured "
+        "in the recording. Replay cannot perform fresh network reads "
+        "divergently."));
+    return promise;
+  }
 
   auto* loader =
       MakeGarbageCollected<Loader>(GetExecutionContext(), this, resolver,

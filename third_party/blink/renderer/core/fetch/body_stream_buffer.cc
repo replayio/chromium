@@ -8,6 +8,7 @@
 
 #include "base/auto_reset.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/fetch/body.h"
 #include "third_party/blink/renderer/core/fetch/bytes_consumer_tee.h"
@@ -153,8 +154,13 @@ void BodyStreamBuffer::Init() {
     if (signal_->aborted()) {
       Abort();
     } else {
-      signal_->AddAlgorithm(
-          WTF::BindOnce(&BodyStreamBuffer::Abort, WrapWeakPersistent(this)));
+      if (recordreplay::IsRecordingOrReplaying("leak-references", "BodyStreamBuffer")) {
+        // Abort() interacts with the recording so we need it to run consistently.
+        signal_->AddAlgorithm(WTF::BindOnce(&BodyStreamBuffer::Abort, WrapPersistent(this)));
+      } else {
+        signal_->AddAlgorithm(
+            WTF::BindOnce(&BodyStreamBuffer::Abort, WrapWeakPersistent(this)));
+      }
     }
   }
   OnStateChange();
@@ -236,13 +242,34 @@ void BodyStreamBuffer::StartLoading(FetchDataLoader* loader,
       client->Abort();
       return;
     }
-    signal_->AddAlgorithm(WTF::BindOnce(&FetchDataLoader::Client::Abort,
-                                        WrapWeakPersistent(client)));
+    if (recordreplay::IsRecordingOrReplaying("leak-references", "BodyStreamBuffer")) {
+      // Client aborts can interact with the recording, so we want them to run consistently.
+      signal_->AddAlgorithm(WTF::BindOnce(&FetchDataLoader::Client::Abort, WrapPersistent(client)));
+    } else {
+      signal_->AddAlgorithm(WTF::BindOnce(&FetchDataLoader::Client::Abort,
+                                          WrapWeakPersistent(client)));
+    }
   }
   loader_ = loader;
   auto* handle = ReleaseHandle(exception_state);
   if (exception_state.HadException())
     return;
+  // A readable body whose first read fails after diverging from the recording
+  // (see BlobBytesConsumer::BeginRead) rejects with the consumer's reason
+  // instead of the loader's generic failure.
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect") &&
+      handle->GetPublicState() ==
+          BytesConsumer::PublicState::kReadableOrWaiting) {
+    const char* buffer = nullptr;
+    size_t available = 0;
+    BytesConsumer::Result result = handle->BeginRead(&buffer, &available);
+    if (result == BytesConsumer::Result::kOk)
+      result = handle->EndRead(0);
+    if (result == BytesConsumer::Result::kError) {
+      exception_state.ThrowTypeError(handle->GetError().Message());
+      return;
+    }
+  }
   keep_alive_ = this;
   loader->Start(handle,
                 MakeGarbageCollected<LoaderClient>(
@@ -403,10 +430,15 @@ void BodyStreamBuffer::Trace(Visitor* visitor) const {
 }
 
 void BodyStreamBuffer::Abort() {
+  recordreplay::Assert("[RUN-1182] BodyStreamBuffer::Abort");
+
   if (!GetExecutionContext()) {
     DCHECK(!consumer_);
     return;
   }
+
+  recordreplay::Assert("[RUN-1182] BodyStreamBuffer::Abort #1");
+
   Controller()->Error(
       MakeGarbageCollected<DOMException>(DOMExceptionCode::kAbortError));
   CancelConsumer();
@@ -423,8 +455,15 @@ void BodyStreamBuffer::Close() {
 void BodyStreamBuffer::GetError() {
   {
     ScriptState::Scope scope(script_state_);
+    String message = "network error";
+    // Report why a read failed after diverging from the recording, e.g. a
+    // blob that can't be read (see BlobBytesConsumer::BeginRead).
+    if (consumer_ &&
+        recordreplay::AreEventsUnavailable("divergent-side-effect")) {
+      message = consumer_->GetError().Message();
+    }
     Controller()->Error(V8ThrowException::CreateTypeError(
-        script_state_->GetIsolate(), "network error"));
+        script_state_->GetIsolate(), message));
   }
   CancelConsumer();
 }
