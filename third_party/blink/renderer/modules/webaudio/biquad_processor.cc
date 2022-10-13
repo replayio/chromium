@@ -27,6 +27,7 @@
 
 #include <memory>
 
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "third_party/blink/renderer/modules/webaudio/biquad_dsp_kernel.h"
 #include "third_party/blink/renderer/platform/audio/audio_utilities.h"
@@ -151,12 +152,25 @@ void BiquadProcessor::ProcessOnlyAudioParams(uint32_t frames_to_process) {
 
 void BiquadProcessor::Reset() {
   AudioDSPKernelProcessor::Reset();
-  has_just_reset_ = true;
+  {
+    // The audio thread reads this under the same lock, which is ordered while
+    // recording or replaying, so which render quantum sees the reset is
+    // ordered too.
+    base::AutoLockMaybe locker(
+        recordreplay::IsRecordingOrReplaying() ? &process_lock_ : nullptr);
+    has_just_reset_ = true;
+  }
 }
 
 void BiquadProcessor::SetType(FilterType type) {
   if (type != type_) {
-    type_ = type;
+    {
+      // The audio thread reads the type under the same lock, which is ordered
+      // while recording or replaying.
+      base::AutoLockMaybe locker(
+          recordreplay::IsRecordingOrReplaying() ? &process_lock_ : nullptr);
+      type_ = type;
+    }
     Reset();  // The filter state must be reset only if the type has changed.
   }
 }
