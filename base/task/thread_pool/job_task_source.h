@@ -24,6 +24,8 @@
 #include "base/task/thread_pool/task_source.h"
 #include "base/task/thread_pool/task_source_sort_key.h"
 
+#include "base/record_replay_ordered_atomic.h"
+
 namespace base::internal {
 
 class PooledTaskRunnerDelegate;
@@ -174,13 +176,19 @@ class BASE_EXPORT JobTaskSourceNew : public JobTaskSource {
     // Loads and returns the state.
     Value Load() const;
 
+    // [RecordReplay] RUN-2080 (https://linear.app/replay/issue/RUN-2080)
+    // This lock can be acquired in non-deterministic contexts when computing
+    // max concurrency.  This is a variant of `Load` above that doesn't
+    // record its thread acquisition.
+    Value RecordReplayLoadUnordered() const;
+
     // Returns a lock that must be held to call `IncrementWorkerCount()`.
     CheckedLock& increment_worker_count_lock() {
       return increment_worker_count_lock_;
     }
 
    private:
-    std::atomic<uint32_t> value_{kOutsideWillRunTaskOrMustReenqueueMask};
+    recordreplay::OrderedAtomic<uint32_t> value_{kOutsideWillRunTaskOrMustReenqueueMask};
     CheckedLock increment_worker_count_lock_{UniversalSuccessor()};
   };
 

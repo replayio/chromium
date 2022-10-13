@@ -24,6 +24,7 @@
 #include "base/process/process_handle.h"
 #include "base/process/process_info.h"
 #include "base/rand_util.h"
+#include "base/record_replay.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
@@ -660,6 +661,13 @@ void FieldTrialList::GetActiveFieldTrialGroups(
 
 // static
 std::set<std::string> FieldTrialList::GetActiveTrialsOfParentProcess() {
+  // Field trials are disabled when recording/replaying. The set of trials are
+  // read from shared memory and won't be consistent when replaying, and there
+  // isn't much point getting them working.
+  if (recordreplay::IsRecordingOrReplaying("no-field-trials")) {
+    return {};
+  }
+
   CHECK(global_);
   CHECK(global_->create_trials_in_child_process_called_);
 
@@ -713,6 +721,15 @@ bool FieldTrialList::CreateTrialsFromFieldTrialStates(
 void FieldTrialList::CreateTrialsInChildProcess(const CommandLine& cmd_line,
                                                 uint32_t fd_key) {
   global_->create_trials_in_child_process_called_ = true;
+
+  // Field trials are disabled when recording/replaying.
+  if (recordreplay::IsRecordingOrReplaying("no-field-trials")) {
+    return;
+  }
+
+  recordreplay::Assert(
+      "[RUN-2350-2356] FieldTrialList::CreateTrialsFromCommandLine %d %d",
+      recordreplay::IsRecordingOrReplaying(), recordreplay::FeatureEnabled("no-field-trials"));
 
 #if BUILDFLAG(USE_BLINK)
   // TODO(crbug.com/867558): Change to a CHECK.

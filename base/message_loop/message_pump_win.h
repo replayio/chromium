@@ -23,6 +23,8 @@
 #include "base/win/scoped_handle.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
+#include "base/record_replay_ordered_atomic.h"
+
 namespace base {
 
 // MessagePumpWin serves as the base for specialized versions of the MessagePump
@@ -74,7 +76,7 @@ class BASE_EXPORT MessagePumpWin : public MessagePump {
   //     lpCompletionKey in the queue which is about to wakeup
   //     WaitForIOCompletion(). MessagePumpForIO doesn't support nesting so
   //     this is simpler than MessagePumpForUI.
-  std::atomic_bool work_scheduled_{false};
+  recordreplay::OrderedAtomic<bool> work_scheduled_{false};
 
   // State for the current invocation of Run(). null if not running.
   // This field is not a raw_ptr<> because it was filtered by the rewriter for:

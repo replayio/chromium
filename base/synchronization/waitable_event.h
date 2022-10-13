@@ -238,6 +238,7 @@ class BASE_EXPORT WaitableEvent {
     const bool manual_reset_;
     bool signaled_;
     std::list<Waiter*> waiters_;
+    bool record_replay_unordered_;
 
    private:
     friend class RefCountedThreadSafe<WaitableEventKernel>;
@@ -266,6 +267,9 @@ class BASE_EXPORT WaitableEvent {
   // and whether WaitableEvent should emit a wakeup.flow event on Signal =>
   // TimedWait.
   bool only_used_while_idle_ = false;
+
+  // When recording/replaying, this is used to order wait/signal calls.
+  int record_replay_ordered_lock_id_ = 0;
 };
 
 }  // namespace base
