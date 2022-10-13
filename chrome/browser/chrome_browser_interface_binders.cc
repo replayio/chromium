@@ -53,6 +53,8 @@
 #include "components/performance_manager/embedder/binders.h"
 #include "components/performance_manager/embedder/performance_manager_registry.h"
 #include "components/prefs/pref_service.h"
+#include "components/record_replay/services/auth_token/public/mojom/auth_token.mojom.h"
+#include "components/record_replay/services/auth_token/public/cpp/auth_token_service_factory.h"
 #include "components/security_state/content/content_utils.h"
 #include "components/security_state/core/security_state.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
@@ -172,6 +174,22 @@
 namespace chrome::internal {
 
 namespace {
+
+void BindRecordReplayAuthTokenStore(
+    content::RenderFrameHost* frame_host,
+    mojo::PendingReceiver<auth_token::mojom::RecordReplayAuthTokenStore> receiver) {
+
+  // we only bind the receiver if the frame's origin is app.replay.io
+  if (frame_host->GetLastCommittedOrigin().host() != "app.replay.io") {
+    return;
+  }
+
+  content::BrowserContext* browser_context =
+      frame_host->GetProcess()->GetBrowserContext();
+
+  auth_token::RecordReplayAuthTokenServiceFactory::GetForBrowserContext(browser_context)
+      ->BindAuthTokenStore(std::move(receiver));
+}
 
 #if BUILDFLAG(ENABLE_UNHANDLED_TAP)
 void BindUnhandledTapWebContentsObserver(
@@ -479,6 +497,12 @@ void PopulateChromeFrameBinders(
   if (render_frame_host->GetProcess()->IsPrivileged()) {
     map->Add<pwc::mojom::PrivilegedBridge>(&pwc::BindPrivilegedBridge);
   }
+
+  if (getenv("CHROMIUM_UI")) {
+    map->Add<auth_token::mojom::RecordReplayAuthTokenStore>(
+        &BindRecordReplayAuthTokenStore);
+  }
+
   map->Add<image_annotation::mojom::Annotator>(&BindImageAnnotator);
 
   map->Add<blink::mojom::ScriptToolHost>(

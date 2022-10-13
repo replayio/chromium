@@ -253,19 +253,21 @@ void AddInfoBarsIfNecessary(BrowserWindowInterface* browser,
   infobars::ContentInfoBarManager* infobar_manager =
       infobars::ContentInfoBarManager::FromWebContents(web_contents);
 
-  if (!google_apis::HasAPIKeyConfigured()) {
-    if (infobars::IsInfoBarMigrated(
-            infobars::InfoBarDelegate::GOOGLE_API_KEYS_INFOBAR_DELEGATE)) {
-      if (auto* manager =
-              infobars::BrowserInfoBarManager::From(g_browser_process)) {
-        manager->Show(
-            tabs::TabInterface::GetFromContents(web_contents),
-            infobars::InfoBarDelegate::GOOGLE_API_KEYS_INFOBAR_DELEGATE);
-      }
-    } else {
-      GoogleApiKeysInfoBarDelegate::Create(infobar_manager);
-    }
-  }
+  // [TT-859] disable the api key delegate (which displays the banner in the infobar.)
+  // Upstream's M158 body, kept commented so the next rebase can see what is disabled:
+  // if (!google_apis::HasAPIKeyConfigured()) {
+  // if (infobars::IsInfoBarMigrated(
+  // infobars::InfoBarDelegate::GOOGLE_API_KEYS_INFOBAR_DELEGATE)) {
+  // if (auto* manager =
+  // infobars::BrowserInfoBarManager::From(g_browser_process)) {
+  // manager->Show(
+  // tabs::TabInterface::GetFromContents(web_contents),
+  // infobars::InfoBarDelegate::GOOGLE_API_KEYS_INFOBAR_DELEGATE);
+  // }
+  // } else {
+  // GoogleApiKeysInfoBarDelegate::Create(infobar_manager);
+  // }
+  // }
 
   if (ObsoleteSystem::IsObsoleteNowOrSoon()) {
     PrefService* local_state = g_browser_process->local_state();

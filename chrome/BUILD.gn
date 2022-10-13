@@ -379,6 +379,7 @@ if (!is_android && !is_mac) {
     # Note: Do not add ":packed_resources" to deps/public_deps here, as that
     # forces all C++ compilations in chrome_initial to wait for resources.pak.
     # Instead, group("chrome") exposes it via public_deps for installers.
+    data_deps += [ "//replay-assets" ]
     data_deps += [ ":packed_resources" ]
 
     # ChromeOS by design is safe to have rpath=$ORIGIN. This simplifies shared
@@ -604,7 +605,12 @@ if (is_win) {
       # This is a bit of a hack, since GN deliberately terminates its search
       # for runtime_deps at create_bundle nodes (https://crbug.com/40101435).
       data_deps = [ ":chrome_framework" ]
+      data_deps += [ "//replay-assets" ]
+    } else {
+      data_deps = [ "//replay-assets" ]
     }
+
+    data_deps += [ "//replay-assets" ]
   }
 
   if (verify_dynamic_libraries) {

@@ -1,0 +1,32 @@
+# Copyright 2014 The Chromium Authors
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+import("//mojo/public/tools/bindings/mojom.gni")
+
+mojom("mojo_bindings") {
+  sources = [ "record_replay_manager.mojom" ]
+  webui_module_path = "/chrome/browser/ui/webui/record_replay"
+}
+
+source_set("record_replay") {
+  sources = [
+    "record_replay_manager_handler.cc",
+    "record_replay_manager_handler.h",
+    "record_replay_ui.cc",
+    "record_replay_ui.h",
+  ]
+  public_deps = [
+    "//chrome/common",
+    "//content/public/browser",
+  ]
+  deps = [
+    ":mojo_bindings",
+    "//base",
+    "//chrome/browser/profiles:profile",
+    "//chrome/browser/resources/record_replay:resources",
+    "//components/record_replay/services/auth_token:lib",
+    "//mojo/public/cpp/bindings",
+    "//ui/webui",
+  ]
+}

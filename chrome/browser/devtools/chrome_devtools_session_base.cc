@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "base/check.h"
+#include "base/record_replay.h"
 #include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_functions.h"
@@ -106,4 +107,7 @@ void ChromeDevToolsSessionBase::SendProtocolNotification(
   client_channel_->DispatchProtocolMessageToClient(message->Serialize());
 }
 
-void ChromeDevToolsSessionBase::FlushProtocolNotifications() {}
+void ChromeDevToolsSessionBase::FlushProtocolNotifications() {
+  // https://linear.app/replay/issue/RUN-885
+  recordreplay::Assert("ChromeDevToolsSession::FlushProtocolNotifications");
+}

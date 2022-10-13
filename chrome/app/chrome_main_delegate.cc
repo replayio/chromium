@@ -32,6 +32,7 @@
 #include "base/process/process_handle.h"
 #include "base/profiler/thread_group_profiler.h"
 #include "base/rand_util.h"
+#include "base/record_replay_driver.h"
 #include "base/strings/string_util.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
@@ -436,10 +437,13 @@ bool HandleVersionSwitches(const base::CommandLine& command_line) {
 #endif
 
   if (print_product_version) {
-    printf("%s\n", CHROME_VERSION_STRING);
+    printf("%s (replay.io build %s)\n", CHROME_VERSION_STRING,
+           RECORD_REPLAY_BUILD_ID);
   } else {
-    printf("%s %s %s\n", PRODUCT_FULLNAME_STRING, CHROME_VERSION_STRING,
-           chrome::GetChannelName(chrome::WithExtendedStable(true)).c_str());
+    printf("%s %s %s (replay.io build %s)\n", PRODUCT_FULLNAME_STRING,
+           CHROME_VERSION_STRING,
+           chrome::GetChannelName(chrome::WithExtendedStable(true)).c_str(),
+           RECORD_REPLAY_BUILD_ID);
   }
   fflush(stdout);
   return true;

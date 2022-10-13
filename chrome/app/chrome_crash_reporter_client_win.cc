@@ -29,6 +29,23 @@
 #include "components/metrics/system_profile_user_stream.h"
 #include "components/version_info/channel.h"
 
+static void* LookupRecordReplaySymbol(const char* name) {
+  HMODULE module = GetModuleHandleA("windows-recordreplay.dll");
+  void* fnptr = module ? (void*)GetProcAddress(module, name) : nullptr;
+  return fnptr ? fnptr : reinterpret_cast<void*>(1);
+}
+
+static bool RecordReplayIsReplaying() {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayIsReplaying");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    return reinterpret_cast<bool(*)()>(fnptr)();
+  }
+  return false;
+}
+
 ChromeCrashReporterClient::ChromeCrashReporterClient() = default;
 
 ChromeCrashReporterClient::~ChromeCrashReporterClient() = default;
@@ -39,6 +56,12 @@ void ChromeCrashReporterClient::InitializeCrashReportingForProcess() {
   if (instance) {
     return;
   }
+
+  // Don't initialize the crash reporter when replaying. This happens during
+  // initialization and isn't supported before calling RecordReplayAttach,
+  // and isn't relevant when replaying anyways.
+  if (RecordReplayIsReplaying())
+    return;
 
   instance = new ChromeCrashReporterClient();
   ANNOTATE_LEAKING_OBJECT_PTR(instance);
