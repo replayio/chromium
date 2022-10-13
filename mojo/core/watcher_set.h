@@ -12,6 +12,8 @@
 #include "mojo/core/watcher_dispatcher.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
+#include "base/record_replay.h"
+
 namespace mojo {
 namespace core {
 
@@ -64,7 +66,7 @@ class WatcherSet {
   };
 
   const raw_ptr<Dispatcher> owner_;
-  base::flat_map<WatcherDispatcher*, Entry> watchers_;
+  base::flat_map<WatcherDispatcher*, Entry, recordreplay::CompareByPointerId> watchers_;
   absl::optional<HandleSignalsState> last_known_state_;
 };
 
