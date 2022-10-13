@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "base/notreached.h"
+#include "base/record_replay.h"
 
 namespace ukm {
 
