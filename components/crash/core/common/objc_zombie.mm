@@ -262,11 +262,19 @@ void ZombieObjectCrash(id object, SEL aSelector, SEL viaSelector) {
   *zero = 0;
 }
 
+static inline bool MaybeRecordingOrReplaying() {
+  return true;
+}
+
 // Initialize our globals, returning YES on success.
 BOOL ZombieInit() {
   static BOOL initialized = NO;
   if (initialized)
     return YES;
+
+  // Don't alter internal classes when recording/replaying.
+  if (MaybeRecordingOrReplaying())
+    return NO;
 
   Class rootClass = [NSObject class];
   g_originalDeallocIMP = reinterpret_cast<RealIMP>(

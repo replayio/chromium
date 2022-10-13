@@ -86,7 +86,12 @@ void WebCacheManager::ClearCacheForProcess(content::ChildProcessId process_id) {
 
 void WebCacheManager::ClearRendererCache(
     WebCacheManager::ClearCacheOccasion occasion) {
+  int record_replay_index = 0;
   for (auto& service : web_cache_services_) {
+    recordreplay::Assert(
+        "[RUN-1975-2287] WebCacheManager::ClearRendererCache A %d %d %d/%zu",
+        service.first.GetUnsafeValue(), (int)occasion, record_replay_index++,
+        web_cache_services_.size());
     // It is possible to have a renderer host that is not ready and is still
     // present in 'web_cache_services_' because the notification has not reach
     // this instance. This can happen if  'ClearRendererCache' is called by an
@@ -95,6 +100,8 @@ void WebCacheManager::ClearRendererCache(
       service.second->ClearCache(occasion == ON_NAVIGATION);
     }
   }
+  recordreplay::Assert(
+      "[RUN-1975-2287] WebCacheManager::ClearRendererCache C");
 }
 
 }  // namespace web_cache
