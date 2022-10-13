@@ -975,6 +975,8 @@ class CORE_EXPORT LocalFrame final
     return frame_visibility_observers_;
   }
 
+  void RegisterRecordReplayAuthTokenObserver();
+  
  private:
   friend class FrameNavigationDisabler;
   // LocalFrameMojoHandler is a part of LocalFrame.
