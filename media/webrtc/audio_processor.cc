@@ -16,6 +16,7 @@
 #include "base/feature_list.h"
 #include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/record_replay.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/thread_pool.h"
 #include "base/trace_event/trace_event.h"
@@ -344,7 +345,11 @@ void AudioProcessor::ProcessCapturedAudio(const media::AudioBus& audio_source,
   // Process and consume the data in the FIFO until there is not enough
   // data to process.
   AudioProcessorCaptureBus* process_bus;
+  int consume_count = 0;
   while (capture_fifo_->Consume(&process_bus, &capture_delay)) {
+    ++consume_count;
+    REPLAY_ASSERT("AudioProcessor::ProcessCapturedAudio consume %d",
+                  consume_count);
     // Use the process bus directly if audio processing is disabled.
     AudioProcessorCaptureBus* output_bus = process_bus;
     absl::optional<double> new_volume;
@@ -366,6 +371,7 @@ void AudioProcessor::ProcessCapturedAudio(const media::AudioBus& audio_source,
     deliver_processed_audio_callback_.Run(*output_bus->bus(),
                                           audio_capture_time, new_volume);
   }
+  REPLAY_ASSERT("AudioProcessor::ProcessCapturedAudio %d", consume_count);
 }
 
 void AudioProcessor::SetOutputWillBeMuted(bool muted) {
