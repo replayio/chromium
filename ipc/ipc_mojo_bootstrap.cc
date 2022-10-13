@@ -54,6 +54,8 @@
 #include "mojo/public/cpp/bindings/tracing_helpers.h"
 #include "third_party/abseil-cpp/absl/base/attributes.h"
 
+#include "base/record_replay.h"
+
 namespace IPC {
 
 class ChannelAssociatedGroupController;
@@ -178,7 +180,8 @@ class ChannelAssociatedGroupController
         dispatcher_(this),
         control_message_handler_(this),
         control_message_proxy_thunk_(this),
-        control_message_proxy_(&control_message_proxy_thunk_) {
+        control_message_proxy_(&control_message_proxy_thunk_),
+        lock_("ChannelAssociatedGroupController.lock_") {
     control_message_handler_.SetDescription(
         "IPC::mojom::Bootstrap [primary] PipeControlMessageHandler");
     dispatcher_.SetValidator(std::make_unique<mojo::MessageHeaderValidator>(
@@ -1144,12 +1147,14 @@ class ChannelAssociatedGroupController
 
     base::AutoLock locker(lock_);
     Endpoint* endpoint = FindEndpoint(id);
-    if (!endpoint)
+    if (!endpoint) {
       return;
+    }
 
     mojo::InterfaceEndpointClient* client = endpoint->client();
-    if (!client)
+    if (!client) {
       return;
+    }
 
     if (!endpoint->task_runner()->RunsTasksInCurrentSequence() &&
         !proxy_task_runner_->RunsTasksInCurrentSequence()) {
