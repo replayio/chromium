@@ -12,11 +12,20 @@
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 class CORE_EXPORT LongTaskObserver : public GarbageCollectedMixin {
  public:
-  virtual ~LongTaskObserver() = default;
+  LongTaskObserver() {
+    // Pointer registration is needed for sorting in LongTaskDetector methods.
+    recordreplay::RegisterPointer("LongTaskObserver", this);
+  }
+
+  virtual ~LongTaskObserver() {
+    recordreplay::UnregisterPointer(this);
+  }
 
   virtual void OnLongTaskDetected(base::TimeTicks start_time,
                                   base::TimeTicks end_time) = 0;
