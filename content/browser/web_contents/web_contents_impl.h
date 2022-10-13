@@ -25,6 +25,7 @@
 #include "base/memory/safe_ref.h"
 #include "base/observer_list.h"
 #include "base/process/kill.h"
+#include "base/record_replay.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -2561,6 +2562,8 @@ class CONTENT_EXPORT WebContentsImpl
   // frame of the opener. This will only have a value if `is_popup_` is true.
   // See https://explainers-by-googlers.github.io/partitioned-popins/
   base::WeakPtr<RenderFrameHostImpl> partitioned_popin_opener_;
+
+  bool record_replay_for_recording_ = false;
 
   base::WeakPtrFactory<WebContentsImpl> loading_weak_factory_{this};
   base::WeakPtrFactory<WebContentsImpl> weak_factory_{this};
