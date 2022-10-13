@@ -1,0 +1,19 @@
+# Copyright 2022 The Chromium Authors
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+# List of files that don't need to be passed to html_to_wrapper().
+non_web_component_files =
+    [
+      "auth.ts",
+      "record_replay.ts",
+      "record_replay_api.ts",
+    ]
+
+ts_files = non_web_component_files
+# The generated bindings are TypeScript, so the name tsc consumes and the name
+# tsc emits are different files. Keep both: mojo_ts_files is the input that
+# copy_mojom drops into the preprocess folder, mojo_js_files is what build_ts
+# produces for it and is what the bundle excludes and the grdp registers.
+mojo_ts_files = [ "record_replay_manager.mojom-webui.ts" ]
+mojo_js_files = [ "record_replay_manager.mojom-webui.js" ]
