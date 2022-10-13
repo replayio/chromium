@@ -8,6 +8,7 @@
 
 #include "base/observer_list.h"
 #include "base/observer_list_threadsafe.h"
+#include "base/record_replay.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/trace_event/interned_args_helper.h"
 #include "base/trace_event/memory_dump_manager.h"
@@ -30,7 +31,11 @@ class MemoryPressureObserver {
     // MemoryPressureListener is created in a non-sequenced context. Tests will
     // need to be adjusted for that to work.
     if (SequencedTaskRunner::HasCurrentDefault()) {
+      REPLAY_ASSERT("MemoryPressureObserver::AddObserver A %d", sync);
       async_observers_->AddObserver(listener);
+    }
+    else {
+      REPLAY_ASSERT("MemoryPressureObserver::AddObserver B %d", sync);
     }
 
     if (sync) {
@@ -47,6 +52,8 @@ class MemoryPressureObserver {
 
   void Notify(
       MemoryPressureListener::MemoryPressureLevel memory_pressure_level) {
+    recordreplay::AutoDisallowEvents disallow("MemoryPressureObserver::Notify");
+
     async_observers_->Notify(FROM_HERE, &MemoryPressureListener::Notify,
                              memory_pressure_level);
     AutoLock lock(sync_observers_lock_);
