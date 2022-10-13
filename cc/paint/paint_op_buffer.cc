@@ -284,6 +284,7 @@ void PaintOpBuffer::Append(
 }
 
 PaintOpBuffer::~PaintOpBuffer() {
+  recordreplay::AutoDisallowEvents disallow("~PaintOpBuffer");
   // Frees immutable serialized `PaintOp` value/Skia buffers and internal
   // `AlignedAlloc` backing bytes with no JS/DOM callbacks or escaping
   // untrusted pointers. Excluding paint teardown avoids quarantine churn on

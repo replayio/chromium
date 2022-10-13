@@ -48,6 +48,8 @@
 #include "ui/gfx/geometry/transform_util.h"
 #include "ui/gfx/geometry/vector2d_conversions.h"
 
+#include "base/record_replay.h"
+
 namespace cc {
 
 namespace {
@@ -113,6 +115,7 @@ LayerImpl::LayerImpl(LayerTreeImpl* tree_impl, int id)
       effect_tree_index_(kInvalidPropertyNodeId),
       clip_tree_index_(kInvalidPropertyNodeId),
       scroll_tree_index_(kInvalidPropertyNodeId) {
+  recordreplay::RegisterPointer("LayerImpl", this);
   DCHECK_GT(layer_id_, 0);
   DCHECK_GT(stable_id_for_shared_quad_state_, 0);
   DCHECK(layer_tree_impl_);
@@ -124,6 +127,7 @@ LayerImpl::LayerImpl(LayerTreeImpl* tree_impl, int id)
 }
 
 LayerImpl::~LayerImpl() {
+  recordreplay::UnregisterPointer(this);
   // Emit both the pointer-based "id" (used by Catapult's ObjectCollection to
   // match the implicit snapshot id in AsValueInto) and "layer_id".
   TRACE_EVENT_INSTANT(
@@ -178,6 +182,8 @@ void LayerImpl::SetTransformTreeIndex(int index) {
   }
 
   transform_tree_index_ = index;
+  recordreplay::Assert("[RUN-550-1329] LayerImpl::SetTransformTreeIndex %d %d",
+                       layer_id_, index);
   SetNeedsPushProperties(LayerImpl::kChangedPropertyTreeIndex);
 }
 
@@ -448,6 +454,10 @@ bool LayerImpl::IsSnappedToPixelGridInTarget() {
 
 void LayerImpl::CopyPropertiesTo(LayerImpl* layer) const {
   DCHECK(layer->IsActive());
+
+  recordreplay::Assert("[RUN-550-1329] LayerImpl::PushPropertiesTo %d %d %llu",
+                       transform_tree_index_, layer_id_,
+                       element_id_.GetInternalValue());
 
   if (GetChangeFlag(kChangedPropertyTreeIndex)) {
     layer->transform_tree_index_ = transform_tree_index_;
@@ -962,7 +972,11 @@ gfx::Rect LayerImpl::VisibleLayerRect() const {
 }
 
 int LayerImpl::GetSortingContextId() const {
-  return GetTransformTree().Node(transform_tree_index()).sorting_context_id;
+  int rv = GetTransformTree().Node(transform_tree_index()).sorting_context_id;
+
+  recordreplay::Assert("[RUN-550] LayerImpl::GetSortingContextId %d %d", transform_tree_index(), rv);
+
+  return rv;
 }
 
 Region LayerImpl::GetInvalidationRegionForDebugging() {

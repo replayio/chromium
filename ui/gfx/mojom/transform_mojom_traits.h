@@ -8,6 +8,7 @@
 #include <array>
 #include <cmath>
 
+#include "base/record_replay.h"
 #include "base/check.h"
 #include "mojo/public/cpp/bindings/array_traits.h"
 #include "mojo/public/cpp/bindings/union_traits.h"

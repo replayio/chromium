@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/record_replay.h"
 #include "cc/trees/client_layer_tree_host_impl.h"
 
 #include <utility>
@@ -51,6 +52,9 @@ std::unique_ptr<ClientLayerTreeHostImpl> ClientLayerTreeHostImpl::Create(
     int id,
     scoped_refptr<base::SequencedTaskRunner> image_worker_task_runner,
     LayerTreeHostSchedulingDelegate* scheduling_delegate) {
+  recordreplay::CommandDiagnostic(
+    "[RUN-2110-2761] LayerTreeHostImpl::Create %d", id);
+
   CHECK(!settings.trees_in_viz_in_viz_process);
   return base::WrapUnique(new ClientLayerTreeHostImpl(
       settings, delegate, task_runner_provider, rendering_stats_instrumentation,

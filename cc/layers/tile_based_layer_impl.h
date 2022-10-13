@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "base/check_op.h"
+#include "base/record_replay.h"
 #include "cc/base/math_util.h"
 #include "cc/cc_export.h"
 #include "cc/debug/debug_colors.h"
@@ -446,6 +447,8 @@ void TileBasedLayerImpl<Tiling>::AppendQuads(
         return IterationStatus::kContinue;
       });
 
+  recordreplay::Assert("[RUN-550-1536] PictureLayerImpl::AppendQuads C");
+
   if (missing_tile_count) {
     append_quads_data->num_missing_tiles += missing_tile_count;
     TRACE_EVENT_INSTANT("cc", "TileBasedLayerImpl::AppendQuads checkerboard",
@@ -627,6 +630,8 @@ bool TileBasedLayerImpl<Tiling>::AppendQuadForTile(
         visible_geometry_rect.size().Area64();
   }
   produced_tile_last_append_quads_ = true;
+  recordreplay::Assert("[RUN-550-1536] PictureLayerImpl::AppendQuads B %d",
+                       iter.CurrentTiling()->record_replay_id_);
   AddScaleToLastAppendQuadsScales(iter.CurrentTiling()->contents_scale_key());
 
   return /*tile_produced=*/true;

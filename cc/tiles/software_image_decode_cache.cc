@@ -24,6 +24,8 @@
 #include "cc/tiles/mipmap_util.h"
 #include "ui/gfx/geometry/skia_conversions.h"
 
+#include "base/record_replay.h"
+
 using base::trace_event::MemoryAllocatorDump;
 using base::trace_event::MemoryDumpLevelOfDetail;
 
@@ -88,6 +90,8 @@ class SoftwareImageDecodeTaskImpl : public TileTask {
         devtools_instrumentation::ScopedImageDecodeTask::DecodeType::kSoftware,
         ImageDecodeCache::ToScopedTaskType(task_type_),
         ImageDecodeCache::ToScopedImageType(image_type));
+    REPLAY_ASSERT("[RUN-593-1824] RunOnWorkerThread %s %d",
+                         image_key_.ToString().c_str(), RecordReplayId());
     SoftwareImageDecodeCache::TaskProcessingResult result =
         cache_->DecodeImageInTask(image_key_, paint_image_, task_type_);
 
@@ -144,7 +148,8 @@ PaintFlags::FilterQuality GetDecodedFilterQuality(
 SoftwareImageDecodeCache::SoftwareImageDecodeCache(
     SkColorType color_type,
     size_t locked_memory_limit_bytes)
-    : decoded_images_(ImageLRUCache::NO_AUTO_EVICT),
+    : lock_("SoftwareImageDecodeCache.lock_"),
+      decoded_images_(ImageLRUCache::NO_AUTO_EVICT),
       locked_images_budget_(locked_memory_limit_bytes),
       color_type_(color_type),
       generator_client_id_(PaintImage::GetNextGeneratorClientId()),
@@ -266,6 +271,7 @@ SoftwareImageDecodeCache::GetTaskForImageAndRefInternal(
       cache_entry->in_raster_task->SetExternalDependent(task);
     }
   }
+
   return TaskResult(task);
 }
 
@@ -353,6 +359,10 @@ SoftwareImageDecodeCache::DecodeImageIfNecessary(const CacheKey& key,
   if (key.target_size().IsEmpty())
     entry->decode_failed = true;
 
+  recordreplay::Assert(
+      "[RUN-593-1824] SoftwareImageDecodeCache::DecodeImageIfNecessary A %d %d %d",
+      entry->decode_failed, !!entry->memory, !!entry->is_locked);
+
   if (entry->decode_failed)
     return TaskProcessingResult::kCancelled;
 
@@ -364,6 +374,10 @@ SoftwareImageDecodeCache::DecodeImageIfNecessary(const CacheKey& key,
     if (lock_succeeded)
       return TaskProcessingResult::kLockOnly;
   }
+
+  REPLAY_ASSERT(
+      "[RUN-593-1824] SoftwareImageDecodeCache::DecodeImageIfNecessary B %d %d",
+      (int)key.type(), paint_image.stable_id());
 
   std::unique_ptr<CacheEntry> local_cache_entry;
   // If we can use the original decode, we'll definitely need a decode.
@@ -439,10 +453,19 @@ SoftwareImageDecodeCache::DecodeImageIfNecessary(const CacheKey& key,
           GetColorTypeForPaintImage(key.target_color_params(), paint_image)));
     }
 
+    recordreplay::Assert(
+        "[RUN-593-1824] SoftwareImageDecodeCache::DecodeImageIfNecessary C %d %s",
+        !!candidate_key, candidate_key ? candidate_key->ToString().c_str() : "");
+
     if (candidate_key) {
       CHECK(*candidate_key != key) << key.ToString();
       auto decoded_draw_image =
           GetDecodedImageForDrawInternal(*candidate_key, paint_image);
+
+      recordreplay::Assert(
+          "[RUN-593-1824] SoftwareImageDecodeCache::DecodeImageIfNecessary D %d %d",
+          !!decoded_draw_image.image(), (int)key.type());
+
       if (!decoded_draw_image.image()) {
         local_cache_entry = nullptr;
       } else {
