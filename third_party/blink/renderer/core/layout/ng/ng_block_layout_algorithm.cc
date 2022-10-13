@@ -273,8 +273,9 @@ void NGBlockLayoutAlgorithm::SetBoxType(NGPhysicalFragment::NGBoxType type) {
 MinMaxSizesResult NGBlockLayoutAlgorithm::ComputeMinMaxSizes(
     const MinMaxSizesFloatInput& float_input) {
   if (auto result =
-          CalculateMinMaxSizesIgnoringChildren(node_, BorderScrollbarPadding()))
+          CalculateMinMaxSizesIgnoringChildren(node_, BorderScrollbarPadding())) {
     return *result;
+  }
 
   MinMaxSizes sizes;
   bool depends_on_block_constraints = false;
@@ -1648,6 +1649,10 @@ const NGLayoutResult* NGBlockLayoutAlgorithm::LayoutNewFormattingContext(
         {child_available_inline_size, ChildAvailableSize().block_size},
         /* is_new_fc */ true, opportunity.rect.start_offset.block_offset);
 
+    recordreplay::Assert("[RUN-1855-1911] NGBlockLayoutAlgorithm::LayoutNewFormattingContext (%s)",
+      child_space.ToString().Ascii().c_str()
+    );
+
     // All formatting context roots (like this child) should start with an empty
     // exclusion space.
     DCHECK(child_space.ExclusionSpace().IsEmpty());
@@ -1805,6 +1810,9 @@ NGLayoutResult::EStatus NGBlockLayoutAlgorithm::HandleInflow(
       /* is_new_fc */ false, forced_bfc_block_offset,
       has_clearance_past_adjoining_floats,
       previous_inflow_position->block_end_annotation_space);
+  recordreplay::Assert("[RUN-1855-1856] NGBlockLayoutAlgorithm::HandleInflow (%s)",
+    child_space.ToString().Ascii().c_str()
+  );
   const NGLayoutResult* layout_result =
       LayoutInflow(child_space, child_break_token, early_break_,
                    column_spanner_path_, &child, inline_child_layout_context);
@@ -2014,6 +2022,10 @@ NGLayoutResult::EStatus NGBlockLayoutAlgorithm::FinishInflow(
       new_child_space = CreateConstraintSpaceForChild(
           child, child_break_token, *child_data, ChildAvailableSize(),
           /* is_new_fc */ false, child_bfc_block_offset);
+      recordreplay::Assert(
+        "[RUN-1855-1862] NGBlockLayoutAlgorithm::FinishInflow space(%s)",
+        new_child_space.ToString().Ascii().c_str()
+      );
       layout_result = LayoutInflow(new_child_space, child_break_token,
                                    early_break_, column_spanner_path_, &child,
                                    inline_child_layout_context);
@@ -2671,6 +2683,9 @@ NGConstraintSpace NGBlockLayoutAlgorithm::CreateConstraintSpaceForChild(
     const absl::optional<LayoutUnit> child_bfc_block_offset,
     bool has_clearance_past_adjoining_floats,
     LayoutUnit block_start_annotation_space) {
+  recordreplay::Assert("[RUN-1855-1856] NGBlockLayoutAlgorithm::CreateConstraintSpaceForChild %d #0",
+    child.RecordReplayId()
+  );
   const ComputedStyle& child_style = child.Style();
   const auto child_writing_direction = child_style.GetWritingDirection();
 

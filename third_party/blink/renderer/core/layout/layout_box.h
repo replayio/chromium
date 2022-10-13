@@ -2129,6 +2129,11 @@ class CORE_EXPORT LayoutBox : public LayoutBoxModelObject {
   // (which is responsible for painting the tickmarks).
   void InvalidatePaintForTickmarks();
 
+  int RecordReplayId() const {
+    NOT_DESTROYED();
+    return record_replay_id_;
+  }
+
   // Returns which of the border box space and contents space (maybe both)
   // the backgrounds should be painted into, if the LayoutBox is composited.
   // The caller may adjust the value by considering LCD-text etc. if needed and
@@ -2478,6 +2483,9 @@ class CORE_EXPORT LayoutBox : public LayoutBoxModelObject {
   Member<LayoutBoxRareData> rare_data_;
 
   FRIEND_TEST_ALL_PREFIXES(LayoutMultiColumnSetTest, ScrollAnchroingCrash);
+
+  // A deterministic ID is needed for sorting in various SnapCoordinator methods.
+  int record_replay_id_ = 0;
 };
 
 template <>
