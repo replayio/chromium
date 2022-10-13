@@ -25,6 +25,7 @@
 #include "base/memory/safe_ref.h"
 #include "base/observer_list.h"
 #include "base/process/kill.h"
+#include "base/record_replay.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -2321,7 +2322,7 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
 
   std::unique_ptr<PrerenderHostRegistry> prerender_host_registry_;
 
-  std::unique_ptr<power_scheduler::PowerModeVoter> audible_power_mode_voter_;
+  recordreplay::unique_leaky_ptr<power_scheduler::PowerModeVoter> audible_power_mode_voter_;
 
   viz::FrameSinkId xr_render_target_;
 
@@ -2367,6 +2368,8 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
   // either DevTools is opened and consults this value or when a non-prerendered
   // navigation commits in the primary main frame.
   bool last_navigation_was_prerender_activation_for_devtools_ = false;
+
+  bool record_replay_for_recording_ = false;
 
   base::WeakPtrFactory<WebContentsImpl> loading_weak_factory_{this};
   base::WeakPtrFactory<WebContentsImpl> weak_factory_{this};

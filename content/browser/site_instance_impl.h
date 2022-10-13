@@ -150,6 +150,7 @@ class CONTENT_EXPORT SiteInstanceImpl final : public SiteInstance {
   bool RequiresOriginKeyedProcess() override;
   bool IsSameSiteWithURL(const GURL& url) override;
   bool IsGuest() override;
+  bool RecordReplayForRecording() override;
   SiteInstanceProcessAssignment GetLastProcessAssignmentOutcome() override;
   void WriteIntoTrace(perfetto::TracedProto<TraceProto> context) override;
   int EstimateOriginAgentClusterOverheadForMetrics() override;
@@ -371,6 +372,12 @@ class CONTENT_EXPORT SiteInstanceImpl final : public SiteInstance {
   // - SiteInstanceImpl::CanAssociateWithSpareProcess().
   void PreventAssociationWithSpareProcess();
 
+  // RecordReplay [RUN-2762]
+  // Mark this site-instance as being for a recorded tab.
+  void RecordReplaySetForRecording();
+  // Check if this site-instance is for a recorded tab.
+  bool RecordReplayIsForRecording();
+
   // Returns the special site URL used by the default SiteInstance.
   static const GURL& GetDefaultSiteURL();
 
@@ -585,6 +592,10 @@ class CONTENT_EXPORT SiteInstanceImpl final : public SiteInstance {
   // Keeps track of whether we need to verify that the StoragePartition
   // information does not change when `site_info_` is set.
   bool verify_storage_partition_info_ = false;
+
+  // RecordReplay [RUN-2762]
+  // Indicates if this site-instance was created for a recorded tab.
+  bool record_replay_for_recording_ = false;
 };
 
 }  // namespace content
