@@ -662,7 +662,7 @@ void HTMLFormElement::PrepareForSubmission(const Event* event,
                     "' was implicitly closed by reaching the end of the "
                     "file. Please add an explicit end tag ('</",
                     tag_name, ">')"})));
-        DispatchEvent(*Event::Create(event_type_names::kError));
+        DispatchEvent(*Event::Create(event_type_names::kError), "HTMLFormElement::PrepareForSubmission #1");
         return;
       }
     }
@@ -757,7 +757,7 @@ void HTMLFormElement::PrepareForSubmission(const Event* event,
       SubmitEvent* submit_event = MakeGarbageCollected<SubmitEvent>(
           event_type_names::kSubmit, submit_event_init);
       should_submit =
-          DispatchEvent(*submit_event) == DispatchEventResult::kNotCanceled;
+          DispatchEvent(*submit_event, "HTMLFormElement::PrepareForSubmission #2") == DispatchEventResult::kNotCanceled;
       // `DispatchEvent()` above could have disconnected `this` from the DOM. In
       // that case, the form would have been unregistered as a tool,
       // `active_webmcp_tool_` will be null; there's no need to react to the
@@ -1050,7 +1050,7 @@ FormData* HTMLFormElement::ConstructEntryList(Element* submitter,
       }
     }
   }
-  DispatchEvent(*MakeGarbageCollected<FormDataEvent>(form_data));
+  DispatchEvent(*MakeGarbageCollected<FormDataEvent>(form_data), "HTMLFormElement::ConstructEntryList");
 
   if (submitter) {
     submitter->SetActivatedSubmit(false);
@@ -1065,7 +1065,7 @@ void HTMLFormElement::reset() {
 
   is_in_reset_function_ = true;
 
-  if (DispatchEvent(*Event::CreateCancelableBubble(event_type_names::kReset)) !=
+  if (DispatchEvent(*Event::CreateCancelableBubble(event_type_names::kReset), "HTMLFormElement::reset") !=
       DispatchEventResult::kNotCanceled) {
     is_in_reset_function_ = false;
     return;
