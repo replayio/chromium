@@ -6,6 +6,7 @@
 
 #include <utility>
 
+#include "base/record_replay.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/time/time.h"
@@ -58,9 +59,15 @@ void AudioOutputDeviceThreadCallback::Process(uint32_t control_signal) {
   media::AudioOutputBuffer* buffer =
       reinterpret_cast<media::AudioOutputBuffer*>(
           shared_memory_mapping_.memory());
+  // RUN-1667: the audio service writes these params into shared memory and is
+  // not recorded, so the values the client reads out have to come from the
+  // recording.
   media::AudioGlitchInfo glitch_info{
-      .duration = base::Microseconds(buffer->params.glitch_duration_us),
-      .count = buffer->params.glitch_count};
+      .duration = base::Microseconds(static_cast<int64_t>(
+          recordreplay::RecordReplayValue("audioparams::glitch_duration_us",
+                                          buffer->params.glitch_duration_us))),
+      .count = static_cast<unsigned int>(recordreplay::RecordReplayValue(
+          "audioparams::glitch_count", buffer->params.glitch_count))};
   buffer->params.glitch_duration_us = {};
   buffer->params.glitch_count = 0;
 
@@ -68,10 +75,13 @@ void AudioOutputDeviceThreadCallback::Process(uint32_t control_signal) {
                      "callback_num", callback_num_, "glitches",
                      glitch_info.count);
 
-  base::TimeDelta delay = base::Microseconds(buffer->params.delay_us);
+  // RUN-1667: Record the delay_us param from the shared memory buffer (this is mutated by the other end.)
+  base::TimeDelta delay = base::Microseconds(
+    recordreplay::RecordReplayValue("audioparams::delay_us", buffer->params.delay_us));
 
   base::TimeTicks delay_timestamp =
-      base::TimeTicks() + base::Microseconds(buffer->params.delay_timestamp_us);
+      base::TimeTicks() + base::Microseconds(recordreplay::RecordReplayValue(
+          "audioparams::delay_timestamp_us", buffer->params.delay_timestamp_us));
 
   DVLOG(4) << __func__ << " delay:" << delay << " delay_timestamp:" << delay;
 
@@ -91,8 +101,24 @@ void AudioOutputDeviceThreadCallback::Process(uint32_t control_signal) {
   // frames, and ask client to render audio.  Since |output_bus_| is wrapping
   // the shared memory the Render() call is writing directly into the shared
   // memory.
-  render_callback_->Render(delay, delay_timestamp, glitch_info,
-                           output_bus_.get());
+  // The audio service also writes this shared memory, which isn't recorded,
+  // so while recording or replaying the client renders into memory only this
+  // process writes, and the result is copied to the shared memory afterwards.
+  if (recordreplay::IsRecordingOrReplaying() &&
+      !audio_parameters_.IsBitstreamFormat()) {
+    if (!record_replay_bus_) {
+      record_replay_bus_ = media::AudioBus::Create(audio_parameters_);
+    }
+    // Like the audio service zeroing the shared memory, so a render that
+    // writes nothing outputs silence.
+    record_replay_bus_->Zero();
+    render_callback_->Render(delay, delay_timestamp, glitch_info,
+                             record_replay_bus_.get());
+    record_replay_bus_->CopyTo(output_bus_.get());
+  } else {
+    render_callback_->Render(delay, delay_timestamp, glitch_info,
+                             output_bus_.get());
+  }
   stats_reporter_.ReportCallback(delay, glitch_info);
 
   if (audio_parameters_.IsBitstreamFormat()) {
