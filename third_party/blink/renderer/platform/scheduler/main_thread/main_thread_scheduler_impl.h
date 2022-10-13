@@ -15,6 +15,7 @@
 #include "base/metrics/single_sample_metrics.h"
 #include "base/observer_list.h"
 #include "base/profiler/sample_metadata.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "base/task/sequence_manager/task_queue.h"
 #include "base/task/sequence_manager/task_time_observer.h"
@@ -55,6 +56,8 @@
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
+
+#include "base/record_replay.h"
 
 namespace base {
 class LazyNow;
@@ -748,7 +751,9 @@ class PLATFORM_EXPORT MainThreadSchedulerImpl
   using TaskQueueVoterMap ALLOW_DISCOURAGED_TYPE("TODO(crbug.com/1404327)") =
       std::map<scoped_refptr<MainThreadTaskQueue>,
                std::unique_ptr<
-                   base::sequence_manager::TaskQueue::QueueEnabledVoter>>;
+                   base::sequence_manager::TaskQueue::QueueEnabledVoter>,
+               recordreplay::CompareRefptrByPointerId<
+                   scoped_refptr<MainThreadTaskQueue>>>;
 
   TaskQueueVoterMap task_runners_;
 
@@ -860,7 +865,7 @@ class PLATFORM_EXPORT MainThreadSchedulerImpl
 
     WTF::Vector<AgentGroupSchedulerScope> agent_group_scheduler_scope_stack;
 
-    std::unique_ptr<power_scheduler::PowerModeVoter> audible_power_mode_voter;
+    recordreplay::unique_leaky_ptr<power_scheduler::PowerModeVoter> audible_power_mode_voter;
 
     std::unique_ptr<TaskAttributionTracker> task_attribution_tracker;
     Persistent<HeapHashSet<WeakMember<AgentGroupSchedulerImpl>>>
