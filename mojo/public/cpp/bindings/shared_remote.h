@@ -20,6 +20,8 @@
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/bindings/runtime_features.h"
 
+#include "base/record_replay.h"
+
 namespace mojo {
 
 namespace internal {
@@ -183,6 +185,16 @@ class SharedRemoteBase
 
     void DeleteOnCorrectThread() const {
       if (!task_runner_->RunsTasksInCurrentSequence()) {
+        // Sequenced task runners don't support posting tasks at non-deterministic
+        // points when recording/replaying, so leak the remote instead.
+        if (recordreplay::AreEventsDisallowed() &&
+            recordreplay::FeatureEnabled("leak-references", "RemoteWrapper::DeleteOnCorrectThread")) {
+          // Skip-delete never runs ~InterfacePtrState*; arm flag so Invoker
+          // guards see the IEC MultiplexRouter still holds.
+          remote_.record_replay_leak();
+          return;
+        }
+
         // NOTE: This is only called when there are no more references to
         // |this|, so binding it unretained is both safe and necessary.
         task_runner_->PostTask(
