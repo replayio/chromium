@@ -290,6 +290,10 @@ class WebContents : public PageNavigator,
     // in WebContents::Create() call, and callers have no chance to set their
     // delegates.
     raw_ptr<WebContentsDelegate> delegate = nullptr;
+
+    // Indicates that the content should be recorded by the Record Replay
+    // framework.
+    bool record_replay_for_recording = false;
   };
 
   // Token that causes input to be blocked on this WebContents for at least as
