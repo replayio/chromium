@@ -112,6 +112,8 @@
 #include "third_party/boringssl/src/include/openssl/ssl.h"
 #include "third_party/inspector_protocol/crdtp/json.h"
 
+#include "base/record_replay.h"
+
 using crdtp::SpanFrom;
 using crdtp::json::ConvertCBORToJSON;
 
@@ -1490,6 +1492,7 @@ void InspectorNetworkAgent::PrepareRequest(DocumentLoader* loader,
       request.SetDevToolsStackId(stack_id);
     }
   }
+
   if (!accepted_encodings_.IsEmpty()) {
     scoped_refptr<base::RefCountedData<base::flat_set<net::SourceStreamType>>>
         accepted_stream_types = request.GetDevToolsAcceptedStreamTypes();
@@ -1653,8 +1656,10 @@ void InspectorNetworkAgent::DidReceiveData(uint64_t identifier,
     }
   }
 
+  double timestamp = base::TimeTicks::Now().since_origin().InSecondsF();
+
   GetFrontend()->dataReceived(
-      request_id, base::TimeTicks::Now().since_origin().InSecondsF(),
+      request_id, timestamp,
       static_cast<int>(data.size()),
       static_cast<int>(
           resources_data_->GetAndClearPendingEncodedDataLength(request_id)),
@@ -1691,8 +1696,10 @@ void InspectorNetworkAgent::DidFinishLoading(
   int pending_encoded_data_length = static_cast<int>(
       resources_data_->GetAndClearPendingEncodedDataLength(request_id));
   if (pending_encoded_data_length > 0) {
+    double timestamp = base::TimeTicks::Now().since_origin().InSecondsF();
+
     GetFrontend()->dataReceived(
-        request_id, base::TimeTicks::Now().since_origin().InSecondsF(), 0,
+        request_id, timestamp, 0,
         pending_encoded_data_length);
   }
 
@@ -2386,6 +2393,10 @@ void InspectorNetworkAgent::getResponseBody(
   bool base64_encoded;
   protocol::Response response =
       GetResponseBody(request_id, &content, &base64_encoded);
+
+  recordreplay::Assert("[RUN-2194] InspectorNetworkAgent::getResponseBody %d",
+                       (int)response.Code());
+
   if (response.IsSuccess()) {
     callback->sendSuccess(content, base64_encoded);
   } else {
