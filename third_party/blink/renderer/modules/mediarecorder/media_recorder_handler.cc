@@ -17,6 +17,7 @@
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/record_replay.h"
 #include "base/system/sys_info.h"
 #include "base/task/bind_post_task.h"
 #include "base/task/sequenced_task_runner.h"
@@ -230,6 +231,11 @@ bool MediaRecorderHandler::CanSupportMimeType(const String& type,
 
   std::vector<std::string> codecs_list;
   media::SplitCodecs(web_codecs.Utf8(), &codecs_list);
+  const bool no_video_codecs =
+      video && recordreplay::IsRecordingOrReplaying("no-video");
+  if (no_video_codecs && codecs_list.empty())
+    return false;
+
 
   for (const auto& codec : codecs_list) {
     const auto profile = VideoStringToCodecProfile(String(codec));
@@ -321,6 +327,14 @@ bool MediaRecorderHandler::CanSupportMimeTypeForCodec(const String& type,
     }
   }
 
+  // While recording/replaying no video encoder is available: |video| types
+  // only support audio codecs, and need them listed because their default
+  // codecs include a video one.
+  const bool no_video_codecs =
+      video && recordreplay::IsRecordingOrReplaying("no-video");
+  if (no_video_codecs) {
+    relevant_codecs = kAudioCodecs;
+  }
   // For `video/x-matroska`, `video/webm`, and `audio/webm`, trim the content
   // after first '.' to do the case insensitive match based on historical
   // logic. For `video/mp4`, and `audio/mp4`, preserve the whole string to do
