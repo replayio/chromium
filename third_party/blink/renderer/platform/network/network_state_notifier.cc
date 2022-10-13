@@ -278,11 +278,35 @@ void NetworkStateNotifier::NotifyObservers(ObserverListMap& map,
                                            const NetworkState& state) {
   DCHECK(IsMainThread());
   base::AutoLock locker(lock_);
-  for (const auto& entry : map) {
-    entry.value->PostTask(
+
+  // The map's iteration order follows the hash of the observer pointers, which
+  // a replay does not reproduce.  Post in an order keyed by the task runner's
+  // pointer id instead, as this did before the map was keyed by the observer.
+  std::vector<std::pair<NetworkStateObserver*,
+                        scoped_refptr<base::SingleThreadTaskRunner>>>
+      observers;
+  for (const auto& entry : map)
+    observers.push_back(std::make_pair(entry.key, entry.value));
+  std::sort(observers.begin(), observers.end(),
+            [](const auto& a, const auto& b) {
+              // Observers sharing a task runner still need a total order, or
+              // std::sort -- which is not stable -- leaves them in the map's
+              // pointer-hash order.  See RecordReplayObserverId().
+              using RunnerLess = recordreplay::CompareRefptrByPointerId<
+                  scoped_refptr<base::SingleThreadTaskRunner>>;
+              if (RunnerLess()(a.second, b.second))
+                return true;
+              if (RunnerLess()(b.second, a.second))
+                return false;
+              return a.first->RecordReplayObserverId() <
+                     b.first->RecordReplayObserverId();
+            });
+
+  for (const auto& entry : observers) {
+    entry.second->PostTask(
         FROM_HERE,
         base::BindOnce(&NetworkStateNotifier::NotifyObserverOnTaskRunner,
-                       base::Unretained(this), base::UnsafeDangling(entry.key),
+                       base::Unretained(this), base::UnsafeDangling(entry.first),
                        type, state));
   }
 }
