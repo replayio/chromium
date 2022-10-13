@@ -1,0 +1,3330 @@
+// Copyright 2021 Record Replay Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
+
+#include "v8/third_party/inspector_protocol/crdtp/json.h"
+#include "v8/third_party/inspector_protocol/crdtp/serializable.h"
+
+#include "third_party/inspector_protocol/crdtp/json.h"
+#include "third_party/inspector_protocol/crdtp/serializable.h"
+
+#include "base/base64.h"
+#include "base/json/json_reader.h"
+#include "base/json/json_writer.h"
+#include "base/path_service.h"
+#include "base/process/process_handle.h"
+#include "base/record_replay.h"
+#include "base/record_replay_paint_surface.h"
+#include "base/record_replay_render_interface.h"
+#include "content/public/renderer/render_thread.h"
+#include "content/public/renderer/v8_value_converter.h"
+#include "third_party/blink/renderer/bindings/core/v8/serialization/serialized_script_value.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_css_style_declaration.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_document.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_element.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_node.h"
+#include "third_party/blink/renderer/core/css/css_style_declaration.h"
+#include "third_party/blink/renderer/core/dom/document.h"
+#include "third_party/blink/renderer/core/dom/dom_node_ids.h"
+#include "third_party/blink/renderer/core/dom/events/custom_event.h"
+#include "third_party/blink/renderer/core/frame/local_dom_window.h"
+#include "third_party/blink/renderer/core/frame/settings.h"
+#include "third_party/blink/renderer/core/inspector/inspected_frames.h"
+#include "third_party/blink/renderer/core/inspector/inspector_css_agent.h"
+#include "third_party/blink/renderer/core/inspector/inspector_dom_agent.h"
+#include "third_party/blink/renderer/core/inspector/inspector_dom_debugger_agent.h"
+#include "third_party/blink/renderer/core/inspector/inspector_network_agent.h"
+#include "third_party/blink/renderer/core/inspector/inspector_resource_container.h"
+#include "third_party/blink/renderer/core/inspector/inspector_resource_content_loader.h"
+#include "third_party/blink/renderer/core/inspector/main_thread_debugger.h"
+#include "third_party/blink/renderer/core/inspector/resolve_node.h"
+#include "third_party/blink/renderer/core/page/page.h"
+#include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
+#include "third_party/blink/renderer/platform/bindings/v8_binding.h"
+#include "third_party/blink/renderer/platform/bindings/v8_dom_wrapper.h"
+#include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
+#include "third_party/blink/renderer/platform/fonts/font_cache.h"
+#include "third_party/blink/renderer/platform/heap/persistent.h"
+#include "third_party/blink/renderer/platform/weborigin/security_origin.h"
+#include "third_party/inspector_protocol/crdtp/maybe.h"
+#include "v8/include/v8-inspector.h"
+
+#include <array>
+#include <cinttypes>
+#include <cmath>
+#include <fstream>
+#include <string>
+#include <unordered_set>
+#include <vector>
+#include "crypto/secure_hash.h"
+#include "crypto/sha2.h"
+
+#ifndef OS_WIN
+static const char DirectorySeparator = '/';
+#else
+static const char DirectorySeparator = '\\';
+#endif
+
+static const char *AnnotationHookJSName = "__RECORD_REPLAY_ANNOTATION_HOOK__";
+
+namespace v8 {
+
+extern void FunctionCallbackRecordReplaySetCommandCallback(const FunctionCallbackInfo<Value>& args);
+extern void FunctionCallbackRecordReplaySetClearPauseDataCallback(const FunctionCallbackInfo<Value>& callArgs);
+extern void FunctionCallbackRecordReplayAddNewScriptHandler(const FunctionCallbackInfo<Value>& args);
+extern void FunctionCallbackRecordReplayGetScriptSource(const FunctionCallbackInfo<Value>& args);
+
+namespace internal {
+
+extern int RecordReplayObjectId(v8::Isolate* isolate, v8::Local<v8::Context> cx,
+                                v8::Local<v8::Value> object, bool allow_create);
+extern void RecordReplayConfirmObjectHasId(v8::Isolate* isolate,
+                                           v8::Local<v8::Context> cx,
+                                           v8::Local<v8::Value> object);
+extern v8::Local<v8::Object> RecordReplayGetBytecode(
+    v8::Isolate* isolate_,
+    v8::Local<v8::Object> paramsObj);
+
+extern int gPauseContextGroupId;
+std::string RecordReplayContextAddressToken(v8::Isolate* isolate,
+                                            uintptr_t ctxAddr, bool includeId);
+
+} // namespace internal
+} // namespace v8
+
+#define CDPERROR_MISSINGCONTEXT 1001
+#define CDPERROR_NOTALIVE 1002
+
+namespace blink {
+
+// This URL will prevent the script from being reported to the recorder.
+constexpr const char* kInternalScriptURL = "record-replay-internal";
+
+// using RemoteObjectIdTypeRaw = v8_inspector::String16;
+// The actual type for RemoteObjectId
+using RemoteObjectIdTypeRaw = std::u16string;
+
+// The more convenient type that we use
+using RemoteObjectIdType = WTF::String;
+
+extern "C" void V8RecordReplaySetDefaultContext(v8::Isolate* isolate, v8::Local<v8::Context> cx);
+extern "C" uintptr_t V8RecordReplayGetDefaultContextAddress(v8::Isolate* isolate);
+extern "C" void V8RecordReplayFinishRecording();
+extern "C" void V8RecordReplaySetCrashReason(const char* reason);
+extern "C" char* V8RecordReplayReadAssetFileContents(const char* aPath, size_t* aLength);
+extern "C" void V8RecordReplayOnConsoleMessage(size_t bookmark);
+extern "C" void V8RecordReplayAddMetadata(const char* jsonString);
+extern "C" void V8RecordReplaySetAPIObjectIdCallback(int (*callback)(v8::Local<v8::Object>));
+extern "C" void V8RecordReplayRegisterBrowserEventCallback(
+  void (*callback)(const char* name, const char* payload)
+);
+extern "C" bool V8RecordReplayCurrentReturnValue(v8::Local<v8::Value>* object);
+extern "C" uint64_t* V8RecordReplayGetProgressCounter();
+
+static const char REPLAY_CDT_PAUSE_OBJECT_GROUP[] =
+    "REPLAY_CDT_PAUSE_OBJECT_GROUP";
+
+static bool IsCommandHandlingEnabledWhenRecording() {
+  return !recordreplay::FeatureEnabled("replay-only-command-handling");
+}
+
+static bool IsCommandHandlingEnabled() {
+  return recordreplay::IsReplaying() ||
+         IsCommandHandlingEnabledWhenRecording();
+}
+
+static LocalFrame* GetLocalFrameRoot(v8::Isolate* isolate) {
+  LocalDOMWindow* currentWindow = CurrentDOMWindow(isolate);
+
+  if (!currentWindow) {
+    recordreplay::Print("[RuntimeError] GetLocalFrameRoot: no window.");
+    return nullptr;
+  }
+
+  LocalFrame* f = currentWindow->GetFrame();
+  if (!f || f->IsDetached() || f->IsProvisional()) {
+    recordreplay::Print(
+        "[RuntimeError] GetLocalFrameRoot: window has no usable frame. "
+        "win=%d frame=%d isDetached=%d isProvisional=%d "
+        "isMainFrame=%d isLocalRoot=%d url=%s",
+        currentWindow->RecordReplayId(), (f ? f->RecordReplayId() : -1),
+        f ? f->IsDetached() : -1, f ? f->IsProvisional() : -1,
+        f ? f->IsMainFrame() : -1, f ? f->IsLocalRoot() : -1,
+        (f && f->GetDocument())
+            ? f->GetDocument()->Url().GetString().Utf8().c_str()
+            : "<no-doc>");
+    return nullptr;
+  }
+
+  LocalFrame& root = f->LocalFrameRoot();
+
+  if (root.IsDetached() || root.IsProvisional()) {
+    recordreplay::Print(
+        "[RuntimeError] GetLocalFrameRoot: root is detached or provisional "
+        "frame=%d.",
+        root.RecordReplayId());
+    return nullptr;
+  }
+
+  return &root;
+}
+
+
+class InspectorData {
+public:
+  // Nothing else references the agents and frames the command handlers
+  // create, so these roots keep them alive across GCs during a pause, which
+  // would otherwise free them while this global still points at them.
+  v8::Isolate* isolate;
+  Persistent<InspectorDOMAgent> inspectorDomAgent;
+  Persistent<InspectorDOMDebuggerAgent> inspectorDomDebuggerAgent;
+  Persistent<InspectorNetworkAgent> inspectorNetworkAgent;
+  Persistent<InspectorCSSAgent> inspectorCssAgent;
+  Persistent<InspectedFrames> inspectedFrames;
+  v8_inspector::V8InspectorSession* inspectorSession;
+
+  InspectorData(v8::Isolate* i) {
+    isolate = i;
+    inspectorDomAgent = nullptr;
+    inspectorDomDebuggerAgent = nullptr;
+    inspectorNetworkAgent = nullptr;
+    inspectorCssAgent = nullptr;
+    inspectedFrames = nullptr;
+    inspectorSession = nullptr;
+  }
+
+  LocalFrame* GetLocalFrameRoot() const { return blink::GetLocalFrameRoot(isolate); }
+};
+
+static LocalFrame* gRootLocalFrame = nullptr;
+
+typedef std::unordered_map<int, InspectorData*> ContextGroupIdInspectorMap;
+
+std::unordered_map<v8::Isolate*, ContextGroupIdInspectorMap*>* gInspectorData = nullptr;
+std::unordered_map<v8::Isolate*, v8_inspector::V8Inspector*>* gV8Inspectors = nullptr;
+
+static std::string ReadReplayAssetFile(const char* filename, size_t& len) {
+  base::FilePath binPath;
+  std::string assetsDir;
+
+  if (getenv("RECORD_REPLAY_ASSETS_DIRECTORY")) {
+    assetsDir = getenv("RECORD_REPLAY_ASSETS_DIRECTORY");
+  } else if (base::PathService::Get(base::FILE_EXE, &binPath)) {
+    // PathService::Get(base::DIR_EXE, result);
+    auto assetRoot = binPath.DirName();
+#if BUILDFLAG(IS_MAC)
+    // NOTE: We have to go up by 9 directories on Mac -
+    // E.g.:
+    // Replay-Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/replay-assets/replay_sourcemap_handler.js
+    assetRoot = assetRoot.AppendASCII("../../../../../../../../..");
+#endif
+    assetsDir = assetRoot.AppendASCII("replay-assets").AsUTF8Unsafe();
+  }
+  if (!assetsDir.length()) {
+    recordreplay::Crash("ReadReplayAssetFile failed: Neither base::FILE_EXE nor RECORD_REPLAY_ASSETS_DIRECTORY provided.");
+  }
+  std::string fpath = assetsDir + std::string("/") + filename;
+  std::ifstream ifs(fpath);
+  std::stringstream ss;
+  ss << ifs.rdbuf();
+  std::string s = ss.str();
+  len = s.length();
+  recordreplay::Print("ReadReplayAssetFile from '%s' (%zu)",
+    fpath.c_str(),
+    len);
+  if (!len) {
+    recordreplay::Crash("ReadReplayAssetFile (\"%s\") failed: %s",
+      fpath.c_str(),
+      strerror(errno));
+  }
+  return s;
+}
+
+static String ReadReplayAssetFile(const char* fname) {
+  size_t len;
+
+  // Important: Treat as UTF-8.
+  String result = String::FromUTF8(ReadReplayAssetFile(fname, len).c_str(), len);
+  if (!len) {
+    recordreplay::Crash("ReadReplayAssetFile failed: %s", fname);
+  }
+  return result;
+}
+
+static String ReadReplayCommandAssetFile(const char* fname) {
+  size_t len;
+
+  // Important: Treat as UTF-8.
+  String result = String::FromUTF8(
+    IsCommandHandlingEnabledWhenRecording()
+      // Recording + Replay.
+      ? ReadReplayAssetFile(fname, len).c_str()
+      // Replay only.
+      : V8RecordReplayReadAssetFileContents(fname, &len),
+    len
+  );
+  if (!len) {
+    recordreplay::Crash("ReadReplayAssetFile failed: %s", fname);
+  }
+  return result;
+}
+
+static String ReadReplaySourcemapHandlerScript() {
+  return ReadReplayAssetFile("replay_sourcemap_handler.js");
+}
+
+static String ReadReplayCommandHandlerScript() {
+  return ReadReplayCommandAssetFile("replay_command_handlers.js");
+}
+
+// Script that injects React DevTools "stub" functions to capture
+// marker annotations while recording, for use in later processing
+const char* gReactDevtoolsScript = R""""(
+//js
+(() => {
+
+const stubFiberRoots = {};
+const unmountedFibersByRenderer = {};
+const unmountedFiberAlternatesByRenderer = {};
+const unmountedFiberLinksByRenderer = {};
+
+const stubHook = {
+  isStub: true,
+  supportsFiber: true,
+  inject,
+  onCommitFiberUnmount,
+  onCommitFiberRoot,
+  onPostCommitFiberRoot,
+  renderers: new Map(),
+};
+
+
+function getFiberRootsSetForRenderer(rendererID) {
+  if (!stubFiberRoots[rendererID]) {
+    stubFiberRoots[rendererID] = new Set();
+  }
+
+  return stubFiberRoots[rendererID];
+}
+
+function getUnmountedFibersSetForRenderer(rendererID) {
+  if (!unmountedFibersByRenderer[rendererID]) {
+    unmountedFibersByRenderer[rendererID] = new Set();
+  }
+
+  return unmountedFibersByRenderer[rendererID];
+}
+
+function getUnmountedFiberAlternatesForRenderer(rendererID) {
+  if (!unmountedFiberAlternatesByRenderer[rendererID]) {
+    unmountedFiberAlternatesByRenderer[rendererID] = new Map();
+  }
+
+  return unmountedFiberAlternatesByRenderer[rendererID];
+}
+
+function getUnmountedFiberLinksForRenderer(rendererID) {
+  if (!unmountedFiberLinksByRenderer[rendererID]) {
+    unmountedFiberLinksByRenderer[rendererID] = new Map();
+  }
+
+  return unmountedFiberLinksByRenderer[rendererID];
+}
+
+window.__REACT_DEVTOOLS_SAVED_RENDERERS__ = [];
+window.__REACT_DEVTOOLS_STUB_FIBER_ROOTS = stubFiberRoots;
+
+Object.defineProperty(window, "__REACT_DEVTOOLS_GLOBAL_HOOK__", {
+  configurable: true,
+  enumerable: false,
+  get() {
+    return stubHook;
+  }
+});
+
+let uidCounter = 0;
+
+function inject(renderer) {
+  // Declare these enum strings in scope for later routine use
+  const annotationType = "inject";
+
+  const id = ++uidCounter;
+  window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook:v1:" + annotationType, "");
+  window.__REACT_DEVTOOLS_SAVED_RENDERERS__.push(renderer);
+  return id;
+}
+
+function onCommitFiberUnmount(rendererID, fiber) {
+  const annotationType = "commit-fiber-unmount"
+
+  // Unmounts are always one fiber at a time during the commit phase.
+  // Stash the unmounted fibers here, so we can map them to persistent
+  // object IDs inside of `onCommitFiberRoot` processing in the routine.
+  const unmountedFibersSet = getUnmountedFibersSetForRenderer(rendererID);
+  unmountedFibersSet.add(fiber);
+
+  let unmountedFiberAlternates;
+  if (fiber.alternate) {
+    unmountedFiberAlternates = getUnmountedFiberAlternatesForRenderer(rendererID);
+    unmountedFiberAlternates.set(fiber, fiber.alternate);
+  }
+
+  // React <= 17 also cuts the deleted subtree's links and clears its state
+  // before calling onCommitFiberRoot (React 18+ only does that after passive
+  // effects). The routine needs the tree as it was before the commit, so save
+  // what React is going to clear.
+  getUnmountedFiberLinksForRenderer(rendererID).set(fiber, {
+    child: fiber.child,
+    sibling: fiber.sibling,
+    return: fiber.return,
+    memoizedProps: fiber.memoizedProps,
+    memoizedState: fiber.memoizedState,
+    stateNode: fiber.stateNode,
+  });
+
+  window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook:v1:" + annotationType, "");
+}
+
+// eslint-disable-next-line no-unused-vars
+function onCommitFiberRoot(rendererID, root, priorityLevel) {
+  // The "commit" handler should be the only one the routine needs to do the work as of 2023-05-01.
+  // We capture unmounted fibers in the unmount handler above, and the routine
+  // will process them when we evaluate at the commit annotation point.
+  // The others mostly exist for hypothetical completeness.
+  const annotationType = "commit-fiber-root";
+
+  const mountedRoots = getFiberRootsSetForRenderer(rendererID);
+  const current = root.current;
+  const isKnownRoot = mountedRoots.has(root);
+  // Keep track of mounted roots so we can hydrate when DevTools connect.
+  const isUnmounting = current.memoizedState == null || current.memoizedState.element == null;
+
+  if (!isKnownRoot && !isUnmounting) {
+    mountedRoots.add(root);
+  } else if (isKnownRoot && isUnmounting) {
+    mountedRoots.delete(root);
+  }
+
+  // Get these so it's in scope in the routine eval, and we can clear it after the annotation
+  const unmountedFibersSet = getUnmountedFibersSetForRenderer(rendererID);
+  const unmountedFiberAlternates = getUnmountedFiberAlternatesForRenderer(rendererID);
+  const unmountedFiberLinks = getUnmountedFiberLinksForRenderer(rendererID);
+
+  window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook:v1:" + annotationType, "");
+
+  for (const fiber of unmountedFibersSet) {
+    unmountedFiberAlternates.delete(fiber);
+  }
+  unmountedFiberLinks.clear();
+  unmountedFibersSet.clear();
+}
+
+// eslint-disable-next-line no-unused-vars
+function onPostCommitFiberRoot(rendererID, root) {
+  const annotationType = "post-commit-fiber-root";
+  window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook:v1:" + annotationType, "");
+}
+
+})();
+
+)"""";
+
+
+
+// Script that injects Redux DevTools "stub" functions to capture
+// marker annotations while recording, for use in later processing
+const char* gReduxDevtoolsScript = R""""(
+//js
+(() => { // webpackBootstrap
+/******/ 	"use strict";
+var __webpack_exports__ = {};
+
+;// CONCATENATED MODULE: ./src/pageScript/api/generateInstanceId.ts
+let id = 0;
+function generateId(instanceId) {
+  return instanceId || ++id;
+}
+;// CONCATENATED MODULE: ./src/pageScript/api/filters.ts
+const FilterState = {
+  DO_NOT_FILTER: 'DO_NOT_FILTER',
+  DENYLIST_SPECIFIC: 'DENYLIST_SPECIFIC',
+  ALLOWLIST_SPECIFIC: 'ALLOWLIST_SPECIFIC'
+};
+const noFiltersApplied = localFilter => !localFilter && (!window.devToolsOptions || !window.devToolsOptions.filter || window.devToolsOptions.filter === FilterState.DO_NOT_FILTER);
+function isFiltered(action, localFilter) {
+  if (noFiltersApplied(localFilter) || typeof action !== 'string' && typeof action.type.match !== 'function') {
+    return false;
+  }
+  const {
+    allowlist,
+    denylist
+  } = localFilter || window.devToolsOptions || {};
+  const actionType = action.type || action;
+  return allowlist && !actionType.match(allowlist) || denylist && actionType.match(denylist);
+}
+;// CONCATENATED MODULE: ./src/pageScript/api/index.ts
+
+
+const listeners = {};
+function isArray(arg) {
+  return Array.isArray(arg);
+}
+function getLocalFilter(config) {
+  const denylist = config.actionsDenylist ?? config.actionsBlacklist;
+  const allowlist = config.actionsAllowlist ?? config.actionsWhitelist;
+  if (denylist || allowlist) {
+    return {
+      allowlist: isArray(allowlist) ? allowlist.join('|') : allowlist,
+      denylist: isArray(denylist) ? denylist.join('|') : denylist
+    };
+  }
+  return undefined;
+}
+let latestDispatchedActions = {};
+function saveReplayAnnotation(action, state, connectionType, extractedConfig, config) {
+  const {
+    instanceId
+  } = extractedConfig;
+  window.__RECORD_REPLAY_ANNOTATION_HOOK__('redux-devtools-setup', JSON.stringify({
+    type: 'action',
+    actionType: action.type,
+    connectionType,
+    instanceId
+  }));
+  latestDispatchedActions[instanceId] = {
+    action,
+    state,
+    extractedConfig,
+    config
+  };
+}
+function sendMessage(action, state, preConfig = {}, _instanceId, _name) {
+  if (!action || !action.type) {
+    action = {
+      type: 'update'
+    };
+  } else if (typeof action === 'string') {
+    action = {
+      type: action
+    };
+  }
+  const [config, extractedExtensionConfig] = extractExtensionConfig(preConfig);
+  saveReplayAnnotation(action, state, 'generic', extractedExtensionConfig, config);
+}
+function extractExtensionConfig(preConfig) {
+  const config = preConfig || {};
+  const instanceId = generateId(config.instanceId);
+  if (!config.instanceId) config.instanceId = instanceId;
+  if (!config.name) {
+    config.name = document.title && instanceId === 1 ? document.title : `Instance ${instanceId}`;
+  }
+  const localFilter = getLocalFilter(config);
+  let {
+    stateSanitizer,
+    actionSanitizer,
+    predicate
+  } = config;
+  const extractedExtensionConfig = {
+    instanceId: instanceId,
+    stateSanitizer,
+    actionSanitizer,
+    predicate,
+    localFilter,
+    isFiltered: isFiltered
+  };
+  return [config, extractedExtensionConfig];
+}
+function connect(preConfig) {
+  const [config, extractedExtensionConfig] = extractExtensionConfig(preConfig);
+  const {
+    instanceId
+  } = extractedExtensionConfig;
+  const subscribe = listener => {
+    if (!listener) return undefined;
+    return function unsubscribe() {};
+  };
+  const unsubscribe = () => {
+    delete listeners[instanceId];
+  };
+  const send = (action, state) => {
+    if (!action) {
+      return;
+    }
+    let amendedAction = action;
+    if (typeof action === 'string') {
+      amendedAction = {
+        type: action
+      };
+    }
+    saveReplayAnnotation(amendedAction, state, 'generic', extractedExtensionConfig, config);
+    return;
+  };
+  const init = (_state, _liftedData) => {
+    window.__RECORD_REPLAY_ANNOTATION_HOOK__('redux-devtools-setup', JSON.stringify({
+      type: 'init',
+      connectionType: 'generic',
+      instanceId
+    }));
+  };
+  const error = (_payload) => {};
+  return {
+    init,
+    subscribe,
+    unsubscribe,
+    send,
+    error
+  };
+}
+;// CONCATENATED MODULE: ./src/pageScript/index.ts
+
+
+let stores = {};
+function __REDUX_DEVTOOLS_EXTENSION__(preConfig = {}) {
+  // if (typeof config !== 'object') config = {};
+  if (!window.devToolsOptions) window.devToolsOptions = {};
+  let store;
+  const [config, extractedExtensionConfig] = extractExtensionConfig(preConfig);
+  const {
+    instanceId
+  } = extractedExtensionConfig;
+  function init() {
+    window.__RECORD_REPLAY_ANNOTATION_HOOK__('redux-devtools-setup', JSON.stringify({
+      type: 'init',
+      connectionType: 'redux',
+      instanceId
+    }));
+  }
+  const enhance = () => next => {
+    return (reducer_, initialState_) => {
+      const originalStore = next(reducer_, initialState_);
+      const newStore = {
+        ...originalStore,
+        dispatch: action => {
+          const result = originalStore.dispatch(action);
+          saveReplayAnnotation(action, originalStore.getState(), 'redux', extractedExtensionConfig, config);
+          return result;
+        }
+      };
+
+      // @ts-ignore
+      store = stores[instanceId] = newStore;
+      init();
+      return store;
+    };
+  };
+  return enhance();
+}
+// noinspection JSAnnotator
+window.__REDUX_DEVTOOLS_EXTENSION__ = __REDUX_DEVTOOLS_EXTENSION__;
+window.__REDUX_DEVTOOLS_EXTENSION__.open = () => {};
+window.__REDUX_DEVTOOLS_EXTENSION__.notifyErrors = () => {};
+window.__REDUX_DEVTOOLS_EXTENSION__.send = sendMessage;
+window.__REDUX_DEVTOOLS_EXTENSION__.listen = () => {};
+window.__REDUX_DEVTOOLS_EXTENSION__.connect = connect;
+window.__REDUX_DEVTOOLS_EXTENSION__.disconnect = () => {};
+const extensionCompose = config => (...funcs) => {
+  // @ts-ignore FIXME
+  return (...args) => {
+    const instanceId = generateId(config.instanceId);
+    return [...funcs].reduceRight(
+    // @ts-ignore FIXME
+    (composed, f) => f(composed), __REDUX_DEVTOOLS_EXTENSION__({
+      ...config,
+      instanceId
+    })(...args));
+  };
+};
+function reduxDevtoolsExtensionCompose(...funcs) {
+  if (funcs.length === 0) {
+    return __REDUX_DEVTOOLS_EXTENSION__();
+  }
+  if (funcs.length === 1 && typeof funcs[0] === 'object') {
+    return extensionCompose(funcs[0]);
+  }
+  return extensionCompose({})(...funcs);
+}
+window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ = reduxDevtoolsExtensionCompose;
+/******/ })()
+
+)"""";
+
+const char* gOnNewWindowScript = R""""(
+//js
+(() => {
+  window.__REACT_DEVTOOLS_GLOBAL_HOOK__ = window.top.__REACT_DEVTOOLS_GLOBAL_HOOK__;
+  window.__REDUX_DEVTOOLS_EXTENSION__ = window.top.__REDUX_DEVTOOLS_EXTENSION__;
+  window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ = window.top.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__;
+
+  // TODO: Feels like this cross-context function usage can cause trouble, especially when
+  //      the user pauses inside the iframe's JS and tries to access something inside the iframe via
+  //      __RECORD_REPLAY__?
+  window.__RECORD_REPLAY__ = window.top.__RECORD_REPLAY__;
+  window.__RECORD_REPLAY_ARGUMENTS__ = window.top.__RECORD_REPLAY_ARGUMENTS__;
+  window.__RECORD_REPLAY_ETERNAL_STATE__ = window.top.__RECORD_REPLAY_ETERNAL_STATE__;
+})()
+)"""";
+
+static v8::Local<v8::String> ToV8String(v8::Isolate* isolate, const char* value) {
+  return v8::String::NewFromUtf8(isolate, value,
+                                 v8::NewStringType::kInternalized).ToLocalChecked();
+}
+
+// Define a property that isn't writable, configurable, or enumerable.
+static void DefineProperty(v8::Isolate* isolate, v8::Local<v8::Object> obj,
+                           const char* name, v8::Local<v8::Value> value) {
+  v8::Local<v8::String> name_string = ToV8String(isolate, name);
+  obj->DefineOwnProperty(isolate->GetCurrentContext(), name_string, value,
+                         (v8::PropertyAttribute)(v8::ReadOnly | v8::DontEnum | v8::DontDelete))
+    .Check();
+}
+
+static void SetFunctionProperty(v8::Isolate* isolate, v8::Local<v8::Object> obj,
+                                const char* name, v8::FunctionCallback callback) {
+  v8::Local<v8::Context> context = isolate->GetCurrentContext();
+  v8::Local<v8::FunctionTemplate> function_template =
+    v8::FunctionTemplate::New(isolate, callback, v8::Local<v8::Value>(),
+                              v8::Local<v8::Signature>(), 0,
+                              v8::ConstructorBehavior::kThrow,
+                              v8::SideEffectType::kHasSideEffect);
+  v8::Local<v8::Function> function =
+    function_template->GetFunction(context).ToLocalChecked();
+
+  DefineProperty(isolate, obj, name, function);
+  function->SetName(ToV8String(isolate, name));
+}
+
+static void LogCallback(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsString() &&
+        "must be called with a single string");
+  v8::String::Utf8Value text(args.GetIsolate(), args[0]);
+  recordreplay::Print("%s", *text);
+}
+
+static void LogTraceCallback(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsString() &&
+        "must be called with a single string");
+  v8::String::Utf8Value text(args.GetIsolate(), args[0]);
+  recordreplay::Trace("%s", *text);
+}
+
+// warning(kind, data?): data's own enumerable string-keyed properties become
+// the warning's fields. Non-primitive values are added as their JSON.
+static void LogWarningCallback(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() >= 1 && args.Length() <= 2 && args[0]->IsString() &&
+        "must be called with a kind string and an optional data object");
+  v8::Isolate* isolate = args.GetIsolate();
+  v8::String::Utf8Value kind(isolate, args[0]);
+
+  // Backing storage for the fields' keys and string values, reserved up front
+  // so the c_str() pointers held by the fields stay valid.
+  std::vector<std::string> strings;
+  std::vector<RecordReplayWarningField> fields;
+  if (args.Length() == 2 && args[1]->IsObject()) {
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();
+    v8::Local<v8::Object> data = args[1].As<v8::Object>();
+    v8::Local<v8::Array> names;
+    if (data->GetOwnPropertyNames(
+                context,
+                static_cast<v8::PropertyFilter>(v8::ONLY_ENUMERABLE |
+                                                v8::SKIP_SYMBOLS),
+                v8::KeyConversionMode::kConvertToString)
+            .ToLocal(&names)) {
+      strings.reserve(names->Length() * 2);
+      fields.reserve(names->Length());
+      for (uint32_t i = 0; i < names->Length(); i++) {
+        v8::Local<v8::Value> name;
+        v8::Local<v8::Value> value;
+        if (!names->Get(context, i).ToLocal(&name) ||
+            !data->Get(context, name).ToLocal(&value)) {
+          continue;
+        }
+        strings.push_back(*v8::String::Utf8Value(isolate, name));
+        const char* key = strings.back().c_str();
+        if (value->IsString()) {
+          strings.push_back(*v8::String::Utf8Value(isolate, value));
+          fields.emplace_back(key, strings.back());
+        } else if (value->IsBoolean()) {
+          fields.emplace_back(key, value->BooleanValue(isolate));
+        } else if (value->IsNumber()) {
+          double number = value.As<v8::Number>()->Value();
+          if (std::trunc(number) == number &&
+              std::fabs(number) <= 9007199254740991.0) {
+            fields.emplace_back(key, static_cast<int64_t>(number));
+          } else {
+            fields.emplace_back(key, number);
+          }
+        } else {
+          v8::TryCatch try_catch(isolate);
+          v8::Local<v8::String> json;
+          if (v8::JSON::Stringify(context, value).ToLocal(&json)) {
+            strings.push_back(*v8::String::Utf8Value(isolate, json));
+            fields.emplace_back(key, strings.back());
+          }
+        }
+      }
+    }
+  }
+  recordreplay::Warning(*kind, fields.data(), fields.size());
+}
+
+static void fromJsForceCheckpoint(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 0 && "must be called without arguments");
+  if (recordreplay::IsInReplayCode("forceCheckpoint")) {
+    return;
+  }
+
+  // Use a flushed checkpoint so explicit test checkpoints are not dropped by
+  // the normal time-based checkpoint throttle.
+  recordreplay::NewCheckpointFlushed();
+}
+
+void
+RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
+                                v8::Isolate* isolate) {
+  if (v8::IsMainThread() && IsCommandHandlingEnabled()) {
+    if (!gV8Inspectors) {
+      gV8Inspectors = new std::unordered_map<v8::Isolate*,v8_inspector::V8Inspector*>();
+      gInspectorData = new std::unordered_map<v8::Isolate*, ContextGroupIdInspectorMap*>();
+    }
+
+    gV8Inspectors->insert(std::make_pair(isolate, inspector));
+  }
+}
+
+// Whether the frame that our globally registered script(s)
+// were run in is alive.
+static bool gReplayScriptsAlive = false;
+
+// Whether `frame` is the root frame showing about:blank. That is the tab's
+// initial about:blank once instrumented JS ran in it
+// (RecordReplayOnInstrumentedScriptBeforeFirstCheckpoint),
+// or about:blank shown after a page, e.g. after going back to it. Its window runs
+// our scripts like a root frame's, so that pauses in it work. After a page it
+// takes no checkpoints (see OnRootFrameInit): a recording that ends on it ends
+// with the last page. Only opaque about:blank documents count; one that
+// inherits its initiator's origin is an ordinary replay window.
+static bool IsBlankReplayWindow(LocalFrame* frame) {
+  Document* document = frame->GetDocument();
+  const SecurityOrigin* origin = frame->DomWindow()->GetSecurityOrigin();
+  return frame == gRootLocalFrame && document &&
+         document->Url().IsAboutBlankURL() && origin &&
+         origin->Host().empty();
+}
+
+// Whether `frame` is a tab's page at a data: or file: URL. Their origins have
+// no host, but they are pages like any other: they start the recording when
+// they load, as its first page, and are replay windows after other pages too.
+// Other documents without a host (Chrome's error pages, iframes) aren't.
+static bool IsHostlessPageWindow(LocalFrame* frame) {
+  Document* document = frame->GetDocument();
+  return frame->IsOutermostMainFrame() && document &&
+         (document->Url().ProtocolIsData() || document->Url().IsLocalFile());
+}
+
+bool RecordReplayIsReplayWindow(LocalFrame* frame) {
+  if (!recordreplay::IsRecordingOrReplaying("commands") || !frame ||
+      !frame->DomWindow()) {
+    return false;
+  }
+  // IsOrdinary() excludes internal pages like the in-process <select> popup.
+  if (!frame->GetPage() || !frame->GetPage()->IsOrdinary()) {
+    return false;
+  }
+  const SecurityOrigin* origin = frame->DomWindow()->GetSecurityOrigin();
+  return (origin && !origin->Host().empty()) || IsBlankReplayWindow(frame) ||
+         IsHostlessPageWindow(frame);
+}
+
+bool RecordReplayHasRootFrame() {
+  return !!gRootLocalFrame;
+}
+
+// Whether a root frame that isn't about:blank (a page of the app) ran our
+// replay scripts yet.
+static bool gHadPageRootFrame = false;
+
+// RecordReplayIds of the local roots that ran as ordinary windows while a
+// root's scripts were alive.
+static std::unordered_set<int>& RecordReplayOrdinaryLocalRootIds() {
+  static auto* ids = new std::unordered_set<int>();
+  return *ids;
+}
+
+bool RecordReplayIsRootFrame(LocalFrame* frame) {
+  if (!RecordReplayIsReplayWindow(frame) || !frame->IsLocalRoot()) {
+    return false;
+  }
+  // While the root's scripts are alive, popups and OOPIFs in this renderer
+  // don't take over: they run as ordinary windows, and their contexts going
+  // away leaves the root's scripts alive. A new outermost main frame without
+  // an opener is the tab's next page, which a same-site navigation commits in
+  // this renderer before the old page leaves (into the back/forward cache, or
+  // unloaded). A popup's later documents keep its frame, whose opener the page
+  // may have disowned since.
+  return !gReplayScriptsAlive || frame == gRootLocalFrame ||
+         (frame->IsOutermostMainFrame() && !frame->Opener() &&
+          !RecordReplayOrdinaryLocalRootIds().count(frame->RecordReplayId()));
+}
+
+// Whether `frame` is the root frame our replay scripts are alive in.
+static bool IsAliveRootFrame(LocalFrame* frame) {
+  return gReplayScriptsAlive && frame == gRootLocalFrame &&
+         RecordReplayIsRootFrame(frame);
+}
+
+void RecordReplayBeforeDocumentShutdown(Document& document) {
+  LocalFrame* frame = document.GetFrame();
+  if (!IsAliveRootFrame(frame)) {
+    return;
+  }
+  CHECK(v8::IsMainThread());
+  recordreplay::Print("ReplayScript BeforeDocumentShutdown frame=%d",
+                      frame->RecordReplayId());
+  // Last live document state; must precede SetScriptAlive(false) so the gate
+  // allows it.
+  recordreplay::NewCheckpointFlushed();
+  // Skip initial empty documents: their window can be reused without
+  // ClearContexts or a new ALIVE, so nothing would undo the mute.
+  if (!document.IsInitialEmptyDocument()) {
+    recordreplay::SetScriptAlive(false);
+  }
+}
+
+/**
+ * This is called when our local root frame is about to shut down.
+ */
+void RecordReplayClearContexts(const char* reason, LocalFrame* frame) {
+  CHECK(v8::IsMainThread());
+  if (!IsAliveRootFrame(frame)) {
+    return;
+  }
+  v8::Isolate* isolate = V8PerIsolateData::MainThreadIsolate();
+  recordreplay::Print(
+      "ReplayScript STATUS_CHANGE_UNALIVE - %s %s frame=%d", reason,
+      v8::internal::RecordReplayContextAddressToken(
+          isolate, V8RecordReplayGetDefaultContextAddress(isolate), true)
+          .c_str(),
+      frame->RecordReplayId());
+  gReplayScriptsAlive = false;
+  recordreplay::SetScriptAlive(false);
+}
+
+static void fromJsIsReplayScriptAlive(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  v8::Isolate* isolate = args.GetIsolate();
+  args.GetReturnValue().Set(v8::Number::New(isolate, gReplayScriptsAlive));
+}
+
+static void fromJsHasDiverged(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  v8::Isolate* isolate = args.GetIsolate();
+  args.GetReturnValue().Set(v8::Number::New(isolate, recordreplay::HasDivergedFromRecording()));
+}
+
+// Function to invoke on CDP responses and events.
+static v8::Eternal<v8::Function>* gCDPMessageCallback;
+
+static void SetCDPMessageCallback(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  v8::Isolate* isolate = args.GetIsolate();
+  CHECK(args[0]->IsFunction());
+  v8::Local<v8::Function> callback = args[0].As<v8::Function>();
+  gCDPMessageCallback = new v8::Eternal<v8::Function>(isolate, callback);
+}
+
+static void SendMessageToFrontend(const v8_inspector::StringView& message) {
+  recordreplay::AutoMarkReplayCode mark;
+  recordreplay::AutoDisallowEvents disallow("RecordReplay_SendMessageToFrontend");
+  CHECK(v8::IsMainThread());
+
+  CHECK(gCDPMessageCallback);
+
+  v8::Isolate* isolate = v8::Isolate::GetCurrent();
+  if (!isolate->InContext() || ScriptForbiddenScope::IsScriptForbidden()) {
+    // We're never interested in messages sent at these times.
+    return;
+  }
+
+  v8::HandleScope scope(isolate);
+
+  v8::Local<v8::Context> context = isolate->GetCurrentContext();
+  v8::Local<v8::Value> arg;
+  if (message.is8Bit()) {
+    arg = v8::String::NewFromOneByte(isolate, message.characters8(),
+                                                        v8::NewStringType::kNormal,
+                                                        (int)message.length()).ToLocalChecked();
+  } else {
+    arg = v8::String::NewFromTwoByte(isolate, message.characters16(),
+                                                        v8::NewStringType::kNormal,
+                                                        (int)message.length()).ToLocalChecked();
+  }
+  v8::Local<v8::Function> callback = gCDPMessageCallback->Get(isolate);
+  v8::MaybeLocal<v8::Value> rv = callback->Call(context, v8::Undefined(isolate), 1, &arg);
+  CHECK(!rv.IsEmpty());
+
+  // If we get back a string from the call, report it as an error to the log (in such a way as it
+  // can be recovered by our error reporting), and then crash.
+  v8::Local<v8::Value> result = rv.ToLocalChecked();
+  CHECK(result->IsUndefined() || result->IsString());
+
+  if (result->IsString()) {
+    v8::String::Utf8Value messageValue(isolate, result);
+    std::string messageStr(*messageValue);
+    recordreplay::Crash("CDPMessageCallback FAILED %s:%d %s", "js", 0, messageStr.c_str());
+  }
+}
+
+// Id of CDP requests that C++ sends on its own. The command handlers only
+// expect responses to their own requests, so these responses aren't passed on.
+static constexpr int kRecordReplayInternalCDPRequestId = -1;
+
+struct InspectorChannel final : public v8_inspector::V8Inspector::Channel {
+  void sendResponse(int callId,
+                    std::unique_ptr<v8_inspector::StringBuffer> message) final {
+    if (callId == kRecordReplayInternalCDPRequestId) {
+      return;
+    }
+    SendMessageToFrontend(message->string());
+  }
+  void sendNotification(std::unique_ptr<v8_inspector::StringBuffer> message) final {
+    SendMessageToFrontend(message->string());
+  }
+  void flushProtocolNotifications() final {}
+};
+
+// Nestable override for SendCDPMessage context-group routing.
+// Console → OnConsoleMessage can re-enter via pause evaluate that emits
+// another console API call; a single optional cannot model that.
+// POD stack: no global ctor / exit-time dtor (-Werror).
+static constexpr size_t kMaxContextGroupIdOverrideDepth = 16;
+static int gContextGroupIdForSendCDPMessageStack[kMaxContextGroupIdOverrideDepth];
+static size_t gContextGroupIdForSendCDPMessageDepth = 0;
+
+extern "C" void SetContextGroupIdForSendCDPMessage(int contextGroupId) {
+  CHECK(v8::IsMainThread());
+  CHECK_GT(contextGroupId, 0);
+  CHECK_LT(gContextGroupIdForSendCDPMessageDepth, kMaxContextGroupIdOverrideDepth);
+  gContextGroupIdForSendCDPMessageStack[gContextGroupIdForSendCDPMessageDepth++] =
+      contextGroupId;
+}
+
+extern "C" void ClearContextGroupIdForSendCDPMessage() {
+  CHECK(v8::IsMainThread());
+  CHECK_GT(gContextGroupIdForSendCDPMessageDepth, 0u);
+  gContextGroupIdForSendCDPMessageDepth--;
+}
+
+absl::optional<int> GetCurrentContextGroupIdForIsolate(v8::Isolate* isolate) {
+  LocalFrame* local_frame_root = GetLocalFrameRoot(isolate);
+
+  if (local_frame_root != nullptr) {
+    // Get (do NOT create) a ContextGroupId:
+    return WeakIdentifierMap<LocalFrame>::Identifier(local_frame_root);
+  }
+
+  return absl::optional<int>();
+}
+
+InspectorData* getInspectorFor(v8::Isolate* isolate, int contextGroupId) {
+  InspectorData* data = nullptr;
+  ContextGroupIdInspectorMap* inspectorData;
+
+  CHECK(gInspectorData);
+
+  if (gInspectorData->find(isolate) == gInspectorData->end()) {
+    inspectorData = new ContextGroupIdInspectorMap();
+    gInspectorData->insert(std::make_pair(isolate, inspectorData));
+  } else {
+    inspectorData = (*gInspectorData)[isolate];
+  }
+
+  if (inspectorData->find(contextGroupId) == inspectorData->end()) {
+    data = new InspectorData(isolate);
+    inspectorData->insert(std::pair(contextGroupId, data));
+  } else {
+    data = inspectorData->at(contextGroupId);
+  }
+  return data;
+}
+
+/**
+ * This function makes sure that the session exists and
+ * we are on main thread when accessing it.
+ */
+v8_inspector::V8InspectorSession* getInspectorSession(v8::Isolate* isolate, int contextGroupId) {
+  CHECK(v8::IsMainThread());
+  CHECK(IsCommandHandlingEnabled());
+  CHECK(gV8Inspectors);
+
+  v8_inspector::V8Inspector* inspector = (*gV8Inspectors)[isolate];
+  CHECK(inspector);
+
+  InspectorData* data = getInspectorFor(isolate, contextGroupId);
+
+  if (!data->inspectorSession) {
+    // RecorderCommandHandling creates the session at record and replay the
+    // same way — not divergent. Only Mark+Disallow when the session is
+    // replay-only; AreEventsDisallowed() then seeds m_replay_owned.
+    auto connect = [&]() {
+      return inspector
+          ->connect(contextGroupId, new InspectorChannel(),
+                    v8_inspector::StringView(),
+                    v8_inspector::V8Inspector::kFullyTrusted)
+          .release();
+    };
+    if (IsCommandHandlingEnabledWhenRecording()) {
+      data->inspectorSession = connect();
+    } else {
+      recordreplay::AutoMarkReplayCode mark;
+      recordreplay::AutoDisallowEvents disallow(
+          "RecordReplayRegisterV8Inspector");
+      data->inspectorSession = connect();
+    }
+  }
+  return data->inspectorSession;
+}
+
+// Console API calls and execution contexts are reported only to sessions of
+// the context group they belong to that enabled the Runtime domain. The
+// command handlers enable it in the root's group; other local roots (popups,
+// OOPIFs) have groups of their own.
+static void RecordReplayEnableRuntimeForLocalRoot(v8::Isolate* isolate,
+                                                  LocalFrame* frame) {
+  recordreplay::AutoMarkReplayCode mark;
+  recordreplay::AutoDisallowEvents disallow(
+      "RecordReplayEnableRuntimeForLocalRoot");
+  std::string message =
+      "{\"id\":" + std::to_string(kRecordReplayInternalCDPRequestId) +
+      ",\"method\":\"Runtime.enable\"}";
+  getInspectorSession(isolate, WeakIdentifierMap<LocalFrame>::Identifier(frame))
+      ->dispatchProtocolMessage(v8_inspector::StringView(
+          reinterpret_cast<const uint8_t*>(message.c_str()), message.length()));
+}
+
+static int GetBlinkPersistentId(v8::Local<v8::Object> object) {
+  v8::Isolate* isolate = v8::Isolate::GetCurrent();
+
+  // Provide a unique id for Blink Objects.
+  if (V8DOMWrapper::IsWrapper(isolate, object)) {
+    ScriptWrappable* wrappable = ToScriptWrappable(object);
+    return wrappable->RecordReplayId();
+  }
+
+  return 0;
+}
+
+// Get persistent id of objects that we are currently tracking.
+static int GetPersistentId(v8::Local<v8::Object> object) {
+  v8::Isolate* isolate = v8::Isolate::GetCurrent();
+  return v8::internal::RecordReplayObjectId(isolate,
+                                            isolate->GetCurrentContext(),
+                                            object,
+                                            /* allow_create */ false);
+}
+
+/**
+ * This only supports V8 CDP commands.
+ * That is because we do not have access to a complete DevToolsSession
+ * (A fully connected session in turn would use the UberDispatcher to distribute
+ * arbitrary commands to all parts of Chromium.)
+ * That is because a full session (i) might add a lot of overhead, and/or
+ * (ii) cause many more types of divergences.
+ * That is why we would need to create individual Inspectors/agents (e.g. InspectorDOMAgent) as needed instead.
+ * However, we might also opt to forego that option entirely, and do it all manually, since many inspectors/agents
+ * do not provide too much value if they are not hooked up to a `DevToolsSession` and the `UberDispatcher`.
+ */
+static void SendCDPMissingContextError(v8::Isolate* isolate,
+                                       v8::Local<v8::Value> message_arg) {
+  if (gCDPMessageCallback == nullptr) {
+    return;
+  }
+  // Ensure the message has an ID. If not, handle the error in JavaScript.
+  v8::String::Utf8Value inmessage(isolate, message_arg);
+  std::string nmessage(*inmessage);
+  absl::optional<base::Value> jsonMessage = base::JSONReader::Read(nmessage);
+  base::Value::Dict* messageDict = jsonMessage->GetIfDict();
+  CHECK(messageDict != nullptr);
+  CHECK(messageDict->FindInt("id").has_value());
+
+  std::unique_ptr<base::DictionaryValue> error(new base::DictionaryValue);
+  error->SetStringKey("message", "[RUN-2600] No context group available for Isolate.");
+  error->SetIntKey("code", CDPERROR_MISSINGCONTEXT);
+
+  base::DictionaryValue result;
+  result.SetKey("error", base::Value::FromUniquePtrValue(std::move(error)));
+  result.SetIntKey("id", *(messageDict->FindInt("id")));
+
+  std::string json;
+  base::JSONWriter::Write(result, &json);
+  auto message = v8_inspector::StringView((const uint8_t*)json.c_str(), json.length());
+  SendMessageToFrontend(message);
+}
+
+static absl::optional<int> ContextGroupIdFromInspectorContextId(
+    v8::Isolate* isolate,
+    int context_id) {
+  if (context_id <= 0 || !gV8Inspectors)
+    return absl::nullopt;
+
+  auto it = gV8Inspectors->find(isolate);
+  if (it == gV8Inspectors->end() || !it->second)
+    return absl::nullopt;
+
+  v8::HandleScope handle_scope(isolate);
+  v8::Local<v8::Context> context;
+  if (!it->second->contextById(context_id).ToLocal(&context))
+    return absl::nullopt;
+
+  LocalDOMWindow* window =
+      DynamicTo<LocalDOMWindow>(ToExecutionContext(context));
+  LocalFrame* frame = window ? window->GetFrame() : nullptr;
+  if (!frame)
+    return absl::nullopt;
+
+  // Same map GetCurrentContextGroupIdForIsolate uses; do not create.
+  LocalFrame& root = frame->LocalFrameRoot();
+  if (!WeakIdentifierMap<LocalFrame>::HasIdentifier(&root))
+    return absl::nullopt;
+  return WeakIdentifierMap<LocalFrame>::Identifier(&root);
+}
+
+static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  // The optional second argument is an inspector context id used to route
+  // frame evaluations; existing callers only pass the serialized message.
+  const bool has_context_id = args.Length() == 2 && !args[1]->IsUndefined();
+  CHECK((args.Length() == 1 || args.Length() == 2) && args[0]->IsString() &&
+        (!has_context_id || args[1]->IsInt32()) &&
+        "must be called with a string and optional context id");
+
+  recordreplay::AutoMarkReplayCode mark;
+  recordreplay::AutoDisallowEvents disallow("SendCDPMessage");
+
+  v8::Isolate* isolate = args.GetIsolate();
+  v8::String::Utf8Value message(isolate, args[0]);
+  std::string nmessage(*message);
+
+  absl::optional<int> contextGroupId;
+  if (gContextGroupIdForSendCDPMessageDepth > 0) {
+    contextGroupId =
+        gContextGroupIdForSendCDPMessageStack[gContextGroupIdForSendCDPMessageDepth - 1];
+  } else if (has_context_id) {
+    contextGroupId = ContextGroupIdFromInspectorContextId(
+        isolate, args[1].As<v8::Int32>()->Value());
+    if (!contextGroupId.has_value()) {
+      SendCDPMissingContextError(isolate, args[0]);
+      return;
+    }
+  } else if (recordreplay::HasDivergedFromRecording() &&
+             v8::internal::gPauseContextGroupId > 0) {
+    // CommandCallback has already translated the paused inspector context id
+    // into a context group id, so no further lookup is needed here.
+    contextGroupId = v8::internal::gPauseContextGroupId;
+  } else {
+    contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
+  }
+
+  // No group, or its main-world V8 Context is already gone (post-nav /
+  // DidClearContextsForFrame). ContextIfInitialized does not create.
+  LocalFrame* frame =
+      contextGroupId.has_value()
+          ? WeakIdentifierMap<LocalFrame>::Lookup(*contextGroupId)
+          : nullptr;
+  if (!frame ||
+      ToV8ContextMaybeEmpty(frame, DOMWrapperWorld::MainWorld()).IsEmpty()) {
+    SendCDPMissingContextError(isolate, args[0]);
+    return;
+  }
+
+  v8_inspector::StringView messageView((const uint8_t*)nmessage.c_str(),
+                                       nmessage.length());
+  getInspectorSession(isolate, *contextGroupId)->dispatchProtocolMessage(messageView);
+}
+
+static std::string GetRecordingDirectory() {
+  const char* recordingDir = getenv("RECORD_REPLAY_DIRECTORY");
+  if (recordingDir) {
+    return recordingDir;
+  }
+  const char* homeDir = getenv("HOME");
+  if (!homeDir) {
+    homeDir = getenv("USERPROFILE");
+  }
+  return std::string(homeDir) + DirectorySeparator + std::string(".replay");
+}
+
+static void GetRecordingId(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  v8::Isolate* isolate = args.GetIsolate();
+
+  const char* recordingId = recordreplay::GetRecordingId();
+  if (recordingId) {
+    args.GetReturnValue().Set(ToV8String(isolate, recordingId));
+  } else {
+    args.GetReturnValue().SetNull();
+  }
+}
+
+static void SHA256DigestHex(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsString() &&
+      "must be called with a single string");
+  v8::Isolate* isolate = args.GetIsolate();
+  // Zeroed: replay skips hash and only fills via RecordReplayBytes.
+  char* digestHex = new char[65]();
+
+  if (!recordreplay::IsReplaying()) {
+    v8::String::Utf8Value content(isolate, args[0]);
+    std::unique_ptr<crypto::SecureHash> hasher =
+        crypto::SecureHash::Create(crypto::SecureHash::SHA256);
+    hasher->Update(*content, content.length());
+    uint8_t digest[crypto::kSHA256Length];
+    hasher->Finish(digest, crypto::kSHA256Length);
+    for (int i = 0; i < 32; i++) {
+      sprintf(digestHex + i * 2, "%02x", digest[i]);
+    }
+  }
+
+  // The content being hashed can vary when replaying if source contents have been
+  // replaced, so we record/replay the result.
+  recordreplay::RecordReplayBytes("SHA256DigestHex", digestHex, 65);
+
+  args.GetReturnValue().Set(ToV8String(isolate, digestHex));
+}
+
+static void GetRecordingFilePath(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsString() && "must be called with one string");
+  v8::Isolate* isolate = args.GetIsolate();
+  v8::String::Utf8Value filename(isolate, args[0]);
+
+  std::string path = GetRecordingDirectory() + DirectorySeparator + std::string(*filename);
+
+  args.GetReturnValue().Set(ToV8String(isolate, path.c_str()));
+}
+
+static void RecordingDirectoryFileExists(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsString() && "must be called with one string");
+  v8::Isolate* isolate = args.GetIsolate();
+  v8::String::Utf8Value filename(isolate, args[0]);
+
+  std::string path = GetRecordingDirectory() + DirectorySeparator + std::string(*filename);
+
+  std::ifstream stream(path);
+
+  args.GetReturnValue().Set(v8::Boolean::New(isolate, stream.good()));
+}
+
+static void ReadFromRecordingDirectory(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsString() && "must be called with one string");
+  v8::Isolate* isolate = args.GetIsolate();
+  v8::String::Utf8Value filename(isolate, args[0]);
+
+  std::string path = GetRecordingDirectory() + DirectorySeparator + std::string(*filename);
+  std::ifstream stream(path);
+  std::string data;
+  stream >> data;
+  stream.close();
+
+  args.GetReturnValue().Set(ToV8String(isolate, data.c_str()));
+}
+
+static void WriteToRecordingDirectory(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 2 && args[0]->IsString() && args[1]->IsString() &&
+        "must be called with two strings");
+  v8::Isolate* isolate = args.GetIsolate();
+  v8::String::Utf8Value filename(isolate, args[0]);
+  v8::String::Utf8Value content(isolate, args[1]);
+
+  recordreplay::Assert("[RUN-1670-1764] WriteToRecordingDirectory %s (%zu)", *filename, (size_t)strlen(*content));
+
+  std::string path = GetRecordingDirectory() + DirectorySeparator + std::string(*filename);
+  std::ofstream stream(path);
+  stream << *content;
+  stream.close();
+
+  args.GetReturnValue().Set(ToV8String(isolate, path.c_str()));
+}
+
+static void AddRecordingEvent(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsString() &&
+        "must be called with a single string");
+  v8::String::Utf8Value content(args.GetIsolate(), args[0]);
+
+  std::string filename = GetRecordingDirectory() + DirectorySeparator + std::string("recordings.log");
+  std::ofstream stream(filename.c_str(), std::ofstream::app);
+  stream << *content << "\n";
+  stream.close();
+}
+
+static void fromJsGetPersistentId(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  int persistentId = 0;
+  v8::Isolate* isolate = args.GetIsolate();
+  if (args.Length() == 1 && args[0]->IsObject()) {
+    persistentId = GetPersistentId(args[0].As<v8::Object>());
+  }
+  args.GetReturnValue().Set(v8::Number::New(isolate, persistentId));
+}
+
+static void fromJsGetProgressCounter(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  v8::Isolate* isolate = args.GetIsolate();
+  uint64_t progress = *V8RecordReplayGetProgressCounter();
+  args.GetReturnValue().Set(v8::Number::New(isolate, progress));
+}
+
+static void fromJsCheckPersistentId(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  if (args.Length() >= 1) {
+    v8::internal::RecordReplayConfirmObjectHasId(args.GetIsolate(),
+                                                 args.GetIsolate()->GetCurrentContext(),
+                                                 args[0]);
+  }
+}
+
+static std::vector<std::string>& GetRegisteredRootFrameScripts() {
+  static std::vector<std::string>* scripts = new std::vector<std::string>();
+  return *scripts;
+}
+
+static void GetCurrentError(const v8::FunctionCallbackInfo<v8::Value>& args);
+
+
+static void SetDataProperty(v8::Isolate* isolate,
+                            v8::Local<v8::Object> obj,
+                            const char* property,
+                            v8::Local<v8::Value> value) {
+  v8::Local<v8::Context> context = isolate->GetCurrentContext();
+  obj->Set(context, ToV8String(isolate, property), value).Check();
+}
+
+/** ###########################################################################
+ * CBOR stuff
+ * ##########################################################################*/
+
+/**
+ * NOTE: There are two identical `Serializable` interfaces -
+ *  `v8_crdtp::Serializable` and
+ *  `crdtp::Serializable`.
+ *  Both namespaces also have their own copy of the ConvertCBORToJSON function.
+ *
+ * @see https://replit.com/@Domiii/FunctionTemplates#main.cpp
+ */
+// typedef ConvertResult (*ConvertFun)(int, int);  // signature for all valid functions
+template <typename S,
+          std::string Convert(const std::vector<uint8_t>&,
+                              std::vector<uint8_t>&)>
+v8::MaybeLocal<v8::Value> convertCborToJSTempl(v8::Isolate* isolate,
+                                               S* value) {
+  // deserialize + send to JS
+  std::vector<uint8_t> cbor;
+  value->AppendSerialized(&cbor);
+
+  if (cbor.size() > 1) {
+    /**
+     * This is based on other code that uses `wrapObject` and sends the result
+     * to JS.
+     * @see
+     * https://github.com/replayio/chromium-v8/blob/b38bf5b0b1f149f7af3fd90a2ce12344e7191d03/src/inspector/custom-preview.cc#L123
+     */
+    std::vector<uint8_t> json;
+    auto errorMessage = Convert(cbor, json);
+    if (!errorMessage.length()) {
+      auto jsonStr =
+          v8::String::NewFromOneByte(isolate, json.data(),
+                                     v8::NewStringType::kNormal, (int)json.size())
+              .ToLocalChecked();
+      // see https://stackoverflow.com/a/23688325
+      auto context = isolate->GetCurrentContext();
+      auto jsonObj = v8::JSON::Parse(context, jsonStr);
+      if (!jsonObj.IsEmpty()) {
+        return jsonObj.ToLocalChecked();
+      }
+    } else {
+      recordreplay::Warning("ConvertCborToJSDeserializeFailed",
+                            {{"error", errorMessage}});
+    }
+  }
+  v8::MaybeLocal<v8::Value> defaultVal;
+  return defaultVal;
+}
+
+std::string ConvertCborToJsonV8(const std::vector<uint8_t>& cbor,
+                                std::vector<uint8_t>& json) {
+  auto cborSpan = v8_crdtp::SpanFrom(cbor);
+  auto status = v8_crdtp::json::ConvertCBORToJSON(cborSpan, &json);
+  if (status.ok()) {
+    return "";
+  }
+  return status.ToASCIIString();
+}
+
+v8::MaybeLocal<v8::Value> convertCborToJS(
+    v8::Isolate* isolate,
+    v8_crdtp::Serializable* value) {
+  return convertCborToJSTempl<v8_crdtp::Serializable, ConvertCborToJsonV8>(
+      isolate, value);
+}
+
+std::string ConvertCborToJsonDefault(const std::vector<uint8_t>& cbor,
+                                std::vector<uint8_t>& json) {
+  auto cborSpan = crdtp::SpanFrom(cbor);
+  auto status = crdtp::json::ConvertCBORToJSON(cborSpan, &json);
+  if (status.ok()) {
+    return "";
+  }
+  return status.ToASCIIString();
+}
+
+v8::MaybeLocal<v8::Value> convertCborToJS(
+    v8::Isolate* isolate,
+    crdtp::Serializable* value) {
+  return convertCborToJSTempl<crdtp::Serializable, ConvertCborToJsonDefault>(
+      isolate, value);
+}
+
+template <typename T>
+v8::Local<v8::Array> convertCborToJS(v8::Isolate* isolate,
+                                     std::vector<std::unique_ptr<T>>* arr) {
+  v8::Local<v8::Array> result = v8::Array::New(isolate);
+  auto context = isolate->GetCurrentContext();
+  for (uint32_t i = 0; i < arr->size(); ++i) {
+    auto* entry = (crdtp::Serializable*)(*arr)[i].get();
+    auto item =
+        convertCborToJSTempl<crdtp::Serializable, ConvertCborToJsonDefault>(
+            isolate, entry);
+    if (!item.IsEmpty()) {
+      result->Set(context, i, item.ToLocalChecked()).Check();
+    } else {
+      result->Set(context, i, Null(isolate)).Check();
+    }
+  }
+  return result;
+}
+
+template <typename T>
+v8::MaybeLocal<v8::Value> convertCborToJSMaybe(v8::Isolate* isolate,
+                                               crdtp::Maybe<T> value) {
+  static_assert(
+      std::is_base_of<crdtp::Serializable, T>::value,
+      "type parameter T of Maybe<T> must derive from crdtp::Serializable");
+
+  if (value.isJust()) {
+    crdtp::Serializable* serializable = (crdtp::Serializable*)value.fromJust();
+    return convertCborToJSTempl<crdtp::Serializable, ConvertCborToJsonDefault>(
+        isolate, serializable);
+  }
+  v8::MaybeLocal<v8::Value> defaultVal;
+  return defaultVal;
+}
+
+
+/** ###########################################################################
+ * More Debugger interfaces (Inspectors)
+ * @see https://static.replay.io/protocol/tot/DOM/
+ * @see https://chromedevtools.github.io/devtools-protocol/tot/DOM/
+ * ##########################################################################*/
+
+
+static InspectedFrames* getOrCreateInspectedFrames(v8::Isolate* isolate, int contextGroupId) {
+  InspectorData *data = getInspectorFor(isolate, contextGroupId);
+
+  if (!data->inspectedFrames) {
+    data->inspectedFrames = MakeGarbageCollected<InspectedFrames>(data->GetLocalFrameRoot());
+  }
+  return data->inspectedFrames;
+}
+
+// NOTE: we need to instantiate all inspectors indivudally because we
+//    are not fully hooked up with a `DevToolsSession` + `UberDispatcher`.
+//    We also cannot enable them for the same reason.
+absl::optional<InspectorDOMAgent*> getOrCreateInspectorDOMAgent(v8::Isolate* isolate) {
+  auto contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
+  if (!contextGroupId.has_value()) {
+    return absl::optional<InspectorDOMAgent*>();
+  }
+
+  InspectorData *data = getInspectorFor(isolate, *contextGroupId);
+
+  if (!data->inspectorDomAgent) {
+    // NOTE: based on WebDevToolsAgentImpl::AttachSession
+    InspectedFrames* inspectedFrames = getOrCreateInspectedFrames(isolate, *contextGroupId);
+    data->inspectorDomAgent = MakeGarbageCollected<InspectorDOMAgent>(
+        isolate, inspectedFrames, getInspectorSession(isolate, *contextGroupId));
+    data->inspectorDomAgent->FrameDocumentUpdated(data->GetLocalFrameRoot());
+  }
+  return data->inspectorDomAgent;
+}
+
+absl::optional<InspectorDOMDebuggerAgent*> getOrCreateInspectorDOMDebuggerAgent(
+    v8::Isolate* isolate) {
+  auto contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
+
+  if (!contextGroupId.has_value()) {
+    return absl::optional<InspectorDOMDebuggerAgent*>();
+  }
+
+  InspectorData *data = getInspectorFor(isolate, *contextGroupId);
+
+  if (!data->inspectorDomDebuggerAgent) {
+    data->inspectorDomDebuggerAgent =
+        MakeGarbageCollected<InspectorDOMDebuggerAgent>(
+            isolate, *getOrCreateInspectorDOMAgent(isolate), getInspectorSession(isolate, *contextGroupId));
+
+    // RUN-1061: registering the agent here allows it to receive `UserCallback`
+    // events.
+    data->GetLocalFrameRoot()->GetProbeSink()->AddInspectorDOMDebuggerAgent(data->inspectorDomDebuggerAgent);
+  }
+  return data->inspectorDomDebuggerAgent;
+}
+
+absl::optional<InspectorNetworkAgent*> getOrCreateInspectorNetworkAgent(v8::Isolate* isolate) {
+  absl::optional<int> contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
+  if (!contextGroupId.has_value()) {
+    return absl::optional<InspectorNetworkAgent*>();
+  }
+
+  InspectorData *data = getInspectorFor(isolate, *contextGroupId);
+
+  if (!data->inspectorNetworkAgent) {
+    InspectedFrames* inspectedFrames = getOrCreateInspectedFrames(isolate, *contextGroupId);
+    data->inspectorNetworkAgent = MakeGarbageCollected<InspectorNetworkAgent>(
+        inspectedFrames, nullptr, getInspectorSession(isolate, *contextGroupId));
+  }
+  return data->inspectorNetworkAgent;
+}
+
+absl::optional<InspectorCSSAgent*> getOrCreateInspectorCSSAgent(v8::Isolate* isolate) {
+  absl::optional<int> contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
+  if (!contextGroupId.has_value()) {
+    return absl::optional<InspectorCSSAgent*>();
+  }
+
+  InspectorData *data = getInspectorFor(isolate, *contextGroupId);
+
+  if (!data->inspectorCssAgent) {
+    // NOTE: based on WebDevToolsAgentImpl::AttachSession
+    InspectedFrames* inspectedFrames = getOrCreateInspectedFrames(isolate, *contextGroupId);
+
+    auto* resource_content_loader =
+        MakeGarbageCollected<InspectorResourceContentLoader>(data->GetLocalFrameRoot());
+    auto* resource_container =
+        MakeGarbageCollected<InspectorResourceContainer>(inspectedFrames);
+    auto domAgent = getOrCreateInspectorDOMAgent(isolate);
+
+    auto* networkAgent = *getOrCreateInspectorNetworkAgent(isolate);
+    data->inspectorCssAgent = MakeGarbageCollected<InspectorCSSAgent>(
+        *domAgent, inspectedFrames, networkAgent, resource_content_loader,
+        resource_container);
+
+    // NOTE: we cannot easily enable without a full session active,
+    //      but if we wanted to, here is an example:
+    // https://source.chromium.org/chromium/chromium/src/+/main:out/mac-Debug/gen/third_party/blink/renderer/core/inspector/protocol/css.cc;l=890?q=EnableCallbackImpl&ss=chromium%2Fchromium%2Fsrc
+    // std::unique_ptr<blink::protocol::CSS::Backend::EnableCallback>
+    // cb(nullptr); gInspectorCssAgent->enable(std::move(cb));
+  }
+  return data->inspectorCssAgent;
+}
+
+/** ###########################################################################
+ * Object Management
+ * ##########################################################################*/
+
+static bool
+getObjectByCdpId(v8::Isolate* isolate,
+                  const v8_inspector::StringView& cdpIdV8,
+                  v8::Local<v8::Object>& plainObject) {
+  auto context = isolate->GetCurrentContext();
+  std::unique_ptr<v8_inspector::StringBuffer> error;
+  v8::Local<v8::Value> unwrapped;
+
+  absl::optional<int> contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
+  if (!contextGroupId.has_value()) {
+    recordreplay::Warning("GetObjectByCdpIdMissingContextGroup");
+    return false;
+  }
+
+  if (!getInspectorSession(isolate, *contextGroupId)->unwrapObject(&error, cdpIdV8, &unwrapped, &context,
+                                       nullptr)) {
+    recordreplay::Warning("GetObjectByCdpIdLookupFailed",
+                          {{"error", ToCoreString(error->string()).Ascii()}});
+    return false;
+  }
+  plainObject = unwrapped.As<v8::Object>();
+  return true;
+}
+
+/**
+ * Returns the matching object or null.
+ * Should generally never return null.
+ */
+static bool getV8FromBlinkObject(
+    v8::Isolate* isolate,
+    ScriptWrappable* blinkObject,
+    v8::Local<v8::Value>& result) {
+  ScriptState* scriptState = ScriptState::Current(isolate);
+  v8::Local<v8::Value> v8Object;
+  if (blinkObject->Wrap(scriptState).ToLocal(&v8Object)) {
+    result = v8Object;
+    return true;
+  }
+
+  // weird
+  recordreplay::Print("[RuntimeError] getV8FromBlinkObject failed");
+  return false;
+}
+
+/**
+ * NOTE: Since the `RemoteObject` type is not publicly exposed, we cannot easily
+ * access it in CPP space. We thus only use it in JS. This basically emulates
+ * gecko's `makeDebuggeeValue`.
+ */
+static void fromJsMakeDebuggeeValue(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  v8::Isolate* isolate = args.GetIsolate();
+
+  CHECK(args.Length() == 1 &&
+        "must be called with a single value");
+
+  auto contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
+
+  if (!contextGroupId.has_value()) {
+      recordreplay::Warning("MakeDebuggeeValueMissingContext");
+      args.GetReturnValue().SetNull();
+      return;
+  }
+
+  auto context = isolate->GetCurrentContext();
+  auto value = args[0];
+
+  const String object_group(REPLAY_CDT_PAUSE_OBJECT_GROUP);
+  auto generatePreview = false;
+
+  // NOTE: `wrapObject` always creates a new `RemoteObject` and binds it
+  // to a new id.
+  auto remoteObjSerialized = getInspectorSession(isolate, *contextGroupId)->wrapObject(
+      context, value, ToV8InspectorStringView(object_group), generatePreview);
+
+  if (remoteObjSerialized) {
+    auto result = convertCborToJS(isolate, (v8_crdtp::Serializable*)remoteObjSerialized.get());
+
+    if (!result.IsEmpty()) {
+      args.GetReturnValue().Set(result.ToLocalChecked());
+      return;
+    }
+  }
+  args.GetReturnValue().SetNull();
+}
+
+static void LayoutDom(
+  const v8::FunctionCallbackInfo<v8::Value>& args) {
+  if (gRootLocalFrame) {
+    gRootLocalFrame->GetDocument()->UpdateStyleAndLayout(DocumentUpdateReason::kUnknown);
+  }
+}
+
+static void ForTestingSerializeValueToArray(
+  const v8::FunctionCallbackInfo<v8::Value>& args) {
+  v8::Isolate* isolate = args.GetIsolate();
+  v8::Local<v8::Context> context = isolate->GetCurrentContext();
+
+  CHECK(args.Length() == 1 &&
+        "must be called with a single value");
+
+  auto value = args[0];
+
+  scoped_refptr<SerializedScriptValue> serializedValue =
+    SerializedScriptValue::Serialize(
+      isolate, value,
+      SerializedScriptValue::SerializeOptions(), ASSERT_NO_EXCEPTION);
+  base::span<const uint8_t> data = serializedValue->GetWireData();
+
+  v8::Local<v8::Array> result = v8::Array::New(isolate);
+  for (size_t i = 0; i < data.size(); ++i) {
+    result->Set(context, (uint32_t)i, v8::Number::New(isolate, data[i])).Check();
+  }
+
+  args.GetReturnValue().Set(result);
+}
+
+static void fromJsGetArgumentsInFrame(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsString() &&
+        "must be called with a single string");
+  v8::Isolate* isolate = args.GetIsolate();
+  auto contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
+
+  if (!contextGroupId.has_value()) {
+    recordreplay::Warning("GetArgumentsInFrameMissingContext");
+    args.GetReturnValue().SetNull();
+    return;
+  }
+
+  // convert v8::String → v8::String::Utf8Value → v8_inspector::StringView
+  // future-work: can this be improved?
+  v8::String::Utf8Value frameId(isolate, args[0]);
+  const uint8_t* frameIdPtr = reinterpret_cast<const uint8_t*>(*frameId);
+  v8_inspector::StringView frameIdV8(frameIdPtr, frameId.length());
+
+  auto result = getInspectorSession(isolate, *contextGroupId)->getArgumentsOfCallFrame(frameIdV8);
+
+  if (result.IsEmpty()) {
+    args.GetReturnValue().SetNull();
+  } else {
+    args.GetReturnValue().Set(result.ToLocalChecked());
+  }
+}
+
+static void fromJsGetObjectByCdpId(
+  const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsString() &&
+        "[RuntimeError] must be called with a single string");
+
+  v8::Isolate* isolate = args.GetIsolate();
+
+  // convert v8::String → v8::String::Utf8Value → v8_inspector::StringView
+  // future-work: can this be improved?
+  v8::String::Utf8Value cdpId(isolate, args[0]);
+  const uint8_t* cdpIdPtr = reinterpret_cast<const uint8_t*>(*cdpId);
+  v8_inspector::StringView cdpIdV8(cdpIdPtr, cdpId.length());
+
+  v8::Local<v8::Object> plainObject;
+  if (getObjectByCdpId(isolate, cdpIdV8, plainObject)) {
+    args.GetReturnValue().Set(plainObject);
+  } else {
+    args.GetReturnValue().SetNull();
+  }
+}
+
+/**
+ * Whether a given value is a blink object.
+ *
+ * NOTE: If we want a generalized |isNativeObject| function,
+ * we probably have to look at |v8::internal::Script::type|
+ * (which is also used by |CallSiteInfo::IsNative|).
+ */
+static void fromJsIsBlinkObject(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 &&
+        "[RuntimeError] must be called with a single value");
+
+  v8::Isolate* isolate = args.GetIsolate();
+
+  bool result = V8DOMWrapper::IsWrapper(isolate, args[0]);
+
+  args.GetReturnValue().Set(result);
+}
+
+static void fromJsIsBlinkNodeObject(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 &&
+        "[RuntimeError] must be called with a single value");
+
+  v8::Isolate* isolate = args.GetIsolate();
+  args.GetReturnValue().Set(!!V8Node::ToImplWithTypeCheck(isolate, args[0]));
+}
+
+static void fromJsIsBlinkElementObject(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 &&
+        "[RuntimeError] must be called with a single value");
+
+  v8::Isolate* isolate = args.GetIsolate();
+  args.GetReturnValue().Set(!!V8Element::ToImplWithTypeCheck(isolate, args[0]));
+}
+
+static void fromJsIsBlinkCSSStyleDeclarationObject(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 &&
+        "[RuntimeError] must be called with a single value");
+
+  v8::Isolate* isolate = args.GetIsolate();
+  args.GetReturnValue().Set(
+      !!V8CSSStyleDeclaration::ToImplWithTypeCheck(isolate, args[0]));
+}
+
+/**
+ * Return whether there is a return value available for the topmost frame,
+ * when stopped at an "exit" return site.
+ */
+static void fromJsHasReturnValue(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  v8::Local<v8::Value> return_value;
+  bool has_return_value = V8RecordReplayCurrentReturnValue(&return_value);
+
+  args.GetReturnValue().Set(has_return_value);
+}
+
+/**
+ * When stopped at an "exit" return site, returns the topmost frame's
+ * pending return value.
+ */
+static void fromJsGetReturnValue(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  v8::Local<v8::Value> return_value;
+  bool has_return_value = V8RecordReplayCurrentReturnValue(&return_value);
+
+  if (has_return_value) {
+    args.GetReturnValue().Set(return_value);
+  }
+}
+
+/** ###########################################################################
+ * Networking
+ * ##########################################################################*/
+
+// Represents a known network request.  Created and added to
+// `gActiveNetworkRequests` when the request is first seen.  Removed
+// when the request finishes or fails.
+struct NetworkRequestStatus {
+  size_t response_data_received;
+  size_t request_data_sent;
+  base::Value info;
+  NetworkRequestStatus(const base::DictionaryValue& info_arg)
+  : response_data_received(0),
+    request_data_sent(0),
+    info(info_arg.Clone())
+  {}
+};
+// Map of active network requests.
+std::unordered_map<std::string, NetworkRequestStatus>*
+  gActiveNetworkRequests = nullptr;
+
+// Globals storing values to be returned to controller commands
+// `GetCurrentNetwork*`
+static base::Value *gCurrentNetworkRequestEvent = nullptr;
+static const std::string* gCurrentNetworkRequestId = nullptr;
+static const char* gCurrentNetworkStreamKind = nullptr;
+static std::vector<uint8_t>* gCurrentNetworkStreamData = nullptr;
+
+static void SetCurrentNetworkStreamData(
+    const std::string& request_id,
+    const char* stream_kind,
+    const uint8_t* data,
+    size_t data_length) {
+  gCurrentNetworkRequestId = &request_id;
+  gCurrentNetworkStreamKind = stream_kind;
+  gCurrentNetworkStreamData->clear();
+  gCurrentNetworkStreamData->insert(
+      gCurrentNetworkStreamData->begin(),
+      data,
+      data + data_length);
+}
+
+static void ClearCurrentNetworkStreamData() {
+  gCurrentNetworkRequestId = nullptr;
+  gCurrentNetworkStreamKind = nullptr;
+  gCurrentNetworkStreamData->clear();
+}
+static void GetCurrentNetworkRequestEvent(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  if (!gCurrentNetworkRequestEvent) {
+    return;
+  }
+
+  v8::Isolate* isolate = args.GetIsolate();
+  std::string json;
+  base::JSONWriter::Write(*gCurrentNetworkRequestEvent, &json);
+  v8::Local<v8::String> json_string = ToV8String(isolate, json.c_str());
+  args.GetReturnValue().Set(json_string);
+}
+
+static void GetCurrentNetworkRequestId(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  if (!gCurrentNetworkRequestId) {
+    return;
+  }
+
+  v8::Isolate* isolate = args.GetIsolate();
+  args.GetReturnValue().Set(
+      ToV8String(isolate, gCurrentNetworkRequestId->c_str()));
+}
+
+static void GetCurrentNetworkStreamKind(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  if (!gCurrentNetworkStreamKind) {
+    return;
+  }
+
+  v8::Isolate* isolate = args.GetIsolate();
+  args.GetReturnValue().Set(
+      ToV8String(isolate, gCurrentNetworkStreamKind));
+}
+
+static void GetCurrentNetworkStreamData(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(gCurrentNetworkStreamData);
+
+  v8::Isolate* isolate = args.GetIsolate();
+  v8::Local<v8::Context> context = isolate->GetCurrentContext();
+
+  // Expect params: { index, length }
+  v8::Local<v8::Object> params =
+    args[0]->ToObject(context).ToLocalChecked();
+  size_t index =
+    params->Get(context, ToV8String(isolate, "index"))
+      .ToLocalChecked()->NumberValue(context).ToChecked();
+  size_t length =
+    params->Get(context, ToV8String(isolate, "length"))
+      .ToLocalChecked()->NumberValue(context).ToChecked();
+  size_t size = gCurrentNetworkStreamData->size();
+
+  if ((size < index) || ((size - index) < length)) {
+    recordreplay::Print(
+      "GetCurrentNetworkStreamData: Out of range slice"
+      " (size=%u, requested=%u-%u)",
+      (unsigned) size,
+      (unsigned) index,
+      (unsigned) (index + length)
+    );
+    return;
+  }
+
+  const uint8_t* bytes = gCurrentNetworkStreamData->data() + index;
+  std::string encoded = base::Base64Encode(
+    base::span<const uint8_t>(bytes, length)
+  );
+  char* encoded_cstr = strdup(encoded.c_str());
+  char* encoded_end = encoded_cstr + encoded.length();
+  for (char *cur = encoded_cstr; cur < encoded_end; cur++) {
+    if (*cur == '-') { *cur = '+'; }
+    if (*cur == '_') { *cur = '/'; }
+  }
+
+  v8::Local<v8::Object> result = v8::Object::New(isolate);
+  result->Set(context,
+    ToV8String(isolate, "kind"),
+    ToV8String(isolate, "data")
+  ).Check();
+  result->Set(context,
+    ToV8String(isolate, "value"),
+    ToV8String(isolate, encoded_cstr)
+  ).Check();
+  args.GetReturnValue().Set(result);
+}
+
+static std::string GetRequestIdentifierProperty(const base::DictionaryValue& info) {
+  const std::string *requestId = info.FindPath("requestId")->GetIfString();
+  return *requestId;
+}
+
+static void CopyDictionaryProperty(base::DictionaryValue& dst,
+                                   const base::DictionaryValue& src,
+                                   const char* property) {
+  const base::Value* value = src.FindPath(property);
+  if (value) {
+    dst.Set(property, std::unique_ptr<base::Value>(value->CreateDeepCopy()));
+  }
+}
+
+static void EmitNetworkRequestEvent(const std::string& request_id,
+                                    base::DictionaryValue& event) {
+  gCurrentNetworkRequestEvent = &event;
+  gCurrentNetworkRequestId = &request_id;
+  recordreplay::OnNetworkRequestEvent(request_id.c_str());
+  gCurrentNetworkRequestEvent = nullptr;
+  gCurrentNetworkRequestId = nullptr;
+}
+
+static void EmitResponseEvent(const std::string& request_id,
+                              const base::DictionaryValue& info) {
+  base::DictionaryValue event;
+  event.SetString("kind", "response");
+  CopyDictionaryProperty(event, info, "responseHeaders");
+  CopyDictionaryProperty(event, info, "responseProtocolVersion");
+  CopyDictionaryProperty(event, info, "responseStatus");
+  CopyDictionaryProperty(event, info, "responseStatusText");
+  CopyDictionaryProperty(event, info, "responseFromCache");
+  EmitNetworkRequestEvent(request_id, event);
+}
+
+static void HandleNetworkPrepareRequestEvent(const base::DictionaryValue& info) {
+  CHECK(gActiveNetworkRequests);
+  std::string request_id = GetRequestIdentifierProperty(info);
+  if (gActiveNetworkRequests->find(request_id) != gActiveNetworkRequests->end()) {
+    // TODO: should be an assert?
+    recordreplay::Print("Duplicate request id: %s", request_id.c_str());
+    return;
+  }
+
+  const base::Value* redirect_source_value = info.FindPath("redirectSourceId");
+  const std::string* redirect_source_id =
+      redirect_source_value ? redirect_source_value->GetIfString() : nullptr;
+  if (redirect_source_id) {
+    auto request_info = gActiveNetworkRequests->find(*redirect_source_id);
+    if (request_info == gActiveNetworkRequests->end()) {
+      recordreplay::Print("No original request for redirected prepare: %s",
+                          redirect_source_id->c_str());
+      return;
+    }
+    gActiveNetworkRequests->erase(request_info);
+  }
+
+  // Save request info in a global table.
+  gActiveNetworkRequests->insert(
+    { request_id, NetworkRequestStatus(info) }
+  );
+
+  // Register the request.
+  uint64_t bookmark = *info.FindPath("bookmark")->GetIfDouble();
+  recordreplay::OnNetworkRequest(request_id.c_str(), "http", bookmark);
+
+  // Package and emit a network request event with the appropriate info.
+  base::DictionaryValue event;
+  event.SetString("kind", "request");
+  CopyDictionaryProperty(event, info, "requestUrl");
+  CopyDictionaryProperty(event, info, "requestHeaders");
+  CopyDictionaryProperty(event, info, "requestMethod");
+  CopyDictionaryProperty(event, info, "requestCause");
+  CopyDictionaryProperty(event, info, "initiator");
+  CopyDictionaryProperty(event, info, "replayInternal");
+  if (redirect_source_id) {
+    event.SetString("redirectSourceId", *redirect_source_id);
+  }
+
+  EmitNetworkRequestEvent(request_id, event);
+}
+
+static void HandleNetworkNavigationRedirectEvent(const base::DictionaryValue& info) {
+  CHECK(gActiveNetworkRequests);
+
+  std::string redirected_request_id = GetRequestIdentifierProperty(info);
+
+  const std::string& previous_request_id =
+      *info.FindPath("redirectSourceId")->GetIfString();
+
+  auto request_info = gActiveNetworkRequests->find(previous_request_id);
+  if (request_info == gActiveNetworkRequests->end()) {
+    recordreplay::Print("No original request for navigation redirect: %s",
+      previous_request_id.c_str());
+    return;
+  }
+  const base::DictionaryValue& previous_info =
+    base::Value::AsDictionaryValue(request_info->second.info);
+
+  EmitResponseEvent(previous_request_id, info);
+
+  // TODO: should we be inheriting the bookmark from the previous request?
+  const uint64_t bookmark = *previous_info.FindPath("bookmark")->GetIfDouble();
+  recordreplay::OnNetworkRequest(redirected_request_id.c_str(), "http", bookmark);
+
+  base::DictionaryValue redirected_info;
+  CopyDictionaryProperty(redirected_info, previous_info, "bookmark");
+  CopyDictionaryProperty(redirected_info, info, "requestUrl");
+  CopyDictionaryProperty(redirected_info, info, "requestHeaders");
+  CopyDictionaryProperty(redirected_info, info, "requestMethod");
+  CopyDictionaryProperty(redirected_info, previous_info, "requestCause");
+  CopyDictionaryProperty(redirected_info, previous_info, "initiator");
+  CopyDictionaryProperty(redirected_info, previous_info, "replayInternal");
+
+  base::DictionaryValue event;
+  event.SetString("kind", "request");
+  CopyDictionaryProperty(event, redirected_info, "requestUrl");
+  CopyDictionaryProperty(event, redirected_info, "requestHeaders");
+  CopyDictionaryProperty(event, redirected_info, "requestMethod");
+  CopyDictionaryProperty(event, redirected_info, "requestCause");
+  CopyDictionaryProperty(event, redirected_info, "initiator");
+  CopyDictionaryProperty(event, redirected_info, "replayInternal");
+  event.SetString("redirectSourceId", previous_request_id);
+  EmitNetworkRequestEvent(redirected_request_id, event);
+
+  gActiveNetworkRequests->erase(request_info);
+  gActiveNetworkRequests->insert(
+    { redirected_request_id, NetworkRequestStatus(redirected_info) }
+  );
+}
+
+static void HandleNetworkRequestDataFormEvent(const base::DictionaryValue& info) {
+  CHECK(gActiveNetworkRequests);
+  std::string request_id = GetRequestIdentifierProperty(info);
+  auto request_info = gActiveNetworkRequests->find(request_id);
+  if (request_info == gActiveNetworkRequests->end()) {
+    recordreplay::Print("Unknown request for request data: %s",
+      request_id.c_str());
+    return;
+  }
+
+  // If we're receiving a RequestData.Form event, all the
+  // request data is present and none should have been already received.
+  CHECK(request_info->second.request_data_sent == 0);
+
+  { // Send a "request-body" network request event.
+    base::DictionaryValue requestBodyEvent;
+    requestBodyEvent.SetString("kind", "request-body");
+
+    EmitNetworkRequestEvent(request_id, requestBodyEvent);
+  }
+
+  std::string stream_id = "request-" + request_id;
+
+  // Call StreamStart API.
+  recordreplay::OnNetworkStreamStart(
+    stream_id.c_str(), "request-data", request_id.c_str()
+  );
+
+  // Call StreamData API.
+  size_t length = *info.FindPath("dataLength")->GetIfDouble();
+
+  CHECK(length >= 0);
+  const std::string *data_base64 = info.FindPath("data")->GetIfString();
+  if (data_base64) {
+    const uint8_t* data =
+      reinterpret_cast<const uint8_t *>(data_base64->c_str());
+    size_t offset = request_info->second.response_data_received;
+    SetCurrentNetworkStreamData(
+      request_id,
+      "request-data",
+      data,
+      data_base64->length()
+    );
+    recordreplay::OnNetworkStreamData(
+      stream_id.c_str(), offset, length, /* bookmark = */ 0
+    );
+    ClearCurrentNetworkStreamData();
+  }
+  request_info->second.request_data_sent += length;
+}
+
+static void HandleNetworkDidReceiveResponseEvent(const base::DictionaryValue& info) {
+  CHECK(gActiveNetworkRequests);
+  std::string request_id = GetRequestIdentifierProperty(info);
+  auto request_info = gActiveNetworkRequests->find(request_id);
+  if (request_info == gActiveNetworkRequests->end()) {
+    recordreplay::Print("Unknown request received response: %s",
+      request_id.c_str());
+    return;
+  }
+
+  EmitResponseEvent(request_id, info);
+}
+
+static void HandleNetworkDidFinishLoadingEvent(const base::DictionaryValue& info) {
+  CHECK(gActiveNetworkRequests);
+  std::string request_id = GetRequestIdentifierProperty(info);
+  auto request_info = gActiveNetworkRequests->find(request_id);
+  if (request_info == gActiveNetworkRequests->end()) {
+    recordreplay::Print("Unknown request finished loading: %s",
+      request_id.c_str());
+    return;
+  }
+
+  base::DictionaryValue event;
+  event.SetString("kind", "request-done");
+  CopyDictionaryProperty(event, info, "encodedBodySize");
+  CopyDictionaryProperty(event, info, "decodedBodySize");
+
+  EmitNetworkRequestEvent(request_id, event);
+}
+
+static void HandleNetworkDidFailLoadingEvent(const base::DictionaryValue& info) {
+  CHECK(gActiveNetworkRequests);
+  std::string request_id = GetRequestIdentifierProperty(info);
+  auto request_info = gActiveNetworkRequests->find(request_id);
+  if (request_info == gActiveNetworkRequests->end()) {
+    recordreplay::Print("Unknown request failed loading: %s",
+      request_id.c_str());
+    return;
+  }
+
+  base::DictionaryValue event;
+  event.SetString("kind", "request-failed");
+  CopyDictionaryProperty(event, info, "requestFailedReason");
+
+  EmitNetworkRequestEvent(request_id, event);
+}
+
+static void HandleNetworkDidReceiveDataEvent(const base::DictionaryValue& info) {
+  CHECK(gActiveNetworkRequests);
+  CHECK(gCurrentNetworkStreamData);
+  // Get request info.
+  std::string request_id = GetRequestIdentifierProperty(info);
+  auto request_info = gActiveNetworkRequests->find(request_id);
+  if (request_info == gActiveNetworkRequests->end()) {
+    recordreplay::Print("Unknown request received data: %s",
+      request_id.c_str());
+    return;
+  }
+
+  std::string stream_id = "response-" + request_id;
+
+  // The first byte of data received triggers a "response-body" event.
+  if (request_info->second.response_data_received == 0) {
+    base::DictionaryValue event;
+    event.SetString("kind", "response-body");
+
+    EmitNetworkRequestEvent(request_id, event);
+
+    recordreplay::OnNetworkStreamStart(
+      stream_id.c_str(), "response-data", request_id.c_str()
+    );
+  }
+
+  // Sending stream data.
+  size_t length = *info.FindPath("dataLength")->GetIfDouble();
+  CHECK(length >= 0);
+
+  const std::string *data_base64 = info.FindPath("data")->GetIfString();
+  if (data_base64) {
+    std::string out_string;
+    if (!base::Base64Decode(*data_base64, &out_string)) {
+      recordreplay::Print("Unknown request received data: %s",
+        request_id.c_str());
+      return;
+    }
+    const uint8_t* data =
+      reinterpret_cast<const uint8_t *>(out_string.c_str());
+    size_t offset = request_info->second.response_data_received;
+    SetCurrentNetworkStreamData(
+      request_id,
+      "response-data",
+      data,
+      out_string.length()
+    );
+    recordreplay::OnNetworkStreamData(
+      stream_id.c_str(), offset, length, /* bookmark = */ 0
+    );
+    ClearCurrentNetworkStreamData();
+  }
+  request_info->second.response_data_received += length;
+}
+
+/** ###########################################################################
+ * blink (DOM, CSS etc.) queries
+ * @see https://static.replay.io/protocol/tot/DOM/
+ * @see https://chromedevtools.github.io/devtools-protocol/tot/DOM/
+ * ##########################################################################*/
+
+static bool checkCDPResponse(const char* label,
+                             const protocol::Response& response,
+                             const v8::FunctionCallbackInfo<v8::Value>& args) {
+  if (!response.IsSuccess()) {
+    recordreplay::Warning(
+        "CDPCommandFailed",
+        {{"command", label},
+         {"code", static_cast<int>(response.Code())},
+         {"message", response.Message()}});
+
+    // result is null
+    args.GetReturnValue().SetNull();
+    return false;
+  }
+  return true;
+}
+
+static void fromJsGetNodeIdByCpdId(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsString() &&
+        "[RuntimeError] must be called with a single string");
+
+  v8::Isolate* isolate = args.GetIsolate();
+
+  // convert v8::String → v8::String::Utf8Value → v8_inspector::StringView
+  v8::String::Utf8Value cdpId(isolate, args[0]);
+  const uint8_t* cdpIdPtr = reinterpret_cast<const uint8_t*>(*cdpId);
+  v8_inspector::StringView cdpIdV8(cdpIdPtr, cdpId.length());
+
+  v8::Local<v8::Object> nodeObj;
+  if (getObjectByCdpId(isolate, cdpIdV8, nodeObj)) {
+    Node* node = V8Node::ToImplWithTypeCheck(isolate, nodeObj);
+    if (node) {
+      // Bind node and get nodeId.
+      auto domAgent = getOrCreateInspectorDOMAgent(isolate);
+      if (!domAgent.has_value()) {
+        recordreplay::CommandDiagnostic("fromJsGetNodeIdByCpdId no context id.");
+        args.GetReturnValue().SetNull();
+        return;
+      }
+
+      int nodeId = (*domAgent)->BindDocumentNode(node);
+      args.GetReturnValue().Set(v8::Number::New(isolate, nodeId));
+      return;
+    } else {
+      // This should be reported by the caller, where we have more relevant
+      // context info.
+    }
+  } else { /* already reported by getObjectByCdpId */ }
+
+  args.GetReturnValue().SetNull();
+}
+
+
+static void fromJsGetBoxModel(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsNumber() &&
+        "[RuntimeError] must be called with a single number");
+
+  v8::Isolate* isolate = args.GetIsolate();
+  auto nodeId = (int)args[0].As<v8::Integer>()->Value();
+
+  auto domAgent = getOrCreateInspectorDOMAgent(isolate);
+  if (!domAgent.has_value()) {
+    recordreplay::CommandDiagnostic("CDP InspectorDOMAgent.getBoxModel no context id.");
+    args.GetReturnValue().SetNull();
+    return;
+  }
+
+  int backend_node_id = 0;
+  String object_id;
+  std::unique_ptr<protocol::DOM::BoxModel> boxModel;
+  auto response =
+      (*domAgent)->getBoxModel(nodeId, backend_node_id, object_id, &boxModel);
+
+  if (!response.IsSuccess()) {
+    // This can happen when querying nodes that don't have a box model.
+    recordreplay::CommandDiagnostic(
+        "CDP InspectorDOMAgent.getBoxModel failed (nodeId: %d, Code: "
+        "%d): %s",
+        nodeId, response.Code(), response.Message().c_str());
+  } else {
+    auto result = convertCborToJS(isolate, boxModel.get());
+    if (!result.IsEmpty()) {
+      args.GetReturnValue().Set(result.ToLocalChecked());
+      return;
+    }
+  }
+
+  args.GetReturnValue().SetNull();
+}
+
+
+static void fromJsGetMatchedStylesForElement(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsNumber() &&
+        "[RuntimeError] must be called with a single number");
+
+  v8::Isolate* isolate = args.GetIsolate();
+  auto nodeId = (int)args[0].As<v8::Integer>()->Value();
+
+  auto cssAgent = getOrCreateInspectorCSSAgent(isolate);
+  if (!cssAgent.has_value()) {
+    recordreplay::Warning("GetMatchedStylesForElementMissingContext");
+    args.GetReturnValue().SetNull();
+    return;
+  }
+
+  Maybe<protocol::CSS::CSSStyle> inlineStyle;
+  Maybe<protocol::CSS::CSSStyle> attributesStyle;
+  Maybe<protocol::Array<protocol::CSS::RuleMatch>> matchedRules;
+  Maybe<protocol::Array<protocol::CSS::PseudoElementMatches>> pseudoIdMatches;
+  Maybe<protocol::Array<protocol::CSS::InheritedStyleEntry>> inheritedEntries;
+  Maybe<protocol::Array<protocol::CSS::InheritedPseudoElementMatches>> inherited_pseudo_id_matches;
+  Maybe<protocol::Array<protocol::CSS::CSSKeyframesRule>> keyframesRules;
+  Maybe<int> parentLayoutNodeId;
+
+  auto response = (*cssAgent)->getMatchedStylesForNode(
+    nodeId, &inlineStyle, &attributesStyle, &matchedRules, &pseudoIdMatches,
+    &inheritedEntries, &inherited_pseudo_id_matches, &keyframesRules,
+    &parentLayoutNodeId);
+
+  if (!response.IsSuccess()) {
+    recordreplay::Warning(
+        "GetMatchedStylesForNodeFailed",
+        {{"nodeId", nodeId},
+         {"code", static_cast<int>(response.Code())},
+         {"message", response.Message()}});
+    args.GetReturnValue().SetNull();
+    return;
+  }
+
+  v8::Local<v8::Object> result = v8::Object::New(isolate);
+  // NOTE: not sure what `attributesStyle` is and how its different from `inlineStyle`?
+  if (attributesStyle.isJust()) {
+    auto rulesJs = convertCborToJS(isolate, attributesStyle.fromJust());
+    if (!rulesJs.IsEmpty()) {
+      SetDataProperty(isolate, result, "attributesStyle",
+                      rulesJs.ToLocalChecked());
+    }
+  }
+  if (matchedRules.isJust()) {
+    auto rulesJs = convertCborToJS(isolate, matchedRules.fromJust());
+    SetDataProperty(isolate, result, "matchedRules", rulesJs);
+  }
+  if (pseudoIdMatches.isJust()) {
+    auto rulesJs = convertCborToJS(isolate, pseudoIdMatches.fromJust());
+    SetDataProperty(isolate, result, "pseudoIdMatches", rulesJs);
+  }
+  if (keyframesRules.isJust()) {
+    auto rulesJs = convertCborToJS(isolate, keyframesRules.fromJust());
+    SetDataProperty(isolate, result, "keyframesRules", rulesJs);
+  }
+  args.GetReturnValue().Set(result);
+}
+
+
+static void fromJsCssGetStylesheetByCpdId(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsString() &&
+        "[RuntimeError] must be called with a single string");
+
+  v8::Isolate* isolate = args.GetIsolate();
+
+  auto sheetId = ToCoreString(args[0].As<v8::String>());
+  auto cssAgent = getOrCreateInspectorCSSAgent(isolate);
+  if (!cssAgent.has_value()) {
+    recordreplay::Warning("GetStylesheetByCdpIdMissingContext");
+    args.GetReturnValue().SetNull();
+    return;
+  }
+
+  CSSStyleSheet* styleSheet = (*cssAgent)->getStyleSheet(sheetId);
+  v8::Local<v8::Value> v8StyleSheet;
+  if (styleSheet && getV8FromBlinkObject(isolate, styleSheet, v8StyleSheet)) {
+    args.GetReturnValue().Set(v8StyleSheet);
+  } else {
+    args.GetReturnValue().SetNull();
+  }
+}
+
+static void fromJsDomPerformSearch(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsString() &&
+        "[RuntimeError] must be called with a single string");
+
+  v8::Isolate* isolate = args.GetIsolate();
+
+  auto query = ToCoreString(args[0].As<v8::String>());
+  auto domAgent = getOrCreateInspectorDOMAgent(isolate);
+  if (!domAgent.has_value()) {
+    recordreplay::Warning("DomPerformSearchMissingContext");
+    return;
+  }
+
+  bool includeUserAgentShadowDom = true;
+  String searchId;
+  int resultCount;
+
+  // NOTE: We modified performSearch to work even though the agent is not
+  // enabled.
+  auto response = (*domAgent)->performSearch(query, includeUserAgentShadowDom,
+                                          &searchId, &resultCount);
+  if (checkCDPResponse("DOM.performSearch", response, args)) {
+    if (resultCount) {
+      int fromIndex = 0;
+      int toIndex = resultCount;
+      std::unique_ptr<protocol::Array<int>> nodeIds;
+      response =
+          (*domAgent)->getSearchResults(searchId, fromIndex, toIndex, &nodeIds);
+      if (checkCDPResponse("DOM.getSearchResults", response, args)) {
+        v8::Local<v8::Array> result = v8::Array::New(isolate);
+        uint32_t nWritten = 0;
+        for (uint32_t i = 0; i < nodeIds->size(); ++i) {
+          int nodeId = (*nodeIds)[i];
+          auto* node = (*domAgent)->NodeForId(nodeId);
+          v8::Local<v8::Value> v8Node;
+          if (node && getV8FromBlinkObject(isolate, node, v8Node)) {
+            v8::Local<v8::Context> context = isolate->GetCurrentContext();
+            result->Set(context, nWritten++, v8Node).Check();
+          }
+        }
+        args.GetReturnValue().Set(result);
+      }
+    } else {
+      v8::Local<v8::Array> result = v8::Array::New(isolate);
+      args.GetReturnValue().Set(result);
+    }
+
+    // clean up
+    (*domAgent)->discardSearchResults(searchId);
+  }
+}
+
+static void fromJsCollectEventListeners(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsObject() &&
+        "[RuntimeError] must be called with a single plain object (DOM node)");
+
+  v8::Isolate* isolate = args.GetIsolate();
+  auto context = isolate->GetCurrentContext();
+  auto nodeObject = args[0].As<v8::Object>();
+  auto* node = V8Node::ToImplWithTypeCheck(isolate, nodeObject);
+
+  v8::Local<v8::Array> result = v8::Array::New(isolate);
+  if (!node) {
+    recordreplay::Warning("CollectEventListenersNotNode");
+  } else {
+    auto report_for_all_contexts = true;
+    V8EventListenerInfoList eventListenerInfos;
+    InspectorDOMDebuggerAgent::CollectEventListeners(
+        isolate, node, nodeObject, node, report_for_all_contexts,
+        &eventListenerInfos);
+
+    uint32_t i = 0;
+    for (const auto& info : eventListenerInfos) {
+      auto v8Info = v8::Object::New(isolate);
+      SetDataProperty(isolate, v8Info, "type",
+                      V8String(isolate, info.event_type));
+      SetDataProperty(isolate, v8Info, "capture",
+                      v8::Boolean::New(isolate, info.use_capture));
+      SetDataProperty(isolate, v8Info, "handler", info.effective_function);
+      result->Set(context, i++, v8Info).Check();
+    }
+  }
+  args.GetReturnValue().Set(result);
+}
+
+static void fromJsGetFunctionBytecode(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsObject() &&
+        "[RuntimeError] must be called with a single plain object");
+
+  v8::Isolate* isolate = args.GetIsolate();
+  v8::Local<v8::Object> paramObj = args[0].As<v8::Object>();
+
+  v8::Local<v8::Object> rv = v8::internal::RecordReplayGetBytecode(isolate, paramObj);
+
+  args.GetReturnValue().Set(rv);
+}
+
+static void fromJsGetFunctionLocation(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsFunction() &&
+        "[RuntimeError] must be called with a single function");
+
+  v8::Isolate* isolate = args.GetIsolate();
+  v8::Local<v8::Function> function = args[0].As<v8::Function>();
+
+  for (;;) {
+    v8::Local<v8::Value> bound_function = function->GetBoundFunction();
+    if (!bound_function->IsFunction()) {
+      break;
+    }
+    function = bound_function.As<v8::Function>();
+  }
+
+  const int script_id = function->ScriptId();
+  const int line_number = function->GetScriptLineNumber();
+  const int column_number = function->GetScriptColumnNumber();
+
+  if (script_id < 0 || line_number == v8::Function::kLineOffsetNotFound ||
+      column_number == v8::Function::kLineOffsetNotFound) {
+    args.GetReturnValue().SetNull();
+    return;
+  }
+
+  v8::Local<v8::Object> location = v8::Object::New(isolate);
+  SetDataProperty(isolate, location, "sourceId",
+                  ToV8String(isolate, std::to_string(script_id).c_str()));
+  SetDataProperty(isolate, location, "line",
+                  v8::Integer::New(isolate, line_number + 1));
+  SetDataProperty(isolate, location, "column",
+                  v8::Integer::New(isolate, column_number));
+  args.GetReturnValue().Set(location);
+}
+
+static void fromJsBeginReplayCode(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsString() &&
+        "[RuntimeError] must be called with a single string");
+
+  // The driver keeps the label pointer for as long as events stay disallowed,
+  // so it can't point into this call's Utf8Value. Callers pass a few fixed
+  // labels.
+  static auto* labels = new std::unordered_set<std::string>();
+  v8::String::Utf8Value label(args.GetIsolate(), args[0]);
+  recordreplay::BeginDisallowEventsWithLabel(
+      labels->insert(*label).first->c_str());
+  recordreplay::EnterReplayCode();
+}
+
+static void fromJsEndReplayCode(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  recordreplay::EndDisallowEvents();
+  recordreplay::ExitReplayCode();
+}
+
+static void fromJsGetCurrentViewportPixelSize(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  v8::Isolate* isolate = args.GetIsolate();
+
+  gfx::Size size = recordreplay::GetCurrentViewportPixelSize();
+
+  v8::Local<v8::Object> jsSize = v8::Object::New(isolate);
+  SetDataProperty(isolate, jsSize, "width",
+                  v8::Number::New(isolate, size.width()));
+  SetDataProperty(isolate, jsSize, "height",
+                  v8::Number::New(isolate, size.height()));
+  args.GetReturnValue().Set(jsSize);
+}
+
+// Blink LocalDOMWindow accessors — never page-owned Window getters.
+static void fromJsGetDevicePixelRatio(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  v8::Isolate* isolate = args.GetIsolate();
+  LocalDOMWindow* window = CurrentDOMWindow(isolate);
+  if (!window) {
+    args.GetReturnValue().Set(0);
+    return;
+  }
+
+  // RUN-2989: early Mac devicePixelRatio is wrong; prefer viewport/CSS px.
+  gfx::Size size = recordreplay::GetCurrentViewportPixelSize();
+  if (size.width()) {
+    const int inner_width = window->innerWidth();
+    if (inner_width > 0) {
+      args.GetReturnValue().Set(static_cast<double>(size.width()) / inner_width);
+      return;
+    }
+  }
+  args.GetReturnValue().Set(window->devicePixelRatio());
+}
+
+/** ###########################################################################
+ * misc
+ * ##########################################################################*/
+
+// Handle incoming browser events.
+static void HandleBrowserEvent(const char* name, const char* payload) {
+  base::Value val = base::JSONReader::Read(payload).value_or(base::Value());
+  assert(!val.is_none() && "Browser event JSON failed");
+  assert(!val.is_dict() && "Browser event JSON is not a dictionary");
+  if (!strcmp(name, "Network.PrepareRequest")) {
+    HandleNetworkPrepareRequestEvent(base::Value::AsDictionaryValue(val));
+  } else if (!strcmp(name, "Network.NavigationRedirect")) {
+    HandleNetworkNavigationRedirectEvent(base::Value::AsDictionaryValue(val));
+  } else if (!strcmp(name, "Network.RequestData.Form")) {
+    HandleNetworkRequestDataFormEvent(base::Value::AsDictionaryValue(val));
+  } else if (!strcmp(name, "Network.DidReceiveResponse")) {
+    HandleNetworkDidReceiveResponseEvent(base::Value::AsDictionaryValue(val));
+  } else if (!strcmp(name, "Network.DidFinishLoading")) {
+    HandleNetworkDidFinishLoadingEvent(base::Value::AsDictionaryValue(val));
+  } else if (!strcmp(name, "Network.DidFailLoading")) {
+    HandleNetworkDidFailLoadingEvent(base::Value::AsDictionaryValue(val));
+  } else if (!strcmp(name, "Network.DidReceiveData")) {
+    HandleNetworkDidReceiveDataEvent(base::Value::AsDictionaryValue(val));
+  } else {
+    recordreplay::Print("HandleBrowserEvent received unrecognized event %s", name);
+  }
+}
+
+// Called from page page javascript.
+// `function __RECORD_REPLAY_ANNOTATION_HOOK__(kind, contents)`
+// Since this function is called from userland JS, we avoid assertions.
+// We don't want flawed uses of the API to crash the recording.
+static void InvokeOnAnnotation(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  if (! (args.Length() >= 2 && args[0]->IsString())) {
+    recordreplay::Print("[RuntimeError] %s called with incorrect arguments",
+                        AnnotationHookJSName);
+    return;
+  }
+
+  v8::Isolate* isolate = args.GetIsolate();
+  v8::Local<v8::Object> payload = v8::Object::New(isolate);
+  v8::Local<v8::Context> context = isolate->GetCurrentContext();
+  payload->Set(context, ToV8String(isolate, "message"), args[1]).Check();
+
+  v8::Local<v8::String> json;
+  if (!v8::JSON::Stringify(context, payload).ToLocal(&json)) {
+    recordreplay::Print("[RuntimeError] %s contents failed to json stringify",
+                        AnnotationHookJSName);
+    return;
+  }
+
+  v8::String::Utf8Value kind(args.GetIsolate(), args[0]);
+  v8::String::Utf8Value contents(args.GetIsolate(), json);
+  recordreplay::OnAnnotation(*kind, *contents);
+}
+
+/**
+ * Copied from gin/try_catch.h.
+ */
+static v8::Local<v8::String> GetSourceLine(v8::Isolate* isolate,
+                                    v8::Local<v8::Message> message) {
+  auto maybe = message->GetSourceLine(isolate->GetCurrentContext());
+  v8::Local<v8::String> source_line;
+  return maybe.ToLocal(&source_line) ? source_line : v8::String::Empty(isolate);
+}
+
+static const std::string V8ToString(v8::Isolate* isolate, v8::Local<v8::Value> str) {
+  v8::String::Utf8Value s(isolate, str);
+  return *s;
+}
+
+/**
+ * Error reporting utility based on ShellRunner::Run.
+ * WARNING: It does not work very well. For some reason, we have to try/catch
+ * inside the JS code to get a proper error message. Might have to do with the
+ * fact that we are running this before the window and/or other mechanisms have
+ * not fully initialized.
+ */
+static std::string GetStackTrace(v8::Isolate* isolate, v8::TryCatch& try_catch) {
+  if (!try_catch.HasCaught()) {
+    return "";
+  }
+
+  std::stringstream ss;
+  v8::Local<v8::Message> message = try_catch.Message();
+  if (!message.IsEmpty()) {
+    ss << V8ToString(isolate, message->Get()) << std::endl;
+  }
+  ss << V8ToString(isolate, GetSourceLine(isolate, message)) << std::endl;
+
+  // v8::Local<v8::StackTrace> trace = message->GetStackTrace();
+  // if (trace.IsEmpty())
+  //   return ss.str();
+
+  // int len = trace->GetFrameCount();
+  // for (int i = 0; i < len; ++i) {
+  //   v8::Local<v8::StackFrame> frame = trace->GetFrame(isolate, i);
+  //   ss << V8ToString(isolate, frame->GetScriptName()) << ":"
+  //      << frame->GetLineNumber() << ":" << frame->GetColumn() << ": "
+  //      << V8ToString(isolate, frame->GetFunctionName()) << std::endl;
+  // }
+  return ss.str();
+}
+
+static void RunScript(v8::Isolate* isolate, v8::Local<v8::Context> context, const char* source_raw, const char* filename) {
+  v8::Local<v8::String> filename_string = ToV8String(isolate, filename);
+  v8::ScriptOrigin origin(isolate, filename_string);
+
+  v8::TryCatch try_catch(isolate);
+  v8::Local<v8::String> source = ToV8String(isolate, source_raw);
+  auto maybe_script = v8::Script::Compile(context, source, &origin);
+
+  v8::Local<v8::Script> script;
+  if (!maybe_script.ToLocal(&script)) {
+    recordreplay::Crash("Replay RunScript COMPILE failed: %s",
+      GetStackTrace(isolate, try_catch).c_str());
+  }
+  v8::Local<v8::Value> rv;
+  if (!script->Run(context).ToLocal(&rv)) {
+    recordreplay::Crash("Replay RunScript INIT failed: %s",
+      GetStackTrace(isolate, try_catch).c_str());
+  }
+}
+
+static void fromJsRegisterRootFrameScript(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsString() &&
+        "must be called with a single string");
+
+  v8::String::Utf8Value script(args.GetIsolate(), args[0]);
+  GetRegisteredRootFrameScripts().emplace_back(*script);
+}
+
+static bool TestEnv(const char* env) {
+  const char* v = getenv(env);
+  return v && v[0] && v[0] != '0';
+}
+
+// Share aggregate instrumentation state across realms so that it remains
+// reachable from global evaluations in the main world.
+static v8::Eternal<v8::Object>* gRecordReplayEternalState;
+
+void InstallRecordReplayGlobals(v8::Isolate* isolate,
+                                v8::Local<v8::Context> context) {
+  // Create the objects and functions below in this context's realm.
+  v8::Context::Scope scope(context);
+
+  // Add __RECORD_REPLAY_ANNOTATION_HOOK__ as a global.
+  SetFunctionProperty(isolate, context->Global(), AnnotationHookJSName,
+                      InvokeOnAnnotation);
+
+  v8::Local<v8::Object> jsrrApi = v8::Object::New(isolate);
+  DefineProperty(isolate, context->Global(), "__RECORD_REPLAY__", jsrrApi);
+
+  v8::Local<v8::Object> args = v8::Object::New(isolate);
+  DefineProperty(isolate, context->Global(), "__RECORD_REPLAY_ARGUMENTS__",
+                 args);
+
+  DefineProperty(isolate, args, "REPLAY_CDT_PAUSE_OBJECT_GROUP",
+                 ToV8String(isolate, REPLAY_CDT_PAUSE_OBJECT_GROUP));
+
+  DefineProperty(
+      isolate, args, "RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE",
+      v8::Boolean::New(isolate,
+                       TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE")));
+
+  DefineProperty(isolate, args, "CDPERROR_MISSINGCONTEXT",
+                 v8::Number::New(isolate, (double)CDPERROR_MISSINGCONTEXT));
+
+  DefineProperty(isolate, args, "CDPERROR_NOTALIVE",
+                 v8::Number::New(isolate, (double)CDPERROR_NOTALIVE));
+
+  SetFunctionProperty(isolate, args, "log", LogCallback);
+  SetFunctionProperty(isolate, args, "logTrace", LogTraceCallback);
+  SetFunctionProperty(isolate, args, "warning", LogWarningCallback);
+
+  // CDP debugger functionality
+  SetFunctionProperty(isolate, args, "fromJsIsReplayScriptAlive",
+                      fromJsIsReplayScriptAlive);
+  SetFunctionProperty(isolate, args, "hasDiverged",
+                      fromJsHasDiverged);
+  SetFunctionProperty(isolate, args, "setCDPMessageCallback",
+                      SetCDPMessageCallback);
+  SetFunctionProperty(isolate, args, "sendCDPMessage", SendCDPMessage);
+  SetFunctionProperty(isolate, args, "setCommandCallback",
+                      v8::FunctionCallbackRecordReplaySetCommandCallback);
+
+  SetFunctionProperty(isolate, args, "layoutDom", LayoutDom);
+
+  // Object Util
+  SetFunctionProperty(isolate, args, "fromJsMakeDebuggeeValue",
+                      fromJsMakeDebuggeeValue);
+  SetFunctionProperty(isolate, args, "fromJsGetArgumentsInFrame",
+                      fromJsGetArgumentsInFrame);
+  SetFunctionProperty(isolate, args, "fromJsGetObjectByCdpId",
+                      fromJsGetObjectByCdpId);
+  SetFunctionProperty(isolate, args, "fromJsIsBlinkObject",
+                      fromJsIsBlinkObject);
+  SetFunctionProperty(isolate, args, "fromJsIsBlinkNodeObject",
+                      fromJsIsBlinkNodeObject);
+  SetFunctionProperty(isolate, args, "fromJsIsBlinkElementObject",
+                      fromJsIsBlinkElementObject);
+  SetFunctionProperty(isolate, args, "fromJsIsBlinkCSSStyleDeclarationObject",
+                      fromJsIsBlinkCSSStyleDeclarationObject);
+  SetFunctionProperty(isolate, args, "fromJsHasReturnValue",
+                      fromJsHasReturnValue);
+  SetFunctionProperty(isolate, args, "fromJsGetReturnValue",
+                      fromJsGetReturnValue);
+
+  // networking
+  SetFunctionProperty(isolate, args, "getCurrentNetworkRequestEvent",
+                      GetCurrentNetworkRequestEvent);
+  SetFunctionProperty(isolate, args, "getCurrentNetworkRequestId",
+                      GetCurrentNetworkRequestId);
+  SetFunctionProperty(isolate, args, "getCurrentNetworkStreamKind",
+                      GetCurrentNetworkStreamKind);
+  SetFunctionProperty(isolate, args, "getCurrentNetworkStreamData",
+                      GetCurrentNetworkStreamData);
+
+  // DOM, blink, API stuff
+  // SetFunctionProperty(isolate, args, "jsGetObjectIdForAnyObject",
+  //                     jsGetObjectIdForAnyObject);
+  // SetFunctionProperty(isolate, args, "jsPreviewBlinkObjectForObjectId",
+  // jsPreviewBlinkObjectForObjectId);
+  SetFunctionProperty(isolate, args, "fromJsGetNodeIdByCpdId", fromJsGetNodeIdByCpdId);
+  SetFunctionProperty(isolate, args, "fromJsGetBoxModel", fromJsGetBoxModel);
+  SetFunctionProperty(isolate, args, "fromJsGetMatchedStylesForElement",
+                      fromJsGetMatchedStylesForElement);
+  SetFunctionProperty(isolate, args, "fromJsCssGetStylesheetByCpdId",
+                      fromJsCssGetStylesheetByCpdId);
+  SetFunctionProperty(isolate, args, "fromJsCollectEventListeners",
+                      fromJsCollectEventListeners);
+  SetFunctionProperty(isolate, args, "fromJsDomPerformSearch",
+                      fromJsDomPerformSearch);
+  SetFunctionProperty(isolate, args, "getFunctionBytecode",
+                      fromJsGetFunctionBytecode);
+  SetFunctionProperty(isolate, args, "getFunctionLocation",
+                      fromJsGetFunctionLocation);
+
+  // Replay meta.
+  DefineProperty(isolate, args, "IsReplaying",
+                 v8::Boolean::New(isolate, recordreplay::IsReplaying()));
+  SetFunctionProperty(isolate, args, "beginReplayCode",
+                      fromJsBeginReplayCode);
+  SetFunctionProperty(isolate, args, "endReplayCode",
+                      fromJsEndReplayCode);
+
+  // Graphics.
+  SetFunctionProperty(isolate, args, "getCurrentViewportPixelSize",
+                      fromJsGetCurrentViewportPixelSize);
+  SetFunctionProperty(isolate, args, "fromJsGetDevicePixelRatio",
+                      fromJsGetDevicePixelRatio);
+
+  // unsorted Replay stuff
+  SetFunctionProperty(
+      isolate, args, "setClearPauseDataCallback",
+      v8::FunctionCallbackRecordReplaySetClearPauseDataCallback);
+  SetFunctionProperty(isolate, args, "getCurrentError", GetCurrentError);
+  SetFunctionProperty(isolate, args, "getRecordingId", GetRecordingId);
+  SetFunctionProperty(isolate, args, "sha256DigestHex", SHA256DigestHex);
+  SetFunctionProperty(isolate, args, "writeToRecordingDirectory",
+                      WriteToRecordingDirectory);
+  SetFunctionProperty(isolate, args, "addRecordingEvent", AddRecordingEvent);
+  SetFunctionProperty(isolate, args, "addNewScriptHandler",
+                      v8::FunctionCallbackRecordReplayAddNewScriptHandler);
+  SetFunctionProperty(isolate, args, "getScriptSource",
+                      v8::FunctionCallbackRecordReplayGetScriptSource);
+
+  SetFunctionProperty(isolate, args, "recordingDirectoryFileExists",
+                      RecordingDirectoryFileExists);
+  SetFunctionProperty(isolate, args, "readFromRecordingDirectory",
+                      ReadFromRecordingDirectory);
+  SetFunctionProperty(isolate, args, "getRecordingFilePath",
+                      GetRecordingFilePath);
+  SetFunctionProperty(isolate, args, "getPersistentId", fromJsGetPersistentId);
+  SetFunctionProperty(isolate, args, "checkPersistentId", fromJsCheckPersistentId);
+  SetFunctionProperty(isolate, args, "getProgressCounter", fromJsGetProgressCounter);
+  SetFunctionProperty(isolate, args, "forceCheckpoint", fromJsForceCheckpoint);
+  SetFunctionProperty(isolate, args, "registerRootFrameScript",
+                      fromJsRegisterRootFrameScript);
+
+  // exported for tests
+  SetFunctionProperty(
+    isolate, args, "forTestingSerializeValueToArray",
+    ForTestingSerializeValueToArray);
+
+  if (gRecordReplayEternalState == nullptr) {
+    v8::Local<v8::Object> eternal_state = v8::Object::New(isolate);
+    eternal_state->SetPrototype(context, v8::Null(isolate)).Check();
+    gRecordReplayEternalState =
+        new v8::Eternal<v8::Object>(isolate, eternal_state);
+  }
+  DefineProperty(isolate, context->Global(), "__RECORD_REPLAY_ETERNAL_STATE__",
+                 gRecordReplayEternalState->Get(isolate));
+}
+
+void InitializeRecordReplay(
+  const char* processType,
+  v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
+  V8RecordReplaySetAPIObjectIdCallback(GetBlinkPersistentId);
+  gActiveNetworkRequests =
+      new std::unordered_map<std::string, NetworkRequestStatus>();
+  gCurrentNetworkStreamData = new std::vector<uint8_t>();
+
+  // Add process type metadata.
+  std::string metadata = std::string("{ \"process\": \"") + processType + "\" }";
+  V8RecordReplayAddMetadata(metadata.c_str());
+}
+
+void InitializeRecordReplayAfterCheckpoint() {
+  // The first replay window does this even when it isn't a root frame and so
+  // takes no checkpoint; the first root frame takes it later
+  // (LocalWindowProxy::Initialize).
+  static bool initialized = false;
+  if (initialized) {
+    return;
+  }
+  initialized = true;
+  // Note: This can immediately invoke the callback for events that happened
+  // before the callback was registered.
+  V8RecordReplayRegisterBrowserEventCallback(HandleBrowserEvent);
+}
+
+static void InitializeReplayScripts(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
+  // Register context, s.t. when handling a command and we are not on a
+  // JS stack, we can always use the current root frame's context.
+  // Note: We are assuming that each tab has its own process, for now.
+  //   (That might not hold true for tabs of the same domain - not sure)
+  V8RecordReplaySetDefaultContext(isolate, context);
+
+  // Initialize __RECORD_REPLAY__ things.
+  InstallRecordReplayGlobals(isolate, context);
+
+  if (recordreplay::FeatureEnabled("collect-source-maps") &&
+      !TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_COLLECTION")) {
+    recordreplay::AutoMarkReplayCode amrc;
+    RunScript(isolate, context, ReadReplaySourcemapHandlerScript().Utf8().c_str(), kInternalScriptURL);
+  }
+
+  if (recordreplay::FeatureEnabled("force-main-world-initialization")) {
+    // Call this here to avoid divergence later.
+    // https://linear.app/replay/issue/RUN-2195#comment-e0b6c75b
+    localFrame->GetSettings()->SetForceMainWorldInitialization(true);
+  }
+
+  if (IsCommandHandlingEnabled()) {
+    recordreplay::AutoMarkReplayCode amrc;
+    String commandHandlerScript = ReadReplayCommandHandlerScript();
+    {
+      recordreplay::AutoDisallowEvents disallow("InitializeReplayScripts");
+
+      // Run `commandHandlerScript`.
+      RunScript(isolate, context, commandHandlerScript.Utf8().c_str(), kInternalScriptURL);
+    }
+  }
+}
+
+void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
+  recordreplay::AutoMarkReplayCode amrc;
+  recordreplay::Trace(
+    "[RUN-2739] OnRootFrameInit win=%d frame=%d %d %d %d %d parent=%d" " \"%s\"",
+      localFrame->DomWindow()->RecordReplayId(),
+      localFrame->RecordReplayId(),
+
+      localFrame->IsCrossOriginToParentOrOuterDocument(),
+      localFrame->IsFencedFrameRoot(),
+      localFrame->IsInFencedFrameTree(),
+      localFrame->IsMainFrame(),
+
+      localFrame->Parent() ? localFrame->Parent()->IsMainFrame() : -1,
+
+      localFrame->GetDocument()->Url().GetString().Utf8().c_str()
+      );
+
+  // NOTE: The root `LocalFrame` can change over time.
+  gRootLocalFrame = localFrame;
+
+  // Retain last-resort font before first checkpoint for post-diverge PF inject.
+  FontCache::WarmReplayLastResortFont();
+
+  // 1. Reset paint surface so that paints to the new root's surface are not ignored.
+  // See: https://linear.app/replay/issue/RUN-2400
+  recordreplay::DoResetPaintSurface();
+
+  // 2. Initialize sourcemap worker, command handlers etc.
+  // about:blank after a page takes no checkpoints.
+  const bool blank = IsBlankReplayWindow(localFrame);
+  gHadPageRootFrame |= !blank;
+  gReplayScriptsAlive = true;
+  recordreplay::SetScriptAlive(!blank || !gHadPageRootFrame);
+  recordreplay::Print("ReplayScript STATUS_CHANGE_ALIVE %s group=%d win=%d frame=%d",
+      v8::internal::RecordReplayContextAddressToken(
+          isolate, *reinterpret_cast<v8::internal::Address*>(*context), true)
+          .c_str(),
+      v8::internal::gPauseContextGroupId,
+      localFrame->DomWindow()->RecordReplayId(),
+      localFrame->RecordReplayId());
+  InitializeReplayScripts(isolate, localFrame, context);
+}
+
+static void RunRegisteredRootFrameScripts(v8::Isolate* isolate,
+                                          v8::Local<v8::Context> context) {
+  for (const auto& script : GetRegisteredRootFrameScripts()) {
+    recordreplay::AutoDisallowEvents disallow("RunRegisteredRootFrameScripts");
+    RunScript(isolate, context, script.c_str(), kInternalScriptURL);
+  }
+}
+
+void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
+  // 1. Register navigation event.
+  if (localFrame->GetDocument()->Url().ProtocolIsInHTTPFamily()) {
+    recordreplay::OnNavigationEvent(
+        nullptr, localFrame->GetDocument()->Url().GetString().Utf8().c_str());
+  }
+
+  // 2. Initialize registered root frame scripts
+  RunRegisteredRootFrameScripts(isolate, context);
+
+  // 3. Initialize React and Redux Devtools stubs.
+  if (recordreplay::FeatureEnabled("react-devtools-backend") &&
+      !TestEnv("RECORD_REPLAY_DISABLE_REACT_DEVTOOLS")) {
+    // Note: We use a special URL for the react devtools as this script needs
+    // to be reported to the recorder so that evaluations can be performed in
+    // its frames.
+    RunScript(isolate, context, gReactDevtoolsScript, "record-replay-react-devtools");
+    RunScript(isolate, context, gReduxDevtoolsScript, "record-replay-redux-devtools");
+  }
+}
+
+void OnNewWindowAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> newContext) {
+  recordreplay::AutoMarkReplayCode amrc;
+  // Other local roots get their own bindings, as isolated worlds do, without
+  // the command API: a popup is its own window.top, and an OOPIF's top is
+  // usually in another process. The bindings are read-only, so an OOPIF whose
+  // top is a local window of this renderer (A embedding B embedding A) keeps
+  // them instead of sharing the top's below.
+  const bool ordinaryLocalRoot = localFrame->IsLocalRoot() &&
+                                 !IsAliveRootFrame(localFrame) &&
+                                 gReplayScriptsAlive;
+  if (ordinaryLocalRoot) {
+    InstallRecordReplayGlobals(isolate, newContext);
+    // The scripts define helpers on this window's __RECORD_REPLAY_ARGUMENTS__,
+    // which its code calls when its sources are replaced while replaying.
+    RunRegisteredRootFrameScripts(isolate, newContext);
+  }
+
+  RunScript(isolate, newContext, gOnNewWindowScript,
+            "record-replay-OnNewWindow");
+
+  if (ordinaryLocalRoot) {
+    RecordReplayOrdinaryLocalRootIds().insert(localFrame->RecordReplayId());
+    // Runtime.enable forces main world initialization in the frame's page,
+    // and with replay-only command handling it runs only when replaying.
+    // Set it on both sides, as the root does in InitializeReplayScripts.
+    if (recordreplay::FeatureEnabled("force-main-world-initialization")) {
+      localFrame->GetSettings()->SetForceMainWorldInitialization(true);
+    }
+    if (IsCommandHandlingEnabled() && gCDPMessageCallback) {
+      RecordReplayEnableRuntimeForLocalRoot(isolate, localFrame);
+    }
+  }
+
+  LocalFrame* parentFrame = DynamicTo<LocalFrame>(localFrame->Parent());
+  recordreplay::Print(
+    "[RUN-2739] OnNewWindowAfterCheckpoint %d win=%d frame=%d %d \"%s\" parent=%d",
+    newContext == isolate->GetCurrentContext(),
+    localFrame->DomWindow()->RecordReplayId(),
+    localFrame->RecordReplayId(),
+    localFrame->IsCrossOriginToParentOrOuterDocument(),
+    localFrame->GetDocument()->Url().GetString().Utf8().c_str(),
+    parentFrame ? parentFrame->RecordReplayId() : 0
+  );
+}
+
+static ErrorEvent* gCurrentErrorEvent;
+
+void RecordReplayOnErrorEvent(ErrorEvent* error_event) {
+  if (!v8::IsMainThread()) {
+    return;
+  }
+
+  CHECK(!gCurrentErrorEvent);
+  gCurrentErrorEvent = error_event;
+
+  size_t bookmark = error_event->record_replay_bookmark();
+  V8RecordReplayOnConsoleMessage(bookmark);
+
+  gCurrentErrorEvent = nullptr;
+}
+
+static void GetCurrentError(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  if (!gCurrentErrorEvent) {
+    return;
+  }
+
+  v8::Isolate* isolate = args.GetIsolate();
+  v8::Local<v8::Object> rv = v8::Object::New(isolate);
+
+  SetDataProperty(isolate, rv, "message",
+                  ToV8String(isolate, gCurrentErrorEvent->message().Utf8().c_str()));
+  SetDataProperty(isolate, rv, "filename",
+                  ToV8String(isolate, gCurrentErrorEvent->filename().Utf8().c_str()));
+  SetDataProperty(isolate, rv, "line", v8::Number::New(isolate, gCurrentErrorEvent->lineno()));
+  SetDataProperty(isolate, rv, "column", v8::Number::New(isolate, gCurrentErrorEvent->colno()));
+  SetDataProperty(isolate, rv, "scriptId",
+                  v8::Number::New(isolate, gCurrentErrorEvent->Location()->ScriptId()));
+
+  args.GetReturnValue().Set(rv);
+}
+
+bool GetStringProperty(v8::Local<v8::Context> context, v8::Local<v8::Object> obj, const char* name, v8::Local<v8::String>* out) {
+  v8::Isolate* isolate = context->GetIsolate();
+  v8::Local<v8::String> v8Name = ToV8String(isolate, name);
+  v8::Local<v8::Value> v8Value = obj->Get(context, v8Name).ToLocalChecked();
+
+  return v8Value->ToString(context).ToLocal(out);
+}
+
+bool GetObjectProperty(v8::Local<v8::Context> context, v8::Local<v8::Object> obj, const char* name, v8::Local<v8::Object>* out) {
+  v8::Isolate* isolate = context->GetIsolate();
+  v8::Local<v8::String> v8Name = ToV8String(isolate, name);
+  v8::Local<v8::Value> v8Value = obj->Get(context, v8Name).ToLocalChecked();
+
+  return v8Value->ToObject(context).ToLocal(out);
+}
+
+bool StringEquals(v8::Isolate* isolate, v8::Local<v8::String> str1, const char* str2) {
+  return str1->StringEquals(ToV8String(isolate, str2));
+}
+
+void RecordReplayEventListener::Invoke(ExecutionContext* context, Event* event) {
+  v8::Isolate* isolate = context->GetIsolate();
+  v8::Local<v8::Context> v8_context = isolate->GetCurrentContext();
+  ScriptState* scriptState = ScriptState::Current(isolate);
+  CustomEvent* customEvent = To<CustomEvent>(event);
+
+  if (!customEvent) {
+    return;
+  }
+
+  v8::Local<v8::Value> detail = customEvent->detail(scriptState).V8Value();
+  v8::Local<v8::String> detail_json;
+  if (!detail->ToString(v8_context).ToLocal(&detail_json)) {
+    LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: detail is not a string";
+    return;
+  }
+
+  // for debugging:
+  // LOG(ERROR) << "RecordReplayEventListener: detail = " << V8ToString(isolate, detail_json);
+
+  // detail is a JSON stringified object with one of the following forms:
+
+  // { "id": "record-replay-token", "message": { "type": "connect" } }      => register auth token observer
+  // { "id": "record-replay-token", "message": { "type": "login" } }        => open external browser to login
+  // { "id": "record-replay-token", "message": { "token": <string|null> } } => set access token if string.  clear if null (or undefined?)
+  // { "id": "record-replay", "message": { "user": <string|null> } }        => set user if string.  clear if null (or undefined?)
+
+  v8::Local<v8::Object> detail_obj;
+  if (!v8::JSON::Parse(v8_context, detail_json).ToLocalChecked()->ToObject(v8_context).ToLocal(&detail_obj)) {
+    LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: detail is not a JSON object";
+    return;
+  }
+
+  // always pull out the id and message properties, and early out if id isn't a string or message isn't an object
+  v8::Local<v8::String> id_str;
+  if (!GetStringProperty(v8_context, detail_obj, "id", &id_str)) {
+    LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: id is not an string";
+    return;
+  }
+
+  v8::Local<v8::Object> message_obj;
+  if (!GetObjectProperty(v8_context, detail_obj, "message", &message_obj)) {
+    LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: message is not an object";
+    return;
+  }
+
+
+  if (StringEquals(isolate, id_str, "record-replay-token")) {
+    HandleRecordReplayTokenMessage(v8_context, message_obj);
+  } else if (StringEquals(isolate, id_str, "record-replay")) {
+    HandleRecordReplayMessage(v8_context, message_obj);
+  } else {
+    LOG(ERROR) << "[RUN-2863] Unknown event id: " << V8ToString(isolate, id_str);
+  }
+}
+
+void RecordReplayEventListener::HandleRecordReplayTokenMessage(v8::Local<v8::Context> context, v8::Local<v8::Object> message) {
+  v8::Isolate* isolate = context->GetIsolate();
+
+  // cases here:
+  // { "id": "record-replay-token", "message": { "type": "connect" } }      => register auth token observer
+  // { "id": "record-replay-token", "message": { "type": "login" } }        => open external browser to login
+  // { "id": "record-replay-token", "message": { "token": <string|null> } } => set access token if string.  clear if null (or undefined?)
+
+  // first check if there's a type property to handle the first two cases above.
+  v8::Local<v8::Value> message_type = message->Get(context, ToV8String(isolate, "type")).ToLocalChecked();
+  if (message_type->IsString()) {
+    // message is either `{ type: "connect" }` or `{ type: "login" }`, with neither payload carrying additional info.
+    if (StringEquals(isolate, message_type.As<v8::String>(), "connect")) {
+      LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: connect message received";
+      local_frame_->RegisterRecordReplayAuthTokenObserver();
+      return;
+    }
+
+    if (StringEquals(isolate, message_type.As<v8::String>(), "login")) {
+      LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: login message received";
+      // [RUN-2863] TODO open external browser to login
+      return;
+    }
+
+    LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: unknown record-replay-token message type: " << V8ToString(isolate, message_type);
+  }
+
+  // if we're here, we should only be in the `{ token: ... }` case from the list above.
+  v8::Local<v8::Value> message_token = message->Get(context, ToV8String(isolate, "token")).ToLocalChecked();
+  if (message_token->IsString()) {
+    LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: set access token message received, token = " << V8ToString(isolate, message_token);
+    // [RUN-2863] TODO set the access token in browser prefs.
+    return;
+  }
+
+  if (message_token->IsNull()) {
+    LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: clear access token message received";
+    // [RUN-2863] TODO clear the access token in browser prefs.
+    return;
+  }
+
+  LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: unknown record-replay-token message";
+}
+
+void RecordReplayEventListener::HandleRecordReplayMessage(v8::Local<v8::Context> context, v8::Local<v8::Object> message) {
+  v8::Isolate* isolate = context->GetIsolate();
+
+  // the only message handled here is `{ user: <string|null> }`
+  v8::Local<v8::Value> message_user = message->Get(context, ToV8String(isolate, "user")).ToLocalChecked();
+  if (message_user->IsString()) {
+    LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: set user message received, user = " << V8ToString(isolate, message_user);
+    // [RUN-2863] TODO set the user in browser prefs.
+    return;
+  }
+
+  if (message_user->IsNullOrUndefined()) {
+    LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: clear user message received";
+    // [RUN-2863] TODO clear the user in browser prefs.
+    return;
+  }
+
+  LOG(ERROR) << "[RUN-2863] Unknown record-replay message type";
+  return;
+}
+
+void RecordReplayEventListener::Trace(Visitor* visitor) const {
+  visitor->Trace(local_frame_);
+  EventListener::Trace(visitor);
+}
+
+int RecordReplayOnDOMMutation(Node& target, const char* type) {
+  if (!recordreplay::DependencyGraphEnabled()) {
+    return -1;
+  }
+
+  base::Value::Dict info;
+  info.Set("kind", "domMutation");
+  info.Set("mutationType", type);
+  info.Set("mutationNode", target.RecordReplayId());
+  std::string json;
+  base::JSONWriter::Write(info, &json);
+  return recordreplay::NewDependencyGraphNode(json.c_str());
+}
+
+}  // namespace blink
