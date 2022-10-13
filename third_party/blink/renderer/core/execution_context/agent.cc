@@ -10,6 +10,8 @@
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/html/custom/custom_element_reaction_stack.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 namespace {
@@ -42,7 +44,9 @@ Agent::Agent(v8::Isolate* isolate,
       origin_keyed_because_of_inheritance_(false),
       is_origin_agent_cluster_(is_origin_agent_cluster),
       origin_agent_cluster_left_as_default_(
-          origin_agent_cluster_left_as_default) {}
+          origin_agent_cluster_left_as_default) {
+  record_replay_id_ = recordreplay::NewIdAnyThread("blink::Agent");
+}
 
 Agent::~Agent() = default;
 
@@ -134,7 +138,13 @@ bool Agent::IsWindowAgent() const {
 }
 
 void Agent::PerformMicrotaskCheckpoint() {
+  recordreplay::Assert("[RUN-2056-2211] Agent::PerformMicrotaskCheckpoint %d Start",
+    (int) RecordReplayId());
+
   event_loop_->PerformMicrotaskCheckpoint();
+
+  recordreplay::Assert("[RUN-2056-2211] Agent::PerformMicrotaskCheckpoint %d Done",
+    (int) RecordReplayId());
 }
 
 void Agent::Dispose() {

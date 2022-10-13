@@ -11,6 +11,8 @@
 #include "third_party/skia/include/core/SkFont.h"
 #include "third_party/skia/include/core/SkPath.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 namespace {
@@ -102,7 +104,9 @@ void SkFontGetGlyphExtentsForHarfBuzz(const SkFont& font,
 #if BUILDFLAG(IS_APPLE)
   // TODO(drott): Remove this once we have better metrics bounds
   // on Mac, https://bugs.chromium.org/p/skia/issues/detail?id=5328
-  if (const auto path = font.getPath(glyph)) {
+  if (const auto path = recordreplay::AreEventsUnavailable("divergent-update")
+                            ? std::optional<SkPath>()
+                            : font.getPath(glyph)) {
     sk_bounds = path->getBounds();
   } else {
     sk_bounds = font.getBounds(glyph, nullptr);
@@ -128,7 +132,9 @@ void SkFontGetBoundsForGlyph(const SkFont& font, Glyph glyph, SkRect* bounds) {
 #if BUILDFLAG(IS_APPLE)
   // TODO(drott): Remove this once we have better metrics bounds
   // on Mac, https://bugs.chromium.org/p/skia/issues/detail?id=5328
-  if (const auto path = font.getPath(glyph)) {
+  if (const auto path = recordreplay::AreEventsUnavailable("divergent-update")
+                            ? std::optional<SkPath>()
+                            : font.getPath(glyph)) {
     *bounds = path->getBounds();
   } else {
     // Fonts like Apple Color Emoji have no paths, fall back to bounds here.

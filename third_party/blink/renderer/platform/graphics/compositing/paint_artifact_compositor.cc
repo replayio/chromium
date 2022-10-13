@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <memory>
 #include <utility>
+#include <sstream>
 
 #include "base/compiler_specific.h"
 #include "base/debug/crash_logging.h"
@@ -734,6 +735,9 @@ void PaintArtifactCompositor::Layerizer::LayerizeGroup(
     if (&chunk_effect == &current_group) {
       compositor_.UpdatePaintedScrollTranslationsBeforeLayerization(
           artifact_, chunk_cursor_);
+#if !BUILDFLAG(IS_WIN) // RUN-2115
+      recordreplay::Assert("[RUN-1470-1471] PaintArtifactCompositor::LayerizeGroup %d", chunk_cursor_->id);
+#endif
       pending_layers_.emplace_back(
           artifact_, *chunk_cursor_,
           compositor_.ChunkCompositingType(artifact_, *chunk_cursor_));
@@ -1058,6 +1062,7 @@ void PaintArtifactCompositor::Update(
         tracks_raster_invalidations_, root_layer_->layer_tree_host());
 
     cc::Layer& layer = pending_layer.CcLayer();
+
     const auto& property_state = pending_layer.GetPropertyTreeState();
     const auto& transform = property_state.Transform();
     const auto& clip = property_state.Clip();
@@ -1098,9 +1103,14 @@ void PaintArtifactCompositor::Update(
     bool backface_hidden = transform.IsBackfaceHidden();
     layer.SetShouldCheckBackfaceVisibility(backface_hidden);
 
+    recordreplay::Assert("[RUN-1470-1471] PaintArtifactCompositor::Update %d",
+                         layer.subtree_property_changed());
+
     if (layer.subtree_property_changed())
       root_layer_->SetNeedsCommit();
   }
+
+  recordreplay::Assert("[RUN-657-1540] PaintArtifactCompositor::Update");
 
   root_layer_->layer_tree_host()->RegisterSelection(layer_selection);
 
