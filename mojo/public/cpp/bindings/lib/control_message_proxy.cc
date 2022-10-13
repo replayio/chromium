@@ -11,6 +11,7 @@
 
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
+#include "base/record_replay.h"
 #include "base/run_loop.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
@@ -212,6 +213,8 @@ void ControlMessageProxy::NotifyIdle() {
 
 void ControlMessageProxy::OnConnectionError() {
   encountered_error_ = true;
+  recordreplay::Assert("ControlMessageProxy::OnConnectionError %d",
+                       !pending_flush_callback_.is_null());
   if (!pending_flush_callback_.is_null()) {
     RunFlushForTestingClosure();
   }

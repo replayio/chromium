@@ -10,6 +10,7 @@
 #include <string_view>
 
 #include "base/compiler_specific.h"
+#include "base/record_replay.h"
 #include "mojo/public/cpp/bindings/lib/array_internal.h"
 #include "mojo/public/cpp/bindings/lib/message_fragment.h"
 #include "mojo/public/cpp/bindings/lib/serialization_forward.h"
