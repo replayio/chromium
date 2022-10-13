@@ -293,6 +293,11 @@ IntersectionObserver::IntersectionObserver(
       track_fraction_of_root_(semantics == kFractionOfRoot),
       always_report_root_bounds_(always_report_root_bounds),
       use_overflow_clip_edge_(use_overflow_clip_edge) {
+  // Pointer registration gives observers a deterministic order while
+  // recording/replaying: in ElementIntersectionObserverData's hash tables,
+  // keyed by the pointer id, and in the sorting in
+  // IntersectionObserverController::ComputeIntersections.
+  recordreplay::RegisterPointer("IntersectionObserver", this);
   switch (margin.size()) {
     case 0:
       break;
@@ -333,7 +338,9 @@ IntersectionObserver::IntersectionObserver(
 void IntersectionObserver::ProcessCustomWeakness(const LivenessBroker& info) {
   // For explicit-root observers, if the root element disappears for any reason,
   // any remaining obsevations must be dismantled.
-  if (root() && !info.IsHeapObjectAlive(root()))
+  if (root() && !info.IsHeapObjectAlive(root())
+    && !(recordreplay::AreEventsDisallowed() &&
+      recordreplay::FeatureEnabled("leak-references", "IntersectionObserver::ProcessCustomWeakness")))
     root_ = nullptr;
   if (!RootIsImplicit() && !root())
     disconnect();
@@ -361,6 +368,9 @@ void IntersectionObserver::observe(Element* target,
       MakeGarbageCollected<IntersectionObservation>(*this, *target);
   target->EnsureIntersectionObserverData().AddObservation(*observation);
   observations_.insert(observation);
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "IntersectionObserver")) {
+    replay_strong_observations_.insert(observation);
+  }
   if (root() && root()->isConnected()) {
     root()
         ->GetDocument()
@@ -402,6 +412,9 @@ void IntersectionObserver::unobserve(Element* target,
 
   observation->Disconnect();
   observations_.erase(observation);
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "IntersectionObserver")) {
+    replay_strong_observations_.erase(observation);
+  }
   active_observations_.erase(observation);
   if (root() && root()->isConnected() && observations_.empty()) {
     root()
@@ -415,6 +428,9 @@ void IntersectionObserver::disconnect(ExceptionState& exception_state) {
   for (auto& observation : observations_)
     observation->Disconnect();
   observations_.clear();
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "IntersectionObserver")) {
+    replay_strong_observations_.clear();
+  }
   active_observations_.clear();
   if (root() && root()->isConnected()) {
     root()
@@ -474,6 +490,10 @@ int64_t IntersectionObserver::ComputeIntersections(
     unsigned flags,
     absl::optional<base::TimeTicks>& monotonic_time) {
   DCHECK(!RootIsImplicit());
+  REPLAY_ASSERT("[TT-1483-1527] IntersectionObserver::ComputeIntersections A %d %d %u",
+    !!RootIsValid(),
+    !!GetExecutionContext(),
+    (unsigned)observations_.size());
   if (!RootIsValid() || !GetExecutionContext() || observations_.empty())
     return 0;
 
@@ -486,6 +506,11 @@ int64_t IntersectionObserver::ComputeIntersections(
   bool is_post_layout_delivery_observer =
       GetDeliveryBehavior() ==
       IntersectionObserver::kDeliverDuringPostLayoutSteps;
+
+  REPLAY_ASSERT("[TT-1483-1527] IntersectionObserver::ComputeIntersections B %d %d",
+    post_layout_delivery_only,
+    is_post_layout_delivery_observer);
+
   if (post_layout_delivery_only != is_post_layout_delivery_observer)
     return 0;
 
@@ -545,6 +570,10 @@ void IntersectionObserver::Deliver() {
   if (!NeedsDelivery())
     return;
   HeapVector<Member<IntersectionObserverEntry>> entries;
+
+  recordreplay::AutoDependencyExecution execute(
+    recordreplay::NewDependencyGraphNode("{\"kind\":\"intersectionChanged\"}")
+  );
   for (auto& observation : observations_)
     observation->TakeRecords(entries);
   active_observations_.clear();
@@ -561,6 +590,7 @@ void IntersectionObserver::Trace(Visitor* visitor) const {
       IntersectionObserver, &IntersectionObserver::ProcessCustomWeakness>(this);
   visitor->Trace(delegate_);
   visitor->Trace(observations_);
+  visitor->Trace(replay_strong_observations_);
   visitor->Trace(active_observations_);
   ScriptWrappable::Trace(visitor);
   ExecutionContextClient::Trace(visitor);

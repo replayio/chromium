@@ -40,6 +40,7 @@ Element* ClosestInclusiveAncestorContainer(Element& element,
 
 StyleRecalcContext StyleRecalcContext::FromInclusiveAncestors(
     Element& element) {
+  recordreplay::Assert("[RUN-2424-3005] StyleRecalcContext::FromInclusiveAncestors %d", element.RecordReplayId());
   return StyleRecalcContext{ClosestInclusiveAncestorContainer(element)};
 }
 
