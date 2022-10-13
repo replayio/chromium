@@ -73,9 +73,16 @@ void WebCacheManager::ClearCacheForProcess(content::ChildProcessId process_id) {
 
 void WebCacheManager::ClearRendererCache(
     WebCacheManager::ClearCacheOccasion occasion) {
+  int record_replay_index = 0;
   for (auto& service : web_cache_services_) {
+    recordreplay::Assert(
+        "[RUN-1975-2287] WebCacheManager::ClearRendererCache A %d %d %d/%zu",
+        service.first.GetUnsafeValue(), (int)occasion, record_replay_index++,
+        web_cache_services_.size());
     service.second->ClearCache(occasion == ON_NAVIGATION);
   }
+  recordreplay::Assert(
+      "[RUN-1975-2287] WebCacheManager::ClearRendererCache C");
 }
 
 }  // namespace web_cache
