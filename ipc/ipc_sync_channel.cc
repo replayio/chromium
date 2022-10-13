@@ -25,6 +25,8 @@
 #include "ipc/param_traits_macros.h"
 #include "mojo/public/cpp/bindings/sync_event_watcher.h"
 
+#include "base/record_replay.h"
+
 using base::WaitableEvent;
 
 namespace IPC {
