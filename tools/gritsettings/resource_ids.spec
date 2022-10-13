@@ -302,6 +302,10 @@
     "META": {"sizes": {"includes": [30],}},
     "includes": [3320],
   },
+  "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/record_replay/resources.grd": {
+    "META": {"sizes": {"includes": [200]}},
+    "includes": [1915],
+  },
   "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/segmentation_internals/resources.grd": {
     "META": {"sizes": {"includes": [10]}},
     "includes": [3340],
