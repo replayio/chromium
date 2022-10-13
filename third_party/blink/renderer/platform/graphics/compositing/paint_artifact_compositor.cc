@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <memory>
 #include <utility>
+#include <sstream>
 
 #include "base/compiler_specific.h"
 #include "base/debug/crash_logging.h"
@@ -821,6 +822,9 @@ void PaintArtifactCompositor::Layerizer::LayerizeGroup(
     if (&chunk_effect == &current_group) {
       compositor_.UpdatePaintedScrollTranslationsBeforeLayerization(
           artifact_, chunk_cursor_);
+#if !BUILDFLAG(IS_WIN) // RUN-2115
+      recordreplay::Assert("[RUN-1470-1471] PaintArtifactCompositor::LayerizeGroup %d", chunk_cursor_->id);
+#endif
       pending_layers_.emplace_back(
           artifact_, *chunk_cursor_,
           compositor_.ChunkCompositingType(artifact_, *chunk_cursor_));
@@ -1230,6 +1234,9 @@ void PaintArtifactCompositor::Update(
           CompositorElementIdFromDOMNodeId(effect.CanvasChildId()));
     }
 
+    recordreplay::Assert("[RUN-1470-1471] PaintArtifactCompositor::Update %d",
+                         layer.subtree_property_changed());
+
     if (layer.subtree_property_changed())
       root_layer_->SetNeedsCommit();
 
@@ -1255,6 +1262,8 @@ void PaintArtifactCompositor::Update(
     UMA_HISTOGRAM_COUNTS_100("Blink.Compositor.MergedStickyLayerCount",
                              merged_sticky_count);
   }
+
+  recordreplay::Assert("[RUN-657-1540] PaintArtifactCompositor::Update");
 
   root_layer_->layer_tree_host()->RegisterSelection(layer_selection);
 
