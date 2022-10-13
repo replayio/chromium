@@ -6,11 +6,21 @@
 
 #include <optional>
 
+#include "base/record_replay.h"
 #include "base/task/sequence_manager/sequence_manager_impl.h"
 #include "base/threading/thread_checker.h"
 
 namespace base {
 namespace sequence_manager {
+
+TimeDomain::TimeDomain() {
+  // TimeDomains can be compared based on their pointer IDs, see sequence_manager_impl.h
+  recordreplay::RegisterPointer("TimeDomain", this);
+}
+
+TimeDomain::~TimeDomain() {
+  recordreplay::UnregisterPointer(this);
+}
 
 void TimeDomain::NotifyPolicyChanged() {
   sequence_manager_->ScheduleWork();

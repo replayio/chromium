@@ -7,6 +7,7 @@
 #include <optional>
 
 #include "base/check.h"
+#include "base/record_replay.h"
 #include "base/time/tick_clock.h"
 
 namespace base {
