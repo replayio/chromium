@@ -132,7 +132,7 @@ void MIDIAccess::DidAddInputPort(const String& id,
   auto* port = MakeGarbageCollected<MIDIInput>(this, id, manufacturer, name,
                                                version, ToDeviceState(state));
   inputs_.push_back(port);
-  DispatchEvent(*MIDIConnectionEvent::Create(port));
+  DispatchEvent(*MIDIConnectionEvent::Create(port), "MIDIAccess::DidAddInputPort");
 }
 
 void MIDIAccess::DidAddOutputPort(const String& id,
@@ -145,7 +145,7 @@ void MIDIAccess::DidAddOutputPort(const String& id,
   auto* port = MakeGarbageCollected<MIDIOutput>(
       this, port_index, id, manufacturer, name, version, ToDeviceState(state));
   outputs_.push_back(port);
-  DispatchEvent(*MIDIConnectionEvent::Create(port));
+  DispatchEvent(*MIDIConnectionEvent::Create(port), "MIDIAccess::DidAddOutputPort");
 }
 
 void MIDIAccess::DidSetInputPortState(unsigned port_index, PortState state) {

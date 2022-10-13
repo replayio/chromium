@@ -619,14 +619,14 @@ void Bluetooth::AdvertisingEvent(
     auto* event = MakeGarbageCollected<BluetoothAdvertisingEvent>(
         event_type_names::kAdvertisementreceived, device,
         std::move(advertising_event), target_world);
-    DispatchEvent(*event);
+    DispatchEvent(*event, "Bluetooth::AdvertisingEvent");
   } else {
     BluetoothDevice* device = GetOrCreateBluetoothDevice(
         advertising_event->device, GetExecutionContext());
     auto* event = MakeGarbageCollected<BluetoothAdvertisingEvent>(
         event_type_names::kAdvertisementreceived, device,
         std::move(advertising_event), /*world=*/nullptr);
-    DispatchEvent(*event);
+    DispatchEvent(*event, "Bluetooth::AdvertisingEvent");
   }
 }
 

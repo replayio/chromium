@@ -198,6 +198,9 @@ class CreateSessionDescriptionRequest
 
   void OnSuccessUniquePtr(
       std::unique_ptr<webrtc::SessionDescriptionInterface> desc) {
+    // https://linear.app/replay/issue/RUN-547
+    recordreplay::Assert("CreateSessionDescriptionRequest::OnSuccess %d", !!desc);
+
     if (!main_thread_->BelongsToCurrentThread()) {
       BindPostTask(
           main_thread_,
@@ -754,6 +757,8 @@ RTCPeerConnectionHandler::RTCPeerConnectionHandler(
       encoded_insertable_streams_(encoded_insertable_streams),
       task_runner_(std::move(task_runner)) {
   CHECK(client_);
+
+  INIT_RECORD_REPLAY_ID(RTCPeerConnectionHandler);
 
   GetPeerConnectionHandlers()->insert(this);
 }

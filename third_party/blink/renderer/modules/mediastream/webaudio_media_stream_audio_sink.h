@@ -92,7 +92,7 @@ class MODULES_EXPORT WebAudioMediaStreamAudioSink
   media::AudioParameters source_params_ GUARDED_BY(lock_);
 
   // Protects the above variables.
-  base::Lock lock_;
+  base::Lock lock_{"WebAudioMediaStreamAudioSink"};
 
   // No lock protection needed since only accessed in span version of
   // ProvideInput().
