@@ -26,7 +26,8 @@ void ThreadSafeScriptContainer::RawScriptData::AddHeader(const String& key,
 }
 
 ThreadSafeScriptContainer::ThreadSafeScriptContainer()
-    : waiting_cv_(&lock_), are_all_data_added_(false) {}
+    : lock_("ThreadSafeScriptContainer.lock_"),
+      waiting_cv_(&lock_), are_all_data_added_(false) {}
 
 void ThreadSafeScriptContainer::AddOnIOThread(
     const KURL& url,

@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "base/metrics/histogram_functions.h"
+#include "base/record_replay.h"
 #include "base/time/time.h"
 #include "media/base/decoder_buffer.h"
 #include "media/base/limits.h"
@@ -303,9 +304,12 @@ ScriptPromise<VideoDecoderSupport> VideoDecoder::isConfigSupported(
   VideoDecoderSupport* support = VideoDecoderSupport::Create();
   support->setConfig(config_copy);
 
+  // Video decoding is unsupported while recording/replaying, see
+  // VideoDecoderBroker.
   if ((hw_pref == HardwarePreference::kPreferSoftware &&
        !media::IsBuiltInVideoCodec(video_type->codec)) ||
-      !media::IsSupportedVideoType(*video_type)) {
+      !media::IsSupportedVideoType(*video_type) ||
+      recordreplay::IsRecordingOrReplaying("no-video")) {
     support->setSupported(false);
     return ToResolvedPromise<VideoDecoderSupport>(script_state, support);
   }
