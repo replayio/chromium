@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "base/memory/ptr_util.h"
+#include "base/record_replay.h"
 #include "device/base/synchronization/shared_memory_seqlock_buffer.h"
 #include "services/device/public/cpp/generic_sensor/sensor_reading.h"
 
@@ -69,7 +70,18 @@ bool SensorReadingSharedBufferReader::GetReading(
            ++retries < kMaxReadAttemptsCount);
 
   // Consider the number of retries less than kMaxRetries as success.
-  return retries < kMaxReadAttemptsCount;
+  bool ok = retries < kMaxReadAttemptsCount;
+  ok = recordreplay::RecordReplayValue(
+      "SensorReadingSharedBufferReader::GetReading ok", ok);
+  if (ok) {
+    recordreplay::RecordReplayBytes(
+        "SensorReadingSharedBufferReader::GetReading", result,
+        sizeof(*result));
+  }
+  recordreplay::Assert(
+      "SensorReadingSharedBufferReader::GetReading ok %d ts %f", ok,
+      ok ? result->timestamp() : -1.0);
+  return ok;
 }
 
 }  // namespace device
