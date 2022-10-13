@@ -85,6 +85,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/capture_source_location.h"
 #include "third_party/blink/renderer/bindings/core/v8/frozen_array.h"
 #include "third_party/blink/renderer/bindings/core/v8/isolated_world_csp.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_controller.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
@@ -431,6 +432,10 @@
 #include "third_party/blink/renderer/platform/wtf/text/text_encoding_registry.h"
 #include "third_party/blink/renderer/platform/wtf/text/utf16.h"
 #include "third_party/perfetto/include/perfetto/tracing/track_event_args.h"
+
+#include "base/json/json_writer.h"
+
+extern "C" int V8RecordReplayDependencyGraphExecutionNode();
 
 namespace blink {
 
@@ -1059,6 +1064,11 @@ Document::Document(const DocumentInit& initializer,
       data_(MakeGarbageCollected<DocumentData>(GetExecutionContext())) {
   TRACE_EVENT("blink", "Document::Document", perfetto::Flow::FromPointer(this));
   DCHECK(agent_);
+  // Documents are registered so that we can test the validity of document
+  // pointers while replaying to avoid crashes.
+  // See V8Window::NamedPropertyGetterCustom
+  recordreplay::RegisterPointer("Document", this);
+
   if (base::FeatureList::IsEnabled(features::kDelayAsyncScriptExecution) &&
       features::kDelayAsyncScriptExecutionDelayByDefaultParam.Get()) {
     script_runner_delayer_->Activate();
@@ -1149,6 +1159,8 @@ Document::Document(const DocumentInit& initializer,
 }
 
 Document::~Document() {
+  recordreplay::UnregisterPointer(this);
+
   DCHECK(!GetLayoutView());
   DCHECK(!ParentTreeScope());
   // If a top document with a cache, verify that it was comprehensively
@@ -1372,6 +1384,8 @@ AtomicString Document::ConvertLocalName(const AtomicString& name) {
 // SVGElementFactory because they don't support prefixes correctly.
 Element* Document::CreateRawElement(const QualifiedName& qname,
                                     CreateElementFlags flags) {
+  recordreplay::Assert("[RUN-1492-2299] Document::CreateRawElement %s",
+                       qname.ToString().Utf8().c_str());
   Element* element = nullptr;
   if (qname.NamespaceURI() == html_names::xhtmlNamespaceURI) {
     // https://html.spec.whatwg.org/C/#elements-in-the-dom:element-interface
@@ -1913,7 +1927,7 @@ void Document::SetReadyState(DocumentReadyState ready_state) {
                  TaskType::kInternalDefault);
   } else {
     // Synchronously dispatch event when the page is not in back/forward cache.
-    DispatchEvent(*Event::Create(event_type_names::kReadystatechange));
+    DispatchEvent(*Event::Create(event_type_names::kReadystatechange), "Document::SetReadyState");
   }
 }
 
@@ -2342,10 +2356,11 @@ void Document::DidChangeVisibilityState() {
     // tab and update the visibility state.
     return;
   }
-  DispatchEvent(*Event::CreateBubble(event_type_names::kVisibilitychange));
+  DispatchEvent(*Event::CreateBubble(event_type_names::kVisibilitychange), "Document::DidChangeVisibilityState #1");
   // Also send out the deprecated version until it can be removed.
   DispatchEvent(
-      *Event::CreateBubble(event_type_names::kWebkitvisibilitychange));
+      *Event::CreateBubble(event_type_names::kWebkitvisibilitychange),
+      "Document::DidChangeVisibilityState #2");
 
   if (IsPageVisible())
     GetDocumentAnimations().MarkAnimationsCompositorPending();
@@ -2841,6 +2856,17 @@ void Document::UpdateStyle() {
   RUNTIME_CALL_TIMER_SCOPE(GetAgent().isolate(),
                            RuntimeCallStats::CounterId::kUpdateStyle);
 
+  // Updating style can trigger network requests, so keep track of execution.
+  std::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::DictValue info;
+    info.Set("kind", "documentUpdateStyle");
+    info.Set("url", Url().GetString().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
+
   StyleEngine& style_engine = GetStyleEngine();
   unsigned initial_element_count = style_engine.StyleForElementCount();
 
@@ -3135,6 +3161,13 @@ void Document::UpdateStyleAndLayout(DocumentUpdateReason reason) {
   TRACE_EVENT("blink", "Document::UpdateStyleAndLayout");
   LocalFrameView* frame_view = View();
 
+  // Refuse to update style and layout state if side effects or events
+  // are not allowed.
+  // We are doing something while replaying that didn't happen while recording and
+  // isn't supposed to interact with the recording, like getting object previews.
+  if (!recordreplay::AllowSideEffects() || recordreplay::AreEventsDisallowed())
+    return;
+
   bool is_potentially_clean =
       (Lifecycle().GetState() >= DocumentLifecycle::kLayoutClean) &&
       !NeedsLayoutTreeUpdate() && (!frame_view || !frame_view->NeedsLayout());
@@ -3259,11 +3292,13 @@ void Document::SetIsXrOverlay(bool val, Element* overlay_element) {
 }
 
 void Document::ScheduleUseShadowTreeUpdate(SVGUseElement& element) {
+  recordreplay::Assert("[RUN-1436-2260] Document::ScheduleUseShadowTreeUpdate %d", element.RecordReplayId());
   use_elements_needing_update_.insert(&element);
   ScheduleLayoutTreeUpdateIfNeeded();
 }
 
 void Document::UnscheduleUseShadowTreeUpdate(SVGUseElement& element) {
+  recordreplay::Assert("[RUN-1436-2260] Document::UnscheduleUseShadowTreeUpdate %d", element.RecordReplayId());
   use_elements_needing_update_.erase(&element);
 }
 
@@ -3274,6 +3309,7 @@ void Document::UpdateUseShadowTreesIfNeeded() {
   while (!use_elements_needing_update_.empty()) {
     HeapHashSet<Member<SVGUseElement>> elements;
     use_elements_needing_update_.swap(elements);
+
     for (SVGUseElement* element : elements)
       element->BuildPendingResource();
   }
@@ -3327,6 +3363,10 @@ void Document::Shutdown() {
         ConnectedSubframeCount() == 0);
   if (!IsActive())
     return;
+
+  // Replay: seal the last live root document state. Precedes the scopers
+  // below, since command handling at the checkpoint can run script.
+  RecordReplayBeforeDocumentShutdown(*this);
 
   // An active Document must have an associated window.
   CHECK(dom_window_);
@@ -4321,8 +4361,34 @@ void Document::close() {
   CheckCompleted();
 }
 
+void Document::RecordReplayOnRemoveLoadEventDelay() {
+  if (recordreplay::DependencyGraphEnabled()) {
+    int node_id = V8RecordReplayDependencyGraphExecutionNode();
+    if (node_id) {
+      record_replay_load_event_dependency_nodes_.push_back(node_id);
+    } else {
+      recordreplay::Warning("DependencyGraphLoadEventDelayUnknownNode");
+    }
+  }
+}
+
 void Document::DispatchLoadEventAndFinalize() {
   DCHECK(!InStyleRecalc());
+
+  std::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::DictValue info;
+    info.Set("kind", "documentLoaded");
+    info.Set("url", Url().GetString().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
+    for (int parent_node_id : record_replay_load_event_dependency_nodes_) {
+      recordreplay::AddDependencyGraphEdge(parent_node_id, node_id,
+                                           "{\"kind\":\"loadEventDelay\"}");
+    }
+    execute.emplace(node_id);
+  }
 
   load_event_progress_ = kLoadEventInProgress;
 
@@ -4563,6 +4629,16 @@ bool Document::DispatchBeforeUnloadEvent(
          !GetEventTargetData()->event_listener_map.Contains(
              event_type_names::kBeforeunload));
 
+  std::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::DictValue info;
+    info.Set("kind", "documentBeforeUnload");
+    info.Set("url", Url().GetString().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
+
   PageDismissalScope in_page_dismissal;
   auto& before_unload_event = *MakeGarbageCollected<BeforeUnloadEvent>();
   before_unload_event.initEvent(event_type_names::kBeforeunload, false, true);
@@ -4677,6 +4753,16 @@ void Document::DispatchUnloadEvents(
     return;
   }
 
+  std::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::DictValue info;
+    info.Set("kind", "documentUnloaded");
+    info.Set("url", Url().GetString().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
+
   Element* current_focused_element = FocusedElement();
   if (auto* input = DynamicTo<HTMLInputElement>(current_focused_element))
     input->EndEditing();
@@ -4734,9 +4820,10 @@ void Document::DispatchUnloadEvents(
   if (page_visible) {
     // Dispatch visibilitychange event, but don't bother doing
     // other notifications as we're about to be unloaded.
-    DispatchEvent(*Event::CreateBubble(event_type_names::kVisibilitychange));
+    DispatchEvent(*Event::CreateBubble(event_type_names::kVisibilitychange), "Document::DispatchUnloadEvents #1");
     DispatchEvent(
-        *Event::CreateBubble(event_type_names::kWebkitvisibilitychange));
+        *Event::CreateBubble(event_type_names::kWebkitvisibilitychange),
+        "Document::DispatchUnloadEvents #2");
   }
   if (!dom_window_)
     return;
@@ -4762,7 +4849,7 @@ void Document::DispatchUnloadEvents(
 
 void Document::DispatchFreezeEvent() {
   SetFreezingInProgress(true);
-  DispatchEvent(*Event::Create(event_type_names::kFreeze));
+  DispatchEvent(*Event::Create(event_type_names::kFreeze), "Document::DispatchFreezeEvent");
   SetFreezingInProgress(false);
   UseCounter::Count(*this, WebFeature::kPageLifeCycleFreeze);
 }
@@ -5311,6 +5398,11 @@ void Document::DidLoadAllScriptBlockingResources() {
                           BindOnce(&Document::ExecuteScriptsWaitingForResources,
                                    WrapWeakPersistent(this)));
 
+  record_replay_execute_scripts_waiting_for_resources_node_id_ =
+    recordreplay::NewDependencyGraphNode(
+      "{\"kind\":\"documentScheduleExecuteScriptsWaitingForResources\"}"
+    );
+
   if (IsA<HTMLDocument>(this) && body()) {
     // For HTML if we have no more stylesheets to load and we're past the body
     // tag, we should have something to paint so resume.
@@ -5322,6 +5414,21 @@ void Document::DidLoadAllScriptBlockingResources() {
 }
 
 void Document::ExecuteScriptsWaitingForResources() {
+  std::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::DictValue info;
+    info.Set("kind", "documentExecuteScriptsWaitingForResources");
+    info.Set("url", Url().GetString().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
+    recordreplay::AddDependencyGraphEdge(
+      record_replay_execute_scripts_waiting_for_resources_node_id_, node_id,
+      "{\"kind\":\"scheduler\"}"
+    );
+    execute.emplace(node_id);
+  }
+
   if (!IsScriptExecutionReady())
     return;
   if (ScriptableDocumentParser* parser = GetScriptableDocumentParser())
@@ -6900,7 +7007,7 @@ String Document::cookie(ExceptionState& exception_state) const {
     CountUse(WebFeature::kFileAccessedCookies);
   }
 
-  return cookie_jar_->Cookies();
+  return cookie_jar_->Cookies(exception_state);
 }
 
 void Document::setCookie(const String& value, ExceptionState& exception_state) {
@@ -6925,7 +7032,7 @@ void Document::setCookie(const String& value, ExceptionState& exception_state) {
     UseCounter::Count(*this, WebFeature::kFileAccessedCookies);
   }
 
-  if (cookie_jar_->SetCookie(value)) {
+  if (cookie_jar_->SetCookie(value, exception_state)) {
     IncrementCookieModificationCount();
   }
 }
@@ -8050,6 +8157,17 @@ void Document::FinishedParsing() {
               perfetto::Flow::FromPointer(this));
   DCHECK(!GetScriptableDocumentParser() || !parser_->IsParsing());
   DCHECK(!GetScriptableDocumentParser() || ready_state_ != kLoading);
+
+  std::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::DictValue info;
+    info.Set("kind", "documentFinishedParsing");
+    info.Set("url", Url().GetString().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
+
   SetParsingState(kInDOMContentLoaded);
   DocumentParserTiming::From(*this).MarkParserStop();
 
@@ -8064,7 +8182,7 @@ void Document::FinishedParsing() {
   if (document_timing_.DomContentLoadedEventStart().is_null())
     document_timing_.MarkDomContentLoadedEventStart();
   if (!ScriptForbiddenScope::IsScriptForbidden()) {
-    DispatchEvent(*Event::CreateBubble(event_type_names::kDOMContentLoaded));
+    DispatchEvent(*Event::CreateBubble(event_type_names::kDOMContentLoaded), "Document::FinishedParsing");
 
     if (LocalFrame* frame = GetFrame()) {
       if (frame->IsAttached()) {
@@ -8513,6 +8631,10 @@ ukm::UkmRecorder* Document::UkmRecorder() {
           mojo_recorder->GetWeakPtr());
     }
     ukm_recorder_ = std::move(mojo_recorder);
+
+    recordreplay::Assert("Document::UkmRecorder mint doc=%d sourceId=%lld",
+                         recordreplay::PointerId(this),
+                         (long long)UkmSourceID());
   }
 
   if (WebTestSupport::IsRunningWebTest()) {
@@ -8889,6 +9011,8 @@ void Document::DecrementLoadEventDelayCount() {
   DCHECK(load_event_delay_count_);
   --load_event_delay_count_;
 
+  RecordReplayOnRemoveLoadEventDelay();
+
   if (!load_event_delay_count_)
     CheckLoadEventSoon();
 }
@@ -8896,6 +9020,8 @@ void Document::DecrementLoadEventDelayCount() {
 void Document::DecrementLoadEventDelayCountAndCheckLoadEvent() {
   DCHECK(load_event_delay_count_);
   --load_event_delay_count_;
+
+  RecordReplayOnRemoveLoadEventDelay();
 
   if (!load_event_delay_count_)
     CheckCompleted();
@@ -10041,7 +10167,7 @@ void Document::ActivateForPrerendering(
 
   // https://wicg.github.io/nav-speculation/prerendering.html#prerendering-browsing-context-activate
   // Step 8.3.4 "Fire an event named prerenderingchange at doc."
-  DispatchEvent(*Event::Create(event_type_names::kPrerenderingchange));
+  DispatchEvent(*Event::Create(event_type_names::kPrerenderingchange), "Document::ActivateForPrerendering");
 
   // Step 8.3.5 "For each steps in doc’s post-prerendering activation steps
   // list:"
