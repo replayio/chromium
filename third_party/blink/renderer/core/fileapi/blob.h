@@ -57,13 +57,12 @@ class CORE_EXPORT Blob : public ScriptWrappable,
   DEFINE_WRAPPERTYPEINFO();
 
  public:
-  static Blob* Create(ExecutionContext*) {
-    return MakeGarbageCollected<Blob>(BlobDataHandle::Create());
-  }
+  static Blob* Create(ExecutionContext*, ExceptionState&);
 
   static Blob* Create(ExecutionContext* execution_context,
                       const HeapVector<Member<V8BlobPart>>& blob_parts,
-                      const BlobPropertyBag* options);
+                      const BlobPropertyBag* options,
+                      ExceptionState&);
 
   static Blob* Create(const unsigned char* data,
                       size_t size,

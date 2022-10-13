@@ -209,7 +209,18 @@ class CORE_EXPORT WorkerThread : public Thread::TaskObserver {
                                          Parameters&&... parameters) {
     base::AutoLock locker(ThreadSetLock());
     unsigned called_worker_count = 0;
+
+    std::vector<WorkerThread*> threads;
     for (WorkerThread* thread : WorkerThreads()) {
+      threads.push_back(thread);
+    }
+    std::sort(threads.begin(), threads.end(),
+              recordreplay::CompareByPointerId());
+
+    recordreplay::Assert("[RUN-1537-1689] CallOnAllWorkerThreads %zu",
+                         threads.size());
+
+    for (WorkerThread* thread : threads) {
       PostCrossThreadTask(
           *thread->GetTaskRunner(task_type), FROM_HERE,
           CrossThreadBindOnce(function, WTF::CrossThreadUnretained(thread),
@@ -454,7 +465,7 @@ class CORE_EXPORT WorkerThread : public Thread::TaskObserver {
   // This lock protects shared states between the main thread and the worker
   // thread. See thread-safety annotations (e.g., GUARDED_BY) in this header
   // file.
-  base::Lock lock_;
+  base::Lock lock_{"WorkerThread.lock_"};
 
   // Whether the thread is paused in a nested message loop or not. Used
   // only on the worker thread.
