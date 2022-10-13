@@ -100,7 +100,8 @@ class Gpu::EstablishRequest
  public:
   EstablishRequest(Gpu* parent,
                    scoped_refptr<base::SingleThreadTaskRunner> main_task_runner)
-      : parent_(parent), main_task_runner_(main_task_runner) {}
+      : parent_(parent), main_task_runner_(main_task_runner),
+        lock_("Gpu::EstablishRequest.lock_") {}
 
   EstablishRequest(const EstablishRequest&) = delete;
   EstablishRequest& operator=(const EstablishRequest&) = delete;
