@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <utility>
 
+#include "base/record_replay.h"
 #include "base/check_op.h"
 #include "base/clang_profiling_buildflags.h"
 #include "base/files/scoped_file.h"
@@ -250,6 +251,7 @@ void Process::TerminateCurrentProcessImmediately(int exit_code) {
 #if BUILDFLAG(CLANG_PROFILING)
   WriteClangProfilingProfile();
 #endif
+  recordreplay::FinishRecording();
   _exit(exit_code);
 }
 
@@ -295,6 +297,10 @@ void Process::Close() {
   // end up w/ a zombie when it does finally exit.
 }
 
+static inline bool MaybeRecordingOrReplaying() {
+  return true;
+}
+
 #if !BUILDFLAG(IS_IOS)
 bool Process::Terminate(int exit_code, bool wait) const {
   // exit_code isn't supportable.
@@ -306,6 +312,12 @@ bool Process::Terminate(int exit_code, bool wait) const {
 
 #if !BUILDFLAG(IS_IOS) || (BUILDFLAG(USE_BLINK) && TARGET_OS_SIMULATOR)
 bool Process::TerminateInternal(int exit_code, bool wait) const {
+  // When recording/replaying the child process is responsible for exiting
+  // so that it can finish uploading any in progress recording.
+  if (MaybeRecordingOrReplaying()) {
+    return false;
+  }
+
   // RESULT_CODE_KILLED_BAD_MESSAGE == 3, but layering prevents its use.
   // |wait| is always false when terminating badly-behaved processes.
   const bool maybe_compromised = !wait && exit_code == 3;

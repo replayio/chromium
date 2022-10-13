@@ -9,6 +9,8 @@
 #include "base/check_op.h"
 #include "base/compiler_specific.h"
 #include "base/memory/ptr_util.h"
+#include "base/record_replay.h"
+#include "base/stl_util.h"
 #include "base/types/cxx23_to_underlying.h"
 
 namespace base::internal {
@@ -139,6 +141,7 @@ RegisteredTaskSource PriorityQueue::PopTaskSource() {
   RegisteredTaskSource task_source =
       task_source_and_sort_key.take_task_source();
   container_.pop();
+
   return task_source;
 }
 
