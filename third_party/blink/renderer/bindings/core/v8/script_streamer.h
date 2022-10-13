@@ -282,6 +282,8 @@ class CORE_EXPORT ResourceScriptStreamer final : public ScriptStreamer {
   // For transmitting local compile hints to V8 while streaming.
   std::unique_ptr<v8_compile_hints::V8LocalCompileHintsConsumer>
       local_compile_hints_consumer_;
+
+  int record_replay_scheduled_node_id_ = 0;
 };
 
 // BackgroundInlineScriptStreamer allows parsing and compiling inline scripts in
