@@ -28,6 +28,7 @@
 #pragma allow_unsafe_buffers
 #endif
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/modules/webaudio/biquad_dsp_kernel.h"
 
 #include <limits.h>
@@ -108,6 +109,14 @@ bool BiquadDSPKernel::HasConstantValuesForTesting(float* values,
 }
 
 void BiquadDSPKernel::UpdateCoefficientsIfNecessary(int frames_to_process) {
+  // The processor only assigns its audio-rate flag along with sample-accurate
+  // values, so read it the way the code below does.
+  REPLAY_ASSERT(
+      "BiquadDSPKernel::UpdateCoefficientsIfNecessary %d %d %d",
+      GetBiquadProcessor()->FilterCoefficientsDirty(),
+      GetBiquadProcessor()->HasSampleAccurateValues(),
+      GetBiquadProcessor()->HasSampleAccurateValues() &&
+          GetBiquadProcessor()->IsAudioRate());
   if (GetBiquadProcessor()->FilterCoefficientsDirty()) {
     // TODO(crbug.com/40637820): Eventually, the render quantum size will no
     // longer be hardcoded as 128. At that point, we'll need to switch from

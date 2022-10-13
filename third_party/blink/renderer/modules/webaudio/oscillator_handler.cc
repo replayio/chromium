@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <limits>
 
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "base/trace_event/typed_macros.h"
 #include "build/build_config.h"
@@ -290,6 +291,9 @@ bool OscillatorHandler::CalculateSampleAccuratePhaseIncrements(
 
   float final_scale = periodic_wave_->RateScale();
 
+  REPLAY_ASSERT("OscillatorHandler::CalculateSampleAccuratePhaseIncrements %d %d",
+                frequency_->HasSampleAccurateValues(),
+                frequency_->IsAudioRate());
   if (frequency_->HasSampleAccurateValues() && frequency_->IsAudioRate()) {
     has_sample_accurate_values = true;
     has_frequency_changes = true;
@@ -785,6 +789,9 @@ void OscillatorHandler::HandleStoppableSourceNode() {
   // definitely past the end time, we can stop this node.  (This handles the
   // case where the this source is not connected to the destination and we want
   // to stop it.)
+  REPLAY_ASSERT("OscillatorHandler::HandleStoppableSourceNode %d %d %d %f %f",
+                recordreplay::PointerId(this), end_time_ != kUnknownTime,
+                IsPlayingOrScheduled(), now, end_time_);
   if (end_time_ != kUnknownTime && IsPlayingOrScheduled() &&
       now >= end_time_ + kExtraStopFrames / Context()->sampleRate()) {
     Finish();
