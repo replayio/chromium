@@ -127,6 +127,8 @@ MainThreadTaskQueue::MainThreadTaskQueue(
       main_thread_scheduler_(main_thread_scheduler),
       agent_group_scheduler_(params.agent_group_scheduler),
       frame_scheduler_(params.frame_scheduler) {
+  // Needed for sorting in TaskQueueVoterMap.
+  recordreplay::RegisterPointer("MainThreadTaskQueue", this);
   task_runner_with_default_task_type_ =
       base::FeatureList::IsEnabled(
           features::kUseBlinkSchedulerTaskRunnerWithCustomDeleter)
@@ -158,6 +160,8 @@ MainThreadTaskQueue::MainThreadTaskQueue(
 }
 
 MainThreadTaskQueue::~MainThreadTaskQueue() {
+  recordreplay::UnregisterPointer(this);
+
   DCHECK(!wake_up_budget_pool_);
 }
 
