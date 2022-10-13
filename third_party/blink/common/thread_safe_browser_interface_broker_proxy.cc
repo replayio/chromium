@@ -10,8 +10,9 @@
 
 namespace blink {
 
-ThreadSafeBrowserInterfaceBrokerProxy::ThreadSafeBrowserInterfaceBrokerProxy() =
-    default;
+ThreadSafeBrowserInterfaceBrokerProxy::ThreadSafeBrowserInterfaceBrokerProxy()
+  : binder_map_lock_("ThreadSafeBrowserInterfaceBrokerProxy.binder_map_lock_")
+{}
 
 ThreadSafeBrowserInterfaceBrokerProxy::
     ~ThreadSafeBrowserInterfaceBrokerProxy() = default;
