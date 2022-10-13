@@ -146,6 +146,7 @@ def validateJavaScriptAllowed(source_dir, out_dir, is_ios):
       # remove exception.
       'chrome/browser/resources/bluetooth_internals',
       'chrome/browser/resources/chromeos/accessibility',
+      'chrome/browser/resources/record_replay',
       # TODO(crbug.com/41484340): Migrate to TypeScript.
       'chrome/browser/resources/device_log',
       # TODO(crbug.com/385341235): Migrate inspect to TypeScript.
