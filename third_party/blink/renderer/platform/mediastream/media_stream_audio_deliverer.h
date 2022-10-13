@@ -8,6 +8,7 @@
 #include <algorithm>
 
 #include "base/containers/contains.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "base/threading/thread_checker.h"
 #include "base/trace_event/trace_event.h"
@@ -58,6 +59,9 @@ class MediaStreamAudioDeliverer {
     base::AutoLock auto_lock(consumers_lock_);
     DCHECK(!base::Contains(consumers_, consumer));
     DCHECK(!base::Contains(pending_consumers_, consumer));
+    REPLAY_ASSERT("MediaStreamAudioDeliverer::AddConsumer %u %u",
+                  (unsigned)consumers_.size(),
+                  (unsigned)pending_consumers_.size());
     pending_consumers_.push_back(consumer);
     SendLogMessage(
         String::Format("%s => (number of consumer: active=%u, pending=%u)",
@@ -74,6 +78,11 @@ class MediaStreamAudioDeliverer {
     const bool had_consumers =
         !consumers_.empty() || !pending_consumers_.empty();
     auto it = std::ranges::find(consumers_, consumer);
+    REPLAY_ASSERT("MediaStreamAudioDeliverer::RemoveConsumer %u %u %d %d",
+                  (unsigned)consumers_.size(),
+                  (unsigned)pending_consumers_.size(),
+                  (int)(it != consumers_.end()),
+                  (int)base::Contains(pending_consumers_, consumer));
     if (it != consumers_.end()) {
       consumers_.erase(it);
     } else {
@@ -106,6 +115,9 @@ class MediaStreamAudioDeliverer {
     base::AutoLock auto_lock(consumers_lock_);
     {
       base::AutoLock auto_params_lock(params_lock_);
+      REPLAY_ASSERT("MediaStreamAudioDeliverer::OnSetFormat %d %u %u",
+                    (int)params_.Equals(params), (unsigned)consumers_.size(),
+                    (unsigned)pending_consumers_.size());
       if (params_.Equals(params))
         return;
       SendLogMessage(String::Format("%s({params=[%s]})", __func__,
@@ -126,6 +138,9 @@ class MediaStreamAudioDeliverer {
                 "layover_delay (ms)",
                 (base::TimeTicks::Now() - reference_time).InMillisecondsF());
     base::AutoLock auto_lock(consumers_lock_);
+    REPLAY_ASSERT("MediaStreamAudioDeliverer::OnData %u %u",
+                  (unsigned)consumers_.size(),
+                  (unsigned)pending_consumers_.size());
 
     // Call OnSetFormat() for all pending consumers and move them to the
     // active-delivery list.
@@ -171,7 +186,7 @@ class MediaStreamAudioDeliverer {
   THREAD_CHECKER(thread_checker_);
 
   // Protects concurrent access to |pending_consumers_| and |consumers_|.
-  mutable base::Lock consumers_lock_;
+  mutable base::Lock consumers_lock_{"MediaStreamAudioDeliverer.consumers"};
 
   // Any consumers needing a call to OnSetFormat(), to be notified of the
   // changed audio format, are placed in this list. This includes consumers
@@ -185,7 +200,7 @@ class MediaStreamAudioDeliverer {
   Vector<Consumer*> consumers_;
 
   // Protects concurrent access to |params_|.
-  mutable base::Lock params_lock_;
+  mutable base::Lock params_lock_{"MediaStreamAudioDeliverer.params"};
 
   // Specifies the current format of the audio passing through this
   // MediaStreamAudioDeliverer.
