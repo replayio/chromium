@@ -25,6 +25,8 @@
 #include "services/network/public/mojom/early_hints.mojom.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
 
+#include "base/json/json_writer.h"
+
 namespace blink {
 
 namespace {
@@ -310,6 +312,8 @@ std::unique_ptr<ThrottlingURLLoader> ThrottlingURLLoader::CreateLoaderAndStart(
 }
 
 ThrottlingURLLoader::~ThrottlingURLLoader() {
+  recordreplay::UnregisterPointer(this);
+
   if (inside_delegate_calls_ > 0) {
     // A throttle is calling into this object. In this case, delay destruction
     // of the throttles, so that throttles don't need to worry about any
@@ -438,6 +442,7 @@ ThrottlingURLLoader::ThrottlingURLLoader(
     network::mojom::URLLoaderClient* client,
     const net::NetworkTrafficAnnotationTag& traffic_annotation)
     : forwarding_client_(client), traffic_annotation_(traffic_annotation) {
+  recordreplay::RegisterPointer("ThrottlingURLLoader", this);
   throttles_.reserve(throttles.size());
   for (auto& throttle : throttles)
     throttles_.emplace_back(this, std::move(throttle));
@@ -504,6 +509,11 @@ void ThrottlingURLLoader::Start(
       if (!HandleThrottleResult(throttle, throttle_deferred, &deferred))
         return;
     }
+  }
+
+  if (recordreplay::IsInReplayCode()) {
+    // [TT-1422] Special treatment for Replay-only requests.
+    options |= network::mojom::kURLLoadOptionReplayRequest;
   }
 
   start_info_ = std::make_unique<StartInfo>(factory, request_id, options,
@@ -732,6 +742,19 @@ void ThrottlingURLLoader::OnReceiveRedirect(
   DCHECK_EQ(DEFERRED_NONE, deferred_stage_);
   DCHECK(!loader_completed_);
   DCHECK(deferring_throttles_.empty());
+
+  // Keep track of network requests triggered by the download message we are
+  // handling from the browser process.
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "receivedRedirect");
+    info.Set("original_url", original_url_.spec());
+    info.Set("new_url", redirect_info.new_url.spec());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
 
   if (!throttles_.empty()) {
     bool deferred = false;
