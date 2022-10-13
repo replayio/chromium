@@ -52,10 +52,14 @@
 #include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
+
 namespace blink {
 
 ThreadDebuggerCommonImpl::ThreadDebuggerCommonImpl(v8::Isolate* isolate)
-    : ThreadDebugger(isolate), isolate_(isolate) {}
+    : ThreadDebugger(isolate), isolate_(isolate) {
+  RecordReplayRegisterV8Inspector(v8_inspector_.get(), isolate);
+}
 
 ThreadDebuggerCommonImpl::~ThreadDebuggerCommonImpl() = default;
 
@@ -1017,6 +1021,9 @@ void ThreadDebuggerCommonImpl::cancelTimer(void* data) {
 }
 
 int64_t ThreadDebuggerCommonImpl::generateUniqueId() {
+  // https://linear.app/replay/issue/RUN-885
+  recordreplay::Assert("ThreadDebuggerCommonImpl::generateUniqueId");
+
   int64_t result;
   base::RandBytes(&result, sizeof result);
   return result;
