@@ -14,6 +14,8 @@
 
 #include <aclapi.h>
 
+#include "base/record_replay.h"
+
 namespace base {
 
 namespace {
@@ -49,8 +51,10 @@ std::optional<span<uint8_t>> PlatformSharedMemoryMapper::Map(
     return std::nullopt;
   }
 
+  // Calling VirtualQuery in GetMemorySectionSize will fail when replaying,
+  // so we manually record/replay the size.
   return make_span(static_cast<uint8_t*>(address),
-                   GetMemorySectionSize(address));
+                   recordreplay::RecordReplayValue("MemorySectionSize", GetMemorySectionSize(address)));
 }
 
 void PlatformSharedMemoryMapper::Unmap(span<uint8_t> mapping) {

@@ -31,12 +31,15 @@
 #include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "base/process/internal_linux.h"
+#include "base/record_replay.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "base/threading/platform_thread_internal_posix.h"
 #include "base/threading/thread_id_name_manager.h"
 #include "base/threading/thread_type_delegate.h"
 #include "build/build_config.h"
+
+#include "base/record_replay.h"
 
 namespace base {
 
@@ -204,11 +207,16 @@ bool PlatformThreadLinux::IsThreadBackgroundedForTest(
 void PlatformThreadBase::SetName(const std::string& name) {
   SetNameCommon(name);
 
+  if (recordreplay::AreEventsDisallowed("PlatformThread::SetName"))
+    return;
+
   // On linux we can get the thread names to show up in the debugger by setting
   // the process name for the LWP.  We don't want to do this for the main
   // thread because that would rename the process, causing tools like killall
-  // to stop working.
-  if (PlatformThread::CurrentId() == getpid())
+  // to stop working. This comparison needs to be recorded/replayed because thread
+  // IDs are different when replaying.
+  if (recordreplay::RecordReplayValue("PlatformThread::SetName",
+                                      PlatformThread::CurrentId() == getpid()))
     return;
 
   // http://0pointer.de/blog/projects/name-your-threads.html
@@ -268,8 +276,11 @@ void SetThreadTypeLinux(ProcessId process_id,
   }
 
   if (thread_type == ThreadType::kRealtimeAudio) {
-    if (sched_setscheduler(syscall_tid, SCHED_RR,
-                           &PlatformThreadLinux::kRealTimeAudioPrio) == 0) {
+    if (recordreplay::RecordReplayValue(
+            "[RUN-1967] pthread_setschedparam",
+            (uintptr_t)sched_setscheduler(syscall_tid, SCHED_RR,
+                                          &PlatformThreadLinux::kRealTimeAudioPrio)
+        ) == 0) {
       return;
     }
     // If failed to set to RT, fallback to setpriority to set nice value.

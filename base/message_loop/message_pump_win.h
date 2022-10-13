@@ -23,6 +23,8 @@
 #include "base/win/message_window.h"
 #include "base/win/scoped_handle.h"
 
+#include "base/record_replay_ordered_atomic.h"
+
 namespace base {
 
 // MessagePumpWin serves as the base for specialized versions of the MessagePump
@@ -80,7 +82,7 @@ class BASE_EXPORT MessagePumpWin : public MessagePump {
   //
   // Note that this should not be used for memory ordering. It is accessed via
   // `memory_order_relaxed` in all cases.
-  std::atomic_bool native_msg_scheduled_{false};
+  recordreplay::OrderedAtomic<bool> native_msg_scheduled_{false};
 
   raw_ptr<RunState> run_state_ = nullptr;
 
