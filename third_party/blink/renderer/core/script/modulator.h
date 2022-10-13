@@ -49,7 +49,14 @@ class CORE_EXPORT SingleModuleClient
     : public GarbageCollected<SingleModuleClient>,
       public NameClient {
  public:
-  ~SingleModuleClient() override = default;
+  SingleModuleClient() {
+    // Pointer registration is needed for sorting in
+    // ModuleMap::Entry::NotifyNewSingleModuleFinished.
+    recordreplay::RegisterPointer("SingleModuleClient", this);
+  }
+  ~SingleModuleClient() override {
+    recordreplay::UnregisterPointer(this);
+  }
   virtual void Trace(Visitor* visitor) const {}
   const char* NameInHeapSnapshot() const override {
     return "SingleModuleClient";
