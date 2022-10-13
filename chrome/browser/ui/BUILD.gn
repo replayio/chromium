@@ -2335,6 +2335,10 @@ static_library("ui") {
       "//chrome/browser/chrome_browser_interface_binders_webui_parts_desktop.cc",
       "browser.cc",
       "browser.h",
+      "webui/record_replay/record_replay_manager_handler.cc",
+      "webui/record_replay/record_replay_manager_handler.h",
+      "webui/record_replay/record_replay_ui.cc",
+      "webui/record_replay/record_replay_ui.h",
     ]
 
     if (enable_dice_support) {

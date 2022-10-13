@@ -27,6 +27,7 @@
 #include "chrome/browser/ui/views/toolbar/overflow_button.h"
 #include "chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.h"
 #include "chrome/browser/ui/views/toolbar/pinned_toolbar_actions.h"
+#include "chrome/browser/ui/views/toolbar/record_replay_toolbar_button.h"
 #include "chrome/browser/ui/views/toolbar/split_tabs_button.h"
 #include "components/apps/link_capturing/intent_picker_info.h"
 #include "components/prefs/pref_member.h"
@@ -194,6 +195,9 @@ class ToolbarView : public views::AccessiblePaneView,
   }
   PerformanceInterventionButton* performance_intervention_button() const {
     return performance_intervention_button_;
+  }
+  RecordReplayToolbarButton* record_replay_button() const {
+    return record_replay_button_;
   }
   MediaToolbarButton* media_button() const { return media_button_; }
   HomeButton* home_button() const { return home_; }
@@ -427,6 +431,7 @@ class ToolbarView : public views::AccessiblePaneView,
   raw_ptr<BatterySaverButton> battery_saver_button_ = nullptr;
   raw_ptr<PerformanceInterventionButton> performance_intervention_button_ =
       nullptr;
+  raw_ptr<RecordReplayToolbarButton> record_replay_button_ = nullptr;
   raw_ptr<PinnedToolbarActionsContainer> pinned_toolbar_actions_container_ =
       nullptr;
 

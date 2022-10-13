@@ -17,6 +17,7 @@
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/record_replay.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_tokenizer.h"
 #include "base/strings/utf_string_conversions.h"
@@ -539,6 +540,8 @@ void ExtensionTelemetryService::SetEnabledForESB(bool enable) {
     return;
   }
 
+  recordreplay::Diagnostic("[TT-198] ExtensionTelemetryService::SetEnabled %s",
+                           enable ? "true" : "false");
   esb_enabled_ = enable;
   if (esb_enabled_) {
     SetUpSignalProcessorsAndSubscribersForESB();
@@ -838,6 +841,8 @@ void ExtensionTelemetryService::CreateAndSendEnterpriseReport() {
 void ExtensionTelemetryService::OnUploadComplete(
     bool success,
     base::optional_ref<std::string> response_data) {
+  recordreplay::Diagnostic("[TT-198] ExtensionTelemetryService::OnUploadComplete() %s", success ? "succeeded" : "failed");
+
   // TODO(crbug.com/40253384): Add `config_manager_` implementation
   // to check server response and update config.
   if (success) {
@@ -894,6 +899,9 @@ void ExtensionTelemetryService::UploadPersistedFile(std::string report) {
 
 void ExtensionTelemetryService::UploadReport(
     std::unique_ptr<std::string> report) {
+
+  recordreplay::Diagnostic("[TT-198] ExtensionTelemetryService::UploadReport");
+
   auto callback = base::BindOnce(&ExtensionTelemetryService::OnUploadComplete,
                                  weak_factory_.GetWeakPtr());
   active_uploader_ = std::make_unique<ExtensionTelemetryUploader>(
