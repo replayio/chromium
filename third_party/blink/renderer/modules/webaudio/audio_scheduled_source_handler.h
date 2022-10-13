@@ -8,6 +8,7 @@
 #include <atomic>
 
 #include "base/memory/weak_ptr.h"
+#include "base/record_replay.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/thread_annotations.h"
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
@@ -48,7 +49,15 @@ class AudioScheduledSourceHandler : public AudioHandler {
   double LatencyTime() const override { return 0; }
 
   PlaybackState GetPlaybackState() const {
-    return playback_state_.load(std::memory_order_acquire);
+    PlaybackState state = playback_state_.load(std::memory_order_acquire);
+    // The main thread and the render thread both update the state, so reads
+    // are recorded, except in GCs (HasPendingActivity), which happen at
+    // different points when replaying.
+    if (recordreplay::AreEventsDisallowed()) {
+      return state;
+    }
+    return static_cast<PlaybackState>(recordreplay::RecordReplayValue(
+        "AudioScheduledSourceHandler::GetPlaybackState", state));
   }
 
   void SetPlaybackState(PlaybackState new_state) {
