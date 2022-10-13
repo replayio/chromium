@@ -232,7 +232,7 @@ void AudioWorkletNode::FireProcessorError(
           error_details.source_url, error_details.char_position,
           error_details.line_number, error_details.column_number),
       nullptr);
-  DispatchEvent(*event);
+  DispatchEvent(*event, "AudioWorkletNode::FireProcessorError");
 }
 
 scoped_refptr<AudioWorkletHandler> AudioWorkletNode::GetWorkletHandler() const {
