@@ -218,6 +218,12 @@ const Font* LayoutSVGInlineText::ComputeNewScaledFontForStyle(
   font_description.SetWordSpacing(
       Length::Fixed(font_description.WordSpacing() * scaling_factor / zoom));
 
+  recordreplay::Assert(
+      "[RUN-1436-2286] LayoutSVGInlineText::ComputeNewScaledFontForStyle %d",
+      document.GetStyleEngine().GetFontSelector()
+          ? document.GetStyleEngine().GetFontSelector()->RecordReplayId()
+          : -1);
+
   return MakeGarbageCollected<Font>(
       font_description, document.GetStyleEngine().GetFontSelector());
 }

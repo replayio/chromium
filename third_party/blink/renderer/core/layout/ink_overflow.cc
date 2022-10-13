@@ -355,6 +355,9 @@ InkOverflow::Type InkOverflow::SetTextInkOverflow(
     const PhysicalRect& rect_in_container,
     const InlinePaintContext* inline_context,
     PhysicalRect* ink_overflow_out) {
+  // https://linear.app/replay/issue/RUN-826
+  recordreplay::Assert("[RUN-826] NGInkOverflow::SetTextInkOverflow");
+
   CheckType(type);
   DCHECK(type == Type::kNotSet || type == Type::kInvalidated);
   std::optional<PhysicalRect> ink_overflow = ComputeTextInkOverflow(
