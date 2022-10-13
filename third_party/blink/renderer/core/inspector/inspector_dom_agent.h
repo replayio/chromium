@@ -357,6 +357,9 @@ class CORE_EXPORT InspectorDOMAgent final
   protocol::Response getTopLayerElements(
       std::unique_ptr<protocol::Array<int>>* node_ids) override;
 
+  // [replay] Offer a simple solution to get-or-create nodeId for in-document nodes.
+  int BindDocumentNode(Node*);
+
  private:
   void SetDocument(Document*);
   // Unconditionally enables the agent, even if |enabled_.Get()==true|.
