@@ -230,6 +230,18 @@ void LazyLoadImageObserver::LoadIfNearViewport(
     }
     if (!entry->isIntersecting())
       continue;
+
+    absl::optional<recordreplay::AutoDependencyExecution> execute;
+    if (recordreplay::DependencyGraphEnabled()) {
+      int node_id = recordreplay::NewDependencyGraphNode(
+        "{\"kind\":\"loadLazyImageNearViewport\"}"
+      );
+      recordreplay::AddDependencyGraphEdge(
+        entry->RecordReplayCreatedNodeId(), node_id, "{\"kind\":\"observer\"}"
+      );
+      execute.emplace(node_id);
+    }
+
     if (image_element)
       image_element->LoadDeferredImage();
 

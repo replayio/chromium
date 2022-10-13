@@ -75,6 +75,14 @@
 #include "third_party/blink/renderer/platform/wtf/shared_buffer.h"
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
 
+#include "base/json/json_writer.h"
+#include "base/record_replay.h"
+
+// V8 API for HTML parsing activity that will be reported to the record/replay driver.
+extern "C" void V8RecordReplayHTMLParseStart(void* token, const char* url);
+extern "C" void V8RecordReplayHTMLParseFinish(void* token);
+extern "C" void V8RecordReplayHTMLParseAddData(void* token, const char* data);
+
 namespace blink {
 
 // This sets the (default) maximum number of tokens which the foreground HTML
@@ -557,6 +565,10 @@ HTMLDocumentParser::HTMLDocumentParser(Document& document,
       scheduler_(sync_policy == kAllowDeferredParsing
                      ? Thread::Current()->Scheduler()
                      : nullptr) {
+  if (recordreplay::IsRecordingOrReplaying("notify-html-parse")) {
+    V8RecordReplayHTMLParseStart(this, document.Url().GetString().Utf8().c_str());
+  }
+
   // Make sure the preload scanner thread will be ready when needed.
   if (ThreadedPreloadScannerEnabled() && !task_runner_state_->IsSynchronous())
     GetPreloadScannerThread();
@@ -588,7 +600,11 @@ HTMLDocumentParser::HTMLDocumentParser(Document& document,
     preloader_ = MakeGarbageCollected<HTMLResourcePreloader>(document);
 }
 
-HTMLDocumentParser::~HTMLDocumentParser() = default;
+HTMLDocumentParser::~HTMLDocumentParser() {
+  if (recordreplay::IsRecordingOrReplaying("notify-html-parse")) {
+    V8RecordReplayHTMLParseFinish(this);
+  }
+}
 
 void HTMLDocumentParser::Trace(Visitor* visitor) const {
   visitor->Trace(reentry_permit_);
@@ -692,8 +708,20 @@ bool HTMLDocumentParser::IsParsingFragment() const {
 
 void HTMLDocumentParser::DeferredPumpTokenizerIfPossible(
     bool from_finish_append,
-    base::TimeTicks schedule_time) {
+    base::TimeTicks schedule_time,
+    int record_replay_scheduled_node_id) {
   // This method is called asynchronously, continues building the HTML document.
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    int node_id = recordreplay::NewDependencyGraphNode(
+      "{\"kind\":\"deferredDocumentPumpTokenizer\"}"
+    );
+    recordreplay::AddDependencyGraphEdge(
+      record_replay_scheduled_node_id, node_id, "{\"kind\":\"scheduler\"}"
+    );
+    execute.emplace(node_id);
+  }
 
   // If we're scheduled for a tokenizer pump, then document should be attached
   // and the parser should not be stopped, but sometimes a script completes
@@ -813,6 +841,16 @@ bool HTMLDocumentParser::PumpTokenizer() {
   DCHECK(!GetDocument()->IsPrefetchOnly());
   DCHECK(!IsStopped());
   DCHECK(token_producer_);
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "documentPumpTokenizer");
+    info.Set("url", GetDocument()->Url().GetString().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
 
   did_pump_tokenizer_ = true;
 
@@ -978,11 +1016,15 @@ void HTMLDocumentParser::SchedulePumpTokenizer(bool from_finish_append) {
     // If the parser is already scheduled, there's no need to do anything.
     return;
   }
+  int record_replay_scheduled_node_id = recordreplay::NewDependencyGraphNode(
+    "{\"kind\":\"documentSchedulePumpTokenizer\"}"
+  );
   loading_task_runner_->PostTask(
       FROM_HERE,
       WTF::BindOnce(&HTMLDocumentParser::DeferredPumpTokenizerIfPossible,
                     WrapPersistent(this), from_finish_append,
-                    base::TimeTicks::Now()));
+                    base::TimeTicks::Now(),
+                    record_replay_scheduled_node_id));
   task_runner_state_->SetState(
       HTMLDocumentParserState::DeferredParserState::kScheduled);
 
@@ -997,11 +1039,15 @@ void HTMLDocumentParser::ScheduleEndIfDelayed() {
 
   // Schedule a pump callback if needed.
   if (!task_runner_state_->IsScheduled()) {
+    int record_replay_scheduled_node_id = recordreplay::NewDependencyGraphNode(
+      "{\"kind\":\"documentScheduleEndIfDelayed\"}"
+    );
     loading_task_runner_->PostTask(
         FROM_HERE,
         WTF::BindOnce(&HTMLDocumentParser::DeferredPumpTokenizerIfPossible,
                       WrapPersistent(this),
-                      /*from_finish_append=*/false, base::TimeTicks::Now()));
+                      /*from_finish_append=*/false, base::TimeTicks::Now(),
+                      record_replay_scheduled_node_id));
     yield_timer_ = std::make_unique<base::ElapsedTimer>();
   }
   // If a pump is already scheduled, it's OK to just upgrade it to one
@@ -1082,6 +1128,21 @@ void HTMLDocumentParser::Append(const String& input_source) {
 
   if (IsStopped())
     return;
+
+  if (recordreplay::IsRecordingOrReplaying("notify-html-parse")) {
+    V8RecordReplayHTMLParseAddData(this, input_source.Utf8().c_str());
+  }
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "documentAppendString");
+    info.Set("url", GetDocument()->Url().GetString().Utf8());
+    info.Set("length", (int)input_source.Utf8().length());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
 
   const SegmentedString source(input_source);
 
@@ -1330,11 +1391,22 @@ void HTMLDocumentParser::AppendCurrentInputStreamToPreloadScannerAndScan() {
   }
 }
 
-void HTMLDocumentParser::NotifyScriptLoaded() {
+void HTMLDocumentParser::NotifyScriptLoaded(int record_replay_scheduled_node_id) {
   TRACE_EVENT1("blink", "HTMLDocumentParser::NotifyScriptLoaded", "parser",
                (void*)this);
   DCHECK(script_runner_);
   DCHECK(!IsExecutingScript());
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    int node_id = recordreplay::NewDependencyGraphNode(
+      "{\"kind\":\"documentNotifyScriptLoaded\"}"
+    );
+    recordreplay::AddDependencyGraphEdge(
+      record_replay_scheduled_node_id, node_id, "{\"kind\":\"scheduler\"}"
+    );
+    execute.emplace(node_id);
+  }
 
   scheduler::CooperativeSchedulingManager::AllowedStackScope
       allowed_stack_scope(scheduler::CooperativeSchedulingManager::Instance());

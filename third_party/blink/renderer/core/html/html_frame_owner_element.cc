@@ -61,6 +61,7 @@
 #include "third_party/blink/renderer/core/timing/dom_window_performance.h"
 #include "third_party/blink/renderer/core/timing/window_performance.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/instrumentation/resource_coordinator/renderer_resource_coordinator.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/network/network_state_notifier.h"
@@ -736,6 +737,11 @@ bool HTMLFrameOwnerElement::LoadOrRedirectSubframe(
       Page::MaxNumberOfFrames()) {
     return false;
   }
+
+  // Creating the child frame needs a synchronous call to the browser process
+  // for its routing ID.
+  if (RecordReplayThrowIfEventsUnavailable("subframe creation"))
+    return false;
 
   LocalFrame* child_frame =
       GetDocument().GetFrame()->Client()->CreateFrame(frame_name, this);
