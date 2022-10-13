@@ -18,6 +18,7 @@
 
 #include "base/check_op.h"
 #include "base/memory/stack_allocated.h"
+#include "base/record_replay.h"
 #include "base/synchronization/condition_variable.h"
 #include "base/synchronization/lock.h"
 #include "base/threading/scoped_blocking_call.h"
@@ -53,7 +54,11 @@ namespace base {
 // -----------------------------------------------------------------------------
 WaitableEvent::WaitableEvent(ResetPolicy reset_policy,
                              InitialState initial_state)
-    : kernel_(new WaitableEventKernel(reset_policy, initial_state)) {}
+    : kernel_(new WaitableEventKernel(reset_policy, initial_state)) {
+  // Pointer registration is needed for sorting in WaitSet.user_events_
+  if (!recordreplay::AreEventsDisallowed() || recordreplay::HasDivergedFromRecording())
+    recordreplay::RegisterPointer("WaitableEvent", this);
+}
 
 void WaitableEvent::Reset() {
   base::AutoLock locked(kernel_->lock_);
@@ -100,7 +105,11 @@ class SyncWaiter : public WaitableEvent::Waiter {
   STACK_ALLOCATED();
 
  public:
-  SyncWaiter() : cv_(&lock_) {}
+  SyncWaiter(bool record_replay_unordered)
+       lock_(record_replay_unordered ? nullptr : "SyncWaiter.lock_"),
+       cv_(&lock_) {}
+
+  ~SyncWaiter() override {}
 
   bool Fire(WaitableEvent* signaling_event) override {
     base::AutoLock locked(lock_);
@@ -153,6 +162,10 @@ class SyncWaiter : public WaitableEvent::Waiter {
 };
 
 bool WaitableEvent::TimedWaitImpl(TimeDelta wait_delta) {
+  std::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (kernel_->record_replay_unordered_)
+    disallow.emplace("WaitableEvent::TimedWait");
+
   kernel_->lock_.Acquire();
   if (kernel_->signaled_) {
     if (!kernel_->manual_reset_) {
@@ -165,7 +178,7 @@ bool WaitableEvent::TimedWaitImpl(TimeDelta wait_delta) {
     return true;
   }
 
-  SyncWaiter sw;
+  SyncWaiter sw(kernel_->record_replay_unordered_);
   if (only_used_while_idle_) {
     sw.cv()->declare_only_used_while_idle();
   }
@@ -224,6 +237,14 @@ bool WaitableEvent::TimedWaitImpl(TimeDelta wait_delta) {
 static bool  // StrictWeakOrdering
 cmp_fst_addr(const std::pair<WaitableEvent*, unsigned>& a,
              const std::pair<WaitableEvent*, unsigned>& b) {
+  // When recording/replaying, sort by the pointer ID to get a consistent order.
+  // Note that pointer IDs will not be present for unordered waitable events.
+  if (recordreplay::IsRecordingOrReplaying("pointer-ids")) {
+    int ida = recordreplay::PointerId(a.first);
+    int idb = recordreplay::PointerId(b.first);
+    if (ida && idb)
+      return ida < idb;
+  }
   return a.first < b.first;
 }
 
@@ -231,6 +252,12 @@ cmp_fst_addr(const std::pair<WaitableEvent*, unsigned>& a,
 // NO_THREAD_SAFETY_ANALYSIS: Complex control flow.
 size_t WaitableEvent::WaitManyImpl(WaitableEvent** raw_waitables,
                                    size_t count) NO_THREAD_SAFETY_ANALYSIS {
+  bool record_replay_unordered = count && raw_waitables[0]->kernel_->record_replay_unordered_;
+
+  std::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (record_replay_unordered)
+    disallow.emplace("WaitableEvent::WaitMany");
+
   // We need to acquire the locks in a globally consistent order. Thus we sort
   // the array of waitables by address. We actually sort a pairs so that we can
   // map back to the original index values later.
@@ -251,7 +278,7 @@ size_t WaitableEvent::WaitManyImpl(WaitableEvent** raw_waitables,
     DCHECK(waitables[i].first != waitables[i + 1].first);
   }
 
-  SyncWaiter sw;
+  SyncWaiter sw(record_replay_unordered);
 
   const size_t r = EnqueueMany(&waitables[0], count, &sw);
   if (r < count) {
@@ -363,8 +390,10 @@ size_t WaitableEvent::EnqueueMany(std::pair<WaitableEvent*, size_t>* waitables,
 WaitableEvent::WaitableEventKernel::WaitableEventKernel(
     ResetPolicy reset_policy,
     InitialState initial_state)
-    : manual_reset_(reset_policy == ResetPolicy::MANUAL),
-      signaled_(initial_state == InitialState::SIGNALED) {}
+    : lock_(recordreplay::AreEventsDisallowed() ? nullptr : "WaitableEventKernel.lock_"),
+      manual_reset_(reset_policy == ResetPolicy::MANUAL),
+      signaled_(initial_state == InitialState::SIGNALED),
+      record_replay_unordered_(recordreplay::AreEventsDisallowed()) {}
 
 WaitableEvent::WaitableEventKernel::~WaitableEventKernel() = default;
 
