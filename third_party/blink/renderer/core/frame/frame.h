@@ -457,6 +457,8 @@ class CORE_EXPORT Frame : public GarbageCollected<Frame> {
   // Iterates through the frame owner's ancestor nodes and adjusts the offset.
   void AdjustOffsetByAncestorFrames(gfx::Point* origin_point);
 
+  int RecordReplayId() const { return record_replay_id_; }
+
  protected:
   // |inheriting_agent_factory| should basically be set to the parent frame or
   // opener's WindowAgentFactory. Pass nullptr if the frame is isolated from
@@ -619,6 +621,8 @@ class CORE_EXPORT Frame : public GarbageCollected<Frame> {
   uint64_t form_submit_navigation_task_version_ = 0;
 
   OpenedFrameTracker opened_frame_tracker_;
+
+  int record_replay_id_ = 0;
 };
 
 inline FrameClient* Frame::Client() const {
