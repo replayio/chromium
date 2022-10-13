@@ -29,6 +29,7 @@
 #include <optional>
 #include <utility>
 
+#include "base/record_replay.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
@@ -119,6 +120,14 @@ void IDBOpenDBRequest::Trace(Visitor* visitor) const {
 
 void IDBOpenDBRequest::ContextDestroyed() {
   IDBRequest::ContextDestroyed();
+  // No database can be created for this request anymore, so its callbacks
+  // endpoint is never bound. Messages the browser sends to it block the IDB
+  // pipe's router until the endpoint closes, which the destructor otherwise
+  // does when a GC collects this request. The router then processes the
+  // blocked messages in a task posted from the GC, which runs unordered.
+  if (recordreplay::IsRecordingOrReplaying()) {
+    callbacks_receiver_.reset();
+  }
   if (factory_client_) {
     factory_client_->DetachRequest();
     factory_client_ = nullptr;
