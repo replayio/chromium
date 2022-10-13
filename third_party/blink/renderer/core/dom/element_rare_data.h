@@ -404,6 +404,12 @@ class ElementRareData final : public NodeRareData, public ElementRareDataBase {
 
   void Trace(blink::Visitor*) const override;
 
+  // Replay edit: As of 1/2023, there is ElementRareDataVector::GetWrappedField
+  // so we won't need this in the future.
+  CSSStyleDeclaration* GetInlineCSSStyleDeclaration() const override {
+    return cssom_wrapper_.Get();
+  }
+
  private:
   ScrollOffset saved_layer_scroll_offset_;
 

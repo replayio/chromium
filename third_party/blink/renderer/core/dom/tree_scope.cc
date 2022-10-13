@@ -699,4 +699,8 @@ void TreeScope::Trace(Visitor* visitor) const {
   visitor->Trace(adopted_style_sheets_);
 }
 
+int TreeScope::RecordReplayId() const {
+  return root_node_->RecordReplayId();
+}
+
 }  // namespace blink

@@ -193,6 +193,7 @@
 #include "third_party/blink/renderer/core/xml_names.h"
 #include "third_party/blink/renderer/platform/bindings/dom_data_store.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/bindings/v8_dom_activity_logger.h"
 #include "third_party/blink/renderer/platform/bindings/v8_dom_wrapper.h"
 #include "third_party/blink/renderer/platform/bindings/v8_per_context_data.h"
@@ -1003,6 +1004,16 @@ HeapVector<Member<Element>>* Element::GetElementArrayAttribute(
 NamedNodeMap* Element::attributesForBindings() const {
   ElementRareDataBase& rare_data =
       const_cast<Element*>(this)->EnsureElementRareData();
+
+  if (recordreplay::IsInReplayCode() &&
+      !recordreplay::HasDivergedFromRecording()) {
+    if (!rare_data.AttributeMap()) {
+      // [RUN-1764] Do not try to create blink API objects in our Replay-only
+      // scripts, unless explicitly diverged. Creating rare data is fine.
+      return nullptr;
+    }
+  }
+
   if (NamedNodeMap* attribute_map = rare_data.AttributeMap())
     return attribute_map;
 
@@ -1104,6 +1115,8 @@ bool Element::HasAttributeIgnoringNamespace(
 }
 
 void Element::SynchronizeAllAttributes() const {
+  recordreplay::Assert("[RUN-2424-3238] Element::SynchronizeAllAttributes %d",
+                        !!GetElementData());
   if (!GetElementData())
     return;
   // NOTE: AnyAttributeMatches in selector_checker.cc currently assumes that all
@@ -1170,6 +1183,10 @@ void Element::scrollIntoView(bool align_to_top) {
 }
 
 void Element::scrollIntoViewWithOptions(const ScrollIntoViewOptions* options) {
+  if (RecordReplayThrowIfEventsUnavailable("Element.scrollIntoView")) {
+    return;
+  }
+
   if (auto* ds_controller = DeferredShapingController::From(GetDocument()))
     ds_controller->ReshapeAllDeferred(ReshapeReason::kScrollingApi);
   ActivateDisplayLockIfNeeded(DisplayLockActivationReason::kScrollIntoView);
@@ -1201,6 +1218,14 @@ void Element::ScrollIntoViewNoVisualUpdate(
                                              std::move(params));
 
   GetDocument().SetSequentialFocusNavigationStartingPoint(this);
+}
+
+void Element::RecordReplayScrollIntoViewIfNeededForBinding(
+    bool center_if_needed) {
+  if (RecordReplayThrowIfEventsUnavailable("Element.scrollIntoViewIfNeeded")) {
+    return;
+  }
+  scrollIntoViewIfNeeded(center_if_needed);
 }
 
 void Element::scrollIntoViewIfNeeded(bool center_if_needed) {
@@ -1502,21 +1527,24 @@ LayoutBox* Element::GetLayoutBoxForScrolling() const {
 }
 
 double Element::scrollLeft() {
-  if (!InActiveDocument())
+  if (!InActiveDocument()) {
     return 0;
+  }
 
   GetDocument().UpdateStyleAndLayoutForNode(this,
                                             DocumentUpdateReason::kJavaScript);
 
   if (GetDocument().ScrollingElementNoLayout() == this) {
-    if (GetDocument().domWindow())
+    if (GetDocument().domWindow()) {
       return GetDocument().domWindow()->scrollX();
+    }
     return 0;
   }
 
   LayoutBox* box = GetLayoutBoxForScrolling();
-  if (!box)
+  if (!box) {
     return 0;
+  }
   if (PaintLayerScrollableArea* scrollable_area = box->GetScrollableArea()) {
     DCHECK(GetLayoutBox());
 
@@ -1575,6 +1603,10 @@ double Element::scrollTop() {
 }
 
 void Element::setScrollLeft(double new_left) {
+  if (RecordReplayThrowIfEventsUnavailable("Element.scrollLeft")) {
+    return;
+  }
+
   if (!InActiveDocument())
     return;
 
@@ -1628,6 +1660,10 @@ void Element::setScrollLeft(double new_left) {
 }
 
 void Element::setScrollTop(double new_top) {
+  if (RecordReplayThrowIfEventsUnavailable("Element.scrollTop")) {
+    return;
+  }
+
   if (!InActiveDocument())
     return;
 
@@ -1735,6 +1771,10 @@ void Element::scrollBy(double x, double y) {
 }
 
 void Element::scrollBy(const ScrollToOptions* scroll_to_options) {
+  if (RecordReplayThrowIfEventsUnavailable("Element.scrollBy")) {
+    return;
+  }
+
   if (!InActiveDocument())
     return;
 
@@ -1758,6 +1798,10 @@ void Element::scrollTo(double x, double y) {
 }
 
 void Element::scrollTo(const ScrollToOptions* scroll_to_options) {
+  if (RecordReplayThrowIfEventsUnavailable("Element.scrollTo")) {
+    return;
+  }
+
   if (!InActiveDocument())
     return;
 
@@ -2973,8 +3017,11 @@ scoped_refptr<ComputedStyle> Element::StyleForLayoutObject(
   if (ElementAnimations* element_animations = GetElementAnimations())
     element_animations->CssAnimations().ClearPendingUpdate();
 
+  bool has_custom_style_callbacks = HasCustomStyleCallbacks();
+  recordreplay::Assert("[RUN-2424-3227] Element::StyleForLayoutObject %d",
+    has_custom_style_callbacks);
   scoped_refptr<ComputedStyle> style =
-      HasCustomStyleCallbacks()
+      has_custom_style_callbacks
           ? CustomStyleForLayoutObject(style_recalc_context)
           : OriginalStyleForLayoutObject(style_recalc_context);
   if (!style) {
@@ -3129,6 +3176,10 @@ StyleRecalcChange Element::RecalcStyle(
   DCHECK(!GetForceReattachLayoutTree() || GetComputedStyle())
       << "No need to force a layout tree reattach if we had no computed style";
 
+  recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle A %d %d", 
+                       RecordReplayId(),
+                       HasCustomStyleCallbacks());
+
   DisplayLockStyleScope display_lock_style_scope(this);
   if (HasCustomStyleCallbacks())
     WillRecalcStyle(change);
@@ -3166,6 +3217,8 @@ StyleRecalcChange Element::RecalcStyle(
     display_lock_style_scope.NotifyChildStyleRecalcWasBlocked(child_change);
     if (HasCustomStyleCallbacks())
       DidRecalcStyle(child_change);
+
+    recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle B");
     return sibling_change;
   }
 
@@ -3213,6 +3266,7 @@ StyleRecalcChange Element::RecalcStyle(
                       child_change);
             }
           } else if (SkipStyleRecalcForContainer(*style, child_change)) {
+            recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle C");
             return sibling_change;
           }
         }
@@ -3230,6 +3284,7 @@ StyleRecalcChange Element::RecalcStyle(
 
   if (child_change.TraverseChildren(*this)) {
     SelectorFilterParentScope filter_scope(*this);
+    recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle D %d", !!GetShadowRoot());
     if (ShadowRoot* root = GetShadowRoot()) {
       root->RecalcDescendantStyles(child_change, child_recalc_context);
       if (child_change.RecalcDescendants())
@@ -3241,6 +3296,7 @@ StyleRecalcChange Element::RecalcStyle(
       RecalcDescendantStyles(child_change, child_recalc_context);
     }
   }
+  recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle E");
 
   if (child_change.TraversePseudoElements(*this)) {
     UpdatePseudoElement(kPseudoIdAfter, child_change, child_recalc_context);
@@ -3706,7 +3762,13 @@ StyleRecalcChange Element::RecalcOwnStyle(
     if (ForceApplyForLegacyLayout(*layout_style, *layout_object))
       apply_changes = LayoutObject::ApplyStyleChanges::kYes;
     layout_object->SetStyle(layout_style.get(), apply_changes);
+    recordreplay::Assert("[RUN-3109-3242] Element::RecalcOwnStyle B %d",
+                         layout_style ? layout_style->HasOneRef() : -1);
   }
+  
+  recordreplay::Assert("[RUN-3109-3242] Element::RecalcOwnStyle C %d %d",
+                       new_style ? new_style->HasOneRef() : -1,
+                       old_style ? old_style->HasOneRef() : -1);
   return child_change;
 }
 
@@ -5465,7 +5527,7 @@ bool Element::DispatchFocusEvent(Element* old_focused_element,
   Document& document = GetDocument();
   if (DispatchEvent(*FocusEvent::Create(
           event_type_names::kFocus, Event::Bubbles::kNo, document.domWindow(),
-          0, old_focused_element, source_capabilities)) !=
+          0, old_focused_element, source_capabilities), "Element::DispatchFocusEvent") !=
       DispatchEventResult::kNotCanceled) {
     return false;
   }
@@ -5477,7 +5539,7 @@ void Element::DispatchBlurEvent(Element* new_focused_element,
                                 InputDeviceCapabilities* source_capabilities) {
   DispatchEvent(*FocusEvent::Create(
       event_type_names::kBlur, Event::Bubbles::kNo, GetDocument().domWindow(),
-      0, new_focused_element, source_capabilities));
+      0, new_focused_element, source_capabilities), "Element::DispatchBlurEvent");
 }
 
 void Element::DispatchFocusInEvent(
@@ -5951,6 +6013,9 @@ const ComputedStyle* Element::EnsureComputedStyle(
   // because there is always a possibility that it could allocate something on
   // the V8 heap.
   DCHECK(ThreadState::Current()->IsAllocationAllowed());
+
+  recordreplay::Assert("[RUN-2424-3227] Element::EnsureComputedStyle %d",
+    RecordReplayId());
 
   StyleEngine::InEnsureComputedStyleScope ensure_scope(
       GetDocument().GetStyleEngine());
@@ -6573,8 +6638,14 @@ Element* Element::closest(const AtomicString& selectors) {
 }
 
 DOMTokenList& Element::classList() {
+  // https://linear.app/replay/issue/RUN-1040
+  recordreplay::Assert("Element::classList %d", RecordReplayId());
+
   ElementRareDataBase& rare_data = EnsureElementRareData();
   if (!rare_data.GetClassList()) {
+    // https://linear.app/replay/issue/RUN-1040
+    recordreplay::Assert("Element::classList #1");
+
     auto* class_list =
         MakeGarbageCollected<DOMTokenList>(*this, html_names::kClassAttr);
     class_list->DidUpdateAttributeValue(g_null_atom,
@@ -7259,6 +7330,14 @@ void Element::SynchronizeStyleAttributeInternal() const {
 CSSStyleDeclaration* Element::style() {
   if (!IsStyledElement())
     return nullptr;
+
+  if (recordreplay::IsInReplayCode() &&
+      !recordreplay::HasDivergedFromRecording()) {
+    // [RUN-1764] Do not try to create blink API objects in our Replay-only
+    // scripts, unless explicitly diverged.
+    return EnsureElementRareData().GetInlineCSSStyleDeclaration();
+  }
+
   return &EnsureElementRareData().EnsureInlineCSSStyleDeclaration(this);
 }
 
