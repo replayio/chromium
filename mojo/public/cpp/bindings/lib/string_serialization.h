@@ -15,6 +15,7 @@
 
 #include <string_view>
 
+#include "base/record_replay.h"
 #include "mojo/public/cpp/bindings/lib/array_internal.h"
 #include "mojo/public/cpp/bindings/lib/message_fragment.h"
 #include "mojo/public/cpp/bindings/lib/serialization_forward.h"
@@ -33,8 +34,9 @@ struct Serializer<StringDataView, MaybeConstUserType> {
 
   static void Serialize(MaybeConstUserType& input,
                         MessageFragment<String_Data>& fragment) {
-    if (CallIsNullIfExists<Traits>(input))
+    if (CallIsNullIfExists<Traits>(input)) {
       return;
+    }
 
     auto r = Traits::GetUTF8(input);
     fragment.AllocateArrayData(r.size());
