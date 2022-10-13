@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_HEAP_OBSERVER_LIST_H_
 
 #include "base/auto_reset.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
 #include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/heap/visitor.h"
@@ -26,6 +27,9 @@ class PLATFORM_EXPORT HeapObserverList final {
     CHECK(mutation_state_ & kAllowAddition);
     DCHECK(!HasObserver(observer));
     observers_.push_back(observer);
+    if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                             "HeapObserverSet"))
+      replay_observers_strong_.insert(observer);
     if (check_capacity_) [[unlikely]] {
       // On first addition after GC, check whether we need to shrink to a
       // reasoanble capacity.
@@ -42,6 +46,9 @@ class PLATFORM_EXPORT HeapObserverList final {
     if (it != observers_.end()) {
       observers_.erase(it);
     }
+    if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                             "HeapObserverSet"))
+      replay_observers_strong_.erase(observer);
   }
 
   // Determine whether a particular observer is in the list. Checking
@@ -58,6 +65,9 @@ class PLATFORM_EXPORT HeapObserverList final {
   void Clear() {
     CHECK(mutation_state_ & kAllowRemoval);
     observers_.clear();
+    if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                             "HeapObserverSet"))
+      replay_observers_strong_.clear();
   }
 
   // Iterate over the registered lifecycle observers in an unpredictable order.
@@ -79,6 +89,7 @@ class PLATFORM_EXPORT HeapObserverList final {
 
   void Trace(Visitor* visitor) const {
     visitor->Trace(observers_);
+    visitor->Trace(replay_observers_strong_);
     visitor->RegisterWeakCallbackMethod<
         HeapObserverList, &HeapObserverList::CleanupDeadObservers>(this);
   }
@@ -114,6 +125,7 @@ class PLATFORM_EXPORT HeapObserverList final {
   mutable MutationState mutation_state_ = kAllowAll;
   bool check_capacity_ = false;
   ObserverList observers_;
+  HeapHashSet<Member<ObserverType>> replay_observers_strong_;
 };
 
 }  // namespace blink

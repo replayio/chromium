@@ -9,6 +9,7 @@
 #include <memory>
 #include <optional>
 
+#include "base/record_replay.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/types/optional_ref.h"
 #include "base/types/pass_key.h"
@@ -213,6 +214,12 @@ class PLATFORM_EXPORT WidgetInputHandlerManager final
     return weak_ptr_factory_.GetWeakPtr();
   }
 
+  // Set only while recording/replaying.
+  const scoped_refptr<base::SingleThreadTaskRunner>&
+  RecordReplayMainThreadDefaultTaskRunner() const {
+    return record_replay_main_thread_default_task_runner_;
+  }
+
  private:
   friend class ThreadSafeRefCounted<WidgetInputHandlerManager>;
   ~WidgetInputHandlerManager() override;
@@ -337,6 +344,10 @@ class PLATFORM_EXPORT WidgetInputHandlerManager final
 
   // Any thread can access these variables.
   scoped_refptr<base::SingleThreadTaskRunner> main_thread_task_runner_;
+  // The main thread's default task runner, which unlike the widget's input
+  // task runner outlives the widget.
+  scoped_refptr<base::SingleThreadTaskRunner>
+      record_replay_main_thread_default_task_runner_;
   scoped_refptr<base::SingleThreadTaskRunner>
       compositor_thread_default_task_runner_;
   scoped_refptr<base::SingleThreadTaskRunner>
