@@ -65,6 +65,8 @@
 #include "third_party/blink/renderer/platform/wtf/text/string_buffer.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_offset_map.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 namespace {
@@ -1559,6 +1561,7 @@ void InlineNode::ShapeText(InlineItemsData* data,
   bool is_letter_spacing_reported = false;
   for (unsigned index = 0; index < items.size();) {
     InlineItem& start_item = *items[index];
+
     if (start_item.Type() != InlineItem::kText || !start_item.Length()) {
       index++;
       if (!start_item.IsOpaqueForTextProcessing()) {
@@ -1636,6 +1639,7 @@ void InlineNode::ShapeText(InlineItemsData* data,
         if (text_content[item.StartOffset()] == uchar::kZeroWidthNonJoiner) {
           break;
         }
+
         end_offset = item.EndOffset();
         num_text_items++;
       } else if (item.Type() == InlineItem::kOpenTag) {
@@ -2279,6 +2283,7 @@ MinMaxSizesResult InlineNode::ComputeMinMaxSizes(
     WritingMode container_writing_mode,
     const ConstraintSpace& space,
     const MinMaxSizesFloatInput& float_input) const {
+
   PrepareLayoutIfNeeded();
 
   // Compute the max of inline sizes of all line boxes with 0 available inline

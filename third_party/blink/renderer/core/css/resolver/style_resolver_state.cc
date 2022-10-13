@@ -448,6 +448,8 @@ CSSValue& StyleResolverState::ResolveGradients(CSSValue& value) const {
 }
 
 void StyleResolverState::UpdateFont() {
+  recordreplay::Assert("[RUN-1436-2226] StyleResolverState::UpdateFont %d",
+                       GetElement().RecordReplayId());
   GetFontBuilder().CreateFont(StyleBuilder(), ParentStyle());
   if (css_to_length_conversion_data_dirty_) {
     // Mutating values on css_to_length_conversion_data_ is pointless,

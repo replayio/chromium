@@ -15,6 +15,7 @@ namespace blink {
 StyleRecalcContext StyleRecalcContext::FromInclusiveAncestors(
     Element& start_element,
     PseudoId pseudo_id) {
+  recordreplay::Assert("[RUN-2424-3005] StyleRecalcContext::FromInclusiveAncestors %d", start_element.RecordReplayId());
   StyleRecalcContext result;
   for (Element* element = &start_element; element;
        element = FlatTreeTraversal::ParentElement(*element)) {

@@ -80,12 +80,18 @@ CachedMatchedProperties::CachedMatchedProperties(
         new_matched_properties.properties,
         new_matched_properties.mixin_parameter_bindings,
         new_matched_properties.data_);
+
+    if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                             "CachedMatchedProperties"))
+      replay_matched_properties_strong_.push_back(
+          new_matched_properties.properties);
   }
 }
 
 void CachedMatchedProperties::Clear() {
   matched_properties.clear();
   entries.clear();
+  replay_matched_properties_strong_.clear();
 }
 
 MatchedPropertiesCache::MatchedPropertiesCache() = default;

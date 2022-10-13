@@ -4530,6 +4530,7 @@ const CSSValue* Filter::CSSValueFromComputedStyleInternal(
 void Filter::ApplyValue(StyleResolverState& state,
                         const CSSValue& value,
                         ValueMode) const {
+  recordreplay::Assert("[RUN-2424-3227] longhands::Filter::ApplyValue");
   state.StyleBuilder().SetFilter(StyleBuilderConverter::ConvertFilterOperations(
       state, value, PropertyID()));
 }

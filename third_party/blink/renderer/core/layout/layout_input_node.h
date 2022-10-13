@@ -55,7 +55,9 @@ class CORE_EXPORT LayoutInputNode {
     return LayoutInputNode(box, type);
   }
 
-  LayoutInputNode(std::nullptr_t) : box_(nullptr), type_(kBlock) {}
+  LayoutInputNode(std::nullptr_t) : box_(nullptr), type_(kBlock) {
+    InitRecordReplayId();
+  }
 
   LayoutInputNodeType Type() const {
     return static_cast<LayoutInputNodeType>(type_);
@@ -306,7 +308,10 @@ class CORE_EXPORT LayoutInputNode {
 
  protected:
   LayoutInputNode(LayoutBox* box, LayoutInputNodeType type)
-      : box_(box), type_(type) {}
+      : box_(box), type_(type)
+  {
+    InitRecordReplayId();
+  }
 
   void GetOverrideIntrinsicSize(
       std::optional<LayoutUnit>* computed_inline_size,
@@ -315,6 +320,13 @@ class CORE_EXPORT LayoutInputNode {
   Member<LayoutBox> box_;
 
   unsigned type_ : 1;  // LayoutInputNodeType
+
+private:
+  // https://linear.app/replay/issue/RUN-1219
+  void InitRecordReplayId();
+  int record_replay_id_;
+public:
+  int RecordReplayId() const { return record_replay_id_; }
 };
 
 }  // namespace blink

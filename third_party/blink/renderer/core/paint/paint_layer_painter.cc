@@ -591,6 +591,7 @@ PaintResult PaintLayerPainter::PaintChildren(
     GraphicsContext& context,
     PaintFlags paint_flags) {
   PaintResult result = kFullyPainted;
+  recordreplay::Assert("[RUN-1975-2008] PaintLayerPainter::PaintChildren A");
   if (!paint_layer_.HasSelfPaintingLayerDescendant())
     return result;
 
@@ -620,6 +621,9 @@ PaintResult PaintLayerPainter::PaintChildren(
 
   PaintLayerPaintOrderIterator iterator(&paint_layer_, children_to_visit);
   while (PaintLayer* child = iterator.Next()) {
+    recordreplay::Assert(
+        "[RUN-1975-2008] PaintLayerPainter::PaintChildren B %d %d",
+        child->OwnerNodeId(), child->EnclosingNode()->RecordReplayId());
     // Painting of the whole subtree of an SVG foreignObject, including
     // stacked children, is handled by SVGForeignObjectPainter, so don't
     // paint stacked children here.
@@ -659,6 +663,8 @@ PaintResult PaintLayerPainter::PaintChildren(
       layout_object.GetFrameView()->DidPaintCanvasChild(*canvas, *child_el);
     }
   }
+  recordreplay::Assert(
+      "[RUN-1975-2008] PaintLayerPainter::PaintChildren C");
 
   return result;
 }
