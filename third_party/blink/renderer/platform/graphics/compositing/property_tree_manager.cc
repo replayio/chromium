@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/platform/graphics/compositing/property_tree_manager.h"
 
+#include "base/record_replay.h"
 #include "base/numerics/safe_conversions.h"
 #include "build/build_config.h"
 #include "cc/base/features.h"
@@ -404,6 +405,9 @@ void PropertyTreeManager::SetCurrentEffectState(
 int PropertyTreeManager::EnsureCompositorTransformNode(
     const TransformPaintPropertyNode& transform_node) {
   int id = transform_node.CcNodeId(new_sequence_number_);
+  recordreplay::Assert(
+      "[RUN-550-1536] PropertyTreeManager::EnsureCompositorTransformNode A %d %d",
+      id, new_sequence_number_);
   if (id != cc::kInvalidPropertyNodeId) {
     DCHECK(transform_tree_->Node(id));
     return id;
@@ -413,6 +417,10 @@ int PropertyTreeManager::EnsureCompositorTransformNode(
   int parent_id =
       EnsureCompositorTransformNode(transform_node.Parent()->Unalias());
   id = transform_tree_->Insert(cc::TransformNode(), parent_id);
+
+  recordreplay::Assert(
+      "[RUN-550-1536] PropertyTreeManager::EnsureCompositorTransformNode B %d %d",
+      id, parent_id);
 
   if (auto* scroll_translation_for_fixed =
           transform_node.ScrollTranslationForFixed()) {
