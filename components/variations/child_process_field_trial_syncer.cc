@@ -12,6 +12,8 @@
 #include "base/containers/contains.h"
 #include "components/variations/variations_crash_keys.h"
 
+#include "base/record_replay.h"
+
 namespace variations {
 
 namespace {
