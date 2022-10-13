@@ -116,6 +116,10 @@ class ABSL_LOCKABLE SpinLock {
     return (lockword_.load(std::memory_order_relaxed) & kSpinLockHeld) != 0;
   }
 
+  // Runs the one-time initialization that the first contended SpinLock
+  // otherwise runs on whichever thread hits it.
+  static void RecordReplayInitializeSlowPath();
+
   // Return immediately if this thread holds the SpinLock exclusively.
   // Otherwise, report an error by crashing with a diagnostic.
   inline void AssertHeld() const ABSL_ASSERT_EXCLUSIVE_LOCK() {

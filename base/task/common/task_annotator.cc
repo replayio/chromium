@@ -12,6 +12,7 @@
 #include "base/hash/md5.h"
 #include "base/no_destructor.h"
 #include "base/ranges/algorithm.h"
+#include "base/record_replay.h"
 #include "base/sys_byteorder.h"
 #include "base/threading/thread_local.h"
 #include "base/trace_event/base_tracing.h"

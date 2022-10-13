@@ -35,6 +35,8 @@
 #include "base/win/scoped_com_initializer.h"
 #endif  // BUILDFLAG(IS_WIN)
 
+#include "base/record_replay.h"
+
 namespace base {
 namespace internal {
 
@@ -94,7 +96,8 @@ class WorkerThreadDelegate : public WorkerThread::Delegate {
   WorkerThreadDelegate(const std::string& thread_name,
                        WorkerThread::ThreadLabel thread_label,
                        TrackedRef<TaskTracker> task_tracker)
-      : task_tracker_(std::move(task_tracker)),
+      : lock_("WorkerThreadDelegate.lock_"),
+        task_tracker_(std::move(task_tracker)),
         thread_name_(thread_name),
         thread_label_(thread_label) {}
   WorkerThreadDelegate(const WorkerThreadDelegate&) = delete;
@@ -412,8 +415,13 @@ class PooledSingleThreadTaskRunnerManager::PooledSingleThreadTaskRunner
   bool PostDelayedTask(const Location& from_here,
                        OnceClosure closure,
                        TimeDelta delay) override {
-    if (!g_manager_is_alive)
+    // https://linear.app/replay/issue/RUN-756
+    recordreplay::Assert("PooledSingleThreadTaskRunner::PostDelayedTask %d",
+                         recordreplay::PointerId(this));
+
+    if (!g_manager_is_alive) {
       return false;
+    }
 
     Task task(from_here, std::move(closure), TimeTicks::Now(), delay);
     return PostTask(std::move(task));
@@ -504,7 +512,8 @@ PooledSingleThreadTaskRunnerManager::PooledSingleThreadTaskRunnerManager(
     TrackedRef<TaskTracker> task_tracker,
     DelayedTaskManager* delayed_task_manager)
     : task_tracker_(std::move(task_tracker)),
-      delayed_task_manager_(delayed_task_manager) {
+      delayed_task_manager_(delayed_task_manager),
+      lock_("PooledSingleThreadTaskRunnerManager.lock_") {
   DCHECK(task_tracker_);
   DCHECK(delayed_task_manager_);
 #if BUILDFLAG(IS_WIN)

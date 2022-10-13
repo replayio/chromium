@@ -9,6 +9,7 @@
 #include "base/check_op.h"
 #include "base/feature_list.h"
 #include "base/memory/ptr_util.h"
+#include "base/record_replay.h"
 #include "base/task/task_features.h"
 #include "base/task/thread_pool/task_tracker.h"
 
@@ -54,11 +55,21 @@ void TaskSource::ClearDelayedHeapHandle() {
   delayed_pq_heap_handle_ = HeapHandle();
 }
 
+TaskPriority TaskSource::priority_racy() const {
+  // Record/replay priority value instead of ordering reads/writes.
+  TaskPriority priority = priority_racy_.load(std::memory_order_relaxed);
+  if (recordreplay::AreEventsDisallowed())
+    return priority;
+  return (TaskPriority)recordreplay::RecordReplayValue("TaskSource::priority_racy",
+                                                       (uintptr_t)priority);
+}
+
 TaskSource::TaskSource(const TaskTraits& traits,
                        TaskRunner* task_runner,
                        TaskSourceExecutionMode execution_mode)
     : traits_(traits),
       priority_racy_(traits.priority()),
+      lock_(recordreplay::AreEventsDisallowed() ? nullptr : "TaskSource.lock_"),
       task_runner_(task_runner),
       execution_mode_(execution_mode) {
   DCHECK(task_runner_ ||

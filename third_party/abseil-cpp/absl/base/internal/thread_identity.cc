@@ -28,6 +28,42 @@
 #include "absl/base/internal/raw_logging.h"
 #include "absl/base/internal/spinlock.h"
 
+#ifndef _WIN32
+#include <dlfcn.h>
+#else
+#include <windows.h>
+#endif
+
+static void* LookupRecordReplaySymbol(const char* name) {
+#ifndef _WIN32
+  void* fnptr = dlsym(RTLD_DEFAULT, name);
+#else
+  HMODULE module = GetModuleHandleA("windows-recordreplay.dll");
+  void* fnptr = module ? (void*)GetProcAddress(module, name) : nullptr;
+#endif
+  return fnptr ? fnptr : reinterpret_cast<void*>(1);
+}
+
+static void RecordReplayBeginDisallowEventsWithLabel(const char* label) {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayBeginDisallowEventsWithLabel");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    reinterpret_cast<void(*)(const char*)>(fnptr)(label);
+  }
+}
+
+static void RecordReplayEndDisallowEvents() {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayEndDisallowEvents");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    reinterpret_cast<void(*)()>(fnptr)();
+  }
+}
+
 namespace absl {
 ABSL_NAMESPACE_BEGIN
 namespace base_internal {
@@ -70,6 +106,9 @@ thread_local ThreadIdentity* thread_identity_ptr = nullptr;
 
 void SetCurrentThreadIdentity(
     ThreadIdentity* identity, ThreadIdentityReclaimerFunction reclaimer) {
+  // Setting the identity can happen at non-deterministic points.
+  RecordReplayBeginDisallowEventsWithLabel("SetCurrentThreadIdentity");
+
   assert(CurrentThreadIdentityIfPresent() == nullptr);
   // Associate our destructor.
   // NOTE: This call to pthread_setspecific is currently the only immovable
@@ -115,6 +154,8 @@ void SetCurrentThreadIdentity(
 #else
 #error Unimplemented ABSL_THREAD_IDENTITY_MODE
 #endif
+
+  RecordReplayEndDisallowEvents();
 }
 
 #if ABSL_THREAD_IDENTITY_MODE == ABSL_THREAD_IDENTITY_MODE_USE_TLS || \

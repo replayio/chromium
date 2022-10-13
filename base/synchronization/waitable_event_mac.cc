@@ -14,6 +14,7 @@
 #include "base/files/scoped_file.h"
 #include "base/mac/mach_logging.h"
 #include "base/posix/eintr_wrapper.h"
+#include "base/record_replay.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/time/time.h"
@@ -23,9 +24,26 @@
 
 namespace base {
 
+// The record/replay driver does not order mach_msg calls when they are used
+// for inter-thread communication. We use an ordered lock to ensure that
+// threads do not return from event waits until after the event has actually
+// been signaled.
+static inline void RecordReplayEnsureOrdered(int lock_id) {
+  if (lock_id) {
+    recordreplay::OrderedLock(lock_id);
+    recordreplay::OrderedUnlock(lock_id);
+  }
+}
+
 WaitableEvent::WaitableEvent(ResetPolicy reset_policy,
                              InitialState initial_state)
     : policy_(reset_policy) {
+  // Pointer registration is needed for sorting in WaitSet.user_events_
+  if (!recordreplay::AreEventsDisallowed() || recordreplay::HasDivergedFromRecording()) {
+    recordreplay::RegisterPointer("WaitableEvent", this);
+    record_replay_ordered_lock_id_ = recordreplay::CreateOrderedLock("WaitableEvent");
+  }
+
   mach_port_options_t options{};
   options.flags = MPO_INSERT_SEND_RIGHT;
   options.mpl.mpl_qlimit = 1;
@@ -41,17 +59,35 @@ WaitableEvent::WaitableEvent(ResetPolicy reset_policy,
     Signal();
 }
 
-WaitableEvent::~WaitableEvent() = default;
+WaitableEvent::~WaitableEvent() {
+  recordreplay::UnregisterPointer(this);
+}
 
 void WaitableEvent::Reset() {
+  absl::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (!record_replay_ordered_lock_id_)
+    disallow.emplace("WaitableEvent::Reset");
+  else
+    RecordReplayEnsureOrdered(record_replay_ordered_lock_id_);
+
   PeekPort(receive_right_->Name(), true);
 }
 
 void WaitableEvent::Signal() {
+  absl::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (!record_replay_ordered_lock_id_)
+    disallow.emplace("WaitableEvent::Signal");
+
   mach_msg_empty_send_t msg{};
   msg.header.msgh_bits = MACH_MSGH_BITS_REMOTE(MACH_MSG_TYPE_COPY_SEND);
   msg.header.msgh_size = sizeof(&msg);
   msg.header.msgh_remote_port = send_right_.get();
+
+  // Note: We have to be careful to not use any data from the event after
+  // ordering things here, because the thread we are signaling can wake up
+  // immediately after this call when replaying and may destroy the event.
+  RecordReplayEnsureOrdered(record_replay_ordered_lock_id_);
+
   // If the event is already signaled, this will time out because the queue
   // has a length of one.
   kern_return_t kr =
@@ -61,7 +97,13 @@ void WaitableEvent::Signal() {
 }
 
 bool WaitableEvent::IsSignaled() {
-  return PeekPort(receive_right_->Name(), policy_ == ResetPolicy::AUTOMATIC);
+  absl::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (!record_replay_ordered_lock_id_)
+    disallow.emplace("WaitableEvent::IsSignaled");
+
+  bool rv = PeekPort(receive_right_->Name(), policy_ == ResetPolicy::AUTOMATIC);
+  RecordReplayEnsureOrdered(record_replay_ordered_lock_id_);
+  return rv;
 }
 
 void WaitableEvent::Wait() {
@@ -70,8 +112,13 @@ void WaitableEvent::Wait() {
 }
 
 bool WaitableEvent::TimedWait(const TimeDelta& wait_delta) {
-  if (wait_delta <= TimeDelta())
+  if (wait_delta <= TimeDelta()) {
     return IsSignaled();
+  }
+
+  absl::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (!record_replay_ordered_lock_id_)
+    disallow.emplace("WaitableEvent::TimedWait");
 
   // Record the event that this thread is blocking upon (for hang diagnosis) and
   // consider blocked for scheduling purposes. Ignore this for non-blocking
@@ -130,6 +177,8 @@ bool WaitableEvent::TimedWait(const TimeDelta& wait_delta) {
                   timeout, MACH_PORT_NULL);
   }
 
+  RecordReplayEnsureOrdered(record_replay_ordered_lock_id_);
+
   if (kr == KERN_SUCCESS) {
     return true;
   } else if (rcv_size == 0 && kr == MACH_RCV_TOO_LARGE) {
@@ -143,6 +192,7 @@ bool WaitableEvent::TimedWait(const TimeDelta& wait_delta) {
 // static
 size_t WaitableEvent::WaitMany(WaitableEvent** raw_waitables, size_t count) {
   DCHECK(count) << "Cannot wait on no events";
+
   internal::ScopedBlockingCallWithBaseSyncPrimitives scoped_blocking_call(
       FROM_HERE, BlockingType::MAY_BLOCK);
   // Record an event (the first) that this thread is blocking upon.
@@ -185,6 +235,8 @@ size_t WaitableEvent::WaitMany(WaitableEvent** raw_waitables, size_t count) {
       triggered = std::min(triggered, index);
     }
 
+    RecordReplayEnsureOrdered(raw_waitables[triggered]->record_replay_ordered_lock_id_);
+
     if (raw_waitables[triggered]->policy_ == ResetPolicy::AUTOMATIC) {
       // The message needs to be dequeued to reset the event.
       PeekPort(raw_waitables[triggered]->receive_right_->Name(), true);
@@ -225,6 +277,7 @@ size_t WaitableEvent::WaitMany(WaitableEvent** raw_waitables, size_t count) {
     for (size_t i = 0; i < count; ++i) {
       WaitableEvent* event = raw_waitables[i];
       if (msg.header.msgh_local_port == event->receive_right_->Name()) {
+        RecordReplayEnsureOrdered(event->record_replay_ordered_lock_id_);
         if (event->policy_ == ResetPolicy::AUTOMATIC) {
           // The message needs to be dequeued to reset the event.
           PeekPort(msg.header.msgh_local_port, true);

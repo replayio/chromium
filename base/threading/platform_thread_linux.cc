@@ -20,6 +20,7 @@
 #include "base/metrics/field_trial_params.h"
 #include "base/notreached.h"
 #include "base/process/internal_linux.h"
+#include "base/record_replay.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "base/threading/platform_thread_internal_posix.h"
@@ -35,6 +36,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 #endif
+
+#include "base/record_replay.h"
 
 namespace base {
 
@@ -355,7 +358,10 @@ bool SetCurrentThreadTypeForPlatform(ThreadType thread_type,
 #endif
 
   return thread_type == ThreadType::kRealtimeAudio &&
-         pthread_setschedparam(pthread_self(), SCHED_RR, &kRealTimePrio) == 0;
+         recordreplay::RecordReplayValue(
+             "[RUN-1967] pthread_setschedparam",
+             (uintptr_t)pthread_setschedparam(pthread_self(), SCHED_RR, &kRealTimePrio)
+         ) == 0;
 #else
   return false;
 #endif
@@ -382,12 +388,17 @@ GetCurrentThreadPriorityForPlatformForTest() {
 void PlatformThread::SetName(const std::string& name) {
   ThreadIdNameManager::GetInstance()->SetName(name);
 
+  if (recordreplay::AreEventsDisallowed("PlatformThread::SetName"))
+    return;
+
 #if !BUILDFLAG(IS_NACL) && !BUILDFLAG(IS_AIX)
   // On linux we can get the thread names to show up in the debugger by setting
   // the process name for the LWP.  We don't want to do this for the main
   // thread because that would rename the process, causing tools like killall
-  // to stop working.
-  if (PlatformThread::CurrentId() == getpid())
+  // to stop working. This comparison needs to be recorded/replayed because thread
+  // IDs are different when replaying.
+  if (recordreplay::RecordReplayValue("PlatformThread::SetName",
+                                      PlatformThread::CurrentId() == getpid()))
     return;
 
   // http://0pointer.de/blog/projects/name-your-threads.html
