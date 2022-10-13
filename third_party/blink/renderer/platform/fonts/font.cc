@@ -51,6 +51,8 @@ namespace blink {
 namespace {
 
 FontFallbackMap& GetFontFallbackMap(FontSelector* font_selector) {
+  recordreplay::Assert("[RUN-1436-2286] GetFontFallbackMap %d",
+                       font_selector ? font_selector->RecordReplayId() : -1);
   if (font_selector)
     return font_selector->GetFontFallbackMap();
   return FontCache::Get().GetFontFallbackMap();
@@ -98,6 +100,11 @@ void Font::ReleaseFontFallbackListRef() const {
   if (!font_fallback_list_ || !font_fallback_list_->IsValid() ||
       !font_fallback_list_->HasFontFallbackMap()) {
     font_fallback_list_.reset();
+    return;
+  }
+
+  if (recordreplay::AreEventsDisallowed("Font::ReleaseFontFallbackListRef")) {
+    // [RUN-1436] Leak font_fallback_list_.
     return;
   }
 

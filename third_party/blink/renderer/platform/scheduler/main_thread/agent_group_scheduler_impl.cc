@@ -12,6 +12,8 @@
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_scheduler_impl.h"
 #include "third_party/blink/renderer/platform/scheduler/public/dummy_schedulers.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 namespace scheduler {
 
@@ -53,6 +55,7 @@ AgentGroupSchedulerImpl::AgentGroupSchedulerImpl(
       main_thread_scheduler_(main_thread_scheduler) {
   DCHECK(!default_task_queue_->GetFrameScheduler());
   DCHECK_EQ(default_task_queue_->GetAgentGroupScheduler(), this);
+  record_replay_id_ = recordreplay::NewIdAnyThread("AgentGroupSchedulerImpl");
 }
 
 void AgentGroupSchedulerImpl::Dispose() {
@@ -114,6 +117,18 @@ v8::Isolate* AgentGroupSchedulerImpl::Isolate() {
 void AgentGroupSchedulerImpl::AddAgent(Agent* agent) {
   DCHECK(!base::Contains(agents_, agent));
   agents_.insert(agent);
+
+  if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                           "AgentGroupSchedulerImpl"))
+    replay_agents_strong_.insert(agent);
+}
+
+void AgentGroupSchedulerImpl::RemoveAgent(Agent* agent) {
+  DCHECK(agents_.find(agent) != agents_.end());
+  agents_.erase(agent);
+  if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                           "AgentGroupSchedulerImpl"))
+    replay_agents_strong_.erase(agent);
 }
 
 void AgentGroupSchedulerImpl::PerformMicrotaskCheckpoint() {
@@ -125,13 +140,20 @@ void AgentGroupSchedulerImpl::PerformMicrotaskCheckpoint() {
   }
   for (Agent* agent : agents) {
     DCHECK(agents_.Contains(agent));
+    recordreplay::Assert(
+        "[RUN-2056-2365] AgentGroupSchedulerImpl::PerformMicrotaskCheckpoint "
+        "%d %d %d",
+        RecordReplayId(), (int)agents_.size(), agent->RecordReplayId());
     agent->PerformMicrotaskCheckpoint();
   }
+
+  recordreplay::Assert("[RUN-2056-2211] AgentGroupSchedulerImpl::PerformMicrotaskCheckpoint Done");
 }
 
 void AgentGroupSchedulerImpl::Trace(Visitor* visitor) const {
   AgentGroupScheduler::Trace(visitor);
   visitor->Trace(agents_);
+  visitor->Trace(replay_agents_strong_);
 }
 
 }  // namespace scheduler
