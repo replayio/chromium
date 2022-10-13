@@ -143,7 +143,7 @@ class BiquadProcessor final {
   unsigned render_quantum_frames_;
 
   Vector<std::unique_ptr<BiquadDSPKernel>> kernels_ GUARDED_BY(process_lock_);
-  mutable base::Lock process_lock_;
+  mutable base::Lock process_lock_{"AudioDSPKernelProcessor"};
 };
 
 }  // namespace blink

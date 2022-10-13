@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_node_input.h"
@@ -135,6 +136,8 @@ void BiquadFilterHandler::ProcessOnlyAudioParams(uint32_t frames_to_process) {
 void BiquadFilterHandler::PullInputs(uint32_t frames_to_process) {
   // Render input stream - suggest to the input to render directly into output
   // bus for in-place processing in process() if possible.
+  REPLAY_ASSERT("AudioBasicProcessorHandler::PullInputs %d %d",
+                recordreplay::PointerId(this), (int)GetNodeType());
   Input(0).Pull(Output(0).Bus(), frames_to_process);
 }
 
