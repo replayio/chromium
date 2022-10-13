@@ -50,18 +50,49 @@ TaskQueue::TaskQueue(std::unique_ptr<internal::TaskQueueImpl> impl,
                              ? impl_->sequence_manager()->associated_thread()
                              : MakeRefCounted<internal::AssociatedThreadId>()),
       default_task_runner_(impl_->CreateTaskRunner(kTaskTypeNone)),
-      name_(impl_->GetProtoName()) {}
+      name_(impl_->GetProtoName()) {
+  // Pointer registration is needed for sorting in the following places:
+  // TaskQueueThrottler::PumpThrottledTasks
+  // BudgetPool::UpdateThrottlingStateForAllQueues
+  // FrameTaskQueueController::~FrameTaskQueueController
+  recordreplay::RegisterPointer("TaskQueue", this);
+}
 
 TaskQueue::~TaskQueue() {
   // scoped_refptr guarantees us that this object isn't used.
-  if (!impl_)
+  //
+  // Replay edit: M115 inlined ShutdownTaskQueueGracefully() into this
+  // destructor, so the fork's UnregisterPointer() can no longer sit after the
+  // call.  It has to run on every exit path, and it has to run *after*
+  // ShutdownTaskQueue(): the sequence manager's queue containers sort with
+  // recordreplay::CompareByPointerId, which CHECKs that the id is still live.
+  if (!impl_) {
+    recordreplay::UnregisterPointer(this);
     return;
-  if (impl_->IsUnregistered())
+  }
+  if (impl_->IsUnregistered()) {
+    recordreplay::UnregisterPointer(this);
     return;
+  }
+
+  // [RUN-2217] Leak the TaskQueueImpl rather than unregistering it while events
+  // are disallowed: ShutdownTaskQueue() -> UnregisterTaskQueueImpl() mutates the
+  // sequence manager's selector, active_queues and queues_to_delete
+  // unconditionally, and a Blink scoped_refptr<TaskQueue> can drop its last
+  // reference inside a GC.  Up to M114 this guard lived in
+  // SequenceManagerImpl::ShutdownTaskQueueGracefully, which M115 deleted along
+  // with the queues_to_gracefully_shutdown map.
+  if (recordreplay::AreEventsDisallowed("ShutdownTaskQueueGracefully")) {
+    impl_.release();
+    recordreplay::UnregisterPointer(this);
+    return;
+  }
 
   // If we've not been unregistered then this must occur on the main thread.
   DCHECK_CALLED_ON_VALID_THREAD(associated_thread_->thread_checker);
   ShutdownTaskQueue();
+
+  recordreplay::UnregisterPointer(this);
 }
 
 TaskQueue::TaskTiming::TaskTiming(bool has_wall_time, bool has_thread_time)
@@ -83,10 +114,20 @@ void TaskQueue::TaskTiming::RecordTaskEnd(LazyNow* now) {
     return;
   state_ = State::Finished;
 
-  if (has_wall_time())
+  if (has_wall_time()) {
+    // https://linear.app/replay/issue/RUN-618
+    // https://linear.app/replay/issue/RUN-821
+    // https://linear.app/replay/issue/RUN-852
+    recordreplay::Assert("TaskQueue::TaskTiming::RecordTaskEnd #1");
     end_time_ = now->Now();
-  if (has_thread_time())
+  }
+  if (has_thread_time()) {
+    // https://linear.app/replay/issue/RUN-618
+    // https://linear.app/replay/issue/RUN-821
+    // https://linear.app/replay/issue/RUN-852
+    recordreplay::Assert("TaskQueue::TaskTiming::RecordTaskEnd #2");
     end_thread_time_ = base::ThreadTicks::Now();
+  }
 }
 
 void TaskQueue::ShutdownTaskQueue() {
