@@ -11,6 +11,7 @@
 
 #include "base/containers/flat_map.h"
 #include "base/memory/ref_counted.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "mojo/core/dispatcher.h"
 #include "mojo/core/handle_signals_state.h"
@@ -58,7 +59,7 @@ class WatcherDispatcher : public Dispatcher {
  private:
   friend class Watch;
 
-  using WatchSet = std::set<const Watch*>;
+  using WatchSet = std::set<const Watch*, recordreplay::CompareByPointerId>;
 
   ~WatcherDispatcher() override;
 
@@ -96,6 +97,10 @@ class WatcherDispatcher : public Dispatcher {
   // |ready_watches_| set, so it is represented by a uintptr_t. Using a raw_ptr
   // would force the allocator to quarantine the allocation and delay its reuse.
   uintptr_t last_watch_to_block_arming_ = 0;
+
+  // The pointer ID of the last Watch whose state was returned by Arm(), used
+  // for the round-robin order when recording/replaying.
+  int record_replay_last_watch_to_block_arming_id_ = 0;
 };
 
 }  // namespace core
