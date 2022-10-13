@@ -123,6 +123,9 @@ class CC_EXPORT ProxyImpl : public LayerTreeHostImplClient,
   }
   void SetShouldThrottleFrameRate(bool flag);
 
+  void RecordReplayRepaintPending();
+  void RecordReplayRepaint();
+
  private:
   // LayerTreeHostImplClient implementation
   void DidLoseLayerTreeFrameSinkOnImplThread() override;
@@ -259,6 +262,9 @@ class CC_EXPORT ProxyImpl : public LayerTreeHostImplClient,
   // Either thread can request deferring BeginMainFrame; keep track of both.
   bool main_wants_defer_begin_main_frame_ = false;
   bool impl_wants_defer_begin_main_frame_ = false;
+
+  // The frame sink a repaint initialized while the compositor waited for one.
+  std::unique_ptr<LayerTreeFrameSink> record_replay_frame_sink_;
 };
 
 }  // namespace cc
