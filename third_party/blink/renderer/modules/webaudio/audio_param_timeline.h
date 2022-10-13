@@ -108,6 +108,12 @@ class AudioParamTimeline {
                  double sample_rate,
                  unsigned render_quantum_frames) const;
 
+  // Orders this timeline's accesses through the handler's render-wide lock
+  // while recording or replaying.
+  void RecordReplaySetHandler(DeferredTaskHandler* handler) {
+    record_replay_handler_ = handler;
+  }
+
  private:
   class ParamEvent {
    public:
@@ -483,6 +489,11 @@ class AudioParamTimeline {
   HashSet<ParamEvent*> new_events_ GUARDED_BY(events_lock_);
 
   mutable base::Lock events_lock_;
+
+  DeferredTaskHandler* record_replay_handler_ = nullptr;
+
+  // Whether the audio thread may read the timeline in this render.
+  bool RecordReplayMayRead() const;
 };
 
 }  // namespace blink
