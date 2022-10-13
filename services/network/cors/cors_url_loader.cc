@@ -1023,6 +1023,9 @@ void CorsURLLoader::SetCorsFlagIfNeeded() {
   if (HasSpecialAccessToDestination())
     return;
 
+  if (options_ & mojom::kURLLoadOptionReplayRequest) {
+    return;
+  }
   fetch_cors_flag_ = true;
 }
 
