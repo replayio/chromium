@@ -97,7 +97,8 @@ class CORE_EXPORT ScriptRunner final : public GarbageCollected<ScriptRunner>,
   void PendingScriptFinished(PendingScript*) override;
 
   void ExecuteAsyncPendingScript(PendingScript* pending_script,
-                                 base::TimeTicks ready_to_evaluate_time);
+                                 base::TimeTicks ready_to_evaluate_time,
+                                 int record_replay_scheduled_node_id);
 
  private:
   // Execute the given pending script.
