@@ -35,6 +35,7 @@
 
 #include "base/check_op.h"
 #include "base/gtest_prod_util.h"
+#include "base/record_replay_ordered_atomic.h"
 #include "base/synchronization/lock.h"
 #include "base/thread_annotations.h"
 #include "base/threading/platform_thread.h"
@@ -54,7 +55,8 @@ class LOCKABLE MODULES_EXPORT RecursiveMutex {
   void AssertAcquired() const ASSERT_EXCLUSIVE_LOCK() {
     // TS_UNCHECKED_READ: Either we are the owner and then the value can be
     // read, or we aren't, and we are guaranteed to not see our own thread ID.
-    DCHECK_EQ(TS_UNCHECKED_READ(owner_), base::PlatformThread::CurrentId());
+    DCHECK_EQ(TS_UNCHECKED_READ(owner_).load_unordered(),
+              base::PlatformThread::CurrentId());
   }
   bool Try() EXCLUSIVE_TRYLOCK_FUNCTION(true);
 
@@ -62,12 +64,13 @@ class LOCKABLE MODULES_EXPORT RecursiveMutex {
   // Private constructor to ensure that no new users appear. This class will be
   // removed.
   RecursiveMutex() = default;
+  RecursiveMutex(const char* replay_ordered_name);
   void UpdateStateAfterLockAcquired(base::PlatformThreadId thread_id)
       EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   base::Lock lock_;
   // Atomic only used to avoid load shearing.
-  std::atomic<base::PlatformThreadId> owner_ GUARDED_BY(lock_) =
+  recordreplay::OrderedAtomic<base::PlatformThreadId> owner_ GUARDED_BY(lock_) =
       base::kInvalidThreadId;
   uint64_t lock_depth_ GUARDED_BY(lock_) = 0;
 

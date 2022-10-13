@@ -13,6 +13,7 @@
 #include "base/feature_list.h"
 #include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/record_replay.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
@@ -376,6 +377,7 @@ MainThreadEventQueue::MainThreadEventQueue(
     : client_(client),
       allow_raf_aligned_input_(allow_raf_aligned_input),
       async_touch_move_interval_(GetAsyncTouchMoveInterval()),
+      shared_state_lock_("MainThreadEventQueue.shared_state_lock_"),
       main_task_runner_(std::move(main_task_runner)),
       widget_scheduler_(std::move(widget_scheduler)) {
   DCHECK(widget_scheduler_);
@@ -633,6 +635,7 @@ void MainThreadEventQueue::PossiblyScheduleMainFrame() {
 }
 
 void MainThreadEventQueue::DispatchEvents() {
+  recordreplay::AssertMaybeEventsDisallowed("[TT-1179-1180] MainThreadEventQueue::DispatchEvents");
   size_t events_to_process;
   size_t queue_size;
 
@@ -784,6 +787,7 @@ void MainThreadEventQueue::DispatchRafAlignedInput(base::TimeTicks frame_time) {
 }
 
 void MainThreadEventQueue::PostTaskToMainThread() {
+  recordreplay::AssertMaybeEventsDisallowed("[TT-1179-1180] MainThreadEventQueue::PostTaskToMainThread");
   main_task_runner_->PostTask(
       FROM_HERE, base::BindOnce(&MainThreadEventQueue::DispatchEvents, this));
 }
@@ -959,6 +963,11 @@ bool MainThreadEventQueue::HandleEventOnMainThread(
 
 void MainThreadEventQueue::SetNeedsMainFrame(cc::BeginMainFrameReason reason,
                                              bool urgent) {
+  recordreplay::AssertMaybeEventsDisallowed(
+    "[TT-1179-1180] MainThreadEventQueue::SetNeedsMainFrame %d %d",
+    main_task_runner_->BelongsToCurrentThread(),
+    !!client_
+  );
   if (main_task_runner_->BelongsToCurrentThread()) {
     if (raf_fallback_timer_) {
       raf_fallback_timer_->Start(

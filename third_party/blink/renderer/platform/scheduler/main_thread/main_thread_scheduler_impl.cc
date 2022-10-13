@@ -72,6 +72,8 @@
 #include "third_party/perfetto/protos/perfetto/trace/track_event/track_event.pbzero.h"
 #include "v8/include/v8.h"
 
+#include "base/record_replay.h"
+
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/self_compaction_manager.h"
 #include "base/functional/callback_forward.h"
@@ -303,8 +305,10 @@ MainThreadSchedulerImpl::MainThreadSchedulerImpl(
           helper_.ControlMainThreadTaskQueue()->CreateTaskRunner(
               TaskType::kMainThreadTaskQueueControl)),
       main_thread_only_(this, helper_.GetClock(), helper_.NowTicks()),
+      any_thread_lock_("MainThreadSchedulerImpl.any_thread_lock_"),
       any_thread_(this),
-      policy_may_need_update_(&any_thread_lock_) {
+      policy_may_need_update_(&any_thread_lock_, "MainThreadSchedulerImpl.policy_may_need_update_") {
+  recordreplay::RegisterPointer("MainThreadSchedulerImpl", this);
   MaybeUpdateThreadTypeLease();
   helper_.AttachToCurrentThread();
 
@@ -405,6 +409,8 @@ MainThreadSchedulerImpl::MainThreadSchedulerImpl(
 }
 
 MainThreadSchedulerImpl::~MainThreadSchedulerImpl() {
+  recordreplay::UnregisterPointer(this);
+
   TRACE_EVENT_INSTANT(
       TRACE_DISABLED_BY_DEFAULT("renderer.scheduler"),
       "MainThreadScheduler:deleted",
@@ -1036,8 +1042,9 @@ void MainThreadSchedulerImpl::DidCommitFrameToCompositor() {
   TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("renderer.scheduler"),
                "MainThreadSchedulerImpl::DidCommitFrameToCompositor");
   helper_.CheckOnValidThread();
-  if (helper_.IsShutdown())
+  if (helper_.IsShutdown()) {
     return;
+  }
 
   base::TimeTicks now(helper_.NowTicks());
   if (now < main_thread_only().estimated_next_frame_begin) {
@@ -1269,6 +1276,12 @@ void MainThreadSchedulerImpl::PerformMicrotaskCheckpoint() {
 
   // This will fallback to execute the microtask checkpoint for the
   // default EventLoop for the isolate.
+  REPLAY_ASSERT(
+      "[RUN-2056-2298] MainThreadSchedulerImpl::PerformMicrotaskCheckpoint %d %d %u",
+      recordreplay::PointerId(this), !!isolate(),
+      main_thread_only().agent_group_schedulers
+          ? main_thread_only().agent_group_schedulers->size()
+          : 0u);
   if (isolate())
     EventLoop::PerformIsolateGlobalMicrotasksCheckpoint(isolate());
 
@@ -1294,6 +1307,8 @@ void MainThreadSchedulerImpl::PerformMicrotaskCheckpoint() {
         agent_group_scheduler));
     agent_group_scheduler->PerformMicrotaskCheckpoint();
   }
+  REPLAY_ASSERT(
+      "[RUN-2056] MainThreadSchedulerImpl::PerformMicrotaskCheckpoint Done");
 }
 
 // static
@@ -1501,10 +1516,22 @@ void MainThreadSchedulerImpl::DidHandleInputEventOnMainThread(
 
 bool MainThreadSchedulerImpl::ShouldYieldForHighPriorityWork() {
   helper_.CheckOnValidThread();
-  if (helper_.IsShutdown())
+
+  REPLAY_ASSERT_MAYBE_EVENTS_DISALLOWED(
+      "[RUN-1335-1336] MainThreadSchedulerImpl::ShouldYieldForHighPriorityWork "
+      "A %d",
+      helper_.IsShutdown());
+
+  if (helper_.IsShutdown()) {
     return false;
+  }
+
+  REPLAY_ASSERT_MAYBE_EVENTS_DISALLOWED(
+      "[RUN-1335-1336] MainThreadSchedulerImpl::ShouldYieldForHighPriorityWork "
+      "B");
 
   MaybeUpdatePolicy();
+
   // We only yield if there's a urgent task to be run now, or we are expecting
   // one soon (touch start).
   // Note: even though the control queue has the highest priority we don't yield
@@ -2176,6 +2203,11 @@ void MainThreadSchedulerImpl::Policy::WriteIntoTrace(
 }
 
 void MainThreadSchedulerImpl::OnPendingTasksChanged(bool has_tasks) {
+  // https://linear.app/replay/issue/RUN-827
+  REPLAY_ASSERT(
+      "MainThreadSchedulerImpl::OnPendingTasksChanged %d %d", has_tasks,
+      main_thread_only().compositor_will_send_main_frame_not_expected.get());
+
   if (has_tasks ==
       main_thread_only().compositor_will_send_main_frame_not_expected.get())
     return;
@@ -2195,8 +2227,14 @@ void MainThreadSchedulerImpl::OnPendingTasksChanged(bool has_tasks) {
 void MainThreadSchedulerImpl::DispatchRequestBeginMainFrameNotExpected(
     bool has_tasks) {
   if (has_tasks ==
-      main_thread_only().compositor_will_send_main_frame_not_expected.get())
+      main_thread_only().compositor_will_send_main_frame_not_expected.get()) {
     return;
+  }
+  REPLAY_ASSERT(
+      "[TT-1367-1371] "
+      "MainThreadSchedulerImpl::DispatchRequestBeginMainFrameNotExpected A %d "
+      "%u",
+      recordreplay::PointerId(this), main_thread_only().page_schedulers.size());
 
   TRACE_EVENT1(
       TRACE_DISABLED_BY_DEFAULT("renderer.scheduler"),
@@ -2383,6 +2421,9 @@ void MainThreadSchedulerImpl::RemoveAgentGroupScheduler(
   DCHECK(main_thread_only().agent_group_schedulers);
   DCHECK(main_thread_only().agent_group_schedulers->Contains(
       agent_group_scheduler));
+  REPLAY_ASSERT(
+      "[RUN-2056-2316] MainThreadSchedulerImpl::RemoveAgentGroupScheduler %d",
+      agent_group_scheduler->RecordReplayId());
   main_thread_only().agent_group_schedulers->erase(agent_group_scheduler);
 }
 
@@ -2513,6 +2554,9 @@ void MainThreadSchedulerImpl::AddAgentGroupScheduler(
   bool is_new_entry = main_thread_only()
                           .agent_group_schedulers->insert(agent_group_scheduler)
                           .is_new_entry;
+  REPLAY_ASSERT(
+      "[RUN-2056-2316] MainThreadSchedulerImpl::AddAgentGroupScheduler %d %d",
+      agent_group_scheduler->RecordReplayId(), is_new_entry);
   DCHECK(is_new_entry);
 }
 

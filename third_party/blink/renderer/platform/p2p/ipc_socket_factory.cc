@@ -16,6 +16,7 @@
 #include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/weak_ptr.h"
+#include "base/record_replay.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/bind_post_task.h"
 #include "base/threading/thread_checker.h"
@@ -646,6 +647,18 @@ void IpcPacketSocket::OnOpen(const net::IPEndPoint& local_address,
 void IpcPacketSocket::OnSendComplete(
     const network::P2PSendPacketMetrics& send_metrics) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+
+  // After a pause diverges from the recording, this thread can still read
+  // completions that the IO thread received before the pause, including ones
+  // for packets the recording sent after the pause point and this process
+  // never sent.
+  if (recordreplay::HasDivergedFromRecording() &&
+      (in_flight_packet_records_.empty() ||
+       (send_metrics.packet_id != 0 &&
+        in_flight_packet_records_.front().packet_id !=
+            send_metrics.packet_id))) {
+    return;
+  }
 
   CHECK(!in_flight_packet_records_.empty());
 

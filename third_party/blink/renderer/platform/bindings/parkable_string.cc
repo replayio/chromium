@@ -20,6 +20,7 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/process/memory.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/strings/string_view_util.h"
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
@@ -630,6 +631,19 @@ ParkableStringImpl::Status ParkableStringImpl::CurrentStatus() const {
     return Status::kTooManyReferences;
 
   return Status::kUnreferencedExternally;
+}
+
+ParkableStringImpl::AgeStateSnapshot
+ParkableStringImpl::CaptureAgeStateSnapshot() {
+  base::AutoLock locker(metadata_->lock_);
+  AssertOnValidThread();
+  DCHECK(may_be_parked());
+  AgeStateSnapshot snapshot;
+  snapshot.status = static_cast<int>(CurrentStatus());
+  snapshot.age = static_cast<int>(metadata_->age_);
+  snapshot.has_one_ref =
+      string_.IsNull() ? -1 : (string_.Impl()->HasOneRef() ? 1 : 0);
+  return snapshot;
 }
 
 bool ParkableStringImpl::CanParkNow() const {
