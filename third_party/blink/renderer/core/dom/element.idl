@@ -146,7 +146,7 @@ dictionary CheckVisibilityOptions {
     [CEReactions,RuntimeEnabled=CSSAnchorPositioning] attribute Element? anchorElement;
 
     // Non-standard API
-    [MeasureAs=ElementScrollIntoViewIfNeeded] void scrollIntoViewIfNeeded(optional boolean centerIfNeeded);
+    [MeasureAs=ElementScrollIntoViewIfNeeded, ImplementedAs=RecordReplayScrollIntoViewIfNeededForBinding] void scrollIntoViewIfNeeded(optional boolean centerIfNeeded);
 
     // Experimental accessibility API
     [RuntimeEnabled=ComputedAccessibilityInfo] readonly attribute DOMString? computedRole;
