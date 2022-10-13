@@ -40,9 +40,11 @@
 namespace blink {
 
 static unsigned ComputeMatchedPropertiesHash(const MatchResult& result) {
-  const MatchedPropertiesVector& properties = result.GetMatchedProperties();
+  const RecordReplayMatchedPropertiesVector properties =
+      result.GetRecordReplayMatchedProperties();
   return StringHasher::HashMemory(
-      properties.data(), sizeof(MatchedProperties) * properties.size());
+      properties.data(),
+      sizeof(RecordReplayMatchedProperties) * properties.size());
 }
 
 CachedMatchedProperties::CachedMatchedProperties(
@@ -55,6 +57,11 @@ CachedMatchedProperties::CachedMatchedProperties(
   for (const auto& new_matched_properties : properties) {
     matched_properties.push_back(new_matched_properties.properties);
     matched_properties_types.push_back(new_matched_properties.types_);
+
+    if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                             "CachedMatchedProperties"))
+      replay_matched_properties_strong_.push_back(
+          new_matched_properties.properties);
   }
 }
 
@@ -66,15 +73,22 @@ void CachedMatchedProperties::Set(const ComputedStyle* style,
 
   matched_properties.clear();
   matched_properties_types.clear();
+  replay_matched_properties_strong_.clear();
   for (const auto& new_matched_properties : properties) {
     matched_properties.push_back(new_matched_properties.properties);
     matched_properties_types.push_back(new_matched_properties.types_);
+
+    if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                             "CachedMatchedProperties"))
+      replay_matched_properties_strong_.push_back(
+          new_matched_properties.properties);
   }
 }
 
 void CachedMatchedProperties::Clear() {
   matched_properties.clear();
   matched_properties_types.clear();
+  replay_matched_properties_strong_.clear();
   computed_style = nullptr;
   parent_computed_style = nullptr;
 }
@@ -122,7 +136,8 @@ MatchedPropertiesCache::MatchedPropertiesCache() = default;
 MatchedPropertiesCache::Key::Key(const MatchResult& result)
     : Key(result,
           result.IsCacheable() ? ComputeMatchedPropertiesHash(result)
-                               : HashTraits<unsigned>::EmptyValue()) {}
+                               : HashTraits<unsigned>::EmptyValue()) {
+}
 
 MatchedPropertiesCache::Key::Key(const MatchResult& result, unsigned hash)
     : result_(result), hash_(hash) {}
@@ -148,6 +163,7 @@ const CachedMatchedProperties* MatchedPropertiesCache::Find(
   if (*cache_item != key.result_.GetMatchedProperties()) {
     return nullptr;
   }
+
   if (IsAtShadowBoundary(&style_resolver_state.GetElement()) &&
       cache_item->parent_computed_style->UserModify() !=
           ComputedStyleInitialValues::InitialUserModify()) {

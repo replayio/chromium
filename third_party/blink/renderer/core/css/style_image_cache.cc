@@ -35,6 +35,10 @@ StyleFetchedImage* StyleImageCache::CacheStyleImage(
             FetchParameters::ImageRequestBehavior::kDeferImageLoad,
         origin_clean == OriginClean::kTrue, is_ad_related, params.Url(),
         override_image_resolution);
+
+    if (recordreplay::EnterLeakMemory("StyleImageCache")) {
+      fetched_image_map_strong_.insert(result.stored_value->value);
+    }
   }
 
   return result.stored_value->value.Get();
@@ -42,6 +46,7 @@ StyleFetchedImage* StyleImageCache::CacheStyleImage(
 
 void StyleImageCache::Trace(Visitor* visitor) const {
   visitor->Trace(fetched_image_map_);
+  visitor->Trace(fetched_image_map_strong_);
 }
 
 }  // namespace blink

@@ -64,9 +64,18 @@ bool ElementIntersectionObserverData::ComputeIntersectionsForTarget(
   bool needs_occlusion_tracking = false;
   absl::optional<base::TimeTicks> monotonic_time;
   absl::optional<IntersectionGeometry::RootGeometry> root_geometry;
+
+  // Intersections need to be computed in a consistent order.
+  HeapVector<Member<IntersectionObservation>> observations_to_process;
   for (auto& entry : observations_) {
     needs_occlusion_tracking |= entry.key->NeedsOcclusionTracking();
-    entry.value->ComputeIntersection(flags, monotonic_time, root_geometry);
+    observations_to_process.push_back(entry.value);
+  }
+  std::sort(observations_to_process.begin(), observations_to_process.end(),
+            recordreplay::CompareMemberByPointerId<Member<IntersectionObservation>>());
+
+  for (auto& observation : observations_to_process) {
+    observation->ComputeIntersection(flags, monotonic_time, root_geometry);
   }
   return needs_occlusion_tracking;
 }

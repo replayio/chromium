@@ -76,6 +76,7 @@ void SVGElementRareData::Trace(Visitor* visitor) const {
   visitor->Trace(corresponding_element_);
   visitor->Trace(resource_client_);
   visitor->Trace(smil_animations_);
+  visitor->Trace(replay_strong_element_instances_);
 }
 
 AffineTransform* SVGElementRareData::AnimateMotionTransform() {
