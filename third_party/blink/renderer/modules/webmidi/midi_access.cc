@@ -153,7 +153,7 @@ void MIDIAccess::DidAddInputPort(const String& id,
                                                version, ToDeviceState(state));
   inputs_.push_back(port);
   if (IsPageVisible()) {
-    DispatchEvent(*MIDIConnectionEvent::Create(port));
+    DispatchEvent(*MIDIConnectionEvent::Create(port), "MIDIAccess::DidAddInputPort");
   } else {
     BufferEvent(this, port);
   }
@@ -170,7 +170,7 @@ void MIDIAccess::DidAddOutputPort(const String& id,
       this, port_index, id, manufacturer, name, version, ToDeviceState(state));
   outputs_.push_back(port);
   if (IsPageVisible()) {
-    DispatchEvent(*MIDIConnectionEvent::Create(port));
+    DispatchEvent(*MIDIConnectionEvent::Create(port), "MIDIAccess::DidAddOutputPort");
   } else {
     BufferEvent(this, port);
   }
