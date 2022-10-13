@@ -557,7 +557,7 @@ class CC_EXPORT LayerTreeImpl {
 
   void AddLayerShouldPushProperties(LayerImpl* layer);
   void ClearLayersThatShouldPushProperties();
-  const base::flat_set<LayerImpl*>& LayersThatShouldPushProperties() const {
+  const LayerImplSet& LayersThatShouldPushProperties() const {
     return layers_that_should_push_properties_;
   }
 
@@ -973,8 +973,14 @@ class CC_EXPORT LayerTreeImpl {
 
   // Set of layers that need to push properties.
   // RAW_PTR_EXCLUSION: Performance reasons (based on analysis of MotionMark).
-  RAW_PTR_EXCLUSION base::flat_set<LayerImpl*>
-      layers_that_should_push_properties_;
+  //
+  // DSRC-007 converged at M127: this used to be the one site where the fork
+  // DECLINED upstream's raw_ptr annotation, and upstream has now excluded
+  // raw_ptr here itself, for its own reasons.  The element type is a plain
+  // LayerImpl*, which is what the fork's LayerImplSet
+  // (base::flat_set<LayerImpl*, CompareLayerImplsById>, layer_impl.h:609)
+  // needs, so the two positions now agree.
+  RAW_PTR_EXCLUSION LayerImplSet layers_that_should_push_properties_;
 
   struct ScrollbarLayerIds {
     int horizontal = Layer::INVALID_ID;

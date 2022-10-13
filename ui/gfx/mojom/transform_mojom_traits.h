@@ -7,6 +7,7 @@
 
 #include <array>
 
+#include "base/record_replay.h"
 #include "mojo/public/cpp/bindings/array_traits.h"
 #include "ui/gfx/geometry/transform.h"
 #include "ui/gfx/mojom/transform.mojom-shared.h"
