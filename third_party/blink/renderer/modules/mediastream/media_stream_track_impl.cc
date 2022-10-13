@@ -29,6 +29,7 @@
 
 #include "base/check_op.h"
 #include "base/functional/callback_helpers.h"
+#include "base/record_replay.h"
 #include "base/strings/to_string.h"
 #include "build/build_config.h"
 #include "third_party/blink/public/common/features.h"
@@ -309,6 +310,13 @@ MediaStreamTrackImpl::MediaStreamTrackImpl(
             &MediaStreamTrackImpl::MaybeDispatchConfigurationChange,
             WrapWeakPersistent(this)));
   }
+
+  if ((ready_state_ != MediaStreamSource::kReadyStateEnded ||
+       component_->GetReadyState() != MediaStreamSource::kReadyStateEnded) &&
+      recordreplay::IsRecordingOrReplaying("leak-references",
+                                           "MediaStreamTrackImpl")) {
+    replay_strong_self_ = this;
+  }
 }
 
 MediaStreamTrackImpl::~MediaStreamTrackImpl() = default;
@@ -410,6 +418,8 @@ void MediaStreamTrackImpl::setReadyState(
   if (ready_state_ != MediaStreamSource::kReadyStateEnded &&
       ready_state_ != ready_state) {
     ready_state_ = ready_state;
+    if (ready_state_ == MediaStreamSource::kReadyStateEnded)
+      replay_strong_self_.Clear();
     SendLogMessage(String::Format("%s({ready_state=%s})", __func__,
                                   readyState().AsCStr()));
 
@@ -899,6 +909,9 @@ bool MediaStreamTrackImpl::Ended() const {
 }
 
 void MediaStreamTrackImpl::SourceChangedState() {
+  // A track of a destroyed context returns below without ending.
+  if (component_->GetReadyState() == MediaStreamSource::kReadyStateEnded)
+    replay_strong_self_.Clear();
   if (Ended()) {
     return;
   }
