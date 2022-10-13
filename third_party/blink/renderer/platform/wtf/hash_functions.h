@@ -28,6 +28,8 @@
 
 #include "base/bit_cast.h"
 
+#include "base/record_replay.h"
+
 namespace WTF {
 
 namespace internal {
