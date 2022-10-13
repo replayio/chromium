@@ -12,6 +12,7 @@
 #include "base/check.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/metrics_hashes.h"
+#include "base/record_replay.h"
 #include "content/public/browser/devtools_agent_host_client.h"
 #include "content/public/browser/devtools_agent_host_client_channel.h"
 #include "third_party/inspector_protocol/crdtp/dispatch.h"
@@ -68,4 +69,10 @@ void ChromeDevToolsSessionBase::SendProtocolNotification(
   client_channel_->DispatchProtocolMessageToClient(message->Serialize());
 }
 
-void ChromeDevToolsSessionBase::FlushProtocolNotifications() {}
+void ChromeDevToolsSessionBase::FlushProtocolNotifications() {
+  // https://linear.app/replay/issue/RUN-885
+  // The Assert text keeps the pre-split class name on purpose: it is a RECORDED VALUE,
+  // and upstream moving this method from ChromeDevToolsSession to its base class is not
+  // a reason to change the recorded stream.
+  recordreplay::Assert("ChromeDevToolsSession::FlushProtocolNotifications");
+}

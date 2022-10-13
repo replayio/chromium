@@ -1314,6 +1314,10 @@ static_library("ui") {
       "unload_controller.h",
       "views/search_engine_choice/search_engine_choice_dialog_view.cc",
       "views/search_engine_choice/search_engine_choice_dialog_view.h",
+      "webui/record_replay/record_replay_manager_handler.cc",
+      "webui/record_replay/record_replay_manager_handler.h",
+      "webui/record_replay/record_replay_ui.cc",
+      "webui/record_replay/record_replay_ui.h",
     ]
 
     if (enable_dice_support) {
