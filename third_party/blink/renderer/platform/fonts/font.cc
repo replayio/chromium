@@ -50,6 +50,8 @@ namespace {
 FontFallbackList* GetOrCreateFontFallbackList(
     const FontDescription& font_description,
     FontSelector* font_selector) {
+  recordreplay::Assert("[RUN-1436-2286] GetFontFallbackMap %d",
+                       font_selector ? font_selector->RecordReplayId() : -1);
   FontFallbackMap& fallback_map = font_selector
                                       ? font_selector->GetFontFallbackMap()
                                       : FontCache::Get().GetFontFallbackMap();
