@@ -40,6 +40,7 @@
 #include "base/pending_task.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/process/process_handle.h"
+#include "base/record_replay.h"
 #include "base/scoped_clear_last_error.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
@@ -112,6 +113,35 @@ typedef FILE* FileHandle;
 #if BUILDFLAG(IS_FUCHSIA)
 #include "base/fuchsia/scoped_fx_logger.h"
 #endif
+
+#if !BUILDFLAG(IS_WIN)
+#include <dlfcn.h>
+#else
+#include <windows.h>
+#endif
+
+static void* LookupRecordReplaySymbol(const char* name) {
+#if !BUILDFLAG(IS_WIN)
+  void* fnptr = dlsym(RTLD_DEFAULT, name);
+#else
+  HMODULE module = GetModuleHandleA("windows-recordreplay.dll");
+  void* fnptr = module ? (void*)GetProcAddress(module, name) : nullptr;
+#endif
+  return fnptr ? fnptr : reinterpret_cast<void*>(1);
+}
+
+static void RecordReplayPrint(const char* aFormat, ...) {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayPrint");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    va_list ap;
+    va_start(ap, aFormat);
+    reinterpret_cast<void(*)(const char*, va_list)>(fnptr)(aFormat, ap);
+    va_end(ap);
+  }
+}
 
 namespace logging {
 
@@ -732,6 +762,9 @@ void LogMessage::Flush() {
 #endif
   stream_ << std::endl;
   std::string str_newline(stream_.str());
+
+  RecordReplayPrint("LogMessage %s", str_newline.c_str());
+
   TraceLogMessage(file_, line_, str_newline.substr(message_start_));
 
   // FATAL messages should always run the assert handler and crash, even if a
@@ -933,6 +966,8 @@ void LogMessage::Init(const char* file, int line) {
   // Don't let actions from this method affect the system error after returning.
   base::ScopedClearLastError scoped_clear_last_error;
 
+  RecordReplayPrint("LogMessage::Init %s:%d", std::string(file).c_str(), line);
+
   // Most logging initializes `file` from __FILE__. Unfortunately, because we
   // build from out/Foo we get a `../../` (or \) prefix for all of our
   // __FILE__s. This isn't true for base::Location::Current() which already does
@@ -1038,6 +1073,9 @@ void LogMessage::HandleFatal(size_t stack_start,
 #endif
 
     // Crash the process to generate a dump.
+    // Replace this with an API call to `RecordReplaySetCrashReasonCallback`
+    // See RUN-1562: https://linear.app/replay/issue/RUN-1562
+    RecordReplayPrint("ErrorFatal %s:%d %s", std::string(file_).c_str(), line_, str_newline.c_str());
     // TODO(crbug.com/40254046): Move ImmediateCrash() to an absl::Cleanup to
     // make sure it runs unconditionally. Currently LogAssertHandlers can abort
     // a FATAL message and tests rely on this. HandleFatal() should be
