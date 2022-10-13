@@ -42,6 +42,8 @@
 #include "base/allocator/partition_allocator/thread_cache.h"
 #endif
 
+#include "base/record_replay.h"
+
 namespace base::internal {
 
 namespace {
@@ -144,7 +146,8 @@ WorkerThread::WorkerThread(ThreadType thread_type_hint,
       task_tracker_(std::move(task_tracker)),
       thread_type_hint_(thread_type_hint),
       current_thread_type_(GetDesiredThreadType()),
-      sequence_num_(sequence_num) {
+      sequence_num_(sequence_num),
+      record_replay_unordered_(recordreplay::AreEventsDisallowed()) {
   DCHECK(delegate_);
   DCHECK(task_tracker_);
   DCHECK(CanUseBackgroundThreadTypeForWorkerThread() ||
@@ -305,6 +308,10 @@ void WorkerThread::UpdateThreadType(ThreadType desired_thread_type) {
 }
 
 void WorkerThread::ThreadMain() {
+  absl::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (record_replay_unordered_)
+    disallow.emplace("WorkerThread::ThreadMain");
+
 #if (BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_NACL)) || BUILDFLAG(IS_FUCHSIA)
   DCHECK(io_thread_task_runner_);
   FileDescriptorWatcher file_descriptor_watcher(io_thread_task_runner_);
@@ -450,6 +457,7 @@ void WorkerThread::RunWorker() {
 
     // Get the task source containing the next task to execute.
     RegisteredTaskSource task_source = delegate_->GetWork(this);
+
     if (!task_source) {
       // Exit immediately if GetWork() resulted in detaching this worker.
       if (ShouldExit())

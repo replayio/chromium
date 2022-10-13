@@ -13,9 +13,13 @@
 #include <windows.h>
 #endif
 
+#include "base/record_replay.h"
+
 namespace partition_alloc {
 
 uintptr_t GetRandomPageBase() {
+  recordreplay::AutoDisallowEvents disallow("GetRandomPageBase");
+
   uintptr_t random = static_cast<uintptr_t>(internal::RandomValue());
 
 #if PA_CONFIG(HAS_64_BITS_POINTERS)

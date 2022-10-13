@@ -4,6 +4,7 @@
 
 #include "base/pending_task.h"
 
+#include "base/record_replay.h"
 #include "base/task/task_features.h"
 
 namespace base {
@@ -44,7 +45,12 @@ PendingTask::PendingTask(const Location& posted_from,
       leeway(leeway),
       delay_policy(MaybeOverrideDelayPolicy(delay_policy,
                                             queue_time,
-                                            delayed_run_time)) {}
+                                            delayed_run_time)) {
+  if (!recordreplay::AreEventsUnavailable() &&
+      !recordreplay::AreEventsPassedThrough()) {
+    record_replay_id = recordreplay::NewIdAnyThread("PendingTask");
+  }
+}
 
 PendingTask::PendingTask(PendingTask&& other) = default;
 
