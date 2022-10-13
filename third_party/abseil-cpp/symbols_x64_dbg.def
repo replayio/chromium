@@ -2992,6 +2992,7 @@ EXPORTS
     ?RecordInsertSlow@container_internal@absl@@YAXPEAUHashtablezInfo@12@_K1@Z
     ?RecordRehash@HashtablezInfoHandle@container_internal@absl@@QEAAX_K@Z
     ?RecordRehashSlow@container_internal@absl@@YAXPEAUHashtablezInfo@12@_K@Z
+    ?RecordReplayInitializeMutexSlowPath@absl@@YAXXZ
     ?RecordReservationSlow@container_internal@absl@@YAXPEAUHashtablezInfo@12@_K@Z
     ?RecordStorageChanged@HashtablezInfoHandle@container_internal@absl@@QEAAX_K0@Z
     ?RecordStorageChangedSlow@container_internal@absl@@YAXPEAUHashtablezInfo@12@_K1@Z
