@@ -207,6 +207,11 @@ void UseCounterImpl::AddObserver(Observer* observer) {
 
 void UseCounterImpl::Count(const UseCounterFeature& feature,
                            const LocalFrame* source_frame) {
+  // Some features might get accessed on divergent paths.
+  // E.g. window.devicePixelRatio.
+  if (recordreplay::AreEventsDisallowed("UseCounterImpl::Count"))
+    return;
+
   if (!source_frame)
     return;
 
