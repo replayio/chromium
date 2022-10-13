@@ -620,6 +620,8 @@ String WebDevToolsAgentImpl::NavigationInitiatorInfo(LocalFrame* frame) {
 }
 
 void WebDevToolsAgentImpl::FlushProtocolNotifications() {
+  recordreplay::Assert("[RUN-2161] WebDevToolsAgentImpl::FlushProtocolNotifications");
+
   agent_->FlushProtocolNotifications();
 }
 
@@ -643,12 +645,18 @@ void WebDevToolsAgentImpl::WillProcessTask(
 
 void WebDevToolsAgentImpl::DidProcessTask(
     const base::PendingTask& pending_task) {
-  if (network_agents_.empty())
+  recordreplay::Assert("[RUN-2161] WebDevToolsAgentImpl::DidProcessTask");
+
+  if (network_agents_.empty()) {
+    recordreplay::Assert("[RUN-2161] WebDevToolsAgentImpl::DidProcessTask #1");
     return;
+  }
   v8::Isolate* isolate =
       inspected_frames_->Root()->GetPage()->GetAgentGroupScheduler().Isolate();
   ThreadDebugger::IdleStarted(isolate);
   FlushProtocolNotifications();
+
+  recordreplay::Assert("[RUN-2161] WebDevToolsAgentImpl::DidProcessTask Done");
 }
 
 }  // namespace blink
