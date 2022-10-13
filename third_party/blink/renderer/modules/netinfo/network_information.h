@@ -51,6 +51,12 @@ class NetworkInformation final
                         const absl::optional<double>& downlink_mbps,
                         bool save_data) override;
 
+  // Replay edit: see NetworkStateObserver::RecordReplayObserverId().  This is
+  // a ScriptWrappable, so the id already exists; nothing new is minted.
+  int RecordReplayObserverId() const override {
+    return ScriptWrappable::RecordReplayId();
+  }
+
   // EventTarget overrides.
   const AtomicString& InterfaceName() const override;
   ExecutionContext* GetExecutionContext() const override;
