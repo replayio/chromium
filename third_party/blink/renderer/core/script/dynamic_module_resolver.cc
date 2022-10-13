@@ -4,6 +4,8 @@
 
 #include "third_party/blink/renderer/core/script/dynamic_module_resolver.h"
 
+#include <optional>
+
 #include "base/feature_list.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink.h"
@@ -20,6 +22,8 @@
 #include "third_party/blink/renderer/platform/bindings/v8_throw_exception.h"
 #include "third_party/blink/renderer/platform/loader/fetch/fetch_client_settings_object_snapshot.h"
 #include "v8/include/v8.h"
+
+#include "base/json/json_writer.h"
 
 namespace blink {
 
@@ -142,6 +146,18 @@ void DynamicImportTreeClient::NotifyModuleTreeLoadFinished(
 
     // <spec step="2.3">Return.</spec>
     return;
+  }
+
+  std::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::DictValue info;
+    info.Set("kind", "dynamicImportTreeLoadFinished");
+    if (module_script)
+      info.Set("url", module_script->SourceUrl().GetString().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
+    execute.emplace(node_id);
   }
 
   if (import_phase_ == v8::ModuleImportPhase::kSource) {

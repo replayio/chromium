@@ -29,6 +29,7 @@
 
 #include <array>
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/html/parser/html_entity_parser.h"
 #include "third_party/blink/renderer/core/html/parser/html_parser_idioms.h"
 #include "third_party/blink/renderer/core/html/parser/html_tree_builder.h"
@@ -153,10 +154,13 @@ static inline bool VectorEqualsString(
 
 HTMLTokenizer::HTMLTokenizer(const HTMLParserOptions& options)
     : options_(options), input_stream_preprocessor_(this) {
+  recordreplay::RegisterPointer("HTMLTokenizer", this);
   Reset();
 }
 
-HTMLTokenizer::~HTMLTokenizer() = default;
+HTMLTokenizer::~HTMLTokenizer() {
+  recordreplay::UnregisterPointer(this);
+}
 
 void HTMLTokenizer::Reset() {
   token_.Clear();
