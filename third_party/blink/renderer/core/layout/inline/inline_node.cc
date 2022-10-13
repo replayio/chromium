@@ -57,6 +57,8 @@
 #include "third_party/blink/renderer/platform/wtf/text/character_names.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_buffer.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 namespace {
@@ -1301,6 +1303,7 @@ void InlineNode::ShapeText(InlineItemsData* data,
                            const String* previous_text,
                            const HeapVector<InlineItem>* previous_items,
                            const Font* override_font) const {
+
   TRACE_EVENT0("fonts", "InlineNode::ShapeText");
   const String& text_content = data->text_content;
   HeapVector<InlineItem>* items = &data->items;
@@ -1320,6 +1323,7 @@ void InlineNode::ShapeText(InlineItemsData* data,
 
   for (unsigned index = 0; index < items->size();) {
     InlineItem& start_item = (*items)[index];
+
     if (start_item.Type() != InlineItem::kText || !start_item.Length()) {
       index++;
       continue;
@@ -1381,8 +1385,10 @@ void InlineNode::ShapeText(InlineItemsData* data,
         }
         // Break shaping at ZWNJ so that it prevents kerning. ZWNJ is always at
         // the beginning of an item for this purpose; see InlineItemsBuilder.
-        if (text_content[item.StartOffset()] == kZeroWidthNonJoinerCharacter)
+        if (text_content[item.StartOffset()] == kZeroWidthNonJoinerCharacter) {
           break;
+        }
+
         end_offset = item.EndOffset();
         num_text_items++;
       } else if (item.Type() == InlineItem::kOpenTag) {
@@ -1979,6 +1985,7 @@ MinMaxSizesResult InlineNode::ComputeMinMaxSizes(
     WritingMode container_writing_mode,
     const ConstraintSpace& space,
     const MinMaxSizesFloatInput& float_input) const {
+
   PrepareLayoutIfNeeded();
 
   // Compute the max of inline sizes of all line boxes with 0 available inline

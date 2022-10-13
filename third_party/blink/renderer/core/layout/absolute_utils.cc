@@ -598,6 +598,9 @@ const LayoutResult* ComputeOofBlockDimensions(
                          container_writing_direction, anchor_evaluator);
 
   LayoutUnit block_size;
+
+  recordreplay::Assert(
+      "[RUN-1239] ComputeOutOfFlowBlockDimensions A %d", !!replaced_size);
   if (replaced_size) {
     DCHECK(node.IsReplaced());
     block_size = replaced_size->block_size;

@@ -393,6 +393,7 @@ LayoutCacheStatus CalculateSizeBasedLayoutCacheStatusWithGeometry(
         // If the alignment baselines differ at this stage, we need layout.
         if (*new_alignment_baseline != *old_alignment_baseline)
           return LayoutCacheStatus::kNeedsLayout;
+
         break;
       }
       case BlockContentAlignment::kUnsafeCenter:
@@ -468,11 +469,18 @@ LayoutCacheStatus CalculateSizeBasedLayoutCacheStatus(
   const ConstraintSpace& old_space =
       cached_layout_result.GetConstraintSpaceForCaching();
 
+  recordreplay::Assert("[RUN-1855-1856] CalculateSizeBasedLayoutCacheStatus node(%d) old(%s) new(%s)",
+    node.RecordReplayId(),
+    old_space.ToString().Ascii().c_str(),
+    new_space.ToString().Ascii().c_str()
+  );
+
   if (!new_space.MaySkipLayout(old_space))
     return LayoutCacheStatus::kNeedsLayout;
 
   if (new_space.AreInlineSizeConstraintsEqual(old_space) &&
       new_space.AreBlockSizeConstraintsEqual(old_space)) {
+
     // It is possible that our intrinsic size has changed, check for that here.
     if (IntrinsicSizeWillChange(node, break_token, cached_layout_result,
                                 new_space, fragment_geometry))

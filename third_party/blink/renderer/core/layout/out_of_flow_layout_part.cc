@@ -933,6 +933,8 @@ void OutOfFlowLayoutPart::LayoutCandidates(
       container_builder_->GetWritingDirection(), container_builder_->Size());
   const FragmentItemsBuilder::ItemWithOffsetList* items = nullptr;
   absl::optional<LogicalAnchorQueryMap> anchor_queries;
+  recordreplay::Assert("[RUN-1239] NGOutOfFlowLayoutPart::LayoutCandidates %d",
+                       candidates->size());
   while (candidates->size() > 0) {
     if (!has_block_fragmentation_ ||
         container_builder_->IsInitialColumnBalancingPass())
@@ -1877,6 +1879,13 @@ OutOfFlowLayoutPart::TryCalculateOffset(
       node_info.container_physical_content_size.ConvertToLogical(
           candidate_writing_direction.GetWritingMode());
 
+  recordreplay::Assert(
+      "[RUN-1239-1435] NGOutOfFlowLayoutPart::TryCalculateOffset %d %d %d %s",
+      node_info.container_physical_content_size.width.RawValue(),
+      node_info.container_physical_content_size.height.RawValue(),
+      container_content_size_in_candidate_writing_mode.block_size.RawValue(),
+      node_info.node.ToString().Utf8().c_str());
+
   // Determine if we need to actually run the full OOF-positioned sizing, and
   // positioning algorithm.
   //
@@ -1892,6 +1901,7 @@ OutOfFlowLayoutPart::TryCalculateOffset(
     if (const LayoutResult* cached_result =
             node_info.node.CachedLayoutResultForOutOfFlowPositioned(
                 container_content_size_in_candidate_writing_mode)) {
+      recordreplay::Assert("[RUN-1239] NGOutOfFlowLayoutPart::TryCalculateOffset B");
       OffsetInfo offset_info;
       offset_info.initial_layout_result = cached_result;
       offset_info.has_cached_layout_result = true;
@@ -1993,6 +2003,11 @@ OutOfFlowLayoutPart::TryCalculateOffset(
   absl::optional<LayoutUnit> inline_scroll_max;
   absl::optional<LayoutUnit> additional_inline_scroll_min;
   absl::optional<LayoutUnit> additional_inline_scroll_max;
+  recordreplay::Assert(
+      "[RUN-1239] NGOutOfFlowLayoutPart::TryCalculateOffset C %d %d",
+      try_fit_available_space,
+      node_dimensions.MarginBoxInlineStart() < imcb.inline_start ||
+          node_dimensions.MarginBoxInlineEnd() > imcb.InlineEndOffset());
   if (try_fit_available_space) {
     imcb_for_position_fallback = ComputeIMCBForPositionFallback(
         node_info.constraint_space.AvailableSize(), insets,
@@ -2020,6 +2035,9 @@ OutOfFlowLayoutPart::TryCalculateOffset(
 
   // We may have already pre-computed our block-dimensions when determining
   // our min/max sizes, only run if needed.
+  recordreplay::Assert(
+      "[RUN-1239] NGOutOfFlowLayoutPart::TryCalculateOffset D %d",
+      node_dimensions.size.block_size.RawValue());
   if (node_dimensions.size.block_size == kIndefiniteSize) {
     offset_info.initial_layout_result = ComputeOofBlockDimensions(
         node_info.node, candidate_style, node_info.constraint_space, imcb,
@@ -2197,6 +2215,10 @@ const LayoutResult* OutOfFlowLayoutPart::GenerateFragment(
   const OffsetInfo& offset_info = oof_node_to_layout.offset_info;
   const BlockBreakToken* break_token = oof_node_to_layout.break_token;
   const BlockNode& node = node_info.node;
+  // https://linear.app/replay/issue/RUN-546
+  recordreplay::Assert("[RUN-546] NGOutOfFlowLayoutPart::GenerateFragment Start %d",
+                       node.GetLayoutBox()->RecordReplayId());
+
   const auto& style = node.Style();
   const LayoutUnit block_offset = offset_info.offset.block_offset;
   LogicalSize container_content_size_in_candidate_writing_mode =

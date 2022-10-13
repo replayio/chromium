@@ -240,12 +240,16 @@ void LayoutSVGText::UpdateLayout() {
 
   const gfx::RectF old_boundaries = ObjectBoundingBox();
 
+  recordreplay::Assert("[RUN-1239-2230] LayoutNGSVGText::UpdateBlockLayout A %d",
+                       GetElement()->RecordReplayId());
   const ComputedStyle& style = StyleRef();
   ConstraintSpaceBuilder builder(
       style.GetWritingMode(), style.GetWritingDirection(),
       /* is_new_fc */ true, /* adjust_inline_size_if_needed */ false);
   builder.SetAvailableSize(LogicalSize());
   BlockNode(this).Layout(builder.ToConstraintSpace());
+  recordreplay::Assert("[RUN-1239-2230] LayoutNGSVGText::UpdateBlockLayout B %d",
+                       GetElement()->RecordReplayId());
 
   needs_update_bounding_box_ = true;
 

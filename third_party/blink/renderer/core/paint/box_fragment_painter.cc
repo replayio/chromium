@@ -33,6 +33,7 @@
 #include "third_party/blink/renderer/core/paint/box_decoration_data.h"
 #include "third_party/blink/renderer/core/paint/box_painter.h"
 #include "third_party/blink/renderer/core/paint/fieldset_painter.h"
+#include "third_party/blink/renderer/core/paint/fragment_data.h"
 #include "third_party/blink/renderer/core/paint/fragment_painter.h"
 #include "third_party/blink/renderer/core/paint/frame_set_painter.h"
 #include "third_party/blink/renderer/core/paint/inline_box_fragment_painter.h"
@@ -361,6 +362,12 @@ PaintInfo FloatPaintInfo(const PaintInfo& paint_info) {
 // on their own.
 void PaintFragment(const PhysicalBoxFragment& fragment,
                    const PaintInfo& paint_info) {
+  recordreplay::Assert(
+      "[RUN-1975-2008] NgBoxFragmentPainter::PaintFragment A %llu %d",
+      (uint64_t)(paint_info.FragmentDataOverride()
+                     ? paint_info.FragmentDataOverride()->FragmentID()
+                     : WTF::kNotFound),
+      fragment.GetNode() ? fragment.GetNode()->RecordReplayId() : -1);
   if (fragment.CanTraverse()) {
     BoxFragmentPainter(fragment).Paint(paint_info);
     return;
@@ -1518,9 +1525,14 @@ void BoxFragmentPainter::PaintInlineItems(const PaintInfo& paint_info,
   while (*cursor) {
     const FragmentItem* item = cursor->CurrentItem();
     DCHECK(item);
+    recordreplay::Assert(
+        "[RUN-1975-2008] NGBoxFragmentPainter::PaintInlineItems A %llu %d %d",
+        (uint64_t)item->FragmentId(), (int)item->Type(), item->GetNode() ? item->GetNode()->RecordReplayId() : -1);
     if (UNLIKELY(item->IsLayoutObjectDestroyedOrMoved())) {
       // TODO(crbug.com/1099613): This should not happen, as long as it is
       // really layout-clean.
+      recordreplay::Assert(
+          "[RUN-1975-2008] NGBoxFragmentPainter::PaintInlineItems B %d", (int)item->Type());
       NOTREACHED();
       cursor->MoveToNextSkippingChildren();
       continue;
@@ -1546,6 +1558,8 @@ void BoxFragmentPainter::PaintInlineItems(const PaintInfo& paint_info,
         NOTREACHED_NORETURN();
     }
   }
+  recordreplay::Assert(
+      "[RUN-1975-2008] NGBoxFragmentPainter::PaintInlineItems C");
 }
 
 // Paint a line box. This function records hit test data of the line box in
