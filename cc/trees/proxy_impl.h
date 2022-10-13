@@ -91,6 +91,9 @@ class CC_EXPORT ProxyImpl : public LayerTreeHostImplClient,
   void ClearHistory() override;
   size_t CommitDurationSampleCountForTesting() const override;
 
+  void RecordReplayRepaintPending();
+  void RecordReplayRepaint();
+
  private:
   // LayerTreeHostImplClient implementation
   void DidLoseLayerTreeFrameSinkOnImplThread() override;
@@ -233,6 +236,9 @@ class CC_EXPORT ProxyImpl : public LayerTreeHostImplClient,
 
   // Temporary for production debugging of renderer hang (crbug.com/1159366).
   base::OneShotTimer hung_commit_timer_;
+
+  // The frame sink a repaint initialized while the compositor waited for one.
+  std::unique_ptr<LayerTreeFrameSink> record_replay_frame_sink_;
 };
 
 }  // namespace cc
