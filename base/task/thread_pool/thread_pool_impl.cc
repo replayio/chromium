@@ -35,6 +35,8 @@
 #include "base/time/time.h"
 #include "build/build_config.h"
 
+#include "base/record_replay.h"
+
 namespace base::internal {
 
 namespace {
@@ -115,6 +117,16 @@ ThreadPoolImpl::ThreadPoolImpl(
         tracked_ref_factory_.GetTrackedRef(), monitor_worker_thread_priorities,
         record_lock_contention);
   }
+
+  if (recordreplay::IsRecordingOrReplaying()) {
+    recordreplay::AutoDisallowEvents disallow("ThreadPoolImpl::ThreadPoolImpl");
+    record_replay_unordered_thread_group_ = std::make_unique<ThreadGroupImpl>(
+        std::string(),
+        kBackgroundPoolEnvironmentParams.name_suffix,
+        kBackgroundPoolEnvironmentParams.thread_type_hint,
+        ThreadGroupType::BACKGROUND, task_tracker_->GetTrackedRef(),
+        tracked_ref_factory_.GetTrackedRef());
+  }
 }
 
 ThreadPoolImpl::~ThreadPoolImpl() {
@@ -128,6 +140,7 @@ ThreadPoolImpl::~ThreadPoolImpl() {
   background_thread_group_.reset();
   presentation_thread_group_.reset();
   audio_thread_group_.reset();
+  record_replay_unordered_thread_group_.reset();
 }
 
 void ThreadPoolImpl::Start(const ThreadPoolInstance::InitParams& init_params,
@@ -272,6 +285,14 @@ void ThreadPoolImpl::Start(const ThreadPoolInstance::InitParams& init_params,
         worker_thread_observer, worker_environment,
         g_synchronous_thread_start_for_testing,
         /*may_block_threshold_for_testing=*/{});
+  }
+
+  if (record_replay_unordered_thread_group_) {
+    static_cast<ThreadGroupImpl*>(record_replay_unordered_thread_group_.get())
+        ->Start(max_best_effort_tasks, max_best_effort_tasks,
+                init_params.suggested_reclaim_time,
+                service_thread_task_runner, worker_thread_observer,
+                worker_environment, g_synchronous_thread_start_for_testing);
   }
 
   started_ = true;
@@ -702,6 +723,10 @@ const ThreadGroup* ThreadPoolImpl::GetThreadGroup(ThreadType thread_type,
 
 ThreadGroup* ThreadPoolImpl::GetThreadGroup(ThreadType thread_type,
                                             ThreadPolicy policy) {
+  if (recordreplay::AreEventsDisallowed("unordered-tasks")) {
+    return record_replay_unordered_thread_group_.get();
+  }
+
   if (thread_type == ThreadType::kBackground &&
       policy == ThreadPolicy::PREFER_BACKGROUND && background_thread_group_) {
     return background_thread_group_.get();
@@ -753,6 +778,8 @@ void ThreadPoolImpl::UpdateCanRunPolicy(CanRunPolicy can_run_policy) {
   if (audio_thread_group_) {
     audio_thread_group_->DidUpdateCanRunPolicy();
   }
+  if (record_replay_unordered_thread_group_)
+    record_replay_unordered_thread_group_->DidUpdateCanRunPolicy();
   single_thread_task_runner_manager_.DidUpdateCanRunPolicy();
 }
 

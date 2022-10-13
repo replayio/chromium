@@ -4,6 +4,33 @@
 
 #include "base/functional/callback_helpers.h"
 
+#ifndef _WIN32
+#include <dlfcn.h>
+#else
+#include <windows.h>
+#endif
+
+static void* LookupRecordReplaySymbol(const char* name) {
+#ifndef _WIN32
+  void* fnptr = dlsym(RTLD_DEFAULT, name);
+#else
+  HMODULE module = GetModuleHandleA("windows-recordreplay.dll");
+  void* fnptr = module ? (void*)GetProcAddress(module, name) : nullptr;
+#endif
+  return fnptr ? fnptr : reinterpret_cast<void*>(1);
+}
+
+static uintptr_t RecordReplayValue(const char* why, uintptr_t v) {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayValue");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    return reinterpret_cast<uintptr_t(*)(const char*, uintptr_t)>(fnptr)(why, v);
+  }
+  return v;
+}
+
 namespace base {
 
 ScopedClosureRunner::ScopedClosureRunner() = default;
@@ -39,6 +66,10 @@ void ScopedClosureRunner::ReplaceClosure(OnceClosure closure) {
 
 OnceClosure ScopedClosureRunner::Release() {
   return std::move(closure_);
+}
+
+uintptr_t CallbackRecordReplayValue(const char* why, uintptr_t value) {
+  return RecordReplayValue(why, value);
 }
 
 }  // namespace base
