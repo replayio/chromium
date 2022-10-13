@@ -66,6 +66,8 @@
 #include "partition_alloc/stack/stack.h"
 #include "partition_alloc/thread_cache.h"
 
+#include "base/record_replay.h"
+
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/background_thread_pool_field_trial.h"
 #include "base/system/sys_info.h"
@@ -210,6 +212,10 @@ void MemoryReclaimerSupport::Run() {
   has_pending_task_ = false;
 
   {
+    // The memory reclaimer runs at consistent points when recording vs. replaying,
+    // but can behave differently.
+    recordreplay::AutoDisallowEvents disallow("RunMemoryReclaimer");
+
     // Micros, since memory reclaiming should typically take at most a few ms.
     SCOPED_UMA_HISTOGRAM_TIMER_MICROS("Memory.PartitionAlloc.MemoryReclaim");
     if (base::FeatureList::IsEnabled(kPartitionAllocShortMemoryReclaim)) {
