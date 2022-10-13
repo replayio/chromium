@@ -1361,6 +1361,10 @@ String Request::ContentType() const {
   return result;
 }
 
+std::string Request::GetUrl() const {
+  return url().GetString().Utf8();
+}
+
 void Request::Trace(Visitor* visitor) const {
   ScriptWrappable::Trace(visitor);
   Body::Trace(visitor);
