@@ -24,7 +24,7 @@ class LOCKABLE BASE_EXPORT Lock {
  public:
 #if !DCHECK_IS_ON()
   // Optimized wrapper implementation
-  Lock() : lock_() {}
+  Lock(const char* ordered_name = nullptr) : lock_(ordered_name) {}
 
   Lock(const Lock&) = delete;
   Lock& operator=(const Lock&) = delete;
@@ -44,7 +44,7 @@ class LOCKABLE BASE_EXPORT Lock {
   void AssertAcquired() const ASSERT_EXCLUSIVE_LOCK() {}
   void AssertNotHeld() const {}
 #else
-  Lock();
+  Lock(const char* ordered_name = nullptr);
   ~Lock();
 
   // NOTE: We do not permit recursive locks and will commonly fire a DCHECK() if

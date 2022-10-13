@@ -27,6 +27,8 @@
 #include "base/win/scoped_windows_thread_environment.h"
 #endif
 
+#include "base/record_replay_ordered_atomic.h"
+
 namespace base {
 
 class WorkerThreadObserver;
@@ -158,6 +160,10 @@ class BASE_EXPORT ThreadGroup {
   virtual void DidUpdateCanRunPolicy() = 0;
 
   virtual void OnShutdownStarted() = 0;
+
+  bool RecordReplayUnordered() const {
+    return record_replay_unordered_;
+  }
 
   // Returns true if a thread group is registered in TLS. Used by diagnostic
   // code to check whether it's inside a ThreadPool task.
@@ -463,7 +469,7 @@ class BASE_EXPORT ThreadGroup {
   // released. It is annotated as GUARDED_BY(lock_) because it is always updated
   // under the lock (to avoid races with other state during the update) but it
   // is nonetheless always safe to read it without the lock (since it's atomic).
-  std::atomic<YieldSortKey> max_allowed_sort_key_ GUARDED_BY(lock_){
+  recordreplay::OrderedAtomic<YieldSortKey> max_allowed_sort_key_ GUARDED_BY(lock_){
       kMaxYieldSortKey};
 
   // If |replacement_thread_group_| is non-null, this ThreadGroup is invalid and
@@ -533,6 +539,9 @@ class BASE_EXPORT ThreadGroup {
 
   // Set at the start of JoinForTesting().
   bool join_for_testing_started_ GUARDED_BY(lock_) = false;
+
+  // Whether operations on this thread group may be unordered when recording/replaying.
+  bool record_replay_unordered_ = false;
 };
 
 }  // namespace internal
