@@ -296,6 +296,12 @@ class ElementRareData final : public ElementRareDataBase {
 
   void Trace(blink::Visitor*) const override;
 
+  // Replay edit: As of 1/2023, there is ElementRareDataVector::GetWrappedField
+  // so we won't need this in the future.
+  CSSStyleDeclaration* GetInlineCSSStyleDeclaration() const override {
+    return cssom_wrapper_.Get();
+  }
+
  private:
   AtomicString nonce_;
   AtomicString is_value_;
