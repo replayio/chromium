@@ -44,6 +44,7 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "build/build_config.h"
@@ -707,6 +708,10 @@ RTCPeerConnection::RTCPeerConnection(
   closed_ = false;
   peer_handler_unregistered_ = false;
   suppress_events_ = false;
+  if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                           "RTCPeerConnection")) {
+    replay_strong_self_ = this;
+  }
 }
 
 RTCPeerConnection::~RTCPeerConnection() {
@@ -2240,6 +2245,10 @@ RTCDtlsTransport* RTCPeerConnection::CreateOrUpdateDtlsTransport(
         CreateOrUpdateIceTransport(native_transport->ice_transport());
     transport = MakeGarbageCollected<RTCDtlsTransport>(
         GetExecutionContext(), std::move(native_transport), ice_transport);
+    if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                             "RTCPeerConnection")) {
+      replay_strong_dtls_transports_.push_back(transport);
+    }
   }
   transport->ChangeState(information);
   return transport.Get();
@@ -2845,6 +2854,18 @@ void RTCPeerConnection::CloseInternal() {
   if (sctp_transport_) {
     sctp_transport_->Close();
   }
+  // Each Close() has recorded side effects, and the map's order follows the
+  // native transports' addresses, which differ between recording and replay.
+  if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                           "RTCPeerConnection")) {
+    HeapVector<Member<RTCDtlsTransport>> dtls_transports_copy =
+        replay_strong_dtls_transports_;
+    for (RTCDtlsTransport* dtls_transport : dtls_transports_copy) {
+      dtls_transport->Close();
+    }
+    feature_handle_for_scheduler_.reset();
+    return;
+  }
   // Since Close() can trigger JS-level callbacks, iterate over a copy
   // of the transports list.
   auto dtls_transports_copy = dtls_transports_by_native_transport_;
@@ -2861,7 +2882,7 @@ void RTCPeerConnection::CloseInternal() {
 void RTCPeerConnection::MaybeDispatchEvent(Event* event) {
   if (suppress_events_)
     return;
-  DispatchEvent(*event);
+  DispatchEvent(*event, "RTCPeerConnection::MaybeDispatchEvent");
 }
 
 void RTCPeerConnection::ScheduleDispatchEvent(Event* event) {
@@ -2923,7 +2944,7 @@ void RTCPeerConnection::DispatchScheduledEvents() {
 
   for (auto& event : events) {
     if (event->Setup()) {
-      DispatchEvent(*event->event_.Release());
+      DispatchEvent(*event->event_.Release(), "RTCPeerConnection::DispatchScheduledEvents");
     }
   }
 
@@ -2942,6 +2963,7 @@ void RTCPeerConnection::Trace(Visitor* visitor) const {
   visitor->Trace(scheduled_events_);
   visitor->Trace(dtls_transports_by_native_transport_);
   visitor->Trace(ice_transports_by_native_transport_);
+  visitor->Trace(replay_strong_dtls_transports_);
   visitor->Trace(sctp_transport_);
   EventTarget::Trace(visitor);
   ExecutionContextLifecycleObserver::Trace(visitor);
