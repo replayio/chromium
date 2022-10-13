@@ -129,12 +129,12 @@ class PLATFORM_EXPORT RuntimeCallTimer {
 // RuntimeCallStatsTest.
 #define RUNTIME_CALL_STATS_ENTER_WITH_RCS(runtime_call_stats, timer, \
                                           counterId)                 \
-  if (UNLIKELY(RuntimeCallStats::IsEnabled())) {                     \
+  if (BlinkRuntimeCallStatsEnabled()) {                              \
     (runtime_call_stats)->Enter(timer, counterId);                   \
   }
 
 #define RUNTIME_CALL_STATS_LEAVE_WITH_RCS(runtime_call_stats, timer) \
-  if (UNLIKELY(RuntimeCallStats::IsEnabled())) {                     \
+  if (BlinkRuntimeCallStatsEnabled()) {                              \
     (runtime_call_stats)->Leave(timer);                              \
   }
 
@@ -146,7 +146,7 @@ class PLATFORM_EXPORT RuntimeCallTimer {
 
 #define RUNTIME_CALL_TIMER_SCOPE_WITH_OPTIONAL_RCS(             \
     optional_scope_name, runtime_call_stats, counterId)         \
-  if (UNLIKELY(RuntimeCallStats::IsEnabled())) {                \
+  if (BlinkRuntimeCallStatsEnabled()) {                         \
     optional_scope_name.emplace(runtime_call_stats, counterId); \
   }
 
@@ -362,6 +362,20 @@ class PLATFORM_EXPORT RuntimeCallStats {
 #endif
 };
 
+static inline bool BlinkRuntimeCallStatsEnabled() {
+  // Force-disable call stats when recording/replaying, as calls can occur at
+  // non-deterministic points and will also bloat the recording.
+  //
+  // M127: this used to restate upstream's predicate as
+  // RuntimeEnabledFeatures::BlinkRuntimeCallStatsEnabled().  Upstream factored that
+  // into RuntimeCallStats::IsEnabled() and dropped both the uses AND the
+  // runtime_enabled_features.h include from this header, so the restated form no
+  // longer compiles here.  Calling upstream's predicate also stops the duplicate
+  // from rotting again.
+  return UNLIKELY(RuntimeCallStats::IsEnabled()
+               && !v8::recordreplay::IsRecordingOrReplaying("no-call-stats"));
+}
+
 // A utility class that creates a RuntimeCallTimer and uses it with
 // RuntimeCallStats to measure execution time of a C++ scope.
 // Do not use this class directly, use RUNTIME_CALL_TIMER_SCOPE instead.
@@ -398,7 +412,7 @@ class PLATFORM_EXPORT RuntimeCallStatsScopedTracer {
 
  public:
   explicit RuntimeCallStatsScopedTracer(v8::Isolate* isolate) {
-    if (UNLIKELY(RuntimeCallStats::IsEnabled())) {
+    if (BlinkRuntimeCallStatsEnabled()) {
       AddBeginTraceEventIfEnabled(isolate);
     }
   }

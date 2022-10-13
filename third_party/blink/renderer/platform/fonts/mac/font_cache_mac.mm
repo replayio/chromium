@@ -57,6 +57,8 @@
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
 
+#include "base/record_replay.h"
+
 using base::apple::CFToNSOwnershipCast;
 using base::apple::CFToNSPtrCast;
 using base::apple::NSToCFOwnershipCast;
@@ -313,6 +315,11 @@ const SimpleFontData* FontCache::PlatformFallbackFontForCharacter(
             GetFontData(font_description, AtomicString(kColorEmojiFontMac))) {
       return emoji_font;
     }
+  }
+
+  if (recordreplay::AreEventsUnavailable("PlatformFallbackFontForCharacter")) {
+    // [RUN-2765] Circumvent a rabbit hole of MAC-related font calls.
+    return nullptr;
   }
 
   const FontPlatformData& platform_data =
