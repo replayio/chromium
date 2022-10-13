@@ -14,6 +14,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/weak_ptr.h"
+#include "base/record_replay.h"
 #include "base/time/time.h"
 #include "components/power_scheduler/power_mode_voter.h"
 #include "components/viz/common/frame_sinks/begin_frame_source.h"
@@ -431,7 +432,7 @@ class VIZ_SERVICE_EXPORT CompositorFrameSinkSupport
   // The sequence ID for the save directive pending copy.
   uint32_t in_flight_save_sequence_id_ = 0;
 
-  std::unique_ptr<power_scheduler::PowerModeVoter> power_mode_voter_;
+  recordreplay::unique_leaky_ptr<power_scheduler::PowerModeVoter> power_mode_voter_;
 
   base::flat_set<base::PlatformThreadId> thread_ids_;
 
