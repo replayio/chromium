@@ -299,6 +299,9 @@ Animation::Animation(ExecutionContext* execution_context,
       effect_suppressed_(false),
       compositor_property_animations_have_no_effect_(false),
       animation_has_no_effect_(false) {
+  // Pointer registration is needed for sorting in Animation::HasLowerCompositeOrdering.
+  recordreplay::RegisterPointer("Animation", this);
+
   if (execution_context && !execution_context->IsContextDestroyed())
     SetExecutionContext(execution_context);
 
@@ -323,6 +326,8 @@ Animation::Animation(ExecutionContext* execution_context,
 }
 
 Animation::~Animation() {
+  recordreplay::UnregisterPointer(this);
+
   // Verify that compositor_animation_ has been disposed of.
   DCHECK(!compositor_animation_);
 }
@@ -724,6 +729,10 @@ bool Animation::HasLowerCompositeOrdering(
         return originating_element1->compareDocumentPosition(
                    originating_element2) &
                Node::kDocumentPositionFollowing;
+      } else if (recordreplay::IsRecordingOrReplaying("pointer-ids")) {
+        int ida = originating_element1 ? originating_element1->RecordReplayId() : 0;
+        int idb = originating_element2 ? originating_element2->RecordReplayId() : 0;
+        return ida < idb;
       } else {
         return originating_element1 < originating_element2;
       }
@@ -2301,6 +2310,8 @@ void Animation::StartAnimationOnCompositor(
 // composited and non-composited animations. The use of 'compositor' in the name
 // is confusing.
 void Animation::SetCompositorPending(bool effect_changed) {
+  recordreplay::Assert("[RUN-1641] Animation::SetCompositorPending %d", RecordReplayId());
+
   // FIXME: KeyframeEffect could notify this directly?
   if (!HasActiveAnimationsOnCompositor()) {
     DestroyCompositorAnimation();
@@ -2785,6 +2796,8 @@ absl::optional<AnimationTimeDelta> Animation::TimeToEffectChange() {
 
 // https://www.w3.org/TR/web-animations-1/#canceling-an-animation-section
 void Animation::cancel() {
+  recordreplay::Assert("[RUN-1641] Animation::cancel %d", RecordReplayId());
+
   AnimationTimeDelta current_time_before_cancel =
       CurrentTimeInternal().value_or(AnimationTimeDelta());
   AnimationPlayState initial_play_state = CalculateAnimationPlayState();

@@ -4,6 +4,8 @@
 
 #include "third_party/blink/renderer/core/input/mouse_event_manager.h"
 
+#include "base/record_replay.h"
+
 #include "build/build_config.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_drag_event_init.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_pointer_event_init.h"
@@ -258,6 +260,17 @@ WebInputEventResult MouseEventManager::DispatchMouseEvent(
          mouse_event_type == event_type_names::kClick ||
          mouse_event_type == event_type_names::kAuxclick);
 
+  if (recordreplay::IsRecordingOrReplaying() && (
+    mouse_event_type == event_type_names::kMouseup ||
+    mouse_event_type == event_type_names::kMousedown ||
+    mouse_event_type == event_type_names::kMousemove)) {
+
+    auto pos = mouse_event.PositionInRootFrame();
+    auto x = (size_t)pos.x();
+    auto y = (size_t)pos.y();
+    recordreplay::OnMouseEvent(mouse_event_type.Utf8().c_str(), x, y, false);
+  }
+  
   WebInputEventResult input_event_result = WebInputEventResult::kNotHandled;
 
   if (target && target->ToNode()) {
@@ -290,7 +303,7 @@ WebInputEventResult MouseEventManager::DispatchMouseEvent(
         event_timing = EventTiming::Create(frame_->DomWindow(), *event);
       if (should_dispatch) {
         input_event_result = event_handling_util::ToWebInputEventResult(
-            target->DispatchEvent(*event));
+            target->DispatchEvent(*event, "MouseEventManager::DispatchMouseEvent #1"));
       }
     } else {
       MouseEventInit* initializer = MouseEventInit::Create();
@@ -306,7 +319,7 @@ WebInputEventResult MouseEventManager::DispatchMouseEvent(
         event_timing = EventTiming::Create(frame_->DomWindow(), *event);
       if (should_dispatch) {
         input_event_result = event_handling_util::ToWebInputEventResult(
-            target->DispatchEvent(*event));
+            target->DispatchEvent(*event, "MouseEventManager::DispatchMouseEvent #2"));
       }
     }
   }
@@ -1055,7 +1068,7 @@ WebInputEventResult MouseEventManager::DispatchDragEvent(
                                         : MouseEvent::kRealOrIndistinguishable);
 
   return event_handling_util::ToWebInputEventResult(
-      drag_target->DispatchEvent(*me));
+      drag_target->DispatchEvent(*me, "MouseEventManager::DispatchDragEvent"));
 }
 
 void MouseEventManager::ClearDragDataTransfer() {
