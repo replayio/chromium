@@ -169,6 +169,10 @@ Response InspectorEmulationAgent::disable() {
   setUserAgentOverride(
       String(), protocol::Maybe<String>(), protocol::Maybe<String>(),
       protocol::Maybe<protocol::Emulation::UserAgentMetadata>());
+
+  recordreplay::Assert("[RUN-1537-1538] InspectorEmulationAgent::disable %d %d",
+                       !!locale_override_.Get().empty(),
+                       !!web_local_frame_);
   if (!locale_override_.Get().empty())
     setLocaleOverride(String());
   if (!web_local_frame_)
@@ -399,6 +403,7 @@ Response InspectorEmulationAgent::setFocusEmulationEnabled(bool enabled) {
   Response response = AssertPage();
   if (!response.IsSuccess())
     return response;
+
   emulate_focus_.Set(enabled);
   GetWebViewImpl()->GetPage()->GetFocusController().SetFocusEmulationEnabled(
       enabled);
@@ -717,6 +722,9 @@ Response InspectorEmulationAgent::setUserAgentOverride(
 
 Response InspectorEmulationAgent::setLocaleOverride(
     protocol::Maybe<String> maybe_locale) {
+  recordreplay::Assert(
+      "[RUN-1537-1538] InspectorEmulationAgent::setLocaleOverride A");
+
   // Only allow resetting overrides set by the same agent.
   if (locale_override_.Get().empty() &&
       LocaleController::instance().has_locale_override()) {
@@ -725,6 +733,9 @@ Response InspectorEmulationAgent::setLocaleOverride(
   }
   String locale = maybe_locale.fromMaybe(String());
   String error = LocaleController::instance().SetLocaleOverride(locale);
+  recordreplay::Assert(
+      "[RUN-1537-1538] InspectorEmulationAgent::setLocaleOverride B %d %s",
+      error.empty(), locale.Utf8().c_str());
   if (!error.empty())
     return Response::ServerError(error.Utf8());
   locale_override_.Set(locale);

@@ -159,6 +159,9 @@ void WorkerInspectorController::Dispose() {
 }
 
 void WorkerInspectorController::FlushProtocolNotifications() {
+  // https://linear.app/replay/issue/RUN-885
+  recordreplay::Assert("WorkerInspectorController::FlushProtocolNotifications");
+
   if (agent_)
     agent_->FlushProtocolNotifications();
 }
