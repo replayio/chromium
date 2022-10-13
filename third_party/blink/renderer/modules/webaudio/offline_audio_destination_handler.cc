@@ -237,6 +237,8 @@ void OfflineAudioDestinationHandler::NotifySuspend(size_t frame) {
 void OfflineAudioDestinationHandler::NotifyComplete() {
   DCHECK(IsMainThread());
 
+  recordreplay::Assert("[RUN-2199] OfflineAudioDestinationHandler::NotifyComplete %d", !!render_thread_);
+
   render_thread_.reset();
 
   // If the execution context has been destroyed, there's nowhere to send the
@@ -273,6 +275,8 @@ bool OfflineAudioDestinationHandler::RenderIfNotSuspended(
   }
 
   Context()->GetDeferredTaskHandler().SetAudioThreadToCurrentThread();
+  DeferredTaskHandler::RecordReplayRenderTimelinesLocker replay_timelines(
+      Context()->GetDeferredTaskHandler());
 
   // If the destination node is not initialized, pass the silence to the final
   // audio destination (one step before the FIFO). This check is for the case
