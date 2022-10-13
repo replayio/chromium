@@ -11,6 +11,8 @@
 #include "base/system/sys_info.h"
 #include "base/task/thread_pool/task_tracker.h"
 
+#include "base/record_replay.h"
+
 namespace base {
 namespace internal {
 
@@ -131,6 +133,7 @@ RegisteredTaskSource ThreadGroupNative::GetWork() {
     task_source = TakeRegisteredTaskSource(&workers_executor);
   }
   UpdateMinAllowedPriorityLockRequired();
+
   return task_source;
 }
 

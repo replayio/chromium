@@ -12,6 +12,7 @@
 #include "base/mac/mach_logging.h"
 #include "base/mac/scoped_nsautorelease_pool.h"
 #include "base/posix/eintr_wrapper.h"
+#include "base/record_replay.h"
 #include "base/time/time_override.h"
 
 namespace base {
@@ -148,6 +149,7 @@ void MessagePumpKqueue::Run(Delegate* delegate) {
 
     Delegate::NextWorkInfo next_work_info = delegate->DoWork();
     do_more_work |= next_work_info.is_immediate();
+
     if (!keep_running_)
       break;
 
@@ -155,6 +157,7 @@ void MessagePumpKqueue::Run(Delegate* delegate) {
       continue;
 
     do_more_work |= delegate->DoIdleWork();
+
     if (!keep_running_)
       break;
 
