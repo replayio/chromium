@@ -240,8 +240,9 @@ void MIDIPort::SetStates(PortState state, MIDIPortConnectionState connection) {
   }
   state_ = state;
   connection_ = connection;
-  DispatchEvent(*MIDIConnectionEvent::Create(this));
-  access_->DispatchEvent(*MIDIConnectionEvent::Create(this));
+  DispatchEvent(*MIDIConnectionEvent::Create(this), "MIDIPort::SetStates #1");
+  access_->DispatchEvent(*MIDIConnectionEvent::Create(this),
+                         "MIDIPort::SetStates #2");
 }
 
 }  // namespace blink

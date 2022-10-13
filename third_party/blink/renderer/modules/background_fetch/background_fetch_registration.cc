@@ -80,7 +80,7 @@ void BackgroundFetchRegistration::OnProgress(
   result_ = result;
   failure_reason_ = failure_reason;
 
-  DispatchEvent(*Event::Create(event_type_names::kProgress));
+  DispatchEvent(*Event::Create(event_type_names::kProgress), "BackgroundFetchRegistration::OnProgress");
 }
 
 void BackgroundFetchRegistration::OnRecordsUnavailable() {

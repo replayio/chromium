@@ -87,7 +87,7 @@ bool BluetoothDevice::IsValidDescriptor(const String& descriptor_instance_id) {
 void BluetoothDevice::ClearAttributeInstanceMapAndFireEvent() {
   attribute_instance_map_->Clear();
   DispatchEvent(
-      *Event::CreateBubble(event_type_names::kGattserverdisconnected));
+      *Event::CreateBubble(event_type_names::kGattserverdisconnected), "BluetoothDevice::ClearAttributeInstanceMapAndFireEvent");
 }
 
 const AtomicString& BluetoothDevice::InterfaceName() const {
@@ -232,7 +232,7 @@ void BluetoothDevice::AdvertisingEvent(
   auto* event = MakeGarbageCollected<BluetoothAdvertisingEvent>(
       event_type_names::kAdvertisementreceived, this,
       std::move(advertising_event), world_.Get());
-  DispatchEvent(*event);
+  DispatchEvent(*event, "BluetoothDevice::AdvertisingEvent");
 }
 
 bool BluetoothDevice::HasPendingActivity() const {
