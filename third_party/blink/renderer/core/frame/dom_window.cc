@@ -10,6 +10,7 @@
 #include "base/containers/fixed_flat_map.h"
 #include "base/feature_list.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/record_replay.h"
 #include "services/network/public/mojom/web_sandbox_flags.mojom-blink.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/mojom/frame/frame.mojom-blink.h"
@@ -224,7 +225,13 @@ String CoopReportOnlyErrorMessage(const String& property_name) {
 DOMWindow::DOMWindow(Frame& frame)
     : frame_(frame),
       window_proxy_manager_(frame.GetWindowProxyManager()),
-      window_is_closing_(false) {}
+      window_is_closing_(false) {
+  // The window location can be accessed by replaying specific scripts when
+  // events are disallowed. To ensure this doesn't interact with the recording,
+  // eagerly instantiate the window location.
+  if (recordreplay::IsRecordingOrReplaying("disallow-events", "DOMWindow"))
+    location_ = MakeGarbageCollected<Location>(const_cast<DOMWindow*>(this));
+}
 
 DOMWindow::~DOMWindow() {
   // The frame must be disconnected before finalization.
