@@ -78,7 +78,7 @@ void PermissionStatus::StopListening() {
 }
 
 void PermissionStatus::OnPermissionStatusChange(MojoPermissionStatus status) {
-  DispatchEvent(*Event::Create(event_type_names::kChange));
+  DispatchEvent(*Event::Create(event_type_names::kChange), "PermissionStatus::OnPermissionStatusChange");
 }
 
 void PermissionStatus::Trace(Visitor* visitor) const {

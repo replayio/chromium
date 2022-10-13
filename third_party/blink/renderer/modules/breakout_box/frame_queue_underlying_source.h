@@ -135,7 +135,9 @@ class FrameQueueUnderlyingSource
   // IO thread) and popped on |realm_task_runner_|.
   FrameQueueHandle<NativeFrameType> frame_queue_handle_;
 
-  mutable base::Lock lock_;
+  // Ordered while recording/replaying: whether QueueFrame() posts a task
+  // depends on |num_pending_pulls_|, which the realm thread changes.
+  mutable base::Lock lock_{"FrameQueueUnderlyingSource.lock_"};
   // If the stream backed by this source is transferred to another in-process
   // realm (e.g., a Worker), |transferred_source_| is the source of the
   // transferred stream.

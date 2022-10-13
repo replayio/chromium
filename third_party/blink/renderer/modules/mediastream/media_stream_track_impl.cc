@@ -28,6 +28,7 @@
 #include <memory>
 
 #include "base/callback_helpers.h"
+#include "base/record_replay.h"
 #include "third_party/blink/public/platform/modules/mediastream/web_media_stream_track.h"
 #include "third_party/blink/public/platform/modules/webrtc/webrtc_logging.h"
 #include "third_party/blink/public/web/modules/mediastream/media_stream_video_source.h"
@@ -285,6 +286,13 @@ MediaStreamTrackImpl::MediaStreamTrackImpl(
   // web API.
   if (ready_state_ != MediaStreamSource::kReadyStateEnded)
     EnsureFeatureHandleForScheduler();
+
+  if ((ready_state_ != MediaStreamSource::kReadyStateEnded ||
+       component_->GetReadyState() != MediaStreamSource::kReadyStateEnded) &&
+      recordreplay::IsRecordingOrReplaying("leak-references",
+                                           "MediaStreamTrackImpl")) {
+    replay_strong_self_ = this;
+  }
 }
 
 MediaStreamTrackImpl::~MediaStreamTrackImpl() = default;
@@ -389,6 +397,8 @@ void MediaStreamTrackImpl::setReadyState(
   if (ready_state_ != MediaStreamSource::kReadyStateEnded &&
       ready_state_ != ready_state) {
     ready_state_ = ready_state;
+    if (ready_state_ == MediaStreamSource::kReadyStateEnded)
+      replay_strong_self_.Clear();
     SendLogMessage(String::Format("%s({ready_state=%s})", __func__,
                                   readyState().Utf8().c_str()));
 
@@ -802,6 +812,9 @@ bool MediaStreamTrackImpl::Ended() const {
 }
 
 void MediaStreamTrackImpl::SourceChangedState() {
+  // A track of a destroyed context returns below without ending.
+  if (component_->GetReadyState() == MediaStreamSource::kReadyStateEnded)
+    replay_strong_self_.Clear();
   if (Ended())
     return;
 
