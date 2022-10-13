@@ -959,6 +959,8 @@ class CORE_EXPORT LocalFrame final
   bool AllowStorageAccessSyncAndNotify(
       blink::WebContentSettingsClient::StorageType storage_type);
 
+  void RegisterRecordReplayAuthTokenObserver();
+  
  private:
   friend class FrameNavigationDisabler;
   // LocalFrameMojoHandler is a part of LocalFrame.
