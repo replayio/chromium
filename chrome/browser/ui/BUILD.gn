@@ -1540,6 +1540,10 @@ static_library("ui") {
       "singleton_tabs.h",
       "unload_controller.cc",
       "unload_controller.h",
+      "webui/record_replay/record_replay_manager_handler.cc",
+      "webui/record_replay/record_replay_manager_handler.h",
+      "webui/record_replay/record_replay_ui.cc",
+      "webui/record_replay/record_replay_ui.h",
     ]
 
     if (enable_dice_support) {
