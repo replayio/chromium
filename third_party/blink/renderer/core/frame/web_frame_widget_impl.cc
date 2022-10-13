@@ -1682,6 +1682,9 @@ void WebFrameWidgetImpl::DidBeginMainFrame() {
   LocalFrame* local_root_frame = LocalRootImpl()->GetFrame();
   CHECK(local_root_frame);
 
+  recordreplay::Assert(
+    "[RUN-1675-1826] WebFrameWidgetImpl::DidBeginMainFrame %d", !!local_root_frame->View());
+
   if (LocalFrameView* frame_view = local_root_frame->View()) {
     frame_view->RunPostLifecycleSteps();
   }
@@ -2050,6 +2053,9 @@ void WebFrameWidgetImpl::SetEventListenerProperties(
   widget_base_->LayerTreeHost()->SetEventListenerProperties(
       listener_class, listener_properties);
 
+  recordreplay::Assert(
+      "[RUN-2300] WebFrameWidgetImpl::SetEventListenerProperties A %d",
+      (int)listener_class);
   if (listener_class == cc::EventListenerClass::kTouchStartOrMove ||
       listener_class == cc::EventListenerClass::kTouchEndOrCancel) {
     bool has_touch_handlers =
@@ -2057,8 +2063,14 @@ void WebFrameWidgetImpl::SetEventListenerProperties(
             cc::EventListenerProperties::kNone ||
         EventListenerProperties(cc::EventListenerClass::kTouchEndOrCancel) !=
             cc::EventListenerProperties::kNone;
+
+    recordreplay::Assert(
+        "[RUN-2300] WebFrameWidgetImpl::SetEventListenerProperties B");
+
     if (!has_touch_handlers_ || *has_touch_handlers_ != has_touch_handlers) {
       has_touch_handlers_ = has_touch_handlers;
+      recordreplay::Assert(
+          "[RUN-2300] WebFrameWidgetImpl::SetEventListenerProperties C");
 
       // Set touch event consumers based on whether there are touch event
       // handlers or the page has hit testable scrollbars.
@@ -2071,6 +2083,8 @@ void WebFrameWidgetImpl::SetEventListenerProperties(
     SetHasPointerRawUpdateEventHandlers(listener_properties !=
                                         cc::EventListenerProperties::kNone);
   }
+  recordreplay::Assert(
+      "[RUN-2300] WebFrameWidgetImpl::SetEventListenerProperties D");
 }
 
 cc::EventListenerProperties WebFrameWidgetImpl::EventListenerProperties(
@@ -3555,6 +3569,10 @@ class ReportTimeSwapPromise : public cc::SwapPromise {
       base::TimeTicks swap_time,
       WebFrameWidgetImpl::PromiseCallbacks callbacks,
       int frame_token) {
+    recordreplay::Assert(
+        "[RUN-2317-2366] ReportTimeSwapPromise::RunCallbackAfterSwap %u %d %d",
+        frame_token, !!widget, widget && widget->widget_base_);
+
     // If the widget was collected or the widget wasn't collected yet, but
     // it was closed don't schedule a presentation callback.
     if (widget && widget->widget_base_) {
@@ -3594,6 +3612,8 @@ class ReportTimeSwapPromise : public cc::SwapPromise {
         frame_timing_details.presentation_feedback.timestamp;
     bool presentation_time_is_valid =
         !presentation_time.is_null() && (presentation_time > swap_time);
+    recordreplay::Assert(
+      "[RUN-2317-2570] ReportTimeSwapPromise::RunCallbackAfterPresentation A %d",presentation_time_is_valid);
     if (presentation_time_is_valid) {
       ReportPresentationTime(std::move(presentation_callback),
                              frame_timing_details);
@@ -3609,8 +3629,12 @@ class ReportTimeSwapPromise : public cc::SwapPromise {
 
   static void ReportTime(base::OnceCallback<void(base::TimeTicks)> callback,
                          base::TimeTicks time) {
+    recordreplay::Assert("[RUN-2317-2570] WebFrameWidgetImpl::ReportTime A %d %lld",
+                         !!callback, time.ToInternalValue());
     if (callback)
       std::move(callback).Run(time);
+
+    recordreplay::Assert("[RUN-2317-2570] WebFrameWidgetImpl::ReportTime B");
   }
 
   static void ReportPresentationTime(
@@ -4968,7 +4992,7 @@ void WebFrameWidgetImpl::DidUpdateSurfaceAndScreen(
         CoreInitializer::GetInstance().DidUpdateScreens(
             *local_frame->GetFrame(), original_screen_infos);
         if (window_screen_has_changed)
-          screen->DispatchEvent(*Event::Create(event_type_names::kChange));
+          screen->DispatchEvent(*Event::Create(event_type_names::kChange), "WebFrameWidgetImpl::DidUpdateSurfaceAndScreen");
       });
 
   if (previous_original_screen_infos != original_screen_infos) {
