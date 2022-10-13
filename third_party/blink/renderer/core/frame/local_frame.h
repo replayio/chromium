@@ -977,6 +977,8 @@ class CORE_EXPORT LocalFrame final
     is_caret_browsing_overridden_ = overridden;
   }
 
+  void RegisterRecordReplayAuthTokenObserver();
+  
   void PerformSpellCheck();
 
   TextSuggestionBackendImpl* GetTextSuggestionBackendImpl() const {
