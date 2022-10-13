@@ -11,6 +11,7 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+#include <cstdio>
 
 #include "base/allocator/partition_alloc_support.h"
 #include "base/at_exit.h"
@@ -18,6 +19,7 @@
 #include "base/containers/contains.h"
 #include "base/debug/crash_logging.h"
 #include "base/feature_list.h"
+#include "base/json/json_writer.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
 #include "base/lazy_instance.h"
@@ -34,6 +36,7 @@
 #include "base/path_service.h"
 #include "base/process/process_metrics.h"
 #include "base/ranges/algorithm.h"
+#include "base/record_replay.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
@@ -223,6 +226,8 @@
 #if BUILDFLAG(CLANG_PROFILING_INSIDE_SANDBOX)
 #include "base/test/clang_profiling.h"
 #endif
+
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
 
 namespace content {
 
@@ -1696,6 +1701,12 @@ void RenderThreadImpl::OnRendererForegrounded() {
 
 void RenderThreadImpl::ReleaseFreeMemory() {
   TRACE_EVENT0("blink", "RenderThreadImpl::ReleaseFreeMemory()");
+
+  if (recordreplay::AreEventsDisallowed() &&
+      recordreplay::FeatureEnabled("leak-references", "ReleaseFreeMemory")) {
+    return;
+  }
+
   discardable_memory_allocator_->ReleaseFreeMemory();
 
   // Do not call into blink if it is not initialized.
