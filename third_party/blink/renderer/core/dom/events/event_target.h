@@ -186,7 +186,7 @@ class CORE_EXPORT EventTarget : public ScriptWrappable {
                            EventListenerOptions*);
   virtual void RemoveAllEventListeners();
 
-  DispatchEventResult DispatchEvent(Event&);
+  DispatchEventResult DispatchEvent(Event&, const char* why = "UnknownCaller");
 
   void EnqueueEvent(Event&, TaskType);
 
