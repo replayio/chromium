@@ -640,6 +640,8 @@ static void MatchVTTRules(const Element& element,
 static void MatchElementScopeRules(const Element& element,
                                    ScopedStyleResolver* element_scope_resolver,
                                    ElementRuleCollector& collector) {
+  recordreplay::Assert("[RUN-2424-3230] MatchElementScopeRules %d",
+                        !!element_scope_resolver);
   if (element_scope_resolver) {
     collector.ClearMatchedRules();
     element_scope_resolver->CollectMatchingElementScopeRules(collector);
@@ -647,6 +649,10 @@ static void MatchElementScopeRules(const Element& element,
   }
 
   MatchVTTRules(element, collector);
+  recordreplay::Assert(
+      "[RUN-2424-3231] MatchElementScopeRules inline style %d",
+      element.IsStyledElement() && element.InlineStyle() &&
+          collector.GetPseudoId() == kPseudoIdNone);
   if (element.IsStyledElement() && element.InlineStyle() &&
       collector.GetPseudoId() == kPseudoIdNone) {
     // Do not add styles depending on style attributes to the
@@ -979,6 +985,10 @@ scoped_refptr<ComputedStyle> StyleResolver::ResolveStyle(
     Element* element,
     const StyleRecalcContext& style_recalc_context,
     const StyleRequest& style_request) {
+  recordreplay::Assert("[RUN-2424-3005] StyleResolver::ResolveStyle %d %d", 
+    ((ScriptWrappable*)&GetDocument())->RecordReplayId(),
+    element ? element->RecordReplayId() : -1
+  );
   if (!element) {
     DCHECK(style_request.IsPseudoStyleRequest());
     return nullptr;
@@ -1380,6 +1390,10 @@ void StyleResolver::ApplyBaseStyleNoCache(
   }
 
   // TODO(obrufau): support styling nested pseudo-elements
+  recordreplay::Assert(
+      "[RUN-2424-3229] StyleResolver::ApplyBaseStyleNoCache %d",
+      style_request.rules_to_include == StyleRequest::kUAOnly ||
+          (style_request.IsPseudoStyleRequest() && element->IsPseudoElement()));
   if (style_request.rules_to_include == StyleRequest::kUAOnly ||
       (style_request.IsPseudoStyleRequest() && element->IsPseudoElement())) {
     MatchUARules(*element, collector);
@@ -1493,6 +1507,8 @@ void StyleResolver::ApplyBaseStyle(
     StyleCascade& cascade) {
   DCHECK(style_request.pseudo_id != kPseudoIdFirstLineInherited);
 
+  recordreplay::Assert("[RUN-2424-3005] StyleResolver::ApplyBaseStyle %d",
+                        state.CanCacheBaseStyle() && CanReuseBaseComputedStyle(state));
   if (state.CanCacheBaseStyle() && CanReuseBaseComputedStyle(state)) {
     const ComputedStyle* animation_base_computed_style =
         CachedAnimationBaseComputedStyle(state);
@@ -1527,6 +1543,10 @@ void StyleResolver::ApplyBaseStyle(
     return;
   }
 
+  recordreplay::Assert(
+      "[RUN-2424-3228] StyleResolver::ApplyBaseStyle incremental %d",
+      !style_recalc_context.parent_forces_recalc &&
+          CanApplyInlineStyleIncrementally(element, state, style_request));
   if (!style_recalc_context.parent_forces_recalc &&
       CanApplyInlineStyleIncrementally(element, state, style_request)) {
     // We are in a situation where we can reuse the old style
@@ -2334,6 +2354,7 @@ void StyleResolver::CascadeAndApplyMatchedProperties(StyleResolverState& state,
         state.StyleBuilder().CloneStyle();
     // Re-apply all overlapping properties (both legacy and non-legacy).
     apply(CascadeFilter(CSSProperty::kOverlapping, false));
+
     UseCountLegacyOverlapping(GetDocument(), *non_legacy_style,
                               state.StyleBuilder());
   }

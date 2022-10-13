@@ -527,8 +527,9 @@ void SVGElement::UpdateRelativeLengthsInformation(
 
 void SVGElement::InvalidateRelativeLengthClients(
     SubtreeLayoutScope* layout_scope) {
-  if (!isConnected())
+  if (!isConnected()) {
     return;
+  }
 
 #if DCHECK_IS_ON()
   DCHECK(!in_relative_length_clients_invalidation_);
@@ -549,8 +550,9 @@ void SVGElement::InvalidateRelativeLengthClients(
   }
 
   for (SVGElement* element : elements_with_relative_lengths_) {
-    if (element != this)
+    if (element != this) {
       element->InvalidateRelativeLengthClients(layout_scope);
+    }
   }
 }
 
@@ -591,6 +593,9 @@ void SVGElement::AddInstance(SVGElement* instance) {
   DCHECK(!instances.Contains(instance));
 
   instances.insert(instance);
+  if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                           "SVGElement"))
+    EnsureSVGRareData()->ReplayStrongElementInstances().insert(instance);
 }
 
 void SVGElement::RemoveInstance(SVGElement* instance) {
@@ -602,12 +607,16 @@ void SVGElement::RemoveInstance(SVGElement* instance) {
       SvgRareData()->ElementInstances();
 
   instances.erase(instance);
+
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "SVGElement"))
+    EnsureSVGRareData()->ReplayStrongElementInstances().erase(instance);
 }
 
-static HeapHashSet<WeakMember<SVGElement>>& EmptyInstances() {
-  DEFINE_STATIC_LOCAL(
-      Persistent<HeapHashSet<WeakMember<SVGElement>>>, empty_instances,
-      (MakeGarbageCollected<HeapHashSet<WeakMember<SVGElement>>>()));
+using ReplaySVGElementSet = HeapHashSet<WeakMember<SVGElement>>;
+
+static ReplaySVGElementSet& EmptyInstances() {
+  DEFINE_STATIC_LOCAL(Persistent<ReplaySVGElementSet>, empty_instances,
+                      (MakeGarbageCollected<ReplaySVGElementSet>()));
   return *empty_instances;
 }
 
@@ -926,7 +935,7 @@ bool SVGElement::SendSVGLoadEventIfPossible() {
     return false;
   if ((IsStructurallyExternal() || IsA<SVGSVGElement>(*this)) &&
       HasLoadListener(this))
-    DispatchEvent(*Event::Create(event_type_names::kLoad));
+    DispatchEvent(*Event::Create(event_type_names::kLoad), "SVGElement::SendSVGLoadEventIfPossible");
   return true;
 }
 
@@ -1145,6 +1154,9 @@ void SVGElement::InvalidateInstances() {
   }
 
   SvgRareData()->ElementInstances().clear();
+
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "SVGElement"))
+    EnsureSVGRareData()->ReplayStrongElementInstances().clear();
 }
 
 void SVGElement::SetNeedsStyleRecalcForInstances(
@@ -1154,7 +1166,12 @@ void SVGElement::SetNeedsStyleRecalcForInstances(
   if (set.empty())
     return;
 
+  std::vector<SVGElement*> members;
   for (SVGElement* instance : set)
+    members.push_back(instance);
+  std::sort(members.begin(), members.end(), recordreplay::CompareByRecordReplayId());
+
+  for (SVGElement* instance : members)
     instance->SetNeedsStyleRecalc(change_type, reason);
 }
 

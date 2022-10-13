@@ -254,6 +254,8 @@ const CSSValue& StyleResolverState::ResolveLightDarkPair(
 }
 
 void StyleResolverState::UpdateFont() {
+  recordreplay::Assert("[RUN-1436-2226] StyleResolverState::UpdateFont %d",
+                       GetElement().RecordReplayId());
   GetFontBuilder().CreateFont(StyleBuilder(), ParentStyle());
   SetConversionFontSizes(CSSToLengthConversionData::FontSizes(
       style_builder_.InternalStyle(), RootElementStyle()));
