@@ -8,6 +8,7 @@
 
 #include "base/bind.h"
 #include "base/check.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "mojo/public/cpp/bindings/associated_group_controller.h"
@@ -34,7 +35,7 @@ class ScopedInterfaceEndpointHandle::State
     DCHECK(!lock_);
     DCHECK(!pending_association_);
 
-    lock_.emplace();
+    lock_.emplace("ScopedInterfaceEndpointHandle::State.lock_");
     pending_association_ = true;
     peer_state_ = std::move(peer);
   }
@@ -90,6 +91,11 @@ class ScopedInterfaceEndpointHandle::State
       }
     }
 
+    // Handles are also closed by objects finalized in GCs, which happen at
+    // different points when replaying.
+    recordreplay::AssertMaybeEventsDisallowed(
+        "ScopedInterfaceEndpointHandle::State::Close cached_group_controller %d",
+        !!cached_group_controller);
     if (cached_group_controller) {
       cached_group_controller->CloseEndpointHandle(cached_id, reason);
     } else if (cached_peer_state) {

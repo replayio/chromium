@@ -80,6 +80,11 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS) AssociatedInterfacePtrStateBase {
     return endpoint_client_->CreateThreadSafeProxy(std::move(target));
   }
 
+  void record_replay_leak() {
+    if (endpoint_client_)
+      endpoint_client_->record_replay_leak();
+  }
+
  protected:
   void Swap(AssociatedInterfacePtrStateBase* other);
   void Bind(ScopedInterfaceEndpointHandle handle,

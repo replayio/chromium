@@ -39,6 +39,8 @@
 
 #endif  // !BUILDFLAG(IS_NACL)
 
+#include "base/record_replay.h"
+
 namespace mojo {
 namespace core {
 
@@ -124,7 +126,8 @@ ChannelPosix::ChannelPosix(
     scoped_refptr<base::SingleThreadTaskRunner> io_task_runner)
     : Channel(delegate, handle_policy),
       self_(this),
-      io_task_runner_(io_task_runner) {
+      io_task_runner_(io_task_runner),
+      write_lock_("ChannelPosix.write_lock_") {
   if (connection_params.server_endpoint().is_valid())
     server_ = connection_params.TakeServerEndpoint();
   else
@@ -154,6 +157,9 @@ void ChannelPosix::ShutDownImpl() {
 }
 
 void ChannelPosix::Write(MessagePtr message) {
+  // https://linear.app/replay/issue/RUN-618
+  recordreplay::Assert("ChannelPosix::Write Start");
+
   bool log_histograms = true;
 #if !defined(MOJO_CORE_SHARED_LIBRARY)
   log_histograms = base::ShouldLogHistogramForCpuReductionExperiment();
@@ -171,6 +177,8 @@ void ChannelPosix::Write(MessagePtr message) {
     if (reject_writes_)
       return;
     if (outgoing_messages_.empty()) {
+      // https://linear.app/replay/issue/RUN-618
+      recordreplay::Assert("ChannelPosix::Write #1");
       if (!WriteNoLock(MessageView(std::move(message), 0)))
         reject_writes_ = write_error = true;
     } else {

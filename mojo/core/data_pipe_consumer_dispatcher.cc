@@ -24,6 +24,8 @@
 #include "mojo/core/user_message_impl.h"
 #include "mojo/public/c/system/data_pipe.h"
 
+#include "base/record_replay.h"
+
 namespace mojo {
 namespace core {
 
@@ -94,7 +96,7 @@ Dispatcher::Type DataPipeConsumerDispatcher::GetType() const {
 }
 
 MojoResult DataPipeConsumerDispatcher::Close() {
-  base::AutoLock lock(lock_);
+  recordreplay::AutoLockMaybeEventsDisallowed lock(lock_);
   DVLOG(1) << "Closing data pipe consumer " << pipe_id_;
   return CloseNoLock();
 }
@@ -170,10 +172,16 @@ MojoResult DataPipeConsumerDispatcher::ReadData(
     uint32_t tail_bytes_to_copy =
         std::min(options_.capacity_num_bytes - read_offset_, bytes_to_read);
     uint32_t head_bytes_to_copy = bytes_to_read - tail_bytes_to_copy;
-    if (tail_bytes_to_copy > 0)
+    if (tail_bytes_to_copy > 0) {
+      recordreplay::RecordReplayBytes("DataPipeConsumerDispatcher::ReadData",
+                                      (uint8_t*)data + read_offset_, tail_bytes_to_copy);
       memcpy(destination, data + read_offset_, tail_bytes_to_copy);
-    if (head_bytes_to_copy > 0)
+    }
+    if (head_bytes_to_copy > 0) {
+      recordreplay::RecordReplayBytes("DataPipeConsumerDispatcher::ReadData",
+                                      (uint8_t*)data, head_bytes_to_copy);
       memcpy(destination + tail_bytes_to_copy, data, head_bytes_to_copy);
+    }
   }
   *num_bytes = bytes_to_read;
 
@@ -225,6 +233,9 @@ MojoResult DataPipeConsumerDispatcher::BeginReadData(
   *buffer = data + read_offset_;
   *buffer_num_bytes = bytes_to_read;
   two_phase_max_bytes_read_ = bytes_to_read;
+
+  recordreplay::RecordReplayBytes("DataPipeConsumerDispatcher::BeginReadData",
+                                  (void*)*buffer, *buffer_num_bytes);
 
   if (had_new_data)
     watchers_.NotifyState(GetHandleSignalsStateNoLock());
@@ -441,6 +452,7 @@ DataPipeConsumerDispatcher::DataPipeConsumerDispatcher(
       node_controller_(node_controller),
       control_port_(control_port),
       pipe_id_(pipe_id),
+      lock_("DataPipeConsumerDispatcher.lock_"),
       watchers_(this),
       shared_ring_buffer_(std::move(shared_ring_buffer)) {}
 

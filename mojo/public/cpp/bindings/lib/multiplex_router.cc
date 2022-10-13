@@ -25,6 +25,8 @@
 #include "mojo/public/cpp/bindings/lib/message_quota_checker.h"
 #include "mojo/public/cpp/bindings/sequence_local_sync_event_watcher.h"
 
+#include "base/record_replay.h"
+
 namespace mojo {
 namespace internal {
 
@@ -291,12 +293,20 @@ class MultiplexRouter::MessageWrapper {
   // handles.
   Message DeserializeEndpointHandlesAndTake() {
     if (!value_.DeserializeAssociatedEndpointHandles(router_)) {
+      // https://linear.app/replay/issue/RUN-1228
+      // Not asserting here because the location where false is returned
+      // in the call above is asserted instead.
+
       // The previous call may have deserialized part of the associated
       // interface endpoint handles. They must be destroyed outside of the
       // router's lock, so we cannot wait until destruction of MessageWrapper.
       value_.Reset();
       return Message();
     }
+
+    // https://linear.app/replay/issue/RUN-1228
+    recordreplay::Assert("[RUN-1228] MessageWrapper::DeserializeEndpointHandlesAndTake #2 isNull=%d",
+      value_.IsNull());
     return std::move(value_);
   }
 
@@ -383,8 +393,10 @@ MultiplexRouter::MultiplexRouter(
                  primary_interface_name),
       control_message_handler_(this),
       control_message_proxy_(&connector_) {
+  recordreplay::RegisterPointer("MultiplexRouter", this);
+
   if (config_ == MULTI_INTERFACE)
-    lock_.emplace();
+    lock_.emplace("MultiplexRouter.lock_");
 
   connector_.set_incoming_receiver(&dispatcher_);
 
@@ -417,6 +429,8 @@ void MultiplexRouter::StartReceiving() {
 }
 
 MultiplexRouter::~MultiplexRouter() {
+  recordreplay::UnregisterPointer(this);
+
   MayAutoLock locker(&lock_);
 
   being_destructed_ = true;
@@ -500,6 +514,11 @@ ScopedInterfaceEndpointHandle MultiplexRouter::CreateLocalEndpointHandle(
 void MultiplexRouter::CloseEndpointHandle(
     InterfaceId id,
     const absl::optional<DisconnectReason>& reason) {
+  recordreplay::Assert(
+      "[RUN-1209-1784] MultiplexRouter::CloseEndpointHandle %u %d %d %u %s", id,
+      IsValidInterfaceId(id), IsPrimaryInterfaceId(id), 
+      reason.has_value() ? reason->custom_reason : (uint32_t)-1,
+      reason.has_value() ? reason->description.c_str() : "");
   if (!IsValidInterfaceId(id))
     return;
 
@@ -546,7 +565,18 @@ void MultiplexRouter::DetachEndpointClient(
 
   DCHECK(IsValidInterfaceId(id));
 
+  // Avoid warning when endpoints are removed at non-deterministic points,
+  // e.g. during GC.
+  if (recordreplay::AreEventsDisallowed()) {
+    recordreplay::BeginPassThroughEvents();
+  }
+
   MayAutoLock locker(&lock_);
+
+  if (recordreplay::AreEventsDisallowed()) {
+    recordreplay::EndPassThroughEvents();
+  }
+
   DCHECK(base::Contains(endpoints_, id));
 
   InterfaceEndpoint* endpoint = endpoints_[id].get();
@@ -815,6 +845,8 @@ void MultiplexRouter::OnPipeConnectionError(bool force_async_dispatch) {
     endpoint_vector.push_back(pair.second);
 
   for (const auto& endpoint : endpoint_vector) {
+    REPLAY_ASSERT("MultiplexRouter::OnPipeConnectionError %u %d",
+                  endpoint->id(), !!endpoint->client());
     if (endpoint->client()) {
       base::flat_set<uint64_t> request_ids =
           endpoint->UnregisterAllExternalSyncWaiters();
@@ -1006,6 +1038,16 @@ bool MultiplexRouter::ProcessNotifyErrorTask(
   absl::optional<DisconnectReason> disconnect_reason(
       endpoint->disconnect_reason());
 
+  // crash-0100: router→client breadcrumb before NotifyError.
+  recordreplay::Diagnostic(
+      "[crash-0100] ProcessNotifyErrorTask this=%d endpoint=%u client=%d "
+      "reason=%d custom=%u desc=%s",
+      recordreplay::PointerId(this), endpoint->id(),
+      recordreplay::PointerId(client),
+      disconnect_reason.has_value(),
+      disconnect_reason ? disconnect_reason->custom_reason : 0u,
+      disconnect_reason ? disconnect_reason->description.c_str() : "");
+
   {
     // We must unlock before calling into |client| because it may call this
     // object within NotifyError(). Holding the lock will lead to deadlock.
@@ -1056,8 +1098,9 @@ bool MultiplexRouter::ProcessIncomingMessage(
   DCHECK(IsValidInterfaceId(id));
 
   InterfaceEndpoint* endpoint = FindEndpoint(id);
-  if (!endpoint || endpoint->closed())
+  if (!endpoint || endpoint->closed()) {
     return true;
+  }
 
   if (!endpoint->client()) {
     // We need to wait until a client is attached in order to dispatch further
@@ -1092,6 +1135,9 @@ bool MultiplexRouter::ProcessIncomingMessage(
     // always accessed on the same sequence, including DetachEndpointClient().
     MayAutoUnlock unlocker(&lock_);
     Message tmp_message = message_wrapper->DeserializeEndpointHandlesAndTake();
+    recordreplay::Assert(
+        "[RUN-2229-2231] MultiplexRouter::ProcessIncomingMessage %d",
+        tmp_message.IsNull());
     result =
         !tmp_message.IsNull() && client->HandleIncomingMessage(&tmp_message);
   }

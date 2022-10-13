@@ -75,6 +75,11 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS) InterfacePtrStateBase {
     return endpoint_client_->CreateThreadSafeProxy(std::move(target));
   }
 
+  void record_replay_leak() {
+    if (endpoint_client_)
+      endpoint_client_->record_replay_leak();
+  }
+
 #if DCHECK_IS_ON()
   void SetNextCallLocation(const base::Location& location) {
     endpoint_client_->SetNextCallLocation(location);
