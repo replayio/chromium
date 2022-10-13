@@ -236,7 +236,7 @@ bool ClipboardCommands::DispatchClipboardEvent(LocalFrame& frame,
             *target->GetExecutionContext())
             .SetState(event_type, source);
     Event* const evt = ClipboardEvent::Create(event_type, data_transfer);
-    target->DispatchEvent(*evt);
+    target->DispatchEvent(*evt, "ClipboardCommands::DispatchClipboardEvent");
     no_default_processing = evt->defaultPrevented();
   }
   if (no_default_processing && policy == DataTransferAccessPolicy::kWritable) {
@@ -479,7 +479,7 @@ void ClipboardCommands::PasteAsFragment(LocalFrame& frame,
   }
   target->DispatchEvent(*TextEvent::CreateForFragmentPaste(
       frame.DomWindow(), pasting_fragment, smart_replace, match_style,
-      data_transfer));
+      data_transfer), "ClipboardCommands::PasteAsFragment");
 }
 
 void ClipboardCommands::PasteAsPlainTextFromClipboard(
@@ -490,7 +490,7 @@ void ClipboardCommands::PasteAsPlainTextFromClipboard(
     return;
   target->DispatchEvent(*TextEvent::CreateForPlainTextPaste(
       frame.DomWindow(), frame.GetSystemClipboard()->ReadPlainText(),
-      CanSmartReplaceInClipboard(frame)));
+      CanSmartReplaceInClipboard(frame)), "ClipboardCommands::PasteAsPlainTextFromClipboard");
 }
 
 ClipboardCommands::FragmentAndPlainText

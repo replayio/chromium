@@ -219,7 +219,7 @@ WebInputEventResult PointerEventManager::DispatchPointerEvent(
       !check_for_listener || target->HasEventListeners(event_type);
 
   if (!should_filter || listeners_exist) {
-    DispatchEventResult dispatch_result = target->DispatchEvent(*pointer_event);
+    DispatchEventResult dispatch_result = target->DispatchEvent(*pointer_event, "PointerEventManager::DispatchPointerEvent");
     return event_handling_util::ToWebInputEventResult(dispatch_result);
   }
   return WebInputEventResult::kNotHandled;
