@@ -44,6 +44,7 @@ namespace blink {
 class HTMLDocument;
 class ScriptState;
 class SecurityOrigin;
+class RecordReplayEventListener;
 
 // Subclass of WindowProxy that only handles LocalFrame.
 class LocalWindowProxy final : public WindowProxy {
@@ -70,6 +71,8 @@ class LocalWindowProxy final : public WindowProxy {
       v8::Context::AbortScriptExecutionCallback callback);
 
  private:
+  void SetupRecordReplayWebChannel();
+
   // LocalWindowProxy overrides:
   bool IsLocal() const override { return true; }
   void Initialize() override;
@@ -109,6 +112,7 @@ class LocalWindowProxy final : public WindowProxy {
     return To<LocalFrame>(WindowProxy::GetFrame());
   }
 
+  Member<RecordReplayEventListener> record_replay_listener_;
   Member<ScriptState> script_state_;
   bool context_was_created_from_snapshot_ = false;
   // A callback registered by the embedder to abort script execution in the
