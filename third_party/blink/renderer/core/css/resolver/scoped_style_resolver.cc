@@ -30,6 +30,7 @@
 
 #include <ranges>
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/animation/document_timeline.h"
 #include "third_party/blink/renderer/core/css/cascade_layer_map.h"
 #include "third_party/blink/renderer/core/css/cascade_layered.h"
@@ -275,6 +276,10 @@ template <class Func>
 void ScopedStyleResolver::ForAllStylesheets(ElementRuleCollector& collector,
                                             const ContainerNode& scope_root,
                                             const Func& func) {
+  recordreplay::Assert("[RUN-2424-3232] ForAllStylesheets empty %d",
+                        active_style_sheets_.empty());
+  recordreplay::Assert("[RUN-2424-3233] ForAllStylesheets size %d",
+                        active_style_sheets_.size());
 #if DCHECK_IS_ON()
   // Verify that all the cached rule_set_groups_ have the right bits
   // and RuleSets.
@@ -291,6 +296,8 @@ void ScopedStyleResolver::ForAllStylesheets(ElementRuleCollector& collector,
   }
 #endif
 
+  recordreplay::Assert("[RUN-2424-3234] ForAllStylesheets rule set groups %d",
+                        rule_set_groups_.size());
   for (RuleSetGroup& rule_set_group : rule_set_groups_) {
     func(MatchRequest(rule_set_group, &scope_root, collector));
   }

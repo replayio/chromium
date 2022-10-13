@@ -54,6 +54,7 @@ bool MayHaveActiveAnimations(const Element& element) {
 StyleRecalcContext StyleRecalcContext::FromInclusiveAncestors(
     Element& start_element,
     PseudoId pseudo_id) {
+  recordreplay::Assert("[RUN-2424-3005] StyleRecalcContext::FromInclusiveAncestors %d", start_element.RecordReplayId());
   StyleRecalcContext result;
   result.is_overscroll_container_child =
       IsOrWasOverscrollContainer(start_element);

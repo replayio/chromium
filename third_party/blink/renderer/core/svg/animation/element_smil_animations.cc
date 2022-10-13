@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/core/svg/animation/element_smil_animations.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/svg/animation/smil_animation_sandwich.h"
 
 namespace blink {
@@ -34,6 +35,8 @@ void ElementSMILAnimations::RemoveAnimation(const QualifiedName& attribute,
 bool ElementSMILAnimations::Apply(SMILTime elapsed) {
   bool did_apply = false;
   HeapVector<Member<SMILAnimationSandwich>> sandwiches(sandwiches_.Values());
+  std::sort(sandwiches.begin(), sandwiches.end(),
+            recordreplay::CompareMemberByPointerId<Member<SMILAnimationSandwich>>());
   for (SMILAnimationSandwich* sandwich : sandwiches) {
     sandwich->UpdateActiveAnimationStack(elapsed);
     if (sandwich->ApplyAnimationValues())

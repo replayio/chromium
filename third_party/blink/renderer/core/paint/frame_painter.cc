@@ -68,7 +68,11 @@ void FramePainter::Paint(GraphicsContext& context, PaintFlags paint_flags) {
 
   PaintLayerPainter layer_painter(*root_layer);
 
+  recordreplay::Assert("[RUN-1975-2008] FramePainter::Paint A %d",
+                       root_layer->EnclosingNode()->RecordReplayId());
   layer_painter.Paint(context, paint_flags);
+  recordreplay::Assert("[RUN-1975-2008] FramePainter::Paint B %d",
+                       root_layer->EnclosingNode()->RecordReplayId());
 
   if (is_top_level_painter) {
     // Everything that happens after paintContents completions is considered
