@@ -13,6 +13,8 @@
 #include "mojo/public/c/system/trap.h"
 #include "mojo/public/cpp/system/trap.h"
 
+#include "base/record_replay.h"
+
 namespace mojo {
 namespace {
 
