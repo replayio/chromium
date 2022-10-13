@@ -360,6 +360,7 @@ InvalidationSet& RuleFeatureSet::EnsureMutableInvalidationSet(
     PositionType position,
     bool in_nth_child,
     scoped_refptr<InvalidationSet>& invalidation_set) {
+
   if (!invalidation_set) {
     // Create a new invalidation set of the right type.
     if (type == InvalidationType::kInvalidateDescendants) {

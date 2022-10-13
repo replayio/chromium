@@ -641,6 +641,10 @@ class CORE_EXPORT PaintLayerScrollableArea final
   // @container (snapped:...) query for the given axis.
   Element* GetSnappedQueryTargetAlongAxis(cc::SnapAxis) const;
 
+  int RecordReplayId() const { 
+    return record_replay_id_; 
+  }
+
  private:
   bool NeedsHypotheticalScrollbarThickness(ScrollbarOrientation) const;
   int ComputeHypotheticalScrollbarThickness(
@@ -820,6 +824,8 @@ class CORE_EXPORT PaintLayerScrollableArea final
   gfx::Rect scroll_corner_and_resizer_visual_rect_;
 
   gfx::PointF last_cull_rect_update_scroll_position_;
+
+  int record_replay_id_ = 0;
 
   class ScrollingBackgroundDisplayItemClient final
       : public GarbageCollected<ScrollingBackgroundDisplayItemClient>,
