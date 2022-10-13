@@ -41,6 +41,7 @@
 #include "third_party/blink/renderer/core/url/dom_origin.h"
 #include "third_party/blink/renderer/core/url/dom_url_utils_read_only.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/bindings/v8_dom_activity_logger.h"
 #include "third_party/blink/renderer/platform/bindings/v8_dom_wrapper.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
@@ -330,6 +331,11 @@ void Location::SetLocation(const String& url,
     // We use the CurrentDOMWindow here. `dom_window` might be remote here.
     activity_logger->LogEvent(CurrentDOMWindow(incumbent_window->GetIsolate()),
                               "blinkSetAttribute", argv);
+  }
+
+  // Shared by Location.assign / replace / href and URL-part setters.
+  if (RecordReplayThrowIfEventsUnavailable("Location.set", exception_state)) {
+    return;
   }
 
   ResourceRequestHead resource_request(completed_url);
