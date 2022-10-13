@@ -40,6 +40,8 @@
 #include "net/log/net_log_values.h"
 #include "third_party/abseil-cpp/absl/strings/ascii.h"
 
+#include "base/record_replay.h"
+
 using base::Time;
 
 namespace net {
@@ -881,6 +883,17 @@ void HttpResponseHeaders::ParseStatusLine(std::string_view line,
   }
 
   response_code_ = ParseStatus(line.substr(space + 1), raw_headers_);
+
+  // There is currently a problem that happens sometimes while replaying where
+  // base::StringToInt malfunctions and returns zero given a valid numeric input.
+  // The underlying reason has not been identified (see backend issue 2078),
+  // and for now we workaround this by forcing the code to match when replaying.
+  // M119 extracted the digits-to-int step into the file-local ParseStatus(), so
+  // the override now follows the call instead of the base::StringToInt() inside
+  // it; ParseStatus()'s other caller (the Builder constructor) deliberately
+  // keeps no override, as it had none before.
+  response_code_ = recordreplay::RecordReplayValue("HttpResponseHeaders::ParseStatusLine response code",
+                                                   response_code_);
 }
 
 size_t HttpResponseHeaders::FindHeader(size_t from,
