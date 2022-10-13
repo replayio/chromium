@@ -263,6 +263,9 @@ base::ScopedCFTypeRef<CMFormatDescriptionRef> CreateVideoFormatVP9(
     media::VideoCodecProfile profile,
     absl::optional<gfx::HDRMetadata> hdr_metadata,
     const gfx::Size& coded_size) {
+  // FIXME Disabled due to failing to compile...
+  return base::ScopedCFTypeRef<CMFormatDescriptionRef>();
+  /*
   base::ScopedCFTypeRef<CFMutableDictionaryRef> format_config(
       CreateFormatExtensions(kCMVideoCodecType_VP9, profile, color_space,
                              hdr_metadata));
@@ -279,6 +282,7 @@ base::ScopedCFTypeRef<CMFormatDescriptionRef> CreateVideoFormatVP9(
   OSSTATUS_DLOG_IF(WARNING, status != noErr, status)
       << "CMVideoFormatDescriptionCreate()";
   return format;
+  */
 }
 
 // Create a VTDecompressionSession using the provided |format|. If
@@ -389,7 +393,8 @@ bool InitializeVideoToolboxInternal() {
   session.reset();
 
   if (__builtin_available(macOS 11.0, *)) {
-    VTRegisterSupplementalVideoDecoderIfAvailable(kCMVideoCodecType_VP9);
+    // FIXME disabled due to build break.
+    //VTRegisterSupplementalVideoDecoderIfAvailable(kCMVideoCodecType_VP9);
 
     // Create a VP9 decoding session.
     if (!CreateVideoToolboxSession(

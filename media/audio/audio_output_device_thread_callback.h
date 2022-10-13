@@ -53,6 +53,8 @@ class MEDIA_EXPORT AudioOutputDeviceThreadCallback
   base::WritableSharedMemoryMapping shared_memory_mapping_;
   raw_ptr<media::AudioRendererSink::RenderCallback> render_callback_;
   std::unique_ptr<media::AudioBus> output_bus_;
+  // What the client renders into while recording or replaying.
+  std::unique_ptr<media::AudioBus> record_replay_bus_;
   uint64_t callback_num_ = 0;
 
   // Used to record a UMA stat for the audio output stream duration form the
