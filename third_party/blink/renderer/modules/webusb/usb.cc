@@ -442,7 +442,7 @@ void USB::OnDeviceAdded(UsbDeviceInfoPtr device_info) {
       device = GetOrCreateDevice(std::move(device_info));
     }
     DispatchEvent(
-        *USBConnectionEvent::Create(event_type_names::kConnect, device, world));
+        *USBConnectionEvent::Create(event_type_names::kConnect, device, world), "USB::OnDeviceAdded");
   });
 }
 
@@ -463,7 +463,7 @@ void USB::OnDeviceRemoved(UsbDeviceInfoPtr device_info) {
           mojo::NullRemote(), GetExecutionContext());
     }
     DispatchEvent(*USBConnectionEvent::Create(event_type_names::kDisconnect,
-                                              device, world));
+                                              device, world), "USB::OnDeviceRemoved");
     device_cache.erase(guid);
   });
 }

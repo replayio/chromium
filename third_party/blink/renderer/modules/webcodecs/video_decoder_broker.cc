@@ -10,6 +10,7 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/record_replay.h"
 #include "base/task/sequenced_task_runner.h"
 #include "build/buildflag.h"
 #include "media/base/decoder_factory.h"
@@ -229,6 +230,11 @@ class MediaVideoTaskWrapper {
   std::vector<std::unique_ptr<media::VideoDecoder>> OnCreateDecoders() {
     DVLOG(2) << __func__;
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+    // Video decoding is unsupported while recording/replaying: without
+    // decoders, configure() fails like it does for unsupported configs.
+    if (recordreplay::IsRecordingOrReplaying("no-video"))
+      return {};
 
     if (decoder_factory_needs_update_)
       UpdateDecoderFactory();

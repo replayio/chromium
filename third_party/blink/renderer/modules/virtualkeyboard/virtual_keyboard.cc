@@ -121,7 +121,7 @@ void VirtualKeyboard::VirtualKeyboardOverlayChanged(
 
   bounding_rect_ = DOMRect::FromRect(keyboard_rect);
   DispatchEvent(*(MakeGarbageCollected<VirtualKeyboardGeometryChangeEvent>(
-      event_type_names::kGeometrychange)));
+      event_type_names::kGeometrychange)), "VirtualKeyboard::VirtualKeyboardOverlayChanged");
 }
 
 void VirtualKeyboard::show() {

@@ -13,6 +13,8 @@
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "third_party/perfetto/include/perfetto/tracing/track.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_events.h"
+
 namespace blink {
 
 XRFrameRequestCallbackCollection::XRFrameRequestCallbackCollection(
@@ -89,6 +91,8 @@ void XRFrameRequestCallbackCollection::ExecuteCallbacks(XRSession* session,
 
     TRACE_EVENT_END("xr", perfetto::Track(trace_id_base_ + id));
     probe::AsyncTask async_task(context_, it_async_task->value.get());
+    recordreplay::UserEventProbe replayEvent("XRRequestFrame", AtomicString());
+
     it_frame_request->value->InvokeAndReportException(session, timestamp,
                                                       frame);
   }

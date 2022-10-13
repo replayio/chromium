@@ -176,7 +176,8 @@ void Serial::OnPortConnectedStateChanged(
           SerialPort* port = GetOrCreatePort(*world, port_info->Clone());
           port->set_connected(connected);
           port->DispatchEvent(
-              *MakeGarbageCollected<SerialConnectionEvent>(event_type, world));
+              *MakeGarbageCollected<SerialConnectionEvent>(event_type, world),
+                              connected ? "Serial::OnPortAdded" : "Serial::OnPortRemoved");
         }
       }
     } else if (context->IsWorkerGlobalScope()) {
@@ -198,7 +199,8 @@ void Serial::OnPortConnectedStateChanged(
           SerialPort* port = GetOrCreatePort(world, std::move(port_info));
           port->set_connected(connected);
           port->DispatchEvent(
-              *MakeGarbageCollected<SerialConnectionEvent>(event_type, &world));
+              *MakeGarbageCollected<SerialConnectionEvent>(event_type, &world),
+                              connected ? "Serial::OnPortAdded" : "Serial::OnPortRemoved");
         }
       }
     }
@@ -209,7 +211,8 @@ void Serial::OnPortConnectedStateChanged(
     SerialPort* port = GetOrCreatePort(std::move(port_info));
     port->set_connected(connected);
     port->DispatchEvent(*MakeGarbageCollected<SerialConnectionEvent>(
-        event_type, /*world=*/nullptr));
+        event_type, /*world=*/nullptr),
+                        connected ? "Serial::OnPortAdded" : "Serial::OnPortRemoved");
   }
 }
 

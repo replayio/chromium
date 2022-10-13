@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/core/scheduler/task_attribution_task_state.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/platform/bindings/cpp_heap_external_tag.h"
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/bindings/wrapper_type_info.h"
@@ -43,6 +44,9 @@ TaskAttributionTaskState* TaskAttributionTaskState::GetCurrent(
 void TaskAttributionTaskState::SetCurrent(
     v8::Isolate* isolate,
     TaskAttributionTaskState* task_state) {
+  // https://linear.app/replay/issue/RUN-885
+  recordreplay::Assert("ScriptWrappableTaskState::SetCurrent");
+
   CHECK(isolate);
   if (isolate->IsExecutionTerminating()) {
     return;
@@ -60,6 +64,9 @@ void TaskAttributionTaskState::SetCurrent(
   if (!task_state) {
     isolate->SetContinuationPreservedEmbedderData(v8::Undefined(isolate));
   } else {
+    // https://linear.app/replay/issue/RUN-885
+    recordreplay::Assert("ScriptWrappableTaskState::SetCurrent #1");
+
     v8::HandleScope handle_scope(isolate);
     isolate->SetContinuationPreservedEmbedderData(
         v8::CppHeapExternal::New<TaskAttributionTaskState>(
