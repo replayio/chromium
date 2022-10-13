@@ -102,6 +102,8 @@
 #include "ui/display/screen_info.h"
 #include "v8/include/v8-inspector.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 namespace {
