@@ -23,6 +23,8 @@
 #include "content/public/child/child_thread.h"
 #include "third_party/blink/public/common/thread_safe_browser_interface_broker_proxy.h"
 
+#include "base/record_replay.h"
+
 namespace mswr = Microsoft::WRL;
 
 namespace content {
@@ -73,7 +75,9 @@ HRESULT DWriteFontCollectionProxy::Create(
       proxy_out, dwrite_factory, std::move(proxy));
 }
 
-DWriteFontCollectionProxy::DWriteFontCollectionProxy() = default;
+DWriteFontCollectionProxy::DWriteFontCollectionProxy()
+  : families_lock_("DWriteFontCollectionProxy.families_lock_")
+{}
 
 DWriteFontCollectionProxy::~DWriteFontCollectionProxy() = default;
 
@@ -169,11 +173,14 @@ HRESULT DWriteFontCollectionProxy::FindFamilyName(
 std::optional<UINT32> DWriteFontCollectionProxy::FindFamilyIndex(
     const std::u16string& family_name,
     HRESULT* hresult_out) {
+  recordreplay::Assert("[RUN-2116] DWriteFontCollectionProxy::FindFamilyIndex");
+
   DCHECK(!hresult_out || *hresult_out == S_OK);
   {
     base::AutoLock families_lock(families_lock_);
     auto iter = family_names_.find(family_name);
     if (iter != family_names_.end()) {
+      recordreplay::Assert("[RUN-2116] DWriteFontCollectionProxy::FindFamilyIndex #1");
       if (iter->second != kFamilyNotFound)
         return iter->second;
       return std::nullopt;
@@ -182,6 +189,7 @@ std::optional<UINT32> DWriteFontCollectionProxy::FindFamilyIndex(
     if (base::FeatureList::IsEnabled(kLimitFontFamilyNamesPerRenderer) &&
         family_names_.size() > kFamilyNamesLimit &&
         !IsLastResortFontName(family_name)) {
+      recordreplay::Assert("[RUN-2116] DWriteFontCollectionProxy::FindFamilyIndex #2");
       return std::nullopt;
     }
   }
@@ -193,6 +201,7 @@ std::optional<UINT32> DWriteFontCollectionProxy::FindFamilyIndex(
   if (!GetFontProxy().FindFamily(family_name, &family_index)) {
     if (hresult_out)
       *hresult_out = E_FAIL;
+    recordreplay::Assert("[RUN-2116] DWriteFontCollectionProxy::FindFamilyIndex #3");
     return std::nullopt;
   }
 
@@ -202,6 +211,7 @@ std::optional<UINT32> DWriteFontCollectionProxy::FindFamilyIndex(
            family_names_[family_name] == family_index);
     family_names_[family_name] = family_index;
     if (family_index == kFamilyNotFound) [[unlikely]] {
+      recordreplay::Assert("[RUN-2116] DWriteFontCollectionProxy::FindFamilyIndex #4");
       return std::nullopt;
     }
     DCHECK(IsValidFamilyIndex(family_index));
@@ -209,11 +219,13 @@ std::optional<UINT32> DWriteFontCollectionProxy::FindFamilyIndex(
     if (DWriteFontFamilyProxy* family =
             GetOrCreateFamilyLockRequired(family_index)) {
       family->SetName(family_name);
+      recordreplay::Assert("[RUN-2116] DWriteFontCollectionProxy::FindFamilyIndex #5");
       return family_index;
     }
 
     if (hresult_out)
       *hresult_out = E_FAIL;
+    recordreplay::Assert("[RUN-2116] DWriteFontCollectionProxy::FindFamilyIndex #6");
     return std::nullopt;
   }
 }
@@ -372,6 +384,8 @@ HRESULT DWriteFontCollectionProxy::CreateStreamFromKey(
     const void* font_file_reference_key,
     UINT32 font_file_reference_key_size,
     IDWriteFontFileStream** font_file_stream) {
+  recordreplay::Assert("[RUN-2058] DWriteFontCollectionProxy::CreateStreamFromKey");
+
   if (font_file_reference_key_size != sizeof(HANDLE)) {
     return E_FAIL;
   }
@@ -392,6 +406,9 @@ HRESULT DWriteFontCollectionProxy::CreateStreamFromKey(
     return E_FAIL;
   }
   *font_file_stream = stream.Detach();
+
+  recordreplay::Assert("[RUN-2058] DWriteFontCollectionProxy::CreateStreamFromKey Done");
+
   return S_OK;
 }
 
@@ -427,6 +444,13 @@ bool DWriteFontCollectionProxy::LoadFamily(
     UINT32 family_index,
     IDWriteFontCollection** containing_collection) {
   TRACE_EVENT0("dwrite,fonts", "FontProxy::LoadFamily");
+
+  // RUN-2625: We cannot load fonts without accessing the recording stream.
+  if (recordreplay::IsInReplayCode() &&
+      recordreplay::FeatureEnabled("replay-code",
+                                   "DWriteFontCollectionProxy::LoadFamily")) {
+    return false;
+  }
 
   uint32_t index = family_index;
   // CreateCustomFontCollection ends up calling
@@ -772,12 +796,20 @@ HRESULT FontFileEnumerator::RuntimeClassInitialize(
   return S_OK;
 }
 
-FontFileStream::FontFileStream() = default;
+FontFileStream::FontFileStream() {
+  data_ = std::make_unique<base::MemoryMappedFile>();
+}
 
-FontFileStream::~FontFileStream() = default;
+FontFileStream::~FontFileStream() {
+  // The destructor is not called at a consistent point when replaying,
+  // so we avoid releasing resources that must happen deterministically.
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "~FontFileStream")) {
+    (void)data_.release();
+  }
+}
 
 HRESULT FontFileStream::GetFileSize(UINT64* file_size) {
-  *file_size = data_.length();
+  *file_size = data_->length();
   return S_OK;
 }
 
@@ -792,9 +824,9 @@ HRESULT FontFileStream::ReadFileFragment(const void** fragment_start,
                                          void** fragment_context) {
   if (fragment_offset + fragment_size < fragment_offset)
     return E_FAIL;
-  if (fragment_offset + fragment_size > data_.length())
+  if (fragment_offset + fragment_size > data_->length())
     return E_FAIL;
-  *fragment_start = UNSAFE_TODO(data_.data() + fragment_offset);
+  *fragment_start = UNSAFE_TODO(data_->data() + fragment_offset);
   *fragment_context = nullptr;
   return S_OK;
 }
@@ -809,7 +841,7 @@ HRESULT FontFileStream::RuntimeClassInitialize(HANDLE handle) {
     return E_FAIL;
   }
 
-  if (!data_.Initialize(base::File(duplicate_handle))) {
+  if (!data_->Initialize(base::File(duplicate_handle))) {
     return E_FAIL;
   }
   return S_OK;
