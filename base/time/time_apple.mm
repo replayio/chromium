@@ -109,12 +109,21 @@ int64_t ComputeCurrentTicks() {
 #endif  // !BUILDFLAG(ENABLE_MACH_ABSOLUTE_TIME_TICKS)
 }
 
+static inline bool MaybeRecordingOrReplaying() {
+  return true;
+}
+
 int64_t ComputeThreadTicks() {
   // The pthreads library keeps a cached reference to the thread port, which
   // does not have to be released like mach_thread_self() does.
   mach_port_t thread_port = pthread_mach_thread_np(pthread_self());
   if (thread_port == MACH_PORT_NULL) {
     DLOG(ERROR) << "Failed to get pthread_mach_thread_np()";
+    return 0;
+  }
+
+  // Calling thread_info is currently unsupported when recording/replaying.
+  if (MaybeRecordingOrReplaying()) {
     return 0;
   }
 
