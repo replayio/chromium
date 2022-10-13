@@ -1,0 +1,39 @@
+# Copyright 2014 The Chromium Authors
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+import("//mojo/public/tools/bindings/mojom.gni")
+
+mojom("mojo_bindings") {
+  sources = [ "record_replay_manager.mojom" ]
+  webui_module_path = "/chrome/browser/ui/webui/record_replay"
+}
+
+# DSRC-400: upstream split chrome/browser/ui/BUILD.gn at M157 and deleted the 2158-line region
+# that listed these four sources, so they had no target compiling them.  Re-homed here as a
+# per-feature source_set, which is upstream's own pattern at this base (cf.
+# chrome/browser/ui/webui/actor_internals/BUILD.gn).  The dep list below is derived from these
+# four files' own #include set and is NOT verified by a build.
+source_set("record_replay") {
+  sources = [
+    "record_replay_manager_handler.cc",
+    "record_replay_manager_handler.h",
+    "record_replay_ui.cc",
+    "record_replay_ui.h",
+  ]
+
+  public_deps = [
+    ":mojo_bindings",
+    "//base",
+    "//content/public/browser",
+    "//ui/webui",
+  ]
+
+  deps = [
+    "//chrome/browser/profiles",
+    "//chrome/browser/resources/record_replay:resources",
+    "//chrome/common",
+    "//components/record_replay/services/auth_token:lib",
+    "//mojo/public/cpp/bindings",
+  ]
+}

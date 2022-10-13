@@ -82,6 +82,7 @@ source_set("configs") {
     "//chrome/browser/ui/webui/policy",
     "//chrome/browser/ui/webui/predictors",
     "//chrome/browser/ui/webui/private_ai_internals",
+    "//chrome/browser/ui/webui/record_replay",
     "//chrome/browser/ui/webui/regional_capabilities_internals",
     "//chrome/browser/ui/webui/saved_tab_groups_unsupported",
     "//chrome/browser/ui/webui/segmentation_internals",

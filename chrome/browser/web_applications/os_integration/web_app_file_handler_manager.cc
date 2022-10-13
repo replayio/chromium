@@ -32,9 +32,13 @@
 namespace web_app {
 
 WebAppFileHandlerManager::WebAppFileHandlerManager(Profile* profile)
-    : profile_(profile) {}
+    : profile_(profile) {
+  recordreplay::RegisterPointer("WebAppFileHandlerManager", this);
+}
 
-WebAppFileHandlerManager::~WebAppFileHandlerManager() = default;
+WebAppFileHandlerManager::~WebAppFileHandlerManager() {
+  recordreplay::UnregisterPointer(this);
+}
 
 void WebAppFileHandlerManager::SetProvider(base::PassKey<OsIntegrationManager>,
                                            WebAppProvider& provider) {
