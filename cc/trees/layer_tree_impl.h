@@ -539,8 +539,7 @@ class CC_EXPORT LayerTreeImpl {
 
   void AddLayerShouldPushProperties(LayerImpl* layer);
   void ClearLayersThatShouldPushProperties();
-  const base::flat_set<raw_ptr<LayerImpl, CtnExperimental>>&
-  LayersThatShouldPushProperties() const {
+  const LayerImplSet& LayersThatShouldPushProperties() const {
     return layers_that_should_push_properties_;
   }
 
@@ -870,8 +869,11 @@ class CC_EXPORT LayerTreeImpl {
   LayerImplMap layer_id_map_;
 
   // Set of layers that need to push properties.
-  base::flat_set<raw_ptr<LayerImpl, CtnExperimental>>
-      layers_that_should_push_properties_;
+  // DSRC-007: annotation declined here, unlike CommitState's Layer set.
+  // PushLayerPropertiesInternal() reaches the elements through `*it` and `->`,
+  // which works for a plain pointer, so nothing forces the raw_ptr element and
+  // the fork's LayerImplSet typedef stays as it is.
+  LayerImplSet layers_that_should_push_properties_;
 
   std::unordered_map<ElementId, float, ElementIdHash>
       element_id_to_opacity_animations_;

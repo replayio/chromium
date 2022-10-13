@@ -157,7 +157,12 @@ struct CC_EXPORT CommitState {
   std::vector<UIResourceRequest> ui_resource_request_queue;
   base::flat_map<UIResourceId, gfx::Size> ui_resource_sizes;
   PropertyTreesChangeState property_trees_change_state;
-  base::flat_set<raw_ptr<Layer, CtnExperimental>>
+  // DSRC-007 family, third instance, and the first that must TAKE upstream's
+  // annotation rather than decline it: tree_synchronizer.cc iterates this set
+  // with `(*it).get()`, which only compiles for a raw_ptr element.  The fork's
+  // comparator survives the annotation because CompareLayersById is a plain
+  // function object, not a deducing template like recordreplay::CompareByPointerId.
+  base::flat_set<raw_ptr<Layer, CtnExperimental>, CompareLayersById>
       layers_that_should_push_properties;
 
   // Specific scrollers may request clobbering the active delta value on the
