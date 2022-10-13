@@ -36,7 +36,10 @@
 #include "cc/trees/swap_promise.h"
 #include "cc/trees/trace_utils.h"
 #include "components/viz/common/view_transition_element_resource_id.h"
+#include "components/viz/service/display/record_replay_render.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
+
+#include "base/record_replay.h"
 
 namespace cc {
 
@@ -55,9 +58,16 @@ ProxyMain::ProxyMain(LayerTreeHost* layer_tree_host,
   TRACE_EVENT0("cc", "ProxyMain::ProxyMain");
   DCHECK(task_runner_provider_);
   DCHECK(IsMainThread());
+  
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    recordreplay::InitPaintCallback();
+    recordreplay::SetCompositorProxy(this);
+  }
 }
 
 ProxyMain::~ProxyMain() {
+  recordreplay::CompositorProxyDestroyed(this);
+
   TRACE_EVENT0("cc", "ProxyMain::~ProxyMain");
   DCHECK(IsMainThread());
   DCHECK(!started_);
@@ -66,12 +76,19 @@ ProxyMain::~ProxyMain() {
 void ProxyMain::InitializeOnImplThread(CompletionEvent* completion_event,
                                        int id,
                                        const LayerTreeSettings* settings) {
+  recordreplay::Assert("[RUN-1881] ProxyMain::InitializeOnImplThread");
+
   DCHECK(task_runner_provider_->IsImplThread());
   DCHECK(!proxy_impl_);
   proxy_impl_ =
       std::make_unique<ProxyImpl>(weak_factory_.GetWeakPtr(), layer_tree_host_,
                                   id, settings, task_runner_provider_);
+
+  recordreplay::Assert("[RUN-1881] ProxyMain::InitializeOnImplThread #1");
+
   completion_event->Signal();
+
+  recordreplay::Assert("[RUN-1881] ProxyMain::InitializeOnImplThread Done");
 }
 
 void ProxyMain::DestroyProxyImplOnImplThread(
@@ -127,6 +144,17 @@ void ProxyMain::DidCompletePageScaleAnimation() {
 
 void ProxyMain::BeginMainFrame(
     std::unique_ptr<BeginMainFrameAndCommitState> begin_main_frame_state) {
+  
+  BeginMainFrameWithBlocking(std::move(begin_main_frame_state), false);
+}
+
+void ProxyMain::BeginMainFrameWithBlocking(
+    std::unique_ptr<BeginMainFrameAndCommitState> begin_main_frame_state,
+    bool force_blocking) {
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    recordreplay::SetCompositorProxy(this);
+  }
+
   DCHECK(IsMainThread());
   DCHECK_EQ(NO_PIPELINE_STAGE, current_pipeline_stage_);
 
@@ -253,7 +281,10 @@ void ProxyMain::BeginMainFrame(
     commit_timeout = true;
   }
 
-  bool blocking = block_on_next_commit_;
+  // [RecordReplay] A repaint forces a blocking commit; see
+  // BeginMainFrameWithBlocking().  M120 moved this declaration here from just
+  // above the commit, so the fork's disjunct moved with it.
+  bool blocking = force_blocking || block_on_next_commit_;
   block_on_next_commit_ = false;
 
   bool scroll_and_viewport_changes_synced = false;
@@ -274,7 +305,12 @@ void ProxyMain::BeginMainFrame(
 
   // See LayerTreeHostClient::BeginMainFrame for more documentation on
   // what this does.
-  layer_tree_host_->BeginMainFrame(frame_args);
+  //
+  // [RecordReplay] A repaint (force_blocking) draws the page as it is at the
+  // pause, so it doesn't run animation frame callbacks or rAF-aligned input,
+  // which would change the page before it's drawn.
+  if (!force_blocking)
+    layer_tree_host_->BeginMainFrame(frame_args);
 
   // Updates cc animations on the main-thread. This is necessary in order
   // to track animation states such that they are cleaned up properly.
@@ -375,8 +411,21 @@ void ProxyMain::BeginMainFrame(
   }
 
   // If updating the layers resulted in a content update, we need a commit.
-  if (updated)
+  //
+  // [RecordReplay] Scroll events do not always perform a paint commit, however
+  // one is necessary for paint events to be properly collected during scrolling.
+  // Force commits if we're recording or replaying.
+  //
+  // See #RUN-2434 (https://linear.app/replay/issue/RUN-2434)
+  if (updated || recordreplay::IsRecordingOrReplaying("notify-paints"))
     final_pipeline_stage_ = COMMIT_PIPELINE_STAGE;
+
+  // [RecordReplay] The paint's bookmark comes before WillCommit: a repaint
+  // while paused at it runs a nested main frame, whose commit would otherwise
+  // wait for this frame's commit, which isn't posted until after the bookmark.
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    recordreplay::OnCommitPaint();
+  }
 
   auto completion_event_ptr = std::make_unique<CompletionEvent>(
       base::WaitableEvent::ResetPolicy::MANUAL);
@@ -490,6 +539,7 @@ void ProxyMain::BeginMainFrame(
   layer_tree_host_->RecordEndOfFrameMetrics(
       begin_main_frame_start_time,
       begin_main_frame_state->active_sequence_trackers);
+  recordreplay::Assert("[RUN-1675-1826] ProxyMain::BeginMainFrame");
 }
 
 void ProxyMain::DidCompleteCommit(int source_frame_number,
@@ -505,6 +555,10 @@ void ProxyMain::DidPresentCompositorFrame(
     std::vector<PresentationTimeCallbackBuffer::SuccessfulCallbackWithDetails>
         sucessful_presentation_callbacks,
     const viz::FrameTimingDetails& frame_timing_details) {
+
+  recordreplay::Assert(
+      "[RUN-2317-2366] ProxyMain::DidPresentCompositorFrame %u", frame_token);
+
   layer_tree_host_->DidPresentCompositorFrame(
       frame_token, std::move(presentation_callbacks),
       std::move(sucessful_presentation_callbacks), frame_timing_details);
@@ -974,6 +1028,26 @@ void ProxyMain::NotifyNewLocalSurfaceIdExpectedWhilePaused() {
       FROM_HERE,
       base::BindOnce(&ProxyImpl::NotifyNewLocalSurfaceIdExpectedWhilePaused,
                      base::Unretained(proxy_impl_.get())));
+}
+
+void ProxyMain::RecordReplayRepaintPending() {
+  if (!proxy_impl_)
+    return;
+  ImplThreadTaskRunner()->PostTask(
+      FROM_HERE, base::BindOnce(&ProxyImpl::RecordReplayRepaintPending,
+                                base::Unretained(proxy_impl_.get())));
+}
+
+void ProxyMain::RecordReplayRepaint() {
+  if (!proxy_impl_)
+    return;
+  ImplThreadTaskRunner()->PostTask(
+      FROM_HERE, base::BindOnce(&ProxyImpl::RecordReplayRepaint,
+                                base::Unretained(proxy_impl_.get())));
+}
+
+const viz::LocalSurfaceId& ProxyMain::RecordReplayLocalSurfaceId() const {
+  return layer_tree_host_->local_surface_id_from_parent();
 }
 
 }  // namespace cc
