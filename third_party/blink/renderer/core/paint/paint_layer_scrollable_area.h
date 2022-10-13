@@ -686,6 +686,10 @@ class CORE_EXPORT PaintLayerScrollableArea final
     return last_scroll_direction_vertical_;
   }
 
+  int RecordReplayId() const { 
+    return record_replay_id_; 
+  }
+
  private:
   bool NeedsHypotheticalScrollbarThickness(ScrollbarOrientation) const;
   int ComputeHypotheticalScrollbarThickness(
@@ -881,6 +885,8 @@ class CORE_EXPORT PaintLayerScrollableArea final
       ContainerScrollDirection::kNone;
   ContainerScrollDirection last_scroll_direction_vertical_ =
       ContainerScrollDirection::kNone;
+
+  int record_replay_id_ = 0;
 
   class ScrollingBackgroundDisplayItemClient final
       : public GarbageCollected<ScrollingBackgroundDisplayItemClient>,
