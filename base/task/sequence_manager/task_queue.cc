@@ -128,10 +128,18 @@ TaskQueue::TaskQueue(std::unique_ptr<internal::TaskQueueImpl> impl,
                              : MakeRefCounted<internal::AssociatedThreadId>()),
       default_task_runner_(impl_ ? impl_->CreateTaskRunner(kTaskTypeNone)
                                  : CreateNullTaskRunner()),
-      name_(impl_ ? impl_->GetProtoName() : QueueName::UNKNOWN_TQ) {}
+      name_(impl_ ? impl_->GetProtoName() : QueueName::UNKNOWN_TQ) {
+  // Pointer registration is needed for sorting in the following places:
+  // TaskQueueThrottler::PumpThrottledTasks
+  // BudgetPool::UpdateThrottlingStateForAllQueues
+  // FrameTaskQueueController::~FrameTaskQueueController
+  recordreplay::RegisterPointer("TaskQueue", this);
+}
 
 TaskQueue::~TaskQueue() {
   ShutdownTaskQueueGracefully();
+
+  recordreplay::UnregisterPointer(this);
 }
 
 void TaskQueue::ShutdownTaskQueueGracefully() {
@@ -166,10 +174,20 @@ void TaskQueue::TaskTiming::RecordTaskEnd(LazyNow* now) {
     return;
   state_ = State::Finished;
 
-  if (has_wall_time())
+  if (has_wall_time()) {
+    // https://linear.app/replay/issue/RUN-618
+    // https://linear.app/replay/issue/RUN-821
+    // https://linear.app/replay/issue/RUN-852
+    recordreplay::Assert("TaskQueue::TaskTiming::RecordTaskEnd #1");
     end_time_ = now->Now();
-  if (has_thread_time())
+  }
+  if (has_thread_time()) {
+    // https://linear.app/replay/issue/RUN-618
+    // https://linear.app/replay/issue/RUN-821
+    // https://linear.app/replay/issue/RUN-852
+    recordreplay::Assert("TaskQueue::TaskTiming::RecordTaskEnd #2");
     end_thread_time_ = base::ThreadTicks::Now();
+  }
 }
 
 void TaskQueue::ShutdownTaskQueue() {

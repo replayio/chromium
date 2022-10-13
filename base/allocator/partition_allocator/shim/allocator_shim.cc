@@ -385,10 +385,19 @@ ALWAYS_INLINE void ShimAlignedFree(void* address, void* context) {
 #include "base/allocator/partition_allocator/shim/allocator_shim_override_glibc_weak_symbols.h"
 #endif
 
+static inline bool MaybeRecordingOrReplaying() {
+  return true;
+}
+
 #if BUILDFLAG(IS_APPLE)
 namespace allocator_shim {
 
 void InitializeAllocatorShim() {
+  // Don't alter memory allocation behavior when recording/replaying.
+  if (MaybeRecordingOrReplaying()) {
+    return;
+  }
+
 #if !BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
   // Prepares the default dispatch. After the intercepted malloc calls have
   // traversed the shim this will route them to the default malloc zone.

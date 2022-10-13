@@ -121,6 +121,10 @@ int64_t ComputeCurrentTicks() {
 #endif  // BUILDFLAG(IS_IOS)
 }
 
+static inline bool MaybeRecordingOrReplaying() {
+  return true;
+}
+
 int64_t ComputeThreadTicks() {
 #if BUILDFLAG(IS_IOS)
   NOTREACHED();
@@ -131,6 +135,11 @@ int64_t ComputeThreadTicks() {
   mach_port_t thread_port = pthread_mach_thread_np(pthread_self());
   if (thread_port == MACH_PORT_NULL) {
     DLOG(ERROR) << "Failed to get pthread_mach_thread_np()";
+    return 0;
+  }
+
+  // Calling thread_info is currently unsupported when recording/replaying.
+  if (MaybeRecordingOrReplaying()) {
     return 0;
   }
 

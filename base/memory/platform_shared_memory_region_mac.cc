@@ -10,6 +10,7 @@
 #include "base/mac/scoped_mach_vm.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/record_replay.h"
 #include "build/build_config.h"
 
 namespace base {
@@ -179,6 +180,12 @@ bool PlatformSharedMemoryRegion::CheckPlatformHandlePermissionsCorrespondToMode(
 
   bool is_read_only = kr == KERN_INVALID_RIGHT;
   bool expected_read_only = mode == Mode::kReadOnly;
+
+  // vm_map doesn't behave identically when replaying, so treat things as
+  // consistent. If any checks fail while recording then the process would have
+  // crashed anyways.
+  if (recordreplay::IsReplaying())
+    return true;
 
   if (is_read_only != expected_read_only) {
     // TODO(crbug.com/838365): convert to DLOG when bug fixed.

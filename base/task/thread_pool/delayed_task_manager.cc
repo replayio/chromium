@@ -9,6 +9,7 @@
 #include "base/bind.h"
 #include "base/check.h"
 #include "base/feature_list.h"
+#include "base/record_replay.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/task_features.h"
 #include "base/task/task_runner.h"
@@ -17,6 +18,23 @@
 
 namespace base {
 namespace internal {
+
+namespace {
+
+// A task's weak receiver is invalidated on the task's own sequence, racing with
+// this check on the service thread, so the replay uses the recorded result.
+bool RecordReplayMaybeValid(const Task& task) {
+  bool valid = task.task.MaybeValid();
+  if (recordreplay::IsRecordingOrReplaying("values",
+                                           "DelayedTaskManagerMaybeValid") &&
+      !recordreplay::AreEventsDisallowed()) {
+    valid = recordreplay::RecordReplayValue("DelayedTaskManagerMaybeValid",
+                                            valid);
+  }
+  return valid;
+}
+
+}  // namespace
 
 DelayedTaskManager::DelayedTask::DelayedTask() = default;
 
@@ -52,7 +70,8 @@ DelayedTaskManager::DelayedTaskManager(const TickClock* tick_clock)
       schedule_process_ripe_tasks_closure_(BindRepeating(
           &DelayedTaskManager::ScheduleProcessRipeTasksOnServiceThread,
           Unretained(this))),
-      tick_clock_(tick_clock) {
+      tick_clock_(tick_clock),
+      queue_lock_("DelayedTaskManager.queue_lock_") {
   DETACH_FROM_SEQUENCE(sequence_checker_);
   DCHECK(tick_clock_);
 }
@@ -133,7 +152,7 @@ void DelayedTaskManager::ProcessRipeTasks() {
     // power.
     while (!delayed_task_queue_.empty() &&
            (delayed_task_queue_.top().task.earliest_delayed_run_time() <= now ||
-            !delayed_task_queue_.top().task.task.MaybeValid())) {
+            !RecordReplayMaybeValid(delayed_task_queue_.top().task))) {
       // The const_cast on top is okay since the DelayedTask is
       // transactionally being popped from |delayed_task_queue_| right after
       // and the move doesn't alter the sort order.

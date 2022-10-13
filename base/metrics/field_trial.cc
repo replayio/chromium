@@ -21,6 +21,7 @@
 #include "base/process/process_handle.h"
 #include "base/process/process_info.h"
 #include "base/rand_util.h"
+#include "base/record_replay.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
@@ -672,6 +673,13 @@ void FieldTrialList::GetActiveFieldTrialGroupsFromString(
 void FieldTrialList::GetInitiallyActiveFieldTrials(
     const CommandLine& command_line,
     FieldTrial::ActiveGroups* active_groups) {
+  // Field trials are disabled when recording/replaying. The set of trials are
+  // read from shared memory and won't be consistent when replaying, and there
+  // isn't much point getting them working.
+  if (recordreplay::IsRecordingOrReplaying("no-field-trials")) {
+    return;
+  }
+
   DCHECK(global_);
   DCHECK(global_->create_trials_from_command_line_called_);
 
@@ -723,6 +731,15 @@ bool FieldTrialList::CreateTrialsFromFieldTrialStates(
 void FieldTrialList::CreateTrialsFromCommandLine(const CommandLine& cmd_line,
                                                  uint32_t fd_key) {
   global_->create_trials_from_command_line_called_ = true;
+
+  // Field trials are disabled when recording/replaying.
+  if (recordreplay::IsRecordingOrReplaying("no-field-trials")) {
+    return;
+  }
+
+  recordreplay::Assert(
+      "[RUN-2350-2356] FieldTrialList::CreateTrialsFromCommandLine %d %d",
+      recordreplay::IsRecordingOrReplaying(), recordreplay::FeatureEnabled("no-field-trials"));
 
 #if !BUILDFLAG(IS_NACL) && !BUILDFLAG(IS_IOS)
   if (cmd_line.HasSwitch(switches::kFieldTrialHandle)) {

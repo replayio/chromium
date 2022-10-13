@@ -76,8 +76,14 @@ ThreadGroup::ThreadGroup(TrackedRef<TaskTracker> task_tracker,
                          ThreadGroup* predecessor_thread_group)
     : task_tracker_(std::move(task_tracker)),
       delegate_(std::move(delegate)),
-      lock_(predecessor_thread_group ? &predecessor_thread_group->lock_
-                                     : nullptr) {
+      lock_(recordreplay::AreEventsDisallowed() ? nullptr : "ThreadGroup.lock_"
+            // We ought to have a CheckedLock ctor that takes both an ordered
+            // name and a predecessor, but since we don't support debug builds
+            // when recording/replaying currently it doesn't seem worth the
+            // hassle.
+            /*predecessor_thread_group ? &predecessor_thread_group->lock_
+                                       : nullptr*/),
+      record_replay_unordered_(recordreplay::AreEventsDisallowed()) {
   DCHECK(task_tracker_);
 }
 
@@ -206,8 +212,9 @@ RegisteredTaskSource ThreadGroup::TakeRegisteredTaskSource(
     return nullptr;
   }
 
-  if (run_status == TaskSource::RunStatus::kAllowedSaturated)
+  if (run_status == TaskSource::RunStatus::kAllowedSaturated) {
     return priority_queue_.PopTaskSource();
+  }
 
   // If the TaskSource isn't saturated, check whether TaskTracker allows it to
   // remain in the PriorityQueue.
@@ -219,8 +226,9 @@ RegisteredTaskSource ThreadGroup::TakeRegisteredTaskSource(
   // otherwise.
   RegisteredTaskSource task_source =
       task_tracker_->RegisterTaskSource(priority_queue_.PeekTaskSource().get());
-  if (!task_source)
+  if (!task_source) {
     return priority_queue_.PopTaskSource();
+  }
   // Replace the top task_source and then update the queue.
   std::swap(priority_queue_.PeekTaskSource(), task_source);
   priority_queue_.UpdateSortKey(*task_source.get(), task_source->GetSortKey());
@@ -269,8 +277,9 @@ void ThreadGroup::InvalidateAndHandoffAllTaskSourcesToOtherThreadGroup(
 bool ThreadGroup::ShouldYield(TaskSourceSortKey sort_key) {
   DCHECK(TS_UNCHECKED_READ(max_allowed_sort_key_).is_lock_free());
 
-  if (!task_tracker_->CanRunPriority(sort_key.priority()))
+  if (!task_tracker_->CanRunPriority(sort_key.priority())) {
     return true;
+  }
   // It is safe to read |max_allowed_sort_key_| without a lock since this
   // variable is atomic, keeping in mind that threads may not immediately see
   // the new value when it is updated.
@@ -296,6 +305,7 @@ bool ThreadGroup::ShouldYield(TaskSourceSortKey sort_key) {
   max_allowed_sort_key =
       TS_UNCHECKED_READ(max_allowed_sort_key_)
           .exchange(kMaxYieldSortKey, std::memory_order_relaxed);
+
   // Another thread might have decided to yield and racily reset
   // |max_allowed_sort_key_|, in which case this thread doesn't yield.
   return max_allowed_sort_key.priority != TaskPriority::BEST_EFFORT;
