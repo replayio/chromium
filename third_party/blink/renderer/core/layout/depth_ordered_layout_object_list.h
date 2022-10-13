@@ -36,9 +36,7 @@ struct LayoutObjectWithDepth {
   LayoutObject& operator*() const { return *object; }
   LayoutObject* operator->() const { return object; }
 
-  bool operator<(const LayoutObjectWithDepth& other) const {
-    return depth > other.depth;
-  }
+  bool operator<(const LayoutObjectWithDepth& other) const;
 
   void operator=(LayoutObject* obj) {
     object = obj;

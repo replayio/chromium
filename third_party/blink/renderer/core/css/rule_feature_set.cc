@@ -299,6 +299,7 @@ InvalidationSet& RuleFeatureSet::EnsureMutableInvalidationSet(
     InvalidationType type,
     PositionType position,
     scoped_refptr<InvalidationSet>& invalidation_set) {
+
   if (!invalidation_set) {
     // Create a new invalidation set of the right type.
     if (type == InvalidationType::kInvalidateDescendants) {

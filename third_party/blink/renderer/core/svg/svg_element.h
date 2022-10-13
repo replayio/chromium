@@ -32,6 +32,7 @@
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
 
@@ -153,7 +154,7 @@ class CORE_EXPORT SVGElement : public Element {
     EnsureUniqueElementData().SetPresentationAttributeStyleIsDirty(true);
   }
 
-  const HeapHashSet<WeakMember<SVGElement>>& InstancesForElement() const;
+  const HeapHashSet<WeakMember<SVGElement>, WTF::MemberHashRecordReplayId<SVGElement>>& InstancesForElement() const;
   void AddInstance(SVGElement*);
   void RemoveInstance(SVGElement*);
 
@@ -297,7 +298,7 @@ class CORE_EXPORT SVGElement : public Element {
   static SVGElementSet& GetDependencyTraversalVisitedSet();
   void UpdateWebAnimatedAttributeOnBaseValChange(const QualifiedName&);
 
-  HeapHashSet<WeakMember<SVGElement>> elements_with_relative_lengths_;
+  HeapHashSet<WeakMember<SVGElement>, WTF::MemberHashRecordReplayId<SVGElement>> elements_with_relative_lengths_;
 
   typedef HeapHashMap<QualifiedName, Member<SVGAnimatedPropertyBase>>
       AttributeToPropertyMap;

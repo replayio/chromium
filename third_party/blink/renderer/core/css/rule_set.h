@@ -346,7 +346,13 @@ class RuleMap {
 // ElementRuleCollector::CollectMatchingRules.
 class CORE_EXPORT RuleSet final : public GarbageCollected<RuleSet> {
  public:
-  RuleSet() = default;
+  RuleSet() {
+    // Pointer registration is needed for sorting within StyleEngine methods.
+    recordreplay::RegisterPointer("RuleSet", this);
+  }
+  ~RuleSet() {
+    recordreplay::UnregisterPointer(this);
+  }
   RuleSet(const RuleSet&) = delete;
   RuleSet& operator=(const RuleSet&) = delete;
 

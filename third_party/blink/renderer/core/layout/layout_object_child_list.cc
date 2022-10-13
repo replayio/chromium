@@ -36,6 +36,8 @@
 #include "third_party/blink/renderer/core/layout/ng/inline/ng_fragment_items.h"
 #include "third_party/blink/renderer/core/paint/object_paint_invalidator.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 namespace {

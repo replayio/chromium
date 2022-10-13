@@ -283,6 +283,7 @@ struct SameSizeAsLayoutObject : public GarbageCollected<SameSizeAsLayoutObject>,
   unsigned bitfields3_;
   void* pointers[1];
   Member<void*> members[5];
+  int record_replay_id_;
 #if DCHECK_IS_ON()
   bool is_destroyed_;
 #endif
@@ -403,6 +404,7 @@ LayoutObject::LayoutObject(Node* node)
       previous_(nullptr),
       next_(nullptr),
       fragment_(MakeGarbageCollected<FragmentData>()) {
+  record_replay_id_ = recordreplay::NewIdMainThread("LayoutObject");
   InstanceCounters::IncrementCounter(InstanceCounters::kLayoutObjectCounter);
   if (node_)
     GetFrameView()->IncrementLayoutObjectCount();
@@ -414,6 +416,15 @@ LayoutObject::~LayoutObject() {
   DCHECK(is_destroyed_);
 #endif
   InstanceCounters::DecrementCounter(InstanceCounters::kLayoutObjectCounter);
+
+  // If recording/replaying and in a nondeterministic execution, allow
+  // style_ to leak, since it may otherwise get destroyed in a
+  // non-deterministic fashion and remove itself from font-fallback-maps
+  // that are accessed deterministically.
+  // See https://linear.app/replay/issue/RUN-1758/fontfallbackmap-items-getting-removed-non-deterministically
+  if (recordreplay::AreEventsDisallowed("~LayoutObject")) {
+    (void) style_.release();
+  }
 }
 
 bool LayoutObject::IsDescendantOf(const LayoutObject* obj) const {
@@ -2502,6 +2513,9 @@ void LayoutObject::SetPseudoElementStyle(
 DISABLE_CFI_PERF
 void LayoutObject::SetStyle(scoped_refptr<const ComputedStyle> style,
                             ApplyStyleChanges apply_changes) {
+  recordreplay::Assert("[RUN-2300] LayoutObject::SetStyle %d %d %d",
+                       RecordReplayId(), style_ == style, (int)apply_changes);
+
   NOT_DESTROYED();
   if (style_ == style)
     return;
@@ -2665,11 +2679,18 @@ void LayoutObject::SetStyle(scoped_refptr<const ComputedStyle> style,
 #endif
   }
 
+  recordreplay::Assert("[RUN-2300] LayoutObject::SetStyle #9 %d %d %d",
+                       diff.NeedsPaintInvalidation(),
+                       updated_diff.NeedsPaintInvalidation(),
+                       IsSVGRoot());
+
   if (diff.NeedsPaintInvalidation() || updated_diff.NeedsPaintInvalidation()) {
     if (IsSVGRoot()) {
       // LayoutSVGRoot::LocalVisualRect() depends on some styles.
       SetShouldDoFullPaintInvalidation();
     } else {
+      recordreplay::Assert("[RUN-2300] LayoutObject::SetStyle #10");
+
       // We'll set needing geometry change later if the style change does cause
       // possible layout change or visual overflow change.
       SetShouldDoFullPaintInvalidationWithoutGeometryChange();
@@ -2700,8 +2721,12 @@ void LayoutObject::SetStyle(scoped_refptr<const ComputedStyle> style,
   }
 
   if (!IsText() && diff.CompositablePaintEffectChanged()) {
+    recordreplay::Assert("[RUN-2300] LayoutObject::SetStyle #15");
+
     SetShouldDoFullPaintInvalidationWithoutGeometryChange();
   }
+
+  recordreplay::Assert("[RUN-2300] LayoutObject::SetStyle Done");
 }
 
 void LayoutObject::UpdateFirstLineImageObservers(
@@ -3649,20 +3674,32 @@ void LayoutObject::WillBeDestroyed() {
   if (HasCounterNodeMap())
     LayoutCounter::DestroyCounterNodes(*this);
 
+  recordreplay::AssertMaybeEventsDisallowed(
+      "[RUN-2300] LayoutObject::WillBeDestroyed A %d %d", RecordReplayId(),
+      GetNode() ? GetNode()->RecordReplayId() : -1);
+
   // Remove the handler if node had touch-action set. Handlers are not added
   // for text nodes so don't try removing for one too. Need to check if
   // m_style is null in cases of partial construction. Any handler we added
   // previously may have already been removed by the Document independently.
   if (GetNode() && !GetNode()->IsTextNode() && style_ &&
       style_->GetTouchAction() != TouchAction::kAuto) {
+    recordreplay::AssertMaybeEventsDisallowed(
+        "[RUN-2300] LayoutObject::WillBeDestroyed B %d", RecordReplayId());
     EventHandlerRegistry& registry =
         GetDocument().GetFrame()->GetEventHandlerRegistry();
     if (registry.EventHandlerTargets(EventHandlerRegistry::kTouchAction)
             ->Contains(GetNode())) {
+      recordreplay::AssertMaybeEventsDisallowed(
+          "[RUN-2300] LayoutObject::WillBeDestroyed C %d %d", RecordReplayId(),
+          GetNode()->RecordReplayId());
       registry.DidRemoveEventHandler(*GetNode(),
                                      EventHandlerRegistry::kTouchAction);
     }
   }
+
+  recordreplay::AssertMaybeEventsDisallowed(
+      "[RUN-2300] LayoutObject::WillBeDestroyed D", RecordReplayId());
 
   SetAncestorLineBoxDirty(false);
 
@@ -4533,8 +4570,12 @@ void LayoutObject::
   NOT_DESTROYED();
   // Only full invalidation reasons are allowed.
   DCHECK(IsFullPaintInvalidationReason(reason));
-  if (ShouldDoFullPaintInvalidation())
+
+  if (ShouldDoFullPaintInvalidation()) {
     return;
+  }
+
+  recordreplay::Assert("[RUN-2300] LayoutObject::SetShouldDoFullPaintInvalidationWithoutGeometryChangeInternal #1");
 
   SetShouldCheckForPaintInvalidationWithoutGeometryChange();
   if (reason == PaintInvalidationReason::kFull) {
@@ -4567,9 +4608,16 @@ void LayoutObject::SetShouldCheckForPaintInvalidation() {
 }
 
 void LayoutObject::SetShouldCheckForPaintInvalidationWithoutGeometryChange() {
+  recordreplay::Assert("[RUN-2300] LayoutObject::SetShouldCheckForPaintInvalidationWithoutGeometryChange %d",
+                       RecordReplayId());
+
   NOT_DESTROYED();
   if (ShouldCheckForPaintInvalidation())
     return;
+
+  recordreplay::Assert("[RUN-2300] LayoutObject::SetShouldCheckForPaintInvalidationWithoutGeometryChange #1 %d",
+                       RecordReplayId());
+
   GetFrameView()->ScheduleVisualUpdateForPaintInvalidationIfNeeded();
 
   bitfields_.SetShouldCheckForPaintInvalidation(true);
@@ -4594,6 +4642,9 @@ void LayoutObject::SetMayNeedPaintInvalidationAnimatedBackgroundImage() {
   NOT_DESTROYED();
   if (MayNeedPaintInvalidationAnimatedBackgroundImage())
     return;
+
+  recordreplay::Assert("[RUN-1641] LayoutObject::SetMayNeedPaintInvalidationAnimatedBackgroundImage #1");
+
   bitfields_.SetMayNeedPaintInvalidationAnimatedBackgroundImage(true);
   SetShouldCheckForPaintInvalidationWithoutGeometryChange();
 }
@@ -4605,6 +4656,8 @@ void LayoutObject::SetShouldDelayFullPaintInvalidation() {
 
   bitfields_.SetShouldDelayFullPaintInvalidation(true);
   if (!ShouldCheckForPaintInvalidation()) {
+    recordreplay::Assert("[RUN-2300] LayoutObject::SetShouldDelayFullPaintInvalidation #1");
+
     // This will also schedule a visual update.
     SetShouldCheckForPaintInvalidationWithoutGeometryChange();
   } else {
