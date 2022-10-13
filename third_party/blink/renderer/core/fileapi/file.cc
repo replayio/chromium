@@ -38,6 +38,7 @@
 #include "third_party/blink/renderer/core/frame/web_feature.h"
 #include "third_party/blink/renderer/core/html/forms/form_controller.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/to_v8.h"
 #include "third_party/blink/renderer/platform/blob/blob_data.h"
@@ -117,7 +118,12 @@ static std::unique_ptr<BlobData> CreateBlobDataForFileWithMetadata(
 File* File::Create(ExecutionContext* context,
                    const HeapVector<Member<V8BlobPart>>& file_bits,
                    const String& file_name,
-                   const FilePropertyBag* options) {
+                   const FilePropertyBag* options,
+                   ExceptionState& exception_state) {
+  if (RecordReplayThrowIfEventsUnavailable("File.constructor",
+                                           &exception_state))
+    return nullptr;
+
   DCHECK(options->hasType());
 
   base::Time last_modified;
@@ -141,6 +147,13 @@ File* File::Create(ExecutionContext* context,
                    normalize_line_endings_to_native);
 
   uint64_t file_size = blob_data->length();
+
+  recordreplay::Assert("[RUN-1533-1733] File::Create %llu %d %zu \"%s\" (%s)",
+                       file_size, normalize_line_endings_to_native,
+                       (size_t)file_bits.size(),
+                       file_name.Utf8().c_str(),
+                       blob_data->ContentType().Utf8().c_str());
+
   return MakeGarbageCollected<File>(
       file_name, last_modified,
       BlobDataHandle::Create(std::move(blob_data), file_size));

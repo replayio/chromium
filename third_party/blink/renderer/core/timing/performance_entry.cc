@@ -39,10 +39,12 @@
 #include "third_party/blink/renderer/core/performance_entry_names.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
 
+#include "base/record_replay_atomic_sequence_num.h"
+
 namespace blink {
 
 namespace {
-static base::AtomicSequenceNumber index_seq;
+static ::recordreplay::AtomicSequenceNumber index_seq;
 }
 
 PerformanceEntry::PerformanceEntry(const AtomicString& name,
@@ -58,7 +60,9 @@ PerformanceEntry::PerformanceEntry(const AtomicString& name,
                          ? DynamicTo<LocalDOMWindow>(source)->GetNavigationId()
                          : kNavigationIdDefaultValue),
       source_(source),
-      is_triggered_by_soft_navigation_(is_triggered_by_soft_navigation) {}
+      is_triggered_by_soft_navigation_(is_triggered_by_soft_navigation) {
+  recordreplay::Assert("[RUN-2317-2316] PerformanceEntry A %d %u", index_, navigation_id_);
+}
 
 PerformanceEntry::PerformanceEntry(double duration,
                                    const AtomicString& name,
@@ -75,6 +79,7 @@ PerformanceEntry::PerformanceEntry(double duration,
       source_(source),
       is_triggered_by_soft_navigation_(is_triggered_by_soft_navigation) {
   DCHECK_GE(duration_, 0.0);
+  recordreplay::Assert("[RUN-2317-2316] PerformanceEntry B %d %u", index_, navigation_id_);
 }
 
 PerformanceEntry::~PerformanceEntry() = default;
