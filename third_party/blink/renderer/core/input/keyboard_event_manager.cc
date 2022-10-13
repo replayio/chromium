@@ -310,7 +310,8 @@ WebInputEventResult KeyboardEventManager::KeyEvent(
       event->SetTarget(node);
       event->SetStopPropagation(!send_key_event);
 
-      dispatch_result = node->DispatchEvent(*event);
+      dispatch_result =
+          node->DispatchEvent(*event, "KeyboardEventManager::KeyEvent #1");
       break;
     }
     case WebInputEvent::Type::kRawKeyDown:
@@ -343,7 +344,8 @@ WebInputEventResult KeyboardEventManager::KeyEvent(
         node->UpdateHadKeyboardEvent(*event);
       }
 
-      if (dispatch_result = node->DispatchEvent(*event);
+      if (dispatch_result =
+              node->DispatchEvent(*event, "KeyboardEventManager::KeyEvent #2");
           dispatch_result != DispatchEventResult::kNotCanceled) {
         break;
       }
@@ -393,7 +395,8 @@ WebInputEventResult KeyboardEventManager::KeyEvent(
       event->SetTarget(node);
       event->SetStopPropagation(!send_key_event);
 
-      dispatch_result = node->DispatchEvent(*event);
+      dispatch_result =
+          node->DispatchEvent(*event, "KeyboardEventManager::KeyEvent #3");
       break;
     }
     default:
@@ -422,6 +425,16 @@ void KeyboardEventManager::KeyEventModifierMayHaveChanged(int modifiers) {
 void KeyboardEventManager::DefaultKeyboardEventHandler(
     KeyboardEvent* event,
     Node* possible_focused_node) {
+
+  // [replay] capture keyboard events
+  if (event->type() == event_type_names::kKeydown ||
+      event->type() == event_type_names::kKeyup ||
+      event->type() == event_type_names::kKeypress) {
+    recordreplay::OnKeyEvent(event->type().Utf8().c_str(),
+                             event->key().Utf8().c_str(),
+                             false);
+  }
+
   if (event->type() == event_type_names::kKeydown) {
     frame_->GetEditor().HandleKeyboardEvent(event);
     if (event->DefaultHandled())

@@ -25,10 +25,16 @@ void AnimationTimeline::AnimationAttached(Animation* animation) {
   DCHECK(!animations_.Contains(animation));
   animations_.insert(animation);
   animation->ResolveTimelineOffsets(GetTimelineRange());
+
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "AnimationTimeline"))
+    record_replay_animations_strong_.insert(animation);
 }
 
 void AnimationTimeline::AnimationDetached(Animation* animation) {
   animations_.erase(animation);
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "AnimationTimeline"))
+    record_replay_animations_strong_.erase(animation);
+
   animations_needing_update_.erase(animation);
   if (animation->Outdated())
     outdated_animation_count_--;
@@ -193,12 +199,16 @@ Animation* AnimationTimeline::Play(AnimationEffect* child,
 }
 
 void AnimationTimeline::MarkAnimationsCompositorPending(bool source_changed) {
+  recordreplay::Assert("[RUN-1641] AnimationTimeline::MarkAnimationsCompositorPending %d", RecordReplayId());
+
   Animation::CompositorPendingReason reason =
       source_changed ? Animation::CompositorPendingReason::kPendingEffectChange
                      : Animation::CompositorPendingReason::kPendingUpdate;
   for (const auto& animation : animations_) {
     animation->SetCompositorPending(reason);
   }
+
+  recordreplay::Assert("[RUN-1641] AnimationTimeline::MarkAnimationsCompositorPending Done");
 }
 
 void AnimationTimeline::MarkPendingIfCompositorPropertyAnimationChanges(
@@ -213,6 +223,7 @@ void AnimationTimeline::Trace(Visitor* visitor) const {
   visitor->Trace(document_);
   visitor->Trace(animations_needing_update_);
   visitor->Trace(animations_);
+  visitor->Trace(record_replay_animations_strong_);
   ScriptWrappable::Trace(visitor);
 }
 
