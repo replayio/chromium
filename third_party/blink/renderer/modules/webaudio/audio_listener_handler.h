@@ -135,7 +135,7 @@ class AudioListenerHandler final
 
   // To synchronize settings of the state of the listener during
   // `PannerHandler::Process()` and related functions.
-  mutable base::Lock listener_lock_;
+  mutable base::Lock listener_lock_{"AudioListener"};
 
   // A set of PannerHandlers. This is updated only in the main thread and is
   // referred in the audio thread. These raw pointers are safe because
