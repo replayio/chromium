@@ -33,6 +33,7 @@
 #include <memory>
 #include <utility>
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_blob_property_bag.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_arraybuffer_arraybufferview_blob_usvstring.h"
@@ -44,6 +45,7 @@
 #include "third_party/blink/renderer/core/frame/web_feature.h"
 #include "third_party/blink/renderer/core/url/dom_url.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/blob/blob_url.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
@@ -114,9 +116,22 @@ Blob::Blob(scoped_refptr<BlobDataHandle> data_handle)
 Blob::~Blob() = default;
 
 // static
+Blob* Blob::Create(ExecutionContext*, ExceptionState& exception_state) {
+  if (RecordReplayThrowIfEventsUnavailable("Blob.constructor",
+                                           &exception_state))
+    return nullptr;
+  return MakeGarbageCollected<Blob>(BlobDataHandle::Create());
+}
+
+// static
 Blob* Blob::Create(ExecutionContext* context,
                    const HeapVector<Member<V8BlobPart>>& blob_parts,
-                   const BlobPropertyBag* options) {
+                   const BlobPropertyBag* options,
+                   ExceptionState& exception_state) {
+  if (RecordReplayThrowIfEventsUnavailable("Blob.constructor",
+                                           &exception_state))
+    return nullptr;
+
   DCHECK(options->hasType());
   DCHECK(options->hasEndings());
   bool normalize_line_endings_to_native = (options->endings() == "native");
@@ -235,10 +250,19 @@ ReadableStream* Blob::stream(ScriptState* script_state) const {
 static ScriptPromise ReadBlobHelper(
     const scoped_refptr<BlobDataHandle>& blob_data_handle,
     ScriptState* script_state,
-    FileReaderLoader::ReadType read_type) {
+    FileReaderLoader::ReadType read_type,
+    const char* operation_name) {
   ScriptPromiseResolver* resolver =
       MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   auto promise = resolver->Promise();
+
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
+    resolver->Reject(MakeGarbageCollected<DOMException>(
+        DOMExceptionCode::kNotReadableError,
+        String("Cannot replay operation ") + operation_name +
+            " because it was not recorded."));
+    return promise;
+  }
 
   new BlobFileReaderClient(blob_data_handle,
                            ExecutionContext::From(script_state)
@@ -249,13 +273,14 @@ static ScriptPromise ReadBlobHelper(
 }
 
 blink::ScriptPromise Blob::text(ScriptState* script_state) {
-  auto read_type = FileReaderLoader::kReadAsText;
-  return ReadBlobHelper(blob_data_handle_, script_state, read_type);
+  return ReadBlobHelper(blob_data_handle_, script_state,
+                        FileReaderLoader::kReadAsText, "Blob.text");
 }
 
 blink::ScriptPromise Blob::arrayBuffer(ScriptState* script_state) {
-  auto read_type = FileReaderLoader::kReadAsArrayBuffer;
-  return ReadBlobHelper(blob_data_handle_, script_state, read_type);
+  return ReadBlobHelper(blob_data_handle_, script_state,
+                        FileReaderLoader::kReadAsArrayBuffer,
+                        "Blob.arrayBuffer");
 }
 
 void Blob::AppendTo(BlobData& blob_data) const {

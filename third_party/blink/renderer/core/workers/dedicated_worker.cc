@@ -249,6 +249,11 @@ void DedicatedWorker::OnHostCreated(
     CrossVariantMojoRemote<
         mojom::blink::BackForwardCacheControllerHostInterfaceBase>
         back_forward_cache_controller_host) {
+  // Keep track of network requests made while starting the worker.
+  recordreplay::AutoDependencyExecution execute(
+    recordreplay::NewDependencyGraphNode("{\"kind\":\"workerHostCreated\"}")
+  );
+
   DCHECK(!base::FeatureList::IsEnabled(features::kPlzDedicatedWorker));
   const RejectCoepUnsafeNone reject_coep_unsafe_none(
       network::CompatibleWithCrossOriginIsolated(parent_coep));
@@ -339,7 +344,7 @@ void DedicatedWorker::OnScriptLoadStartFailed() {
 void DedicatedWorker::DispatchErrorEventForScriptFetchFailure() {
   DCHECK(!GetExecutionContext() || GetExecutionContext()->IsContextThread());
   // TODO(nhiroki): Add a console error message.
-  DispatchEvent(*Event::CreateCancelable(event_type_names::kError));
+  DispatchEvent(*Event::CreateCancelable(event_type_names::kError), "DedicatedWorker::DispatchErrorEventForScriptFetchFailure");
 }
 
 std::unique_ptr<WebContentSettingsClient>
