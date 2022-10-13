@@ -70,6 +70,8 @@
 #include "third_party/blink/renderer/platform/wtf/text/string_utf8_adaptor.h"
 #include "third_party/blink/renderer/platform/wtf/wtf_size_t.h"
 
+#include "base/json/json_writer.h"
+
 namespace blink {
 
 DOMWebSocket::EventQueue::EventQueue(EventTarget* target)
@@ -81,7 +83,7 @@ void DOMWebSocket::EventQueue::Dispatch(Event* event) {
   switch (state_) {
     case kActive:
       DCHECK(events_.empty());
-      target_->DispatchEvent(*event);
+      target_->DispatchEvent(*event, "DOMWebSocket::EventQueue::Dispatch");
       break;
     case kPaused:
     case kUnpausePosted:
@@ -138,7 +140,7 @@ void DOMWebSocket::EventQueue::DispatchQueuedEvents() {
     if (state_ == kStopped || state_ == kPaused || state_ == kUnpausePosted)
       break;
     DCHECK_EQ(state_, kActive);
-    target_->DispatchEvent(*events.TakeFirst());
+    target_->DispatchEvent(*events.TakeFirst(), "DOMWebSocket::EventQueue::DispatchQueuedEvents");
     // |this| can be stopped here.
   }
   if (state_ == kPaused || state_ == kUnpausePosted) {
@@ -182,6 +184,7 @@ DOMWebSocket::DOMWebSocket(ExecutionContext* context)
       event_queue_(MakeGarbageCollected<EventQueue>(this)),
       buffered_amount_update_task_pending_(false) {
   DVLOG(1) << "DOMWebSocket " << this << " created";
+  record_replay_id_ = recordreplay::NewIdAnyThread("DOMWebSocket");
 }
 
 DOMWebSocket::~DOMWebSocket() {
@@ -238,6 +241,28 @@ DOMWebSocket* DOMWebSocket::Create(
 
   if (exception_state.HadException())
     return nullptr;
+
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "websocketCreated");
+    info.Set("socketId", websocket->record_replay_id_);
+    info.Set("url", url.Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    recordreplay::NewDependencyGraphNode(json.c_str());
+  }
+
+  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+    std::string annotationContents;
+    if (recordreplay::IsReplaying()) {
+      base::Value::Dict info;
+      info.Set("kind", "create");
+      info.Set("socketId", websocket->record_replay_id_);
+      info.Set("url", url.Utf8());
+      base::JSONWriter::Write(info, &annotationContents);
+    }
+    recordreplay::OnAnnotation("DOMWebSocket", annotationContents.c_str());
+  }
 
   return websocket;
 }
@@ -332,6 +357,30 @@ void DOMWebSocket::send(const String& message,
     return;
   }
 
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "websocketSendMessage");
+    info.Set("socketId", record_replay_id_);
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
+
+  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+    std::string annotationContents;
+    if (recordreplay::IsReplaying()) {
+      base::Value::Dict info;
+      info.Set("kind", "send");
+      info.Set("socketId", record_replay_id_);
+      info.Set("binary", false);
+      info.Set("text", message.Utf8());
+      info.Set("encodedLength", (int)encoded_message.length());
+      base::JSONWriter::Write(info, &annotationContents);
+    }
+    recordreplay::OnAnnotation("DOMWebSocket", annotationContents.c_str());
+  }
+
   DCHECK(channel_);
   buffered_amount_ += encoded_message.length();
   channel_->Send(encoded_message, base::OnceClosure());
@@ -351,6 +400,30 @@ void DOMWebSocket::send(DOMArrayBuffer* binary_data,
     UpdateBufferedAmountAfterClose(binary_data->ByteLength());
     return;
   }
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "websocketSendMessage");
+    info.Set("socketId", record_replay_id_);
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
+
+  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+    std::string annotationContents;
+    if (recordreplay::IsReplaying()) {
+      base::Value::Dict info;
+      info.Set("kind", "send");
+      info.Set("socketId", record_replay_id_);
+      info.Set("binary", true);
+      info.Set("encodedLength", (int)binary_data->ByteLength());
+      base::JSONWriter::Write(info, &annotationContents);
+    }
+    recordreplay::OnAnnotation("DOMWebSocket", annotationContents.c_str());
+  }
+
   DCHECK(channel_);
   buffered_amount_ += binary_data->ByteLength();
   channel_->Send(*binary_data, 0, binary_data->ByteLength(),
@@ -371,6 +444,30 @@ void DOMWebSocket::send(NotShared<DOMArrayBufferView> array_buffer_view,
     UpdateBufferedAmountAfterClose(array_buffer_view->byteLength());
     return;
   }
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "websocketSendMessage");
+    info.Set("socketId", record_replay_id_);
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
+
+  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+    std::string annotationContents;
+    if (recordreplay::IsReplaying()) {
+      base::Value::Dict info;
+      info.Set("kind", "send");
+      info.Set("socketId", record_replay_id_);
+      info.Set("binary", true);
+      info.Set("encodedLength", (int)array_buffer_view->byteLength());
+      base::JSONWriter::Write(info, &annotationContents);
+    }
+    recordreplay::OnAnnotation("DOMWebSocket", annotationContents.c_str());
+  }
+
   DCHECK(channel_);
   buffered_amount_ += array_buffer_view->byteLength();
   channel_->Send(*array_buffer_view->buffer(), array_buffer_view->byteOffset(),
@@ -393,6 +490,29 @@ void DOMWebSocket::send(Blob* binary_data, ExceptionState& exception_state) {
   uint64_t size = binary_data->size();
   buffered_amount_ += size;
   DCHECK(channel_);
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "websocketSendMessage");
+    info.Set("socketId", record_replay_id_);
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
+
+  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+    std::string annotationContents;
+    if (recordreplay::IsReplaying()) {
+      base::Value::Dict info;
+      info.Set("kind", "send");
+      info.Set("socketId", record_replay_id_);
+      info.Set("binary", true);
+      info.Set("encodedLength", (int)size);
+      base::JSONWriter::Write(info, &annotationContents);
+    }
+    recordreplay::OnAnnotation("DOMWebSocket", annotationContents.c_str());
+  }
 
   // When the runtime type of |binary_data| is File,
   // binary_data->GetBlobDataHandle()->size() returns -1. However, in order to
@@ -424,6 +544,19 @@ void DOMWebSocket::close(uint16_t code, ExceptionState& exception_state) {
 void DOMWebSocket::CloseInternal(int code,
                                  const String& reason,
                                  ExceptionState& exception_state) {
+  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+    std::string annotationContents;
+    if (recordreplay::IsReplaying()) {
+      base::Value::Dict info;
+      info.Set("kind", "close");
+      info.Set("socketId", record_replay_id_);
+      info.Set("code", code);
+      info.Set("reason", reason.Utf8());
+      base::JSONWriter::Write(info, &annotationContents);
+    }
+    recordreplay::OnAnnotation("DOMWebSocket", annotationContents.c_str());
+  }
+
   common_.CloseInternal(code, reason, channel_, exception_state);
 }
 
@@ -517,6 +650,30 @@ void DOMWebSocket::DidConnect(const String& subprotocol,
   common_.SetState(kOpen);
   subprotocol_ = subprotocol;
   extensions_ = extensions;
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "websocketConnected");
+    info.Set("socketId", record_replay_id_);
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
+
+  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+    std::string annotationContents;
+    if (recordreplay::IsReplaying()) {
+      base::Value::Dict info;
+      info.Set("kind", "connected");
+      info.Set("socketId", record_replay_id_);
+      info.Set("subprotocol", subprotocol.Utf8());
+      info.Set("extensions", extensions.Utf8());
+      base::JSONWriter::Write(info, &annotationContents);
+    }
+    recordreplay::OnAnnotation("DOMWebSocket", annotationContents.c_str());
+  }
+
   event_queue_->Dispatch(Event::Create(event_type_names::kOpen));
   NotifyWebSocketActivity();
 }
@@ -528,6 +685,31 @@ void DOMWebSocket::DidReceiveTextMessage(const String& msg) {
   DCHECK_NE(common_.GetState(), kConnecting);
   if (common_.GetState() != kOpen)
     return;
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "websocketNewMessage");
+    info.Set("socketId", record_replay_id_);
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
+
+  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+    std::string annotationContents;
+    if (recordreplay::IsReplaying()) {
+      std::string text = msg.Utf8();
+      base::Value::Dict info;
+      info.Set("kind", "newMessage");
+      info.Set("socketId", record_replay_id_);
+      info.Set("binary", false);
+      info.Set("text", text);
+      info.Set("encodedLength", (int)text.length());
+      base::JSONWriter::Write(info, &annotationContents);
+    }
+    recordreplay::OnAnnotation("DOMWebSocket", annotationContents.c_str());
+  }
 
   DCHECK(!origin_string_.IsNull());
   event_queue_->Dispatch(MessageEvent::Create(msg, origin_string_));
@@ -548,6 +730,29 @@ void DOMWebSocket::DidReceiveBinaryMessage(
   DCHECK_NE(common_.GetState(), kConnecting);
   if (common_.GetState() != kOpen)
     return;
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "websocketNewMessage");
+    info.Set("socketId", record_replay_id_);
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
+
+  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+    std::string annotationContents;
+    if (recordreplay::IsReplaying()) {
+      base::Value::Dict info;
+      info.Set("kind", "newMessage");
+      info.Set("socketId", record_replay_id_);
+      info.Set("binary", true);
+      info.Set("encodedLength", (int)size);
+      base::JSONWriter::Write(info, &annotationContents);
+    }
+    recordreplay::OnAnnotation("DOMWebSocket", annotationContents.c_str());
+  }
 
   switch (binary_type_) {
     case kBinaryTypeBlob: {
@@ -574,6 +779,18 @@ void DOMWebSocket::DidError() {
   DVLOG(1) << "WebSocket " << this << " DidError()";
   ReflectBufferedAmountConsumption();
   common_.SetState(kClosed);
+
+  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+    std::string annotationContents;
+    if (recordreplay::IsReplaying()) {
+      base::Value::Dict info;
+      info.Set("kind", "onError");
+      info.Set("socketId", record_replay_id_);
+      base::JSONWriter::Write(info, &annotationContents);
+    }
+    recordreplay::OnAnnotation("DOMWebSocket", annotationContents.c_str());
+  }
+
   event_queue_->Dispatch(Event::Create(event_type_names::kError));
 }
 
@@ -610,6 +827,17 @@ void DOMWebSocket::DidClose(
   common_.SetState(kClosed);
 
   ReleaseChannel();
+
+  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+    std::string annotationContents;
+    if (recordreplay::IsReplaying()) {
+      base::Value::Dict info;
+      info.Set("kind", "onClose");
+      info.Set("socketId", record_replay_id_);
+      base::JSONWriter::Write(info, &annotationContents);
+    }
+    recordreplay::OnAnnotation("DOMWebSocket", annotationContents.c_str());
+  }
 
   event_queue_->Dispatch(
       MakeGarbageCollected<CloseEvent>(was_clean, code, reason));

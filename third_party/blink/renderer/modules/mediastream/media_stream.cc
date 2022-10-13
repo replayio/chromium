@@ -509,9 +509,9 @@ void MediaStream::RemoveTrackByComponentAndFireEvents(
   // Fire events synchronously or asynchronously.
   if (event_timing == DispatchEventTiming::kImmediately) {
     DispatchEvent(*MakeGarbageCollected<MediaStreamTrackEvent>(
-        event_type_names::kRemovetrack, track));
+        event_type_names::kRemovetrack, track), "MediaStream::RemoveTrackByComponentAndFireEvents #1");
     if (became_inactive)
-      DispatchEvent(*Event::Create(event_type_names::kInactive));
+      DispatchEvent(*Event::Create(event_type_names::kInactive), "MediaStream::RemoveTrackByComponentAndFireEvents #2");
   } else {
     ScheduleDispatchEvent(MakeGarbageCollected<MediaStreamTrackEvent>(
         event_type_names::kRemovetrack, track));
@@ -543,9 +543,9 @@ void MediaStream::AddTrackAndFireEvents(MediaStreamTrack* track,
   // Fire events synchronously or asynchronously.
   if (event_timing == DispatchEventTiming::kImmediately) {
     DispatchEvent(*MakeGarbageCollected<MediaStreamTrackEvent>(
-        event_type_names::kAddtrack, track));
+        event_type_names::kAddtrack, track), "MediaStream::AddTrackAndFireEvents #1");
     if (became_active)
-      DispatchEvent(*Event::Create(event_type_names::kActive));
+      DispatchEvent(*Event::Create(event_type_names::kActive), "MediaStream::AddTrackAndFireEvents #2");
   } else {
     ScheduleDispatchEvent(MakeGarbageCollected<MediaStreamTrackEvent>(
         event_type_names::kAddtrack, track));
@@ -576,7 +576,7 @@ void MediaStream::ScheduledEventTimerFired(TimerBase*) {
 
   HeapVector<Member<Event>>::iterator it = events.begin();
   for (; it != events.end(); ++it)
-    DispatchEvent(*it->Release());
+    DispatchEvent(*it->Release(), "MediaStream::ScheduledEventTimerFired");
 
   events.clear();
 }

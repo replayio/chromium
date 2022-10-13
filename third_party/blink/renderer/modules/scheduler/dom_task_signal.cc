@@ -126,7 +126,8 @@ void DOMTaskSignal::SignalPriorityChange(const AtomicString& priority,
   auto* init = TaskPriorityChangeEventInit::Create();
   init->setPreviousPriority(previous_priority);
   DispatchEvent(*TaskPriorityChangeEvent::Create(
-      event_type_names::kPrioritychange, init));
+      event_type_names::kPrioritychange, init),
+                "DOMTaskSignal::SignalPriorityChange");
 
   if (auto* source_signal_manager = DynamicTo<SourceSignalCompositionManager>(
           *priority_composition_manager_.Get())) {
