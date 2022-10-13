@@ -34,6 +34,7 @@
 
 #include "base/debug/alias.h"
 #include "base/feature_list.h"
+#include "base/no_destructor.h"
 #include "base/timer/elapsed_timer.h"
 #include "base/trace_event/process_memory_dump.h"
 #include "base/trace_event/trace_event.h"
@@ -51,6 +52,7 @@
 #include "third_party/blink/renderer/platform/fonts/font_platform_data_cache.h"
 #include "third_party/blink/renderer/platform/fonts/font_unique_name_lookup.h"
 #include "third_party/blink/renderer/platform/fonts/simple_font_data.h"
+#include "third_party/blink/renderer/platform/heap/persistent.h"
 #include "third_party/blink/renderer/platform/heap/thread_state.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/web_memory_allocator_dump.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/web_process_memory_dump.h"
@@ -72,6 +74,18 @@ extern const char kNotoColorEmojiCompat[] = "Noto Color Emoji Compat";
 #endif
 
 SkFontMgr* FontCache::static_font_manager_ = nullptr;
+
+namespace {
+
+Persistent<SimpleFontData>& ReplayLastResortSimpleFontDataStorage() {
+  // M123 moved FontData to Oilpan, so the retaining reference has to be a GC
+  // root: a raw pointer here would compile and let the font be collected,
+  // which is the opposite of what this storage exists for.
+  static base::NoDestructor<Persistent<SimpleFontData>> font_data;
+  return *font_data;
+}
+
+}  // namespace
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 float FontCache::device_scale_factor_ = 1.0;
@@ -221,6 +235,20 @@ String FontCache::FirstAvailableOrFirst(const String& families) {
   // setting change/script.
   return String::FromUTF8(
       gfx::FontList::FirstAvailableOrFirst(families.Utf8().c_str()));
+}
+
+void FontCache::WarmReplayLastResortFont() {
+  Persistent<SimpleFontData>& font_data =
+      ReplayLastResortSimpleFontDataStorage();
+  if (font_data)
+    return;
+  // M123 dropped the ShouldRetain parameter; under Oilpan the reference above
+  // is the retention.
+  font_data = FontCache::Get().GetLastResortFallbackFont(FontDescription());
+}
+
+const SimpleFontData* FontCache::ReplayLastResortSimpleFontData() {
+  return ReplayLastResortSimpleFontDataStorage().Get();
 }
 
 const SimpleFontData* FontCache::FallbackFontForCharacter(

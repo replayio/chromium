@@ -918,6 +918,8 @@ class CORE_EXPORT LocalFrame final
   // Can only be called while the frame is not detached.
   const mojom::RendererContentSettingsPtr& GetContentSettings();
 
+  void RegisterRecordReplayAuthTokenObserver();
+  
  private:
   friend class FrameNavigationDisabler;
   // LocalFrameMojoHandler is a part of LocalFrame.
