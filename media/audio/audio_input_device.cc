@@ -19,6 +19,7 @@
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/record_replay.h"
 #include "base/strings/stringprintf.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/time/time.h"
@@ -98,6 +99,7 @@ class AudioInputDevice::AudioThreadCallback
   size_t current_segment_id_;
   uint32_t last_buffer_id_;
   std::vector<std::unique_ptr<const media::AudioBus>> audio_buses_;
+  std::unique_ptr<media::AudioBus> capture_bus_;
   raw_ptr<CaptureCallback> capture_callback_;
 
   // Used for informing AudioInputDevice that we have gotten data, i.e. the
@@ -433,6 +435,9 @@ void AudioInputDevice::AudioThreadCallback::MapSharedMemory() {
   }
   CHECK_EQ(span_reader.remaining(), 0u);
 
+  if (recordreplay::IsRecordingOrReplaying())
+    capture_bus_ = media::AudioBus::Create(audio_parameters_);
+
   // Indicate that browser side capture initialization has succeeded and IPC
   // channel initialized. This effectively completes the
   // AudioCapturerSource::Start()' phase as far as the caller of that function
@@ -449,16 +454,32 @@ void AudioInputDevice::AudioThreadCallback::Process(uint32_t pending_data) {
   span = span.subspan(current_segment_id_ * segment_length_, segment_length_);
   AudioInputBuffer* buffer = reinterpret_cast<AudioInputBuffer*>(span.data());
 
+  // Use pre-allocated audio bus wrapping existing block of shared memory.
+  const media::AudioBus* audio_bus = audio_buses_[current_segment_id_].get();
+  AudioInputBufferParameters params = buffer->params;
+  if (recordreplay::IsRecordingOrReplaying()) {
+    if (recordreplay::IsRecording())
+      audio_bus->CopyTo(capture_bus_.get());
+    recordreplay::RecordReplayBytes("AudioInputDevice::Process params", &params,
+                                    sizeof(params));
+    for (int ch = 0; ch < capture_bus_->channels(); ++ch) {
+      recordreplay::RecordReplayBytes(
+          "AudioInputDevice::Process", capture_bus_->channel(ch),
+          static_cast<size_t>(capture_bus_->frames()) * sizeof(float));
+    }
+    audio_bus = capture_bus_.get();
+  }
+
   // Usually this will be equal but in the case of low sample rate (e.g. 8kHz,
   // the buffer may be bigger (on mac at least)).
-  DCHECK_GE(buffer->params.size,
+  DCHECK_GE(params.size,
             segment_length_ - sizeof(AudioInputBufferParameters));
 
   // Verify correct sequence.
-  if (buffer->params.id != last_buffer_id_ + 1) {
+  if (params.id != last_buffer_id_ + 1) {
     std::string message = base::StringPrintf(
         "Incorrect buffer sequence. Expected = %u. Actual = %u.",
-        last_buffer_id_ + 1, buffer->params.id);
+        last_buffer_id_ + 1, params.id);
     LOG(ERROR) << message;
     capture_callback_->OnCaptureError(
         media::AudioCapturerSource::ErrorCode::kUnknown, message);
@@ -471,10 +492,7 @@ void AudioInputDevice::AudioThreadCallback::Process(uint32_t pending_data) {
     capture_callback_->OnCaptureError(
         media::AudioCapturerSource::ErrorCode::kUnknown, message);
   }
-  last_buffer_id_ = buffer->params.id;
-
-  // Use pre-allocated audio bus wrapping existing block of shared memory.
-  const media::AudioBus* audio_bus = audio_buses_[current_segment_id_].get();
+  last_buffer_id_ = params.id;
 
   // Regularly inform that we have gotten data.
   frames_since_last_got_data_callback_ += audio_bus->frames();
@@ -488,18 +506,18 @@ void AudioInputDevice::AudioThreadCallback::Process(uint32_t pending_data) {
   // the audio delay measurement.
   // TODO(olka, tommi): Take advantage of |capture_time| in the renderer.
   const base::TimeTicks capture_time =
-      base::TimeTicks() + base::Microseconds(buffer->params.capture_time_us);
+      base::TimeTicks() + base::Microseconds(params.capture_time_us);
   const base::TimeTicks now_time = base::TimeTicks::Now();
   DCHECK_GE(now_time, capture_time);
 
   AudioGlitchInfo glitch_info{
-      .duration = base::Microseconds(buffer->params.glitch_duration_us),
-      .count = buffer->params.glitch_count};
+      .duration = base::Microseconds(params.glitch_duration_us),
+      .count = params.glitch_count};
   base::TimeDelta delay = now_time - capture_time;
   stats_reporter_.ReportCallback(delay, glitch_info);
 
   capture_callback_->Capture(audio_bus, capture_time, glitch_info,
-                             buffer->params.volume);
+                             params.volume);
   if (confirm_reads_via_shmem_) {
     // Use memory_order_release to create a memory barrier that ensures that
     // callback_capture_->Capture() doesn't get moved to after has_unread_data
