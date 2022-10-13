@@ -66,6 +66,11 @@ ClassicPendingScript* ClassicPendingScript::Fetch(
     ScriptElementBase* element,
     FetchParameters::DeferOption defer,
     scheduler::TaskAttributionInfo* parent_task) {
+
+  // https://linear.app/replay/issue/RUN-820
+  recordreplay::Assert("[RUN-820] ClassicPendingScript::Fetch #1 url=%s",
+    url.GetString().Utf8().c_str());
+
   ExecutionContext* context = element_document.GetExecutionContext();
   FetchParameters params(options.CreateFetchParameters(
       url, context->GetSecurityOrigin(), context->GetCurrentWorld(),
@@ -539,6 +544,12 @@ void ClassicPendingScript::AdvanceReadyState(ReadyState new_ready_state) {
   DCHECK(!StateIsReady(ready_state_));
 
   ready_state_ = new_ready_state;
+
+  if (IsReady()) {
+    record_replay_dependency_node_ids_.push_back(
+      recordreplay::NewDependencyGraphNode("{\"kind\":\"pendingScriptReady\"}")
+    );
+  }
 
   // Did we transition into a 'ready' state?
   if (IsReady() && IsWatchingForLoad())
