@@ -25,6 +25,7 @@
 #include "base/memory/safe_ref.h"
 #include "base/observer_list.h"
 #include "base/process/kill.h"
+#include "base/record_replay.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -2307,7 +2308,7 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
   // the user is trying to move the mouse to the back button.
   base::TimeTicks last_back_navigation_hint_time_ = base::TimeTicks::Min();
 
-  std::unique_ptr<power_scheduler::PowerModeVoter> audible_power_mode_voter_;
+  recordreplay::unique_leaky_ptr<power_scheduler::PowerModeVoter> audible_power_mode_voter_;
 
   viz::FrameSinkId xr_render_target_;
 
@@ -2347,6 +2348,8 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
   // Counts the number of open scopes that disallow custom cursors in this web
   // contents. Custom cursors are allowed if this is 0.
   int disallow_custom_cursor_scope_count_ = 0;
+
+  bool record_replay_for_recording_ = false;
 
   base::WeakPtrFactory<WebContentsImpl> loading_weak_factory_{this};
   base::WeakPtrFactory<WebContentsImpl> weak_factory_{this};
