@@ -74,6 +74,7 @@ void FrameConsole::ReportMessageToClient(
     return;
 
   String url = location->Url();
+
   String stack_trace;
   if (source == mojom::blink::ConsoleMessageSource::kConsoleApi) {
     if (!frame_->GetPage())
