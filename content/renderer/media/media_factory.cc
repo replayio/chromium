@@ -364,6 +364,11 @@ std::unique_ptr<blink::WebMediaPlayer> MediaFactory::CreateMediaPlayer(
     scoped_refptr<base::SingleThreadTaskRunner>
         main_thread_compositor_task_runner,
     scoped_refptr<base::TaskRunner> compositor_worker_task_runner) {
+  // Media playback is not supported when recording/replaying.
+  if (recordreplay::IsRecordingOrReplaying("no-media")) {
+    return nullptr;
+  }
+
   blink::WebLocalFrame* web_frame = render_frame_->GetWebFrame();
   auto* delegate = GetWebMediaPlayerDelegate();
 

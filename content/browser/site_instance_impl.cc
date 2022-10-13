@@ -590,6 +590,14 @@ void SiteInstanceImpl::PreventAssociationWithSpareProcess() {
   can_associate_with_spare_process_ = false;
 }
 
+void SiteInstanceImpl::RecordReplaySetForRecording() {
+  record_replay_for_recording_ = true;
+}
+
+bool SiteInstanceImpl::RecordReplayIsForRecording() {
+  return record_replay_for_recording_;
+}
+
 void SiteInstanceImpl::SetSite(const UrlInfo& url_info) {
   const GURL& url = url_info.url;
   // TODO(creis): Consider calling ShouldAssignSiteForURL internally, rather
@@ -1116,6 +1124,10 @@ bool SiteInstanceImpl::IsFixedStoragePartition() {
     CHECK(is_fixed_storage_partition);
   }
   return is_fixed_storage_partition;
+}
+
+bool SiteInstanceImpl::RecordReplayForRecording() {
+  return record_replay_for_recording_;
 }
 
 bool SiteInstanceImpl::IsJitDisabled() {
