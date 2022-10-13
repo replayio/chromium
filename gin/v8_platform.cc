@@ -15,6 +15,7 @@
 #include "base/memory/nonscannable_memory.h"
 #include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
+#include "base/record_replay.h"
 #include "base/system/sys_info.h"
 #include "base/task/post_job.h"
 #include "base/task/task_traits.h"
@@ -436,7 +437,10 @@ double V8Platform::MonotonicallyIncreasingTime() {
       static_cast<double>(base::Time::kMicrosecondsPerSecond);
 }
 
+extern "C" void V8RecordReplayAssert(const char* format, ...);
+
 double V8Platform::CurrentClockTimeMillis() {
+  V8RecordReplayAssert("[RUN-1348-2017] V8Platform::CurrentClockTimeMillis");
   return static_cast<double>(time_clamper_.ClampToMillis(base::Time::Now()));
 }
 
