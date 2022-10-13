@@ -195,6 +195,12 @@ const char kChromeUIPrivacySandboxManageTopicsLearnMoreURL[] =
 const char kChromeUIQuitHost[] = "quit";
 const char kChromeUIQuitURL[] = "chrome://quit/";
 const char kChromeUIQuotaInternalsHost[] = "quota-internals";
+// recordreplay
+const char kChromeUIRecordReplayHost[] = "recordreplay";
+const char kChromeUIRecordReplayIconHost[] = "recordreplayicon";
+const char kChromeUIRecordReplayPageHost[] = "recordreplay";
+const char kChromeUIRecordReplayPageURL[] = "chrome://recordreplay/";
+// /recordreplay
 const char kChromeUIResetPasswordHost[] = "reset-password";
 const char kChromeUIResetPasswordURL[] = "chrome://reset-password/";
 const char kChromeUIRestartHost[] = "restart";

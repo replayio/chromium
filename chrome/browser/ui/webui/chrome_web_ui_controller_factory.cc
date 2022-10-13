@@ -55,6 +55,7 @@
 #include "chrome/browser/ui/webui/policy/policy_ui.h"
 #include "chrome/browser/ui/webui/predictors/predictors_ui.h"
 #include "chrome/browser/ui/webui/privacy_sandbox/privacy_sandbox_internals_ui.h"
+#include "chrome/browser/ui/webui/record_replay/record_replay_ui.h"
 #include "chrome/browser/ui/webui/segmentation_internals/segmentation_internals_ui.h"
 #include "chrome/browser/ui/webui/signin_internals_ui.h"
 #include "chrome/browser/ui/webui/suggest_internals/suggest_internals_ui.h"
@@ -838,6 +839,10 @@ WebUIFactoryFunction GetWebUIFactoryFunction(WebUI* web_ui,
     return &NewWebUI<privacy_sandbox_internals::PrivacySandboxInternalsUI>;
   }
 
+  // recordreplay
+  if (url.host_piece() == chrome::kChromeUIRecordReplayHost)
+    return &NewWebUI<RecordReplayUI>;
+  // /recordreplay
   return nullptr;
 }
 
@@ -952,7 +957,9 @@ bool ChromeWebUIControllerFactory::IsWebUIAllowedToMakeNetworkRequests(
       // https://crbug.com/831813
       origin.host() == chrome::kChromeUIInspectHost ||
       // https://crbug.com/859345
-      origin.host() == chrome::kChromeUIDownloadsHost;
+      origin.host() == chrome::kChromeUIDownloadsHost ||
+      // recordreplay
+      origin.host() == chrome::kChromeUIRecordReplayHost;
 }
 
 ChromeWebUIControllerFactory::ChromeWebUIControllerFactory() = default;
