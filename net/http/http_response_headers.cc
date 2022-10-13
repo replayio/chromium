@@ -37,6 +37,8 @@
 #include "net/log/net_log_capture_mode.h"
 #include "net/log/net_log_values.h"
 
+#include "base/record_replay.h"
+
 using base::Time;
 
 namespace net {
@@ -728,6 +730,13 @@ void HttpResponseHeaders::ParseStatusLine(
   raw_headers_.push_back(' ');
   raw_headers_.append(code, p);
   base::StringToInt(base::MakeStringPiece(code, p), &response_code_);
+
+  // There is currently a problem that happens sometimes while replaying where
+  // base::StringToInt malfunctions and returns zero given a valid numeric input.
+  // The underlying reason has not been identified (see backend issue 2078),
+  // and for now we workaround this by forcing the code to match when replaying.
+  response_code_ = recordreplay::RecordReplayValue("HttpResponseHeaders::ParseStatusLine response code",
+                                                   response_code_);
 
   // Skip whitespace.
   while (p < line_end && *p == ' ')
