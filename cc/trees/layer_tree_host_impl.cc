@@ -159,6 +159,8 @@
 #include "ui/gfx/skia_span_util.h"
 #include "ui/latency/latency_info.h"
 
+#include "base/record_replay.h"
+
 namespace cc {
 namespace {
 
@@ -627,6 +629,10 @@ LayerTreeHostImpl::LayerTreeHostImpl(
                               base::Unretained(this)),
           kHasInputResetDelay),
       contains_srgb_cache_(kContainsSrgbCacheSize) {
+
+  recordreplay::CommandDiagnostic(
+    "[RUN-2110-2761] LayerTreeHostImpl::Create %d", id);
+
   if (!settings_.trees_in_viz_in_viz_process) {
     image_animation_controller_ = std::make_unique<ImageAnimationController>(
         GetTaskRunner(), this, settings_.enable_image_animation_resync);
@@ -729,6 +735,10 @@ LayerTreeHostImpl::LayerTreeHostImpl(
 }
 
 LayerTreeHostImpl::~LayerTreeHostImpl() {
+  
+  recordreplay::CommandDiagnostic(
+    "[RUN-2110-2761] ~LayerTreeHostImpl %d", id());
+
   DCHECK(task_runner_provider_->IsImplThread());
   TRACE_EVENT0("cc", "LayerTreeHostImpl::~LayerTreeHostImpl()");
   TRACE_EVENT_INSTANT(
