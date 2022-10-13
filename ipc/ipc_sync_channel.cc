@@ -28,6 +28,8 @@
 #include "ipc/trace_ipc_message.h"
 #include "mojo/public/cpp/bindings/sync_event_watcher.h"
 
+#include "base/record_replay.h"
+
 using base::WaitableEvent;
 
 namespace IPC {
