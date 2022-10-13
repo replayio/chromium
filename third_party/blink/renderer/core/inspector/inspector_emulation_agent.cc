@@ -322,6 +322,10 @@ protocol::Response InspectorEmulationAgent::disable() {
   hardware_concurrency_override_.Clear();
   cpu_performance_override_.Clear();
   setUserAgentOverride(String(), std::nullopt, std::nullopt, nullptr);
+
+  recordreplay::Assert("[RUN-1537-1538] InspectorEmulationAgent::disable %d %d",
+                       !!locale_override_.Get().empty(),
+                       !!web_local_frame_);
   if (!locale_override_.Get().empty())
     setLocaleOverride(String());
   if (!web_local_frame_)
@@ -1056,9 +1060,14 @@ protocol::Response InspectorEmulationAgent::setLocaleOverride(
     return protocol::Response::ServerError(
         "Locale override is only available to trusted clients");
   }
+  recordreplay::Assert(
+      "[RUN-1537-1538] InspectorEmulationAgent::setLocaleOverride A");
   String locale = maybe_locale.value_or(String());
   String error = LocaleController::instance().SetLocaleOverride(
       locale, locale_override_.Get().empty());
+  recordreplay::Assert(
+      "[RUN-1537-1538] InspectorEmulationAgent::setLocaleOverride B %d %s",
+      error.empty(), locale.Utf8().c_str());
   if (!error.empty())
     return protocol::Response::ServerError(error.Utf8());
   locale_override_.Set(locale);
