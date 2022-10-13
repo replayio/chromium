@@ -37,6 +37,8 @@ class IdTargetObserverRegistry;
 
 class CORE_EXPORT IdTargetObserver : public GarbageCollected<IdTargetObserver> {
  public:
+  HAS_RECORD_REPLAY_ID();
+
   virtual ~IdTargetObserver();
   virtual void Trace(Visitor*) const;
   virtual void IdTargetChanged() = 0;

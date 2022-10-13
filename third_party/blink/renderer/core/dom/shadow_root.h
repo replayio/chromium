@@ -206,6 +206,10 @@ class CORE_EXPORT ShadowRoot final : public DocumentFragment,
 
   void Trace(Visitor*) const override;
 
+  int RecordReplayId() const {
+    return DocumentFragment::RecordReplayId();
+  }
+
  private:
   friend class ReferenceTargetIdObserver;
 

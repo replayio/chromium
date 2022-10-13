@@ -237,6 +237,15 @@ NodeRareData::EnsureInlineCSSStyleDeclaration(Element* owner_element) {
                                                 owner_element);
 }
 
+// Replay edit: the existing inline CSSOM wrapper, without creating one.
+// See Element::style(): replay-only scripts must not create blink API objects
+// unless they have explicitly diverged.
+CSSStyleDeclaration* NodeRareData::GetInlineCSSStyleDeclaration()
+    const {
+  return static_cast<InlineCSSStyleDeclaration*>(
+      GetField(FieldId::kCssomWrapper));
+}
+
 ShadowRoot* NodeRareData::GetShadowRoot() const {
   return static_cast<ShadowRoot*>(GetField(FieldId::kShadowRoot));
 }
