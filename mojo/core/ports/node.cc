@@ -27,6 +27,8 @@
 #include "mojo/core/ports/port_locker.h"
 #include "third_party/abseil-cpp/absl/container/inlined_vector.h"
 
+#include "base/record_replay.h"
+
 namespace mojo {
 namespace core {
 namespace ports {
@@ -44,7 +46,7 @@ constexpr size_t kRandomNameCacheSize = 256;
 // to collisions between independently generated names in different processes.
 class RandomNameGenerator {
  public:
-  RandomNameGenerator() = default;
+  RandomNameGenerator() : lock_("RandomNameGenerator.lock_") {}
 
   RandomNameGenerator(const RandomNameGenerator&) = delete;
   RandomNameGenerator& operator=(const RandomNameGenerator&) = delete;
@@ -98,7 +100,7 @@ void GenerateRandomPortName(PortName* name) {
 }  // namespace
 
 Node::Node(const NodeName& name, NodeDelegate* delegate)
-    : name_(name), delegate_(this, delegate) {}
+    : name_(name), delegate_(this, delegate), ports_lock_("Node.ports_lock_") {}
 
 Node::~Node() {
   if (!ports_.empty()) {
@@ -237,7 +239,19 @@ int Node::CreatePortPair(PortRef* port0_ref, PortRef* port1_ref) {
 
 int Node::SetUserData(const PortRef& port_ref,
                       scoped_refptr<UserData> user_data) {
+  // The user data might be cleared during destructors that run at
+  // non-deterministic points. Pass through events while taking the
+  // lock to avoid a warning.
+  if (recordreplay::AreEventsDisallowed()) {
+    recordreplay::BeginPassThroughEvents();
+  }
+
   SinglePortLocker locker(&port_ref);
+
+  if (recordreplay::AreEventsDisallowed()) {
+    recordreplay::EndPassThroughEvents();
+  }
+
   auto* port = locker.port();
   if (port->state == Port::kClosed) {
     return ERROR_PORT_STATE_UNEXPECTED;
@@ -262,6 +276,13 @@ int Node::GetUserData(const PortRef& port_ref,
 }
 
 int Node::ClosePort(const PortRef& port_ref) {
+  // The set of ports on a node should be the same when recording vs. replaying,
+  // so we refuse to close ports when events are disallowed and the calling
+  // code runs at non-deterministic points. This will cause ports to leak.
+  if (recordreplay::AreEventsDisallowed() &&
+      recordreplay::FeatureEnabled("leak-references", "Node::ClosePort")) {
+    return OK;
+  }
   std::vector<std::unique_ptr<UserMessageEvent>> undelivered_messages;
   NodeName peer_node_name;
   PortName peer_port_name;
@@ -302,6 +323,7 @@ int Node::ClosePort(const PortRef& port_ref) {
 
   ErasePort(port_ref.name());
 
+  recordreplay::Assert("[RUN-1307-1773] Node::ClosePort B %d %zu", was_initialized, undelivered_messages.size());
   if (was_initialized) {
     DVLOG(2) << "Sending ObserveClosure from " << port_ref.name() << "@"
              << name_ << " to " << peer_port_name << "@" << peer_node_name;
@@ -411,6 +433,16 @@ int Node::GetMessage(const PortRef& port_ref,
 
 int Node::SendUserMessage(const PortRef& port_ref,
                           std::unique_ptr<UserMessageEvent> message) {
+  if (recordreplay::IsRecordingOrReplaying("Node::SendUserMessage")) {
+    std::ostringstream ss;
+    ss << port_ref.name() << ",";
+    for (size_t i = 0; i < message->num_ports(); ++i) {
+      ss << message->ports()[i] << ",";
+    }
+    recordreplay::Assert("[RUN-2188-3122] Node::SendUserMessage %s",
+      ss.str().c_str());
+  }
+
   int rv = SendUserMessageInternal(port_ref, &message);
   if (rv != OK) {
     // If send failed, close all carried ports. Note that we're careful not to
@@ -932,6 +964,9 @@ int Node::OnObserveProxyAck(const PortRef& port_ref,
 
 int Node::OnObserveClosure(const PortRef& port_ref,
                            std::unique_ptr<ObserveClosureEvent> event) {
+  recordreplay::Assert("[RUN-549] Node::OnObserveClosure Start %lu %lu",
+                       event->port_name().v1, event->port_name().v2);
+
   // OK if the port doesn't exist, as it may have been closed already.
   if (!port_ref.is_valid()) {
     return OK;
@@ -1236,6 +1271,9 @@ int Node::OnUpdatePreviousPeer(const PortRef& port_ref,
 }
 
 int Node::AddPortWithName(const PortName& port_name, scoped_refptr<Port> port) {
+  recordreplay::Assert("[RUN-549] Node::AddPortWithName %lu %lu %lu %lu",
+                       name_.v1, name_.v2, port_name.v1, port_name.v2);
+
   PortLocker::AssertNoPortsLockedOnCurrentThread();
   base::AutoLock lock(ports_lock_);
   if (port->peer_port_name != kInvalidPortName) {
@@ -1251,6 +1289,9 @@ int Node::AddPortWithName(const PortName& port_name, scoped_refptr<Port> port) {
 }
 
 void Node::ErasePort(const PortName& port_name) {
+  recordreplay::Assert("[RUN-549] Node::ErasePort %lu %lu %lu %lu",
+                       name_.v1, name_.v2, port_name.v1, port_name.v2);
+
   PortLocker::AssertNoPortsLockedOnCurrentThread();
   scoped_refptr<Port> port;
   {
