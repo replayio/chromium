@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <utility>
+#include <sstream>
 
 #include "base/debug/dump_without_crashing.h"
 #include "base/logging.h"
@@ -552,6 +553,9 @@ void PaintArtifactCompositor::LayerizeGroup(
                 chunk_cursor->hit_test_data->scrolling_contents_cull_rect,
                 ComputeNeedsCompositedScrolling(artifact, chunk_cursor)});
       }
+#if !BUILDFLAG(IS_WIN) // RUN-2115
+      recordreplay::Assert("[RUN-1470-1471] PaintArtifactCompositor::LayerizeGroup %d", chunk_cursor->id);
+#endif
       pending_layers_.emplace_back(
           artifact, *chunk_cursor,
           ChunkCompositingType(artifact, *chunk_cursor));
@@ -877,6 +881,7 @@ void PaintArtifactCompositor::Update(
         tracks_raster_invalidations_, root_layer_->layer_tree_host());
 
     cc::Layer& layer = pending_layer.CcLayer();
+
     const auto& property_state = pending_layer.GetPropertyTreeState();
     const auto& transform = property_state.Transform();
     const auto& clip = property_state.Clip();
@@ -914,9 +919,14 @@ void PaintArtifactCompositor::Update(
     bool backface_hidden = transform.IsBackfaceHidden();
     layer.SetShouldCheckBackfaceVisibility(backface_hidden);
 
+    recordreplay::Assert("[RUN-1470-1471] PaintArtifactCompositor::Update %d",
+                         layer.subtree_property_changed());
+
     if (layer.subtree_property_changed())
       root_layer_->SetNeedsCommit();
   }
+
+  recordreplay::Assert("[RUN-657-1540] PaintArtifactCompositor::Update");
 
   root_layer_->layer_tree_host()->RegisterSelection(layer_selection);
 
