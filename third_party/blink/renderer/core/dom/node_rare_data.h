@@ -210,6 +210,10 @@ class CORE_EXPORT NodeRareData final : public GarbageCollected<NodeRareData> {
 
   RareDataUpdate<CSSStyleDeclaration> EnsureInlineCSSStyleDeclaration(
       Element* owner_element);
+  // Replay edit: the existing inline CSSOM wrapper, without creating one.
+  // See Element::style(): replay-only scripts must not create blink API
+  // objects unless they have explicitly diverged.
+  CSSStyleDeclaration* GetInlineCSSStyleDeclaration() const;
 
   ShadowRoot* GetShadowRoot() const;
   [[nodiscard]] RareDataUpdate<void> SetShadowRoot(ShadowRoot& shadow_root);
