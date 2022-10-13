@@ -28,6 +28,7 @@
 
 #include "third_party/blink/renderer/core/css/resolver/scoped_style_resolver.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/animation/document_timeline.h"
 #include "third_party/blink/renderer/core/css/cascade_layer_map.h"
 #include "third_party/blink/renderer/core/css/counter_style_map.h"
@@ -225,18 +226,26 @@ void ScopedStyleResolver::KeyframesRulesAdded(const TreeScope& tree_scope) {
 
 template <class Func>
 void ScopedStyleResolver::ForAllStylesheets(const Func& func) {
+  recordreplay::Assert("[RUN-2424-3232] ForAllStylesheets empty %d",
+                        style_sheets_.empty());
   if (style_sheets_.empty()) {
     return;
   }
 
   MatchRequest match_request{&scope_->RootNode()};
+  recordreplay::Assert("[RUN-2424-3233] ForAllStylesheets size %d",
+                        style_sheets_.size());
   for (auto sheet : style_sheets_) {
     match_request.AddRuleset(&sheet->Contents()->GetRuleSet(), sheet);
+    recordreplay::Assert("[RUN-2424-3234] ForAllStylesheets IsFull %d",
+                          match_request.IsFull());
     if (match_request.IsFull()) {
       func(match_request);
       match_request.ClearAfterMatching();
     }
   }
+  recordreplay::Assert("[RUN-2424-3235] ForAllStylesheets IsEmpty %d",
+                        !match_request.IsEmpty());
   if (!match_request.IsEmpty()) {
     func(match_request);
   }

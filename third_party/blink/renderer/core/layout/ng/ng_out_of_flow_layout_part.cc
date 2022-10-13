@@ -777,6 +777,8 @@ void NGOutOfFlowLayoutPart::LayoutCandidates(
       container_builder_->GetWritingDirection(), container_builder_->Size());
   const NGFragmentItemsBuilder::ItemWithOffsetList* items = nullptr;
   absl::optional<NGLogicalAnchorQueryMap> anchor_queries;
+  recordreplay::Assert("[RUN-1239] NGOutOfFlowLayoutPart::LayoutCandidates %d",
+                       candidates->size());
   while (candidates->size() > 0) {
     if (!has_block_fragmentation_ ||
         container_builder_->IsInitialColumnBalancingPass())
@@ -1653,6 +1655,13 @@ NGOutOfFlowLayoutPart::TryCalculateOffset(
       node_info.container_physical_content_size.ConvertToLogical(
           candidate_writing_direction.GetWritingMode());
 
+  recordreplay::Assert(
+      "[RUN-1239-1435] NGOutOfFlowLayoutPart::TryCalculateOffset %d %d %d %s",
+      node_info.container_physical_content_size.width.RawValue(),
+      node_info.container_physical_content_size.height.RawValue(),
+      container_content_size_in_candidate_writing_mode.block_size.RawValue(),
+      node_info.node.ToString().Utf8().c_str());
+
   // Determine if we need to actually run the full OOF-positioned sizing, and
   // positioning algorithm.
   //
@@ -1668,6 +1677,7 @@ NGOutOfFlowLayoutPart::TryCalculateOffset(
     if (const NGLayoutResult* cached_result =
             node_info.node.CachedLayoutResultForOutOfFlowPositioned(
                 container_content_size_in_candidate_writing_mode)) {
+      recordreplay::Assert("[RUN-1239] NGOutOfFlowLayoutPart::TryCalculateOffset B");
       OffsetInfo offset_info;
       offset_info.initial_layout_result = cached_result;
       offset_info.has_cached_layout_result = true;
@@ -1734,6 +1744,13 @@ NGOutOfFlowLayoutPart::TryCalculateOffset(
           &node_dimensions);
 
   // Check if the inline dimension fits.
+  recordreplay::Assert(
+      "[RUN-1239] NGOutOfFlowLayoutPart::TryCalculateOffset C %d %d",
+      try_fit_available_space,
+      node_dimensions.MarginBoxInlineStart() <
+              computed_available_rect.offset.inline_offset ||
+          node_dimensions.MarginBoxInlineEnd() >
+              computed_available_rect.InlineEndOffset());
   if (try_fit_available_space) {
     if (node_dimensions.MarginBoxInlineStart() <
             computed_available_rect.offset.inline_offset ||
@@ -1745,6 +1762,9 @@ NGOutOfFlowLayoutPart::TryCalculateOffset(
 
   // We may have already pre-computed our block-dimensions when determining
   // our min/max sizes, only run if needed.
+  recordreplay::Assert(
+      "[RUN-1239] NGOutOfFlowLayoutPart::TryCalculateOffset D %d",
+      node_dimensions.size.block_size.RawValue());
   if (node_dimensions.size.block_size == kIndefiniteSize) {
     offset_info.initial_layout_result = ComputeOutOfFlowBlockDimensions(
         node_info.node, candidate_style, node_info.constraint_space, insets,
@@ -1909,6 +1929,10 @@ const NGLayoutResult* NGOutOfFlowLayoutPart::GenerateFragment(
     bool should_use_fixed_block_size,
     bool requires_content_before_breaking,
     RepeatMode repeat_mode) {
+  // https://linear.app/replay/issue/RUN-546
+  recordreplay::Assert("[RUN-546] NGOutOfFlowLayoutPart::GenerateFragment Start %d",
+                       node.GetLayoutBox()->RecordReplayId());
+
   const auto& style = node.Style();
 
   LayoutUnit inline_size = node_dimensions.size.inline_size;

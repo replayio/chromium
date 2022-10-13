@@ -54,6 +54,8 @@
 #include "third_party/blink/renderer/platform/wtf/text/character_names.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_buffer.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 namespace {
@@ -1264,6 +1266,7 @@ void NGInlineNode::ShapeText(NGInlineItemsData* data,
                              const String* previous_text,
                              const HeapVector<NGInlineItem>* previous_items,
                              const Font* override_font) const {
+
   TRACE_EVENT0("fonts", "NGInlineNode::ShapeText");
   const String& text_content = data->text_content;
   HeapVector<NGInlineItem>* items = &data->items;
@@ -1277,6 +1280,7 @@ void NGInlineNode::ShapeText(NGInlineItemsData* data,
 
   for (unsigned index = 0; index < items->size();) {
     NGInlineItem& start_item = (*items)[index];
+
     if (start_item.Type() != NGInlineItem::kText || !start_item.Length()) {
       index++;
       continue;
@@ -1333,8 +1337,10 @@ void NGInlineNode::ShapeText(NGInlineItemsData* data,
         }
         // Break shaping at ZWNJ so that it prevents kerning. ZWNJ is always at
         // the beginning of an item for this purpose; see NGInlineItemsBuilder.
-        if (text_content[item.StartOffset()] == kZeroWidthNonJoinerCharacter)
+        if (text_content[item.StartOffset()] == kZeroWidthNonJoinerCharacter) {
           break;
+        }
+
         end_offset = item.EndOffset();
         num_text_items++;
       } else if (item.Type() == NGInlineItem::kOpenTag) {
@@ -1507,6 +1513,7 @@ void NGInlineNode::ShapeTextIncludingFirstLine(
     NGInlineNodeData* data,
     const String* previous_text,
     const HeapVector<NGInlineItem>* previous_items) const {
+
   DCHECK_NE(new_state, NGInlineNodeData::kShapingNone);
   data->shaping_state_ = new_state;
 #if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID)
@@ -1517,6 +1524,7 @@ void NGInlineNode::ShapeTextIncludingFirstLine(
 #endif
 
   ShapeText(data, previous_text, previous_items);
+
   if (new_state == NGInlineNodeData::kShapingDone)
     ShapeTextForFirstLineIfNeeded(data);
 }
@@ -1923,6 +1931,7 @@ MinMaxSizesResult NGInlineNode::ComputeMinMaxSizes(
     WritingMode container_writing_mode,
     const NGConstraintSpace& space,
     const MinMaxSizesFloatInput& float_input) const {
+
   PrepareLayoutIfNeeded();
   ShapeTextOrDefer(space);
 

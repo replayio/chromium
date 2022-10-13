@@ -47,6 +47,7 @@ class CORE_EXPORT CachedMatchedProperties final
   // We use UntracedMember<> here because WeakMember<> would require using a
   // HeapHashSet which is slower to iterate.
   Vector<UntracedMember<CSSPropertyValueSet>> matched_properties;
+  HeapVector<Member<CSSPropertyValueSet>> replay_matched_properties_strong_;
   Vector<MatchedProperties::Data> matched_properties_types;
 
   scoped_refptr<const ComputedStyle> computed_style;
@@ -59,7 +60,9 @@ class CORE_EXPORT CachedMatchedProperties final
 
   bool DependenciesEqual(const StyleResolverState&);
 
-  void Trace(Visitor*) const {}
+  void Trace(Visitor* visitor) const {
+    visitor->Trace(replay_matched_properties_strong_);
+  }
 
   bool operator==(const MatchedPropertiesVector& properties);
   bool operator!=(const MatchedPropertiesVector& properties);

@@ -408,6 +408,11 @@ const NGLayoutResult* NGBlockNode::Layout(
     const NGBlockBreakToken* break_token,
     const NGEarlyBreak* early_break,
     const NGColumnSpannerPath* column_spanner_path) const {
+  recordreplay::Assert("[RUN-1855-1862] NGBlockNode::Layout %d space(%s)",
+    RecordReplayId(),
+    constraint_space.ToString().Ascii().c_str()
+  );
+
   // Use the old layout code and synthesize a fragment.
   if (!CanUseNewLayout())
     return RunLegacyLayout(constraint_space);
@@ -438,6 +443,7 @@ const NGLayoutResult* NGBlockNode::Layout(
   const NGLayoutResult* layout_result = box_->CachedLayoutResult(
       constraint_space, break_token, early_break, column_spanner_path,
       &fragment_geometry, &cache_status);
+
 
   if ((cache_status == NGLayoutCacheStatus::kHit ||
        cache_status == NGLayoutCacheStatus::kNeedsSimplifiedLayout) &&
@@ -787,6 +793,11 @@ const NGLayoutResult* NGBlockNode::CachedLayoutResultForOutOfFlowPositioned(
     LogicalSize container_content_size) const {
   DCHECK(IsOutOfFlowPositioned());
 
+  recordreplay::Assert(
+      "[RUN-1239-1384] NGBlockNode::CachedLayoutResultForOutOfFlowPositioned A %d %lu",
+      box_->NeedsLayout(),
+      box_->PhysicalFragmentCount());
+
   if (box_->NeedsLayout())
     return nullptr;
 
@@ -802,6 +813,11 @@ const NGLayoutResult* NGBlockNode::CachedLayoutResultForOutOfFlowPositioned(
 
   // The containing-block may have borders/scrollbars which might change
   // between passes affecting the final position.
+  
+  recordreplay::Assert(
+      "[RUN-1239-1384] NGBlockNode::CachedLayoutResultForOutOfFlowPositioned C %d",
+      cached_layout_result->CanUseOutOfFlowPositionedFirstTierCache());
+
   if (!cached_layout_result->CanUseOutOfFlowPositionedFirstTierCache())
     return nullptr;
 
@@ -811,6 +827,16 @@ const NGLayoutResult* NGBlockNode::CachedLayoutResultForOutOfFlowPositioned(
   // are in the correct writing mode (htb-ltr), and we have a fixed width.
   const NGConstraintSpace& space =
       cached_layout_result->GetConstraintSpaceForCaching();
+
+  recordreplay::Assert(
+      "[RUN-1239-1384] NGBlockNode::CachedLayoutResultForOutOfFlowPositioned D %d %d %d %d %d %d",
+      space.PercentageResolutionSize().inline_size.RawValue(),
+      space.PercentageResolutionSize().block_size.RawValue(),
+      container_content_size.inline_size.RawValue(),
+      container_content_size.block_size.RawValue(),
+      (Style().Left().IsAuto() && Style().Right().IsAuto()),
+      (Style().Top().IsAuto() && Style().Bottom().IsAuto()));
+
   if (space.PercentageResolutionSize() != container_content_size)
     return nullptr;
 
