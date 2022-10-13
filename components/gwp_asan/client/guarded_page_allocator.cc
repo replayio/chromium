@@ -35,6 +35,8 @@
 #include <pthread.h>
 #endif
 
+#include "base/record_replay.h"
+
 namespace gwp_asan {
 namespace internal {
 
@@ -292,6 +294,7 @@ GuardedPageAllocator::~GuardedPageAllocator() {
 #endif  // BUILDFLAG(USE_PARTITION_ALLOC_AS_GWP_ASAN_STORE)
 
 void* GuardedPageAllocator::MapRegionHint() const {
+  recordreplay::AutoDisallowEvents disallow("GuardedPageAllocator::MapRegionHint");
 #if defined(ARCH_CPU_64_BITS)
   // Mapping the GWP-ASan region in to the lower 32-bits of address space makes
   // it much more likely that a bad pointer dereference points into our region
