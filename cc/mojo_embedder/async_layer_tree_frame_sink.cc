@@ -23,6 +23,9 @@
 #include "components/viz/common/frame_sinks/begin_frame_args.h"
 #include "components/viz/common/hit_test/hit_test_region_list.h"
 #include "components/viz/common/quads/compositor_frame.h"
+#include "components/viz/service/display/record_replay_render.h"
+
+#include "base/record_replay.h"
 
 namespace cc {
 namespace mojo_embedder {
@@ -220,6 +223,10 @@ void AsyncLayerTreeFrameSink::SubmitCompositorFrame(
                          TRACE_EVENT_FLAG_FLOW_OUT, "step",
                          "SubmitHitTestData");
 
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    recordreplay::SubmitCompositorFrame(local_surface_id_, frame);
+  }
+
   power_mode_voter_.OnFrameProduced(frame.render_pass_list.back()->damage_rect,
                                     frame.device_scale_factor());
 
@@ -267,6 +274,14 @@ void AsyncLayerTreeFrameSink::OnBeginFrame(
     const viz::FrameTimingDetailsMap& timing_details,
     bool frame_ack,
     std::vector<viz::ReturnedResource> resources) {
+  // After diverging from the recording, the only paints we want to perform are
+  // repaints, which are triggered from the main thread rather than OnBeginFrame
+  // IPC messages. Ignore any IPC messages replayed from the recording so that
+  // we can get to the repainting frame faster.
+  if (recordreplay::HasDivergedFromRecording()) {
+    return;
+  }
+
   if (features::IsOnBeginFrameAcksEnabled()) {
     if (frame_ack) {
       DidReceiveCompositorFrameAck(std::move(resources));
