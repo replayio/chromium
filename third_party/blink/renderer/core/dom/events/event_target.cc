@@ -227,7 +227,11 @@ void EventTargetData::Trace(Visitor* visitor) const {
   visitor->Trace(event_listener_map);
 }
 
-EventTarget::EventTarget() = default;
+EventTarget::EventTarget() {
+  if (recordreplay::AreEventsDisallowed() &&
+      !recordreplay::HasDivergedFromRecording())
+    recordreplay::Warning("EventTargetCreatedWithEventsDisallowed");
+}
 
 EventTarget::~EventTarget() = default;
 
@@ -420,11 +424,18 @@ bool EventTarget::AddEventListenerInternal(
     const AtomicString& event_type,
     EventListener* listener,
     const AddEventListenerOptionsResolved* options) {
-  if (!listener)
-    return false;
+  REPLAY_ASSERT(
+      "[RUN-1260-1332] EventTarget::AddEventListenerInternal A %d %d %d %s",
+      !!listener, options->hasSignal() && options->signal()->aborted(),
+      !!GetExecutionContext(), event_type.GetString().Utf8().c_str());
 
-  if (options->hasSignal() && options->signal()->aborted())
+  if (!listener) {
     return false;
+  }
+
+  if (options->hasSignal() && options->signal()->aborted()) {
+    return false;
+  }
 
   // It doesn't make sense to add an event listener without an ExecutionContext
   // and some code below here assumes we have one.
@@ -440,6 +451,8 @@ bool EventTarget::AddEventListenerInternal(
         if (frame->IsInFencedFrameTree()) {
           window->PrintErrorMessage(
               "unload/beforeunload handlers are prohibited in fenced frames.");
+          REPLAY_ASSERT(
+              "[RUN-1260-1332] EventTarget::AddEventListenerInternal C");
           return false;
         }
       }
@@ -451,6 +464,7 @@ bool EventTarget::AddEventListenerInternal(
       !execution_context->IsFeatureEnabled(
           mojom::blink::PermissionsPolicyFeature::kUnload,
           ReportOptions::kReportOnFailure)) {
+    REPLAY_ASSERT("[RUN-1260-1332] EventTarget::AddEventListenerInternal B");
     return false;
   }
 
@@ -480,6 +494,10 @@ bool EventTarget::AddEventListenerInternal(
   RegisteredEventListener* registered_listener = nullptr;
   bool added = EnsureEventTargetData().event_listener_map.Add(
       event_type, listener, options, &registered_listener);
+
+  REPLAY_ASSERT(
+      "[RUN-1260-1332] EventTarget::AddEventListenerInternal D %d", added);
+
   if (added) {
     CHECK(registered_listener);
     if (options->hasSignal()) {
@@ -641,6 +659,13 @@ bool EventTarget::RemoveEventListenerInternal(
 
   RegisteredEventListener* registered_listener;
 
+  if (!recordreplay::AreEventsDisallowed()) {
+    // don't Assert during GC
+    REPLAY_ASSERT(
+        "[RUN-1260-1332] EventTarget::RemoveEventListenerInternal %s",
+        event_type.GetString().Utf8().c_str());
+  }
+
   if (!d->event_listener_map.Remove(event_type, listener, options,
                                     &registered_listener)) {
     return false;
@@ -717,6 +742,49 @@ bool EventTarget::dispatchEventForBindings(Event* event,
     return false;
 
   event->SetTrusted(false);
+  
+  if (recordreplay::IsRecordingOrReplaying()) {
+    if (event->IsMouseEvent() &&
+      (event->type() == event_type_names::kMouseup ||
+      event->type() == event_type_names::kMousedown ||
+      event->type() == event_type_names::kMousemove)
+    ) {
+      auto* mouseEvent = DynamicTo<MouseEvent>(event);
+      double x = 0, y = 0;
+      
+      if (const LocalDOMWindow* window = ExecutingWindow()) {
+        if (const LocalFrame* frame = window->GetFrame()) {
+          if (frame->GetPage()) {
+            x = mouseEvent->pageX();
+            y = mouseEvent->pageY();
+
+            if (!x && !y) {
+              if (auto* element = DynamicTo<Element>(ToNode())) {
+                auto* rect = element->getBoundingClientRect();
+                x = rect->x() + rect->width() / 2;
+                y = rect->y() + rect->height() / 2;
+              }
+            }
+
+            gfx::PointF pos(x, y);
+            gfx::PointF rootPos = frame->View()->ConvertToRootFrame(pos);
+            x = rootPos.x();
+            y = rootPos.y();
+          }
+        } 
+      }
+      recordreplay::OnMouseEvent(event->type().Utf8().c_str(), (size_t)std::round(x), (size_t)std::round(y), true);
+    } else if (event->IsKeyboardEvent() &&
+      (event->type() == event_type_names::kKeydown ||
+      event->type() == event_type_names::kKeyup ||
+      event->type() == event_type_names::kKeypress)
+    ) {
+      auto* keyEvent = DynamicTo<KeyboardEvent>(event);
+      recordreplay::OnKeyEvent(event->type().Utf8().c_str(),
+                               keyEvent->key().Utf8().c_str(),
+                               true);
+    }
+  }
 
   // Return whether the event was cancelled or not to JS not that it
   // might have actually been default handled; so check only against
@@ -928,6 +996,8 @@ bool EventTarget::FireEventListeners(Event& event,
                                 "event",
                                 IsInstrumentedForAsyncStack(event.type()));
 
+    recordreplay::UserEventProbe replayEvent(nullptr, event.type(), this);
+
     // To match Mozilla, the AT_TARGET phase fires both capturing and bubbling
     // event listeners, even though that violates some versions of the DOM spec.
     listener->Invoke(context, &event);
@@ -977,6 +1047,11 @@ Vector<AtomicString> EventTarget::EventTypes() {
 
 void EventTarget::RemoveAllEventListeners() {
   if (auto* d = GetEventTargetData()) {
+    if (!recordreplay::AreEventsDisallowed()) {
+      // don't Assert during GC
+      REPLAY_ASSERT("[RUN-1260-1332] EventTarget::RemoveAllEventListeners");
+    }
+
     d->event_listener_map.Clear();
   }
 }
