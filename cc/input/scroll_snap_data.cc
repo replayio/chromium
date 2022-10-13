@@ -18,6 +18,8 @@
 #include "cc/input/snap_selection_strategy.h"
 #include "ui/gfx/geometry/vector2d_f.h"
 
+#include "base/record_replay.h"
+
 namespace cc {
 namespace {
 
