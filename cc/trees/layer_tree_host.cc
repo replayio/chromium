@@ -83,6 +83,8 @@
 #include "ui/gfx/presentation_feedback.h"
 #include "ui/latency/latency_info.h"
 
+#include "base/record_replay.h"
+
 namespace {
 static base::AtomicSequenceNumber s_layer_tree_host_sequence_number;
 static base::AtomicSequenceNumber s_image_decode_sequence_number;
@@ -528,6 +530,7 @@ void LayerTreeHost::WaitForCommitCompletion(bool for_protected_sequence) const {
   // We should not be running code that modifies commit state just prior to the
   // impl commit.
   CHECK(!inside_will_commit_);
+
   if (commit_completion_event_) {
     TRACE_EVENT0("cc", "LayerTreeHost::WaitForCommitCompletion");
     commit_completion_event_->Wait();
