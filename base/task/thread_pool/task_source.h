@@ -209,9 +209,7 @@ class BASE_EXPORT TaskSource : public RefCountedThreadSafe<TaskSource> {
 
   // Returns a racy thread_type of the TaskSource. Can be accessed without a
   // Transaction but may return an outdated result.
-  ThreadType thread_type_racy() const {
-    return thread_type_racy_.load(std::memory_order_relaxed);
-  }
+  ThreadType thread_type_racy() const;
 
   // The following traits can be accessed without a Transaction because
   // they are never mutated.
