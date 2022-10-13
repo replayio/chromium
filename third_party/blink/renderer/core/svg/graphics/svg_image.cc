@@ -60,9 +60,11 @@
 #include "third_party/blink/renderer/platform/graphics/paint/paint_record.h"
 #include "third_party/blink/renderer/platform/graphics/paint/paint_record_builder.h"
 #include "third_party/blink/renderer/platform/graphics/paint/paint_shader.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
 #include "third_party/blink/renderer/platform/scheduler/public/main_thread.h"
 #include "third_party/blink/renderer/platform/scheduler/public/main_thread_scheduler.h"
+#include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/rect_conversions.h"
@@ -101,14 +103,41 @@ SVGImage::SVGImage(ImageObserver* observer, bool is_multipart)
                                  ->Scheduler()
                                  ->ToMainThreadScheduler()
                                  ->CreateAgentGroupScheduler()),
-      has_pending_timeline_rewind_(false) {}
+      has_pending_timeline_rewind_(false) {
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "SVGImage"))
+    replay_strong_image_observer_ = observer;
+}
 
 SVGImage::~SVGImage() {
   if (document_host_) {
-    // Store `document_host_` in a local variable and clear it so that
-    // SVGImageChromeClient knows we're destructed.
-    auto* document_host = document_host_.Release();
-    document_host->Shutdown();
+    // M125 moved the page teardown this guard protects out of here and into
+    // IsolatedSVGDocumentHost::Shutdown(), so the guard now wraps the call.
+    // Leak the host during a nondeterministic GC sweep instead of shutting it
+    // down: Shutdown() ends in Page::WillBeDestroyed(), which erases the page
+    // from AllPages() and would diverge membership at iteration time. Leaking
+    // the host keeps its Member<Page> reachable, so the Page is never
+    // collected and WillBeDestroyed() never runs.
+    if (recordreplay::AreEventsDisallowed("~SVGImage") &&
+        recordreplay::EnterLeakMemory("SVGImage")) {
+      DEFINE_STATIC_LOCAL(
+          Persistent<GCedHeapHashSet<Member<IsolatedSVGDocumentHost>>>,
+          leaked_document_hosts,
+          (MakeGarbageCollected<
+              GCedHeapHashSet<Member<IsolatedSVGDocumentHost>>>()));
+      leaked_document_hosts->insert(document_host_.Release());
+      // Null the dangling SVGImageChromeClient::image_ that the teardown
+      // would have cleared (UAF).
+      chrome_client_->ChromeDestroyed();
+      // Warn once if the leak grows large.
+      if (leaked_document_hosts->size() == 500) {
+        recordreplay::Warning("ManyLeakedSVGImagePages");
+      }
+    } else {
+      // Store `document_host_` in a local variable and clear it so that
+      // SVGImageChromeClient knows we're destructed.
+      auto* document_host = document_host_.Release();
+      document_host->Shutdown();
+    }
   }
 
   // Verify that page teardown destroyed the Chrome
