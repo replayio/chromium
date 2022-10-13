@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/platform/scheduler/public/event_loop.h"
 
+#include <optional>
 #include <utility>
 
 #include "base/memory/ptr_util.h"
@@ -35,7 +36,9 @@ EventLoop::~EventLoop() {
 }
 
 void EventLoop::EnqueueMicrotask(base::OnceClosure task) {
-  pending_microtasks_.push_back(std::move(task));
+  int record_replay_scheduled_node_id =
+    recordreplay::NewDependencyGraphNode("{\"kind\":\"enqueueMicrotask\"}");
+  pending_microtasks_.emplace_back(std::move(task), record_replay_scheduled_node_id);
   microtask_queue_->EnqueueMicrotask(isolate_, &EventLoop::RunPendingMicrotask,
                                      this);
 }
@@ -124,8 +127,18 @@ bool EventLoop::IsSchedulerAttachedForTest(FrameOrWorkerScheduler* scheduler) {
 void EventLoop::RunPendingMicrotask(void* data) {
   TRACE_EVENT0("renderer.scheduler", "RunPendingMicrotask");
   auto* self = static_cast<EventLoop*>(data);
-  base::OnceClosure task = std::move(self->pending_microtasks_.front());
+  base::OnceClosure task = std::move(self->pending_microtasks_.front().first);
+  int record_replay_scheduled_node_id = self->pending_microtasks_.front().second;
   self->pending_microtasks_.pop_front();
+
+  std::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    int node_id = recordreplay::NewDependencyGraphNode("{\"kind\":\"runMicrotask\"}");
+    recordreplay::AddDependencyGraphEdge(record_replay_scheduled_node_id, node_id,
+                                         "{\"kind\":\"scheduler\"}");
+    execute.emplace(node_id);
+  }
+
   std::move(task).Run();
 }
 
