@@ -30,6 +30,8 @@
 
 #include "base/bit_cast.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 namespace internal {

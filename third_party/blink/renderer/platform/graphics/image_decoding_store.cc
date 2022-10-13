@@ -31,13 +31,18 @@
 #include "third_party/blink/renderer/platform/graphics/image_frame_generator.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
+#include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 #include "third_party/blink/renderer/platform/wtf/threading.h"
+
+#include <atomic>
 
 namespace blink {
 
 namespace {
 
 static const size_t kDefaultMaxTotalSizeOfHeapEntries = 32 * 1024 * 1024;
+
+static std::atomic<bool> gHasInstance{false};
 
 }  // namespace
 
@@ -48,7 +53,10 @@ ImageDecodingStore::ImageDecodingStore()
           FROM_HERE,
           base::MemoryPressureListenerTag::kImageDecodingStore,
           blink::BindRepeating(&ImageDecodingStore::OnMemoryPressure,
-                               blink::Unretained(this))) {}
+                               blink::Unretained(this))) {
+  REPLAY_ASSERT("[TT-1524-1526] ImageDecodingStore::ImageDecodingStore");
+  gHasInstance = true;
+}
 
 ImageDecodingStore::~ImageDecodingStore() {
 #if DCHECK_IS_ON()
@@ -62,6 +70,10 @@ ImageDecodingStore::~ImageDecodingStore() {
 ImageDecodingStore& ImageDecodingStore::Instance() {
   DEFINE_THREAD_SAFE_STATIC_LOCAL(ImageDecodingStore, store, ());
   return store;
+}
+
+bool ImageDecodingStore::HasInstance() {
+  return gHasInstance;
 }
 
 bool ImageDecodingStore::LockDecoder(

@@ -175,7 +175,7 @@ class PLATFORM_EXPORT ImageFrameGenerator final
 
   struct ClientLock {
     int ref_count = 0;
-    base::Lock lock;
+    base::Lock lock{"ImageFrameGenerator::ClientLock"};
   };
 
   mutable base::Lock generator_lock_;
