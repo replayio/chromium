@@ -11,8 +11,9 @@
 namespace blink {
 
 DisplayItemList::~DisplayItemList() {
-  for (auto& item : *this)
+  for (auto& item : *this) {
     item.Destruct();
+  }
 }
 
 #if DCHECK_IS_ON()

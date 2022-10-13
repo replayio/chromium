@@ -60,15 +60,24 @@ class PLATFORM_EXPORT AgentGroupSchedulerImpl : public AgentGroupScheduler {
 
   void Dispose();
 
+  int RecordReplayId() const { return record_replay_id_; }
+
+  void RemoveAgent(Agent* agent);
+
  private:
   scoped_refptr<MainThreadTaskQueue> default_task_queue_;
   scoped_refptr<base::SingleThreadTaskRunner> default_task_runner_;
   scoped_refptr<MainThreadTaskQueue> compositor_task_queue_;
   scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner_;
   MainThreadSchedulerImpl& main_thread_scheduler_;  // Not owned.
-  HeapHashSet<WeakMember<Agent>> agents_;
+  HeapHashSet<WeakMember<Agent>, WTF::MemberHashRecordReplayId<Agent>> agents_;
+  // Strong references kept while "leak-references" is on, so a replay sees the
+  // same agents the recording did.
+  HeapHashSet<Member<Agent>> replay_agents_strong_;
 
   BrowserInterfaceBrokerProxy broker_;
+
+  int record_replay_id_ = 0;
 };
 
 }  // namespace scheduler

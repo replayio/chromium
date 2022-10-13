@@ -164,6 +164,15 @@ class PLATFORM_EXPORT ParkableStringImpl final
     return &metadata_->digest_;
   }
 
+  // Record/replay diagnostics: a lock-free-to-consume snapshot of the state
+  // feeding |MaybeAgeOrParkString()|. Captured under |lock_|, no Assert inside.
+  struct AgeStateSnapshot {
+    int status;  // Status ordinal.
+    int age;     // Age ordinal.
+    int has_one_ref;  // 1/0, or -1 when |string_| is null.
+  };
+  AgeStateSnapshot CaptureAgeStateSnapshot();
+
  private:
   enum class State : uint8_t;
   enum class Status : uint8_t;

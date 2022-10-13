@@ -177,7 +177,7 @@ class PLATFORM_EXPORT ImageFrameGenerator final
 
   struct ClientLock {
     int ref_count = 0;
-    base::Lock lock;
+    base::Lock lock{"ImageFrameGenerator::ClientLock"};
   };
 
   // Note that it is necessary to use HashMap here to ensure that references

@@ -58,8 +58,13 @@ MemoryCache* ReplaceMemoryCacheForTesting(MemoryCache* cache) {
 }
 
 void MemoryCacheEntry::Trace(Visitor* visitor) const {
-  visitor->template RegisterWeakCallbackMethod<
-      MemoryCacheEntry, &MemoryCacheEntry::ClearResourceWeak>(this);
+  // Don't bother to register for tracing events if we're instrumented.
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "MemoryCacheEntry")) {
+    visitor->Trace(strong_resource_);
+  } else {
+    visitor->template RegisterWeakCallbackMethod<
+        MemoryCacheEntry, &MemoryCacheEntry::ClearResourceWeak>(this);
+  }
 }
 
 void MemoryCacheEntry::ClearResourceWeak(const LivenessBroker& info) {
@@ -363,6 +368,8 @@ void MemoryCache::EvictResources() {
 
 void MemoryCache::Prune() {
   TRACE_EVENT0("renderer", "MemoryCache::prune()");
+
+  recordreplay::Assert("[RUN-1975-2287] MemoryCache::Prune");
 
   if (in_prune_resources_)
     return;
