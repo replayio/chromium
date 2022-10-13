@@ -55,6 +55,7 @@
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
 #include "third_party/blink/renderer/platform/heap/prefinalizer.h"
+#include "third_party/blink/renderer/platform/heap/self_keep_alive.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_peer_connection_handler_client.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_session_description_request.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_void_request.h"
@@ -517,6 +518,12 @@ class MODULES_EXPORT RTCPeerConnection final
   // The same kind of map for webrtc::IceTransports.
   HeapHashMap<webrtc::IceTransportInterface*, WeakMember<RTCIceTransport>>
       ice_transports_by_native_transport_;
+  // Every RTCDtlsTransport in creation order, while recording or replaying.
+  // CloseInternal() closes these instead of walking
+  // dtls_transports_by_native_transport_, whose order follows the native
+  // transports' addresses and whose weak entries a GC that happens on one
+  // side only could drop.
+  HeapVector<Member<RTCDtlsTransport>> replay_strong_dtls_transports_;
 
   std::unique_ptr<RTCPeerConnectionHandler> peer_handler_;
 
@@ -570,6 +577,16 @@ class MODULES_EXPORT RTCPeerConnection final
   // globally. See https://w3c.github.io/webappsec-csp/#directive-webrtc
   // and https://w3c.github.io/webrtc-extensions/#ice-csp-modifications.
   bool are_ice_candidates_administratively_prohibited_ = false;
+
+  // While recording/replaying, a peer connection is never collected. The fork's
+  // HeapObserverSet keeps it while its context lives, but once the context is
+  // destroyed it is collected at a GC-dependent point, and its sweep tears down
+  // the RTCRtpSenders (removing their WebRTC audio sinks from the local tracks
+  // the capture thread delivers to) and the RTCPeerConnectionHandler
+  // (MediaStreamTrackMetrics sends RemoveTrack over mojo, and the native peer
+  // connection is released on the signaling thread), all with events
+  // disallowed.
+  SelfKeepAlive<RTCPeerConnection> replay_strong_self_;
 };
 
 }  // namespace blink

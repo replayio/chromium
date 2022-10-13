@@ -241,8 +241,8 @@ void MIDIPort::SetStates(PortState state, MIDIPortConnectionState connection) {
   state_ = state;
   connection_ = connection;
   if (access_ && access_->IsPageVisible()) {
-    DispatchEvent(*MIDIConnectionEvent::Create(this));
-    access_->DispatchEvent(*MIDIConnectionEvent::Create(this));
+    DispatchEvent(*MIDIConnectionEvent::Create(this), "MIDIPort::SetStates #1");
+    access_->DispatchEvent(*MIDIConnectionEvent::Create(this), "MIDIPort::SetStates #2");
   } else if (access_) {
     access_->BufferEvent(this, this);
     access_->BufferEvent(access_, this);

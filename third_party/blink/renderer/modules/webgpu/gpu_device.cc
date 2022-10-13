@@ -366,7 +366,7 @@ void GPUDevice::OnUncapturedError(wgpu::ErrorType errorType,
 
   GPUUncapturedErrorEvent* event =
       GPUUncapturedErrorEvent::Create(event_type_names::kUncapturederror, init);
-  DispatchEvent(*event);
+  DispatchEvent(*event, "GPUDevice::OnUncapturedError");
   if (!event->defaultPrevented()) {
     AddConsoleWarning(message);
   }
