@@ -701,6 +701,14 @@ WebGLRenderingContextBase::CreateWebGraphicsContext3DProvider(
     return nullptr;
   }
 
+  // WebGL contexts are not currently supported when recording/replaying.
+  if (recordreplay::IsRecordingOrReplaying("no-webgl")) {
+    host->HostDispatchEvent(WebGLContextEvent::Create(
+        event_type_names::kWebglcontextcreationerror,
+        "disabled when recording/replaying"));
+    return nullptr;
+  }
+
   // We create a context *before* checking whether WebGL is blocked. This is
   // because new context creation is effectively synchronized against the
   // browser having a working GPU process connection, and that is in turn

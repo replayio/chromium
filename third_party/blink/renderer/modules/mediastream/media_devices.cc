@@ -10,6 +10,7 @@
 #include "base/feature_list.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
+#include "base/record_replay.h"
 #include "base/strings/strcat.h"
 #include "base/uuid.h"
 #include "build/build_config.h"
@@ -453,11 +454,14 @@ ScriptPromise<IDLSequence<MediaDeviceInfo>> MediaDevices::enumerateDevices(
 
   enumerate_device_requests_.insert(result_tracker);
 
+  // There is no video capture while recording/replaying, so cameras are not
+  // listed.
+  const bool video_input = !recordreplay::IsRecordingOrReplaying("no-video");
   LocalFrame* frame = LocalDOMWindow::From(script_state)->GetFrame();
   GetDispatcherHost(frame).EnumerateDevices(
-      /*request_audio_input=*/true, /*request_video_input=*/true,
+      /*request_audio_input=*/true, /*request_video_input=*/video_input,
       /*request_audio_output=*/true,
-      /*request_video_input_capabilities=*/true,
+      /*request_video_input_capabilities=*/video_input,
       /*request_audio_input_capabilities=*/
       base::FeatureList::IsEnabled(kEnumerateDevicesRequestAudioCapabilities),
       BindOnce(&MediaDevices::DevicesEnumerated, WrapPersistent(this),
@@ -1203,7 +1207,7 @@ void MediaDevices::DispatchScheduledEvents() {
   events.swap(scheduled_events_);
 
   for (const auto& event : events) {
-    DispatchEvent(*event);
+    DispatchEvent(*event, "MediaDevices::DispatchScheduledEvents");
   }
 }
 
@@ -1249,8 +1253,9 @@ void MediaDevices::FinalizeStartObserving(
 
   current_device_infos_ = enumeration;
 
+  const bool video_input = !recordreplay::IsRecordingOrReplaying("no-video");
   GetDispatcherHost(window->GetFrame())
-      .AddMediaDevicesListener(true /* audio input */, true /* video input */,
+      .AddMediaDevicesListener(true /* audio input */, video_input,
                                true /* audio output */,
                                receiver_.BindNewPipeAndPassRemote(
                                    GetExecutionContext()->GetTaskRunner(
