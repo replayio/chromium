@@ -22,6 +22,7 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/strcat.h"
 #include "base/trace_event/trace_event.h"
+#include "base/values.h"
 #include "build/build_config.h"
 #include "components/download/public/common/download_stats.h"
 #include "content/browser/about_url_loader_factory.h"
@@ -122,6 +123,8 @@
 #if BUILDFLAG(ENABLE_PLUGINS)
 #include "content/public/browser/plugin_service.h"
 #endif
+
+#include "content/common/renderer.mojom.h"
 
 namespace content {
 
@@ -651,6 +654,11 @@ void NavigationURLLoaderImpl::Start() {
 
   CreateInterceptors();
   Restart();
+
+  // Send a message to the render process to trigger network monitor
+  // events for RecordReplay to observe.  Content processes are
+  // not recorded so this event will be lost otherwise.
+  base::Value::Dict dict;
 }
 
 void NavigationURLLoaderImpl::CreateInterceptors() {
