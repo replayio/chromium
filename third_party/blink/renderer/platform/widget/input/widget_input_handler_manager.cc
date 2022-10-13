@@ -246,6 +246,10 @@ WidgetInputHandlerManager::WidgetInputHandlerManager(
               ? compositor_thread_scheduler->InputTaskRunner()
               : nullptr),
       allow_scroll_resampling_(allow_scroll_resampling) {
+  if (recordreplay::IsRecordingOrReplaying()) {
+    record_replay_main_thread_default_task_runner_ =
+        base::SingleThreadTaskRunner::GetCurrentDefault();
+  }
 #if BUILDFLAG(IS_ANDROID)
   if (compositor_thread_default_task_runner_) {
     synchronous_compositor_registry_ =
@@ -276,7 +280,11 @@ void WidgetInputHandlerManager::InitInputHandler() {
   InputThreadTaskRunner()->PostTask(FROM_HERE, std::move(init_closure));
 }
 
-WidgetInputHandlerManager::~WidgetInputHandlerManager() = default;
+WidgetInputHandlerManager::~WidgetInputHandlerManager() {
+  REPLAY_ASSERT("WidgetInputHandlerManager::~WidgetInputHandlerManager");
+  // The leak-references guard that used to release response_power_mode_voter_
+  // here went away with the voter: M116 upstream removed power_scheduler.
+}
 
 void WidgetInputHandlerManager::AddInterface(
     mojo::PendingReceiver<mojom::blink::WidgetInputHandler> receiver,
@@ -962,11 +970,30 @@ void WidgetInputHandlerManager::DidHandleInputEventSentToCompositor(
       }
 
       if (!dropped_event_counts_timer_->IsRunning()) {
-        dropped_event_counts_timer_->Start(
-            FROM_HERE, kEventCountsTimerDelay,
-            base::BindOnce(
-                &WidgetInputHandlerManager::SendDroppedPointerDownCounts,
-                this));
+        base::OnceClosure send_counts;
+        if (recordreplay::IsRecordingOrReplaying()) {
+          // The timer fires on the compositor thread at a time that isn't
+          // ordered with the main thread, where WidgetBase::Shutdown's cleanup
+          // checks the manager's reference count. Drop the timer's reference
+          // on the main thread instead, in a task whose order there is
+          // replayed.
+          DCHECK(RecordReplayMainThreadDefaultTaskRunner());
+          send_counts = base::BindOnce(
+              [](scoped_refptr<WidgetInputHandlerManager> manager) {
+                manager->SendDroppedPointerDownCounts();
+                manager->RecordReplayMainThreadDefaultTaskRunner()->PostTask(
+                    FROM_HERE,
+                    base::BindOnce(
+                        [](scoped_refptr<WidgetInputHandlerManager>) {},
+                        std::move(manager)));
+              },
+              base::WrapRefCounted(this));
+        } else {
+          send_counts = base::BindOnce(
+              &WidgetInputHandlerManager::SendDroppedPointerDownCounts, this);
+        }
+        dropped_event_counts_timer_->Start(FROM_HERE, kEventCountsTimerDelay,
+                                           std::move(send_counts));
       }
     }
   }
