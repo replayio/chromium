@@ -11,6 +11,7 @@
 #include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/record_replay.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/trace_event/memory_allocator_dump.h"
@@ -19,6 +20,7 @@
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/platform/bindings/parkable_string.h"
+#include "third_party/blink/renderer/platform/bindings/parkable_string_record_replay.h"
 #include "third_party/blink/renderer/platform/disk_data_allocator.h"
 #include "third_party/blink/renderer/platform/instrumentation/memory_pressure_listener.h"
 #include "third_party/blink/renderer/platform/scheduler/public/main_thread.h"
@@ -45,7 +47,8 @@ struct ParkableStringManager::Statistics {
 namespace {
 
 bool CompressionEnabled() {
-  return base::FeatureList::IsEnabled(features::kCompressParkableStrings);
+  return base::FeatureList::IsEnabled(features::kCompressParkableStrings) &&
+         !recordreplay::IsRecordingOrReplaying("no-park-strings");
 }
 
 class OnPurgeMemoryListener : public GarbageCollected<OnPurgeMemoryListener>,
@@ -390,6 +393,7 @@ void ParkableStringManager::AgeStringsAndPark() {
 
   bool can_make_progress = false;
   for (ParkableStringImpl* str : unparked) {
+    AssertParkableStringAgeState(str);
     if (str->MaybeAgeOrParkString() ==
         ParkableStringImpl::AgeOrParkResult::kSuccessOrTransientFailure) {
       can_make_progress = true;
@@ -397,6 +401,7 @@ void ParkableStringManager::AgeStringsAndPark() {
   }
 
   for (ParkableStringImpl* str : parked) {
+    AssertParkableStringAgeState(str);
     if (str->MaybeAgeOrParkString() ==
         ParkableStringImpl::AgeOrParkResult::kSuccessOrTransientFailure) {
       can_make_progress = true;
@@ -413,6 +418,8 @@ void ParkableStringManager::AgeStringsAndPark() {
   // that this has to run when the idle tasks are not. As a consequence, it
   // is important to make sure that this will not reschedule tasks forever.
   bool reschedule = HasPendingWork() && can_make_progress;
+  recordreplay::Assert("ParkableStringManager::AgeStringsAndPark reschedule %d",
+                       reschedule);
   if (reschedule)
     ScheduleAgingTaskIfNeeded();
 }
