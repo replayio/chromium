@@ -25,6 +25,7 @@
 #include "base/debug/stack_trace.h"
 #include "base/feature_list.h"
 #include "base/memory/ptr_util.h"
+#include "base/record_replay.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/system/sys_info.h"
 #include "base/task/thread_pool/initialization_util.h"
@@ -227,6 +228,13 @@ RenderProcessImpl::RenderProcessImpl()
                      "--wasm-dynamic-tiering");
   SetV8FlagIfNotFeature(features::kWebAssemblyDynamicTiering,
                         "--no-wasm-dynamic-tiering");
+
+  // The recorder doesn't install handlers for fatal signals and treats every
+  // SIGSEGV as a crash, so when recording/replaying V8 keeps emitting the
+  // WebAssembly bounds checks instead of relying on the trap handler.
+  if (recordreplay::IsRecordingOrReplaying()) {
+    return;
+  }
 
 #if (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)) && defined(ARCH_CPU_X86_64)
   if (base::FeatureList::IsEnabled(features::kWebAssemblyTrapHandler)) {

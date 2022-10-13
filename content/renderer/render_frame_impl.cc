@@ -34,6 +34,7 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/observer_list.h"
 #include "base/process/process.h"
+#include "base/record_replay.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_piece.h"
@@ -253,6 +254,8 @@
 
 #include "content/renderer/java/gin_java_bridge_dispatcher.h"
 #endif
+
+#include "base/json/json_writer.h"
 
 using base::Time;
 using blink::ContextMenuData;
@@ -2091,6 +2094,10 @@ void RenderFrameImpl::Unload(
                routing_id_);
   DCHECK(!base::RunLoop::IsNestedOnCurrentThread());
 
+  recordreplay::AutoDependencyExecution execute(
+    recordreplay::NewDependencyGraphNode("{\"kind\":\"renderFrameUnload\"}")
+  );
+
   // Send an UpdateState message before we get deleted.
   // TODO(dcheng): Improve this comment to clarify why it's important to sent
   // state updates.
@@ -2578,6 +2585,16 @@ void RenderFrameImpl::CommitNavigation(
   DCHECK(!blink::IsRendererDebugURL(common_params->url));
   DCHECK(!NavigationTypeUtils::IsSameDocument(common_params->navigation_type));
   LogCommitHistograms(commit_params->commit_sent, is_main_frame_);
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "renderFrameNavigate");
+    info.Set("url", common_params->url.spec());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
 
   AssertNavigationCommits assert_navigation_commits(
       this, kMayReplaceInitialEmptyDocument);
@@ -4361,8 +4378,9 @@ void RenderFrameImpl::DidCreateScriptContext(v8::Local<v8::Context> context,
         context, std::move(mojo_js_interface_broker_));
   }
 
-  for (auto& observer : observers_)
+  for (auto& observer : observers_) {
     observer.DidCreateScriptContext(context, world_id);
+  }
 }
 
 void RenderFrameImpl::WillReleaseScriptContext(v8::Local<v8::Context> context,
@@ -4828,7 +4846,6 @@ void RenderFrameImpl::DidCommitNavigationInternal(
   auto params = MakeDidCommitProvisionalLoadParams(
       commit_type, transition, permissions_policy_header,
       document_policy_header, embedding_token);
-
   if (same_document_params) {
     GetFrameHost()->DidCommitSameDocumentNavigation(
         std::move(params), std::move(same_document_params));
@@ -5694,9 +5711,17 @@ void RenderFrameImpl::BeginNavigationInternal(
 
   int load_flags = info->url_request.GetLoadFlagsForWebUrlRequest();
   absl::optional<base::Value::Dict> initiator;
-  if (!info->devtools_initiator_info.IsNull()) {
+
+  // Devtools behavior can vary when replaying, so record/replay the contents
+  // of the initiator.
+  std::string initiator_string = info->devtools_initiator_info.IsNull()
+      ? std::string()
+      : info->devtools_initiator_info.Utf8();
+  recordreplay::RecordReplayString("devtools_initiator_info", initiator_string);
+
+  if (initiator_string.length()) {
     absl::optional<base::Value> initiator_value =
-        base::JSONReader::Read(info->devtools_initiator_info.Utf8());
+        base::JSONReader::Read(initiator_string);
     if (initiator_value && initiator_value->is_dict())
       initiator = std::move(*initiator_value).TakeDict();
   }
