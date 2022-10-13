@@ -290,6 +290,7 @@ PaintOpBuffer::~PaintOpBuffer() {
   // the backing buffer and allows immediate `ThreadCache` reuse of
   // `SkTextBlob` and `SkPathData` allocations.
   base::ScopedSafetyChecksExclusion excluded;
+  recordreplay::AutoDisallowEvents disallow("~PaintOpBuffer");
   DestroyOps();
   // Explicitly free `data_` before `excluded` goes out of scope, since member
   // destructors run after the destructor body exits.

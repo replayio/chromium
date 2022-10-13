@@ -27,6 +27,8 @@
 #include "third_party/perfetto/include/perfetto/tracing/track_event_args.h"
 #include "url/gurl.h"
 
+#include "base/record_replay.h"
+
 using base::AutoLock;
 
 namespace gpu {
@@ -126,6 +128,7 @@ GpuChannelHost::GpuChannelHost(
       client_type_(client_type),
       listener_(nullptr, base::OnTaskRunnerDeleter(io_thread_)),
       connection_tracker_(base::MakeRefCounted<ConnectionTracker>()),
+      deferred_message_lock_("GpuChannelHost.context_lock_"),
       sync_point_graph_validation_enabled_(
           features::IsSyncPointGraphValidationEnabled()) {
   if (features::IsLegacyIpcDisabled()) {
