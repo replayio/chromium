@@ -27,6 +27,7 @@
 
 #include "third_party/blink/renderer/core/html/parser/html_tokenizer.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/html/parser/html_entity_parser.h"
 #include "third_party/blink/renderer/core/html/parser/html_parser_idioms.h"
 #include "third_party/blink/renderer/core/html/parser/html_tree_builder.h"
@@ -146,10 +147,13 @@ HTMLTokenizer::HTMLTokenizer(const HTMLParserOptions& options)
     : track_attributes_ranges_(options.track_attributes_ranges),
       input_stream_preprocessor_(this),
       options_(options) {
+  recordreplay::RegisterPointer("HTMLTokenizer", this);
   Reset();
 }
 
-HTMLTokenizer::~HTMLTokenizer() = default;
+HTMLTokenizer::~HTMLTokenizer() {
+  recordreplay::UnregisterPointer(this);
+}
 
 void HTMLTokenizer::Reset() {
   token_.Clear();
