@@ -771,7 +771,7 @@ WebURLLoader::WebURLLoader(
                            std::move(url_loader_factory),
                            std::move(keep_alive_handle),
                            back_forward_cache_loader_helper)) {
-  recordreplay::RegisterPointer(this);
+  recordreplay::RegisterPointer("WebURLLoader", this);
 }
 
 WebURLLoader::WebURLLoader() {
