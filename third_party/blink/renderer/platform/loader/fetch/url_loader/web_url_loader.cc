@@ -775,7 +775,7 @@ WebURLLoader::WebURLLoader(
 }
 
 WebURLLoader::WebURLLoader() {
-  recordreplay::RegisterPointer(this);
+  recordreplay::RegisterPointer("WebURLLoader", this);
 }
 
 WebURLLoader::~WebURLLoader() {
