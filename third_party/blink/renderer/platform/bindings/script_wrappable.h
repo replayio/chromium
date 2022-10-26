@@ -148,7 +148,7 @@ class PLATFORM_EXPORT ScriptWrappable
 
  protected:
   ScriptWrappable() {
-    record_replay_id_ = recordreplay::NewIdMainThread("ScriptWrappable");
+    record_replay_id_ = recordreplay::NewIdAnyThread("ScriptWrappable");
   }
 
  private:

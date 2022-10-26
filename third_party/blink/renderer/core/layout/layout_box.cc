@@ -130,6 +130,7 @@ struct SameSizeAsLayoutBox : public LayoutBoxModelObject {
   void* pointers[4];
   Vector<scoped_refptr<const NGLayoutResult>, 1> layout_results;
   Persistent<void*> rare_data;
+  int record_replay_id;
 };
 
 ASSERT_SIZE(LayoutBox, SameSizeAsLayoutBox);

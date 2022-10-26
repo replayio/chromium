@@ -349,6 +349,8 @@ class CORE_EXPORT LayoutObject : public ImageResourceObserver,
 
   // End of DisplayItemClient methods.
 
+  int RecordReplayId() const { return record_replay_id_; }
+
   LayoutObject* Parent() const {
     NOT_DESTROYED();
     return parent_;
@@ -4285,8 +4287,6 @@ class CORE_EXPORT LayoutObject : public ImageResourceObserver,
     NOT_DESTROYED();
     bitfields_.SetNeedsSimplifiedNormalFlowLayout(b);
   }
-
-  int RecordReplayId() const { return record_replay_id_; }
 
  private:
   friend class LineLayoutItem;

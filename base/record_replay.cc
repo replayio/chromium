@@ -230,14 +230,17 @@ static int gNextMainThreadId = 1;
 
 int NewIdMainThread(const char* name) {
   if (IsRecordingOrReplaying()) {
-    CHECK(V8IsMainThread());
+    if (!V8IsMainThread()) {
+      fprintf(stderr, "NewIdMainThread not main thread: %s\n", name);
+      CHECK(V8IsMainThread());
+    }
     Assert("NewId %s", name);
     return gNextMainThreadId++;
   }
   return 0;
 }
 
-static std::atomic<int> gNextAnyThreadId = 1;
+static std::atomic<int> gNextAnyThreadId{1};
 
 int NewIdAnyThread(const char* name) {
   if (IsRecordingOrReplaying()) {

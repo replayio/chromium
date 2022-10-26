@@ -219,6 +219,7 @@ struct SameSizeAsLayoutObject : ImageResourceObserver, DisplayItemClient {
   // The following fields are in FragmentData.
   PhysicalOffset paint_offset_;
   std::unique_ptr<int> rare_data_;
+  int record_replay_id_;
 #if DCHECK_IS_ON()
   bool is_destroyed_;
 #endif
