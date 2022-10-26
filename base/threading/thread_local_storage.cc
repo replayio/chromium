@@ -257,6 +257,14 @@ TlsVectorEntry* ConstructTlsVector() {
 }
 
 void OnThreadExitInternal(TlsVectorEntry* tls_data) {
+  // Thread local value destructors do not run consistently when recording/replaying.
+  // When recording the current thread is no longer known and calls/locks/etc.
+  // made by the destructors cannot be recorded, and when replaying the destructor
+  // does not run at all. To avoid these problems we skip running the destructors
+  // for now and let associated resources leak.
+  if (recordreplay::IsRecordingOrReplaying("leak-references"))
+    return;
+
   DCHECK(tls_data);
   // Some allocators, such as TCMalloc, use TLS. As a result, when a thread
   // terminates, one of the destructor calls we make may be to shut down an
