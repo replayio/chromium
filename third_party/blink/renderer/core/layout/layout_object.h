@@ -4286,6 +4286,8 @@ class CORE_EXPORT LayoutObject : public ImageResourceObserver,
     bitfields_.SetNeedsSimplifiedNormalFlowLayout(b);
   }
 
+  int RecordReplayId() const { return record_replay_id_; }
+
  private:
   friend class LineLayoutItem;
 
@@ -4302,6 +4304,11 @@ class CORE_EXPORT LayoutObject : public ImageResourceObserver,
   static bool affects_parent_block_;
 
   FragmentData fragment_;
+
+  // A deterministic ID is needed for hashing in the following places:
+  // FragmentPaintPropertyTreeBuilder::UpdateTransform
+  // LayoutObjectWithDepth ordering
+  int record_replay_id_ = 0;
 
 #if DCHECK_IS_ON()
   bool is_destroyed_ = false;

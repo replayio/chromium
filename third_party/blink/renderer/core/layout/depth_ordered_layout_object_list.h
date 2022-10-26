@@ -36,7 +36,7 @@ struct LayoutObjectWithDepth {
     // When recording/replaying, ensure that sorted arrays of objects are
     // ordered deterministically when their depths are the same.
     if (recordreplay::IsRecordingOrReplaying("pointer-ids"))
-      return recordreplay::PointerId(object) < recordreplay::PointerId(other.object);
+      return object->RecordReplayId() < other.object->RecordReplayId();
 
     return false;
   }
