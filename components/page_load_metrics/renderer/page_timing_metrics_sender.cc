@@ -362,6 +362,20 @@ void PageTimingMetricsSender::SendNow() {
                                     new_features_->animated_css_properties.size())
   );
 
+  // https://linear.app/replay/issue/RUN-727
+  recordreplay::Assert("PageTimingMetricsSender::SendNow %d %d %d %d %d %d %d %d %d %d",
+    last_timing_->back_forward_cache_timings.size(),
+    last_timing_->input_to_navigation_start ? 1 : 0,
+    metadata_->intersection_update ? 1 : 0,
+    metadata_->intersection_update ? (metadata_->intersection_update->main_frame_intersection_rect ? 1 : 0) : 0,
+    new_features_->features.size(),
+    new_features_->css_properties.size(),
+    new_features_->animated_css_properties.size(),
+    resources.size(),
+    render_data_.new_layout_shifts.size(),
+    render_data_.input_timestamps.size()
+  );
+
   sender_->SendTiming(last_timing_, metadata_, std::move(new_features_),
                       std::move(resources), render_data_, last_cpu_timing_,
                       std::move(new_deferred_resource_data_),
