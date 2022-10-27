@@ -362,6 +362,13 @@ void PageTimingMetricsSender::SendNow() {
                                     new_features_->animated_css_properties.size())
   );
 
+  // Features can vary between recording/replaying apparently due to differences
+  // in the special recording/replaying scripts which run in the two cases.
+  new_features_->features.resize(
+    recordreplay::RecordReplayValue("PageTimingMetricsSender::SendNow NumFeatures",
+                                    new_features_->features.size())
+  );
+
   // https://linear.app/replay/issue/RUN-727
   recordreplay::Assert("PageTimingMetricsSender::SendNow %d %d %d %d %d %d %d %d %d %d",
     last_timing_->back_forward_cache_timings.size(),
