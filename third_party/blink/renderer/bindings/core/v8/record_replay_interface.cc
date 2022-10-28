@@ -29,6 +29,8 @@ namespace v8 {
 
 extern void FunctionCallbackRecordReplaySetCommandCallback(const FunctionCallbackInfo<Value>& args);
 extern void FunctionCallbackRecordReplaySetClearPauseDataCallback(const FunctionCallbackInfo<Value>& callArgs);
+extern void FunctionCallbackRecordReplayAddNewScriptHandler(const FunctionCallbackInfo<Value>& args);
+extern void FunctionCallbackRecordReplayGetScriptSource(const FunctionCallbackInfo<Value>& args);
 
 } // namespace v8
 
@@ -1273,9 +1275,7 @@ static int GetAPIObjectIdCallback(v8::Local<v8::Object> object) {
   for (const WrapperTypeInfo* info : infos) {
     if (V8PerIsolateData::From(isolate)->HasInstance(info, object)) {
       ScriptWrappable* wrappable = ToScriptWrappable(object);
-      int id = recordreplay::PointerId(wrappable);
-      CHECK(id);
-      return id;
+      return wrappable->RecordReplayId();
     }
   }
   return 0;
@@ -1567,16 +1567,14 @@ void SetupRecordReplayCommands(v8::Isolate* isolate) {
     new std::unordered_map<std::string, NetworkRequestStatus>();
   gCurrentNetworkStreamData = new std::vector<uint8_t>();
 
-  if (recordreplay::FeatureEnabled("collect-source-maps") &&
-      !TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_COLLECTION")) {
-    FIXME;
-    return;
-  }
+  bool collectSourceMaps =
+    recordreplay::FeatureEnabled("collect-source-maps") &&
+    !TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_COLLECTION");
 
-  if (!recordreplay::IsRecording())
+  // Early return to avoid creating the arguments object when we're not
+  // going to be running any scripts.
+  if (!collectSourceMaps && !recordreplay::IsReplaying())
     return;
-
-  recordreplay::AutoDisallowEvents disallow;
 
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
 
@@ -1612,13 +1610,26 @@ void SetupRecordReplayCommands(v8::Isolate* isolate) {
                       WriteToRecordingDirectory);
   SetFunctionProperty(isolate, args, "addRecordingEvent",
                       AddRecordingEvent);
+  SetFunctionProperty(isolate, args, "addNewScriptHandler",
+                      v8::FunctionCallbackRecordReplayAddNewScriptHandler);
+  SetFunctionProperty(isolate, args, "getScriptSource",
+                      v8::FunctionCallbackRecordReplayGetScriptSource);
 
-  v8::Local<v8::String> source = ToV8String(isolate, gReplayScript);
   v8::Local<v8::String> filename = ToV8String(isolate, "record-replay-internal");
-
   v8::ScriptOrigin origin(filename);
-  v8::Local<v8::Script> script = v8::Script::Compile(context, source, &origin).ToLocalChecked();
-  script->Run(context).ToLocalChecked();
+
+  if (collectSourceMaps) {
+    v8::Local<v8::String> source = ToV8String(isolate, gSourceMapScript);
+    v8::Local<v8::Script> script = v8::Script::Compile(context, source, &origin).ToLocalChecked();
+    script->Run(context).ToLocalChecked();
+  }
+
+  if (recordreplay::IsReplaying()) {
+    recordreplay::AutoDisallowEvents disallow;
+    v8::Local<v8::String> source = ToV8String(isolate, gReplayScript);
+    v8::Local<v8::Script> script = v8::Script::Compile(context, source, &origin).ToLocalChecked();
+    script->Run(context).ToLocalChecked();
+  }
 }
 
 extern "C" void V8RecordReplayOnConsoleMessage(size_t bookmark);
