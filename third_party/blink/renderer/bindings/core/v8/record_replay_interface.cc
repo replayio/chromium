@@ -51,10 +51,6 @@ const {
   getCurrentNetworkRequestEvent,
   getCurrentNetworkStreamData,
   dump,
-  getRecordingId,
-  sha256DigestHex,
-  writeToRecordingDirectory,
-  addRecordingEvent,
 } = __RECORD_REPLAY_ARGUMENTS__;
 
 const gSourceMapData = new Map();
@@ -71,10 +67,46 @@ const JSON_parse = JSON.parse;
 // utils.js
 ///////////////////////////////////////////////////////////////////////////////
 
+// Some of these are duplicated in gSourceMapScript, so watch out when making
+// modifications to update both versions...
+
 function assert(v) {
   if (!v) {
     log(`Assertion failed ${Error().stack}`);
     throw new Error("Assertion failed");
+  }
+}
+
+function getSourceMapURLs(sourceURL, relativeSourceMapURL) {
+  let sourceBaseURL;
+  if (typeof sourceURL === "string" && isValidBaseURL(sourceURL)) {
+    sourceBaseURL = sourceURL;
+  } else if (window?.location?.href && isValidBaseURL(window?.location?.href)) {
+    sourceBaseURL = window.location.href;
+  }
+
+  let sourceMapURL;
+  try {
+    sourceMapURL = new URL(relativeSourceMapURL, sourceBaseURL).toString();
+  } catch (err) {
+    log("Failed to process sourcemap url: " + err.message);
+    return null;
+  }
+
+  // If the map was a data: URL or something along those lines, we want
+  // to resolve paths in the map relative to the overall base.
+  const sourceMapBaseURL =
+    isValidBaseURL(sourceMapURL) ? sourceMapURL : sourceBaseURL;
+
+  return { sourceMapURL, sourceMapBaseURL };
+}
+
+function isValidBaseURL(url) {
+  try {
+    new URL("", url);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -818,46 +850,6 @@ function createProtocolScope(scopeId) {
   };
 }
 
-///////////////////////////////////////////////////////////////////////////////
-// utilities.js
-///////////////////////////////////////////////////////////////////////////////
-
-// Some of these are duplicated in gSourceMapScript, so watch out when making
-// modifications to update both versions...
-
-function getSourceMapURLs(sourceURL, relativeSouceMapURL) {
-  let sourceBaseURL;
-  if (typeof sourceURL === "string" && isValidBaseURL(sourceURL)) {
-    sourceBaseURL = sourceURL;
-  } else if (window?.location?.href && isValidBaseURL(window?.location?.href)) {
-    sourceBaseURL = window.location.href;
-  }
-
-  let sourceMapURL;
-  try {
-    sourceMapURL = new URL(relativeSourceMapURL, sourceBaseURL).toString();
-  } catch (err) {
-    log("Failed to process sourcemap url: " + err.message);
-    return null;
-  }
-
-  // If the map was a data: URL or something along those lines, we want
-  // to resolve paths in the map relative to the overall base.
-  const sourceMapBaseURL =
-    isValidBaseURL(sourceMapURL) ? sourceMapURL : sourceBaseURL;
-
-  return { sourceMapURL, sourceMapBaseURL };
-}
-
-function isValidBaseURL(url) {
-  try {
-    new URL("", url);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 } catch (e) {
   log(`Error: Initialization exception ${e}`);
 }
@@ -871,6 +863,16 @@ function isValidBaseURL(url) {
 const char* gSourceMapScript = R""""(
 
 (() => {
+
+const {
+  log,
+  getRecordingId,
+  sha256DigestHex,
+  writeToRecordingDirectory,
+  addRecordingEvent,
+  addNewScriptHandler,
+  getScriptSource,
+} = __RECORD_REPLAY_ARGUMENTS__;
 
 addNewScriptHandler((scriptId, sourceURL, relativeSourceMapURL) => {
   if (!relativeSourceMapURL || relativeSourceMapURL.startsWith("data:"))
@@ -892,7 +894,7 @@ addNewScriptHandler((scriptId, sourceURL, relativeSourceMapURL) => {
     return;
   }
 
-  const scriptSouce = getScriptSource(scriptId);
+  const scriptSource = getScriptSource(scriptId);
 
   const recordingId = getRecordingId();
   if (!recordingId) {
@@ -939,7 +941,7 @@ addNewScriptHandler((scriptId, sourceURL, relativeSourceMapURL) => {
       parentOffset: offset,
     }));
   }
-}
+});
 
 async function fetchText(url) {
   const response = await fetch(url);
@@ -1025,13 +1027,20 @@ function collectUnresolvedSourceMapResources(mapText, mapURL) {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// utilities.js
+// utils.js
 ///////////////////////////////////////////////////////////////////////////////
 
 // Some of these are duplicated in gReplayScript, so watch out when making
 // modifications to update both versions...
 
-function getSourceMapURLs(sourceURL, relativeSouceMapURL) {
+function assert(v) {
+  if (!v) {
+    log(`Assertion failed ${Error().stack}`);
+    throw new Error("Assertion failed");
+  }
+}
+
+function getSourceMapURLs(sourceURL, relativeSourceMapURL) {
   let sourceBaseURL;
   if (typeof sourceURL === "string" && isValidBaseURL(sourceURL)) {
     sourceBaseURL = sourceURL;
