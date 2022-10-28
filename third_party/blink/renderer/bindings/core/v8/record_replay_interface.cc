@@ -876,7 +876,7 @@ const {
   getScriptSource,
 } = __RECORD_REPLAY_ARGUMENTS__;
 
-addNewScriptHandler((scriptId, sourceURL, relativeSourceMapURL) => {
+addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   if (!relativeSourceMapURL || relativeSourceMapURL.startsWith("data:"))
     return;
 
