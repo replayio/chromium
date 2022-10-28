@@ -1275,7 +1275,9 @@ static int GetAPIObjectIdCallback(v8::Local<v8::Object> object) {
   for (const WrapperTypeInfo* info : infos) {
     if (V8PerIsolateData::From(isolate)->HasInstance(info, object)) {
       ScriptWrappable* wrappable = ToScriptWrappable(object);
-      return wrappable->RecordReplayId();
+      int id = recordreplay::PointerId(wrappable);
+      CHECK(id);
+      return id;
     }
   }
   return 0;
