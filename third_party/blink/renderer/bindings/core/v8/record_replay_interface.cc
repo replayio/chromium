@@ -34,10 +34,9 @@ extern void FunctionCallbackRecordReplaySetClearPauseDataCallback(const Function
 
 namespace blink {
 
-// Script which defines handlers for recorder commands, and collects source maps
-// unless disabled. If source map collection is disabled, this script only runs
-// when replaying.
-const char* gRecordReplayScript = R""""(
+// Script which defines handlers for recorder commands, and is only loaded while
+// replaying.
+const char* gReplayScript = R""""(
 
 (() => {
 
@@ -47,6 +46,7 @@ const {
   sendCDPMessage,
   setCommandCallback,
   setClearPauseDataCallback,
+  addNewScriptHandler,
   getCurrentError,
   getCurrentNetworkRequestEvent,
   getCurrentNetworkStreamData,
@@ -55,7 +55,6 @@ const {
   sha256DigestHex,
   writeToRecordingDirectory,
   addRecordingEvent,
-  collectSourceMaps,
 } = __RECORD_REPLAY_ARGUMENTS__;
 
 const gSourceMapData = new Map();
@@ -135,11 +134,6 @@ function messageCallback(message) {
 initMessages();
 addEventListener("Runtime.consoleAPICalled", onConsoleAPICall);
 sendMessage("Runtime.enable");
-
-if (collectSourceMaps()) {
-  addEventListener("Debugger.scriptParsed", registerSourceMap);
-  sendMessage("Debugger.enable");
-}
 
 const CommandCallbacks = {
   "Target.getCurrentMessageContents": Target_getCurrentMessageContents,
@@ -237,6 +231,21 @@ function Target_getCurrentMessageContents() {
     argumentValues,
   };
 }
+
+addNewScriptHandler((scriptId, sourceURL, relativeSourceMapURL) => {
+  if (!relativeSourceMapURL)
+    return;
+
+  const urls = getSourceMapURLs(sourceURL, relativeSourceMapURL);
+  if (!urls)
+    return;
+
+  const { sourceMapURL, sourceMapBaseURL } = urls;
+  gSourceMapData.set(scriptId, {
+    url: sourceMapURL,
+    baseUrl: sourceMapBaseURL
+  });
+});
 
 function Target_getSourceMapURL({ sourceId }) {
   return gSourceMapData.get(sourceId) || {};
@@ -810,16 +819,13 @@ function createProtocolScope(scopeId) {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// sourcemap.js
+// utilities.js
 ///////////////////////////////////////////////////////////////////////////////
 
-async function registerSourceMap(ev) {
-  if (!ev.sourceMapURL) {
-    return;
-  }
+// Some of these are duplicated in gSourceMapScript, so watch out when making
+// modifications to update both versions...
 
-  const { url: sourceURL, scriptId } = ev;
-
+function getSourceMapURLs(sourceURL, relativeSouceMapURL) {
   let sourceBaseURL;
   if (typeof sourceURL === "string" && isValidBaseURL(sourceURL)) {
     sourceBaseURL = sourceURL;
@@ -829,10 +835,10 @@ async function registerSourceMap(ev) {
 
   let sourceMapURL;
   try {
-    sourceMapURL = new URL(ev.sourceMapURL, sourceBaseURL).toString();
+    sourceMapURL = new URL(relativeSourceMapURL, sourceBaseURL).toString();
   } catch (err) {
     log("Failed to process sourcemap url: " + err.message);
-    return;
+    return null;
   }
 
   // If the map was a data: URL or something along those lines, we want
@@ -840,14 +846,42 @@ async function registerSourceMap(ev) {
   const sourceMapBaseURL =
     isValidBaseURL(sourceMapURL) ? sourceMapURL : sourceBaseURL;
 
-  gSourceMapData.set(scriptId, {
-    url: sourceMapURL,
-    baseUrl: sourceMapBaseURL
-  });
+  return { sourceMapURL, sourceMapBaseURL };
+}
 
-  if (sourceMapURL.startsWith("data:")) {
-    return;
+function isValidBaseURL(url) {
+  try {
+    new URL("", url);
+    return true;
+  } catch {
+    return false;
   }
+}
+
+} catch (e) {
+  log(`Error: Initialization exception ${e}`);
+}
+
+})();
+
+)"""";
+
+// Script which sets a handler for collecting source maps from scripts in the
+// recording. Runs when recording/replaying if source map collection is enabled.
+const char* gSourceMapScript = R""""(
+
+(() => {
+
+addNewScriptHandler((scriptId, sourceURL, relativeSourceMapURL) => {
+  if (!relativeSourceMapURL || relativeSourceMapURL.startsWith("data:"))
+    return;
+
+  const urls = getSourceMapURLs(sourceURL, relativeSourceMapURL);
+  if (!urls)
+    return;
+
+  const { sourceMapURL, sourceMapBaseURL } = urls;
+
   let sourceMap;
   try {
     sourceMap = await fetchText(sourceMapURL);
@@ -858,7 +892,7 @@ async function registerSourceMap(ev) {
     return;
   }
 
-  const script = sendMessage("Debugger.getScriptSource", { scriptId });
+  const scriptSouce = getScriptSource(scriptId);
 
   const recordingId = getRecordingId();
   if (!recordingId) {
@@ -876,15 +910,15 @@ async function registerSourceMap(ev) {
     id,
     url: sourceMapURL,
     baseURL: sourceMapBaseURL,
-    targetContentHash: typeof script?.scriptSource === "string"
-      ? makeAPIHash(script.scriptSource)
+    targetContentHash: typeof scriptSource === "string"
+      ? makeAPIHash(scriptSource)
       : undefined,
     targetURLHash: sourceURL ? makeAPIHash(sourceURL) : undefined,
     targetMapURLHash: makeAPIHash(sourceMapURL),
   }));
 
   const { sources } =
-    collectUnresolvedSourceMapResources(sourceMap, sourceMapURL, ev.url);
+    collectUnresolvedSourceMapResources(sourceMap, sourceMapURL, sourceURL);
 
   for (const { offset, url } of sources) {
     let sourceContent;
@@ -904,15 +938,6 @@ async function registerSourceMap(ev) {
       parentId: id,
       parentOffset: offset,
     }));
-  }
-}
-
-function isValidBaseURL(url) {
-  try {
-    new URL("", url);
-    return true;
-  } catch {
-    return false;
   }
 }
 
@@ -999,8 +1024,44 @@ function collectUnresolvedSourceMapResources(mapText, mapURL) {
   };
 }
 
-} catch (e) {
-  log(`Error: Initialization exception ${e}`);
+///////////////////////////////////////////////////////////////////////////////
+// utilities.js
+///////////////////////////////////////////////////////////////////////////////
+
+// Some of these are duplicated in gReplayScript, so watch out when making
+// modifications to update both versions...
+
+function getSourceMapURLs(sourceURL, relativeSouceMapURL) {
+  let sourceBaseURL;
+  if (typeof sourceURL === "string" && isValidBaseURL(sourceURL)) {
+    sourceBaseURL = sourceURL;
+  } else if (window?.location?.href && isValidBaseURL(window?.location?.href)) {
+    sourceBaseURL = window.location.href;
+  }
+
+  let sourceMapURL;
+  try {
+    sourceMapURL = new URL(relativeSourceMapURL, sourceBaseURL).toString();
+  } catch (err) {
+    log("Failed to process sourcemap url: " + err.message);
+    return null;
+  }
+
+  // If the map was a data: URL or something along those lines, we want
+  // to resolve paths in the map relative to the overall base.
+  const sourceMapBaseURL =
+    isValidBaseURL(sourceMapURL) ? sourceMapURL : sourceBaseURL;
+
+  return { sourceMapURL, sourceMapBaseURL };
+}
+
+function isValidBaseURL(url) {
+  try {
+    new URL("", url);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 })();
@@ -1174,15 +1235,6 @@ static void AddRecordingEvent(const v8::FunctionCallbackInfo<v8::Value>& args) {
   std::ofstream stream(filename.c_str(), std::ofstream::app);
   stream << *content << "\n";
   stream.close();
-}
-
-// Sourcemap collection can be disabled while recording if the appropriate
-// environment variable is set.
-static bool gCollectSourceMaps;
-
-static void CollectSourceMaps(const v8::FunctionCallbackInfo<v8::Value>& args) {
-  v8::Isolate* isolate = args.GetIsolate();
-  args.GetReturnValue().Set(gCollectSourceMaps ? v8::True(isolate) : v8::False(isolate));
 }
 
 static void GetCurrentError(const v8::FunctionCallbackInfo<v8::Value>& args);
@@ -1502,19 +1554,17 @@ void SetupRecordReplayCommands(v8::Isolate* isolate) {
   V8RecordReplaySetAPIObjectIdCallback(GetAPIObjectIdCallback);
   V8RecordReplayRegisterBrowserEventCallback(HandleBrowserEvent);
 
-  gCollectSourceMaps = !TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_COLLECTION");
   gActiveNetworkRequests =
     new std::unordered_map<std::string, NetworkRequestStatus>();
   gCurrentNetworkStreamData = new std::vector<uint8_t>();
 
-  // When we aren't collecting source maps and are recording we don't need the
-  // record/replay script for anything, so we don't compile and run it. The script
-  // adds significant overhead, mainly due to enabling V8 inspector features.
-  if (!gCollectSourceMaps && recordreplay::IsRecording()) {
+  if (recordreplay::FeatureEnabled("collect-source-maps") &&
+      !TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_COLLECTION")) {
+    FIXME;
     return;
   }
 
-  if (!recordreplay::FeatureEnabled("recording-script"))
+  if (!recordreplay::IsRecording())
     return;
 
   recordreplay::AutoDisallowEvents disallow;
@@ -1553,10 +1603,8 @@ void SetupRecordReplayCommands(v8::Isolate* isolate) {
                       WriteToRecordingDirectory);
   SetFunctionProperty(isolate, args, "addRecordingEvent",
                       AddRecordingEvent);
-  SetFunctionProperty(isolate, args, "collectSourceMaps",
-                      CollectSourceMaps);
 
-  v8::Local<v8::String> source = ToV8String(isolate, gRecordReplayScript);
+  v8::Local<v8::String> source = ToV8String(isolate, gReplayScript);
   v8::Local<v8::String> filename = ToV8String(isolate, "record-replay-internal");
 
   v8::ScriptOrigin origin(filename);
