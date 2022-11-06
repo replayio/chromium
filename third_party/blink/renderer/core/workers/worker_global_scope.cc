@@ -150,7 +150,7 @@ FontFaceSet* WorkerGlobalScope::fonts() {
 }
 
 WorkerGlobalScope::~WorkerGlobalScope() {
-  if (font_matching_metrics_)
+  if (font_matching_metrics_ && !recordreplay::AreEventsDisallowed())
     font_matching_metrics_->PublishAllMetrics();
   DCHECK(!ScriptController());
   InstanceCounters::DecrementCounter(
