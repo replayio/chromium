@@ -207,9 +207,16 @@ class CORE_EXPORT WorkerThread : public Thread::TaskObserver {
                                          Parameters&&... parameters) {
     MutexLocker lock(ThreadSetMutex());
     unsigned called_worker_count = 0;
-    for (WorkerThread* thread : WorkerThreads()) {
+
+    std::vector<scoped_refptr<base::SingleThreadTaskRunner>> task_runners;
+    for (WorkerThread* thread : WorkerThreads())
+      task_runners.push_back(thread->GetTaskRunner(task_type));
+    std::sort(task_runners.begin(), task_runners.end(),
+              recordreplay::CompareRefptrByPointerId<scoped_refptr<base::SingleThreadTaskRunner>>());
+
+    for (const auto& task_runner : task_runners) {
       PostCrossThreadTask(
-          *thread->GetTaskRunner(task_type), FROM_HERE,
+          *task_runner, FROM_HERE,
           CrossThreadBindOnce(function, WTF::CrossThreadUnretained(thread),
                               parameters...));
       ++called_worker_count;
