@@ -1564,7 +1564,7 @@ static void InvokeOnAnnotation(const v8::FunctionCallbackInfo<v8::Value>& args) 
   v8::Isolate* isolate = args.GetIsolate();
   v8::Local<v8::Object> payload = v8::Object::New(isolate);
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
-  SetDataProperty(isolate, payload, "message", args[1]);
+  payload->Set(context, "message", args[1]).Check();
 
   v8::Local<v8::String> json;
   if (!v8::JSON::Stringify(context, payload).ToLocal(&json)) {
