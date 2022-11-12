@@ -23,13 +23,6 @@
 #include "third_party/blink/public/web/web_performance.h"
 #include "url/gurl.h"
 
-namespace mojo {
-  namespace internal {
-    extern void RecordReplayAssertBufferAllocationsBegin();
-    extern void RecordReplayAssertBufferAllocationsEnd();
-  }
-}
-
 namespace page_load_metrics {
 
 namespace {
@@ -66,9 +59,6 @@ class MojoPageTimingSender : public PageTimingSender {
       mojom::DeferredResourceCountsPtr new_deferred_resource_data,
       mojom::InputTimingPtr input_timing_delta,
       const blink::MobileFriendliness& mobile_friendliness) override {
-    // https://linear.app/replay/issue/RUN-783
-    mojo::internal::RecordReplayAssertBufferAllocationsBegin();
-
     DCHECK(page_load_metrics_);
     page_load_metrics_->UpdateTiming(
         limited_sending_mode_ ? CreatePageLoadTiming() : timing->Clone(),
@@ -76,9 +66,6 @@ class MojoPageTimingSender : public PageTimingSender {
         render_data.Clone(), cpu_timing->Clone(),
         std::move(new_deferred_resource_data), std::move(input_timing_delta),
         std::move(mobile_friendliness));
-
-    // https://linear.app/replay/issue/RUN-783
-    mojo::internal::RecordReplayAssertBufferAllocationsEnd();
   }
 
   void SetUpSmoothnessReporting(
