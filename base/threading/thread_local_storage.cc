@@ -12,8 +12,6 @@
 #include "base/synchronization/lock.h"
 #include "build/build_config.h"
 
-#include <dlfcn.h>
-
 using base::internal::PlatformThreadLocalStorage;
 
 // Chrome Thread Local Storage (TLS)
