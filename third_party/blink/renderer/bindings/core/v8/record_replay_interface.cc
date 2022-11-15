@@ -1088,6 +1088,15 @@ static v8::Local<v8::String> ToV8String(v8::Isolate* isolate, const char* value)
                                  v8::NewStringType::kInternalized).ToLocalChecked();
 }
 
+// Define a property that isn't writable, configurable, or enumerable.
+static void DefineProperty(v8::Isolate* isolate, v8::Local<v8::Object> obj,
+                           const char* name, v8::Local<v8::Value> value) {
+  v8::Local<v8::String> name_string = ToV8String(isolate, name);
+  obj->DefineOwnProperty(isolate->GetCurrentContext(), name_string, value,
+                         (v8::PropertyAttribute)(v8::ReadOnly | v8::DontEnum | v8::DontDelete))
+    .Check();
+}
+
 static void SetFunctionProperty(v8::Isolate* isolate, v8::Local<v8::Object> obj,
                                 const char* name, v8::FunctionCallback callback) {
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
@@ -1100,7 +1109,9 @@ static void SetFunctionProperty(v8::Isolate* isolate, v8::Local<v8::Object> obj,
     function_template->GetFunction(context).ToLocalChecked();
 
   v8::Local<v8::String> name_string = ToV8String(isolate, name);
-  obj->Set(context, name_string, function).Check();
+  obj->DefineOwnProperty(isolate->GetCurrentContext(), name_string, function,
+                         (v8::PropertyAttribute)(v8::ReadOnly | v8::DontEnum | v8::DontDelete))
+    .Check();
   function->SetName(name_string);
 }
 
@@ -1569,6 +1580,22 @@ static void InvokeOnAnnotation(const v8::FunctionCallbackInfo<v8::Value>& args) 
   recordreplay::OnAnnotation(*kind, *contents);
 }
 
+static void ReactDevtoolsInject(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  recordreplay::OnAnnotation("react-devtools-hook", "inject");
+}
+
+static void ReactDevtoolsOnCommitFiberUnmount(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  recordreplay::OnAnnotation("react-devtools-hook", "commit-fiber-unmount");
+}
+
+static void ReactDevtoolsOnCommitFiberRoot(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  recordreplay::OnAnnotation("react-devtools-hook", "commit-fiber-root");
+}
+
+static void ReactDevtoolsOnPostCommitFiberRoot(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  recordreplay::OnAnnotation("react-devtools-hook", "post-commit-fiber-root");
+}
+
 extern "C" void V8RecordReplaySetAPIObjectIdCallback(int (*callback)(v8::Local<v8::Object>));
 extern "C" void V8RecordReplayRegisterBrowserEventCallback(
   void (*callback)(const char* name, const char* payload)
@@ -1579,6 +1606,20 @@ static bool TestEnv(const char* env) {
   return v && v[0] && v[0] != '0';
 }
 
+static void SetupReactDevtoolsHook(v8::Isolate* isolate, v8::Local<v8::Object> global) {
+  if (!recordreplay::FeatureEnabled("react-devtools-backend"))
+    return;
+
+  v8::Local<v8::Object> hook = v8::Object::New(isolate);
+  DefineProperty(isolate, global, "__REACT_DEVTOOLS_GLOBAL_HOOK__", hook);
+
+  DefineProperty(isolate, hook, "supportsFiber", v8::True(isolate));
+  SetFunctionProperty(isolate, hook, "inject", ReactDevtoolsInject);
+  SetFunctionProperty(isolate, hook, "onCommitFiberUnmount", ReactDevtoolsOnCommitFiberUnmount);
+  SetFunctionProperty(isolate, hook, "onCommitFiberRoot", ReactDevtoolsOnCommitFiberRoot);
+  SetFunctionProperty(isolate, hook, "onPostCommitFiberRoot", ReactDevtoolsOnPostCommitFiberRoot);
+}
+
 void SetupRecordReplayCommands(v8::Isolate* isolate) {
   V8RecordReplaySetAPIObjectIdCallback(GetAPIObjectIdCallback);
   V8RecordReplayRegisterBrowserEventCallback(HandleBrowserEvent);
@@ -1586,6 +1627,15 @@ void SetupRecordReplayCommands(v8::Isolate* isolate) {
   gActiveNetworkRequests =
     new std::unordered_map<std::string, NetworkRequestStatus>();
   gCurrentNetworkStreamData = new std::vector<uint8_t>();
+
+  v8::Local<v8::Context> context = isolate->GetCurrentContext();
+
+  // Add the "__RECORD_REPLAY_ANNOTATION_HOOK__" hook function to
+  // the page window global.
+  SetFunctionProperty(isolate, context->Global(), AnnotationHookJSName,
+                      InvokeOnAnnotation);
+
+  SetupReactDevtoolsHook(isolate, context->Global());
 
   bool collectSourceMaps =
     recordreplay::FeatureEnabled("collect-source-maps") &&
@@ -1596,19 +1646,11 @@ void SetupRecordReplayCommands(v8::Isolate* isolate) {
   if (!collectSourceMaps && !recordreplay::IsReplaying())
     return;
 
-  v8::Local<v8::Context> context = isolate->GetCurrentContext();
-
   v8::Local<v8::String> args_name_string =
     ToV8String(isolate, "__RECORD_REPLAY_ARGUMENTS__");
 
-  // Add the "__RECORD_REPLAY_ANNOTATION_HOOK__" hook function to
-  // the page window global.
-  SetFunctionProperty(isolate, context->Global(), AnnotationHookJSName,
-                      InvokeOnAnnotation);
-
   v8::Local<v8::Object> args = v8::Object::New(isolate);
   context->Global()->Set(context, args_name_string, args).Check();
-
 
   SetFunctionProperty(isolate, args, "log",
                       LogCallback);
