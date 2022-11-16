@@ -1150,11 +1150,8 @@ static void SetFunctionProperty(v8::Isolate* isolate, v8::Local<v8::Object> obj,
   v8::Local<v8::Function> function =
     function_template->GetFunction(context).ToLocalChecked();
 
-  v8::Local<v8::String> name_string = ToV8String(isolate, name);
-  obj->DefineOwnProperty(isolate->GetCurrentContext(), name_string, function,
-                         (v8::PropertyAttribute)(v8::ReadOnly | v8::DontEnum | v8::DontDelete))
-    .Check();
-  function->SetName(name_string);
+  DefineProperty(isolate, obj, name, function);
+  function->SetName(ToV8String(isolate, name));
 }
 
 static void LogCallback(const v8::FunctionCallbackInfo<v8::Value>& args) {
