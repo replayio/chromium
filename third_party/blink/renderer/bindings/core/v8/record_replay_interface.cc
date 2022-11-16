@@ -1083,6 +1083,48 @@ function isValidBaseURL(url) {
 
 )"""";
 
+// Script which sets a handler for collecting source maps from scripts in the
+// recording. Runs when recording/replaying if source map collection is enabled.
+const char* gReactDevtoolsScript = R""""(
+
+(() => {
+
+const hook = {
+  supportsFiber: true,
+  inject,
+  onCommitFiberUnmount,
+  onCommitFiberRoot,
+  onPostCommitFiberRoot,
+};
+
+Object.defineProperty(window, "__REACT_DEVTOOLS_GLOBAL_HOOK__", {
+  configurable: false,
+  enumerable: false,
+  get() {
+    return hook;
+  }
+});
+
+function inject(renderer) {
+  window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook", "inject");
+}
+
+function onCommitFiberUnmount(rendererID, fiber) {
+  window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook", "commit-fiber-unmount");
+}
+
+function onCommitFiberRoot(rendererID, root, priorityLevel) {
+  window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook", "commit-fiber-root");
+}
+
+function onPostCommitFiberRoot(rendererID, root) {
+  window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook", "post-commit-fiber-root");
+}
+
+})();
+
+)"""";
+
 static v8::Local<v8::String> ToV8String(v8::Isolate* isolate, const char* value) {
   return v8::String::NewFromUtf8(isolate, value,
                                  v8::NewStringType::kInternalized).ToLocalChecked();
@@ -1580,44 +1622,23 @@ static void InvokeOnAnnotation(const v8::FunctionCallbackInfo<v8::Value>& args) 
   recordreplay::OnAnnotation(*kind, *contents);
 }
 
-static void ReactDevtoolsInject(const v8::FunctionCallbackInfo<v8::Value>& args) {
-  recordreplay::OnAnnotation("react-devtools-hook", "inject");
-}
-
-static void ReactDevtoolsOnCommitFiberUnmount(const v8::FunctionCallbackInfo<v8::Value>& args) {
-  recordreplay::OnAnnotation("react-devtools-hook", "commit-fiber-unmount");
-}
-
-static void ReactDevtoolsOnCommitFiberRoot(const v8::FunctionCallbackInfo<v8::Value>& args) {
-  recordreplay::OnAnnotation("react-devtools-hook", "commit-fiber-root");
-}
-
-static void ReactDevtoolsOnPostCommitFiberRoot(const v8::FunctionCallbackInfo<v8::Value>& args) {
-  recordreplay::OnAnnotation("react-devtools-hook", "post-commit-fiber-root");
-}
-
 extern "C" void V8RecordReplaySetAPIObjectIdCallback(int (*callback)(v8::Local<v8::Object>));
 extern "C" void V8RecordReplayRegisterBrowserEventCallback(
   void (*callback)(const char* name, const char* payload)
 );
 
+static void RunScript(v8::Isolate* isolate, v8::Local<v8::Context> context, const char* script, const char* filename) {
+  v8::Local<v8::String> filename_string = ToV8String(isolate, filename);
+  v8::ScriptOrigin origin(filename_string);
+
+  v8::Local<v8::String> source = ToV8String(isolate, script);
+  v8::Local<v8::Script> compiled = v8::Script::Compile(context, source, &origin).ToLocalChecked();
+  compiled->Run(context).ToLocalChecked();
+}
+
 static bool TestEnv(const char* env) {
   const char* v = getenv(env);
   return v && v[0] && v[0] != '0';
-}
-
-static void SetupReactDevtoolsHook(v8::Isolate* isolate, v8::Local<v8::Object> global) {
-  if (!recordreplay::FeatureEnabled("react-devtools-backend"))
-    return;
-
-  v8::Local<v8::Object> hook = v8::Object::New(isolate);
-  DefineProperty(isolate, global, "__REACT_DEVTOOLS_GLOBAL_HOOK__", hook);
-
-  DefineProperty(isolate, hook, "supportsFiber", v8::True(isolate));
-  SetFunctionProperty(isolate, hook, "inject", ReactDevtoolsInject);
-  SetFunctionProperty(isolate, hook, "onCommitFiberUnmount", ReactDevtoolsOnCommitFiberUnmount);
-  SetFunctionProperty(isolate, hook, "onCommitFiberRoot", ReactDevtoolsOnCommitFiberRoot);
-  SetFunctionProperty(isolate, hook, "onPostCommitFiberRoot", ReactDevtoolsOnPostCommitFiberRoot);
 }
 
 void SetupRecordReplayCommands(v8::Isolate* isolate) {
@@ -1635,22 +1656,8 @@ void SetupRecordReplayCommands(v8::Isolate* isolate) {
   SetFunctionProperty(isolate, context->Global(), AnnotationHookJSName,
                       InvokeOnAnnotation);
 
-  SetupReactDevtoolsHook(isolate, context->Global());
-
-  bool collectSourceMaps =
-    recordreplay::FeatureEnabled("collect-source-maps") &&
-    !TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_COLLECTION");
-
-  // Early return to avoid creating the arguments object when we're not
-  // going to be running any scripts.
-  if (!collectSourceMaps && !recordreplay::IsReplaying())
-    return;
-
-  v8::Local<v8::String> args_name_string =
-    ToV8String(isolate, "__RECORD_REPLAY_ARGUMENTS__");
-
   v8::Local<v8::Object> args = v8::Object::New(isolate);
-  context->Global()->Set(context, args_name_string, args).Check();
+  DefineProperty(isolate, context->Global(), "__RECORD_REPLAY_ARGUMENTS__", args);
 
   SetFunctionProperty(isolate, args, "log",
                       LogCallback);
@@ -1681,20 +1688,25 @@ void SetupRecordReplayCommands(v8::Isolate* isolate) {
   SetFunctionProperty(isolate, args, "getScriptSource",
                       v8::FunctionCallbackRecordReplayGetScriptSource);
 
-  v8::Local<v8::String> filename = ToV8String(isolate, "record-replay-internal");
-  v8::ScriptOrigin origin(filename);
+  // This URL will prevent the script from being reported to the recorder.
+  const char* InternalScriptURL = "record-replay-internal";
 
-  if (collectSourceMaps) {
-    v8::Local<v8::String> source = ToV8String(isolate, gSourceMapScript);
-    v8::Local<v8::Script> script = v8::Script::Compile(context, source, &origin).ToLocalChecked();
-    script->Run(context).ToLocalChecked();
+  if (recordreplay::FeatureEnabled("collect-source-maps") &&
+      !TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_COLLECTION")) {
+    RunScript(isolate, context, gSourceMapScript, InternalScriptURL);
+  }
+
+  if (recordreplay::FeatureEnabled("react-devtools-backend") &&
+      !TestEnv("RECORD_REPLAY_DISABLE_REACT_DEVTOOLS")) {
+    // Note: We use a special URL for the react devtools as this script needs
+    // to be reported to the recorder so that evaluations can be performed in
+    // its frames.
+    RunScript(isolate, context, gReactDevtoolsScript, "record-replay-react-devtools");
   }
 
   if (recordreplay::IsReplaying()) {
     recordreplay::AutoDisallowEvents disallow;
-    v8::Local<v8::String> source = ToV8String(isolate, gReplayScript);
-    v8::Local<v8::Script> script = v8::Script::Compile(context, source, &origin).ToLocalChecked();
-    script->Run(context).ToLocalChecked();
+    RunScript(isolate, context, gReplayScript, InternalScriptURL);
   }
 }
 
