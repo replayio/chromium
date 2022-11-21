@@ -34,6 +34,13 @@ extern void FunctionCallbackRecordReplaySetClearPauseDataCallback(const Function
 extern void FunctionCallbackRecordReplayAddNewScriptHandler(const FunctionCallbackInfo<Value>& args);
 extern void FunctionCallbackRecordReplayGetScriptSource(const FunctionCallbackInfo<Value>& args);
 
+namespace internal {
+
+extern int RecordReplayObjectId(v8::Isolate* isolate, v8::Local<v8::Context> cx,
+                                v8::Local<v8::Value> object, bool allow_create);
+
+} // namespace internal
+
 } // namespace v8
 
 namespace blink {
@@ -1303,6 +1310,17 @@ static void AddRecordingEvent(const v8::FunctionCallbackInfo<v8::Value>& args) {
   stream.close();
 }
 
+static void GetPersistentId(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  if (args.Length() >= 1 && recordreplay::HasDivergedFromRecording()) {
+    int id = v8::internal::RecordReplayObjectId(args.GetIsolate(),
+                                                args.GetIsolate()->GetCurrentContext(),
+                                                args[0], /* allow_create */ false);
+    if (id) {
+      args.GetReturnValue().Set(v8::Number::New(args.GetIsolate(), id));
+    }
+  }
+}
+
 static void GetCurrentError(const v8::FunctionCallbackInfo<v8::Value>& args);
 
 extern "C" void V8RecordReplayFinishRecording();
@@ -1685,6 +1703,8 @@ void SetupRecordReplayCommands(v8::Isolate* isolate) {
                       v8::FunctionCallbackRecordReplayAddNewScriptHandler);
   SetFunctionProperty(isolate, args, "getScriptSource",
                       v8::FunctionCallbackRecordReplayGetScriptSource);
+  SetFunctionProperty(isolate, args, "getPersistentId",
+                      GetPersistentId);
 
   // This URL will prevent the script from being reported to the recorder.
   const char* InternalScriptURL = "record-replay-internal";
