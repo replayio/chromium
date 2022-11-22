@@ -1714,17 +1714,21 @@ void SetupRecordReplayCommands(v8::Isolate* isolate) {
     RunScript(isolate, context, gSourceMapScript, InternalScriptURL);
   }
 
+  if (recordreplay::IsReplaying()) {
+    recordreplay::AutoDisallowEvents disallow;
+    RunScript(isolate, context, gReplayScript, InternalScriptURL);
+  }
+}
+
+void RunInitialRecordReplayScripts(v8::Isolate* isolate) {
+  v8::Local<v8::Context> context = isolate->GetCurrentContext();
+
   if (recordreplay::FeatureEnabled("react-devtools-backend") &&
       !TestEnv("RECORD_REPLAY_DISABLE_REACT_DEVTOOLS")) {
     // Note: We use a special URL for the react devtools as this script needs
     // to be reported to the recorder so that evaluations can be performed in
     // its frames.
     RunScript(isolate, context, gReactDevtoolsScript, "record-replay-react-devtools");
-  }
-
-  if (recordreplay::IsReplaying()) {
-    recordreplay::AutoDisallowEvents disallow;
-    RunScript(isolate, context, gReplayScript, InternalScriptURL);
   }
 }
 
