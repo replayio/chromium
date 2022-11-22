@@ -1115,8 +1115,12 @@ Object.defineProperty(window, "__REACT_DEVTOOLS_GLOBAL_HOOK__", {
   }
 });
 
+let uidCounter = 0;
+
 function inject(renderer) {
+  const id = ++uidCounter;
   window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook", "inject");
+  return id;
 }
 
 function onCommitFiberUnmount(rendererID, fiber) {
