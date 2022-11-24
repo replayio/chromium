@@ -41,7 +41,6 @@ namespace blink {
 // Script which defines handlers for recorder commands, and is only loaded while
 // replaying.
 const char* gReplayScript = R""""(
-
 (() => {
 
 const {
@@ -55,6 +54,8 @@ const {
   getCurrentNetworkRequestEvent,
   getCurrentNetworkStreamData,
 } = __RECORD_REPLAY_ARGUMENTS__;
+
+log(`[CHROMDEBUG] 11`);
 
 const gSourceMapData = new Map();
 
@@ -183,6 +184,7 @@ const CommandCallbacks = {
   "Pause.getObjectPreview": Pause_getObjectPreview,
   "Pause.getObjectProperty": Pause_getObjectProperty,
   "Pause.getScope": Pause_getScope,
+  "DOM.getAllBoundingClientRects": DOM_getAllBoundingClientRects
 };
 
 function commandCallback(method, params) {
@@ -322,6 +324,43 @@ function getStackFrames() {
   return callFrames;
 }
 
+
+const DevOnly = {
+  tryEvalDev(expression, frameId = 0) {
+    log(`[CHROMDEBUG] eval - expression: "${expression}"`);
+
+    // NOTE: expression sometimes gets wrapped in parentheses, and its value must be a string
+    const prefixes = ['("dev:', '"dev:'];
+    const prefix = prefixes.find(p => expression.startsWith(p));
+    if (prefix) {
+      // hackfix: evaluate straight-up in our dev context
+      // TODO: unsafe. Must be behind DEV-ONLY flag.
+
+      let cmd = expression;
+      if (cmd.startsWith('(')) {
+        // strip '()'
+        cmd = cmd.substring(1, expression.length - 1);
+      }
+      if (cmd.endsWith(';')) {
+        // strip trailing ';'
+        cmd = cmd.substring(0, expression.length - 1);
+      }
+
+      // parse JSON (used for serialization)
+      cmd = JSON.parse(cmd);
+
+      // strip "dev:" and wrap in ()
+      cmd = `(${cmd.substring(4)})`;
+      log(`[CHROMDEBUG] eval (dev) - cmd: "${cmd}"`);
+
+      // run
+      const res = eval(cmd);
+      
+      return { result: { data: {}, returned: { value: JSON.stringify(res) } } };
+    }
+  }
+};
+
 // Build a protocol Result object from a result/exceptionDetails CDP rval.
 function buildProtocolResult({ result, exceptionDetails }) {
   const value = remoteObjectToProtocolValue(result);
@@ -335,34 +374,57 @@ function buildProtocolResult({ result, exceptionDetails }) {
   return { result: protocolResult };
 }
 
+
 function Pause_evaluateInFrame({ frameId, expression }) {
-  const frames = getStackFrames();
-  const index = +frameId;
-  assert(index < frames.length);
-  const frame = frames[index];
+  try {
+    const result = DevOnly.tryEvalDev(expression, frameId);
+    if (result) {
+      return result;
+    }
 
-  const rv = doEvaluation();
-  return buildProtocolResult(rv);
+    const frames = getStackFrames();
+    const index = +frameId;
+    assert(index < frames.length);
+    const frame = frames[index];
 
-  function doEvaluation() {
-    // In order to do the evaluation in the right frame, the same number of
-    // frames need to be on V8's stack when we do the evaluation as when we got
-    // the stack frames in the first place. The debugger agent extracts a frame
-    // index from the ID it is given and uses that to walk the stack to the
-    // frame where it will do the evaluation (see DebugStackTraceIterator).
-    return sendMessage(
-      "Debugger.evaluateOnCallFrame",
-      {
-        callFrameId: frame.callFrameId,
-        expression,
-      }
-    );
+    const rv = doEvaluation();
+    return buildProtocolResult(rv);
+
+    function doEvaluation() {
+      // In order to do the evaluation in the right frame, the same number of
+      // frames need to be on V8's stack when we do the evaluation as when we got
+      // the stack frames in the first place. The debugger agent extracts a frame
+      // index from the ID it is given and uses that to walk the stack to the
+      // frame where it will do the evaluation (see DebugStackTraceIterator).
+      return sendMessage(
+        "Debugger.evaluateOnCallFrame",
+        {
+          callFrameId: frame.callFrameId,
+          expression,
+        }
+      );
+    }
+  }
+  catch (err) {
+    log(`[CHROMDEBUG] Pause_evaluateInGlobal - err: ${err.stack}`);
+    return { result: { data: {}, exception: { value: JSON.stringify(`err: ${err.stack}`) } } };
   }
 }
 
 function Pause_evaluateInGlobal({ expression }) {
-  const rv = sendMessage("Runtime.evaluate", { expression });
-  return buildProtocolResult(rv);
+  try {
+    const result = DevOnly.tryEvalDev(expression);
+    if (result) {
+      return result;
+    }
+    
+    const rv = sendMessage("Runtime.evaluate", { expression });
+    return buildProtocolResult(rv);
+  }
+  catch (err) {
+    log(`[CHROMDEBUG] Pause_evaluateInGlobal - err: ${err.stack}`);
+    return { result: { data: {}, exception: { value: JSON.stringify(`err: ${err.stack}`) } } };
+  }
 }
 
 function Pause_getAllFrames() {
@@ -407,6 +469,18 @@ function Pause_getScope({ scope }) {
 
 function Graphics_getDevicePixelRatio() {
   return { ratio: window?.devicePixelRatio || 0 };
+}
+
+window.____devCallId = 0;
+function DOM_getAllBoundingClientRects() {
+  log(`[CHROMDEBUG] DOM_getAllBoundingClientRects ${++window.____devCallId}`);
+  const elements = [
+    {
+      node: 'test' + window.____devCallId,
+      rect: [0, 0, 0, 0]
+    }
+  ];
+  return { elements };
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -857,6 +931,548 @@ function createProtocolScope(scopeId) {
   };
 }
 
+
+
+
+
+
+
+/** ###########################################################################
+   * StackingContext
+   * ##########################################################################*/
+  // Mouse Targets Overview
+  //
+  // Mouse target data is used to figure out which element to highlight when the
+  // mouse is hovered/clicked on different parts of the screen when the element
+  // picker is used. To determine this, we need to know the bounding client rects
+  // of every element (easy) and the order in which different elements are stacked
+  // (not easy).
+  //
+  // To figure out the order in which elements are stacked, we reconstruct the
+  // stacking contexts on the page and the order in which elements are laid out
+  // within those stacking contexts, allowing us to assemble a sorted array of
+  // elements such that for any two elements that overlap, the frontmost element
+  // appears first in the array.
+  //
+  // References:
+  //
+  // https://www.w3.org/TR/CSS21/zindex.html
+  //
+  //   We try to follow this reference, although not all of its rules are
+  //   implemented yet.
+  //
+  // https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Positioning/Understanding_z_index/The_stacking_context
+  //
+  //   This is helpful but the rules for when stacking contexts are created are
+  //   quite baroque and don't seem to match up with the spec above, so they are
+  //   mostly ignored here.
+
+  function assert(v, msg = "") {
+    if (!v) {
+      log(`Error: Assertion failed ${msg} ${Error().stack}`);
+      throw new Error("Assertion failed!");
+    }
+  }
+
+  // Information about an element needed to add it to a stacking context.
+  function StackingContextElement(node, parent, offset, style, clipBounds) {
+    assert(node.nodeType == Node.ELEMENT_NODE);
+
+    // Underlying element.
+    this.raw = node;
+
+    // Offset relative to the outer window of the window containing this context.
+    this.offset = offset;
+
+    // the parent StackingContextElement
+    this.parent = parent;
+
+    // Style and clipping information for the node.
+    this.style = style;
+    this.clipBounds = clipBounds;
+
+    // Any stacking context at which this element is the root.
+    this.context = null;
+  }
+
+  StackingContextElement.prototype = {
+    isPositioned() {
+      return this.style.getPropertyValue("position") != "static";
+    },
+
+    isAbsolutelyPositioned() {
+      return ["absolute", "fixed"].includes(this.style.getPropertyValue("position"));
+    },
+
+    isTable() {
+      return ["table", "inline-table"].includes(this.style.getPropertyValue("display"));
+    },
+
+    isFlexOrGridContainer() {
+      return ["flex", "inline-flex", "grid", "inline-grid"].includes(
+        this.style.getPropertyValue("display")
+      );
+    },
+
+    isBlockElement() {
+      return ["block", "table", "flex", "grid"].includes(this.style.getPropertyValue("display"));
+    },
+
+    isFloat() {
+      return this.style.getPropertyValue("float") != "none";
+    },
+
+    getPositionedAncestor() {
+      if (this.isPositioned()) {
+        return this;
+      }
+      return this.parent?.getPositionedAncestor();
+    },
+
+    // see https://developer.mozilla.org/en-US/docs/Web/Guide/CSS/Block_formatting_context
+    getFormattingContextElement() {
+      if (!this.parent) {
+        return this;
+      }
+      if (this.isFloat()) {
+        return this;
+      }
+      if (this.isAbsolutelyPositioned()) {
+        return this;
+      }
+      if (
+        [
+          "inline-block",
+          "table-cell",
+          "table-caption",
+          "table",
+          "table-row",
+          "table-row-group",
+          "table-header-group",
+          "table-footer-group",
+          "inline-table",
+          "flow-root",
+        ].includes(this.style.getPropertyValue("display"))
+      ) {
+        return this;
+      }
+      if (
+        this.isBlockElement() &&
+        !(
+          ["visible", "clip"].includes(this.style.getPropertyValue("overflow-x")) &&
+          ["visible", "clip"].includes(this.style.getPropertyValue("overflow-y"))
+        )
+      ) {
+        return this;
+      }
+      if (["layout", "content", "paint"].includes(this.style.getPropertyValue("contain"))) {
+        return this;
+      }
+      if (this.parent.isFlexOrGridContainer() && !this.isFlexOrGridContainer() && !this.isTable()) {
+        return this;
+      }
+      if (
+        this.style.getPropertyValue("column-count") != "auto" ||
+        this.style.getPropertyValue("column-width") != "auto"
+      ) {
+        return this;
+      }
+      if (this.style.getPropertyValue("column-span") == "all") {
+        return this;
+      }
+      return this.parent.getFormattingContextElement();
+    },
+
+    // toString() {
+    //   return getObjectIdRaw(this.raw);
+    // },
+  };
+
+  let gNextStackingContextId = 1;
+
+  // Information about all the nodes in the same stacking context.
+  // The spec says that some elements should be treated as if they
+  // "created a new stacking context, but any positioned descendants and
+  // descendants which actually create a new stacking context should be
+  // considered part of the parent stacking context, not this new one".
+  // For these elements we also create a StackingContext but pass the
+  // parent stacking context to the constructor as the "realStackingContext".
+  function StackingContext(window, root, offset, realStackingContext) {
+    this.window = window;
+    this.id = gNextStackingContextId++;
+
+    this.realStackingContext = realStackingContext || this;
+
+    // Offset relative to the outer window of the window containing this context.
+    this.offset = offset || { left: 0, top: 0 };
+
+    // The arrays below are filled in tree order (preorder depth first traversal).
+
+    // All non-positioned, non-floating elements.
+    this.nonPositionedElements = [];
+
+    // All floating elements.
+    this.floatingElements = [];
+
+    // All positioned elements with an auto or zero z-index.
+    this.positionedElements = [];
+
+    // Arrays of elements with non-zero z-indexes, indexed by that z-index.
+    this.zIndexElements = new Map();
+
+    this.root = root;
+    if (root) {
+      this.addChildrenWithParent(root);
+    }
+  }
+
+  StackingContext.prototype = {
+    toString() {
+      return `StackingContext:${this.id}`;
+    },
+
+    // Add node and its descendants to this stacking context.
+    add(node, parentElem, offset) {
+      const style = this.window.getComputedStyle(node);
+      if (!style) {
+        // It's not 100% clear why this is sometimes null, but it seems like
+        // this can happen if DOM commands are sent when the window is shutting
+        // down in some way or another.
+        return;
+      }
+
+      const position = style.getPropertyValue("position");
+      let clipBounds;
+      if (position == "absolute") {
+        clipBounds = parentElem?.getPositionedAncestor()?.clipBounds || {};
+      } else if (position == "fixed") {
+        clipBounds = {};
+      } else {
+        clipBounds = parentElem?.clipBounds || {};
+      }
+      clipBounds = Object.assign({}, clipBounds);
+      const elem = new StackingContextElement(node, parentElem, offset, style, clipBounds);
+      if (!["HTML", "BODY"].includes(elem.raw.tagName)) {
+        if (style.getPropertyValue("overflow-x") != "visible") {
+          const clipBounds2 = elem.getFormattingContextElement().raw.getBoundingClientRect();
+          elem.clipBounds.left =
+            clipBounds.left !== undefined
+              ? Math.max(clipBounds2.left, clipBounds.left)
+              : clipBounds2.left;
+          elem.clipBounds.right =
+            clipBounds.right !== undefined
+              ? Math.min(clipBounds2.right, clipBounds.right)
+              : clipBounds2.right;
+        }
+        if (style.getPropertyValue("overflow-y") != "visible") {
+          const clipBounds2 = elem.getFormattingContextElement().raw.getBoundingClientRect();
+          elem.clipBounds.top =
+            clipBounds.top !== undefined
+              ? Math.max(clipBounds2.top, clipBounds.top)
+              : clipBounds2.top;
+          elem.clipBounds.bottom =
+            clipBounds.bottom !== undefined
+              ? Math.min(clipBounds2.bottom, clipBounds.bottom)
+              : clipBounds2.bottom;
+        }
+      }
+
+      // Create a new stacking context for any iframes.
+      if (elem.raw.tagName == "IFRAME") {
+        const { left, top } = elem.raw.getBoundingClientRect();
+        this.addContext(elem, undefined, left, top);
+        elem.context.addChildren(elem.raw.contentWindow.document);
+      }
+
+      if (!elem.style) {
+        this.addNonPositionedElement(elem);
+        this.addChildrenWithParent(elem);
+        return;
+      }
+
+      const parentDisplay = elem.parent?.style?.getPropertyValue("display");
+      if (
+        position != "static" ||
+        ["flex", "inline-flex", "grid", "inline-grid"].includes(parentDisplay)
+      ) {
+        const zIndex = elem.style.getPropertyValue("z-index");
+        if (zIndex != "auto") {
+          this.addContext(elem);
+          // Elements with a zero z-index have their own stacking context but are
+          // grouped with other positioned children with an auto z-index.
+          const index = +zIndex | 0;
+          if (index) {
+            this.realStackingContext.addZIndexElement(elem, index);
+            return;
+          }
+        }
+
+        if (position != "static") {
+          this.realStackingContext.addPositionedElement(elem);
+          if (!elem.context) {
+            this.addContext(elem, this.realStackingContext);
+          }
+        } else {
+          this.addNonPositionedElement(elem);
+          if (!elem.context) {
+            this.addChildrenWithParent(elem);
+          }
+        }
+        return;
+      }
+
+      if (elem.isFloat()) {
+        // Group the element and its descendants.
+        this.addContext(elem, this.realStackingContext);
+        this.addFloatingElement(elem);
+        return;
+      }
+
+      const display = elem.style.getPropertyValue("display");
+      if (display == "inline-block" || display == "inline-table") {
+        // Group the element and its descendants.
+        this.addContext(elem, this.realStackingContext);
+        this.addNonPositionedElement(elem);
+        return;
+      }
+
+      this.addNonPositionedElement(elem);
+      this.addChildrenWithParent(elem);
+    },
+
+    addContext(elem, realStackingContext, left = 0, top = 0) {
+      if (elem.context) {
+        assert(!left && !top);
+        return;
+      }
+      const offset = {
+        left: this.offset.left + left,
+        top: this.offset.top + top,
+      };
+      elem.context = new StackingContext(this.window, elem, offset, realStackingContext);
+    },
+
+    addZIndexElement(elem, index) {
+      const existing = this.zIndexElements.get(index);
+      if (existing) {
+        existing.push(elem);
+      } else {
+        this.zIndexElements.set(index, [elem]);
+      }
+    },
+
+    addPositionedElement(elem) {
+      this.positionedElements.push(elem);
+    },
+
+    addFloatingElement(elem) {
+      this.floatingElements.push(elem);
+    },
+
+    addNonPositionedElement(elem) {
+      this.nonPositionedElements.push(elem);
+    },
+
+    addChildren(parentNode) {
+      for (const child of parentNode.children) {
+        this.add(child, undefined, this.offset);
+      }
+    },
+
+    addChildrenWithParent(parentElem) {
+      for (const child of parentElem.raw.children) {
+        this.add(child, parentElem, this.offset);
+      }
+    },
+
+    // Get the elements in this context ordered back-to-front.
+    flatten() {
+      const rv = [];
+
+      const pushElements = (elems) => {
+        for (const elem of elems) {
+          if (elem.context && elem.context != this) {
+            rv.push(...elem.context.flatten());
+          } else {
+            rv.push(elem);
+          }
+        }
+      };
+
+      const pushZIndexElements = (filter) => {
+        for (const z of zIndexes) {
+          if (filter(z)) {
+            pushElements(this.zIndexElements.get(z));
+          }
+        }
+      };
+
+      const zIndexes = [...this.zIndexElements.keys()];
+      zIndexes.sort((a, b) => a - b);
+
+      if (this.root) {
+        pushElements([this.root]);
+      }
+      pushZIndexElements((z) => z < 0);
+      pushElements(this.nonPositionedElements);
+      pushElements(this.floatingElements);
+      pushElements(this.positionedElements);
+      pushZIndexElements((z) => z > 0);
+
+      return rv;
+    },
+  };
+
+  /** ###########################################################################
+   * {@link shiftRect}
+   * ##########################################################################*/
+  function shiftRect(rect, offset) {
+    return {
+      left: rect.left !== undefined ? offset.left + rect.left : undefined,
+      top: rect.top !== undefined ? offset.top + rect.top : undefined,
+      right: rect.right !== undefined ? offset.left + rect.right : undefined,
+      bottom: rect.bottom !== undefined ? offset.top + rect.bottom : undefined,
+    };
+  }
+
+  /** ###########################################################################
+   * {@link DOM_getAllBoundingClientRects}
+   * ##########################################################################*/
+
+  function getObjectIdRaw(x) {
+    return 'TODO-id';
+  }
+
+  /**
+   * @see https://static.replay.io/protocol/tot/DOM/#type-NodeBounds
+   */
+  function DOM_getAllBoundingClientRects() {
+    const cx = new StackingContext(window);
+
+    cx.addChildren(window.document);
+
+    const entries = cx.flatten();
+
+    // Get elements in front-to-back order.
+    entries.reverse();
+
+    const elements = entries
+      .map(elem => {
+        const id = getObjectIdRaw(elem.raw);
+
+        const { left, top, right, bottom } = shiftRect(elem.raw.getBoundingClientRect(), elem.offset);
+        if (left >= right || top >= bottom) {
+          return null;
+        }
+
+        const clipBounds = shiftRect(elem.clipBounds, elem.offset);
+        // ignore elements that are completely outside their clipBounds
+        if (
+          clipBounds.left > right ||
+          clipBounds.top > bottom ||
+          clipBounds.right < left ||
+          clipBounds.bottom < top
+        ) {
+          return null;
+        }
+        // only return the clipBounds that actually affect this element
+        if (clipBounds.left === undefined || clipBounds.left <= left) {
+          delete clipBounds.left;
+        }
+        if (clipBounds.top === undefined || clipBounds.top <= top) {
+          delete clipBounds.top;
+        }
+        if (clipBounds.right === undefined || clipBounds.right >= right) {
+          delete clipBounds.right;
+        }
+        if (clipBounds.bottom === undefined || clipBounds.bottom >= bottom) {
+          delete clipBounds.bottom;
+        }
+
+        const rects = [...elem.raw.getClientRects()]
+          .map(rect => shiftRect(rect, elem.offset))
+          .map(({ left, top, right, bottom }) => {
+            if (left >= right || top >= bottom) {
+              return null;
+            }
+            return [left, top, right, bottom];
+          })
+          .filter((v) => !!v);
+
+        const v = {
+          node: id,
+          rect: [left, top, right, bottom],
+        };
+        if (rects.length > 1) {
+          v.rects = rects;
+        }
+        if (Object.keys(clipBounds).length > 0) {
+          v.clipBounds = clipBounds;
+        }
+        if (elem.style?.getPropertyValue("visibility") === "hidden") {
+          v.visibility = "hidden";
+        }
+        if (elem.style?.getPropertyValue("pointer-events") === "none") {
+          v.pointerEvents = "none";
+        }
+        return v;
+      })
+      .filter((v) => !!v);
+
+    return { elements };
+  };
+
+  /** ###########################################################################
+   * 
+   * ##########################################################################*/
+
+  /**
+   * @see https://static.replay.io/protocol/tot/DOM/#type-BoxModel
+   */
+  function DOM_getBoxModel({ node }) {
+    const model = { node };
+
+    for (const box of ["content", "padding", "border", "margin"]) {
+      const compactQuads = [];
+      // if (nodeObj.getBoxQuads) {
+        // const quads = nodeObj.getBoxQuads({
+        //   box,
+        //   relativeTo: window.document,
+        // });
+        // TODO
+        const quads = [{
+          p1: { x: 0, y: 0 },
+          p2: { x: 0, y: 100 },
+          p3: { x: 100, y: 100 },
+          p4: { x: 100, y: 0 },
+        }]
+        for (const { p1, p2, p3, p4 } of quads) {
+          compactQuads.push(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, p4.x, p4.y);
+        }
+      // }
+      model[box] = compactQuads;
+    }
+
+    log(`[CHROMDEBUG] getBoxModel(${node}): ${JSON.stringify(model)}`);
+
+    return { model };
+  }
+
+  /** ###########################################################################
+   * override debugger commands
+   * ##########################################################################*/
+
+  CommandCallbacks["DOM.getAllBoundingClientRects"] = DOM_getAllBoundingClientRects;
+  CommandCallbacks["DOM.getBoxModel"] = DOM_getBoxModel;
+
+
+
+
+
+
+
+
+
 } catch (e) {
   log(`Error: Initialization exception ${e}`);
 }
@@ -864,6 +1480,11 @@ function createProtocolScope(scopeId) {
 })();
 
 )"""";
+
+
+
+
+
 
 // Script which sets a handler for collecting source maps from scripts in the
 // recording. Runs when recording/replaying if source map collection is enabled.
