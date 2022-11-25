@@ -132,7 +132,13 @@ function sendMessage(method, params) {
   gCurrentMessageId = id;
   sendCDPMessage(JSON_stringify({ method, params, id }));
   gCurrentMessageId = undefined;
-  return gCurrentMessageResult;
+  if (gCurrentMessageResult?.result) {
+    return gCurrentMessageResult.result;
+  }
+  if (gCurrentMessageResult?.error) {
+    throw new Error(`${gCurrentMessageResult.error.message} (${gCurrentMessageResult.error.code})`);
+  }
+  return undefined;
 }
 
 const gEventListeners = new Map();
@@ -143,11 +149,13 @@ function addEventListener(method, callback) {
 
 function messageCallback(message) {
   try {
+    log(`[CHROMDEBUG] messageCallback: ` + message);
+
     message = JSON_parse(message);
 
     if (message.id) {
       assert(message.id == gCurrentMessageId);
-      gCurrentMessageResult = message.result;
+      gCurrentMessageResult = message;
     } else {
       const listener = gEventListeners.get(message.method);
       if (listener) {
@@ -325,8 +333,8 @@ function getStackFrames() {
 }
 
 
-const DevOnly = {
-  tryEvalDev(expression, frameId = 0) {
+window.DevOnly = {
+  async tryEvalDev(expression, frameId = 0) {
     log(`[CHROMDEBUG] eval - expression: "${expression}"`);
 
     // NOTE: expression sometimes gets wrapped in parentheses, and its value must be a string
@@ -354,7 +362,7 @@ const DevOnly = {
       log(`[CHROMDEBUG] eval (dev) - cmd: "${cmd}"`);
 
       // run
-      const res = eval(cmd);
+      const res = await eval(cmd);
       
       return { result: { data: {}, returned: { value: JSON.stringify(res) } } };
     }
@@ -375,9 +383,9 @@ function buildProtocolResult({ result, exceptionDetails }) {
 }
 
 
-function Pause_evaluateInFrame({ frameId, expression }) {
+async function Pause_evaluateInFrame({ frameId, expression }) {
   try {
-    const result = DevOnly.tryEvalDev(expression, frameId);
+    const result = await window.DevOnly?.tryEvalDev(expression, frameId);
     if (result) {
       return result;
     }
@@ -406,14 +414,14 @@ function Pause_evaluateInFrame({ frameId, expression }) {
     }
   }
   catch (err) {
-    log(`[CHROMDEBUG] Pause_evaluateInGlobal - err: ${err.stack}`);
-    return { result: { data: {}, exception: { value: JSON.stringify(`err: ${err.stack}`) } } };
+    log(`[CHROMDEBUG] Pause_evaluateInFrame - err: ${err.stack}`);
+    return { result: { data: {}, exception: { value: err.stack } } };
   }
 }
 
-function Pause_evaluateInGlobal({ expression }) {
+async function Pause_evaluateInGlobal({ expression }) {
   try {
-    const result = DevOnly.tryEvalDev(expression);
+    const result = await window.DevOnly?.tryEvalDev(expression);
     if (result) {
       return result;
     }
@@ -423,7 +431,7 @@ function Pause_evaluateInGlobal({ expression }) {
   }
   catch (err) {
     log(`[CHROMDEBUG] Pause_evaluateInGlobal - err: ${err.stack}`);
-    return { result: { data: {}, exception: { value: JSON.stringify(`err: ${err.stack}`) } } };
+    return { result: { data: {}, exception: { value: err.stack } } };
   }
 }
 
@@ -560,6 +568,8 @@ function remoteObjectToProtocolValue(obj) {
       if (!obj.objectId) {
         return { value: null };
       }
+
+      // NOTE: Runtime.evaluate returns a new `objectId` for the same object
       const object = remoteObjectToProtocolId(obj);
       return { object };
     }
@@ -592,6 +602,8 @@ function protocolIdToScope(scopeId) {
 function createProtocolObject(objectId, level) {
   const obj = protocolIdToRemoteObject(objectId);
   const className = obj.subtype == "proxy" ? "Proxy" : (obj.className || "Function");
+
+  // NOTE: `persistentId` is added via V8 → `injected-script.cc`
   const { persistentId } = obj;
 
   let preview;
@@ -654,6 +666,7 @@ ProtocolObjectPreview.prototype = {
   },
 
   fill() {
+    // NOTE: we could also use "Runtime.evaluate" with `{ generatePreview: true }`
     const allProperties = sendMessage("Runtime.getProperties", {
       objectId: this.obj.objectId,
       ownProperties: true,
