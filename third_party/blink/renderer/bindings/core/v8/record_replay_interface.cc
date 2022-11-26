@@ -62,8 +62,8 @@ const {
   getCurrentNetworkStreamData,
 
   // DOM
-  DOM_requestNode
-
+  DOM_requestNode,
+  DOM_NodeIdForObject
 } = __RECORD_REPLAY_ARGUMENTS__;
 
 const gSourceMapData = new Map();
@@ -204,6 +204,8 @@ const CommandCallbacks = {
   "DOM.getAllBoundingClientRects": DOM_getAllBoundingClientRects
 };
 
+let gLastCommandErrors = [];
+
 function commandCallback(method, params) {
   if (!CommandCallbacks[method]) {
     log(`Missing command callback: ${method}`);
@@ -213,7 +215,9 @@ function commandCallback(method, params) {
   try {
     return CommandCallbacks[method](params);
   } catch (e) {
-    log(`Error: Command exception ${method} ${e}`);
+    const msg = `Error: Command exception ${method} - ${e?.stack || e}`;
+    gLastCommandErrors.push(msg);
+    log(msg);
     return {};
   }
 }
@@ -344,7 +348,7 @@ function getStackFrames() {
 
 window.DevOnly = {
   tryEvalDev(expression, frameId = 0) {
-    log(`[CHROMDEBUG] eval - expression: "${expression}"`);
+    // log(`[CHROMDEBUG] eval - expression: "${expression}"`);
 
     // NOTE: expression sometimes gets wrapped in parentheses, and its value must be a string
     const prefixes = ['("dev:', '"dev:'];
@@ -374,10 +378,14 @@ window.DevOnly = {
       const resJson = JSON.stringify(res);
 
       const t = res !== undefined ? ` (type: ${typeof res})` : '';
-      log(`[CHROMDEBUG] eval (dev) - cmd: "${cmd}", res:${t} "${resJson}"`);
+      // log(`[CHROMDEBUG] eval (dev) - cmd: "${cmd}", res:${t} "${resJson}"`);
       
       return { result: { data: {}, returned: { value: resJson } } };
     }
+  },
+
+  popCommandError() {
+    return gLastCommandErrors.shift();
   }
 };
 
@@ -522,6 +530,7 @@ function clearPauseDataCallback() {
     gObjectIdToProtocolId.clear();
     gProtocolIdToScope.clear();
     gLastBoundingClientRectsByDOMObjectId.clear();
+    gLastCommandErrors = [];
     gNextObjectId = 1;
   } catch (e) {
     log(`Error: clearPauseDataCallback exception: ${e}`);
@@ -1366,13 +1375,14 @@ function createProtocolScope(scopeId) {
    * NOTE: For DOM elements, we choose to use this approach to keep `objectId` persistent
    * @see https://github.com/replayio/gecko-dev/blob/592992f/devtools/server/actors/replay/module.js#L1489
    */
-  function getDOMObjectId(domElem) {
-    const nodeId = getDOMNodeId(domElem);
+  function getDOMObjectId(domElem, i) {
+    const nodeId = getDOMNodeId(domElem, i);
     return getDOMObjectIdForNodeId(nodeId);
   }
 
-  function getDOMNodeId(domElem) {
-    return DOM_NodeIdForObject(domElem);
+  function getDOMNodeId(domElem, i) {
+    // TODO: for some reason V8Node::ToImplWithTypeCheck does not recognize DOM elements as such
+    return DOM_NodeIdForObject(domElem) || i;
   }
 
   // function getDOMObjectForRemoteObjectId(objectId) {
@@ -1424,19 +1434,18 @@ function createProtocolScope(scopeId) {
    */
   function DOM_getAllBoundingClientRects() {
     const cx = new StackingContext(window);
-
     cx.addChildren(window.document);
 
     const entries = cx.flatten();
-
     // Get elements in front-to-back order.
     entries.reverse();
 
     const elements = entries
-      .map(elem => {
-        const id = getDOMObjectId(elem.raw);
+      .map((elem, i) => {
+        const id = getDOMObjectId(elem.raw, i);
 
         const { left, top, right, bottom } = shiftRect(elem.raw.getBoundingClientRect(), elem.offset);
+
         if (left >= right || top >= bottom) {
           return null;
         }
@@ -1509,7 +1518,7 @@ function createProtocolScope(scopeId) {
    * @see https://static.replay.io/protocol/tot/DOM/#type-BoxModel
    */
   function DOM_getBoxModel({ node }) {
-    if (!gLastBoundingClientRectsByDOMObjectId.size()) {
+    if (!gLastBoundingClientRectsByDOMObjectId.size) {
       // compute all basic bounding client rect sizes
       DOM_getAllBoundingClientRects();
     }
@@ -1582,7 +1591,7 @@ const {
   writeToRecordingDirectory,
   addRecordingEvent,
   addNewScriptHandler,
-  getScriptSource,
+  getScriptSource
 } = __RECORD_REPLAY_ARGUMENTS__;
 
 addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
@@ -2326,7 +2335,7 @@ InspectorDOMAgent* getOrCreateInspectorDOMAgent(LocalFrame* frame,
 //   v8::Isolate* isolate = args.GetIsolate();
 //   auto domAgent = getOrCreateInspectorDOMAgent(gLocalFrame, isolate);
 
-//   // TODO
+//   // ...
 // }
 
 static void DOM_NodeIdForObject(
@@ -2334,13 +2343,23 @@ static void DOM_NodeIdForObject(
   v8::Isolate* isolate = args.GetIsolate();
   InspectorDOMAgent* domAgent = getOrCreateInspectorDOMAgent(gLocalFrame, isolate);
 
+  recordreplay::Print("x2debug DOM_NodeIdForObject 0");
   auto context = isolate->GetCurrentContext();
+  recordreplay::Print("x2debug DOM_NodeIdForObject 1");
   auto obj = args[0]->ToObject(context).ToLocalChecked();
-  Node* node = V8Node::ToImpl(obj);
+  recordreplay::Print("x2debug DOM_NodeIdForObject 2");
+  Node* node = V8Node::ToImplWithTypeCheck(isolate, obj);
+  recordreplay::Print("x2debug DOM_NodeIdForObject 3");
   if (node) {
     auto nodeId = domAgent->BoundNodeId(node);
+    recordreplay::Print("x2debug DOM_NodeIdForObject 4");
     auto rv = v8::Number::New(isolate, nodeId);
+    recordreplay::Print("x2debug DOM_NodeIdForObject 5");
     args.GetReturnValue().Set(rv);
+    recordreplay::Print("x2debug DOM_NodeIdForObject 6");
+  } else {
+    args.GetReturnValue().SetNull();
+    recordreplay::Print("x2debug DOM_NodeIdForObject 11");
   }
 }
 
