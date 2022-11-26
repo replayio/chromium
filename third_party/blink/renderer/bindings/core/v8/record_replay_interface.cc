@@ -10,7 +10,8 @@
 #include "base/record_replay.h"
 #include "content/public/renderer/render_thread.h"
 #include "content/public/renderer/v8_value_converter.h"
-#include "third_party/blink/renderer/core/dom/node.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_node.h"
+#include "third_party/blink/renderer/core/inspector/inspected_frames.h"
 #include "third_party/blink/renderer/core/inspector/inspector_dom_agent.h"
 // #include "third_party/blink/renderer/core/inspector/inspector_dom_debugger_agent.h"
 // #include "third_party/blink/renderer/core/inspector/inspector_dom_snapshot_agent.h"
@@ -520,6 +521,7 @@ function clearPauseDataCallback() {
     gProtocolIdToObject.clear();
     gObjectIdToProtocolId.clear();
     gProtocolIdToScope.clear();
+    gLastBoundingClientRectsByDOMObjectId.clear();
     gNextObjectId = 1;
   } catch (e) {
     log(`Error: clearPauseDataCallback exception: ${e}`);
@@ -1360,15 +1362,36 @@ function createProtocolScope(scopeId) {
    * DOM bookkeeping
    * ##########################################################################*/
 
+  /**
+   * NOTE: For DOM elements, we choose to use this approach to keep `objectId` persistent
+   * @see https://github.com/replayio/gecko-dev/blob/592992f/devtools/server/actors/replay/module.js#L1489
+   */
   function getDOMObjectId(domElem) {
-    // TODO
+    const nodeId = getDOMNodeId(domElem);
+    return getDOMObjectIdForNodeId(nodeId);
   }
 
   function getDOMNodeId(domElem) {
-    // TODO
+    return DOM_NodeIdForObject(domElem);
   }
 
-  function getDOMNodeIdFromRemoteObject(remoteObject) {
+  // function getDOMObjectForRemoteObjectId(objectId) {
+  //   // TODO
+  // }
+
+  /**
+   * NOTE: we introduce an intermediate `DOMNodeObjectId` concept here, to
+   * make sure that DOM objects are identified and dealt with correctly.
+   */
+  function getDOMObjectIdForNodeId(nodeId) {
+    return `_DOM_NODE_${nodeId}`;
+  }
+
+  function getDOMNodeIdForObjectId(objectId) {
+    return objectId.match(/_DOM_NODE_(.*)/)?.[1];
+  }
+
+  function getDOMNodeObjectIdForAnyRemoteObject(remoteObject) {
     // TODO: `obj.subtype === 'node'` (aka "clientSubtype") does not work
     //      (currently held up in `value-mirror.cc` behind a divergence check)
     if (obj.subtype === 'node' || obj.description?.startsWith('HTML')) {
@@ -1376,19 +1399,25 @@ function createProtocolScope(scopeId) {
       const domResult = DOM_requestNode({ objectId: obj.objectId });
       if (domResult?.nodeId) {
         const { nodeId } = domResult;
-        return nodeId;
+        return getDOMObjectIdForNodeId(nodeId);
       }
       else {
         const err = domResult?.error?.message;
         log(`DOM_requestNode failed: ${domResult?.error?.message || '(unknown reason)'}`);
       }
     }
-    return 0;
+    return null;
   }
 
   /** ###########################################################################
    * {@link DOM_getAllBoundingClientRects}
    * ##########################################################################*/
+
+  const gLastBoundingClientRectsByDOMObjectId = new Map();
+
+  function getLastBoundingClientRect(objectId) {
+    return gLastBoundingClientRectsByDOMObjectId.get(objectId);
+  }
 
   /**
    * @see https://static.replay.io/protocol/tot/DOM/#type-NodeBounds
@@ -1462,6 +1491,9 @@ function createProtocolScope(scopeId) {
         if (elem.style?.getPropertyValue("pointer-events") === "none") {
           v.pointerEvents = "none";
         }
+
+        gLastBoundingClientRectsByDOMObjectId.set(id, v);
+
         return v;
       })
       .filter((v) => !!v);
@@ -1477,30 +1509,40 @@ function createProtocolScope(scopeId) {
    * @see https://static.replay.io/protocol/tot/DOM/#type-BoxModel
    */
   function DOM_getBoxModel({ node }) {
+    if (!gLastBoundingClientRectsByDOMObjectId.size()) {
+      // compute all basic bounding client rect sizes
+      DOM_getAllBoundingClientRects();
+    }
+    const rectInfo = getLastBoundingClientRect(node)
+    const rects = rectInfo?.rects || (rectInfo?.rect ? [rectInfo.rect] : [[0, 0, 20, 20]]);
+    
+    // hackfix: simply use the normal (not tight) bounding rects for all for now
     const model = { node };
-
     for (const box of ["content", "padding", "border", "margin"]) {
-      const compactQuads = [];
-      // if (nodeObj.getBoxQuads) {
-        // const quads = nodeObj.getBoxQuads({
-        //   box,
-        //   relativeTo: window.document,
-        // });
-        // TODO
-        const quads = [{
-          p1: { x: 0, y: 0 },
-          p2: { x: 0, y: 100 },
-          p3: { x: 100, y: 100 },
-          p4: { x: 100, y: 0 },
-        }]
-        for (const { p1, p2, p3, p4 } of quads) {
-          compactQuads.push(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, p4.x, p4.y);
-        }
-      // }
-      model[box] = compactQuads;
+      const quads = [];
+      for (const rect of rects) {
+        const [left, top, right, bottom] = rect;
+        quads.push(left, top, right, top, right, bottom, left, bottom);
+      }
+      model[box] = quads;
     }
 
-    log(`[CHROMDEBUG] getBoxModel(${node}): ${JSON.stringify(model)}`);
+
+    // const model = { node };
+    // for (const box of ["content", "padding", "border", "margin"]) {
+    //   const compactQuads = [];
+    //   // https://hacks.mozilla.org/2014/03/introducing-the-getboxquads-api/
+    //   if (nodeObj.getBoxQuads) {
+    //     const quads = nodeObj.getBoxQuads({
+    //       box,
+    //       relativeTo: window.document,
+    //     });
+    //     for (const { p1, p2, p3, p4 } of quads) {
+    //       compactQuads.push(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, p4.x, p4.y);
+    //     }
+    //   // }
+    //   model[box] = compactQuads;
+    // }
 
     return { model };
   }
@@ -1870,7 +1912,6 @@ struct InspectorChannel final : public v8_inspector::V8Inspector::Channel {
 };
 
 static v8_inspector::V8Inspector* gInspector;
-static v8_inspector::V8Inspector* gInspector;
 static v8_inspector::V8InspectorSession* gInspectorSession;
 
 void RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
@@ -1996,6 +2037,14 @@ static int GetAPIObjectIdCallback(v8::Local<v8::Object> object) {
     }
   }
   return 0;
+}
+
+static void SetDataProperty(v8::Isolate* isolate,
+                            v8::Local<v8::Object> obj,
+                            const char* property,
+                            v8::Local<v8::Value> value) {
+  v8::Local<v8::Context> context = isolate->GetCurrentContext();
+  obj->Set(context, ToV8String(isolate, property), value).Check();
 }
 
 /** ###########################################################################
@@ -2257,6 +2306,7 @@ static void HandleNetworkDidReceiveDataEvent(const base::DictionaryValue& info) 
  * @see https://chromedevtools.github.io/devtools-protocol/tot/DOM/
  * ##########################################################################*/
 
+static LocalFrame* gLocalFrame;
 static InspectorDOMAgent* gInspectorDOMAgent;
 
 // GetFrame()
@@ -2264,7 +2314,8 @@ InspectorDOMAgent* getOrCreateInspectorDOMAgent(LocalFrame* frame,
                                                 v8::Isolate* isolate) {
   if (!gInspectorDOMAgent) {
     // NOTE: based on WebDevToolsAgentImpl::AttachSession
-    auto inspected_frames = MakeGarbageCollected<InspectedFrames>(frame);
+    InspectedFrames* inspected_frames =
+        MakeGarbageCollected<InspectedFrames>(frame);
     gInspectorDOMAgent = MakeGarbageCollected<InspectorDOMAgent>(
         isolate, inspected_frames, gInspectorSession);
   }
@@ -2278,19 +2329,26 @@ InspectorDOMAgent* getOrCreateInspectorDOMAgent(LocalFrame* frame,
 //   // TODO
 // }
 
-static void DOM_NodeForRemoteObjectId(
+static void DOM_NodeIdForObject(
     const v8::FunctionCallbackInfo<v8::Value>& args) {
   v8::Isolate* isolate = args.GetIsolate();
-  auto domAgent = getOrCreateInspectorDOMAgent(gLocalFrame, isolate);
+  InspectorDOMAgent* domAgent = getOrCreateInspectorDOMAgent(gLocalFrame, isolate);
 
-  // TODO
+  auto context = isolate->GetCurrentContext();
+  auto obj = args[0]->ToObject(context).ToLocalChecked();
+  Node* node = V8Node::ToImpl(obj);
+  if (node) {
+    auto nodeId = domAgent->BoundNodeId(node);
+    auto rv = v8::Number::New(isolate, nodeId);
+    args.GetReturnValue().Set(rv);
+  }
 }
 
 static void DOM_requestNode(
     const v8::FunctionCallbackInfo<v8::Value>& args) {
   v8::Isolate* isolate = args.GetIsolate();
-  auto domAgent = getOrCreateInspectorDOMAgent(gLocalFrame, isolate);
-
+  InspectorDOMAgent* domAgent =
+      getOrCreateInspectorDOMAgent(gLocalFrame, isolate);
 
   // CHECK(args[0]->IsFunction());
   // v8::Local<v8::Function> callback = args[0].As<v8::Function>();
@@ -2303,8 +2361,8 @@ static void DOM_requestNode(
     // args[0].As<v8::Object>();
     args[0]->ToObject(context).ToLocalChecked();
   auto objectIdVal = params->Get(context, ToV8String(isolate, "objectId"))
-                      .ToLocalChecked();
-                      // .As<v8::String>();
+                      .ToLocalChecked()
+                      .As<v8::String>();
   auto objectId = ToCoreString(objectIdVal);
 
   int nodeId;
@@ -2393,7 +2451,6 @@ static bool TestEnv(const char* env) {
   return v && v[0] && v[0] != '0';
 }
 
-static LocalFrame* gLocalFrame;
 
 void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
   V8RecordReplaySetAPIObjectIdCallback(GetAPIObjectIdCallback);
@@ -2434,8 +2491,8 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
 
   // DOM
   // SetFunctionProperty(isolate, args, "DOM_AssertNode", DOM_AssertNode);
-  SetFunctionProperty(isolate, args, "DOM_NodeForRemoteObjectId",
-                      DOM_NodeForRemoteObjectId);
+  SetFunctionProperty(isolate, args, "DOM_NodeIdForObject",
+                      DOM_NodeIdForObject);
   SetFunctionProperty(isolate, args, "DOM_requestNode", DOM_requestNode);
 
   // unsorted RR stuff
@@ -2494,12 +2551,6 @@ void RecordReplayOnErrorEvent(ErrorEvent* error_event) {
   V8RecordReplayOnConsoleMessage(bookmark);
 
   gCurrentErrorEvent = nullptr;
-}
-
-static void SetDataProperty(v8::Isolate* isolate, v8::Local<v8::Object> obj,
-                            const char* property, v8::Local<v8::Value> value) {
-  v8::Local<v8::Context> context = isolate->GetCurrentContext();
-  obj->Set(context, ToV8String(isolate, property), value).Check();
 }
 
 static void GetCurrentError(const v8::FunctionCallbackInfo<v8::Value>& args) {

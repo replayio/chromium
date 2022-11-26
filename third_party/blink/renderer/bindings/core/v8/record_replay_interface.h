@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_BINDINGS_CORE_V8_RECORD_REPLAY_INTERFACE_H_
 
 #include "third_party/blink/renderer/core/events/error_event.h"
+#include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "base/values.h"
 #include "v8/include/v8.h"
 
