@@ -12,13 +12,14 @@
 namespace blink {
 
 // Initialize command state after the first context is created.
-void SetupRecordReplayCommands(v8::Isolate* isolate);
+void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame);
 
 // Notify the driver that we're adding an error to the console.
 void RecordReplayOnErrorEvent(ErrorEvent* error_event);
 
 // Notify record/replay about new inspectors that have been created.
-void RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector);
+void RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
+                                     v8::Isolate* isolate);
 
 } // namespace blink
 

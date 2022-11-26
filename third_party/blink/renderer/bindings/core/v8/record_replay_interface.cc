@@ -5,14 +5,18 @@
 #include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
 
 #include "base/base64.h"
-#include "base/record_replay.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
+#include "base/record_replay.h"
 #include "content/public/renderer/render_thread.h"
 #include "content/public/renderer/v8_value_converter.h"
 #include "third_party/blink/renderer/core/dom/node.h"
+#include "third_party/blink/renderer/core/inspector/inspector_dom_agent.h"
+// #include "third_party/blink/renderer/core/inspector/inspector_dom_debugger_agent.h"
+// #include "third_party/blink/renderer/core/inspector/inspector_dom_snapshot_agent.h"
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
+#include "third_party/blink/renderer/platform/bindings/v8_binding.h"
 #include "v8/include/v8-inspector.h"
 
 #include "crypto/secure_hash.h"
@@ -51,11 +55,15 @@ const {
   setClearPauseDataCallback,
   addNewScriptHandler,
   getCurrentError,
+
+  // network
   getCurrentNetworkRequestEvent,
   getCurrentNetworkStreamData,
-} = __RECORD_REPLAY_ARGUMENTS__;
 
-log(`[CHROMDEBUG] 11`);
+  // DOM
+  DOM_requestNode
+
+} = __RECORD_REPLAY_ARGUMENTS__;
 
 const gSourceMapData = new Map();
 
@@ -334,7 +342,7 @@ function getStackFrames() {
 
 
 window.DevOnly = {
-  async tryEvalDev(expression, frameId = 0) {
+  tryEvalDev(expression, frameId = 0) {
     log(`[CHROMDEBUG] eval - expression: "${expression}"`);
 
     // NOTE: expression sometimes gets wrapped in parentheses, and its value must be a string
@@ -359,12 +367,15 @@ window.DevOnly = {
 
       // strip "dev:" and wrap in ()
       cmd = `(${cmd.substring(4)})`;
-      log(`[CHROMDEBUG] eval (dev) - cmd: "${cmd}"`);
 
       // run
-      const res = await eval(cmd);
+      const res = eval(cmd);
+      const resJson = JSON.stringify(res);
+
+      const t = res !== undefined ? ` (type: ${typeof res})` : '';
+      log(`[CHROMDEBUG] eval (dev) - cmd: "${cmd}", res:${t} "${resJson}"`);
       
-      return { result: { data: {}, returned: { value: JSON.stringify(res) } } };
+      return { result: { data: {}, returned: { value: resJson } } };
     }
   }
 };
@@ -383,9 +394,9 @@ function buildProtocolResult({ result, exceptionDetails }) {
 }
 
 
-async function Pause_evaluateInFrame({ frameId, expression }) {
+function Pause_evaluateInFrame({ frameId, expression }) {
   try {
-    const result = await window.DevOnly?.tryEvalDev(expression, frameId);
+    const result = window.DevOnly?.tryEvalDev(expression, frameId);
     if (result) {
       return result;
     }
@@ -419,9 +430,9 @@ async function Pause_evaluateInFrame({ frameId, expression }) {
   }
 }
 
-async function Pause_evaluateInGlobal({ expression }) {
+function Pause_evaluateInGlobal({ expression }) {
   try {
-    const result = await window.DevOnly?.tryEvalDev(expression);
+    const result = window.DevOnly?.tryEvalDev(expression);
     if (result) {
       return result;
     }
@@ -435,7 +446,14 @@ async function Pause_evaluateInGlobal({ expression }) {
   }
 }
 
+// function onMaybeNewPause() {
+// }
+
 function Pause_getAllFrames() {
+  // // we don't currently have an event for `Pause.createPause`, so we use this instead.
+  // //  (→ this is called first from `Pause.createPause`, but also from other places)
+  // onMaybeNewPause();
+
   const frames = getStackFrames().map((frame, index) => {
     // Use our own IDs for frames.
     const id = (index++).toString();
@@ -479,17 +497,6 @@ function Graphics_getDevicePixelRatio() {
   return { ratio: window?.devicePixelRatio || 0 };
 }
 
-window.____devCallId = 0;
-function DOM_getAllBoundingClientRects() {
-  log(`[CHROMDEBUG] DOM_getAllBoundingClientRects ${++window.____devCallId}`);
-  const elements = [
-    {
-      node: 'test' + window.____devCallId,
-      rect: [0, 0, 0, 0]
-    }
-  ];
-  return { elements };
-}
 
 ///////////////////////////////////////////////////////////////////////////////
 // object.js
@@ -1348,13 +1355,40 @@ function createProtocolScope(scopeId) {
     };
   }
 
+  
+  /** ###########################################################################
+   * DOM bookkeeping
+   * ##########################################################################*/
+
+  function getDOMObjectId(domElem) {
+    // TODO
+  }
+
+  function getDOMNodeId(domElem) {
+    // TODO
+  }
+
+  function getDOMNodeIdFromRemoteObject(remoteObject) {
+    // TODO: `obj.subtype === 'node'` (aka "clientSubtype") does not work
+    //      (currently held up in `value-mirror.cc` behind a divergence check)
+    if (obj.subtype === 'node' || obj.description?.startsWith('HTML')) {
+      // startsWith hackfix (also used in frontend → `protocol.ts`)
+      const domResult = DOM_requestNode({ objectId: obj.objectId });
+      if (domResult?.nodeId) {
+        const { nodeId } = domResult;
+        return nodeId;
+      }
+      else {
+        const err = domResult?.error?.message;
+        log(`DOM_requestNode failed: ${domResult?.error?.message || '(unknown reason)'}`);
+      }
+    }
+    return 0;
+  }
+
   /** ###########################################################################
    * {@link DOM_getAllBoundingClientRects}
    * ##########################################################################*/
-
-  function getObjectIdRaw(x) {
-    return 'TODO-id';
-  }
 
   /**
    * @see https://static.replay.io/protocol/tot/DOM/#type-NodeBounds
@@ -1371,7 +1405,7 @@ function createProtocolScope(scopeId) {
 
     const elements = entries
       .map(elem => {
-        const id = getObjectIdRaw(elem.raw);
+        const id = getDOMObjectId(elem.raw);
 
         const { left, top, right, bottom } = shiftRect(elem.raw.getBoundingClientRect(), elem.offset);
         if (left >= right || top >= bottom) {
@@ -1436,7 +1470,7 @@ function createProtocolScope(scopeId) {
   };
 
   /** ###########################################################################
-   * 
+   * {@link DOM_getBoxModel}
    * ##########################################################################*/
 
   /**
@@ -1475,7 +1509,6 @@ function createProtocolScope(scopeId) {
    * override debugger commands
    * ##########################################################################*/
 
-  CommandCallbacks["DOM.getAllBoundingClientRects"] = DOM_getAllBoundingClientRects;
   CommandCallbacks["DOM.getBoxModel"] = DOM_getBoxModel;
 
 
@@ -1493,11 +1526,6 @@ function createProtocolScope(scopeId) {
 })();
 
 )"""";
-
-
-
-
-
 
 // Script which sets a handler for collecting source maps from scripts in the
 // recording. Runs when recording/replaying if source map collection is enabled.
@@ -1842,9 +1870,11 @@ struct InspectorChannel final : public v8_inspector::V8Inspector::Channel {
 };
 
 static v8_inspector::V8Inspector* gInspector;
+static v8_inspector::V8Inspector* gInspector;
 static v8_inspector::V8InspectorSession* gInspectorSession;
 
-void RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector) {
+void RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
+                                     v8::Isolate* isolate) {
   if (v8::IsMainThread()) {
     gInspector = inspector;
 
@@ -1857,6 +1887,15 @@ void RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector) {
   }
 }
 
+/**
+ * This only supports V8 CDP commands.
+ * That is because we do not have access to a complete DevToolsSession
+ * (The session in turn uses the UberDispatcher to distribute 
+ * arbitrary commands to all parts of Chromium.)
+ * That is because a full session (i) might add a lot of overhead, and/or
+ * (ii) cause many more types of divergences.
+ * That is why we create individual Inspectors/agents (e.g. InspectorDOMAgent) as we need them instead.
+ */
 static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
   CHECK(v8::IsMainThread());
   CHECK(gInspectorSession);
@@ -1958,6 +1997,10 @@ static int GetAPIObjectIdCallback(v8::Local<v8::Object> object) {
   }
   return 0;
 }
+
+/** ###########################################################################
+ * Networking
+ * ##########################################################################*/
 
 // Represents a known network request.  Created and added to
 // `gActiveNetworkRequests` when the request is first seen.  Removed
@@ -2208,6 +2251,81 @@ static void HandleNetworkDidReceiveDataEvent(const base::DictionaryValue& info) 
   request_info->second.response_data_received += length;
 }
 
+/** ###########################################################################
+ * DOM
+ * @see https://static.replay.io/protocol/tot/DOM/
+ * @see https://chromedevtools.github.io/devtools-protocol/tot/DOM/
+ * ##########################################################################*/
+
+static InspectorDOMAgent* gInspectorDOMAgent;
+
+// GetFrame()
+InspectorDOMAgent* getOrCreateInspectorDOMAgent(LocalFrame* frame,
+                                                v8::Isolate* isolate) {
+  if (!gInspectorDOMAgent) {
+    // NOTE: based on WebDevToolsAgentImpl::AttachSession
+    auto inspected_frames = MakeGarbageCollected<InspectedFrames>(frame);
+    gInspectorDOMAgent = MakeGarbageCollected<InspectorDOMAgent>(
+        isolate, inspected_frames, gInspectorSession);
+  }
+  return gInspectorDOMAgent;
+}
+
+// static void DOM_AssertNode(const v8::FunctionCallbackInfo<v8::Value>& args) {
+//   v8::Isolate* isolate = args.GetIsolate();
+//   auto domAgent = getOrCreateInspectorDOMAgent(gLocalFrame, isolate);
+
+//   // TODO
+// }
+
+static void DOM_NodeForRemoteObjectId(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  v8::Isolate* isolate = args.GetIsolate();
+  auto domAgent = getOrCreateInspectorDOMAgent(gLocalFrame, isolate);
+
+  // TODO
+}
+
+static void DOM_requestNode(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  v8::Isolate* isolate = args.GetIsolate();
+  auto domAgent = getOrCreateInspectorDOMAgent(gLocalFrame, isolate);
+
+
+  // CHECK(args[0]->IsFunction());
+  // v8::Local<v8::Function> callback = args[0].As<v8::Function>();
+  // CHECK(args.Length() == 1 && args[0]->IsString() &&
+  //       "must be called with a single string");
+  // v8::String::Utf8Value text(args.GetIsolate(), args[0]);
+
+  auto context = isolate->GetCurrentContext();
+  auto params = 
+    // args[0].As<v8::Object>();
+    args[0]->ToObject(context).ToLocalChecked();
+  auto objectIdVal = params->Get(context, ToV8String(isolate, "objectId"))
+                      .ToLocalChecked();
+                      // .As<v8::String>();
+  auto objectId = ToCoreString(objectIdVal);
+
+  int nodeId;
+  auto requestResult = domAgent->requestNode(objectId, &nodeId);
+
+  v8::Local<v8::Object> rv = v8::Object::New(isolate);
+  if (requestResult.IsSuccess()) {
+    SetDataProperty(isolate, rv, "nodeId", v8::Number::New(isolate, nodeId));
+    args.GetReturnValue().Set(rv);
+  } else {
+    v8::Local<v8::Object> err = v8::Object::New(isolate);
+    SetDataProperty(isolate, err, "message", ToV8String(isolate, requestResult.Message().c_str()));
+    SetDataProperty(isolate, rv, "error", err);
+    args.GetReturnValue().Set(rv);
+  }
+}
+
+/** ###########################################################################
+ * misc
+ * ##########################################################################*/
+
 // Handle incoming browser events.
 static void HandleBrowserEvent(const char* name, const char* payload) {
   base::Value val = base::JSONReader::Read(payload).value_or(base::Value());
@@ -2264,6 +2382,8 @@ static void RunScript(v8::Isolate* isolate, v8::Local<v8::Context> context, cons
   v8::ScriptOrigin origin(filename_string);
 
   v8::Local<v8::String> source = ToV8String(isolate, script);
+
+  // TODO: check for errors after `Compile` and `Run`
   v8::Local<v8::Script> compiled = v8::Script::Compile(context, source, &origin).ToLocalChecked();
   compiled->Run(context).ToLocalChecked();
 }
@@ -2273,12 +2393,16 @@ static bool TestEnv(const char* env) {
   return v && v[0] && v[0] != '0';
 }
 
-void SetupRecordReplayCommands(v8::Isolate* isolate) {
+static LocalFrame* gLocalFrame;
+
+void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
   V8RecordReplaySetAPIObjectIdCallback(GetAPIObjectIdCallback);
   V8RecordReplayRegisterBrowserEventCallback(HandleBrowserEvent);
 
+  gLocalFrame = localFrame;
+
   gActiveNetworkRequests =
-    new std::unordered_map<std::string, NetworkRequestStatus>();
+      new std::unordered_map<std::string, NetworkRequestStatus>();
   gCurrentNetworkStreamData = new std::vector<uint8_t>();
 
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
@@ -2293,20 +2417,32 @@ void SetupRecordReplayCommands(v8::Isolate* isolate) {
 
   SetFunctionProperty(isolate, args, "log",
                       LogCallback);
+
+  // CDP debugger functionality
   SetFunctionProperty(isolate, args, "setCDPMessageCallback",
                       SetCDPMessageCallback);
   SetFunctionProperty(isolate, args, "sendCDPMessage",
                       SendCDPMessage);
   SetFunctionProperty(isolate, args, "setCommandCallback",
                       v8::FunctionCallbackRecordReplaySetCommandCallback);
-  SetFunctionProperty(isolate, args, "setClearPauseDataCallback",
-                      v8::FunctionCallbackRecordReplaySetClearPauseDataCallback);
-  SetFunctionProperty(isolate, args, "getCurrentError",
-                      GetCurrentError);
+
+  // networking
   SetFunctionProperty(isolate, args, "getCurrentNetworkRequestEvent",
                       GetCurrentNetworkRequestEvent);
   SetFunctionProperty(isolate, args, "getCurrentNetworkStreamData",
                       GetCurrentNetworkStreamData);
+
+  // DOM
+  // SetFunctionProperty(isolate, args, "DOM_AssertNode", DOM_AssertNode);
+  SetFunctionProperty(isolate, args, "DOM_NodeForRemoteObjectId",
+                      DOM_NodeForRemoteObjectId);
+  SetFunctionProperty(isolate, args, "DOM_requestNode", DOM_requestNode);
+
+  // unsorted RR stuff
+  SetFunctionProperty(isolate, args, "setClearPauseDataCallback",
+                      v8::FunctionCallbackRecordReplaySetClearPauseDataCallback);
+  SetFunctionProperty(isolate, args, "getCurrentError",
+                      GetCurrentError);
   SetFunctionProperty(isolate, args, "getRecordingId",
                       GetRecordingId);
   SetFunctionProperty(isolate, args, "sha256DigestHex",
