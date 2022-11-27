@@ -62,8 +62,8 @@ const {
   getCurrentNetworkRequestEvent,
   getCurrentNetworkStreamData,
 
-  // Blink and DOM
-  getBlinkIdRaw
+  // API, Blink and DOM
+  getAPIObjectIdRaw
 } = __RECORD_REPLAY_ARGUMENTS__;
 
 const gSourceMapData = new Map();
@@ -81,10 +81,10 @@ const JSON_parse = JSON.parse;
 // Some of these are duplicated in gSourceMapScript, so watch out when making
 // modifications to update both versions...
 
-function assert(v) {
+function assert(v, msg = "") {
   if (!v) {
-    log(`Assertion failed ${Error().stack}`);
-    throw new Error("Assertion failed");
+    log(`Error: Assertion failed ${msg} ${Error().stack}`);
+    throw new Error("Assertion failed!");
   }
 }
 
@@ -201,7 +201,8 @@ const CommandCallbacks = {
   "Pause.getObjectPreview": Pause_getObjectPreview,
   "Pause.getObjectProperty": Pause_getObjectProperty,
   "Pause.getScope": Pause_getScope,
-  "DOM.getDocument": DOM_getDocument,
+  // bring back after id look up has been fixed
+  // "DOM.getDocument": DOM_getDocument,
   "DOM.getAllBoundingClientRects": DOM_getAllBoundingClientRects,
   "DOM.getBoxModel": DOM_getBoxModel
 };
@@ -531,7 +532,7 @@ function clearPauseDataCallback() {
     gProtocolIdToRemoteObject.clear();
     gRemoteObjectIdToProtocolId.clear();
     gProtocolIdToScope.clear();
-    gLastBoundingClientRectsByDOMObjectId.clear();
+    gLastBoundingClientRectsByAPIObjectId.clear();
     gLastCommandErrors = [];
     gNextObjectId = 1;
   } catch (e) {
@@ -621,6 +622,7 @@ function protocolIdToScope(scopeId) {
 
 function createProtocolObject(objectId, level) {
   const obj = protocolIdToRemoteObject(objectId);
+  // NOTE: `subtype` often won't be available, due to divergence
   const className = obj.subtype == "proxy" ? "Proxy" : (obj.className || "Function");
 
   // NOTE: `persistentId` is added via V8 → `injected-script.cc`
@@ -1000,13 +1002,6 @@ function createProtocolScope(scopeId) {
   //   quite baroque and don't seem to match up with the spec above, so they are
   //   mostly ignored here.
 
-  function assert(v, msg = "") {
-    if (!v) {
-      log(`Error: Assertion failed ${msg} ${Error().stack}`);
-      throw new Error("Assertion failed!");
-    }
-  }
-
   // Information about an element needed to add it to a stacking context.
   function StackingContextElement(node, parent, offset, style, clipBounds) {
     assert(node.nodeType == Node.ELEMENT_NODE);
@@ -1370,40 +1365,40 @@ function createProtocolScope(scopeId) {
 
   
   /** ###########################################################################
-   * Blink and DOM bookkeeping
+   * API, Blink and DOM bookkeeping
    * ##########################################################################*/
 
   /**
    * NOTE: For DOM elements, we choose to use this approach to keep `objectId` persistent
    * @see https://github.com/replayio/gecko-dev/blob/592992f/devtools/server/actors/replay/module.js#L1489
    */
-  function getBlinkId(blinkObject, i) {
-    const blinkId = getBlinkId(blinkObject, i);
-    return decorateBlinkObjectId(blinkId);
-  }
-
-  function getBlinkId(blinkObject, i) {
+  function getAPIObjectId(apiObject, i) {
     // TODO: handle the case better where the id is not picked up correctly (should not happen for DOM nodes)
-    return getBlinkIdRaw(blinkObject) || i;
+    const apiIdRaw = getAPIObjectIdRaw(apiObject) || i;
+    const apiId = decorateAPIObjectId(apiIdRaw);
+    
+    // TODO: make sure that API objects can now be looked up via `protocolIdToRemoteObject` as well
+
+    return apiId;
   }
 
-  // function getDOMObjectForRemoteObjectId(objectId) {
+  // function getAPIObjectForRemoteObjectId(objectId) {
   //   // TODO
   // }
 
   /**
-   * NOTE: we introduce an intermediate `BlinkObjectId` concept here, to
+   * NOTE: we introduce an intermediate `APIObjectId` concept here, to
    * make sure that DOM objects are identified and dealt with correctly.
    */
-  function decorateBlinkObjectId(nodeId) {
+  function decorateAPIObjectId(nodeId) {
     return `_DOM_NODE_${nodeId}`;
   }
 
-  function getBlinkIdId(objectId) {
+  function getAPIObjectIdFromObjectId(objectId) {
     return objectId.match(/_DOM_NODE_(.*)/)?.[1];
   }
 
-  function getBlinkIdForAnyRemoteObject(remoteObject) {
+  function getAPIObjectIdForAnyRemoteObject(remoteObject) {
     // TODO: `obj.subtype === 'node'` (aka "clientSubtype") does not work
     //      (currently held up in `value-mirror.cc` behind a divergence check)
     if (obj.subtype === 'node' || obj.description?.startsWith('HTML')) {
@@ -1412,7 +1407,7 @@ function createProtocolScope(scopeId) {
       const domResult = DOM_requestNode({ objectId: obj.objectId });
       if (domResult?.nodeId) {
         const { nodeId } = domResult;
-        return decorateBlinkObjectId(nodeId);
+        return decorateAPIObjectId(nodeId);
       }
       else {
         const err = domResult?.error?.message;
@@ -1426,17 +1421,22 @@ function createProtocolScope(scopeId) {
    * {@link DOM_getDocument}
    * ##########################################################################*/
   function DOM_getDocument() {
-    // TODO
+    const apiId = getAPIObjectId(window.document);
+
+    return {
+      data: {},
+      document: apiId
+    };
   }
 
   /** ###########################################################################
    * {@link DOM_getAllBoundingClientRects}
    * ##########################################################################*/
 
-  const gLastBoundingClientRectsByDOMObjectId = new Map();
+  const gLastBoundingClientRectsByAPIObjectId = new Map();
 
   function getLastBoundingClientRect(objectId) {
-    return gLastBoundingClientRectsByDOMObjectId.get(objectId);
+    return gLastBoundingClientRectsByAPIObjectId.get(objectId);
   }
 
   /**
@@ -1452,7 +1452,7 @@ function createProtocolScope(scopeId) {
 
     const elements = entries
       .map((elem, i) => {
-        const id = getBlinkId(elem.raw, i);
+        const id = getAPIObjectId(elem.raw, i);
 
         const { left, top, right, bottom } = shiftRect(elem.raw.getBoundingClientRect(), elem.offset);
 
@@ -1511,7 +1511,7 @@ function createProtocolScope(scopeId) {
           v.pointerEvents = "none";
         }
 
-        gLastBoundingClientRectsByDOMObjectId.set(id, v);
+        gLastBoundingClientRectsByAPIObjectId.set(id, v);
 
         return v;
       })
@@ -1528,7 +1528,7 @@ function createProtocolScope(scopeId) {
    * @see https://static.replay.io/protocol/tot/DOM/#type-BoxModel
    */
   function DOM_getBoxModel({ node }) {
-    if (!gLastBoundingClientRectsByDOMObjectId.size) {
+    if (!gLastBoundingClientRectsByAPIObjectId.size) {
       // compute all basic bounding client rect sizes
       DOM_getAllBoundingClientRects();
     }
@@ -2357,7 +2357,7 @@ static LocalFrame* gLocalFrame;
 //   // ...
 // }
 
-static void getBlinkIdRaw(
+static void getAPIObjectIdRaw(
     const v8::FunctionCallbackInfo<v8::Value>& args) {
   v8::Isolate* isolate = args.GetIsolate();
   auto context = isolate->GetCurrentContext();
@@ -2379,6 +2379,7 @@ static void getBlinkIdRaw(
   // }
 
   auto recordReplayId = GetAPIObjectId(isolate, obj);
+  
   auto rv = v8::Number::New(isolate, recordReplayId);
   args.GetReturnValue().Set(rv);
 }
@@ -2530,8 +2531,8 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
 
   // DOM
   // SetFunctionProperty(isolate, args, "DOM_AssertNode", DOM_AssertNode);
-  SetFunctionProperty(isolate, args, "getBlinkIdRaw",
-                      getBlinkIdRaw);
+  SetFunctionProperty(isolate, args, "getAPIObjectIdRaw",
+                      getAPIObjectIdRaw);
   // SetFunctionProperty(isolate, args, "DOM_requestNode", DOM_requestNode);
 
   // unsorted RR stuff
