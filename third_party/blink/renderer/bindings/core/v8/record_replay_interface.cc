@@ -2333,11 +2333,10 @@ static void HandleNetworkDidReceiveDataEvent(const base::DictionaryValue& info) 
  * ##########################################################################*/
 
 static LocalFrame* gLocalFrame;
-// NOTE: Might not use InspectorDOMAgent, since is not too helpful when it is
-// not fully hooked up (requires DevToolsSession + UberDispatcher for that)
-
+// NOTE: the InspectorDOMAgent is not as helpful as we would like, since it is
+// not fully hooked up to `DevToolsSession` + `UberDispatcher`
 // static InspectorDOMAgent* gInspectorDOMAgent;
-// GetFrame()
+
 // InspectorDOMAgent* getOrCreateInspectorDOMAgent(LocalFrame* frame,
 //                                                 v8::Isolate* isolate) {
 //   if (!gInspectorDOMAgent) {
@@ -2346,6 +2345,7 @@ static LocalFrame* gLocalFrame;
 //         MakeGarbageCollected<InspectedFrames>(frame);
 //     gInspectorDOMAgent = MakeGarbageCollected<InspectorDOMAgent>(
 //         isolate, inspected_frames, gInspectorSession);
+//     gInspectorDOMAgent->enable();
 //   }
 //   return gInspectorDOMAgent;
 // }
@@ -2357,32 +2357,41 @@ static LocalFrame* gLocalFrame;
 //   // ...
 // }
 
-static void getAPIObjectIdRaw(
-    const v8::FunctionCallbackInfo<v8::Value>& args) {
+static void getAPIObjectIdRaw(const v8::FunctionCallbackInfo<v8::Value>& args) {
   v8::Isolate* isolate = args.GetIsolate();
   auto context = isolate->GetCurrentContext();
-
   auto obj = args[0]->ToObject(context).ToLocalChecked();
-  // Node* node = V8Node::ToImplWithTypeCheck(isolate, obj);
-  // v8::String::Utf8Value typeName(args.GetIsolate(), obj->TypeOf(isolate));
-  // recordreplay::Print("DOM_NODE %s %d - V8Node %d, V8Document %d", *typeName,
-  //                     !!node, V8Node::HasInstance(obj, isolate),
-  //                     V8Document::HasInstance(obj, isolate));
-  // if (!node) {
-  //   args.GetReturnValue().SetNull();
-  // }
-  // else { ...
-  //   InspectorDOMAgent* domAgent =
-  //       getOrCreateInspectorDOMAgent(gLocalFrame, isolate);
-  //   auto nodeId = domAgent->BoundNodeId(node);
-  //   auto nodeId = domAgent->Bind(node, document_node_to_id_map_.Get());
-  // }
 
   auto recordReplayId = GetAPIObjectId(isolate, obj);
-  
+
   auto rv = v8::Number::New(isolate, recordReplayId);
   args.GetReturnValue().Set(rv);
 }
+
+// static void BuildDOMObjectForNode(
+//     const v8::FunctionCallbackInfo<v8::Value>& args) {
+//   v8::Isolate* isolate = args.GetIsolate();
+//   auto context = isolate->GetCurrentContext();
+
+//   auto obj = args[0]->ToObject(context).ToLocalChecked();
+//   Node* node = V8Node::ToImplWithTypeCheck(isolate, obj);
+//   v8::String::Utf8Value typeName(args.GetIsolate(), obj->TypeOf(isolate));
+//   recordreplay::Print("DOM_NODE %s %d - V8Node %d, V8Document %d", *typeName,
+//                       !!node, V8Node::HasInstance(obj, isolate),
+//                       V8Document::HasInstance(obj, isolate));
+//   if (!node) {
+//     args.GetReturnValue().SetNull();
+//   }
+//   else {
+//     InspectorDOMAgent* domAgent = getOrCreateInspectorDOMAgent(gLocalFrame, isolate);
+//     auto flatten_result = nullptr;
+//     // NOTE: neither of these generate an `objectId`
+//     // domAgent->BuildObjectForNode(node, depth, pierce, nodes_map, flatten_result);
+//     // std::unique_ptr<protocol::DOM::Node>* root;
+//     // NOTE: ↓ `getDocument` also calls `BuildObjectForNode`
+//     // domAgent->getDocument(depth, pierce)
+//   }
+// }
 
 // static void DOM_requestNode(
 //     const v8::FunctionCallbackInfo<v8::Value>& args) {
