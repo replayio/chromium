@@ -12,8 +12,10 @@
 #include "content/public/renderer/v8_value_converter.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_document.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_node.h"
+#include "third_party/blink/renderer/core/dom/pseudo_element.h"
 #include "third_party/blink/renderer/core/inspector/inspected_frames.h"
 #include "third_party/blink/renderer/core/inspector/inspector_dom_agent.h"
+#include "third_party/blink/renderer/core/inspector/resolve_node.h"
 // #include "third_party/blink/renderer/core/inspector/inspector_dom_debugger_agent.h"
 // #include "third_party/blink/renderer/core/inspector/inspector_dom_snapshot_agent.h"
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
@@ -63,7 +65,8 @@ const {
   getCurrentNetworkStreamData,
 
   // API, Blink and DOM
-  getAPIObjectIdRaw
+  getAPIObjectIdRaw,
+  previewBlinkObjectByObjectId
 } = __RECORD_REPLAY_ARGUMENTS__;
 
 const gSourceMapData = new Map();
@@ -485,6 +488,7 @@ function Pause_getExceptionValue() {
 
 function Pause_getObjectPreview({ object, level = "full" }) {
   const objectData = createProtocolObject(object, level);
+  log(`DOMXY getObjectPreview: ${JSON.stringify(objectData)}`);
   return { data: { objects: [objectData] } };
 }
 
@@ -696,6 +700,9 @@ ProtocolObjectPreview.prototype = {
     });
     const properties = allProperties.result;
 
+    // Add data for DOM/CSS objects
+    this.extra = previewBlinkObjectByObjectId(this.obj.objectId);
+
     // Add class-specific data.
     const previewer = CustomPreviewers[this.obj.className];
     const requiredProperties = [];
@@ -723,6 +730,7 @@ ProtocolObjectPreview.prototype = {
     let prototypeId;
     if (prototype && prototype.value && prototype.value.objectId) {
       prototypeId = remoteObjectToProtocolId(prototype.value);
+      // TODO: in gecko-dev, we also `addPrototypeGetterValues` - should we do this here, too?
     }
     return {
       prototypeId,
@@ -832,6 +840,8 @@ function previewFunction(allProperties) {
     this.extra.functionLocation = createProtocolLocation(locationProperty.value.value);
   }
 }
+
+
 
 const CustomPreviewers = {
   Array: ["length"],
@@ -1368,12 +1378,16 @@ function createProtocolScope(scopeId) {
    * API, Blink and DOM bookkeeping
    * ##########################################################################*/
 
+  // TODO: Fix all this, and also make sure that it is consistent with "protocolValue" ↓
+  // * GetObjectIdByDOMNode(obj)
+  // * GetDOMNodeByObjectId(objectId)
+  // * previewBlinkObjectByObjectId(objectId)
+
   /**
    * NOTE: For DOM elements, we choose to use this approach to keep `objectId` persistent
    * @see https://github.com/replayio/gecko-dev/blob/592992f/devtools/server/actors/replay/module.js#L1489
    */
   function getAPIObjectId(apiObject, i) {
-    // TODO: handle the case better where the id is not picked up correctly (should not happen for DOM nodes)
     const apiIdRaw = getAPIObjectIdRaw(apiObject) || i;
     const apiId = decorateAPIObjectId(apiIdRaw);
     
@@ -1381,10 +1395,6 @@ function createProtocolScope(scopeId) {
 
     return apiId;
   }
-
-  // function getAPIObjectForRemoteObjectId(objectId) {
-  //   // TODO
-  // }
 
   /**
    * NOTE: we introduce an intermediate `APIObjectId` concept here, to
@@ -1394,9 +1404,13 @@ function createProtocolScope(scopeId) {
     return `_DOM_NODE_${nodeId}`;
   }
 
-  function getAPIObjectIdFromObjectId(objectId) {
+  function getAPIObjectIdForObjectId(objectId) {
     return objectId.match(/_DOM_NODE_(.*)/)?.[1];
   }
+
+  // function getAPIObjectForObjectId(objectId) {
+  //   const apiId = 
+  // }
 
   function getAPIObjectIdForAnyRemoteObject(remoteObject) {
     // TODO: `obj.subtype === 'node'` (aka "clientSubtype") does not work
@@ -1519,6 +1533,24 @@ function createProtocolScope(scopeId) {
 
     return { elements };
   };
+
+  /** ###########################################################################
+   * {@link DOM_getBoundingClientRect}
+   * ##########################################################################*/
+
+  /**
+   * @see https://static.replay.io/protocol/tot/DOM/#type-BoxModel
+   */
+  function DOM_getBoundingClientRect({ node }) {
+    if (!gLastBoundingClientRectsByAPIObjectId.size) {
+      // compute all basic bounding client rect sizes
+      DOM_getAllBoundingClientRects();
+    }
+    const rectInfo = getLastBoundingClientRect(node)
+    const rect = rectInfo?.rect || [0, 0, 0, 0];
+
+    return { rect };
+  }
 
   /** ###########################################################################
    * {@link DOM_getBoxModel}
@@ -2028,13 +2060,17 @@ static void GetCurrentError(const v8::FunctionCallbackInfo<v8::Value>& args);
 
 extern "C" void V8RecordReplayFinishRecording();
 
+
+// static int GetBlinkObjectId(v8::Isolate* isolate, v8::Local<v8::Object> object) {
+//   // TODO
+// }
+
 // NOTE: this is a copy of `GetAPIObjectIdCallback`.
 //    Want to make sure that this works as intended before changing that which already works.
 static int GetAPIObjectId(v8::Isolate* isolate, v8::Local<v8::Object> object) {
   const WrapperTypeInfo* DefaultWrapperTypeInfos[] = {
       // ScriptWrappable itself doesn't have wrapper type info, so check
       // subclasses.
-      Document::GetStaticWrapperTypeInfo(),
       Node::GetStaticWrapperTypeInfo(),
       Event::GetStaticWrapperTypeInfo()
   };
@@ -2072,6 +2108,18 @@ static void SetDataProperty(v8::Isolate* isolate,
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
   obj->Set(context, ToV8String(isolate, property), value).Check();
 }
+
+// // NOTE: this should theoretically work, but we don't currently track `ScriptState`
+// //    (→ can pass in from local_window_proxy in the future)
+// static void SetDataProperty(ScriptState* scriptState,
+//                             ScriptWrappable* impl,
+//                             v8::Local<v8::Object> obj,
+//                             const char* property) {
+//   auto value = impl->WrapV2(scriptState).ToLocalChecked();
+//   auto isolate = scriptState->GetIsolate();
+//   v8::Local<v8::Context> context = isolate->GetCurrentContext();
+//   obj->Set(context, ToV8String(isolate, property), value).Check();
+// }
 
 /** ###########################################################################
  * Networking
@@ -2335,20 +2383,21 @@ static void HandleNetworkDidReceiveDataEvent(const base::DictionaryValue& info) 
 static LocalFrame* gLocalFrame;
 // NOTE: the InspectorDOMAgent is not as helpful as we would like, since it is
 // not fully hooked up to `DevToolsSession` + `UberDispatcher`
-// static InspectorDOMAgent* gInspectorDOMAgent;
+static InspectorDOMAgent* gInspectorDOMAgent;
 
-// InspectorDOMAgent* getOrCreateInspectorDOMAgent(LocalFrame* frame,
-//                                                 v8::Isolate* isolate) {
-//   if (!gInspectorDOMAgent) {
-//     // NOTE: based on WebDevToolsAgentImpl::AttachSession
-//     InspectedFrames* inspected_frames =
-//         MakeGarbageCollected<InspectedFrames>(frame);
-//     gInspectorDOMAgent = MakeGarbageCollected<InspectorDOMAgent>(
-//         isolate, inspected_frames, gInspectorSession);
-//     gInspectorDOMAgent->enable();
-//   }
-//   return gInspectorDOMAgent;
-// }
+
+InspectorDOMAgent* getOrCreateInspectorDOMAgent(LocalFrame* frame,
+                                                v8::Isolate* isolate) {
+  if (!gInspectorDOMAgent) {
+    // NOTE: based on WebDevToolsAgentImpl::AttachSession
+    InspectedFrames* inspected_frames =
+        MakeGarbageCollected<InspectedFrames>(frame);
+    gInspectorDOMAgent = MakeGarbageCollected<InspectorDOMAgent>(
+        isolate, inspected_frames, gInspectorSession);
+    gInspectorDOMAgent->enable();
+  }
+  return gInspectorDOMAgent;
+}
 
 // static void DOM_AssertNode(const v8::FunctionCallbackInfo<v8::Value>& args) {
 //   v8::Isolate* isolate = args.GetIsolate();
@@ -2368,30 +2417,107 @@ static void getAPIObjectIdRaw(const v8::FunctionCallbackInfo<v8::Value>& args) {
   args.GetReturnValue().Set(rv);
 }
 
-// static void BuildDOMObjectForNode(
-//     const v8::FunctionCallbackInfo<v8::Value>& args) {
-//   v8::Isolate* isolate = args.GetIsolate();
-//   auto context = isolate->GetCurrentContext();
+// implement Pause.getObjectPreview
+// see https://static.replay.io/protocol/tot/Pause/#type-ObjectPreview
+static void previewBlinkObjectByObjectId(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsString() && "must be called with a single string");
 
-//   auto obj = args[0]->ToObject(context).ToLocalChecked();
-//   Node* node = V8Node::ToImplWithTypeCheck(isolate, obj);
-//   v8::String::Utf8Value typeName(args.GetIsolate(), obj->TypeOf(isolate));
-//   recordreplay::Print("DOM_NODE %s %d - V8Node %d, V8Document %d", *typeName,
-//                       !!node, V8Node::HasInstance(obj, isolate),
-//                       V8Document::HasInstance(obj, isolate));
-//   if (!node) {
-//     args.GetReturnValue().SetNull();
-//   }
-//   else {
-//     InspectorDOMAgent* domAgent = getOrCreateInspectorDOMAgent(gLocalFrame, isolate);
-//     auto flatten_result = nullptr;
-//     // NOTE: neither of these generate an `objectId`
-//     // domAgent->BuildObjectForNode(node, depth, pierce, nodes_map, flatten_result);
-//     // std::unique_ptr<protocol::DOM::Node>* root;
-//     // NOTE: ↓ `getDocument` also calls `BuildObjectForNode`
-//     // domAgent->getDocument(depth, pierce)
-//   }
-// }
+  v8::Isolate* isolate = args.GetIsolate();
+  auto context = isolate->GetCurrentContext();
+  auto objectIdLocal = args[0].As<v8::String>();
+
+  InspectorDOMAgent* domAgent =
+      getOrCreateInspectorDOMAgent(gLocalFrame, isolate);
+
+  Node* node;
+  auto response = domAgent->NodeForRemoteObjectId(ToCoreString(objectIdLocal), node);
+  if (response.IsSuccess()) {
+    // set `node` props
+
+    v8::Local<v8::Object> rv = v8::Object::New(isolate);
+    v8::Local<v8::Object> nodeInfo = v8::Object::New(isolate);
+    // see https://static.replay.io/protocol/tot/DOM/#type-Node
+    SetDataProperty(isolate, nodeInfo, "nodeType",
+                    v8::Number::New(isolate, node->getNodeType()));
+    SetDataProperty(isolate, nodeInfo, "nodeName", V8String(isolate, node->nodeName()));
+    SetDataProperty(isolate, nodeInfo, "nodeValue", V8String(isolate,node->nodeValue()));
+    SetDataProperty(isolate, nodeInfo, "isConnected", v8::Boolean::New(isolate,node->isConnected()));
+
+    // TODO
+    // SetDataProperty(isolate, nodeInfo, "style", node->style);
+    // SetDataProperty(isolate, nodeInfo, "parentNode", node->parentNode);
+    // SetDataProperty(isolate, nodeInfo, "childNodes", node->childNodes);
+
+    auto* element = DynamicTo<Element>(node);
+    if (element) {
+      auto attributes = element->Attributes();
+      // TODO
+      // auto attributesArr = ;
+      // SetDataProperty(isolate, nodeInfo, "attributes", attributesArr);
+
+      auto* pseudoElement = DynamicTo<PseudoElement>(element);
+      if (pseudoElement) {
+        auto pseudoType = PseudoElementTagName(pseudoElement->GetPseudoId())
+                                  .LocalName();
+        SetDataProperty(isolate, nodeInfo, "pseudoType", V8String(isolate, pseudoType));
+      }
+    }
+
+    auto* document = DynamicTo<Document>(node);
+    if (document) {
+      SetDataProperty(isolate, nodeInfo, "documentURL",
+                      V8String(isolate, document->urlForBinding().GetString()));
+    }
+
+    SetDataProperty(isolate, rv, "node", nodeInfo);
+    args.GetReturnValue().Set(rv);
+  } else {
+    // TODO:
+    // else if (CSSRule.(this.raw)) {
+    //   this.extra.rule = previewRuleContents(this.raw);
+    // } else if (CSSStyleDeclaration.isInstance(this.raw)) {
+    //   this.extra.style = previewStyleContents(this.raw);
+    // } else if (StyleSheet.isInstance(this.raw)) {
+    //   this.extra.styleSheet = previewStyleSheetContents(this.raw);
+    // }
+    v8::String::Utf8Value objectIdStr(isolate, objectIdLocal);
+    recordreplay::Print(
+        "[previewBlinkObjectByObjectId] failed to look up node (%s): %s",
+        *objectIdStr, response.Message().c_str());
+    args.GetReturnValue().SetNull();
+  }
+
+  // const String object_group("console");
+  // protocol::Maybe<int> v8_execution_context_id;
+  // ResolveNode(gInspectorSession, node, object_group, v8_execution_context_id);
+
+}
+
+static void GetObjectIdByDOMNode(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  v8::Isolate* isolate = args.GetIsolate();
+  auto context = isolate->GetCurrentContext();
+
+  auto obj = args[0]->ToObject(context).ToLocalChecked();
+  Node* node = V8Node::ToImplWithTypeCheck(isolate, obj);
+  v8::String::Utf8Value typeName(args.GetIsolate(), obj->TypeOf(isolate));
+  recordreplay::Print("DOM_NODE %s %d - V8Node %d, V8Document %d", *typeName,
+                      !!node, V8Node::HasInstance(obj, isolate),
+                      V8Document::HasInstance(obj, isolate));
+  if (!node) {
+    args.GetReturnValue().SetNull();
+  }
+  else {
+    InspectorDOMAgent* domAgent = getOrCreateInspectorDOMAgent(gLocalFrame, isolate);
+    auto flatten_result = nullptr;
+    // NOTE: neither of these generate an `objectId`
+    // domAgent->BuildObjectForNode(node, depth, pierce, nodes_map, flatten_result);
+    // std::unique_ptr<protocol::DOM::Node>* root;
+    // NOTE: ↓ `getDocument` also calls `BuildObjectForNode`
+    // domAgent->getDocument(depth, pierce)
+  }
+}
 
 // static void DOM_requestNode(
 //     const v8::FunctionCallbackInfo<v8::Value>& args) {
@@ -2538,11 +2664,9 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
   SetFunctionProperty(isolate, args, "getCurrentNetworkStreamData",
                       GetCurrentNetworkStreamData);
 
-  // DOM
-  // SetFunctionProperty(isolate, args, "DOM_AssertNode", DOM_AssertNode);
-  SetFunctionProperty(isolate, args, "getAPIObjectIdRaw",
-                      getAPIObjectIdRaw);
-  // SetFunctionProperty(isolate, args, "DOM_requestNode", DOM_requestNode);
+  // DOM, blink, API stuff
+  SetFunctionProperty(isolate, args, "getAPIObjectIdRaw", getAPIObjectIdRaw);
+  SetFunctionProperty(isolate, args, "previewBlinkObjectByObjectId", previewBlinkObjectByObjectId);
 
   // unsorted RR stuff
   SetFunctionProperty(isolate, args, "setClearPauseDataCallback",
