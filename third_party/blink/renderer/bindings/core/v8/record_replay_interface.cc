@@ -38,8 +38,8 @@ namespace internal {
 
 extern int RecordReplayObjectId(v8::Isolate* isolate, v8::Local<v8::Context> cx,
                                 v8::Local<v8::Value> object, bool allow_create);
-extern void RecordReplayCheckObjectId(v8::Isolate* isolate, v8::Local<v8::Context> cx,
-                                      v8::Local<v8::Value> object);
+extern void RecordReplayConfirmObjectHasId(v8::Isolate* isolate, v8::Local<v8::Context> cx,
+                                           v8::Local<v8::Value> object);
 
 } // namespace internal
 
@@ -1329,9 +1329,9 @@ static void GetPersistentId(const v8::FunctionCallbackInfo<v8::Value>& args) {
 
 static void CheckPersistentId(const v8::FunctionCallbackInfo<v8::Value>& args) {
   if (args.Length() >= 1) {
-    v8::internal::RecordReplayCheckObjectId(args.GetIsolate(),
-                                            args.GetIsolate()->GetCurrentContext(),
-                                            args[0]);
+    v8::internal::RecordReplayConfirmObjectHasId(args.GetIsolate(),
+                                                 args.GetIsolate()->GetCurrentContext(),
+                                                 args[0]);
   }
 }
 
