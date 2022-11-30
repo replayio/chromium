@@ -395,7 +395,7 @@ window.DevOnly = {
 
       const t = res !== undefined ? ` (type: ${typeof res})` : '';
       // log(`[CHROMDEBUG] eval (dev) - cmd: "${cmd}", res:${t} "${resJson}"`);
-      
+
       return { result: { data: {}, returned: { value: resJson } } };
     }
   },
@@ -461,7 +461,7 @@ function Pause_evaluateInGlobal({ expression }) {
     if (result) {
       return result;
     }
-    
+
     const rv = sendMessage("Runtime.evaluate", { expression });
     return buildProtocolResult(rv);
   }
@@ -1383,7 +1383,7 @@ function createProtocolScope(scopeId) {
     };
   }
 
-  
+
   /** ###########################################################################
    * API, Blink and DOM bookkeeping
    * ##########################################################################*/
@@ -1400,7 +1400,7 @@ function createProtocolScope(scopeId) {
   function getAPIObjectId(apiObject, i) {
     const apiIdRaw = getAPIObjectIdRaw(apiObject) || i;
     const apiId = decorateAPIObjectId(apiIdRaw);
-    
+
     // TODO: make sure that API objects can now be looked up via `protocolIdToRemoteObject` as well
 
     return apiId;
@@ -1419,7 +1419,7 @@ function createProtocolScope(scopeId) {
   }
 
   // function getAPIObjectForObjectId(objectId) {
-  //   const apiId = 
+  //   const apiId =
   // }
 
   function getAPIObjectIdForAnyRemoteObject(remoteObject) {
@@ -1579,7 +1579,7 @@ function createProtocolScope(scopeId) {
     }
     const rectInfo = getLastBoundingClientRect(node)
     const rects = rectInfo?.rects || (rectInfo?.rect ? [rectInfo.rect] : [[0, 0, 20, 20]]);
-    
+
     // hackfix: simply use the normal (not tight) bounding rects for all for now
     const model = { node };
     for (const box of ["content", "padding", "border", "margin"]) {
@@ -1885,6 +1885,10 @@ static v8::Local<v8::String> ToV8String(v8::Isolate* isolate, const char* value)
                                  v8::NewStringType::kInternalized).ToLocalChecked();
 }
 
+static v8::Local<v8::String> ToV8String(v8::Isolate* isolate, const WTF::String& value) {
+  return ToV8String(isolate, value.Ascii().c_str());
+}
+
 // Define a property that isn't writable, configurable, or enumerable.
 static void DefineProperty(v8::Isolate* isolate, v8::Local<v8::Object> obj,
                            const char* name, v8::Local<v8::Value> value) {
@@ -1981,7 +1985,7 @@ void RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
 /**
  * This only supports V8 CDP commands.
  * That is because we do not have access to a complete DevToolsSession
- * (The session in turn uses the UberDispatcher to distribute 
+ * (The session in turn uses the UberDispatcher to distribute
  * arbitrary commands to all parts of Chromium.)
  * That is because a full session (i) might add a lot of overhead, and/or
  * (ii) cause many more types of divergences.
@@ -2449,25 +2453,31 @@ static RemoteObjectIdType GetObjectIdForBlinkObject(v8::Isolate* isolate, v8::Lo
     //    `v8_inspector::protocol::Runtime::API::RemoteObject`
     // NOTE2: actual implementation type is inaccessible
     //    `v8_inspector::protocol::Runtime::RemoteObject`
-    auto remoteObject = gInspectorSession->wrapObject(
+    RemoteObjectIdTypeRaw remoteObjectId = gInspectorSession->wrapObjectGetObjectId(
         context, blinkObjectV8, ToV8InspectorStringView(object_group),
         false /* generatePreview */);
-    // return remoteObject->
 
-    uint8_t remoteObjectBin[100];
-    remoteObjectBin[99] = 0;
-    remoteObject->fromBinary(remoteObjectBin, 99);
+    // if (remoteObjectId.is8Bit()) {
+    //   return RemoteObjectIdType(remoteObjectId.characters8, remoteObjectId.length());
+    // }
+    // NOTE: always 16 bit
+    return RemoteObjectIdType(
+        reinterpret_cast<const UChar*>(remoteObjectId.characters16),
+        remoteObjectId.length());
 
-    for (int i = 0; i < 99; ++i) {
-      if (remoteObjectBin[i] == 0) // make sure, there are no other zeroes
-        remoteObjectBin[i] = 32;
-    }
+    // Consider: we can call the serialized object in JS to access its contents
+    //    (partially based on
+    //    https://source.chromium.org/chromium/chromium/src/+/main:out/Debug/gen/third_party/blink/renderer/core/inspector/protocol/dom.cc;l=2026?q=resolveNode&ss=chromium%2Fchromium%2Fsrc)
+    // crdtp::ObjectSerializer serializer;
+    // serializer.AddField(crdtp::MakeSpan("object"), out_object);
+    // serializer.Finish();
+    //  (there is probably an easier way, but not sure how)
+    // v8::Local<v8::Function> callback = gCDPMessageCallback->Get(isolate);
+    // v8::MaybeLocal<v8::Value> rv =
+    //     callback->Call(context, v8::Undefined(isolate), 1, &arg);
 
-    recordreplay::Print("GetObjectIdForBlinkObject raw result: %s",
-                        (const char*)remoteObjectBin);
-
-    return String("TODO-fix-me");
     // TODO: return objectId
+
 }
 
 static RemoteObjectIdType GetObjectIdForBlinkObject(v8::Isolate* isolate, ScriptWrappable* blinkObject) {
@@ -2488,7 +2498,7 @@ static RemoteObjectIdType GetObjectIdForBlinkObject(v8::Isolate* isolate, Script
 
 static ScriptWrappable* GetBlinkObjectForObjectId(v8::Isolate* isolate,
                                                   RemoteObjectIdType objectId) {
-  
+  // TODO
 }
 
 /** ###########################################################################
@@ -2536,8 +2546,8 @@ static void jsPreviewBlinkObjectForObjectId(
     auto* element = DynamicTo<Element>(node);
     if (element) {
       CSSStyleDeclaration* style = element->style();
-      auto styleObjectId = GetObjectIdForBlinkObject(isolate, style);
-      SetDataProperty(isolate, nodeInfo, "style", styleObjectId);
+      auto styleObjectId = GetObjectIdForBlinkObject(isolate, (ScriptWrappable*)style);
+      SetDataProperty(isolate, nodeInfo, "style", V8String(isolate, styleObjectId));
 
       auto attributes = element->Attributes();
       // TODO
@@ -2598,7 +2608,7 @@ static void jsGetObjectIdForBlinkObject(
     args.GetReturnValue().SetNull();
   } else {
     auto objectId = GetObjectIdForBlinkObject(isolate, node);
-    
+
     args.GetReturnValue().Set(ToV8String(isolate, objectId));
   }
 }
@@ -2628,7 +2638,7 @@ static void jsGetAPIObjectIdRaw(
 //   // v8::String::Utf8Value text(args.GetIsolate(), args[0]);
 
 //   auto context = isolate->GetCurrentContext();
-//   auto params = 
+//   auto params =
 //     // args[0].As<v8::Object>();
 //     args[0]->ToObject(context).ToLocalChecked();
 //   auto objectIdVal = params->Get(context, ToV8String(isolate, "objectId"))
