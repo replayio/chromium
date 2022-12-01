@@ -207,6 +207,7 @@ void LocalWindowProxy::Initialize() {
     SetupRecordReplayCommands(GetIsolate(), GetFrame());
     V8RecordReplaySetDefaultContext(GetIsolate(), context);
     recordreplay::NewCheckpoint();
+    RunInitialRecordReplayScripts(GetIsolate());
   }
 
   {
