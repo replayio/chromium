@@ -171,8 +171,6 @@ function addEventListener(method, callback) {
 
 function messageCallback(message) {
   try {
-    log(`[CHROMDEBUG] messageCallback: ` + message);
-
     message = JSON_parse(message);
 
     if (message.id) {
@@ -231,7 +229,7 @@ function commandCallback(method, params) {
   try {
     return CommandCallbacks[method](params);
   } catch (e) {
-    const msg = `[Runtime Command Error] ${method} - ${e?.stack || e}`;
+    const msg = `Error: ${method} - ${e?.stack || e}`;
     gLastCommandErrors.push(msg);
     log(msg);
     return {};
@@ -363,46 +361,47 @@ function getStackFrames() {
 
 
 window.DevOnly = {
-  tryEvalDev(expression, frameId = 0) {
-    // log(`[CHROMDEBUG] eval - expression: "${expression}"`);
+  // NOTE: commented out until we have a safe/reliably way of dealing with it
+  // tryEvalDev(expression, frameId = 0) {
+  //   // log(`[CHROMDEBUG] eval - expression: "${expression}"`);
 
-    // NOTE: expression sometimes gets wrapped in parentheses, and its value must be a string
-    const prefixes = ['("dev:', '"dev:'];
-    const prefix = prefixes.find(p => expression.startsWith(p));
-    if (prefix) {
-      // hackfix: evaluate straight-up in our dev context
-      // TODO: unsafe. Must be behind DEV-ONLY flag.
+  //   // NOTE: expression sometimes gets wrapped in parentheses, and its value must be a string
+  //   const prefixes = ['("dev:', '"dev:'];
+  //   const prefix = prefixes.find(p => expression.startsWith(p));
+  //   if (prefix) {
+  //     // hackfix: evaluate straight-up in our dev context
+  //     // TODO: unsafe. Must be behind DEV-ONLY flag.
 
-      let cmd = expression;
-      if (cmd.startsWith('(')) {
-        // strip '()'
-        cmd = cmd.substring(1, expression.length - 1);
-      }
-      if (cmd.endsWith(';')) {
-        // strip trailing ';'
-        cmd = cmd.substring(0, expression.length - 1);
-      }
+  //     let cmd = expression;
+  //     if (cmd.startsWith('(')) {
+  //       // strip '()'
+  //       cmd = cmd.substring(1, expression.length - 1);
+  //     }
+  //     if (cmd.endsWith(';')) {
+  //       // strip trailing ';'
+  //       cmd = cmd.substring(0, expression.length - 1);
+  //     }
 
-      // parse JSON (used for serialization)
-      cmd = JSON.parse(cmd);
+  //     // parse JSON (used for serialization)
+  //     cmd = JSON.parse(cmd);
 
-      // strip "dev:" and wrap in ()
-      cmd = `(${cmd.substring(4)})`;
+  //     // strip "dev:" and wrap in ()
+  //     cmd = `(${cmd.substring(4)})`;
 
-      // run
-      const res = eval(cmd);
-      const resJson = JSON.stringify(res);
+  //     // run
+  //     const res = eval(cmd);
+  //     const resJson = JSON.stringify(res);
 
-      const t = res !== undefined ? ` (type: ${typeof res})` : '';
-      // log(`[CHROMDEBUG] eval (dev) - cmd: "${cmd}", res:${t} "${resJson}"`);
+  //     const t = res !== undefined ? ` (type: ${typeof res})` : '';
+  //     // log(`[CHROMDEBUG] eval (dev) - cmd: "${cmd}", res:${t} "${resJson}"`);
 
-      return { result: { data: {}, returned: { value: resJson } } };
-    }
-  },
+  //     return { result: { data: {}, returned: { value: resJson } } };
+  //   }
+  // },
 
-  popCommandError() {
-    return gLastCommandErrors.shift();
-  }
+  // popCommandError() {
+  //   return gLastCommandErrors.shift();
+  // }
 };
 
 // Build a protocol Result object from a result/exceptionDetails CDP rval.
@@ -450,7 +449,6 @@ function Pause_evaluateInFrame({ frameId, expression }) {
     }
   }
   catch (err) {
-    log(`[CHROMDEBUG] Pause_evaluateInFrame - err: ${err.stack}`);
     return { result: { data: {}, exception: { value: err.stack } } };
   }
 }
@@ -466,7 +464,6 @@ function Pause_evaluateInGlobal({ expression }) {
     return buildProtocolResult(rv);
   }
   catch (err) {
-    log(`[CHROMDEBUG] Pause_evaluateInGlobal - err: ${err.stack}`);
     return { result: { data: {}, exception: { value: err.stack } } };
   }
 }
@@ -498,7 +495,7 @@ function Pause_getExceptionValue() {
 
 function Pause_getObjectPreview({ object, level = "full" }) {
   const objectData = createProtocolObject(object, level);
-  log(`DOMXY getObjectPreview: ${JSON.stringify(objectData)}`);
+  // log(`DOMXY getObjectPreview: ${JSON.stringify(objectData)}`);
   return { data: { objects: [objectData] } };
 }
 
@@ -2396,8 +2393,8 @@ static RemoteObjectIdType GetObjectIdForAnyObject(v8::Isolate* isolate,
   //   remoteObjectId.length()
   // );
   auto converted = ToCoreString(remoteObjectId);
-  recordreplay::Print("GetObjectId - string conversion -> '%s'",
-    converted.Ascii().c_str());
+  // recordreplay::Print("GetObjectId - string conversion -> '%s'",
+  //   converted.Ascii().c_str());
 
   return converted;
 
@@ -2421,12 +2418,6 @@ static RemoteObjectIdType GetObjectIdForBlinkObject(v8::Isolate* isolate,
     //     getOrCreateInspectorDOMAgent(gLocalFrame, isolate);
 
     v8::HandleScope handle_scope(isolate);
-    // ScriptState* script_state = ToScriptStateForMainWorld(gLocalFrame);
-    // if (!script_state) {
-    //   recordreplay::Print("GetObjectIdForBlinkObject, but script_state is gone");
-    //   return "";
-    // }
-    // auto context = script_state->GetContext();
     auto context = isolate->GetCurrentContext();
 
     auto blinkObjectV8 = ToV8(blinkObject, context->Global(), isolate);
@@ -2442,7 +2433,7 @@ static ScriptWrappable* GetBlinkObjectForObjectId(v8::Isolate* isolate,
   if (!gInspectorSession->unwrapObject(&error,
                                        ToV8InspectorStringView(objectId),
                                        &object, &context, nullptr)) {
-    recordreplay::Print("GetBlinkObjectForObjectId unwrapObject failed: %s",
+    recordreplay::Print("ERROR: GetBlinkObjectForObjectId unwrapObject failed: %s",
                         ToCoreString(std::move(error)).Ascii().c_str());
     return nullptr;
   }
