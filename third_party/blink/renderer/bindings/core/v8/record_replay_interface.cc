@@ -509,7 +509,7 @@ function Pause_getObjectPreview({ object, level = "full" }) {
 }
 
 function Pause_getObjectProperty({ object, name }) {
-  const obj = protocolIdToRemoteObject(object);
+  const obj = getRemoteObjectById(object);
   const rv = sendMessage(
     "Runtime.callFunctionOn",
     {
@@ -537,21 +537,17 @@ function Graphics_getDevicePixelRatio() {
 // Manage association between remote objects and protocol object IDs.
 
 // Map protocol ObjectId => RemoteObject
-const gProtocolIdToRemoteObject = new Map();
+const gRemoteObjectsById = new Map();
 
-// Map RemoteObject.objectId => protocol ObjectId
-const gRemoteObjectIdToProtocolId = new Map();
-
-// Map protocol ScopeId => Debugger.Scope
-const gProtocolIdToScope = new Map();
+// Map protocol ObjectId => Debugger.Scope
+const gScopesById = new Map();
 
 let gNextObjectId = 1;
 
 function clearPauseDataCallback() {
   try {
-    gProtocolIdToRemoteObject.clear();
-    gRemoteObjectIdToProtocolId.clear();
-    gProtocolIdToScope.clear();
+    gRemoteObjectsById.clear();
+    gScopesById.clear();
     gLastBoundingClientRectsByObjectId.clear();
     gLastCommandErrors = [];
     gNextObjectId = 1;
@@ -560,23 +556,20 @@ function clearPauseDataCallback() {
   }
 }
 
-function remoteObjectToProtocolId(remoteObject) {
+function registerRemoteObject(remoteObject) {
   assert(remoteObject.objectId);
 
-  const existing = gRemoteObjectIdToProtocolId.get(remoteObject.objectId);
+  const existing = gRemoteObjectsById.get(remoteObject.objectId);
   if (existing) {
     return existing;
   }
 
-  const protocolObjectId = (gNextObjectId++).toString();
-  gRemoteObjectIdToProtocolId.set(remoteObject.objectId, protocolObjectId);
-  gProtocolIdToRemoteObject.set(protocolObjectId, remoteObject);
-
-  return protocolObjectId;
+  gRemoteObjectsById.set(remoteObject.objectId, remoteObject);
+  return remoteObject.objectId;
 }
 
-function protocolIdToRemoteObject(objectId) {
-  const remoteObject = gProtocolIdToRemoteObject.get(objectId);
+function getRemoteObjectById(objectId) {
+  const remoteObject = gRemoteObjectsById.get(objectId);
   assert(remoteObject);
   return remoteObject;
 }
@@ -611,7 +604,7 @@ function remoteObjectToProtocolValue(obj) {
       }
 
       // NOTE: Runtime.evaluate returns a new `objectId` for the same object
-      const object = remoteObjectToProtocolId(obj);
+      const object = registerRemoteObject(obj);
       return { object };
     }
     case "symbol":
@@ -621,15 +614,14 @@ function remoteObjectToProtocolValue(obj) {
   }
 }
 
-function scopeToProtocolId(scope) {
-  // Use the scope object's ID as the ID for the scope itself.
-  const id = remoteObjectToProtocolId(scope.object);
-  gProtocolIdToScope.set(id, scope);
+function registerScope(scope) {
+  const id = registerRemoteObject(scope.object);
+  gScopesById.set(id, scope);
   return id;
 }
 
-function protocolIdToScope(scopeId) {
-  const scope = gProtocolIdToScope.get(scopeId);
+function getScopeById(scopeId) {
+  const scope = gScopesById.get(scopeId);
   assert(scope);
   return scope;
 }
@@ -641,7 +633,7 @@ function protocolIdToScope(scopeId) {
 // Logic for creating object previews for the record/replay protocol.
 
 function createProtocolObject(objectId, level) {
-  const obj = protocolIdToRemoteObject(objectId);
+  const obj = getRemoteObjectById(objectId);
   // NOTE: `subtype` often won't be available, due to divergence
   const className = obj.subtype == "proxy" ? "Proxy" : (obj.className || "Function");
 
@@ -745,7 +737,7 @@ ProtocolObjectPreview.prototype = {
 
     let prototypeId;
     if (prototype && prototype.value && prototype.value.objectId) {
-      prototypeId = remoteObjectToProtocolId(prototype.value);
+      prototypeId = registerRemoteObject(prototype.value);
       // TODO: in gecko-dev, we also `addPrototypeGetterValues` - should we do this here, too?
     }
     return {
@@ -909,10 +901,10 @@ function createProtocolPropertyDescriptor(desc) {
   }
 
   if (get && get.objectId) {
-    rv.get = remoteObjectToProtocolId(get);
+    rv.get = registerRemoteObject(get);
   }
   if (set && set.objectId) {
-    rv.set = remoteObjectToProtocolId(set);
+    rv.set = registerRemoteObject(set);
   }
 
   if (symbol) {
@@ -945,13 +937,13 @@ function createProtocolFrame(frameId, frame) {
     functionName: frame.functionName || undefined,
     functionLocation: createProtocolLocation(frame.functionLocation),
     location: createProtocolLocation(frame.location),
-    scopeChain: frame.scopeChain.map(scopeToProtocolId),
+    scopeChain: frame.scopeChain.map(registerScope),
     this: remoteObjectToProtocolValue(frame.this),
   };
 }
 
 function createProtocolScope(scopeId) {
-  const scope = protocolIdToScope(scopeId);
+  const scope = getScopeById(scopeId);
 
   let type;
   switch (scope.type) {
@@ -968,7 +960,7 @@ function createProtocolScope(scopeId) {
 
   let object, bindings;
   if (type == "global" || type == "with") {
-    object = remoteObjectToProtocolId(scope.object);
+    object = registerRemoteObject(scope.object);
   } else {
     bindings = [];
 
@@ -1753,7 +1745,7 @@ function collectUnresolvedSourceMapResources(mapText, mapURL) {
 
 function assert(v) {
   if (!v) {
-    log(`Assertion failed ${Error().stack}`);
+    log(`Error: Assertion failed ${Error().stack}`);
     throw new Error("Assertion failed");
   }
 }
@@ -2410,7 +2402,6 @@ static RemoteObjectIdType GetObjectIdForAnyObject(v8::Isolate* isolate,
   //      https://discord.com/channels/779097926135054346/956618540063010856/1047496481705299968
 
   // NOTE: This always creates a new `RemoteObject` and binds it to a new id.
-  //    Hence, we also need to unbind it at some point.
   // RemoteObjectIdTypeRaw remoteObjectId =
   auto result = gInspectorSession->wrapObjectGetObjectId(
     context, obj, ToV8InspectorStringView(object_group),
