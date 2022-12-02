@@ -2411,10 +2411,10 @@ static RemoteObjectIdType GetObjectIdForAnyObject(v8::Isolate* isolate,
 
   // NOTE: This always creates a new `RemoteObject` and binds it to a new id.
   //    Hence, we also need to unbind it at some point.
-  RemoteObjectIdTypeRaw remoteObjectId =
-      gInspectorSession->wrapObjectGetObjectId(
-          context, obj, ToV8InspectorStringView(object_group),
-          false /* generatePreview */);
+  // RemoteObjectIdTypeRaw remoteObjectId =
+  auto result = gInspectorSession->wrapObjectGetObjectId(
+    context, obj, ToV8InspectorStringView(object_group),
+    false /* generatePreview */);
 
   // if (remoteObjectId.is8Bit()) {
   //   return RemoteObjectIdType(remoteObjectId.characters8, remoteObjectId.length());
@@ -2424,7 +2424,7 @@ static RemoteObjectIdType GetObjectIdForAnyObject(v8::Isolate* isolate,
   //   reinterpret_cast<const UChar*>(remoteObjectId.characters16()),
   //   remoteObjectId.length()
   // );
-  auto converted = ToCoreString(remoteObjectId);
+  auto converted = ToCoreString(*result);
   // recordreplay::Print("GetObjectId - string conversion -> '%s'",
   //   converted.Ascii().c_str());
 
