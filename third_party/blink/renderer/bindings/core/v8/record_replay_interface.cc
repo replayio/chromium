@@ -82,14 +82,14 @@ const {
   setClearPauseDataCallback,
   addNewScriptHandler,
   getCurrentError,
+  fromJsMakeDebuggeeValue,
 
   // network
   getCurrentNetworkRequestEvent,
   getCurrentNetworkStreamData,
 
   // Blink, DOM and more
-  jsGetObjectIdForAnyObject,
-  jsPreviewBlinkObjectForObjectId
+  // ?
 } = __RECORD_REPLAY_ARGUMENTS__;
 
 const gSourceMapData = new Map();
@@ -562,6 +562,21 @@ function clearPauseDataCallback() {
   } catch (e) {
     log(`Error: clearPauseDataCallback exception: ${e}`);
   }
+}
+
+/**
+ * Creates and returns a new `RemoteObject` for given JS object.
+ * 
+ * @return {CDP.Runtime.RemoteObject}
+ * @see https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#type-RemoteObject
+ */
+function makeDebuggeeValue(obj) {
+  assert(!obj.objectId);
+  const remoteObjectStr = fromJsMakeDebuggeeValue(obj);
+  log(`DDBG makeDebuggeeValue: ${remoteObjectStr}`);
+  const remoteObject = JSON.parse(remoteObjectStr);
+  assert(remoteObject.objectId);
+  return remoteObject;
 }
 
 function registerRemoteObject(remoteObject) {
@@ -1388,14 +1403,6 @@ function createProtocolScope(scopeId) {
     };
   }
 
-
-  /** ###########################################################################
-   * API, Blink and DOM bookkeeping
-   * ##########################################################################*/
-
-  function getObjectIdForObject(obj) {
-    return jsGetObjectIdForAnyObject(obj);
-  }
 
   /** ###########################################################################
    * {@link DOM_getDocument}
@@ -2465,12 +2472,13 @@ static ScriptWrappable* GetBlinkObjectForObjectId(v8::Isolate* isolate,
 }
 
 /** ###########################################################################
- * // DOM, blink js functions
+ * functions called from JS
  * ##########################################################################*/
 
-// static void jsGetBlinkObjectForObjectId(
+// static void fromJsGetBlinkObjectForObjectId(
 //     const v8::FunctionCallbackInfo<v8::Value>& args) {
-//   CHECK(args.Length() == 1 && args[0]->IsString() && "must be called with a single string");
+//   CHECK(args.Length() == 1 && args[0]->IsString() && "must be called with a
+//   single string");
 
 //   v8::Isolate* isolate = args.GetIsolate();
 //   auto context = isolate->GetCurrentContext();
@@ -2482,7 +2490,7 @@ static ScriptWrappable* GetBlinkObjectForObjectId(v8::Isolate* isolate,
 
 // // Used for Pause.getObjectPreview
 // // see https://static.replay.io/protocol/tot/Pause/#type-ObjectPreview
-// static void jsPreviewBlinkObjectForObjectId(
+// static void fromJsPreviewBlinkObjectForObjectId(
 //     const v8::FunctionCallbackInfo<v8::Value>& args) {
 //   CHECK(args.Length() == 1 && args[0]->IsString() && "must be called with a single string");
 
@@ -2592,23 +2600,15 @@ static ScriptWrappable* GetBlinkObjectForObjectId(v8::Isolate* isolate,
 /**
  * NOTE: Since the `RemoteObject` type is not publicly exposed, we cannot easily access it in CPP space.
  * We thus only use it in JS.
- * Similar to gecko's `makeDebuggeeValue`.
+ * This basically emulates gecko's `makeDebuggeeValue` (but requires an extra parse).
  */
-// static void jsCreateRemoteObjectForAnyObject(
-static void jsMakeDebuggeeValue(const v8::FunctionCallbackInfo<v8::Value>& args) {
+static void fromJsMakeDebuggeeValue(const v8::FunctionCallbackInfo<v8::Value>& args) {
   CHECK(args.Length() == 1 && args[0]->IsObject() &&
         "must be called with a single object");
   v8::Isolate* isolate = args.GetIsolate();
   auto context = isolate->GetCurrentContext();
   auto obj = args[0]->ToObject(context).ToLocalChecked();
 
-  ScriptState* script_state = ToScriptStateForMainWorld(gLocalFrame);
-  if (!script_state) {
-    recordreplay::Print("GetObjectIdForBlinkObject, but script_state is gone");
-    return;
-  }
-  auto context = script_state->GetContext();
-  v8::Context::Scope scope(context);
   const String object_group("console"); // NOTE: object_group is used for cleaning up
   auto generatePreview = false;
 
@@ -2626,34 +2626,9 @@ static void jsMakeDebuggeeValue(const v8::FunctionCallbackInfo<v8::Value>& args)
   result->AppendSerialized(&cbor);
 
   auto remoteObject = v8::String::NewFromOneByte(isolate, cbor.data(),
-                                                          v8::NewStringType::kNormal,
-                                                          cbor.size()).ToLocalChecked();
-
+                                                 v8::NewStringType::kNormal,
+                                                 cbor.size()).ToLocalChecked();
   args.GetReturnValue().Set(remoteObject);
-
-  // TODO: send result to JS (similar to SendCDPMessageResultToFrontend)
-  
-  // static void SendMessageToFrontend(const v8_inspector::StringView& message) {
-  //   CHECK(v8::IsMainThread());
-
-  //   CHECK(gCDPMessageCallback);
-  //   CHECK(!message.is8Bit());
-
-  //   v8::Isolate* isolate = v8::Isolate::GetCurrent();
-  //   if (!isolate->InContext() || ScriptForbiddenScope::IsScriptForbidden()) {
-  //     // We're never interested in messages sent at these times.
-  //     return;
-  //   }
-
-  //   v8::HandleScope scope(isolate);
-
-  //   v8::Local<v8::Context> context = isolate->GetCurrentContext();
-  //   v8::Local<v8::Value> arg = v8::String::NewFromTwoByte(isolate, message.characters16(),
-  //                                                         v8::NewStringType::kNormal,
-  //                                                         message.length()).ToLocalChecked();
-  //   v8::Local<v8::Function> callback = gCDPMessageCallback->Get(isolate);
-  //   v8::MaybeLocal<v8::Value> rv = callback->Call(context, v8::Undefined(isolate), 1, &arg);
-  //   CHECK(!rv.IsEmpty());
 }
 
 // static void DOM_requestNode(
@@ -2805,7 +2780,7 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
   // SetFunctionProperty(isolate, args, "jsGetObjectIdForAnyObject",
   //                     jsGetObjectIdForAnyObject);
   // SetFunctionProperty(isolate, args, "jsPreviewBlinkObjectForObjectId", jsPreviewBlinkObjectForObjectId);
-  SetFunctionProperty(isolate, args, "makeDebuggeeValue", jsMakeDebuggeeValue);
+  SetFunctionProperty(isolate, args, "fromJsMakeDebuggeeValue", fromJsMakeDebuggeeValue);
 
       // unsorted RR stuff
       SetFunctionProperty(
