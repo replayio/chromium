@@ -182,6 +182,7 @@ function addEventListener(method, callback) {
   gEventListeners.set(method, callback);
 }
 
+// TODO: rename all these CDP-related symbols correspondingly
 function messageCallback(message) {
   try {
     message = JSON_parse(message);
@@ -577,7 +578,7 @@ function registerRemoteObject(remoteObject) {
 
 function getRemoteObjectById(objectId) {
   const remoteObject = gRemoteObjectsById.get(objectId);
-  assert(remoteObject);
+  // assert(remoteObject);
   return remoteObject;
 }
 
@@ -2389,58 +2390,41 @@ static LocalFrame* gLocalFrame;
 // }
 
 
-static RemoteObjectIdType GetObjectIdForAnyObject(v8::Isolate* isolate,
-                                                  const v8::Local<v8::Value>& obj) {
-  // NOTE: adapted from ResolveNode
-  //    (third_party/blink/renderer/core/inspector/resolve_node.cc)
-  v8::HandleScope handle_scope(isolate);
+// static RemoteObjectIdType GetObjectIdForAnyObject(v8::Isolate* isolate,
+//                                                   const v8::Local<v8::Value>& obj) {
+//   // NOTE: adapted from ResolveNode
+//   //    (third_party/blink/renderer/core/inspector/resolve_node.cc)
+//   v8::HandleScope handle_scope(isolate);
 
-  ScriptState* script_state = ToScriptStateForMainWorld(gLocalFrame);
-  if (!script_state) {
-    recordreplay::Print("GetObjectIdForBlinkObject, but script_state is gone");
-    return "";
-  }
-  auto context = script_state->GetContext();
-  v8::Context::Scope scope(context);
-  const String object_group("console"); // NOTE: object_group is used for cleaning up
+//   ScriptState* script_state = ToScriptStateForMainWorld(gLocalFrame);
+//   if (!script_state) {
+//     recordreplay::Print("GetObjectIdForBlinkObject, but script_state is gone");
+//     return "";
+//   }
+//   auto context = script_state->GetContext();
+//   v8::Context::Scope scope(context);
+//   const String object_group("console"); // NOTE: object_group is used for cleaning up
 
-  // NOTE: This always creates (and deletes) a new `RemoteObject` and binds it to a new id.
-  // RemoteObjectIdTypeRaw remoteObjectId =
-  // v8_inspector::StringView result =
-  RemoteObjectIdTypeRaw result = gInspectorSession->wrapObjectGetObjectId(
-      context, obj, ToV8InspectorStringView(object_group), false);
+//   // NOTE: This always creates (and deletes) a new `RemoteObject` and binds it to a new id.
+//   RemoteObjectIdTypeRaw result = gInspectorSession->wrapObjectGetObjectId(
+//       context, obj, ToV8InspectorStringView(object_group), false);
 
-  auto converted = String(result.c_str(), result.length());
-  // recordreplay::Print("GetObjectIdForAnyObject -> '%s'",
-  //                     converted.Ascii().c_str());
+//   auto converted = String(result.c_str(), result.length());
+//   // recordreplay::Print("GetObjectIdForAnyObject -> '%s'",
+//   //                     converted.Ascii().c_str());
+//   return converted;
 
-  return converted;
+// static RemoteObjectIdType GetObjectIdForBlinkObject(v8::Isolate* isolate,
+//                                                     ScriptWrappable* blinkObject) {
+//     // InspectorDOMAgent* domAgent =
+//     //     getOrCreateInspectorDOMAgent(gLocalFrame, isolate);
 
-  // Consider: we can call the serialized object in JS to access its contents
-  //    (partially based on
-  //    https://source.chromium.org/chromium/chromium/src/+/main:out/Debug/gen/third_party/blink/renderer/core/inspector/protocol/dom.cc;l=2026?q=resolveNode&ss=chromium%2Fchromium%2Fsrc)
-  // crdtp::ObjectSerializer serializer;
-  // serializer.AddField(crdtp::MakeSpan("object"), out_object);
-  // serializer.Finish();
-  //  (there is probably an easier way, but not sure how)
-  // v8::Local<v8::Function> callback = gCDPMessageCallback->Get(isolate);
-  // v8::MaybeLocal<v8::Value> rv =
-  //     callback->Call(context, v8::Undefined(isolate), 1, &arg);
+//     v8::HandleScope handle_scope(isolate);
+//     auto context = isolate->GetCurrentContext();
 
-  // TODO: return objectId
-}
-
-static RemoteObjectIdType GetObjectIdForBlinkObject(v8::Isolate* isolate,
-                                                    ScriptWrappable* blinkObject) {
-    // InspectorDOMAgent* domAgent =
-    //     getOrCreateInspectorDOMAgent(gLocalFrame, isolate);
-
-    v8::HandleScope handle_scope(isolate);
-    auto context = isolate->GetCurrentContext();
-
-    auto blinkObjectV8 = ToV8(blinkObject, context->Global(), isolate);
-    return GetObjectIdForAnyObject(isolate, blinkObjectV8);
-}
+//     auto blinkObjectV8 = ToV8(blinkObject, context->Global(), isolate);
+//     return GetObjectIdForAnyObject(isolate, blinkObjectV8);
+// }
 
 static ScriptWrappable* GetBlinkObjectForObjectId(v8::Isolate* isolate,
                                                   RemoteObjectIdType objectId) {
@@ -2468,6 +2452,9 @@ static ScriptWrappable* GetBlinkObjectForObjectId(v8::Isolate* isolate,
       Event::GetStaticWrapperTypeInfo(),
       CSSStyleDeclaration::GetStaticWrapperTypeInfo()
   };
+
+  // TODO: we can remove this annoying loop by checking `DCHECK_LT`
+  //      (to replace `HasInstance`)
   for (const WrapperTypeInfo* info : infos) {
     if (V8PerIsolateData::From(isolate)->HasInstance(info, object)) {
       ScriptWrappable* wrappable = ToScriptWrappable(object.As<v8::Object>());
@@ -2481,115 +2468,192 @@ static ScriptWrappable* GetBlinkObjectForObjectId(v8::Isolate* isolate,
  * // DOM, blink js functions
  * ##########################################################################*/
 
-// Used for Pause.getObjectPreview
-// see https://static.replay.io/protocol/tot/Pause/#type-ObjectPreview
-static void jsPreviewBlinkObjectForObjectId(
-    const v8::FunctionCallbackInfo<v8::Value>& args) {
-  CHECK(args.Length() == 1 && args[0]->IsString() && "must be called with a single string");
+// static void jsGetBlinkObjectForObjectId(
+//     const v8::FunctionCallbackInfo<v8::Value>& args) {
+//   CHECK(args.Length() == 1 && args[0]->IsString() && "must be called with a single string");
 
-  v8::Isolate* isolate = args.GetIsolate();
-  auto context = isolate->GetCurrentContext();
-  auto objectIdLocal = args[0].As<v8::String>();
+//   v8::Isolate* isolate = args.GetIsolate();
+//   auto context = isolate->GetCurrentContext();
+//   auto objectIdLocal = args[0].As<v8::String>();
 
-  // InspectorDOMAgent* domAgent = getOrCreateInspectorDOMAgent(gLocalFrame, isolate);
+//   ScriptWrappable* obj =
+//       GetBlinkObjectForObjectId(isolate, ToCoreString(objectIdLocal));
+// }
 
-  ScriptWrappable* obj = GetBlinkObjectForObjectId(isolate, ToCoreString(objectIdLocal));
-  // Node* node = DynamicTo<Node>(obj);
-  Node* node = static_cast<Node*>(obj);
-  if (node) {
-    // set `node` props
+// // Used for Pause.getObjectPreview
+// // see https://static.replay.io/protocol/tot/Pause/#type-ObjectPreview
+// static void jsPreviewBlinkObjectForObjectId(
+//     const v8::FunctionCallbackInfo<v8::Value>& args) {
+//   CHECK(args.Length() == 1 && args[0]->IsString() && "must be called with a single string");
 
-    v8::Local<v8::Object> extra = v8::Object::New(isolate);
-    v8::Local<v8::Object> nodeInfo = v8::Object::New(isolate);
-    // see https://static.replay.io/protocol/tot/DOM/#type-Node
-    SetDataProperty(isolate, nodeInfo, "nodeType",
-                    v8::Number::New(isolate, node->getNodeType()));
-    SetDataProperty(isolate, nodeInfo, "nodeName", V8String(isolate, node->nodeName()));
-    SetDataProperty(isolate, nodeInfo, "nodeValue", V8String(isolate, node->nodeValue()));
-    SetDataProperty(isolate, nodeInfo, "isConnected", v8::Boolean::New(isolate, node->isConnected()));
+//   v8::Isolate* isolate = args.GetIsolate();
+//   auto context = isolate->GetCurrentContext();
+//   auto objectIdLocal = args[0].As<v8::String>();
 
-    auto* parent = node->parentNode();
-    auto parentObjectId = GetObjectIdForBlinkObject(isolate, parent);
-    SetDataProperty(isolate, nodeInfo, "parentNode", V8String(isolate, parentObjectId));
+//   // InspectorDOMAgent* domAgent = getOrCreateInspectorDOMAgent(gLocalFrame, isolate);
 
-    auto* children = node->childNodes();
-    v8::Local<v8::Array> childNodesArray =
-        v8::Array::New(isolate, children->length());
-    for (size_t i = 0; i < children->length(); ++i) {
-      auto childObjectId = GetObjectIdForBlinkObject(isolate, children->item(i));
-      childNodesArray->Set(context, i, V8String(isolate, childObjectId)).Check();
-    }
-    SetDataProperty(isolate, nodeInfo, "childNodes", childNodesArray);
+//   ScriptWrappable* obj = GetBlinkObjectForObjectId(isolate, ToCoreString(objectIdLocal));
+//   // Node* node = DynamicTo<Node>(obj);
+//   Node* node = static_cast<Node*>(obj);
+//   if (node) {
+//     // set `node` props
 
-    auto* element = DynamicTo<Element>(node);
-    if (element) {
-      CSSStyleDeclaration* style = element->style();
-      auto styleObjectId = GetObjectIdForBlinkObject(isolate, (ScriptWrappable*)style);
-      SetDataProperty(isolate, nodeInfo, "style", V8String(isolate, styleObjectId));
+//     v8::Local<v8::Object> extra = v8::Object::New(isolate);
+//     v8::Local<v8::Object> nodeInfo = v8::Object::New(isolate);
+//     // see https://static.replay.io/protocol/tot/DOM/#type-Node
+//     SetDataProperty(isolate, nodeInfo, "nodeType",
+//                     v8::Number::New(isolate, node->getNodeType()));
+//     SetDataProperty(isolate, nodeInfo, "nodeName", V8String(isolate, node->nodeName()));
+//     SetDataProperty(isolate, nodeInfo, "nodeValue", V8String(isolate, node->nodeValue()));
+//     SetDataProperty(isolate, nodeInfo, "isConnected", v8::Boolean::New(isolate, node->isConnected()));
 
-      auto attributes = element->Attributes();
-      v8::Local<v8::Array> attributesArray = v8::Array::New(isolate, attributes.size());
-      for (auto* it = attributes.begin(); it != attributes.end(); ++it) {
-        v8::Local<v8::Object> attribute = v8::Object::New(isolate);
-        SetDataProperty(isolate, attribute, "name",
-                        V8String(isolate, it->GetName().ToString()));
-        SetDataProperty(isolate, attribute, "value",
-                        V8String(isolate, it->Value().GetString()));
-        auto i = std::distance(attributes.begin(), it);
-        attributesArray->Set(context, i, attribute).Check();
-      }
-      SetDataProperty(isolate, nodeInfo, "attributes", attributesArray);
+//     auto* parent = node->parentNode();
+//     auto parentObjectId = GetObjectIdForBlinkObject(isolate, parent);
+//     SetDataProperty(isolate, nodeInfo, "parentNode", V8String(isolate, parentObjectId));
 
-      auto* pseudoElement = DynamicTo<PseudoElement>(element);
-      if (pseudoElement) {
-        auto pseudoType = PseudoElementTagName(pseudoElement->GetPseudoId())
-                                  .LocalName();
-        SetDataProperty(isolate, nodeInfo, "pseudoType", V8String(isolate, pseudoType));
-      }
-    }
+//     auto* children = node->childNodes();
+//     v8::Local<v8::Array> childNodesArray =
+//         v8::Array::New(isolate, children->length());
+//     for (size_t i = 0; i < children->length(); ++i) {
+//       auto childObjectId = GetObjectIdForBlinkObject(isolate, children->item(i));
+//       childNodesArray->Set(context, i, V8String(isolate, childObjectId)).Check();
+//     }
+//     SetDataProperty(isolate, nodeInfo, "childNodes", childNodesArray);
 
-    auto* document = DynamicTo<Document>(node);
-    if (document) {
-      SetDataProperty(isolate, nodeInfo, "documentURL",
-                      V8String(isolate, document->urlForBinding().GetString()));
-    }
+//     auto* element = DynamicTo<Element>(node);
+//     if (element) {
+//       CSSStyleDeclaration* style = element->style();
+//       auto styleObjectId = GetObjectIdForBlinkObject(isolate, (ScriptWrappable*)style);
+//       SetDataProperty(isolate, nodeInfo, "style", V8String(isolate, styleObjectId));
 
-    // TODO: if `node` is present, `devtools` will send `getObjectPreview` for each child
-    //    (which are not supported yet, resulting in an infinite "Loading..." message)
-    // SetDataProperty(isolate, extra, "node", nodeInfo);
-    args.GetReturnValue().Set(extra);
-  }
-  else {
-    // TODO:
-    // else if (CSSRule.(this.raw)) {
-    //   this.extra.rule = previewRuleContents(this.raw);
-    // } else if (CSSStyleDeclaration.isInstance(this.raw)) {
-    //   this.extra.style = previewStyleContents(this.raw);
-    // } else if (StyleSheet.isInstance(this.raw)) {
-    //   this.extra.styleSheet = previewStyleSheetContents(this.raw);
-    // }
-    // v8::String::Utf8Value objectIdStr(isolate, objectIdLocal);
-    // recordreplay::Print(
-    //     "[previewBlinkObjectForObjectId] failed to look up node (%s): %s",
-    //     *objectIdStr, response.Message().c_str());
-    args.GetReturnValue().SetNull();
-  }
+//       auto attributes = element->Attributes();
+//       v8::Local<v8::Array> attributesArray = v8::Array::New(isolate, attributes.size());
+//       for (auto* it = attributes.begin(); it != attributes.end(); ++it) {
+//         v8::Local<v8::Object> attribute = v8::Object::New(isolate);
+//         SetDataProperty(isolate, attribute, "name",
+//                         V8String(isolate, it->GetName().ToString()));
+//         SetDataProperty(isolate, attribute, "value",
+//                         V8String(isolate, it->Value().GetString()));
+//         auto i = std::distance(attributes.begin(), it);
+//         attributesArray->Set(context, i, attribute).Check();
+//       }
+//       SetDataProperty(isolate, nodeInfo, "attributes", attributesArray);
 
-  // const String object_group("console");
-  // protocol::Maybe<int> v8_execution_context_id;
-  // ResolveNode(gInspectorSession, node, object_group, v8_execution_context_id);
-}
+//       auto* pseudoElement = DynamicTo<PseudoElement>(element);
+//       if (pseudoElement) {
+//         auto pseudoType = PseudoElementTagName(pseudoElement->GetPseudoId())
+//                                   .LocalName();
+//         SetDataProperty(isolate, nodeInfo, "pseudoType", V8String(isolate, pseudoType));
+//       }
+//     }
 
-static void jsGetObjectIdForAnyObject(
-    const v8::FunctionCallbackInfo<v8::Value>& args) {
+//     auto* document = DynamicTo<Document>(node);
+//     if (document) {
+//       SetDataProperty(isolate, nodeInfo, "documentURL",
+//                       V8String(isolate, document->urlForBinding().GetString()));
+//     }
+
+//     SetDataProperty(isolate, extra, "node", nodeInfo);
+//     args.GetReturnValue().Set(extra);
+//   }
+//   else {
+//     // TODO:
+//     // else if (CSSRule.(this.raw)) {
+//     //   this.extra.rule = previewRuleContents(this.raw);
+//     // } else if (CSSStyleDeclaration.isInstance(this.raw)) {
+//     //   this.extra.style = previewStyleContents(this.raw);
+//     // } else if (StyleSheet.isInstance(this.raw)) {
+//     //   this.extra.styleSheet = previewStyleSheetContents(this.raw);
+//     // }
+//     // v8::String::Utf8Value objectIdStr(isolate, objectIdLocal);
+//     // recordreplay::Print(
+//     //     "[previewBlinkObjectForObjectId] failed to look up node (%s): %s",
+//     //     *objectIdStr, response.Message().c_str());
+//     args.GetReturnValue().SetNull();
+//   }
+
+//   // const String object_group("console");
+//   // protocol::Maybe<int> v8_execution_context_id;
+//   // ResolveNode(gInspectorSession, node, object_group, v8_execution_context_id);
+// }
+
+// static void jsGetObjectIdForAnyObject(
+//     const v8::FunctionCallbackInfo<v8::Value>& args) {
+//   CHECK(args.Length() == 1 && args[0]->IsObject() &&
+//         "must be called with a single object");
+//   v8::Isolate* isolate = args.GetIsolate();
+//   auto context = isolate->GetCurrentContext();
+
+//   auto obj = args[0]->ToObject(context).ToLocalChecked();
+//   auto objectId = GetObjectIdForAnyObject(isolate, obj);
+//   args.GetReturnValue().Set(V8String(isolate, objectId));
+// }
+
+/**
+ * NOTE: Since the `RemoteObject` type is not publicly exposed, we cannot easily access it in CPP space.
+ * We thus only use it in JS.
+ * Similar to gecko's `makeDebuggeeValue`.
+ */
+// static void jsCreateRemoteObjectForAnyObject(
+static void jsMakeDebuggeeValue(const v8::FunctionCallbackInfo<v8::Value>& args) {
   CHECK(args.Length() == 1 && args[0]->IsObject() &&
         "must be called with a single object");
   v8::Isolate* isolate = args.GetIsolate();
   auto context = isolate->GetCurrentContext();
-
   auto obj = args[0]->ToObject(context).ToLocalChecked();
-  auto objectId = GetObjectIdForAnyObject(isolate, obj);
-  args.GetReturnValue().Set(V8String(isolate, objectId));
+
+  ScriptState* script_state = ToScriptStateForMainWorld(gLocalFrame);
+  if (!script_state) {
+    recordreplay::Print("GetObjectIdForBlinkObject, but script_state is gone");
+    return;
+  }
+  auto context = script_state->GetContext();
+  v8::Context::Scope scope(context);
+  const String object_group("console"); // NOTE: object_group is used for cleaning up
+  auto generatePreview = false;
+
+  // NOTE: This always creates (and deletes) a new `RemoteObject` and binds it
+  // to a new id. RemoteObjectIdTypeRaw remoteObjectId =
+  // v8_inspector::StringView result =
+  // RemoteObjectIdTypeRaw result = gInspectorSession->wrapObjectGetObjectId(
+  //     context, obj, ToV8InspectorStringView(object_group), false);
+  // auto converted = String(result.c_str(), result.length());
+  auto result = gInspectorSession->wrapObject(
+      context, obj, ToV8InspectorStringView(object_group), generatePreview);
+
+  // deserialize + send to JS
+  std::vector<uint8_t> cbor;
+  result->AppendSerialized(&cbor);
+
+  auto remoteObject = v8::String::NewFromOneByte(isolate, cbor.data(),
+                                                          v8::NewStringType::kNormal,
+                                                          cbor.size()).ToLocalChecked();
+
+  args.GetReturnValue().Set(remoteObject);
+
+  // TODO: send result to JS (similar to SendCDPMessageResultToFrontend)
+  
+  // static void SendMessageToFrontend(const v8_inspector::StringView& message) {
+  //   CHECK(v8::IsMainThread());
+
+  //   CHECK(gCDPMessageCallback);
+  //   CHECK(!message.is8Bit());
+
+  //   v8::Isolate* isolate = v8::Isolate::GetCurrent();
+  //   if (!isolate->InContext() || ScriptForbiddenScope::IsScriptForbidden()) {
+  //     // We're never interested in messages sent at these times.
+  //     return;
+  //   }
+
+  //   v8::HandleScope scope(isolate);
+
+  //   v8::Local<v8::Context> context = isolate->GetCurrentContext();
+  //   v8::Local<v8::Value> arg = v8::String::NewFromTwoByte(isolate, message.characters16(),
+  //                                                         v8::NewStringType::kNormal,
+  //                                                         message.length()).ToLocalChecked();
+  //   v8::Local<v8::Function> callback = gCDPMessageCallback->Get(isolate);
+  //   v8::MaybeLocal<v8::Value> rv = callback->Call(context, v8::Undefined(isolate), 1, &arg);
+  //   CHECK(!rv.IsEmpty());
 }
 
 // static void DOM_requestNode(
@@ -2738,13 +2802,15 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
                       GetCurrentNetworkStreamData);
 
   // DOM, blink, API stuff
-  SetFunctionProperty(isolate, args, "jsGetObjectIdForAnyObject",
-                      jsGetObjectIdForAnyObject);
-  SetFunctionProperty(isolate, args, "jsPreviewBlinkObjectForObjectId", jsPreviewBlinkObjectForObjectId);
+  // SetFunctionProperty(isolate, args, "jsGetObjectIdForAnyObject",
+  //                     jsGetObjectIdForAnyObject);
+  // SetFunctionProperty(isolate, args, "jsPreviewBlinkObjectForObjectId", jsPreviewBlinkObjectForObjectId);
+  SetFunctionProperty(isolate, args, "makeDebuggeeValue", jsMakeDebuggeeValue);
 
-  // unsorted RR stuff
-  SetFunctionProperty(isolate, args, "setClearPauseDataCallback",
-                      v8::FunctionCallbackRecordReplaySetClearPauseDataCallback);
+      // unsorted RR stuff
+      SetFunctionProperty(
+          isolate, args, "setClearPauseDataCallback",
+          v8::FunctionCallbackRecordReplaySetClearPauseDataCallback);
   SetFunctionProperty(isolate, args, "getCurrentError",
                       GetCurrentError);
   SetFunctionProperty(isolate, args, "getRecordingId",
