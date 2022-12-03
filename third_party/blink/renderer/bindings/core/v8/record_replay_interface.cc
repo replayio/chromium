@@ -96,6 +96,8 @@ const gSourceMapData = new Map();
 
 try {
 
+
+
 // Save these before page code potentially overwrites them.
 const JSON_stringify = JSON.stringify;
 const JSON_parse = JSON.parse;
@@ -284,7 +286,7 @@ function Target_getCurrentMessageContents() {
   // Get the protocol representation of the message arguments.
   const argumentValues = [];
   for (const arg of gLastConsoleAPICall.args || []) {
-    argumentValues.push(remoteObjectToProtocolValue(arg));
+    argumentValues.push(cdpToRrpObject(arg));
   }
 
   let level = "info";
@@ -370,8 +372,15 @@ function Target_topFrameLocation() {
   return { location: createProtocolLocation(location)[0] };
 }
 
-// Get the raw call frames on the stack, eliding ones in scripts we are ignoring.
+/**
+ * Get the raw call frames on the stack, eliding ones in scripts we are ignoring.
+ * @return {{ callFrames: CDP.Debugger.CallFrame[] }}
+ * 
+ * @see https://chromedevtools.github.io/devtools-protocol/v8/Debugger/#type-CallFrame
+ * @see https://github.com/replayio/chromium-v8/blob/37d50784b68747e7b2d5ebc16305cb9b3227741a/src/inspector/v8-debugger-agent-impl.cc#L1412
+ */
 function getStackFrames() {
+  // NOTE: this is a custom command we added
   const { callFrames } = sendMessage("Debugger.getCallFrames");
   return callFrames;
 }
@@ -422,8 +431,8 @@ window.DevOnly = {
 };
 
 // Build a protocol Result object from a result/exceptionDetails CDP rval.
-function buildProtocolResult({ result, exceptionDetails }) {
-  const value = remoteObjectToProtocolValue(result);
+function buildRrpObjectResult({ result, exceptionDetails }) {
+  const value = cdpToRrpObject(result);
   const protocolResult = { data: {} };
 
   if (exceptionDetails) {
@@ -448,7 +457,7 @@ function Pause_evaluateInFrame({ frameId, expression }) {
     const frame = frames[index];
 
     const rv = doEvaluation();
-    return buildProtocolResult(rv);
+    return buildRrpObjectResult(rv);
 
     function doEvaluation() {
       // In order to do the evaluation in the right frame, the same number of
@@ -478,7 +487,7 @@ function Pause_evaluateInGlobal({ expression }) {
     }
 
     const rv = sendMessage("Runtime.evaluate", { expression });
-    return buildProtocolResult(rv);
+    return buildRrpObjectResult(rv);
   }
   catch (err) {
     return { result: { data: {}, exception: { value: err.stack } } };
@@ -507,29 +516,29 @@ function Pause_getAllFrames() {
 
 function Pause_getExceptionValue() {
   const rv = sendMessage("Debugger.getPendingException", {});
-  return { exception: remoteObjectToProtocolValue(rv.exception), data: {} };
+  return { exception: cdpToRrpObject(rv.exception), data: {} };
 }
 
 function Pause_getObjectPreview({ object, level = "full" }) {
   log(`DDBG getObjectPreview: ${JSON.stringify({ object })}`);
-  const objectData = createProtocolObject(object, level);
+  const objectData = createPauseObject(object, level);
   return { data: { objects: [objectData] } };
 }
 
 function Pause_getObjectProperty({ object, name }) {
-  const obj = getRemoteObjectById(object);
+  const cdpObj = getCdpObjectByRrpId(object);
   const rv = sendMessage(
     "Runtime.callFunctionOn",
     {
       functionDeclaration: `function() { return this["${name}"] }`,
-      objectId: obj.objectId,
+      objectId: cdpObj.objectId,
     }
   );
-  return buildProtocolResult(rv);
+  return buildRrpObjectResult(rv);
 }
 
 function Pause_getScope({ scope }) {
-  const scopeData = createProtocolScope(scope);
+  const scopeData = createRrpScope(scope);
   return { data: { scopes: [scopeData] } };
 }
 
@@ -540,22 +549,42 @@ function Graphics_getDevicePixelRatio() {
 
 ///////////////////////////////////////////////////////////////////////////////
 // object.js
+// Manage association between remote objects and protocol object IDs.
 ///////////////////////////////////////////////////////////////////////////////
 
-// Manage association between remote objects and protocol object IDs.
 
 // Map protocol ObjectId => RemoteObject
-const gRemoteObjectsById = new Map();
+/**
+ * @type {Map<CDP.Runtime.RemoteObject, number>}
+ */
+const gCdpObjectsByRrpId = new Map();
+
+/**
+ * @type {Map<number, number>}
+ */
+const gRrpIdByCdpId = new Map();
+/**
+ * @type {Map<Object, number>}
+ */
+const gObjectsByRrpId = new Map();
+/**
+ * @type {Map<Object, number>}
+ */
+const gRrpIdByObject = new Map();
+let gLastRrpId = 0;
 
 // Map protocol ObjectId => Debugger.Scope
-const gScopesById = new Map();
+const gCdpScopesByRrpId = new Map();
 
 let gNextObjectId = 1;
 
 function clearPauseDataCallback() {
   try {
-    gRemoteObjectsById.clear();
-    gScopesById.clear();
+    gCdpObjectsByRrpId.clear();
+    gRrpIdByCdpId.clear();
+    gObjectsByRrpId.clear();
+    gRrpIdByObject.clear();
+    gCdpScopesByRrpId.clear();
     gLastBoundingClientRectsByObjectId.clear();
     gLastCommandErrors = [];
     gNextObjectId = 1;
@@ -579,71 +608,98 @@ function makeDebuggeeValue(obj) {
   return remoteObject;
 }
 
-function registerRemoteObject(remoteObject) {
-  assert(remoteObject.objectId);
-
-  const existing = gRemoteObjectsById.get(remoteObject.objectId);
-  if (existing) {
-    return existing;
+function registerPlainObject(obj) {
+  let protocolId = gRrpIdByObject.get(obj);
+  if (!protocolId) {
+    // NOTE: we use a custom protocolId because the CDP RemoteObjectId is a long string
+    //      and thus more costly to index?
+    const cdpObject = makeDebuggeeValue(obj);
+    registerCdpObject(cdpObject);
   }
-
-  gRemoteObjectsById.set(remoteObject.objectId, remoteObject);
-  return remoteObject.objectId;
+  return protocolId;
 }
 
-function getRemoteObjectById(objectId) {
-  const remoteObject = gRemoteObjectsById.get(objectId);
-  // assert(remoteObject);
+/**
+ * @param {CDP.Runtime.RemoteObject}
+ * @return {number} rrpId
+ */
+function registerCdpObject(cdpObject) {
+  const cdpId = cdpObject.objectId;
+  assert(cdpId);
+
+  let rrpId = gRrpIdByCdpId.get(cdpId);
+  if (rrpId) {
+    return rrpId;
+  }
+
+  rrpId = ++gLastRrpId;
+  gCdpObjectsByRrpId.set(rrpId, cdpObject);
+  gRrpIdByObject.set(obj, rrpId);
+  gRrpIdByCdpId.set(cdpId, rrpId);
+  return rrpId;
+}
+
+/**
+ * 
+ * @return {CDP.Runtime.RemoteObject}
+ */
+function getCdpObjectByRrpId(rrpId) {
+  const remoteObject = gCdpObjectsByRrpId.get(rrpId);
+  assert(remoteObject);
   return remoteObject;
 }
 
 // Strings longer than this will be truncated when creating protocol values.
 const MaxStringLength = 10000;
 
-function remoteObjectToProtocolValue(obj) {
-  switch (obj.type) {
+function cdpToRrpObject(cdpObject) {
+  switch (cdpObject.type) {
     case "undefined":
       return {};
     case "string":
     case "number":
     case "boolean":
-      if (obj.unserializableValue) {
-        assert(obj.type == "number");
-        return { unserializableNumber: obj.unserializableValue };
+      if (cdpObject.unserializableValue) {
+        assert(cdpObject.type == "number");
+        return { unserializableNumber: cdpObject.unserializableValue };
       }
-      if (typeof obj.value == "string" && obj.value.length > MaxStringLength) {
-        return { value: obj.value.substring(0, MaxStringLength) + "…" };
+      if (typeof cdpObject.value == "string" && cdpObject.value.length > MaxStringLength) {
+        return { value: cdpObject.value.substring(0, MaxStringLength) + "…" };
       }
-      return { value: obj.value };
+      return { value: cdpObject.value };
     case "bigint": {
-      const str = obj.unserializableValue;
+      const str = cdpObject.unserializableValue;
       assert(str);
       return { bigint: str.substring(0, str.length - 1) };
     }
     case "object":
     case "function": {
-      if (!obj.objectId) {
+      if (!cdpObject.objectId) {    // TODO: how can this happen?
         return { value: null };
       }
 
-      const object = registerRemoteObject(obj);
-      return { object };
+      const rrpId = registerCdpObject(cdpObject);
+      return { object: rrpId };
     }
     case "symbol":
-      return { symbol: obj.description };
+      return { symbol: cdpObject.description };
     default:
       return { unavailable: true };
   }
 }
 
-function registerScope(scope) {
-  const id = registerRemoteObject(scope.object);
-  gScopesById.set(id, scope);
-  return id;
+/**
+ * 
+ * @param {CDP.Runtime.Scope} scope 
+ */
+function registerCdpScope(scope) {
+  const rrpId = registerCdpObject(scope.object);
+  gCdpScopesByRrpId.set(rrpId, scope);
+  return rrpId;
 }
 
-function getScopeById(scopeId) {
-  const scope = gScopesById.get(scopeId);
+function getCdpScopeByRrpId(rrpScopeId) {
+  const scope = gCdpScopesByRrpId.get(rrpScopeId);
   assert(scope);
   return scope;
 }
@@ -654,20 +710,24 @@ function getScopeById(scopeId) {
 
 // Logic for creating object previews for the record/replay protocol.
 
-function createProtocolObject(objectId, level) {
-  const obj = getRemoteObjectById(objectId);
+/**
+ * @return {RRP.Pause.Object}
+ * @see https://static.replay.io/protocol/tot/Pause/#type-Object
+ */
+function createPauseObject(rrpId, level) {
+  const cdpObj = getCdpObjectByRrpId(rrpId);
   // NOTE: `subtype` often won't be available, due to divergence
-  const className = obj.subtype == "proxy" ? "Proxy" : (obj.className || "Function");
+  const className = cdpObj.subtype == "proxy" ? "Proxy" : (cdpObj.className || "Function");
 
   // NOTE: `persistentId` is added via V8 → `injected-script.cc`
-  const { persistentId } = obj;
+  const { persistentId } = cdpObj;
 
   let preview;
   if (level != "none") {
-    preview = new ProtocolObjectPreview(obj, level).fill();
+    preview = new ProtocolObjectPreview(cdpObj, level).fill();
   }
 
-  return { objectId, persistentId, className, preview };
+  return { objectId: rrpId, persistentId, className, preview };
 }
 
 // Target limit for the number of items (properties etc.) to include in object
@@ -684,7 +744,7 @@ const MaxItems = {
 };
 
 function ProtocolObjectPreview(obj, level) {
-  this.obj = obj;
+  this.cdpObj = obj;
   this.level = level;
   this.overflow = false;
   this.numItems = 0;
@@ -724,17 +784,17 @@ ProtocolObjectPreview.prototype = {
   fill() {
     // NOTE: we could also use "Runtime.evaluate" with `{ generatePreview: true }`
     const allProperties = sendMessage("Runtime.getProperties", {
-      objectId: this.obj.objectId,
+      objectId: this.cdpObj.objectId,
       ownProperties: true,
       generatePreview: false,
     });
     const properties = allProperties.result;
 
     // Add data for DOM/CSS objects
-    this.extra = jsPreviewBlinkObjectForObjectId(this.obj.objectId) || {};
+    this.extra = previewBlinkObject(this.cdpObj.objectId) || {};
 
     // Add class-specific data.
-    const previewer = CustomPreviewers[this.obj.className];
+    const previewer = CustomPreviewers[this.cdpObj.className];
     const requiredProperties = [];
     if (previewer) {
       for (const entry of previewer) {
@@ -757,13 +817,13 @@ ProtocolObjectPreview.prototype = {
       }
     }
 
-    let prototypeId;
+    let prototypeRrpId;
     if (prototype && prototype.value && prototype.value.objectId) {
-      prototypeId = registerRemoteObject(prototype.value);
+      prototypeRrpId = registerCdpObject(prototype.value);
       // TODO: in gecko-dev, we also `addPrototypeGetterValues` - should we do this here, too?
     }
     return {
-      prototypeId,
+      prototypeId: prototypeRrpId,
       overflow: (this.overflow && this.level != "full") ? true : undefined,
       properties: this.properties,
       containerEntries: this.containerEntries,
@@ -778,6 +838,10 @@ function getDescriptionCount(description) {
   if (match) {
     return +match[1];
   }
+}
+
+function previewBlinkObject(protocolId) {
+  // TODO
 }
 
 function previewTypedArray() {
@@ -825,8 +889,8 @@ function previewSetMap(allProperties) {
       const value = entryProperties.find(eprop => eprop.name == "value");
       if (value) {
         this.addContainerEntry({
-          key: key ? remoteObjectToProtocolValue(key.value) : undefined,
-          value: remoteObjectToProtocolValue(value.value),
+          key: key ? cdpToRrpObject(key.value) : undefined,
+          value: cdpToRrpObject(value.value),
         });
       }
     }
@@ -905,7 +969,7 @@ const CustomPreviewers = {
 function createProtocolPropertyDescriptor(desc) {
   const { name, value, writable, get, set, configurable, enumerable, symbol } = desc;
 
-  const rv = value ? remoteObjectToProtocolValue(value) : {};
+  const rv = value ? cdpToRrpObject(value) : {};
   rv.name = name;
 
   let flags = 0;
@@ -923,10 +987,10 @@ function createProtocolPropertyDescriptor(desc) {
   }
 
   if (get && get.objectId) {
-    rv.get = registerRemoteObject(get);
+    rv.get = registerCdpObject(get);
   }
   if (set && set.objectId) {
-    rv.set = registerRemoteObject(set);
+    rv.set = registerCdpObject(set);
   }
 
   if (symbol) {
@@ -949,26 +1013,26 @@ function createProtocolLocation(location) {
   }];
 }
 
-function createProtocolFrame(frameId, frame) {
+function createProtocolFrame(frameId, cdpFrame) {
   // CDP call frames don't provide detailed type information.
-  const type = frame.functionName ? "call" : "global";
+  const type = cdpFrame.functionName ? "call" : "global";
 
   return {
     frameId,
     type,
-    functionName: frame.functionName || undefined,
-    functionLocation: createProtocolLocation(frame.functionLocation),
-    location: createProtocolLocation(frame.location),
-    scopeChain: frame.scopeChain.map(registerScope),
-    this: remoteObjectToProtocolValue(frame.this),
+    functionName: cdpFrame.functionName || undefined,
+    functionLocation: createProtocolLocation(cdpFrame.functionLocation),
+    location: createProtocolLocation(cdpFrame.location),
+    scopeChain: cdpFrame.scopeChain.map(registerCdpScope),
+    this: cdpToRrpObject(cdpFrame.this),
   };
 }
 
-function createProtocolScope(scopeId) {
-  const scope = getScopeById(scopeId);
+function createRrpScope(scopeId) {
+  const cdpScope = getCdpScopeByRrpId(scopeId);
 
   let type;
-  switch (scope.type) {
+  switch (cdpScope.type) {
     case "global":
       type = "global";
       break;
@@ -976,32 +1040,32 @@ function createProtocolScope(scopeId) {
       type = "with";
       break;
     default:
-      type = scope.name ? "function" : "block";
+      type = cdpScope.name ? "function" : "block";
       break;
   }
 
-  let object, bindings;
+  let rrpId, bindings;
   if (type == "global" || type == "with") {
-    object = registerRemoteObject(scope.object);
+    rrpId = registerCdpObject(cdpScope.object);
   } else {
     bindings = [];
 
     const properties = sendMessage("Runtime.getProperties", {
-      objectId: scope.object.objectId,
+      objectId: cdpScope.object.objectId,
       ownProperties: true,
       generatePreview: false,
     }).result;
-    for (const { name, value } of properties) {
-      const converted = remoteObjectToProtocolValue(value);
-      bindings.push({ ...converted, name });
+    for (const { name, value: cdpProp } of properties) {
+      const rrpProp = cdpToRrpObject(cdpProp);
+      bindings.push({ ...rrpProp, name });
     }
   }
 
   return {
     scopeId,
     type,
-    object,
-    functionName: scope.name || undefined,
+    object: rrpId,
+    functionName: cdpScope.name || undefined,
     bindings,
   };
 }
@@ -1439,7 +1503,7 @@ function createProtocolScope(scopeId) {
 
     const elements = entries
       .map((elem, i) => {
-        const id = getObjectIdForObject(elem.raw) || i;
+        const id = registerPlainObject(elem.raw) || i;
 
         const { left, top, right, bottom } = shiftRect(elem.raw.getBoundingClientRect(), elem.offset);
 
@@ -1581,6 +1645,10 @@ function createProtocolScope(scopeId) {
 })();
 
 )"""";
+
+/** ###########################################################################
+ * gSourceMapScript
+ * ##########################################################################*/
 
 // Script which sets a handler for collecting source maps from scripts in the
 // recording. Runs when recording/replaying if source map collection is enabled.
