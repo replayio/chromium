@@ -2402,12 +2402,9 @@ static RemoteObjectIdType GetObjectIdForAnyObject(v8::Isolate* isolate,
   }
   auto context = script_state->GetContext();
   v8::Context::Scope scope(context);
-  const String object_group("console");
+  const String object_group("console"); // NOTE: object_group is used for cleaning up
 
-  // TODO: figure out `RemoteObjectId`
-  //      https://discord.com/channels/779097926135054346/956618540063010856/1047496481705299968
-
-  // NOTE: This always creates a new `RemoteObject` and binds it to a new id.
+  // NOTE: This always creates (and deletes) a new `RemoteObject` and binds it to a new id.
   // RemoteObjectIdTypeRaw remoteObjectId =
   // v8_inspector::StringView result =
   RemoteObjectIdTypeRaw result = gInspectorSession->wrapObjectGetObjectId(
@@ -2557,7 +2554,9 @@ static void jsPreviewBlinkObjectForObjectId(
                       V8String(isolate, document->urlForBinding().GetString()));
     }
 
-    SetDataProperty(isolate, extra, "node", nodeInfo);
+    // TODO: if `node` is present, `devtools` will send `getObjectPreview` for each child
+    //    (which are not supported yet, resulting in an infinite "Loading..." message)
+    // SetDataProperty(isolate, extra, "node", nodeInfo);
     args.GetReturnValue().Set(extra);
   }
   else {
