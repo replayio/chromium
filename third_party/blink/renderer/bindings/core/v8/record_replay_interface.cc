@@ -24,10 +24,11 @@
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
 #include "v8/include/v8-inspector.h"
 
-#include "crypto/secure_hash.h"
-#include "crypto/sha2.h"
 #include <array>
 #include <fstream>
+#include <string>
+#include "crypto/secure_hash.h"
+#include "crypto/sha2.h"
 
 #ifndef OS_WIN
 static const char DirectorySeparator = '/';
@@ -60,7 +61,7 @@ namespace blink {
 // using RemoteObjectIdTypeRaw = v8_inspector::String16;
 
 // The actual type for RemoteObjectId
-using RemoteObjectIdTypeRaw = v8_inspector::StringView;
+using RemoteObjectIdTypeRaw = std::u16string;
 
 // The more convenient type that we use
 using RemoteObjectIdType = WTF::String;
@@ -69,6 +70,9 @@ using RemoteObjectIdType = WTF::String;
 // replaying.
 const char* gReplayScript = R""""(
 (() => {
+
+const Verbose = 1;
+const VerboseCommands = Verbose;
 
 const {
   log,
@@ -231,14 +235,17 @@ let gLastCommandErrors = [];
 
 function commandCallback(method, params) {
   if (!CommandCallbacks[method]) {
-    log(`Missing command callback: ${method}`);
+    log(`[Command ${method}] Missing command callback: ${method}`);
     return {};
   }
 
   try {
-    return CommandCallbacks[method](params);
+    VerboseCommands && log(`[Command ${method}] Handling command...`);
+    const result = CommandCallbacks[method](params);
+    VerboseCommands && log(`[Command ${method}] Handled command: result=${JSON.stringify(result)}`);
+    return result;
   } catch (e) {
-    const msg = `Error: ${method} - ${e?.stack || e}`;
+    const msg = `[Command ${method}] Error: ${e?.stack || e}`;
     gLastCommandErrors.push(msg);
     log(msg);
     return {};
@@ -503,8 +510,8 @@ function Pause_getExceptionValue() {
 }
 
 function Pause_getObjectPreview({ object, level = "full" }) {
+  log(`DDBG getObjectPreview: ${JSON.stringify({ object })}`);
   const objectData = createProtocolObject(object, level);
-  // log(`DOMXY getObjectPreview: ${JSON.stringify(objectData)}`);
   return { data: { objects: [objectData] } };
 }
 
@@ -603,7 +610,6 @@ function remoteObjectToProtocolValue(obj) {
         return { value: null };
       }
 
-      // NOTE: Runtime.evaluate returns a new `objectId` for the same object
       const object = registerRemoteObject(obj);
       return { object };
     }
@@ -2403,21 +2409,13 @@ static RemoteObjectIdType GetObjectIdForAnyObject(v8::Isolate* isolate,
 
   // NOTE: This always creates a new `RemoteObject` and binds it to a new id.
   // RemoteObjectIdTypeRaw remoteObjectId =
-  auto result = gInspectorSession->wrapObjectGetObjectId(
-    context, obj, ToV8InspectorStringView(object_group),
-    false /* generatePreview */);
+  // v8_inspector::StringView result =
+  RemoteObjectIdTypeRaw result = gInspectorSession->wrapObjectGetObjectId(
+      context, obj, ToV8InspectorStringView(object_group), false);
 
-  // if (remoteObjectId.is8Bit()) {
-  //   return RemoteObjectIdType(remoteObjectId.characters8, remoteObjectId.length());
-  // }
-  // NOTE: always 16 bit
-  // auto converted = RemoteObjectIdType(
-  //   reinterpret_cast<const UChar*>(remoteObjectId.characters16()),
-  //   remoteObjectId.length()
-  // );
-  auto converted = ToCoreString(*result);
-  // recordreplay::Print("GetObjectId - string conversion -> '%s'",
-  //   converted.Ascii().c_str());
+  auto converted = String(result.c_str(), result.length());
+  // recordreplay::Print("GetObjectIdForAnyObject -> '%s'",
+  //                     converted.Ascii().c_str());
 
   return converted;
 
