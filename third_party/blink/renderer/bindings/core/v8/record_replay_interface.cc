@@ -623,11 +623,13 @@ function registerPlainObject(plainObject) {
   let rrpId = gRrpIdByPlainObject.get(plainObject);
   if (!rrpId) {
     // → ask V8InspectorSession to wrap plainObject (gets CDP.RemoteObject)
+    log(`DDBG registerPlainObject plainObject=${typeof plainObject} - ${JSON.stringify(Object.assign({}, plainObject))}`);
     const cdpObject = makeDebuggeeValue(plainObject);
-    assert(cdpObject);
-    rrpId = registerCdpObject(cdpObject);
-    gRrpIdByPlainObject.set(plainObject, rrpId);
-    gPlainObjectByRrpId.set(rrpId, plainObject);
+    if (cdpObject) {
+      rrpId = registerCdpObject(cdpObject);
+      gRrpIdByPlainObject.set(plainObject, rrpId);
+      gPlainObjectByRrpId.set(rrpId, plainObject);
+    }
   }
   return rrpId;
 }
@@ -646,15 +648,15 @@ function getPlainObjectByRrpId(rrpId) {
   rrpId += '';
   let plainObject = gRrpIdByPlainObject.get(rrpId);
   if (!plainObject) {
-    // not a ref type (registration already handled in `registerCdpObject` ↓)
-    // // → ask V8InspectorSession to unwrap cdpObject (gets plainObject)
-    // const cdpObject = getCdpObjectByRrpId(rrpId);
-    // // → NOTE if we have an rrpId, it means, we already should have registered the cdpObject
-    // assert(cdpObject);
-    // const cdpId = cdpObject.objectId;
-    // plainObject = fromJsGetObjectByCdpId(cdpId);
-    // gRrpIdByPlainObject.set(plainObject, rrpId);
-    // gPlainObjectByRrpId.set(rrpId, plainObject);
+    // (if this was a ref type, registration would already have been handled in `registerCdpObject` ↓)
+    // → ask V8InspectorSession to unwrap cdpObject (gets plainObject)
+    const cdpObject = getCdpObjectByRrpId(rrpId);
+    // → NOTE if we have an rrpId, it means, we already should have registered the cdpObject
+    assert(cdpObject);
+    const cdpId = cdpObject.objectId;
+    plainObject = fromJsGetObjectByCdpId(cdpId);
+    gRrpIdByPlainObject.set(plainObject, rrpId);
+    gPlainObjectByRrpId.set(rrpId, plainObject);
   }
   return plainObject;
 }
@@ -851,7 +853,7 @@ ProtocolObjectPreview.prototype = {
     const properties = allProperties.result;
 
     // Add data for DOM/CSS objects
-    this.extra = previewBlinkObject(this.cdpObj.objectId, allProperties) || {};
+    this.extra = previewBlinkObject(this.cdpObj, allProperties) || {};
 
     // Add class-specific data.
     const previewer = CustomPreviewers[this.cdpObj.className];
@@ -900,11 +902,89 @@ function getDescriptionCount(description) {
   }
 }
 
-function previewBlinkObject(cdpId, allProperties) {
+function previewBlinkObject(cdpObject, allProperties) {
+  const cdpId = cdpObject.objectId;
   const rrpId = gRrpIdByCdpId.get(cdpId);
+  assert(rrpId);
   const plainObject = getPlainObjectByRrpId(rrpId);
-  log(`DDBG previewBlinkObject plainObject=${typeof plainObject}`);
+  log(`DDBG previewBlinkObject rrpId=${rrpId}, cdpId=${cdpId}, cdpObject=${cdpObject.type}, plainObject=${typeof plainObject}, allProperties=${JSON.stringify(allProperties)}`);
+
+  /**
+   * @see https://github.com/replayio/gecko-dev/blob/592992ff7e15cb8ad1dd6fb109f19bd3523cd452/devtools/server/actors/replay/module.js#L1937
+   */
+  if (plainObject instanceof Node) {
+    return {
+      node: previewBlinkNode(plainObject)
+    }
+  }
+
   // TODO
+  
+}
+
+function previewBlinkNode(node) {
+  let attributes, pseudoType;
+  if (node instanceof Element) {
+    attributes = [];
+    for (const { name, value } of node.attributes) {
+      attributes.push({ name, value });
+    }
+    // TODO: we copied this from `gecko-dev`, but its generally not correct.
+    //    Cannot access pseudo elements using the standard API.
+    //    → consider using `DynamicTo<PseudoElement>(node)`
+    pseudoType = node.localName;
+  }
+
+  let style;
+  if (node.style) {
+    style = registerPlainObject(node.style);
+  }
+
+  let parentNode;
+  if (node.parentNode) {
+    parentNode = registerPlainObject(node.parentNode);
+  } else if (node.defaultView && node.defaultView.parent != node.defaultView) {
+    /**
+     * Nested documents use the parent element instead of null.
+     * 
+     * TODO: will need more work here to support multi-CSP iframes
+     *    → consider CollectNodes(..., pierce, ...)
+     * @see https://github.com/replayio/chromium/blob/0074930981924371e5ad6d774b93e267085a4281/third_party/blink/renderer/core/inspector/inspector_dom_agent.cc#1854
+     */
+    const iframes = node.defaultView.parent.document.getElementsByTagName(
+      "iframe"
+    );
+    const iframe = [...iframes].find((f) => f.contentDocument == node);
+    if (iframe) {
+      parentNode = registerPlainObject(iframe);
+    }
+  }
+
+  let childNodes;
+  if (node.nodeName == "IFRAME") {
+    // Treat an iframe's content document as one of its child nodes.
+    childNodes = [registerPlainObject(node.contentDocument)];
+  } else if (node.childNodes.length) {
+    childNodes = [...node.childNodes].map((n) => registerPlainObject(n));
+  }
+
+  let documentURL;
+  if (node.nodeType == Node.DOCUMENT_NODE) {
+    documentURL = node.URL;
+  }
+
+  return {
+    nodeType: node.nodeType,
+    nodeName: node.nodeName,
+    nodeValue: typeof node.nodeValue === "string" ? node.nodeValue : undefined,
+    isConnected: node.isConnected,
+    attributes,
+    pseudoType,
+    style,
+    parentNode,
+    childNodes,
+    documentURL,
+  };
 }
 
 function previewTypedArray() {
@@ -2526,10 +2606,18 @@ static void fromJsMakeDebuggeeValue(const v8::FunctionCallbackInfo<v8::Value>& a
   std::vector<uint8_t> cbor;
   result->AppendSerialized(&cbor);
 
-  auto remoteObject = v8::String::NewFromOneByte(isolate, cbor.data(),
-                                                 v8::NewStringType::kNormal,
-                                                 cbor.size()).ToLocalChecked();
-  args.GetReturnValue().Set(remoteObject);
+  recordreplay::Print("DDBG fromJsMakeDebuggeeValue, len=%d", cbor.size());
+
+  if (cbor.size() > 1) {
+    auto remoteObject =
+        v8::String::NewFromOneByte(isolate, cbor.data(),
+                                  v8::NewStringType::kNormal, cbor.size())
+            .ToLocalChecked();
+    args.GetReturnValue().Set(remoteObject);
+  }
+  else {
+    args.GetReturnValue().SetNull();
+  }
 }
 
 static void fromJsGetObjectByCdpId(
