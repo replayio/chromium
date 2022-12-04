@@ -4,6 +4,8 @@
 
 #include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
 
+#include "v8/third_party/inspector_protocol/crdtp/json.h"
+
 #include "base/base64.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
@@ -929,10 +931,10 @@ function previewBlinkNode(node) {
     for (const { name, value } of node.attributes) {
       attributes.push({ name, value });
     }
-    // TODO: we copied this from `gecko-dev`, but its generally not correct.
-    //    Cannot access pseudo elements using the standard API.
-    //    → consider using `DynamicTo<PseudoElement>(node)`
-    pseudoType = node.localName;
+    // TODO: We cannot access pseudo elements using the JS DOM API.
+    //    → probably want to use `DynamicTo<PseudoElement>(node)`
+    // @see https://static.replay.io/protocol/tot/DOM/#type-PseudoType
+    // pseudoType = node.localName;
   }
 
   let style;
@@ -2606,14 +2608,29 @@ static void fromJsMakeDebuggeeValue(const v8::FunctionCallbackInfo<v8::Value>& a
   std::vector<uint8_t> cbor;
   result->AppendSerialized(&cbor);
 
-  recordreplay::Print("DDBG fromJsMakeDebuggeeValue, len=%d", cbor.size());
-
   if (cbor.size() > 1) {
-    auto remoteObject =
-        v8::String::NewFromOneByte(isolate, cbor.data(),
-                                  v8::NewStringType::kNormal, cbor.size())
+    // auto remoteObjectStr =
+    //     v8::String::NewFromOneByte(isolate, cbor.data(),
+    //                               v8::NewStringType::kNormal, cbor.size())
+    //         .ToLocalChecked();
+    // auto remoteObjectJson = v8::Object::parse;
+    // args.GetReturnValue().Set(remoteObjectJson);
+
+    /**
+     * @see
+     * https://github.com/replayio/chromium-v8/blob/b38bf5b0b1f149f7af3fd90a2ce12344e7191d03/src/inspector/custom-preview.cc#L123
+     */
+    std::vector<uint8_t> json;
+    v8_crdtp::json::ConvertCBORToJSON(v8_crdtp::SpanFrom(cbor), &json);
+
+    recordreplay::Print("DDBG fromJsMakeDebuggeeValue, len=%d, json.len=%d",
+                        cbor.size(), json.size());
+
+    auto remoteObjectStr =
+        v8::String::NewFromOneByte(isolate, json.data(),
+                                  v8::NewStringType::kNormal, json.size())
             .ToLocalChecked();
-    args.GetReturnValue().Set(remoteObject);
+    args.GetReturnValue().Set(remoteObjectStr);
   }
   else {
     args.GetReturnValue().SetNull();
