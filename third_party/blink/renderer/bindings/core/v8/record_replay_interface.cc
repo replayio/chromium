@@ -83,6 +83,7 @@ const {
   addNewScriptHandler,
   getCurrentError,
   fromJsMakeDebuggeeValue,
+  fromJsGetObjectByCdpId,
 
   // network
   getCurrentNetworkRequestEvent,
@@ -111,7 +112,7 @@ const JSON_parse = JSON.parse;
 
 function assert(v, msg = "") {
   if (!v) {
-    log(`Error: Assertion failed ${msg} ${Error().stack}`);
+    log(`[RuntimeError] Assertion failed ${msg} ${Error().stack}`);
     throw new Error("Assertion failed!");
   }
 }
@@ -238,17 +239,17 @@ let gLastCommandErrors = [];
 
 function commandCallback(method, params) {
   if (!CommandCallbacks[method]) {
-    log(`[Command ${method}] Missing command callback: ${method}`);
+    log(`[RuntimeError][Command ${method}] Missing command callback: ${method}`);
     return {};
   }
 
   try {
-    VerboseCommands && log(`[Command ${method}] Handling command...`);
+    VerboseCommands && log(`[Command ${method}] Handling command, params=${JSON.stringify(params)}...`);
     const result = CommandCallbacks[method](params);
-    VerboseCommands && log(`[Command ${method}] Handled command: result=${JSON.stringify(result)}`);
+    VerboseCommands && log(`[Command ${method}] Handled command, result=${JSON.stringify(result)}`);
     return result;
   } catch (e) {
-    const msg = `[Command ${method}] Error: ${e?.stack || e}`;
+    const msg = `[RuntimeError][Command ${method}] ${e?.stack || e}`;
     gLastCommandErrors.push(msg);
     log(msg);
     return {};
@@ -555,22 +556,26 @@ function Graphics_getDevicePixelRatio() {
 
 // Map protocol ObjectId => RemoteObject
 /**
- * @type {Map<CDP.Runtime.RemoteObject, number>}
+ * @type {Map<CDP.Runtime.RemoteObject, string>}
  */
 const gCdpObjectsByRrpId = new Map();
 
 /**
- * @type {Map<number, number>}
+ * @type {Map<string, string>}
  */
 const gRrpIdByCdpId = new Map();
 /**
- * @type {Map<Object, number>}
+ * @type {Map<Object, string>}
  */
 const gObjectsByRrpId = new Map();
 /**
- * @type {Map<Object, number>}
+ * @type {Map<Object, string>}
  */
-const gRrpIdByObject = new Map();
+const gRrpIdByPlainObject = new Map();
+/**
+ * @type {Map<string, Object>}
+ */
+const gPlainObjectByRrpId = new Map();
 let gLastRrpId = 0;
 
 // Map protocol ObjectId => Debugger.Scope
@@ -580,10 +585,12 @@ let gNextObjectId = 1;
 
 function clearPauseDataCallback() {
   try {
+    log(`DDBG clearPauseDataCallback`);
     gCdpObjectsByRrpId.clear();
     gRrpIdByCdpId.clear();
     gObjectsByRrpId.clear();
-    gRrpIdByObject.clear();
+    gRrpIdByPlainObject.clear();
+    gPlainObjectByRrpId.clear();
     gCdpScopesByRrpId.clear();
     gLastBoundingClientRectsByObjectId.clear();
     gLastCommandErrors = [];
@@ -599,24 +606,57 @@ function clearPauseDataCallback() {
  * @return {CDP.Runtime.RemoteObject}
  * @see https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#type-RemoteObject
  */
-function makeDebuggeeValue(obj) {
-  assert(!obj.objectId);
-  const remoteObjectStr = fromJsMakeDebuggeeValue(obj);
+function makeDebuggeeValue(plainObject) {
+  assert(!plainObject.objectId);
+  const remoteObjectStr = fromJsMakeDebuggeeValue(plainObject);
   log(`DDBG makeDebuggeeValue: ${remoteObjectStr}`);
   const remoteObject = JSON.parse(remoteObjectStr);
   assert(remoteObject.objectId);
   return remoteObject;
 }
 
-function registerPlainObject(obj) {
-  let protocolId = gRrpIdByObject.get(obj);
-  if (!protocolId) {
-    // NOTE: we use a custom protocolId because the CDP RemoteObjectId is a long string
-    //      and thus more costly to index?
-    const cdpObject = makeDebuggeeValue(obj);
-    registerCdpObject(cdpObject);
+/**
+ * @param {Object} plainObject
+ * @return {number}
+ */
+function registerPlainObject(plainObject) {
+  let rrpId = gRrpIdByPlainObject.get(plainObject);
+  if (!rrpId) {
+    // → ask V8InspectorSession to wrap plainObject (gets CDP.RemoteObject)
+    const cdpObject = makeDebuggeeValue(plainObject);
+    assert(cdpObject);
+    rrpId = registerCdpObject(cdpObject);
+    gRrpIdByPlainObject.set(plainObject, rrpId);
+    gPlainObjectByRrpId.set(rrpId, plainObject);
   }
-  return protocolId;
+  return rrpId;
+}
+
+function getPlainObjectByCdpId(cdpId) {
+  const rrpId = gRrpIdByCdpId.get(cdpId);
+  assert(rrpId);
+  return getPlainObjectByRrpId(rrpId);
+}
+
+/**
+ * @param {number} rrpId 
+ * @return {Object}
+ */
+function getPlainObjectByRrpId(rrpId) {
+  rrpId += '';
+  let plainObject = gRrpIdByPlainObject.get(rrpId);
+  if (!plainObject) {
+    // not a ref type (registration already handled in `registerCdpObject` ↓)
+    // // → ask V8InspectorSession to unwrap cdpObject (gets plainObject)
+    // const cdpObject = getCdpObjectByRrpId(rrpId);
+    // // → NOTE if we have an rrpId, it means, we already should have registered the cdpObject
+    // assert(cdpObject);
+    // const cdpId = cdpObject.objectId;
+    // plainObject = fromJsGetObjectByCdpId(cdpId);
+    // gRrpIdByPlainObject.set(plainObject, rrpId);
+    // gPlainObjectByRrpId.set(rrpId, plainObject);
+  }
+  return plainObject;
 }
 
 /**
@@ -632,10 +672,24 @@ function registerCdpObject(cdpObject) {
     return rrpId;
   }
 
-  rrpId = ++gLastRrpId;
+  let plainObject;
+  if (isCdpRefType(cdpObject)) {
+    // NOTE: the same object might generate multiple cdpIds
+    plainObject = fromJsGetObjectByCdpId(cdpId);
+    rrpId = gRrpIdByPlainObject.get(plainObject);
+  }
+
+  // new RrpId
+  rrpId ||= ++gLastRrpId + '';  // coerce to string
   gCdpObjectsByRrpId.set(rrpId, cdpObject);
-  gRrpIdByObject.set(obj, rrpId);
   gRrpIdByCdpId.set(cdpId, rrpId);
+  if (plainObject) {
+    gRrpIdByPlainObject.set(plainObject, rrpId);
+    gPlainObjectByRrpId.set(rrpId, plainObject);
+  }
+
+  const { className, description } = gCdpObjectsByRrpId.get(rrpId) || {};
+  log(`DDBG registerCdpObject TRACE ${JSON.stringify({ rrpId, cdpId, cdpObject: cdpObject && { className, description } })} ${new Error(``).stack}`);
   return rrpId;
 }
 
@@ -644,13 +698,19 @@ function registerCdpObject(cdpObject) {
  * @return {CDP.Runtime.RemoteObject}
  */
 function getCdpObjectByRrpId(rrpId) {
-  const remoteObject = gCdpObjectsByRrpId.get(rrpId);
-  assert(remoteObject);
-  return remoteObject;
+  const cdpObject = gCdpObjectsByRrpId.get(rrpId);
+  log(`DDBG getCdpObjectByRrpId rrpId=${rrpId}, cdpObject=${!!cdpObject}`);
+  assert(cdpObject);
+  return cdpObject;
 }
 
 // Strings longer than this will be truncated when creating protocol values.
 const MaxStringLength = 10000;
+
+const cdpRefTypes = ['object', 'function'];
+function isCdpRefType(cdpObject) {
+  return cdpRefTypes.includes(cdpObject.type);
+}
 
 function cdpToRrpObject(cdpObject) {
   switch (cdpObject.type) {
@@ -716,10 +776,10 @@ function getCdpScopeByRrpId(rrpScopeId) {
  */
 function createPauseObject(rrpId, level) {
   const cdpObj = getCdpObjectByRrpId(rrpId);
-  // NOTE: `subtype` often won't be available, due to divergence
+  // TODO: `subtype` often won't be available, due to a divergence check in V8 → `value-mirror.cc`
   const className = cdpObj.subtype == "proxy" ? "Proxy" : (cdpObj.className || "Function");
 
-  // NOTE: `persistentId` is added via V8 → `injected-script.cc`
+  // NOTE: `persistentId` is added in V8 → `injected-script.cc`
   const { persistentId } = cdpObj;
 
   let preview;
@@ -791,7 +851,7 @@ ProtocolObjectPreview.prototype = {
     const properties = allProperties.result;
 
     // Add data for DOM/CSS objects
-    this.extra = previewBlinkObject(this.cdpObj.objectId) || {};
+    this.extra = previewBlinkObject(this.cdpObj.objectId, allProperties) || {};
 
     // Add class-specific data.
     const previewer = CustomPreviewers[this.cdpObj.className];
@@ -840,7 +900,10 @@ function getDescriptionCount(description) {
   }
 }
 
-function previewBlinkObject(protocolId) {
+function previewBlinkObject(cdpId, allProperties) {
+  const rrpId = gRrpIdByCdpId.get(cdpId);
+  const plainObject = getPlainObjectByRrpId(rrpId);
+  log(`DDBG previewBlinkObject plainObject=${typeof plainObject}`);
   // TODO
 }
 
@@ -1069,6 +1132,7 @@ function createRrpScope(scopeId) {
     bindings,
   };
 }
+
 
 
 
@@ -2468,6 +2532,30 @@ static void fromJsMakeDebuggeeValue(const v8::FunctionCallbackInfo<v8::Value>& a
   args.GetReturnValue().Set(remoteObject);
 }
 
+static void fromJsGetObjectByCdpId(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsString() && "[RuntimeError] must be called with a single string");
+
+  v8::Isolate* isolate = args.GetIsolate();
+  auto context = isolate->GetCurrentContext();
+
+  v8::String::Utf8Value cdpId(isolate, args[0]);
+  // not sure why this is such a hassle?
+  const uint8_t* cdpIdPtr = reinterpret_cast<const uint8_t*>(*cdpId);
+  recordreplay::Print("DDBG fromJsGetObjectByCdpId - cdpId=%s", cdpIdPtr);
+  v8_inspector::StringView cdpIdV8(cdpIdPtr, cdpId.length());
+
+  v8::Local<v8::Value> plainObject;
+  std::unique_ptr<v8_inspector::StringBuffer> error;
+  if (!gInspectorSession->unwrapObject(&error, cdpIdV8, &plainObject, &context,
+                                       nullptr)) {
+    recordreplay::Print("[RuntimError] could not lookup cdpId: %s",
+                        ToCoreString(error->string()).Ascii().c_str());
+    args.GetReturnValue().SetNull();
+  } else {
+    args.GetReturnValue().Set(plainObject);
+  }
+}
 
 /** ###########################################################################
  * misc
@@ -2582,12 +2670,15 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
   // SetFunctionProperty(isolate, args, "jsGetObjectIdForAnyObject",
   //                     jsGetObjectIdForAnyObject);
   // SetFunctionProperty(isolate, args, "jsPreviewBlinkObjectForObjectId", jsPreviewBlinkObjectForObjectId);
-  SetFunctionProperty(isolate, args, "fromJsMakeDebuggeeValue", fromJsMakeDebuggeeValue);
+  SetFunctionProperty(isolate, args, "fromJsMakeDebuggeeValue",
+                      fromJsMakeDebuggeeValue);
+  SetFunctionProperty(isolate, args, "fromJsGetObjectByCdpId",
+                      fromJsGetObjectByCdpId);
 
-      // unsorted RR stuff
-      SetFunctionProperty(
-          isolate, args, "setClearPauseDataCallback",
-          v8::FunctionCallbackRecordReplaySetClearPauseDataCallback);
+  // unsorted RR stuff
+  SetFunctionProperty(
+      isolate, args, "setClearPauseDataCallback",
+      v8::FunctionCallbackRecordReplaySetClearPauseDataCallback);
   SetFunctionProperty(isolate, args, "getCurrentError",
                       GetCurrentError);
   SetFunctionProperty(isolate, args, "getRecordingId",
