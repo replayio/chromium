@@ -385,46 +385,6 @@ function getStackFrames() {
 }
 
 
-window.DevOnly = {
-  // NOTE: commented out until we have a safe/reliably way of dealing with it
-  // tryEvalDev(expression, frameId = 0) {
-  //   // log(`[CHROMDEBUG] eval - expression: "${expression}"`);
-
-  //   // NOTE: expression sometimes gets wrapped in parentheses, and its value must be a string
-  //   const prefixes = ['("dev:', '"dev:'];
-  //   const prefix = prefixes.find(p => expression.startsWith(p));
-  //   if (prefix) {
-  //     // hackfix: evaluate straight-up in our dev context
-  //     // TODO: unsafe. Must be behind DEV-ONLY flag.
-
-  //     let cmd = expression;
-  //     if (cmd.startsWith('(')) {
-  //       // strip '()'
-  //       cmd = cmd.substring(1, expression.length - 1);
-  //     }
-  //     if (cmd.endsWith(';')) {
-  //       // strip trailing ';'
-  //       cmd = cmd.substring(0, expression.length - 1);
-  //     }
-
-  //     // parse JSON (used for serialization)
-  //     cmd = JSON.parse(cmd);
-
-  //     // strip "dev:" and wrap in ()
-  //     cmd = `(${cmd.substring(4)})`;
-
-  //     // run
-  //     const res = eval(cmd);
-  //     const resJson = JSON.stringify(res);
-
-  //     const t = res !== undefined ? ` (type: ${typeof res})` : '';
-  //     // log(`[CHROMDEBUG] eval (dev) - cmd: "${cmd}", res:${t} "${resJson}"`);
-
-  //     return { result: { data: {}, returned: { value: resJson } } };
-  //   }
-  // }
-};
-
 // Build a protocol Result object from a result/exceptionDetails CDP rval.
 function buildRrpObjectResult({ result, exceptionDetails }) {
   const value = cdpToRrpObject(result);
@@ -441,11 +401,6 @@ function buildRrpObjectResult({ result, exceptionDetails }) {
 
 function Pause_evaluateInFrame({ frameId, expression }) {
   try {
-    const result = window.DevOnly?.tryEvalDev(expression, frameId);
-    if (result) {
-      return result;
-    }
-
     const frames = getStackFrames();
     const index = +frameId;
     assert(index < frames.length);
@@ -476,11 +431,6 @@ function Pause_evaluateInFrame({ frameId, expression }) {
 
 function Pause_evaluateInGlobal({ expression }) {
   try {
-    const result = window.DevOnly?.tryEvalDev(expression);
-    if (result) {
-      return result;
-    }
-
     const rv = sendMessage("Runtime.evaluate", { expression });
     return buildRrpObjectResult(rv);
   }
