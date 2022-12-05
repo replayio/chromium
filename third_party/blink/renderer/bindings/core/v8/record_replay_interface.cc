@@ -73,7 +73,7 @@ using RemoteObjectIdType = WTF::String;
 const char* gReplayScript = R""""(
 (() => {
 
-const Verbose = 1;
+const Verbose = 0;
 const VerboseCommands = Verbose;
 
 const {
@@ -236,7 +236,6 @@ const CommandCallbacks = {
   "DOM.getBoxModel": DOM_getBoxModel
 };
 
-let gLastCommandErrors = [];
 
 function commandCallback(method, params) {
   if (!CommandCallbacks[method]) {
@@ -250,9 +249,7 @@ function commandCallback(method, params) {
     VerboseCommands && log(`[Command ${method}] Handled command, result=${JSON.stringify(result)}`);
     return result;
   } catch (e) {
-    const msg = `[RuntimeError][Command ${method}] ${e?.stack || e}`;
-    gLastCommandErrors.push(msg);
-    log(msg);
+    log(`[RuntimeError][Command ${method}] ${e?.stack || e}`);
     return {};
   }
 }
@@ -425,10 +422,6 @@ window.DevOnly = {
 
   //     return { result: { data: {}, returned: { value: resJson } } };
   //   }
-  // },
-
-  // popCommandError() {
-  //   return gLastCommandErrors.shift();
   // }
 };
 
@@ -594,7 +587,6 @@ function clearPauseDataCallback() {
     gPlainObjectByRrpId.clear();
     gCdpScopesByRrpId.clear();
     gLastBoundingClientRectsByObjectId.clear();
-    gLastCommandErrors = [];
     gNextObjectId = 1;
   } catch (e) {
     log(`Error: clearPauseDataCallback exception: ${e}`);
