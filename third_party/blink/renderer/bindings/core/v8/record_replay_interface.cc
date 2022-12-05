@@ -17,10 +17,7 @@
 #include "third_party/blink/renderer/core/css/css_style_declaration.h"
 #include "third_party/blink/renderer/core/dom/pseudo_element.h"
 #include "third_party/blink/renderer/core/inspector/inspected_frames.h"
-#include "third_party/blink/renderer/core/inspector/inspector_dom_agent.h"
 #include "third_party/blink/renderer/core/inspector/resolve_node.h"
-// #include "third_party/blink/renderer/core/inspector/inspector_dom_debugger_agent.h"
-// #include "third_party/blink/renderer/core/inspector/inspector_dom_snapshot_agent.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
@@ -2497,22 +2494,6 @@ static void HandleNetworkDidReceiveDataEvent(const base::DictionaryValue& info) 
  * ##########################################################################*/
 
 static LocalFrame* gLocalFrame;
-// NOTE: the InspectorDOMAgent is not as helpful as we would like, since it is
-// not fully hooked up to `DevToolsSession` + `UberDispatcher`
-// static InspectorDOMAgent* gInspectorDOMAgent;
-
-// InspectorDOMAgent* getOrCreateInspectorDOMAgent(LocalFrame* frame,
-//                                                 v8::Isolate* isolate) {
-//   if (!gInspectorDOMAgent) {
-//     // NOTE: based on WebDevToolsAgentImpl::AttachSession
-//     InspectedFrames* inspected_frames =
-//         MakeGarbageCollected<InspectedFrames>(frame);
-//     gInspectorDOMAgent = MakeGarbageCollected<InspectorDOMAgent>(
-//         isolate, inspected_frames, gInspectorSession);
-//     gInspectorDOMAgent->enable();
-//   }
-//   return gInspectorDOMAgent;
-// }
 
 /**
  * NOTE: Since the `RemoteObject` type is not publicly exposed, we cannot easily access it in CPP space.
