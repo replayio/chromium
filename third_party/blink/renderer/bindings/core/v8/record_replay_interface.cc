@@ -400,53 +400,39 @@ function buildRrpObjectResult({ result, exceptionDetails }) {
 
 
 function Pause_evaluateInFrame({ frameId, expression }) {
-  try {
-    const frames = getStackFrames();
-    const index = +frameId;
-    assert(index < frames.length);
-    const frame = frames[index];
+  const frames = getStackFrames();
+  const index = +frameId;
+  assert(index < frames.length);
+  const frame = frames[index];
 
-    const rv = doEvaluation();
-    return buildRrpObjectResult(rv);
+  const rv = doEvaluation();
+  return buildRrpObjectResult(rv);
 
-    function doEvaluation() {
-      // In order to do the evaluation in the right frame, the same number of
-      // frames need to be on V8's stack when we do the evaluation as when we got
-      // the stack frames in the first place. The debugger agent extracts a frame
-      // index from the ID it is given and uses that to walk the stack to the
-      // frame where it will do the evaluation (see DebugStackTraceIterator).
-      return sendMessage(
-        "Debugger.evaluateOnCallFrame",
-        {
-          callFrameId: frame.callFrameId,
-          expression,
-        }
-      );
-    }
-  }
-  catch (err) {
-    return { result: { data: {}, exception: { value: err.stack } } };
+  function doEvaluation() {
+    // In order to do the evaluation in the right frame, the same number of
+    // frames need to be on V8's stack when we do the evaluation as when we got
+    // the stack frames in the first place. The debugger agent extracts a frame
+    // index from the ID it is given and uses that to walk the stack to the
+    // frame where it will do the evaluation (see DebugStackTraceIterator).
+    return sendMessage(
+      "Debugger.evaluateOnCallFrame",
+      {
+        callFrameId: frame.callFrameId,
+        expression,
+      }
+    );
   }
 }
 
 function Pause_evaluateInGlobal({ expression }) {
-  try {
-    const rv = sendMessage("Runtime.evaluate", { expression });
-    return buildRrpObjectResult(rv);
-  }
-  catch (err) {
-    return { result: { data: {}, exception: { value: err.stack } } };
-  }
+  const rv = sendMessage("Runtime.evaluate", { expression });
+  return buildRrpObjectResult(rv);
 }
 
 // function onMaybeNewPause() {
 // }
 
 function Pause_getAllFrames() {
-  // // we don't currently have an event for `Pause.createPause`, so we use this instead.
-  // //  (→ this is called first from `Pause.createPause`, but also from other places)
-  // onMaybeNewPause();
-
   const frames = getStackFrames().map((frame, index) => {
     // Use our own IDs for frames.
     const id = (index++).toString();
