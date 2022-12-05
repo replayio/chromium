@@ -15,7 +15,6 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_document.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_node.h"
 #include "third_party/blink/renderer/core/css/css_style_declaration.h"
-#include "third_party/blink/renderer/core/dom/pseudo_element.h"
 #include "third_party/blink/renderer/core/inspector/inspected_frames.h"
 #include "third_party/blink/renderer/core/inspector/resolve_node.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
@@ -184,7 +183,7 @@ function addEventListener(method, callback) {
   gEventListeners.set(method, callback);
 }
 
-// TODO: rename all these CDP-related symbols correspondingly
+// TODO: rename all these CDP-related symbols to also have CDP in the name
 function messageCallback(message) {
   try {
     message = JSON_parse(message);
@@ -711,7 +710,7 @@ function getCdpScopeByRrpId(rrpScopeId) {
  */
 function createPauseObject(rrpId, level) {
   const cdpObj = getCdpObjectByRrpId(rrpId);
-  // TODO: `subtype` often won't be available, due to a divergence check in V8 → `value-mirror.cc`
+  // NOTE: `subtype` is not reliably available, due to a divergence check in V8 → `value-mirror.cc`
   const className = cdpObj.subtype == "proxy" ? "Proxy" : (cdpObj.className || "Function");
 
   // NOTE: `persistentId` is added in V8 → `injected-script.cc`
@@ -851,7 +850,8 @@ function previewBlinkObject(cdpObject, allProperties) {
     }
   }
 
-  // TODO
+  // TODO: preview other blink objects
+  // Issue: https://linear.app/replay/issue/RUN-861/add-dom-related-props-to-pausegetobjectpreview-and-fix-objectid
   
 }
 
@@ -863,8 +863,7 @@ function previewBlinkNode(node) {
       attributes.push({ name, value });
     }
     // TODO: We cannot access pseudo elements using the JS DOM API.
-    //    → probably want to use `DynamicTo<PseudoElement>(node)`
-    // @see https://static.replay.io/protocol/tot/DOM/#type-PseudoType
+    // Issue: https://linear.app/replay/issue/RUN-953/dom-feature-add-pseudo-elements
     // pseudoType = node.localName;
   }
 
@@ -881,8 +880,7 @@ function previewBlinkNode(node) {
      * Nested documents use the parent element instead of null.
      * 
      * TODO: will need more work here to support multi-CSP iframes
-     *    → consider CollectNodes(..., pierce, ...)
-     * @see https://github.com/replayio/chromium/blob/0074930981924371e5ad6d774b93e267085a4281/third_party/blink/renderer/core/inspector/inspector_dom_agent.cc#1854
+     * Issue: https://linear.app/replay/issue/RUN-954/dom-feature-support-multi-cspcross-origin-iframes
      */
     const iframes = node.defaultView.parent.document.getElementsByTagName(
       "iframe"
@@ -1675,14 +1673,16 @@ function createRrpScope(scopeId) {
    */
   function DOM_getBoxModel({ node }) {
 
-    // TODO: use domAgent->getContentQuads for this instead?
+    // TODO: consider using domAgent->getContentQuads for this instead. Should allow for better accuracy
+    //   Issue: https://linear.app/replay/issue/RUN-886/nodepicker-improve-highlight-on-hover
 
     if (!gLastBoundingClientRectsByObjectId.size) {
       // compute all basic bounding client rect sizes
       DOM_getAllBoundingClientRects();
     }
     const rectInfo = getLastBoundingClientRect(node)
-    const rects = rectInfo?.rects || (rectInfo?.rect ? [rectInfo.rect] : [[0, 0, 20, 20]]);
+    const rects = rectInfo?.rects || 
+      (rectInfo?.rect ? [rectInfo.rect] : [[0, 0, 20, 20]]);
 
     // hackfix: simply use the normal (not tight) bounding rects for all for now
     const model = { node };
@@ -2639,6 +2639,8 @@ static void RunScript(v8::Isolate* isolate, v8::Local<v8::Context> context, cons
   v8::Local<v8::String> source = ToV8String(isolate, script);
 
   // TODO: check for errors after `Compile` and `Run`
+  // Issue:
+  // https://linear.app/replay/issue/RUN-955/chromium-should-not-diverge-and-crash-if-greplayscript-does-not
   v8::Local<v8::Script> compiled = v8::Script::Compile(context, source, &origin).ToLocalChecked();
   compiled->Run(context).ToLocalChecked();
 }
