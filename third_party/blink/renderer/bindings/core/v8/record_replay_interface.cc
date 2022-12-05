@@ -231,8 +231,7 @@ const CommandCallbacks = {
   "Pause.getObjectPreview": Pause_getObjectPreview,
   "Pause.getObjectProperty": Pause_getObjectProperty,
   "Pause.getScope": Pause_getScope,
-  // bring back after id look up has been fixed
-  // "DOM.getDocument": DOM_getDocument,
+  "DOM.getDocument": DOM_getDocument,
   "DOM.getAllBoundingClientRects": DOM_getAllBoundingClientRects,
   "DOM.getBoxModel": DOM_getBoxModel
 };
@@ -680,20 +679,27 @@ function registerCdpObject(cdpObject) {
   if (isCdpRefType(cdpObject)) {
     // NOTE: the same object might generate multiple cdpIds
     plainObject = fromJsGetObjectByCdpId(cdpId);
-    rrpId = gRrpIdByPlainObject.get(plainObject);
+    if (plainObject) {
+      rrpId = gRrpIdByPlainObject.get(plainObject);
+    }
+    const plainObjectinfo = plainObject && { t: typeof plainObject, ctor: plainObject.constructor?.name }
+    log(`DDBG registerCdpObject new plainObject: ${JSON.stringify({ rrpId, plainObjectinfo })}`);
   }
 
   // new RrpId
-  rrpId ||= ++gLastRrpId + '';  // coerce to string
+  const existingRrpId = rrpId;
+  // rrpId ||= ++gLastRrpId + '';  // coerce to string
+  rrpId = cdpId;    // NOTE: we cannot easily generate our own id because they are generated across multiple processes
   gCdpObjectsByRrpId.set(rrpId, cdpObject);
   gRrpIdByCdpId.set(cdpId, rrpId);
-  if (plainObject) {
+  if (plainObject && !existingRrpId) {
     gRrpIdByPlainObject.set(plainObject, rrpId);
     gPlainObjectByRrpId.set(rrpId, plainObject);
   }
 
-  const { className, description } = gCdpObjectsByRrpId.get(rrpId) || {};
-  log(`DDBG registerCdpObject TRACE ${JSON.stringify({ rrpId, cdpId, cdpObject: cdpObject && { className, description } })} ${new Error(``).stack}`);
+  const { className, description, type } = gCdpObjectsByRrpId.get(rrpId) || {};
+  const cdpObjectInfo = cdpObject && { className, description, type };
+  log(`DDBG registerCdpObject TRACE ${JSON.stringify({ rrpId, existingRrpId, gLastRrpId, cdpId, cdpObj: cdpObjectInfo })} ${new Error(``).stack}`);
   return rrpId;
 }
 
@@ -1618,11 +1624,11 @@ function createRrpScope(scopeId) {
    * {@link DOM_getDocument}
    * ##########################################################################*/
   function DOM_getDocument() {
-    const apiId = getAPIObjectId(window.document);
+    const rrpId = registerPlainObject(window.document);
 
     return {
       data: {},
-      document: apiId
+      document: rrpId
     };
   }
 
