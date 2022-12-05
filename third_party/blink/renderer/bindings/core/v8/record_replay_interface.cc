@@ -447,7 +447,6 @@ function Pause_getExceptionValue() {
 }
 
 function Pause_getObjectPreview({ object, level = "full" }) {
-  log(`DDBG getObjectPreview: ${JSON.stringify({ object })}`);
   const objectData = createPauseObject(object, level);
   return { data: { objects: [objectData] } };
 }
@@ -511,7 +510,6 @@ let gNextObjectId = 1;
 
 function clearPauseDataCallback() {
   try {
-    log(`DDBG clearPauseDataCallback`);
     gCdpObjectsByRrpId.clear();
     gRrpIdByCdpId.clear();
     gObjectsByRrpId.clear();
@@ -534,7 +532,6 @@ function clearPauseDataCallback() {
 function makeDebuggeeValue(plainObject) {
   assert(!plainObject.objectId);
   const remoteObjectStr = fromJsMakeDebuggeeValue(plainObject);
-  log(`DDBG makeDebuggeeValue: ${remoteObjectStr}`);
   const remoteObject = JSON.parse(remoteObjectStr);
   assert(remoteObject.objectId);
   return remoteObject;
@@ -548,7 +545,6 @@ function registerPlainObject(plainObject) {
   let rrpId = gRrpIdByPlainObject.get(plainObject);
   if (!rrpId) {
     // → ask V8InspectorSession to wrap plainObject (gets CDP.RemoteObject)
-    log(`DDBG registerPlainObject plainObject=${typeof plainObject} - ${JSON.stringify(Object.assign({}, plainObject))}`);
     const cdpObject = makeDebuggeeValue(plainObject);
     if (cdpObject) {
       rrpId = registerCdpObject(cdpObject);
@@ -606,8 +602,6 @@ function registerCdpObject(cdpObject) {
     if (plainObject) {
       rrpId = gRrpIdByPlainObject.get(plainObject);
     }
-    const plainObjectinfo = plainObject && { t: typeof plainObject, ctor: plainObject.constructor?.name }
-    log(`DDBG registerCdpObject new plainObject: ${JSON.stringify({ rrpId, plainObjectinfo })}`);
   }
 
   // new RrpId
@@ -622,8 +616,6 @@ function registerCdpObject(cdpObject) {
   }
 
   const { className, description, type } = gCdpObjectsByRrpId.get(rrpId) || {};
-  const cdpObjectInfo = cdpObject && { className, description, type };
-  log(`DDBG registerCdpObject TRACE ${JSON.stringify({ rrpId, existingRrpId, gLastRrpId, cdpId, cdpObj: cdpObjectInfo })} ${new Error(``).stack}`);
   return rrpId;
 }
 
@@ -633,7 +625,6 @@ function registerCdpObject(cdpObject) {
  */
 function getCdpObjectByRrpId(rrpId) {
   const cdpObject = gCdpObjectsByRrpId.get(rrpId);
-  log(`DDBG getCdpObjectByRrpId rrpId=${rrpId}, cdpObject=${!!cdpObject}`);
   assert(cdpObject);
   return cdpObject;
 }
@@ -839,7 +830,6 @@ function previewBlinkObject(cdpObject, allProperties) {
   const rrpId = gRrpIdByCdpId.get(cdpId);
   assert(rrpId);
   const plainObject = getPlainObjectByRrpId(rrpId);
-  log(`DDBG previewBlinkObject rrpId=${rrpId}, cdpId=${cdpId}, cdpObject=${cdpObject.type}, plainObject=${typeof plainObject}, allProperties=${JSON.stringify(allProperties)}`);
 
   /**
    * @see https://github.com/replayio/gecko-dev/blob/592992ff7e15cb8ad1dd6fb109f19bd3523cd452/devtools/server/actors/replay/module.js#L1937
@@ -2524,23 +2514,13 @@ static void fromJsMakeDebuggeeValue(const v8::FunctionCallbackInfo<v8::Value>& a
   result->AppendSerialized(&cbor);
 
   if (cbor.size() > 1) {
-    // auto remoteObjectStr =
-    //     v8::String::NewFromOneByte(isolate, cbor.data(),
-    //                               v8::NewStringType::kNormal, cbor.size())
-    //         .ToLocalChecked();
-    // auto remoteObjectJson = v8::Object::parse;
-    // args.GetReturnValue().Set(remoteObjectJson);
-
     /**
+     * This is based on other code that uses `wrapObject` and sends the result to JS.
      * @see
      * https://github.com/replayio/chromium-v8/blob/b38bf5b0b1f149f7af3fd90a2ce12344e7191d03/src/inspector/custom-preview.cc#L123
      */
     std::vector<uint8_t> json;
     v8_crdtp::json::ConvertCBORToJSON(v8_crdtp::SpanFrom(cbor), &json);
-
-    recordreplay::Print("DDBG fromJsMakeDebuggeeValue, len=%d, json.len=%d",
-                        cbor.size(), json.size());
-
     auto remoteObjectStr =
         v8::String::NewFromOneByte(isolate, json.data(),
                                   v8::NewStringType::kNormal, json.size())
@@ -2559,10 +2539,10 @@ static void fromJsGetObjectByCdpId(
   v8::Isolate* isolate = args.GetIsolate();
   auto context = isolate->GetCurrentContext();
 
+  // convert v8::String → v8::String::Utf8Value → v8_inspector::StringView
+  // TODO: can this be improved?
   v8::String::Utf8Value cdpId(isolate, args[0]);
-  // not sure why this is such a hassle?
   const uint8_t* cdpIdPtr = reinterpret_cast<const uint8_t*>(*cdpId);
-  recordreplay::Print("DDBG fromJsGetObjectByCdpId - cdpId=%s", cdpIdPtr);
   v8_inspector::StringView cdpIdV8(cdpIdPtr, cdpId.length());
 
   v8::Local<v8::Value> plainObject;
