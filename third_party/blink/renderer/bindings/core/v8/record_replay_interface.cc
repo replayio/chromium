@@ -69,7 +69,7 @@ using RemoteObjectIdType = WTF::String;
 const char* gReplayScript = R""""(
 (() => {
 
-const Verbose = 0;
+const Verbose = 1;
 const VerboseCommands = Verbose;
 
 const {
@@ -501,12 +501,11 @@ const gRrpIdByPlainObject = new Map();
  * @type {Map<string, Object>}
  */
 const gPlainObjectByRrpId = new Map();
+
 let gLastRrpId = 0;
 
 // Map protocol ObjectId => Debugger.Scope
 const gCdpScopesByRrpId = new Map();
-
-let gNextObjectId = 1;
 
 function clearPauseDataCallback() {
   try {
@@ -517,7 +516,7 @@ function clearPauseDataCallback() {
     gPlainObjectByRrpId.clear();
     gCdpScopesByRrpId.clear();
     gLastBoundingClientRectsByObjectId.clear();
-    gNextObjectId = 1;
+    gLastRrpId = 0;
   } catch (e) {
     log(`Error: clearPauseDataCallback exception: ${e}`);
   }
@@ -606,8 +605,7 @@ function registerCdpObject(cdpObject) {
 
   // new RrpId
   const existingRrpId = rrpId;
-  // rrpId ||= ++gLastRrpId + '';  // coerce to string
-  rrpId = cdpId;    // NOTE: we cannot easily generate our own id because they are generated across multiple processes
+  rrpId ||= ++gLastRrpId + '';  // coerce to string
   gCdpObjectsByRrpId.set(rrpId, cdpObject);
   gRrpIdByCdpId.set(cdpId, rrpId);
   if (plainObject && !existingRrpId) {
