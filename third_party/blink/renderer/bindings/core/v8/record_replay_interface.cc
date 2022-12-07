@@ -98,6 +98,11 @@ try {
 
 
 
+
+
+
+
+
 // Save these before page code potentially overwrites them.
 const JSON_stringify = JSON.stringify;
 const JSON_parse = JSON.parse;
@@ -232,6 +237,7 @@ const CommandCallbacks = {
   "DOM.getAllBoundingClientRects": DOM_getAllBoundingClientRects,
   "DOM.getBoxModel": DOM_getBoxModel,
   "DOM.getEventListeners": DOM_getEventListeners,
+  "DOM.querySelector": DOM_querySelector,
   "CSS.getComputedStyle": CSS_getComputedStyle,
 };
 
@@ -569,9 +575,9 @@ function getPlainObjectByCdpId(cdpId) {
  */
 function getPlainObjectByRrpId(rrpId) {
   rrpId += '';
-  let plainObject = gRrpIdByPlainObject.get(rrpId);
+  let plainObject = gPlainObjectByRrpId.get(rrpId);
   if (!plainObject) {
-    // (if this was a ref type, registration would already have been handled in `registerCdpObject` ↓)
+    // (if this was a ref type, registration should already have been handled in `registerCdpObject` ↓)
     // → ask V8InspectorSession to unwrap cdpObject (gets plainObject)
     const cdpObject = getCdpObjectByRrpId(rrpId);
     // → NOTE if we have an rrpId, it means, we already should have registered the cdpObject
@@ -1273,7 +1279,7 @@ function DOM_getBoxModel({ node }) {
     DOM_getAllBoundingClientRects();
   }
   const rectInfo = getLastBoundingClientRect(node)
-  const rects = rectInfo?.rects || 
+  const rects = rectInfo?.rects ||
     (rectInfo?.rect ? [rectInfo.rect] : [[0, 0, 20, 20]]);
 
   // hackfix: simply use the normal (not tight) bounding rects for all for now
@@ -1305,6 +1311,96 @@ function DOM_getBoxModel({ node }) {
   // }
 
   return { model };
+}
+
+
+/** ###########################################################################
+ * {@link DOM_getEventListeners}
+ * ##########################################################################*/
+
+function DOM_getEventListeners({ node }) {
+  const listeners = [];
+
+  // TODO: adopt from gecko code ↓
+
+  // const nodeObj = getObjectFromId(node).unsafeDereference();
+  // const listenerInfo = Services.els.getListenerInfoFor(nodeObj) || [];
+  // if (nodeObj.nodeName && nodeObj.nodeName == "HTML") {
+  //   // Add event listeners for the document and window as well.
+  //   listenerInfo.push(
+  //     ...Services.els.getListenerInfoFor(nodeObj.parentNode),
+  //     ...Services.els.getListenerInfoFor(nodeObj.ownerGlobal)
+  //   );
+  // }
+
+  // for (const { type, listenerObject, capturing } of listenerInfo) {
+  //   const handler = unwrapXray(listenerObject);
+  //   if (!handler) {
+  //     continue;
+  //   }
+  //   const dbgHandler = makeDebuggeeValue(handler);
+  //   if (dbgHandler.class != "Function") {
+  //     continue;
+  //   }
+  //   const id = getObjectId(dbgHandler);
+  //   listeners.push({
+  //     node,
+  //     handler: id,
+  //     type,
+  //     capture: capturing,
+  //   });
+  // }
+
+  return { listeners, data: {} };
+}
+
+/** ###########################################################################
+ * {@link DOM_querySelector}
+ * ##########################################################################*/
+
+function DOM_querySelector({ node, selector }) {
+  const nodeObj = getPlainObjectByRrpId(node);
+
+  const resultObj = nodeObj.querySelector(selector);
+  if (!resultObj) {
+    return { data: {} };
+  }
+  const result = registerPlainObject(resultObj);
+  return { result, data: {} };
+}
+
+/** ###########################################################################
+ * {@link CSS_getComputedStyle}
+ * ##########################################################################*/
+
+function CSS_getComputedStyle({ node }) {
+  const nodeObj = getPlainObjectByRrpId(node);
+
+  const computedStyle = [];
+  if (nodeObj instanceof Element) {
+    // NOTE: tested successfully for same-CSP elements of different iframes
+    const ownerGlobal = window;
+
+    // TODO: fix pseudoTypes
+    //   → Issue: https://linear.app/replay/issue/RUN-953/
+    // const pseudoType = getPseudoType(node);
+    // let styleInfo;
+    // if (pseudoType) {
+    //   styleInfo = ownerGlobal.getComputedStyle(
+    //     nodeObj.parentNode,
+    //     pseudoType
+    //   );
+    // }
+    // else {
+    styleInfo = ownerGlobal.getComputedStyle(nodeObj);
+    for (let i = 0; i < styleInfo.length; i++) {
+      computedStyle.push({
+        name: styleInfo.item(i),
+        value: styleInfo.getPropertyValue(styleInfo.item(i)),
+      });
+    }
+  }
+  return { computedStyle };
 }
 
 
