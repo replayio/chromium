@@ -89,8 +89,6 @@ void OnNavigationEvent(const char* kind, const char* url);
 int NewIdMainThread(const char* name);
 int NewIdAnyThread(const char* name);
 
-
-
 // stl comparator that uses pointer IDs to compare elements when recording/replaying,
 // giving a deterministic sort order.
 struct CompareByPointerId {
@@ -101,6 +99,23 @@ struct CompareByPointerId {
       int idb = PointerId(b);
       CHECK(ida && idb);
       return ida < idb;
+    }
+    return (uintptr_t)a < (uintptr_t)b;
+  }
+};
+
+// As for CompareByPointerId but tolerates pointers that aren't registered
+// (maybe events were disallowed when the object was created) though the
+// ordering for these objects will be non-deterministic.
+struct CompareMaybeByPointerId {
+  template <typename T>
+  bool operator()(const T* a, const T* b) const {
+    if (IsRecordingOrReplaying("pointer-ids")) {
+      int ida = PointerId(a);
+      int idb = PointerId(b);
+      if (ida && idb) {
+        return ida < idb;
+      }
     }
     return (uintptr_t)a < (uintptr_t)b;
   }
