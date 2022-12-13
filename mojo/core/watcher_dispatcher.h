@@ -57,7 +57,7 @@ class WatcherDispatcher : public Dispatcher {
  private:
   friend class Watch;
 
-  using WatchSet = std::set<const Watch*, recordreplay::CompareMaybeByPointerId>;
+  using WatchSet = std::set<const Watch*, recordreplay::CompareByPointerId>;
 
   ~WatcherDispatcher() override;
 

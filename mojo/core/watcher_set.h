@@ -59,7 +59,7 @@ class WatcherSet {
   };
 
   Dispatcher* const owner_;
-  base::flat_map<WatcherDispatcher*, Entry, recordreplay::CompareByPointerId> watchers_;
+  base::flat_map<WatcherDispatcher*, Entry, recordreplay::CompareMaybeByPointerId> watchers_;
   base::Optional<HandleSignalsState> last_known_state_;
 
   DISALLOW_COPY_AND_ASSIGN(WatcherSet);
