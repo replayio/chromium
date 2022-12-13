@@ -44,26 +44,25 @@ void ContextLifecycleNotifier::NotifyContextDestroyed() {
   });
   observers_.Clear();
 
+  std::sort(observers.begin(), observers.end(), recordreplay::CompareByPointerId());
+
   if (recordreplay::IsRecordingOrReplaying("values") &&
       !recordreplay::AreEventsDisallowed()) {
+    size_t num_observers = recordreplay::RecordReplayValue("NotifyContextDestroyed NumObservers", observers.size());
+    int* observer_ids = new int[num_observers];
+
     if (recordreplay::IsRecording()) {
-      size_t num_observers = observers.size();
-      recordreplay::RecordReplayValue("NotifyContextDestroyed NumObservers", num_observers);
-      int* observer_ids = new int[num_observers];
       for (size_t i = 0; i < observers.size(); i++) {
         int id = recordreplay::PointerId(observers[i]);
         CHECK(id);
         observer_ids[i] = id;
       }
-      recordreplay::RecordReplayBytes("ContextLifecycleNotifier::NotifyContextDestroyed ObserverIds",
-                                      observer_ids, num_observers * sizeof(int));
-      delete[] observer_ids;
-    } else {
-      size_t num_observers = recordreplay::RecordReplayValue("NotifyContextDestroyed NumObservers", 0);
-      int* observer_ids = new int[num_observers];
-      recordreplay::RecordReplayBytes("ContextLifecycleNotifier::NotifyContextDestroyed ObserverIds",
-                                      observer_ids, num_observers * sizeof(int));
+    }
 
+    recordreplay::RecordReplayBytes("ContextLifecycleNotifier::NotifyContextDestroyed ObserverIds",
+                                    observer_ids, num_observers * sizeof(int));
+
+    if (recordreplay::IsReplaying()) {
       HeapVector<Member<ContextLifecycleObserver>> new_observers;
       for (ContextLifecycleObserver* observer : observers) {
         int id = recordreplay::PointerId(observer);
@@ -80,8 +79,9 @@ void ContextLifecycleNotifier::NotifyContextDestroyed() {
       }
 
       observers = std::move(new_observers);
-      delete[] observer_ids;
     }
+
+    delete[] observer_ids;
   }
 
   for (ContextLifecycleObserver* observer : observers) {
