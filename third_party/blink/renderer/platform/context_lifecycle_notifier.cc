@@ -29,7 +29,7 @@ void ContextLifecycleNotifier::RemoveContextLifecycleObserver(
   DCHECK(observers_.HasObserver(observer));
   observers_.RemoveObserver(observer);
 
-  for (auto it : replay_observers_) {
+  for (auto it = replay_observers_.begin(); it != replay_observers_.end(); ++it) {
     if (*it == observer) {
       replay_observers_.erase(it);
       break;
@@ -39,7 +39,7 @@ void ContextLifecycleNotifier::RemoveContextLifecycleObserver(
 
 void ContextLifecycleNotifier::NotifyContextDestroyed() {
   HeapVector<Member<ContextLifecycleObserver>> observers;
-  observers_.ForEachObserver([](ContextLifecycleObserver* observer) {
+  observers_.ForEachObserver([&](ContextLifecycleObserver* observer) {
     observers.push_back(observer);
   });
   observers_.Clear();
@@ -69,7 +69,7 @@ void ContextLifecycleNotifier::NotifyContextDestroyed() {
         int id = recordreplay::PointerId(observer);
         CHECK(id);
         bool found = false;
-        for (int = 0; i < num_observers; i++) {
+        for (size_t i = 0; i < num_observers; i++) {
           if (observer_ids[i] == id) {
             found = true;
             break;
@@ -92,7 +92,7 @@ void ContextLifecycleNotifier::NotifyContextDestroyed() {
     observer->NotifyContextDestroyed();
   }
 
-  replay_observers_.Clear();
+  replay_observers_.clear();
 
 #if DCHECK_IS_ON()
   did_notify_observers_ = true;
