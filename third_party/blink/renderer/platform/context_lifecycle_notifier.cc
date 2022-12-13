@@ -29,9 +29,9 @@ void ContextLifecycleNotifier::RemoveContextLifecycleObserver(
   DCHECK(observers_.HasObserver(observer));
   observers_.RemoveObserver(observer);
 
-  for (auto it = replay_observers_.begin(); it != replay_observers_.end(); ++it) {
-    if (*it == observer) {
-      replay_observers_.erase(it);
+  for (size_t i = 0; i < replay_observers_.size(); i++) {
+    if (replay_observers_[i] == observer) {
+      replay_observers_.EraseAt(i);
       break;
     }
   }
