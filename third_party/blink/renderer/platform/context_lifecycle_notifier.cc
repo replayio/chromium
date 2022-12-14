@@ -44,7 +44,8 @@ void ContextLifecycleNotifier::NotifyContextDestroyed() {
   });
   observers_.Clear();
 
-  std::sort(observers.begin(), observers.end(), recordreplay::CompareByPointerId());
+  std::sort(observers.begin(), observers.end(),
+            recordreplay::CompareMemberByPointerId<Member<ContextLifecycleObserver>>());
 
   if (recordreplay::IsRecordingOrReplaying("values") &&
       !recordreplay::AreEventsDisallowed()) {
