@@ -293,15 +293,7 @@ function Target_getCurrentMessageContents() {
     argumentValues.push(cdpToRrpObject(arg));
   }
 
-  let level = "info";
-  switch (gLastConsoleAPICall.level) {
-    case "warning":
-      level = "warning";
-      break;
-    case "error":
-      level = "error";
-      break;
-  }
+  const level = gLastConsoleAPICall.level;
 
   let url, sourceId, line, column;
   if (gLastConsoleAPICall.stackTrace) {
