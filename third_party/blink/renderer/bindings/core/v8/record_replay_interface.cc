@@ -261,7 +261,7 @@ const CommandCallbacks = {
   "DOM.getEventListeners": DOM_getEventListeners,
   "DOM.querySelector": DOM_querySelector,
   "CSS.getComputedStyle": CSS_getComputedStyle,
-  // "CSS.getAppliedRules": CSS_getAppliedRules,
+  "CSS.getAppliedRules": CSS_getAppliedRules,
 };
 
 
@@ -595,8 +595,22 @@ function isNonNullObject(obj) {
 
 function getPlainObjectByCdpId(cdpId) {
   const rrpId = gRrpIdByCdpId.get(cdpId);
-  assert(rrpId);
-  return getPlainObjectByRrpId(rrpId);
+  if (rrpId) {
+    return getPlainObjectByRrpId(rrpId);
+  }
+  else {
+    TODO;
+  }
+}
+
+/**
+ * Handles the case where we have a `cpdId` for an unregistered object.
+ */
+function _registerNewPlainObjectByCpdId(cpdId) {
+  const plainObject = fromJsGetObjectByCdpId(cdpId);
+  buildRrpObjectFromCdpObject(cdpObject)
+  gRrpIdByPlainObject.set(plainObject, rrpId);
+  gPlainObjectByRrpId.set(rrpId, plainObject);
 }
 
 /**
@@ -1700,11 +1714,40 @@ class CssRule {
 
 /**
  * 
+ * @see https://chromedevtools.github.io/devtools-protocol/tot/CSS/#type-CSSRule
  * @see https://static.replay.io/protocol/tot/CSS/#type-Rule
  */
 function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
-  
-  return ruleRrpId;
+  // NOTE: type is not explained and does not seem to play a role
+  const type = 1;
+  const cssText = cdpRule.style?.cssText;
+  const styleSheetCdpId = cdpRule.style?.styleSheetId;
+  let parentStyleSheet;
+  if (styleSheetCdpId) {
+    // TODO: trace down `styleSheetCdpId`.
+    //   -> InspectorStyleSheet.Id()
+    //   -> NOTE: this is NOT a CDP.Runtime.RemoteObject!
+    const styleSheetObj = getPlainObjectByCdpId(styleSheetCdpId);
+    log(`DDBG CdpAsRrpCssRule - styleSheetObj - ${styleSheetObj?.constructor?.name}: ${JSON.stringify(styleSheetObj)}`);
+    const parentStyleSheetRrpId = TODO;
+  }
+  const startLine = TODO;
+  const startColumn = TODO;
+  const originalLocation = TODO;
+  const selectorText = TODO;
+  const style = TODO;
+
+  const rrpRule = {
+    type,
+    cssText,
+    parentStyleSheet,
+    startLine,
+    startColumn,
+    originalLocation,
+    selectorText,
+    style
+  };
+  return rrpRuleId;
 }
 
 
@@ -1722,13 +1765,14 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
 function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
   const appliedRules = [];
 
+  const cdpRules = cdpMatchedStyles.matchedRules;
   for (const cdpRule of cdpRules) {
     // TODO: add pseudoElement support
     //   Issue: https://linear.app/replay/issue/RUN-953
     const pseudoElement = undefined;
-    const ruleRrpId = registerCdpAsRrpCssRule(nodeObj, cdpRule);
+    const rrpRuleId = registerCdpAsRrpCssRule(nodeObj, cdpRule);
     const appliedRule = {
-      rule: ruleRrpId,
+      rule: rrpRuleId,
       pseudoElement
     };
     appliedRules.push(appliedRule);
@@ -3426,12 +3470,15 @@ static void fromJsGetMatchedStylesForNode(
     args.GetReturnValue().SetNull();
   } else {
     v8::Local<v8::Object> result = v8::Object::New(isolate);
-    if (inlineStyle.isJust()) {
-      auto rulesJs = convertCborToJS(isolate, inlineStyle.fromJust());
-      if (!rulesJs.IsEmpty()) {
-        SetDataProperty(isolate, result, "inlineStyle", rulesJs.ToLocalChecked());
-      }
-    }
+    // NOTE: we don't seem to need `inlineStyle` for now, as its taken care of separately in 
+    //   `Pause.getObjectPreview`.
+    // if (inlineStyle.isJust()) {
+    //   auto rulesJs = convertCborToJS(isolate, inlineStyle.fromJust());
+    //   if (!rulesJs.IsEmpty()) {
+    //     SetDataProperty(isolate, result, "inlineStyle", rulesJs.ToLocalChecked());
+    //   }
+    // }
+    // NOTE: not sure what `attributesStyle` is and how its different from `inlineStyle`?
     if (attributesStyle.isJust()) {
       auto rulesJs = convertCborToJS(isolate, attributesStyle.fromJust());
       if (!rulesJs.IsEmpty()) {
