@@ -1727,6 +1727,8 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
     // TODO: trace down `styleSheetCdpId`.
     //   -> InspectorStyleSheet.Id()
     //   -> NOTE: this is NOT a CDP.Runtime.RemoteObject!
+    //   -> The way to look these up is via `id_to_inspector_style_sheet_` 
+    //        and `css_style_sheet_to_inspector_style_sheet_`
     const styleSheetObj = getPlainObjectByCdpId(styleSheetCdpId);
     log(`DDBG CdpAsRrpCssRule - styleSheetObj - ${styleSheetObj?.constructor?.name}: ${JSON.stringify(styleSheetObj)}`);
     const parentStyleSheetRrpId = TODO;
