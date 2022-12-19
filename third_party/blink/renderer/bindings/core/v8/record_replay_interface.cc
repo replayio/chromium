@@ -595,22 +595,8 @@ function isNonNullObject(obj) {
 
 function getPlainObjectByCdpId(cdpId) {
   const rrpId = gRrpIdByCdpId.get(cdpId);
-  if (rrpId) {
-    return getPlainObjectByRrpId(rrpId);
-  }
-  else {
-    TODO;
-  }
-}
-
-/**
- * Handles the case where we have a `cpdId` for an unregistered object.
- */
-function _registerNewPlainObjectByCpdId(cpdId) {
-  const plainObject = fromJsGetObjectByCdpId(cdpId);
-  buildRrpObjectFromCdpObject(cdpObject)
-  gRrpIdByPlainObject.set(plainObject, rrpId);
-  gPlainObjectByRrpId.set(rrpId, plainObject);
+  assert(rrpId);
+  return getPlainObjectByRrpId(rrpId);
 }
 
 /**
@@ -1724,7 +1710,8 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
   const styleSheetCdpId = cdpRule.style?.styleSheetId;
   let parentStyleSheet;
   if (styleSheetCdpId) {
-    // TODO: trace down `styleSheetCdpId`.
+    // TODO: undo CDP lookup magic
+    // TODO: trace down `styleSheetCdpId`
     //   -> InspectorStyleSheet.Id()
     //   -> NOTE: this is NOT a CDP.Runtime.RemoteObject!
     //   -> The way to look these up is via `id_to_inspector_style_sheet_` 
