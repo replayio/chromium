@@ -1685,9 +1685,14 @@ const PseudoElements = [
 ];
 
 /**
+ * @see https://developer.mozilla.org/en-US/docs/Web/API/CSSRule
+ * @see https://developer.mozilla.org/en-US/docs/Web/API/CSSStyleRule
  * @see https://static.replay.io/protocol/tot/CSS/#type-Rule
  */
 class CssRule {
+  /**
+   * @deprecated
+   */
   type;
   cssText;
   parentStyleSheet;
@@ -1699,31 +1704,53 @@ class CssRule {
 }
 
 /**
+ * @see https://static.replay.io/protocol/tot/CSS/#type-StyleDeclaration
+ * @see https://developer.mozilla.org/en-US/docs/Web/API/CSSStyleDeclaration
+ * @see https://chromedevtools.github.io/devtools-protocol/tot/CSS/#type-CSSStyle
+ */
+function registerCssStyleDeclaration() {
+  // TODO!
+
+  const decl = {
+    cssText,
+    parentRule,
+    properties
+  };
+  return decl;
+}
+
+/**
  * 
+ * @see https://developer.mozilla.org/en-US/docs/Web/API/CSSRule
+ * @see https://developer.mozilla.org/en-US/docs/Web/API/CSSStyleRule
  * @see https://chromedevtools.github.io/devtools-protocol/tot/CSS/#type-CSSRule
  * @see https://static.replay.io/protocol/tot/CSS/#type-Rule
  */
 function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
-  // NOTE: type is not explained and does not seem to play a role
+  // NOTE: type is deprecated -> don't care
   const type = 1;
-  const cssText = cdpRule.style?.cssText;
-  const styleSheetCdpId = cdpRule.style?.styleSheetId;
+  const {
+    cssText,
+    range,
+    selectorList = {},
+    styleSheetId: styleSheetAgentId
+  } = cdpRule.style || {};
+  
   let parentStyleSheet;
-  if (styleSheetCdpId) {
-    // TODO: undo CDP lookup magic
-    // TODO: trace down `styleSheetCdpId`
+  if (styleSheetAgentId) {
+    // trace down `styleSheetCdpId`
     //   -> InspectorStyleSheet.Id()
-    //   -> NOTE: this is NOT a CDP.Runtime.RemoteObject!
     //   -> The way to look these up is via `id_to_inspector_style_sheet_` 
     //        and `css_style_sheet_to_inspector_style_sheet_`
     const styleSheetObj = getPlainObjectByCdpId(styleSheetCdpId);
     log(`DDBG CdpAsRrpCssRule - styleSheetObj - ${styleSheetObj?.constructor?.name}: ${JSON.stringify(styleSheetObj)}`);
     const parentStyleSheetRrpId = TODO;
   }
-  const startLine = TODO;
-  const startColumn = TODO;
-  const originalLocation = TODO;
-  const selectorText = TODO;
+  const startLine = range?.startLine;
+  const startColumn = range?.startColumn;
+  // see https://static.replay.io/protocol/tot/CSS/#type-OriginalStyleSheetLocation
+  const originalLocation = null; // TODO
+  const selectorText = selectorList?.text;
   const style = TODO;
 
   const rrpRule = {
@@ -1741,7 +1768,7 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
 
 
 /**
- * NOTE1: RRP's `CSS.Rule` is entirely based on how gecko does things.
+ * NOTE1: RRP's `CSS.Rule` is based on how gecko does things.
  *    gecko has a utility function to produce the rules in one call.
  *    But in chromium, we have to query and convert the data in multiple steps.
  * 
@@ -1754,8 +1781,12 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
 function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
   const appliedRules = [];
 
-  const cdpRules = cdpMatchedStyles.matchedRules;
-  for (const cdpRule of cdpRules) {
+  const {
+    matchedRules = [],
+    inheritedEntries = []
+  } = cdpMatchedStyles;
+
+  function addCdpRule(cdpRule) {
     // TODO: add pseudoElement support
     //   Issue: https://linear.app/replay/issue/RUN-953
     const pseudoElement = undefined;
@@ -1765,6 +1796,25 @@ function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
       pseudoElement
     };
     appliedRules.push(appliedRule);
+  }
+
+  for (const cdpRule of matchedRules) {
+    addCdpRule(cdpRule);
+  }
+
+  forst (const cdpInheritedEntry of inheritedEntries) {
+    // see https://chromedevtools.github.io/devtools-protocol/tot/CSS/#type-InheritedStyleEntry
+    const {
+      inlineStyle, // inherited inline style
+      matchedCSSRules  // inherited non-inline rules from some stylesheet
+    } = cdpInheritedEntry;
+
+    // TODO: convert/add inlineStyle?
+
+    for (const matchedRule of matchedCSSRules) {
+      // matchedRule.matchingSelectors
+      addCdpRule(matchedRule.rule);
+    }
   }
 
   return { rules: appliedRules, data: {} };
@@ -2873,14 +2923,6 @@ InspectorNetworkAgent* getOrCreateInspectorNetworkAgent() {
     InspectedFrames* inspectedFrames = getOrCreateInspectedFrames();
     gInspectorNetworkAgent = MakeGarbageCollected<InspectorNetworkAgent>(
         inspectedFrames, nullptr, gInspectorSession);
-
-    // // see
-    // // https://source.chromium.org/chromium/chromium/src/+/main:out/Debug/gen/third_party/blink/renderer/core/inspector/protocol/network.cc;l=1520;drc=38321ee39cd73ac2d9d4400c56b90613dee5fe29;bpv=0;bpt=1
-    // Maybe<int> total_buffer_size;
-    // Maybe<int> resource_buffer_size;
-    // Maybe<int> max_post_data_size;
-    // gInspectorNetworkAgent->enable(std::move(total_buffer_size), std::move(resource_buffer_size),
-    //                                std::move(max_post_data_size));
   }
   return gInspectorNetworkAgent;
 }
@@ -2932,7 +2974,7 @@ getObjectByCdpId(v8::Isolate* isolate,
 /**
  * NOTE: Since the `RemoteObject` type is not publicly exposed, we cannot easily
  * access it in CPP space. We thus only use it in JS. This basically emulates
- * gecko's `makeDebuggeeValue` (but requires an extra parse).
+ * gecko's `makeDebuggeeValue`.
  */
 static void fromJsMakeDebuggeeValue(
     const v8::FunctionCallbackInfo<v8::Value>& args) {
@@ -2947,12 +2989,8 @@ static void fromJsMakeDebuggeeValue(
       "console");  // NOTE: object_group is used for cleaning up
   auto generatePreview = false;
 
-  // NOTE: This always creates (and deletes) a new `RemoteObject` and binds it
-  // to a new id. RemoteObjectIdTypeRaw remoteObjectId =
-  // v8_inspector::StringView result =
-  // RemoteObjectIdTypeRaw result = gInspectorSession->wrapObjectGetObjectId(
-  //     context, obj, ToV8InspectorStringView(object_group), false);
-  // auto converted = String(result.c_str(), result.length());
+  // NOTE: `wrapObject` always creates a new `RemoteObject` and binds it
+  // to a new id.
   auto result = gInspectorSession->wrapObject(
       context, value, ToV8InspectorStringView(object_group), generatePreview);
 
@@ -3485,7 +3523,7 @@ static void fromJsGetMatchedStylesForNode(
     }
     if (inheritedEntries.isJust()) {
       auto rulesJs = convertCborToJS(isolate, inheritedEntries.fromJust());
-      SetDataProperty(isolate, result, "inheritedRules", rulesJs);
+      SetDataProperty(isolate, result, "inheritedEntries", rulesJs);
     }
     if (keyframesRules.isJust()) {
       auto rulesJs = convertCborToJS(isolate, keyframesRules.fromJust());
