@@ -1174,6 +1174,19 @@ Response InspectorCSSAgent::getStyleSheetText(const String& style_sheet_id,
   return Response::Success();
 }
 
+CSSStyleSheet* InspectorCSSAgent::getStyleSheet(const String& style_sheet_id) {
+  InspectorStyleSheetBase* inspector_style_sheet = nullptr;
+  Response response =
+      AssertStyleSheetForId(style_sheet_id, inspector_style_sheet);
+  if (response.IsSuccess()) {
+    if (!inspector_style_sheet->IsInlineStyle()) {
+      auto* targetSheet = static_cast<InspectorStyleSheet*>(inspector_style_sheet);
+      return targetSheet->PageStyleSheet();
+    }
+  }
+  return nullptr;
+}
+
 Response InspectorCSSAgent::collectClassNames(
     const String& style_sheet_id,
     std::unique_ptr<protocol::Array<String>>* class_names) {

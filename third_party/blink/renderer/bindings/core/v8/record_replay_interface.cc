@@ -106,6 +106,7 @@ const {
   fromJsGetNodeId,
   fromJsGetBoxModel,
   fromJsGetMatchedStylesForNode,
+  fromJsCssGetStylesheetByCpdId,
 
   // network
   getCurrentNetworkRequestEvent,
@@ -118,8 +119,6 @@ const {
 const gSourceMapData = new Map();
 
 try {
-
-
 
 
 
@@ -261,7 +260,7 @@ const CommandCallbacks = {
   "DOM.getEventListeners": DOM_getEventListeners,
   "DOM.querySelector": DOM_querySelector,
   "CSS.getComputedStyle": CSS_getComputedStyle,
-  "CSS.getAppliedRules": CSS_getAppliedRules,
+  // "CSS.getAppliedRules": CSS_getAppliedRules,
 };
 
 
@@ -737,6 +736,7 @@ function registerNewRrpObject(rrpId, cdpObject, otherRrpObject, plainObject) {
     storeRrpId(rrpId, cdpId, cdpObject);
   }
   if (otherRrpObject) {
+    // TODO: this cannot really work like this... need to find better solution for matching with getObjectPreview
     // specialized RRP objects, built from specialized CDP objects
     gOtherRrpObjectsByRrpId.set(rrpId, otherRrpObject);
   }
@@ -1832,14 +1832,7 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
       log(`DDBG registerCdpAsRrpCssRule - styleSheetObj - ${nativeSheet?.constructor?.name}: ${JSON.stringify(nativeSheet)}`);
 
       const rrpSheet = {
-        type,
-        cssText,
-        parentStyleSheet,
-        startLine,
-        startColumn,
-        originalLocation,
-        selectorText,
-        style
+        TODO
       };
       styleSheetRrpId = registerOtherRrpObject(rrpSheet, nativeSheet);
       storeRrpId(styleSheetRrpId, styleSheetCpdId);
@@ -1933,11 +1926,10 @@ function CSS_getAppliedRules({ node: nodeRrpId }) {
   let rules = gCssRulesByNodeRrpId.get(nodeRrpId);
   const data = {};
 
-  // TODO: need to hackfix this, since 
   if (!rules && isInstanceOfNative(nodeObj, Element)) {
     const nodeId = getBlinkNodeIdByRrpId(nodeRrpId);
 
-    // NOTE: CSS domain commands are not accessible, so we have to get the data indirectly
+    // NOTE: CSS domain commands are not accessible via `sendMessage`, so we have to get the data indirectly.
     // const cdpMatchedStyles = sendMessage('CSS.getMatchedStylesForNode', { nodeId });
     const cdpMatchedStyles = fromJsGetMatchedStylesForNode(nodeId);
 
@@ -1955,6 +1947,8 @@ function CSS_getAppliedRules({ node: nodeRrpId }) {
 
   return { rules, data };
 }
+
+
 
 
 
@@ -3801,11 +3795,13 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
   SetFunctionProperty(isolate, args, "fromJsGetBoxModel", fromJsGetBoxModel);
   SetFunctionProperty(isolate, args, "fromJsGetMatchedStylesForNode",
                       fromJsGetMatchedStylesForNode);
+  SetFunctionProperty(isolate, args, "fromJsCssGetStylesheetByCpdId",
+                      fromJsCssGetStylesheetByCpdId);
 
-  // unsorted RR stuff
-  SetFunctionProperty(
-      isolate, args, "setClearPauseDataCallback",
-      v8::FunctionCallbackRecordReplaySetClearPauseDataCallback);
+      // unsorted RR stuff
+      SetFunctionProperty(
+          isolate, args, "setClearPauseDataCallback",
+          v8::FunctionCallbackRecordReplaySetClearPauseDataCallback);
   SetFunctionProperty(isolate, args, "getCurrentError",
                       GetCurrentError);
   SetFunctionProperty(isolate, args, "getRecordingId",
