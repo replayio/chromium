@@ -64,13 +64,10 @@ extern void RecordReplayConfirmObjectHasId(v8::Isolate* isolate, v8::Local<v8::C
                                            v8::Local<v8::Value> object);
 
 } // namespace internal
-
 } // namespace v8
 
 namespace blink {
-
 // using RemoteObjectIdTypeRaw = v8_inspector::String16;
-
 // The actual type for RemoteObjectId
 using RemoteObjectIdTypeRaw = std::u16string;
 
@@ -119,6 +116,13 @@ const {
 const gSourceMapData = new Map();
 
 try {
+
+
+
+
+
+
+
 
 
 
@@ -260,7 +264,7 @@ const CommandCallbacks = {
   "DOM.getEventListeners": DOM_getEventListeners,
   "DOM.querySelector": DOM_querySelector,
   "CSS.getComputedStyle": CSS_getComputedStyle,
-  // "CSS.getAppliedRules": CSS_getAppliedRules,
+  "CSS.getAppliedRules": CSS_getAppliedRules
 };
 
 
@@ -526,8 +530,8 @@ function isInstanceOfNative(x, target) {
 
   // new sln (also a hackfix): check if its native, and has `name` in inheritance chain
   const name = target?.name;
-  return name && 
-    x?.constructor?.toString()?.includes('() { [native code] }') && 
+  return name &&
+    x?.constructor?.toString()?.includes('() { [native code] }') &&
     hasInProtoChain(x.constructor, name);
 }
 
@@ -556,11 +560,6 @@ function hasInProtoChain(x, name) {
  * @type {Map<string, CDP.Runtime.RemoteObject>}
  */
 const gCdpObjectsByRrpId = new Map();
-/**
- * Special CDP objects that are not `CDP.Runtime.RemoteObject` and not plainObjects.
- * @type {Map<string, Object>}
- */
-const gOtherRrpObjectsByRrpId = new Map();
 
 /**
  * @type {Map<string, string>}
@@ -574,6 +573,11 @@ const gRrpIdByPlainObject = new Map();
  * @type {Map<string, Object>}
  */
 const gPlainObjectByRrpId = new Map();
+
+/**
+ * @type {Map<string, Object>}
+ */
+const gPreviewExtraByRrpId = new Map();
 
 let gLastRrpId = 0;
 
@@ -594,6 +598,7 @@ function clearPauseDataCallback() {
     gRrpIdByCdpId.clear();
     gRrpIdByPlainObject.clear();
     gPlainObjectByRrpId.clear();
+    gPreviewExtraByRrpId.clear();
     gCdpScopesByRrpId.clear();
     gLastBoundingClientRectsByNodeRrpId.clear();
     gCssRulesByNodeRrpId.clear();
@@ -687,7 +692,7 @@ function registerCdpObject(cdpObject) {
     }
   }
 
-  return registerNewRrpObject(rrpId, cdpObject, plainObject);
+  return registerNewRrpObject(rrpId, cdpObject, null, plainObject);
 }
 
 
@@ -702,19 +707,20 @@ function getCdpObjectByRrpId(rrpId) {
 }
 
 /**
- * Edge case: CDP produces a custom object that does NOT have an `objectId`.
- * Sometimes, they have a different id which refers back to some native plainObject 
+ * Edge case: CDP calls produce custom objects that do NOT have an `objectId`.
+ * Sometimes, they have their own id which refers back to some native plainObject 
  *   (e.g. `CSSStylesheet`).
  * Sometimes they do not map to a native plainObject (e.g. `CSSRule`).
- * For such a CDP object, we only store its RRP representation and, for now, discard
+ * For such a CDP object, we only store its RRP preview extra and, for now, discard
  * its CDP representation.
  * 
- * @param {object}
+ * 
+ * @param {object} previewExtra Used in `getObjectPreview`.
  * @return {number} rrpId
+ * 
+ * @see https://static.replay.io/protocol/tot/Pause/#type-ObjectPreview
  */
-function registerOtherRrpObject(otherRrpObject, plainObject) {
-  assert(!cdpObject.objectId);
-
+function registergRrpPreviewExtra(previewExtra, plainObject) {
   let rrpId;
   if (plainObject) {
     rrpId = gRrpIdByPlainObject.get(plainObject);
@@ -722,10 +728,14 @@ function registerOtherRrpObject(otherRrpObject, plainObject) {
 
   // NOTE: there is no cdpObject because there is no `CDP.Runtime.RemoteObject`.
   const cdpObject = null;
-  return registerNewRrpObject(rrpId, cdpObject, otherRrpObject, plainObject);
+  return registerNewRrpObject(rrpId, cdpObject, previewExtra, plainObject);
 }
 
-function registerNewRrpObject(rrpId, cdpObject, otherRrpObject, plainObject) {
+/**
+ * Generates `rrpId`, if it does not have one yet.
+ * Associates `rrpId` with its related data.
+ */
+function registerNewRrpObject(rrpId, cdpObject, previewExtra, plainObject) {
   // new RrpId
   const existingRrpId = rrpId;
   rrpId ||= ++gLastRrpId + '';  // coerce to string
@@ -733,12 +743,11 @@ function registerNewRrpObject(rrpId, cdpObject, otherRrpObject, plainObject) {
     // CDP.Runtime.RemoteObject
     assert(cdpObject.objectId);
     const cdpId = cdpObject.objectId;
-    storeRrpId(rrpId, cdpId, cdpObject);
+    registerRrpCpdId(rrpId, cdpId, cdpObject);
   }
-  if (otherRrpObject) {
-    // TODO: this cannot really work like this... need to find better solution for matching with getObjectPreview
-    // specialized RRP objects, built from specialized CDP objects
-    gOtherRrpObjectsByRrpId.set(rrpId, otherRrpObject);
+  if (previewExtra) {
+    // preview objects, already built from specialized CDP objects
+    gPreviewExtraByRrpId.set(rrpId, previewExtra);
   }
   if (plainObject && !existingRrpId) {
     gRrpIdByPlainObject.set(plainObject, rrpId);
@@ -748,7 +757,7 @@ function registerNewRrpObject(rrpId, cdpObject, otherRrpObject, plainObject) {
   return rrpId;
 }
 
-function storeRrpId(rrpId, cdpId, cdpObject = null) {
+function registerRrpCpdId(rrpId, cdpId, cdpObject = null) {
   gRrpIdByCdpId.set(cdpId, rrpId);
   if (cdpObject) {
     gCdpObjectsByRrpId.set(rrpId, cdpObject);
@@ -870,6 +879,21 @@ function isCdpObjectProxy(cdpObj) {
  * @see https://static.replay.io/protocol/tot/Pause/#type-Object
  */
 function createPauseObject(rrpId, level) {
+  // TODO: need a better thing happening instead of `getCdpObjectByRrpId` to pick up on the pre-cached preview objects
+  //    (TODO2: ideally, create a unique id for CSS.Rule preview objects)
+  /**
+  {
+    "className": "CSSStyleRule",
+    "objectId": "329",
+    "preview": {
+      "overflow": true,
+      "prototypeId": "226",
+      "rule": {
+        // ...
+      }
+    }
+  }
+  */
   const cdpObj = getCdpObjectByRrpId(rrpId);
   // NOTE: `subtype` is not reliably available, due to a divergence check in V8 → `value-mirror.cc`
   const className = isCdpObjectProxy(cdpObj) ? "Proxy" : (cdpObj.className || "Function");
@@ -1814,11 +1838,17 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
   // NOTE: type is deprecated -> don't care
   const type = 1;
   const {
-    cssText,
-    range,
-    selectorList = {},
-    styleSheetId: styleSheetCpdId
-  } = cdpRule.style || {};
+    style: {
+      cssText: styleCssText,
+      // range: styleRange,
+      selectorList = {},
+      styleSheetId: styleSheetCpdId,
+      cssProperties
+    } = {},
+    range: ruleRange,
+    origin
+  } = cdpRule || {};
+
 
   let styleSheetRrpId;
   if (styleSheetCpdId) {
@@ -1831,29 +1861,65 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
       const nativeSheet = fromJsCssGetStylesheetByCpdId(styleSheetCpdId);
       log(`DDBG registerCdpAsRrpCssRule - styleSheetObj - ${nativeSheet?.constructor?.name}: ${JSON.stringify(nativeSheet)}`);
 
-      const rrpSheet = {
-        TODO
+      // NOTE: `isSystem` is part of RRP from `gecko`.
+      //    -> Chromium has a more diversified `StyleSheetOrigin` enum for this, 
+      //      but that is only accessible on the rule level here, for some reason.
+      const href = nativeSheet?.href;
+      const isSystem = origin !== 'regular';
+
+      const styleSheetExtra = {
+        styleSheet: {
+          href,
+          isSystem
+        }
       };
-      styleSheetRrpId = registerOtherRrpObject(rrpSheet, nativeSheet);
-      storeRrpId(styleSheetRrpId, styleSheetCpdId);
+      styleSheetRrpId = registergRrpPreviewExtra(styleSheetExtra, nativeSheet);
+      registerRrpCpdId(styleSheetRrpId, styleSheetCpdId);
     }
   }
-  const startLine = range?.startLine;
-  const startColumn = range?.startColumn;
-  // see https://static.replay.io/protocol/tot/CSS/#type-OriginalStyleSheetLocation
-  const originalLocation = null; // TODO
-  const selectorText = selectorList?.text;
-  const style = TODO;
 
-  const rrpRule = {
-    type,
-    cssText,
-    parentStyleSheet: styleSheetRrpId,
-    startLine,
-    startColumn,
-    originalLocation,
-    selectorText,
-    style
+  // styleExtra
+  const properties = cssProperties?.map(prop => {
+    const { name, value, important } = prop;
+    return {
+      name,
+      value,
+      important
+    };
+  });
+  const styleExtra = {
+    style: {
+      cssText: styleCssText,
+      parentRule: 0, // filled in once we have it, below
+      properties
+    }
+  };
+  const nativeStlyeDeclaration = null;
+  const styleRrpId = registergRrpPreviewExtra(styleExtra, nativeStlyeDeclaration);
+
+  // ruleExtra
+  const startLine = ruleRange?.startLine;
+  const startColumn = ruleRange?.startColumn;
+  // see https://static.replay.io/protocol/tot/CSS/#type-OriginalStyleSheetLocation
+  const originalLocation = undefined; // TODO
+  const selectorText = selectorList?.text;
+
+  /**
+   * Based on `CSSStyleRule::cssText()`.
+   * @see https://github.com/replayio/chromium/blob/052831f0220b79fe0c3343b49f6d2863ea6de05d/third_party/blink/renderer/core/css/css_style_rule.cc#L94
+   */  
+  const ruleCssText = `${selectorText} {${styleCssText}}`; 
+  const ruleExtra = {
+    rule: {
+      type,
+      cssText: ruleCssText,
+      parentStyleSheet: styleSheetRrpId,
+      startLine,
+      startColumn,
+      originalLocation,
+      selectorText,
+      style: styleRrpId
+    }
   };
 
   // NOTE: we cannot currently lookup the native `CSSRule` object because
@@ -1861,9 +1927,12 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
   //      store an id.
   // const nativeRule = lookupNativeCssRuleByCdpRule();
   const nativeRule = null;
-  const ruleRrrpId = registerOtherRrpObject(rrpRule, nativeRule);
+  const ruleRrpId = registergRrpPreviewExtra(ruleExtra, nativeRule);
 
-  return ruleRrrpId;
+  // set ruleRrpId
+  styleExtra && (styleExtra.style.parentRule = ruleRrpId);
+
+  return ruleRrpId;
 }
 
 
@@ -1906,7 +1975,7 @@ function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
     // see https://chromedevtools.github.io/devtools-protocol/tot/CSS/#type-InheritedStyleEntry
     const {
       inlineStyle, // inherited inline style
-      matchedCSSRules  // inherited non-inline rules from some stylesheet
+      matchedCSSRules  // inherited non-inline rules
     } = cdpInheritedEntry;
 
     // TODO: convert/add inlineStyle
@@ -1947,12 +2016,6 @@ function CSS_getAppliedRules({ node: nodeRrpId }) {
 
   return { rules, data };
 }
-
-
-
-
-
-
 
 
 

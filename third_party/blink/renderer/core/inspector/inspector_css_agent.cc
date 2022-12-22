@@ -1180,7 +1180,8 @@ CSSStyleSheet* InspectorCSSAgent::getStyleSheet(const String& style_sheet_id) {
       AssertStyleSheetForId(style_sheet_id, inspector_style_sheet);
   if (response.IsSuccess()) {
     if (!inspector_style_sheet->IsInlineStyle()) {
-      auto* targetSheet = static_cast<InspectorStyleSheet*>(inspector_style_sheet);
+      auto* targetSheet =
+          static_cast<InspectorStyleSheet*>(inspector_style_sheet);
       return targetSheet->PageStyleSheet();
     }
   }
