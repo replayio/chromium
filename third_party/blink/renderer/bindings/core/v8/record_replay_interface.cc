@@ -506,16 +506,62 @@ function Graphics_getDevicePixelRatio() {
 
 
 ///////////////////////////////////////////////////////////////////////////////
+// Utilities
+///////////////////////////////////////////////////////////////////////////////
+
+/**
+ * Check whether given object `x` is instance of class of given `target.name`,
+ * and also has a `native` constructor.
+ * NOTE: ideal solution is `x instanceof global[name]`, but we cannot do that.
+ * @see https://linear.app/replay/issue/RUN-1014/chromium-find-better-way-of-determining-dom-class-membership
+ */
+function isInstanceOfNative(x, target) {
+  /**
+   * NOTE: `instanceof` is implemented in `Object::InstanceOf` -> `JSReceiver::HasInPrototypeChain`
+   * @see https://github.com/replayio/gecko-dev/blob/592992ff7e15cb8ad1dd6fb109f19bd3523cd452/devtools/server/actors/replay/module.js#L1937
+   * @see https://github.com/replayio/chromium-v8/blob/51140a440949dbbeea7a4e6c2185ccdeb8b6276e/src/objects/objects.cc#L929
+   * @see https://github.com/replayio/chromium-v8/blob/51140a440949dbbeea7a4e6c2185ccdeb8b6276e/src/objects/js-objects.cc#170
+   */
+  // old sln: check assortment of props
+  // if (plainObject?.nodeType > 0 && plainObject.nodeType <= 11 && plainObject.appendChild && plainObject.cloneNode) {
+
+  // new sln (also a hackfix): check if its native, and has `name` in inheritance chain
+  const name = target?.name;
+  return name && 
+    x?.constructor?.toString()?.includes('() { [native code] }') && 
+    hasInProtoChain(x.constructor, name);
+}
+
+function hasInProtoChain(x, name) {
+  if (x.name === name) {
+    return true;
+  }
+  if (!x.__proto__) {
+    return false;
+  }
+  return hasInProtoChain(x.__proto__, name);
+}
+
+
+///////////////////////////////////////////////////////////////////////////////
 // object.js
 // Manage association between remote objects and protocol object IDs.
 ///////////////////////////////////////////////////////////////////////////////
 
 
-// Map protocol ObjectId => RemoteObject
 /**
- * @type {Map<CDP.Runtime.RemoteObject, string>}
+ * This is mostly standard CDP `RemoteObject`s.
+ * In some cases, CDP decided to have non-standard objects with
+ * a separate id space (e.g. `CSSStylesheet`). We do not store those.
+ * 
+ * @type {Map<string, CDP.Runtime.RemoteObject>}
  */
 const gCdpObjectsByRrpId = new Map();
+/**
+ * Special CDP objects that are not `CDP.Runtime.RemoteObject` and not plainObjects.
+ * @type {Map<string, Object>}
+ */
+const gOtherRrpObjectsByRrpId = new Map();
 
 /**
  * @type {Map<string, string>}
@@ -535,7 +581,7 @@ let gLastRrpId = 0;
 // Map protocol ObjectId => Debugger.Scope
 const gCdpScopesByRrpId = new Map();
 
-
+// cheap cache for boundingClientRects
 const gLastBoundingClientRectsByNodeRrpId = new Map();
 
 /**
@@ -578,7 +624,7 @@ function makeDebuggeeValue(plainObject) {
 function registerPlainObject(plainObject) {
   let rrpId = gRrpIdByPlainObject.get(plainObject);
   if (!rrpId) {
-    // → ask V8InspectorSession to wrap plainObject (gets CDP.RemoteObject)
+    // → ask V8InspectorSession to wrap plainObject (gets CDP.Runtime.RemoteObject)
     const cdpObject = makeDebuggeeValue(plainObject);
     if (cdpObject) {
       rrpId = registerCdpObject(cdpObject);
@@ -642,11 +688,58 @@ function registerCdpObject(cdpObject) {
     }
   }
 
+  return registerNewRrpObject(rrpId, cdpObject, plainObject);
+}
+
+
+/**
+ * 
+ * @return {CDP.Runtime.RemoteObject | Object}
+ */
+function getCdpObjectByRrpId(rrpId) {
+  const cdpObject = gCdpObjectsByRrpId.get(rrpId);
+  assert(cdpObject);
+  return cdpObject;
+}
+
+/**
+ * Edge case: CDP produces a custom object that does NOT have an `objectId`.
+ * Sometimes, they have a different id which refers back to some native plainObject 
+ *   (e.g. `CSSStylesheet`).
+ * Sometimes they do not map to a native plainObject (e.g. `CSSRule`).
+ * For such a CDP object, we only store its RRP representation and, for now, discard
+ * its CDP representation.
+ * 
+ * @param {object}
+ * @return {number} rrpId
+ */
+function registerOtherRrpObject(otherRrpObject, plainObject) {
+  assert(!cdpObject.objectId);
+
+  let rrpId;
+  if (plainObject) {
+    rrpId = gRrpIdByPlainObject.get(plainObject);
+  }
+
+  // NOTE: there is no cdpObject because there is no `CDP.Runtime.RemoteObject`.
+  const cdpObject = null;
+  return registerNewRrpObject(rrpId, cdpObject, otherRrpObject, plainObject);
+}
+
+function registerNewRrpObject(rrpId, cdpObject, otherRrpObject, plainObject) {
   // new RrpId
   const existingRrpId = rrpId;
   rrpId ||= ++gLastRrpId + '';  // coerce to string
-  gCdpObjectsByRrpId.set(rrpId, cdpObject);
-  gRrpIdByCdpId.set(cdpId, rrpId);
+  if (cdpObject) {
+    // CDP.Runtime.RemoteObject
+    assert(cdpObject.objectId);
+    const cdpId = cdpObject.objectId;
+    storeRrpId(rrpId, cdpId, cdpObject);
+  }
+  if (otherRrpObject) {
+    // specialized RRP objects, built from specialized CDP objects
+    gOtherRrpObjectsByRrpId.set(rrpId, otherRrpObject);
+  }
   if (plainObject && !existingRrpId) {
     gRrpIdByPlainObject.set(plainObject, rrpId);
     gPlainObjectByRrpId.set(rrpId, plainObject);
@@ -655,15 +748,14 @@ function registerCdpObject(cdpObject) {
   return rrpId;
 }
 
-/**
- * 
- * @return {CDP.Runtime.RemoteObject}
- */
-function getCdpObjectByRrpId(rrpId) {
-  const cdpObject = gCdpObjectsByRrpId.get(rrpId);
-  assert(cdpObject);
-  return cdpObject;
+function storeRrpId(rrpId, cdpId, cdpObject = null) {
+  gRrpIdByCdpId.set(cdpId, rrpId);
+  if (cdpObject) {
+    gCdpObjectsByRrpId.set(rrpId, cdpObject);
+  }
 }
+
+
 
 // Strings longer than this will be truncated when creating protocol values.
 const MaxStringLength = 10000;
@@ -714,20 +806,20 @@ function buildRrpObjectFromCdpObject(cdpObject) {
   }
 }
 
-/**
- * NOTE: This is called `createProtocolValueRaw` in gecko
- */
-function buildRrpObjectFromPlainValue(value) {
-  let cdpObject;
-  if (isNonNullObject(value)) {
-    const rrpId = registerPlainObject(value);
-    cdpObject = gCdpObjectsByRrpId.get(rrpId);
-  }
-  else {
-    cdpObject = makeDebuggeeValue(value);
-  }
-  return buildRrpObjectFromCdpObject(cdpObject);
-}
+// /**
+//  * NOTE: This is called `createProtocolValueRaw` in gecko
+//  */
+// function buildRrpObjectFromPlainValue(value) {
+//   let cdpObject;
+//   if (isNonNullObject(value)) {
+//     const rrpId = registerPlainObject(value);
+//     cdpObject = gCdpObjectsByRrpId.get(rrpId);
+//   }
+//   else {
+//     cdpObject = makeDebuggeeValue(value);
+//   }
+//   return buildRrpObjectFromCdpObject(cdpObject);
+// }
 
 /**
  * 
@@ -735,6 +827,7 @@ function buildRrpObjectFromPlainValue(value) {
  */
 function registerCdpScope(scope) {
   const rrpId = registerCdpObject(scope.object);
+  // TODO: we can probably get rid of gCdpScopesByRrpId
   gCdpScopesByRrpId.set(rrpId, scope);
   return rrpId;
 }
@@ -769,7 +862,7 @@ function getBlinkNodeIdByRrpId(nodeRrpId) {
 // Logic for creating object previews for the record/replay protocol.
 
 function isCdpObjectProxy(cdpObj) {
-  return cdpObj.subtype ==="proxy";
+  return cdpObj.subtype === "proxy";
 }
 
 /**
@@ -929,7 +1022,7 @@ ProtocolObjectPreview.prototype = {
     }
 
     // TODO: eval getter
-    
+
     const value = buildRrpObjectFromCdpObject(cdpValue);
     this.getterValues.set(name, { name, ...value });
   },
@@ -1032,29 +1125,23 @@ function previewBlinkObject(cdpObject, allProperties) {
   assert(rrpId);
   const plainObject = getPlainObjectByRrpId(rrpId);
 
-  /**
-   * @see https://github.com/replayio/gecko-dev/blob/592992ff7e15cb8ad1dd6fb109f19bd3523cd452/devtools/server/actors/replay/module.js#L1937
-   */
-  // TODO: figure out how to check for Node without using `instanceof`
-  // if (plainObject instanceof Node) {
-  // hackfix: check for random properties that nodes should have (can cause false positives)
-  if (plainObject?.nodeType > 0 && plainObject.nodeType <= 11 && plainObject.appendChild && plainObject.cloneNode) {
+  if (isInstanceOfNative(plainObject, Node)) {
     return {
       node: previewBlinkNode(plainObject)
     }
   }
-  if (plainObject instanceof CSSStyleDeclaration) {
+  if (isInstanceOfNative(plainObject, CSSStyleDeclaration)) {
     return {
       style: previewBlinkStyle(plainObject)
     }
   }
-  if (plainObject instanceof CSSRule) {
+  if (isInstanceOfNative(plainObject, CSSRule)) {
     return {
       // TODO
       // rule: previewBlinkRule(plainObject)
     }
   }
-  if (plainObject instanceof CSSStyleSheet) {
+  if (isInstanceOfNative(plainObject, CSSStyleSheet)) {
     return {
       // TODO
       // rule: previewBlinkStyleSheet(plainObject)
@@ -1068,10 +1155,7 @@ function previewBlinkObject(cdpObject, allProperties) {
 
 function previewBlinkNode(node) {
   let attributes, pseudoType;
-  // TODO: figure out how to check for Element without using `instanceof`
-  // if (node instanceof Element) {
-  // hackfix: (can cause false positives)
-  if (node.attributes?.length) {
+  if (isInstanceOfNative(node, Element)) {
     attributes = [];
     for (const { name, value } of node.attributes) {
       attributes.push({ name, value });
@@ -1548,7 +1632,7 @@ function DOM_getBoxModel({ node: nodeRrpId }) {
    */
   const cdpModel = fromJsGetBoxModel(nodeId);
 
-  const model = { 
+  const model = {
     node: nodeRrpId
   };
 
@@ -1560,9 +1644,9 @@ function DOM_getBoxModel({ node: nodeRrpId }) {
     Object.assign(
       model,
       {
-        content, 
-        padding, 
-        border, 
+        content,
+        padding,
+        border,
         margin
       }
     );
@@ -1635,7 +1719,7 @@ function CSS_getComputedStyle({ node }) {
   const nodeObj = getPlainObjectByRrpId(node);
 
   const computedStyle = [];
-  if (nodeObj instanceof Element) {
+  if (isInstanceOfNative(nodeObj, Element)) {
     // NOTE: tested successfully for same-CSP elements of different iframes
     const ownerGlobal = window;
 
@@ -1733,18 +1817,33 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
     cssText,
     range,
     selectorList = {},
-    styleSheetId: styleSheetAgentId
+    styleSheetId: styleSheetCpdId
   } = cdpRule.style || {};
-  
-  let parentStyleSheet;
-  if (styleSheetAgentId) {
-    // trace down `styleSheetCdpId`
-    //   -> InspectorStyleSheet.Id()
-    //   -> The way to look these up is via `id_to_inspector_style_sheet_` 
-    //        and `css_style_sheet_to_inspector_style_sheet_`
-    const styleSheetObj = getPlainObjectByCdpId(styleSheetCdpId);
-    log(`DDBG CdpAsRrpCssRule - styleSheetObj - ${styleSheetObj?.constructor?.name}: ${JSON.stringify(styleSheetObj)}`);
-    const parentStyleSheetRrpId = TODO;
+
+  let styleSheetRrpId;
+  if (styleSheetCpdId) {
+    styleSheetRrpId = gRrpIdByCdpId.get(styleSheetCpdId);
+    if (!styleSheetRrpId) {
+      // What is `styleSheetCdpId`?
+      //   -> InspectorStyleSheet.Id()
+      //   -> The way to look these up is via `id_to_inspector_style_sheet_` 
+      //        and `css_style_sheet_to_inspector_style_sheet_`
+      const nativeSheet = fromJsCssGetStylesheetByCpdId(styleSheetCpdId);
+      log(`DDBG registerCdpAsRrpCssRule - styleSheetObj - ${nativeSheet?.constructor?.name}: ${JSON.stringify(nativeSheet)}`);
+
+      const rrpSheet = {
+        type,
+        cssText,
+        parentStyleSheet,
+        startLine,
+        startColumn,
+        originalLocation,
+        selectorText,
+        style
+      };
+      styleSheetRrpId = registerOtherRrpObject(rrpSheet, nativeSheet);
+      storeRrpId(styleSheetRrpId, styleSheetCpdId);
+    }
   }
   const startLine = range?.startLine;
   const startColumn = range?.startColumn;
@@ -1756,14 +1855,22 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
   const rrpRule = {
     type,
     cssText,
-    parentStyleSheet,
+    parentStyleSheet: styleSheetRrpId,
     startLine,
     startColumn,
     originalLocation,
     selectorText,
     style
   };
-  return rrpRuleId;
+
+  // NOTE: we cannot currently lookup the native `CSSRule` object because
+  //      InspectorCSSAgent::BuildObjectForRuleWithoutMedia does not 
+  //      store an id.
+  // const nativeRule = lookupNativeCssRuleByCdpRule();
+  const nativeRule = null;
+  const ruleRrrpId = registerOtherRrpObject(rrpRule, nativeRule);
+
+  return ruleRrrpId;
 }
 
 
@@ -1802,14 +1909,14 @@ function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
     addCdpRule(cdpRule);
   }
 
-  forst (const cdpInheritedEntry of inheritedEntries) {
+  for (const cdpInheritedEntry of inheritedEntries) {
     // see https://chromedevtools.github.io/devtools-protocol/tot/CSS/#type-InheritedStyleEntry
     const {
       inlineStyle, // inherited inline style
       matchedCSSRules  // inherited non-inline rules from some stylesheet
     } = cdpInheritedEntry;
 
-    // TODO: convert/add inlineStyle?
+    // TODO: convert/add inlineStyle
 
     for (const matchedRule of matchedCSSRules) {
       // matchedRule.matchingSelectors
@@ -1825,18 +1932,33 @@ function CSS_getAppliedRules({ node: nodeRrpId }) {
 
   let rules = gCssRulesByNodeRrpId.get(nodeRrpId);
   const data = {};
-  if (!rules && nodeObj instanceof Element) {
+
+  // TODO: need to hackfix this, since 
+  if (!rules && isInstanceOfNative(nodeObj, Element)) {
     const nodeId = getBlinkNodeIdByRrpId(nodeRrpId);
 
     // NOTE: CSS domain commands are not accessible, so we have to get the data indirectly
     // const cdpMatchedStyles = sendMessage('CSS.getMatchedStylesForNode', { nodeId });
     const cdpMatchedStyles = fromJsGetMatchedStylesForNode(nodeId);
 
+
+    // NOTE: we don't seem to need `inlineStyle` for now, as its taken care of separately in 
+    //   `Pause.getObjectPreview`.
+    // if (inlineStyle.isJust()) {
+    //   auto rulesJs = convertCborToJS(isolate, inlineStyle.fromJust());
+    //   if (!rulesJs.IsEmpty()) {
+    //     SetDataProperty(isolate, result, "inlineStyle", rulesJs.ToLocalChecked());
+    //   }
+    // }
     rules = convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles);
   }
 
   return { rules, data };
 }
+
+
+
+
 
 
 
@@ -2912,7 +3034,8 @@ InspectorDOMAgent* getOrCreateInspectorDOMAgent(v8::Isolate* isolate) {
     InspectedFrames* inspectedFrames = getOrCreateInspectedFrames();
     gInspectorDomAgent = MakeGarbageCollected<InspectorDOMAgent>(
         isolate, inspectedFrames, gInspectorSession);
-    // gInspectorDomAgent->enable(); // NOTE: we cannot enable without a full session active
+    // NOTE: we cannot easily enable without a full session active
+    // gInspectorDomAgent->enable();
   }
   return gInspectorDomAgent;
 }
@@ -2940,12 +3063,12 @@ InspectorCSSAgent* getOrCreateInspectorCSSAgent(v8::Isolate* isolate) {
     gInspectorCssAgent = MakeGarbageCollected<InspectorCSSAgent>(
         domAgent, inspectedFrames, networkAgent, resource_content_loader,
         resource_container);
-
-    // // callback implementation example:
-    // // https://source.chromium.org/chromium/chromium/src/+/main:out/mac-Debug/gen/third_party/blink/renderer/core/inspector/protocol/css.cc;l=890?q=EnableCallbackImpl&ss=chromium%2Fchromium%2Fsrc
-    // std::unique_ptr<blink::protocol::CSS::Backend::EnableCallback> cb(nullptr);
-    // gInspectorCssAgent->enable(std::move(cb));
-
+    
+    // NOTE: we cannot easily enable without a full session active,
+    //      but if we wanted to, here is an example:
+    // https://source.chromium.org/chromium/chromium/src/+/main:out/mac-Debug/gen/third_party/blink/renderer/core/inspector/protocol/css.cc;l=890?q=EnableCallbackImpl&ss=chromium%2Fchromium%2Fsrc
+    // std::unique_ptr<blink::protocol::CSS::Backend::EnableCallback>
+    // cb(nullptr); gInspectorCssAgent->enable(std::move(cb));
   }
   return gInspectorCssAgent;
 }
@@ -3380,8 +3503,8 @@ static void fromJsGetNodeId(const v8::FunctionCallbackInfo<v8::Value>& args) {
   if (getObjectByCdpId(isolate, cdpIdV8, nodeObj)) {
     Node* node = V8Node::ToImpl(nodeObj);
     if (node) {
-      // hackfix: bind node here (because the DOMAgent is not informed about the
-      // actual DOM)
+      // hackfix: bind node here
+      //   (if the DOMAgent was enabled, it would track DOM automatically)
       int nodeId = domAgent->BindDocumentNode(node);
       
       // TODO: clean up when done w/ RUN-981
@@ -3497,14 +3620,6 @@ static void fromJsGetMatchedStylesForNode(
     args.GetReturnValue().SetNull();
   } else {
     v8::Local<v8::Object> result = v8::Object::New(isolate);
-    // NOTE: we don't seem to need `inlineStyle` for now, as its taken care of separately in 
-    //   `Pause.getObjectPreview`.
-    // if (inlineStyle.isJust()) {
-    //   auto rulesJs = convertCborToJS(isolate, inlineStyle.fromJust());
-    //   if (!rulesJs.IsEmpty()) {
-    //     SetDataProperty(isolate, result, "inlineStyle", rulesJs.ToLocalChecked());
-    //   }
-    // }
     // NOTE: not sure what `attributesStyle` is and how its different from `inlineStyle`?
     if (attributesStyle.isJust()) {
       auto rulesJs = convertCborToJS(isolate, attributesStyle.fromJust());
@@ -3530,6 +3645,31 @@ static void fromJsGetMatchedStylesForNode(
       SetDataProperty(isolate, result, "keyframesRules", rulesJs);
     }
     args.GetReturnValue().Set(result);
+  }
+}
+
+ 
+static void fromJsCssGetStylesheetByCpdId(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsString() &&
+        "[RuntimeError] must be called with a single number");
+
+  v8::Isolate* isolate = args.GetIsolate();
+
+  auto sheetId = ToCoreString(args[0].As<v8::String>());
+  auto* cssAgent = getOrCreateInspectorCSSAgent(isolate);
+
+  CSSStyleSheet* styleSheet = cssAgent->getStyleSheet(sheetId);
+  if (styleSheet) {
+    v8::Local<v8::Value> jsStyleSheet;
+    ScriptState* scriptState = ScriptState::Current(isolate);
+    if (styleSheet->WrapV2(scriptState).ToLocal(&jsStyleSheet)) {
+      args.GetReturnValue().Set(jsStyleSheet);
+      return;
+    }
+  }
+  else {
+    args.GetReturnValue().SetNull();
   }
 }
 
