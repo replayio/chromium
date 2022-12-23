@@ -1838,13 +1838,8 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
   if (styleSheetCpdId) {
     styleSheetRrpId = gRrpIdByCdpId.get(styleSheetCpdId);
     if (!styleSheetRrpId) {
-      // What is `styleSheetCdpId`?
-      //   -> InspectorStyleSheet.Id()
-      //   -> The way to look these up is via `id_to_inspector_style_sheet_` 
-      //        and `css_style_sheet_to_inspector_style_sheet_`
       const nativeSheet = fromJsCssGetStylesheetByCpdId(styleSheetCpdId);
-
-      // TODO: `nativeSheet` is always null
+      
       log(`DDBG registerCdpAsRrpCssRule - styleSheetObj - ${nativeSheet?.constructor?.name}: ${JSON.stringify(nativeSheet)}`);
 
       // NOTE: `isSystem` is part of RRP from `gecko`.
@@ -1871,14 +1866,16 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
 
   // stylePreview
 
-  const properties = cssProperties?.map(prop => {
-    const { name, value, important } = prop;
-    return {
-      name,
-      value,
-      important
-    };
-  }) || [];
+  const properties = (cssProperties || [])
+    .filter(prop => !!prop.text) // ignore props without text presentation
+    .map(prop => {
+      const { name, value, important } = prop;
+      return {
+        name,
+        value,
+        important
+      };
+    });
   /**
    * hackfix: for some reason, `user-agent` (and possibly other) styles don't have `cssText`.
    *    So, for now, we cook up a simple css serialization algo here.
@@ -1915,13 +1912,13 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
   const startColumn = ruleRange?.startColumn;
   // see https://static.replay.io/protocol/tot/CSS/#type-OriginalStyleSheetLocation
   const originalLocation = undefined; // TODO
-  const selectorText = selectorList?.text;
+  const selectorText = selectorList?.text || '';
 
   /**
    * Based on `CSSStyleRule::cssText()`.
    * @see https://github.com/replayio/chromium/blob/052831f0220b79fe0c3343b49f6d2863ea6de05d/third_party/blink/renderer/core/css/css_style_rule.cc#L94
    */
-  const ruleCssText = `${selectorText || ''} {${styleCssText}}`;
+  const ruleCssText = `${selectorText} {${styleCssText}}`;
   
   const rulePreview = {
     className: 'CSSRule',
@@ -1988,7 +1985,7 @@ function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
   }
 
   for (const cdpRule of matchedRules) {
-    addCdpRule(cdpRule);
+    addCdpRule(cdpRule.rule);
   }
 
   for (const cdpInheritedEntry of inheritedEntries) {
@@ -3585,10 +3582,6 @@ static void fromJsGetNodeId(const v8::FunctionCallbackInfo<v8::Value>& args) {
       // hackfix: bind node here
       //   (if the DOMAgent was enabled, it would track DOM automatically)
       int nodeId = domAgent->BindDocumentNode(node);
-      
-      // TODO: clean up when done w/ RUN-981
-      P("DDBG fromJsGetNodeId %s -> %d", *cdpId, nodeId);
-
       args.GetReturnValue().Set(v8::Number::New(isolate, nodeId));
       return;
     } else {
@@ -3738,18 +3731,20 @@ static void fromJsCssGetStylesheetByCpdId(
   auto sheetId = ToCoreString(args[0].As<v8::String>());
   auto* cssAgent = getOrCreateInspectorCSSAgent(isolate);
 
+  P("DDBG fromJsCssGetStylesheetByCpdId 1: %s", sheetId.Utf8().c_str());
   CSSStyleSheet* styleSheet = cssAgent->getStyleSheet(sheetId);
   if (styleSheet) {
+    P("DDBG fromJsCssGetStylesheetByCpdId 2");
     v8::Local<v8::Value> jsStyleSheet;
     ScriptState* scriptState = ScriptState::Current(isolate);
     if (styleSheet->WrapV2(scriptState).ToLocal(&jsStyleSheet)) {
+      P("DDBG fromJsCssGetStylesheetByCpdId 3");
       args.GetReturnValue().Set(jsStyleSheet);
       return;
     }
   }
-  else {
-    args.GetReturnValue().SetNull();
-  }
+  P("DDBG fromJsCssGetStylesheetByCpdId 4");
+  args.GetReturnValue().SetNull();
 }
 
 /** ###########################################################################
