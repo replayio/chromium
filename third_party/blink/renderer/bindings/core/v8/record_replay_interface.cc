@@ -228,7 +228,7 @@ function messageCallback(message) {
       }
     }
   } catch (e) {
-    log(`Message callback exception: ${e}`);
+    log(`[RuntimeError] Message callback exception: ${e}`);
   }
 }
 
@@ -270,7 +270,7 @@ const CommandCallbacks = {
 
 function commandCallback(method, params) {
   if (!CommandCallbacks[method]) {
-    log(`[RuntimeError][Command ${method}] Missing command callback: ${method}`);
+    log(`[Command ${method}] Missing command callback: ${method}`);
     return {};
   }
 
@@ -381,7 +381,7 @@ function Target_getCurrentNetworkRequestEvent() {
     const obj = JSON.parse(getCurrentNetworkRequestEvent());
     return { data: obj };
   } catch (e) {
-    log(`Error: getCurrentNetworkRequestEvent exception: ${e}`);
+    log(`[RuntimeError] getCurrentNetworkRequestEvent exception: ${e}`);
   }
 }
 
@@ -390,7 +390,7 @@ function Target_getCurrentNetworkStreamData(params) {
   if (data) {
     return { data };
   } else {
-    log(`Error: getCurrentNetworkStreamData returned no data.`);
+    log(`[RuntimeError] getCurrentNetworkStreamData returned no data.`);
   }
 }
 
@@ -575,9 +575,11 @@ const gRrpIdByPlainObject = new Map();
 const gPlainObjectByRrpId = new Map();
 
 /**
+ * Some preview objects are best constructed at an earlier time and then cached for
+ * later use in this map.
  * @type {Map<string, Object>}
  */
-const gPreviewExtraByRrpId = new Map();
+const gObjectPreviewByRrpId = new Map();
 
 let gLastRrpId = 0;
 
@@ -598,13 +600,13 @@ function clearPauseDataCallback() {
     gRrpIdByCdpId.clear();
     gRrpIdByPlainObject.clear();
     gPlainObjectByRrpId.clear();
-    gPreviewExtraByRrpId.clear();
+    gObjectPreviewByRrpId.clear();
     gCdpScopesByRrpId.clear();
     gLastBoundingClientRectsByNodeRrpId.clear();
     gCssRulesByNodeRrpId.clear();
     gLastRrpId = 0;
   } catch (e) {
-    log(`Error: clearPauseDataCallback exception: ${e}`);
+    log(`[RuntimeError] clearPauseDataCallback exception: ${e}`);
   }
 }
 
@@ -702,7 +704,9 @@ function registerCdpObject(cdpObject) {
  */
 function getCdpObjectByRrpId(rrpId) {
   const cdpObject = gCdpObjectsByRrpId.get(rrpId);
-  assert(cdpObject);
+  if (!cdpObject) {
+    throw new Error(`getCdpObjectByRrpId failed - rrpId not found: "${rrpId}"`);
+  }
   return cdpObject;
 }
 
@@ -715,12 +719,12 @@ function getCdpObjectByRrpId(rrpId) {
  * its CDP representation.
  * 
  * 
- * @param {object} previewExtra Used in `getObjectPreview`.
+ * @param {object} rrpObjectPreview Used in `getObjectPreview`.
  * @return {number} rrpId
  * 
  * @see https://static.replay.io/protocol/tot/Pause/#type-ObjectPreview
  */
-function registergRrpPreviewExtra(previewExtra, plainObject) {
+function registerRrpPreview(rrpObjectPreview, plainObject) {
   let rrpId;
   if (plainObject) {
     rrpId = gRrpIdByPlainObject.get(plainObject);
@@ -728,14 +732,14 @@ function registergRrpPreviewExtra(previewExtra, plainObject) {
 
   // NOTE: there is no cdpObject because there is no `CDP.Runtime.RemoteObject`.
   const cdpObject = null;
-  return registerNewRrpObject(rrpId, cdpObject, previewExtra, plainObject);
+  return registerNewRrpObject(rrpId, cdpObject, rrpObjectPreview, plainObject);
 }
 
 /**
  * Generates `rrpId`, if it does not have one yet.
  * Associates `rrpId` with its related data.
  */
-function registerNewRrpObject(rrpId, cdpObject, previewExtra, plainObject) {
+function registerNewRrpObject(rrpId, cdpObject, rrpObjectPreview, plainObject) {
   // new RrpId
   const existingRrpId = rrpId;
   rrpId ||= ++gLastRrpId + '';  // coerce to string
@@ -745,9 +749,10 @@ function registerNewRrpObject(rrpId, cdpObject, previewExtra, plainObject) {
     const cdpId = cdpObject.objectId;
     registerRrpCpdId(rrpId, cdpId, cdpObject);
   }
-  if (previewExtra) {
+  if (rrpObjectPreview) {
     // preview objects, already built from specialized CDP objects
-    gPreviewExtraByRrpId.set(rrpId, previewExtra);
+    gObjectPreviewByRrpId.set(rrpId, rrpObjectPreview);
+    rrpObjectPreview.objectId = rrpId; // set `objectId`
   }
   if (plainObject && !existingRrpId) {
     gRrpIdByPlainObject.set(plainObject, rrpId);
@@ -879,21 +884,11 @@ function isCdpObjectProxy(cdpObj) {
  * @see https://static.replay.io/protocol/tot/Pause/#type-Object
  */
 function createPauseObject(rrpId, level) {
-  // TODO: need a better thing happening instead of `getCdpObjectByRrpId` to pick up on the pre-cached preview objects
-  //    (TODO2: ideally, create a unique id for CSS.Rule preview objects)
-  /**
-  {
-    "className": "CSSStyleRule",
-    "objectId": "329",
-    "preview": {
-      "overflow": true,
-      "prototypeId": "226",
-      "rule": {
-        // ...
-      }
-    }
+  const existingPreview = gObjectPreviewByRrpId.get(rrpId);
+  if (existingPreview) {
+    return existingPreview;
   }
-  */
+
   const cdpObj = getCdpObjectByRrpId(rrpId);
   // NOTE: `subtype` is not reliably available, due to a divergence check in V8 → `value-mirror.cc`
   const className = isCdpObjectProxy(cdpObj) ? "Proxy" : (cdpObj.className || "Function");
@@ -1154,23 +1149,25 @@ function previewBlinkObject(cdpObject, allProperties) {
       node: previewBlinkNode(plainObject)
     }
   }
+
+  // NOTE: we created and cached several of these previews in `getAppliedRules`, since 
+  //      its annoyingly difficult to do this more properly.
   if (isInstanceOfNative(plainObject, CSSStyleDeclaration)) {
     return {
       style: previewBlinkStyle(plainObject)
     }
   }
-  if (isInstanceOfNative(plainObject, CSSRule)) {
-    return {
-      // TODO
-      // rule: previewBlinkRule(plainObject)
-    }
-  }
-  if (isInstanceOfNative(plainObject, CSSStyleSheet)) {
-    return {
-      // TODO
-      // rule: previewBlinkStyleSheet(plainObject)
-    }
-  }
+  
+  // if (isInstanceOfNative(plainObject, CSSRule)) {
+  //   return {
+  //     rule: previewBlinkRule(plainObject)
+  //   }
+  // }
+  // if (isInstanceOfNative(plainObject, CSSStyleSheet)) {
+  //   return {
+  //     styleSheet: previewBlinkStyleSheet(plainObject)
+  //   }
+  // }
 
   // TODO: preview other blink objects
   // Issue: https://linear.app/replay/issue/RUN-861/add-dom-related-props-to-pausegetobjectpreview-and-fix-objectid
@@ -1191,8 +1188,8 @@ function previewBlinkNode(node) {
 
   let style;
   if (node.style) {
+    // TODO: get correct style preview id/object
     style = registerPlainObject(node.style);
-    // TODO: clean up when done w/ RUN-981
     log(`DDBG preview.node.style: ${style} (${typeof node.style})`);
   }
 
@@ -1244,24 +1241,26 @@ function previewBlinkNode(node) {
 }
 
 function previewBlinkStyle(style) {
-  let parentRule;
-  if (style.parentRule) {
-    parentRule = registerPlainObject(style.parentRule);
-  }
+  // NOTE: we currently only use these for inline styles, where there is no parentRule
+  let parentRule = undefined;
+  // if (style.parentRule) {
+  //   parentRule = registerPlainObject(style.parentRule);
+  // }
 
   const properties = [];
   for (let i = 0; i < style.length; i++) {
     const name = style.item(i);
     const value = style.getPropertyValue(name);
-    const important =
-      style.getPropertyPriority(name) == "important" ? true : undefined;
-    properties.push({ name, value, important });
+    if (value) {
+      const important = style.getPropertyPriority(name) == "important" ? true : undefined;
+      properties.push({ name, value, important });
+    }
   }
 
   return {
     cssText: style.cssText,
     parentRule,
-    properties,
+    properties
   };
 }
 
@@ -1811,21 +1810,6 @@ class CssRule {
   style;
 }
 
-/**
- * @see https://static.replay.io/protocol/tot/CSS/#type-StyleDeclaration
- * @see https://developer.mozilla.org/en-US/docs/Web/API/CSSStyleDeclaration
- * @see https://chromedevtools.github.io/devtools-protocol/tot/CSS/#type-CSSStyle
- */
-function registerCssStyleDeclaration() {
-  // TODO!
-
-  const decl = {
-    cssText,
-    parentRule,
-    properties
-  };
-  return decl;
-}
 
 /**
  * 
@@ -1837,12 +1821,12 @@ function registerCssStyleDeclaration() {
 function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
   // NOTE: type is deprecated -> don't care
   const type = 1;
-  const {
+  let {
+    selectorList = {},
+    styleSheetId: styleSheetCpdId,
     style: {
       cssText: styleCssText,
       // range: styleRange,
-      selectorList = {},
-      styleSheetId: styleSheetCpdId,
       cssProperties
     } = {},
     range: ruleRange,
@@ -1859,26 +1843,34 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
       //   -> The way to look these up is via `id_to_inspector_style_sheet_` 
       //        and `css_style_sheet_to_inspector_style_sheet_`
       const nativeSheet = fromJsCssGetStylesheetByCpdId(styleSheetCpdId);
+
+      // TODO: `nativeSheet` is always null
       log(`DDBG registerCdpAsRrpCssRule - styleSheetObj - ${nativeSheet?.constructor?.name}: ${JSON.stringify(nativeSheet)}`);
 
       // NOTE: `isSystem` is part of RRP from `gecko`.
       //    -> Chromium has a more diversified `StyleSheetOrigin` enum for this, 
-      //      but that is only accessible on the rule level here, for some reason.
+      //      (that is only accessible on the rule level in CDP, for some reason)
       const href = nativeSheet?.href;
       const isSystem = origin !== 'regular';
 
-      const styleSheetExtra = {
-        styleSheet: {
-          href,
-          isSystem
+      const styleSheetPreview = {
+        className: 'RRPStyleSheetPreview', // no pre-defined className
+        preview: {
+          overflow: true,
+          styleSheet: {
+            href,
+            isSystem
+          }
         }
       };
-      styleSheetRrpId = registergRrpPreviewExtra(styleSheetExtra, nativeSheet);
+      styleSheetRrpId = registerRrpPreview(styleSheetPreview, nativeSheet);
       registerRrpCpdId(styleSheetRrpId, styleSheetCpdId);
     }
   }
 
-  // styleExtra
+
+  // stylePreview
+
   const properties = cssProperties?.map(prop => {
     const { name, value, important } = prop;
     return {
@@ -1886,18 +1878,39 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
       value,
       important
     };
-  });
-  const styleExtra = {
-    style: {
-      cssText: styleCssText,
-      parentRule: 0, // filled in once we have it, below
-      properties
+  }) || [];
+  /**
+   * hackfix: for some reason, `user-agent` (and possibly other) styles don't have `cssText`.
+   *    So, for now, we cook up a simple css serialization algo here.
+   *    Native chromium has a better solution of course.
+   * @see https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/css/style_property_serializer.cc;l=251;drc=3decef66bc4c08b142a19db9628e9efe68973e64
+   * @see https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/css/style_property_serializer.cc;l=204;drc=3decef66bc4c08b142a19db9628e9efe68973e64
+   */
+  if (!styleCssText) {
+    styleCssText = '\n  ' + properties
+      .map(({ name, value, important }) => {
+        const suffix = important ? ' !important' : '';
+        return `${name}: ${value}${suffix};`;
+      })
+      .join('\n  ');
+  }
+  const stylePreview = {
+    className: 'CSS2Properties', // `gecko` naming convention
+    preview: {
+      overflow: true,
+      style: {
+        cssText: styleCssText,
+        parentRule: 0, // filled in once we have it, below
+        properties
+      }
     }
   };
   const nativeStlyeDeclaration = null;
-  const styleRrpId = registergRrpPreviewExtra(styleExtra, nativeStlyeDeclaration);
+  const styleRrpId = registerRrpPreview(stylePreview, nativeStlyeDeclaration);
 
-  // ruleExtra
+
+  // rulePreview
+
   const startLine = ruleRange?.startLine;
   const startColumn = ruleRange?.startColumn;
   // see https://static.replay.io/protocol/tot/CSS/#type-OriginalStyleSheetLocation
@@ -1907,18 +1920,23 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
   /**
    * Based on `CSSStyleRule::cssText()`.
    * @see https://github.com/replayio/chromium/blob/052831f0220b79fe0c3343b49f6d2863ea6de05d/third_party/blink/renderer/core/css/css_style_rule.cc#L94
-   */  
-  const ruleCssText = `${selectorText} {${styleCssText}}`; 
-  const ruleExtra = {
-    rule: {
-      type,
-      cssText: ruleCssText,
-      parentStyleSheet: styleSheetRrpId,
-      startLine,
-      startColumn,
-      originalLocation,
-      selectorText,
-      style: styleRrpId
+   */
+  const ruleCssText = `${selectorText || ''} {${styleCssText}}`;
+  
+  const rulePreview = {
+    className: 'CSSRule',
+    preview: {
+      overflow: true,
+      rule: {
+        type,
+        cssText: ruleCssText,
+        parentStyleSheet: styleSheetRrpId,
+        startLine,
+        startColumn,
+        originalLocation,
+        selectorText,
+        style: styleRrpId
+      }
     }
   };
 
@@ -1927,10 +1945,10 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
   //      store an id.
   // const nativeRule = lookupNativeCssRuleByCdpRule();
   const nativeRule = null;
-  const ruleRrpId = registergRrpPreviewExtra(ruleExtra, nativeRule);
+  const ruleRrpId = registerRrpPreview(rulePreview, nativeRule);
 
   // set ruleRrpId
-  styleExtra && (styleExtra.style.parentRule = ruleRrpId);
+  stylePreview && (stylePreview.preview.style.parentRule = ruleRrpId);
 
   return ruleRrpId;
 }
@@ -1949,6 +1967,8 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
  */
 function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
   const appliedRules = [];
+
+  log(`DDBG convertCdpToRrpCssRules - cdpMatchedStyles: ${JSON.stringify(cdpMatchedStyles)}`);
 
   const {
     matchedRules = [],
@@ -1986,7 +2006,7 @@ function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
     }
   }
 
-  return { rules: appliedRules, data: {} };
+  return appliedRules;
 }
 
 function CSS_getAppliedRules({ node: nodeRrpId }) {
@@ -2012,10 +2032,12 @@ function CSS_getAppliedRules({ node: nodeRrpId }) {
     //   }
     // }
     rules = convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles);
+    gCssRulesByNodeRrpId.set(nodeRrpId, rules);
   }
 
   return { rules, data };
 }
+
 
 
 
