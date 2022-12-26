@@ -1108,7 +1108,7 @@ ProtocolObjectPreview.prototype = {
           // this.addGetterValue(prop.name, prop.value, this.cdpObj);
         }
         else if (prop.get) {
-          // TODO: call getter without side-effects?
+          // TODO: call getter without side-effects? - https://linear.app/replay/issue/RUN-1016
         }
       }
 
@@ -1148,8 +1148,6 @@ function previewBlinkObject(cdpObject, allProperties) {
     }
   }
 
-  // NOTE: we created and cached several of these previews in `getAppliedRules`, since 
-  //      its annoyingly difficult to do this more properly.
   if (isInstanceOfNative(plainObject, CSSStyleDeclaration)) {
     return {
       style: previewBlinkStyle(plainObject)
@@ -1176,16 +1174,13 @@ function previewBlinkNode(node) {
     for (const { name, value } of node.attributes) {
       attributes.push({ name, value });
     }
-    // TODO: We cannot access pseudo elements using the JS DOM API.
-    //   Issue: https://linear.app/replay/issue/RUN-953/dom-feature-add-pseudo-elements
+    // TODO: We cannot access pseudo elements using the JS DOM API - https://linear.app/replay/issue/RUN-953/
     // pseudoType = node.localName;
   }
 
   let style;
   if (node.style) {
-    // TODO: get correct style preview id/object
     style = registerPlainObject(node.style);
-    log(`DDBG preview.node.style: ${style} (${typeof node.style})`);
   }
 
   let parentNode;
@@ -1236,7 +1231,7 @@ function previewBlinkNode(node) {
 }
 
 function previewBlinkStyle(style) {
-  // NOTE: we currently only use these for inline styles, where there is no parentRule
+  // NOTE: this is for inline styles, where there is no parentRule
   let parentRule = undefined;
   // if (style.parentRule) {
   //   parentRule = registerPlainObject(style.parentRule);
@@ -1741,8 +1736,8 @@ function CSS_getComputedStyle({ node }) {
     // NOTE: tested successfully for same-CSP elements of different iframes
     const ownerGlobal = window;
 
-    // TODO: fix pseudoTypes
-    //   → Issue: https://linear.app/replay/issue/RUN-953/
+    // TODO: add pseudoType support - https://linear.app/replay/issue/RUN-953
+
     // const pseudoType = getPseudoType(node);
     // let styleInfo;
     // if (pseudoType) {
@@ -1968,8 +1963,7 @@ function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
   } = cdpMatchedStyles;
 
   function addCdpRule(cdpRule) {
-    // TODO: add pseudoElement support
-    //   Issue: https://linear.app/replay/issue/RUN-953
+    // TODO: add pseudoElement support - https://linear.app/replay/issue/RUN-953
     const pseudoElement = undefined;
     const rrpRuleId = registerCdpAsRrpCssRule(nodeObj, cdpRule);
     const appliedRule = {
@@ -1990,7 +1984,7 @@ function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
       matchedCSSRules  // inherited non-inline rules
     } = cdpInheritedEntry;
 
-    // TODO: convert/add inlineStyle
+    // TODO: maybe convert/add inlineStyle
 
     for (const matchedRule of matchedCSSRules) {
       // matchedRule.matchingSelectors
@@ -3225,7 +3219,7 @@ static void fromJsGetObjectByCdpId(
   auto context = isolate->GetCurrentContext();
 
   // convert v8::String → v8::String::Utf8Value → v8_inspector::StringView
-  // TODO: can this be improved?
+  // future-work: can this be improved?
   v8::String::Utf8Value cdpId(isolate, args[0]);
   const uint8_t* cdpIdPtr = reinterpret_cast<const uint8_t*>(*cdpId);
   v8_inspector::StringView cdpIdV8(cdpIdPtr, cdpId.length());
@@ -3774,9 +3768,7 @@ static void RunScript(v8::Isolate* isolate, v8::Local<v8::Context> context, cons
 
   v8::Local<v8::String> source = ToV8String(isolate, script);
 
-  // TODO: check for errors after `Compile` and `Run`
-  // Issue:
-  // https://linear.app/replay/issue/RUN-955/chromium-should-not-diverge-and-crash-if-greplayscript-does-not
+  // TODO: check for errors after `Compile` and `Run` - https://linear.app/replay/issue/RUN-955/chromium-should-not-diverge-and-crash-if-greplayscript-does-not
   v8::Local<v8::Script> compiled = v8::Script::Compile(context, source, &origin).ToLocalChecked();
   compiled->Run(context).ToLocalChecked();
 }
