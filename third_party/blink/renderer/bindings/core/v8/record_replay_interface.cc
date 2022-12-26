@@ -584,6 +584,7 @@ const gObjectPreviewByRrpId = new Map();
 let gLastRrpId = 0;
 
 // Map protocol ObjectId => Debugger.Scope
+// TODO: gCdpScopesByRrpId can probably be replaced with gCdpObjectsByRrpId
 const gCdpScopesByRrpId = new Map();
 
 // cheap cache for boundingClientRects
@@ -841,7 +842,6 @@ function buildRrpObjectFromCdpObject(cdpObject) {
  */
 function registerCdpScope(scope) {
   const rrpId = registerCdpObject(scope.object);
-  // TODO: we can probably get rid of gCdpScopesByRrpId
   gCdpScopesByRrpId.set(rrpId, scope);
   return rrpId;
 }
@@ -1040,8 +1040,6 @@ ProtocolObjectPreview.prototype = {
       return;
     }
 
-    // TODO: eval getter
-
     const value = buildRrpObjectFromCdpObject(cdpValue);
     this.getterValues.set(name, { name, ...value });
   },
@@ -1169,9 +1167,6 @@ function previewBlinkObject(cdpObject, allProperties) {
   //   }
   // }
 
-  // TODO: preview other blink objects
-  // Issue: https://linear.app/replay/issue/RUN-861/add-dom-related-props-to-pausegetobjectpreview-and-fix-objectid
-
 }
 
 function previewBlinkNode(node) {
@@ -1197,12 +1192,12 @@ function previewBlinkNode(node) {
   if (node.parentNode) {
     parentNode = registerPlainObject(node.parentNode);
   } else if (node.defaultView && node.defaultView.parent != node.defaultView && node.defaultView.parent.document) {
-    // TODO: properly handle `iframe`s and the case where `node.defaultView.parent.document` is missing
     /**
      * Nested documents use the parent element instead of null.
      * 
      * TODO: will need more work here to support multi-CSP iframes
-     * Issue: https://linear.app/replay/issue/RUN-954/dom-feature-support-multi-cspcross-origin-iframes
+     *   (properly handle `iframe`s and the case where `node.defaultView.parent.document` is missing)
+     *   Issue: https://linear.app/replay/issue/RUN-954/dom-feature-support-multi-cspcross-origin-iframes
      */
     const iframes = node.defaultView.parent.document.getElementsByTagName(
       "iframe"
@@ -1908,8 +1903,8 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
 
   // rulePreview
 
-  const startLine = ruleRange?.startLine;
-  const startColumn = ruleRange?.startColumn;
+  const startLine = (ruleRange || styleRange)?.startLine;
+  const startColumn = (ruleRange || styleRange)?.startColumn;
   // see https://static.replay.io/protocol/tot/CSS/#type-OriginalStyleSheetLocation
   const originalLocation = undefined; // TODO
   const selectorText = selectorList?.text || '';
@@ -3592,37 +3587,6 @@ static void fromJsGetNodeId(const v8::FunctionCallbackInfo<v8::Value>& args) {
 
   // auto response = domAgent->requestNode(cdpId, &nodeId);
   args.GetReturnValue().SetNull();
-
-  // TODO: clean up when done w/ RUN-981
-  // // convert v8::String → v8::String::Utf8Value → v8_inspector::StringView
-  // v8::String::Utf8Value cdpId(isolate, args[0]);
-  // const uint8_t* cdpIdPtr = reinterpret_cast<const uint8_t*>(*cdpId);
-  // v8_inspector::StringView cdpIdV8(cdpIdPtr, cdpId.length());
-  // v8::Local<v8::Object> plainObject;
-  // if (getObjectByCdpId(isolate, cdpIdV8, plainObject)) {
-  //   Node* node = V8Node::ToImpl(plainObject);
-  //   if (node) {
-  //     auto nodeId = DOMNodeIds::IdForNode(node);
-  //     auto* resultNode = DOMNodeIds::NodeForId(nodeId);
-  //     // assert(!!resultNode && "[RuntimeError] failed");
-  //     if (resultNode != node) {
-  //       recordreplay::Print(
-  //           "[RuntimeError] fromJsGetNodeId failed - node id lookup broken?
-  //           nodeId=%d, resultNode=%d", nodeId, !!resultNode);
-  //     }
-  //     else {
-  //       recordreplay::Print("DDBG fromJsGetNodeId success, nodeId=%d,
-  //       resultNode=%d", nodeId, !!resultNode);
-  //       args.GetReturnValue().Set(v8::Number::New(isolate, nodeId));
-  //     }
-  //     return;
-  //   }
-  //   else {
-  //     recordreplay::Print("[RuntimeError] fromJsGetNodeId failed for cdpId
-  //     \"%s\"", *cdpId);
-  //   }
-  // }
-  // args.GetReturnValue().SetNull();
 }
 
 
