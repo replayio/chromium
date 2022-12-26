@@ -3822,10 +3822,10 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
   SetFunctionProperty(isolate, args, "fromJsCssGetStylesheetByCpdId",
                       fromJsCssGetStylesheetByCpdId);
 
-      // unsorted RR stuff
-      SetFunctionProperty(
-          isolate, args, "setClearPauseDataCallback",
-          v8::FunctionCallbackRecordReplaySetClearPauseDataCallback);
+  // unsorted RR stuff
+  SetFunctionProperty(
+      isolate, args, "setClearPauseDataCallback",
+      v8::FunctionCallbackRecordReplaySetClearPauseDataCallback);
   SetFunctionProperty(isolate, args, "getCurrentError",
                       GetCurrentError);
   SetFunctionProperty(isolate, args, "getRecordingId",
