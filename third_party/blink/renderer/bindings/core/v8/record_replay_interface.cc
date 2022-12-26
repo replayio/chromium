@@ -584,7 +584,7 @@ const gObjectPreviewByRrpId = new Map();
 let gLastRrpId = 0;
 
 // Map protocol ObjectId => Debugger.Scope
-// TODO: gCdpScopesByRrpId can probably be replaced with gCdpObjectsByRrpId
+// TODO: gCdpScopesByRrpId can probably be removed (use gCdpObjectsByRrpId instead)
 const gCdpScopesByRrpId = new Map();
 
 // cheap cache for boundingClientRects
@@ -1816,7 +1816,7 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
     styleSheetId: styleSheetCpdId,
     style: {
       cssText: styleCssText,
-      // range: styleRange,
+      range: styleRange,
       cssProperties
     } = {},
     range: ruleRange,
@@ -1829,8 +1829,6 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
     styleSheetRrpId = gRrpIdByCdpId.get(styleSheetCpdId);
     if (!styleSheetRrpId) {
       const nativeSheet = fromJsCssGetStylesheetByCpdId(styleSheetCpdId);
-      
-      log(`DDBG registerCdpAsRrpCssRule - styleSheetObj - ${nativeSheet?.constructor?.name}: ${JSON.stringify(nativeSheet)}`);
 
       // NOTE: `isSystem` is part of RRP from `gecko`.
       //    -> Chromium has a more diversified `StyleSheetOrigin` enum for this, 
@@ -1955,8 +1953,6 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
 function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
   const appliedRules = [];
 
-  log(`DDBG convertCdpToRrpCssRules - cdpMatchedStyles: ${JSON.stringify(cdpMatchedStyles)}`);
-
   const {
     matchedRules = [],
     inheritedEntries = []
@@ -1983,8 +1979,6 @@ function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
       inlineStyle, // inherited inline style
       matchedCSSRules  // inherited non-inline rules
     } = cdpInheritedEntry;
-
-    // TODO: maybe convert/add inlineStyle
 
     for (const matchedRule of matchedCSSRules) {
       // matchedRule.matchingSelectors
@@ -3607,8 +3601,6 @@ static void fromJsGetBoxModel(
         nodeId, response.Code(), response.Message().c_str());
   } else {
     auto result = convertCborToJS(isolate, boxModel.get());
-    P("DDBG boxModel getContent()->size=%d not-empty=%d",
-      boxModel.get()->getContent()->size(), !result.IsEmpty());
     if (!result.IsEmpty()) {
       args.GetReturnValue().Set(result.ToLocalChecked());
       return;
@@ -3689,19 +3681,15 @@ static void fromJsCssGetStylesheetByCpdId(
   auto sheetId = ToCoreString(args[0].As<v8::String>());
   auto* cssAgent = getOrCreateInspectorCSSAgent(isolate);
 
-  P("DDBG fromJsCssGetStylesheetByCpdId 1: %s", sheetId.Utf8().c_str());
   CSSStyleSheet* styleSheet = cssAgent->getStyleSheet(sheetId);
   if (styleSheet) {
-    P("DDBG fromJsCssGetStylesheetByCpdId 2");
     v8::Local<v8::Value> jsStyleSheet;
     ScriptState* scriptState = ScriptState::Current(isolate);
     if (styleSheet->WrapV2(scriptState).ToLocal(&jsStyleSheet)) {
-      P("DDBG fromJsCssGetStylesheetByCpdId 3");
       args.GetReturnValue().Set(jsStyleSheet);
       return;
     }
   }
-  P("DDBG fromJsCssGetStylesheetByCpdId 4");
   args.GetReturnValue().SetNull();
 }
 

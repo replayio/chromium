@@ -164,7 +164,7 @@ class CORE_EXPORT InspectorCSSAgent final
                                        String* text) override;
 
   /**
-   * [recordreplay-edit] Use this to get access to the native StyleSheet object.
+   * [recordreplay] Use this to get access to the native StyleSheet object.
    */
   CSSStyleSheet* getStyleSheet(const String& style_sheet_id);
 
