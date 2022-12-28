@@ -527,10 +527,8 @@ function isInstanceOfNative(x, target) {
    * @see https://github.com/replayio/chromium-v8/blob/51140a440949dbbeea7a4e6c2185ccdeb8b6276e/src/objects/objects.cc#L929
    * @see https://github.com/replayio/chromium-v8/blob/51140a440949dbbeea7a4e6c2185ccdeb8b6276e/src/objects/js-objects.cc#170
    */
-  // old sln: check assortment of props
-  // if (plainObject?.nodeType > 0 && plainObject.nodeType <= 11 && plainObject.appendChild && plainObject.cloneNode) {
 
-  // new sln (also a hackfix): check if its native, and has `name` in inheritance chain
+  // hackfix: check if its native, and has `name` in inheritance chain
   const name = target?.name;
   return name &&
     x?.constructor?.toString()?.includes('() { [native code] }') &&
@@ -1155,18 +1153,6 @@ function previewBlinkObject(cdpObject, allProperties) {
       style: previewBlinkStyle(plainObject)
     }
   }
-  
-  // if (isInstanceOfNative(plainObject, CSSRule)) {
-  //   return {
-  //     rule: previewBlinkRule(plainObject)
-  //   }
-  // }
-  // if (isInstanceOfNative(plainObject, CSSStyleSheet)) {
-  //   return {
-  //     styleSheet: previewBlinkStyleSheet(plainObject)
-  //   }
-  // }
-
 }
 
 function previewBlinkNode(node) {
@@ -1235,9 +1221,6 @@ function previewBlinkNode(node) {
 function previewBlinkStyle(style) {
   // NOTE: this is for inline styles, where there is no parentRule
   let parentRule = undefined;
-  // if (style.parentRule) {
-  //   parentRule = registerPlainObject(style.parentRule);
-  // }
 
   const properties = [];
   for (let i = 0; i < style.length; i++) {
@@ -1678,7 +1661,7 @@ function DOM_getBoxModel({ node: nodeRrpId }) {
 function DOM_getEventListeners({ node }) {
   const listeners = [];
 
-  // TODO: adopt from gecko code ↓
+  // TODO: ↓ adopt from gecko code - https://linear.app/replay/issue/RUN-1034
 
   // const nodeObj = getObjectFromId(node).unsafeDereference();
   // const listenerInfo = Services.els.getListenerInfoFor(nodeObj) || [];
@@ -2018,16 +2001,6 @@ function CSS_getAppliedRules({ node: nodeRrpId }) {
     // NOTE: CSS domain commands are not accessible via `sendMessage`, so we have to get the data indirectly.
     // const cdpMatchedStyles = sendMessage('CSS.getMatchedStylesForNode', { nodeId });
     const cdpMatchedStyles = fromJsGetMatchedStylesForNode(nodeId);
-
-
-    // NOTE: we don't seem to need `inlineStyle` for now, as its taken care of separately in 
-    //   `Pause.getObjectPreview`.
-    // if (inlineStyle.isJust()) {
-    //   auto rulesJs = convertCborToJS(isolate, inlineStyle.fromJust());
-    //   if (!rulesJs.IsEmpty()) {
-    //     SetDataProperty(isolate, result, "inlineStyle", rulesJs.ToLocalChecked());
-    //   }
-    // }
     rules = convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles);
     gCssRulesByNodeRrpId.set(nodeRrpId, rules);
   }
