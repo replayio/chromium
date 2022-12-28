@@ -1057,8 +1057,9 @@ Response InspectorDOMAgent::performSearch(
     Maybe<bool> optional_include_user_agent_shadow_dom,
     String* search_id,
     int* result_count) {
-  if (!enabled_.Get())
-    return Response::ServerError("DOM agent is not enabled");
+  // [replay] comment this out since we cannot currently enable these during replay
+  // if (!enabled_.Get())
+  //   return Response::ServerError("DOM agent is not enabled");
 
   // FIXME: Few things are missing here:
   // 1) Search works with node granularity - number of matches within node is

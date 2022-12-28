@@ -3673,6 +3673,23 @@ static void HandleNetworkDidReceiveDataEvent(const base::DictionaryValue& info) 
  * @see https://chromedevtools.github.io/devtools-protocol/tot/DOM/
  * ##########################################################################*/
 
+static bool checkCDPResponse(const char* label,
+                             const Response& response,
+                             const v8::FunctionCallbackInfo<v8::Value>& args) {
+  if (!response.IsSuccess()) {
+    recordreplay::Print(
+        "[RuntimeError] CDP call \"%s\" failed (Code: %d): %s",
+        label,
+        response.Code(),
+        response.Message().c_str());
+
+    // result is null
+    args.GetReturnValue().SetNull();
+    return false;
+  }
+  return true;
+}
+
 static void fromJsGetNodeId(const v8::FunctionCallbackInfo<v8::Value>& args) {
   CHECK(args.Length() == 1 && args[0]->IsString() &&
         "[RuntimeError] must be called with a single string");
@@ -3802,7 +3819,7 @@ static void fromJsGetMatchedStylesForNode(
 static void fromJsCssGetStylesheetByCpdId(
     const v8::FunctionCallbackInfo<v8::Value>& args) {
   CHECK(args.Length() == 1 && args[0]->IsString() &&
-        "[RuntimeError] must be called with a single number");
+        "[RuntimeError] must be called with a single string");
 
   v8::Isolate* isolate = args.GetIsolate();
 
@@ -3819,6 +3836,38 @@ static void fromJsCssGetStylesheetByCpdId(
     }
   }
   args.GetReturnValue().SetNull();
+}
+
+static void fromJsDomPerformSearch(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsString() &&
+        "[RuntimeError] must be called with a single string");
+
+  v8::Isolate* isolate = args.GetIsolate();
+
+  auto query = ToCoreString(args[0].As<v8::String>());
+  auto* domAgent = getOrCreateInspectorDOMAgent(isolate);
+
+  bool includeUserAgentShadowDom = false;
+  String searchId;
+  int resultCount;
+  auto response = domAgent->performSearch(query, includeUserAgentShadowDom, &searchId, &resultCount);
+  if (checkCDPResponse("DOM.performSearch", response, args)) {
+    if (resultCount) {
+      int fromIndex = 0;
+      int toIndex = resultCount;
+      std::unique_ptr<protocol::Array<int>> nodeIds;
+      response = domAgent->getSearchResults(searchId, fromIndex, toIndex, &nodeIds);
+      if (checkCDPResponse("DOM.getSearchResults", response, args)) {
+        v8::Local<v8::Array> nodes = v8::Array::New(isolate);
+        // TODO: (1) iterate nodeIds -> (2) get v8 objects -> (3) send to JS -> (4) convert to rrpId
+        args.GetReturnValue().Set(nodes);
+      }
+    } else {
+      v8::Local<v8::Array> nodes = v8::Array::New(isolate);
+      args.GetReturnValue().Set(nodes);
+    }
+  }
 }
 
 /** ###########################################################################
