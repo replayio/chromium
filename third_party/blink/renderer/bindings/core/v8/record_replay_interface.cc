@@ -1714,6 +1714,7 @@ function DOM_querySelector({ node, selector }) {
  * ##########################################################################*/
 
 function DOM_performSearch({ query }) {
+  query = query.trim();
   const nodeObjects = fromJsDomPerformSearch(query);
   const nodeRrpIds = nodeObjects
     ?.map(node => gRrpIdByPlainObject.get(node))
@@ -3075,7 +3076,8 @@ static InspectedFrames* getOrCreateInspectedFrames() {
 }
 
 // NOTE: we need to instantiate all inspectors indivudally because we 
-//    are not fully hooked up with a `DevToolsSession` + `UberDispatcher`
+//    are not fully hooked up with a `DevToolsSession` + `UberDispatcher`.
+//    We also cannot enable them for the same reason.
 InspectorDOMAgent* getOrCreateInspectorDOMAgent(v8::Isolate* isolate) {
   if (!gInspectorDomAgent) {
     // NOTE: based on WebDevToolsAgentImpl::AttachSession
@@ -3083,8 +3085,8 @@ InspectorDOMAgent* getOrCreateInspectorDOMAgent(v8::Isolate* isolate) {
     InspectedFrames* inspectedFrames = getOrCreateInspectedFrames();
     gInspectorDomAgent = MakeGarbageCollected<InspectorDOMAgent>(
         isolate, inspectedFrames, gInspectorSession);
-    // NOTE: we cannot easily enable without a full session active
-    // gInspectorDomAgent->enable();
+
+    gInspectorDomAgent->FrameDocumentUpdated(gLocalFrame);
   }
   return gInspectorDomAgent;
 }
@@ -3853,7 +3855,8 @@ static void fromJsDomPerformSearch(
   bool includeUserAgentShadowDom = true;
   String searchId;
   int resultCount;
-  auto response = domAgent->performSearch(query, includeUserAgentShadowDom, &searchId, &resultCount);
+  auto response = domAgent->performSearch(query, includeUserAgentShadowDom,
+                                          &searchId, &resultCount);
   if (checkCDPResponse("DOM.performSearch", response, args)) {
     if (resultCount) {
       int fromIndex = 0;
@@ -3879,6 +3882,9 @@ static void fromJsDomPerformSearch(
       v8::Local<v8::Array> result = v8::Array::New(isolate);
       args.GetReturnValue().Set(result);
     }
+
+    // clean up
+    domAgent->discardSearchResults(searchId);
   }
 }
 

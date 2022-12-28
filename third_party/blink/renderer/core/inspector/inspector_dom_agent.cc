@@ -1218,8 +1218,11 @@ Response InspectorDOMAgent::getSearchResults(
     return Response::ServerError("Invalid search result range");
 
   *node_ids = std::make_unique<protocol::Array<int>>();
-  for (int i = from_index; i < to_index; ++i)
-    (*node_ids)->emplace_back(PushNodePathToFrontend((*it->value)[i].Get()));
+  for (int i = from_index; i < to_index; ++i) {
+    // [replay] PushNodePathToFrontend is unnecessary (and crashes) when nodes are not tracked
+    // (*node_ids)->emplace_back(PushNodePathToFrontend((*it->value)[i].Get()));
+    (*node_ids)->emplace_back(BindDocumentNode((*it->value)[i].Get()));
+  }
   return Response::Success();
 }
 
