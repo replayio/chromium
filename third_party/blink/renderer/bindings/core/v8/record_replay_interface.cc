@@ -104,6 +104,7 @@ const {
   fromJsGetBoxModel,
   fromJsGetMatchedStylesForNode,
   fromJsCssGetStylesheetByCpdId,
+  fromJsDomPerformSearch,
 
   // network
   getCurrentNetworkRequestEvent,
@@ -263,6 +264,7 @@ const CommandCallbacks = {
   "DOM.getBoxModel": DOM_getBoxModel,
   "DOM.getEventListeners": DOM_getEventListeners,
   "DOM.querySelector": DOM_querySelector,
+  "DOM.performSearch": DOM_performSearch,
   "CSS.getComputedStyle": CSS_getComputedStyle,
   "CSS.getAppliedRules": CSS_getAppliedRules
 };
@@ -1725,6 +1727,21 @@ function DOM_querySelector({ node, selector }) {
 }
 
 /** ###########################################################################
+ * {@link DOM_performSearch}
+ * ##########################################################################*/
+
+function DOM_performSearch({ query }) {
+  const nodeObjects = fromJsDomPerformSearch(query);
+  const nodeRrpIds = nodeObjects
+    ?.map(node => gRrpIdByPlainObject.get(node))
+    .filter(rrpId => !!rrpId)
+   || [];
+
+  return { nodes: nodeRrpIds, data: {} };
+}
+
+
+/** ###########################################################################
  * {@link CSS_getComputedStyle}
  * ##########################################################################*/
 
@@ -3154,6 +3171,26 @@ getObjectByCdpId(v8::Isolate* isolate,
 }
 
 /**
+ * Returns the matching object or null.
+ * Should generally never return null.
+ */
+static bool getV8FromBlinkObject(
+    v8::Isolate* isolate,
+    ScriptWrappable* blinkObject,
+    v8::Local<v8::Value>& result) {
+  ScriptState* scriptState = ScriptState::Current(isolate);
+  v8::Local<v8::Value> v8Object;
+  if (blinkObject->WrapV2(scriptState).ToLocal(&v8Object)) {
+    result = v8Object;
+    return true;
+  }
+
+  // weird
+  P("[RuntimeError] getV8FromBlinkObject failed");
+    return false;
+}
+
+/**
  * NOTE: Since the `RemoteObject` type is not publicly exposed, we cannot easily
  * access it in CPP space. We thus only use it in JS. This basically emulates
  * gecko's `makeDebuggeeValue`.
@@ -3210,7 +3247,6 @@ static void fromJsGetObjectByCdpId(
         "[RuntimeError] must be called with a single string");
 
   v8::Isolate* isolate = args.GetIsolate();
-  auto context = isolate->GetCurrentContext();
 
   // convert v8::String → v8::String::Utf8Value → v8_inspector::StringView
   // future-work: can this be improved?
@@ -3218,15 +3254,11 @@ static void fromJsGetObjectByCdpId(
   const uint8_t* cdpIdPtr = reinterpret_cast<const uint8_t*>(*cdpId);
   v8_inspector::StringView cdpIdV8(cdpIdPtr, cdpId.length());
 
-  v8::Local<v8::Value> plainObject;
-  std::unique_ptr<v8_inspector::StringBuffer> error;
-  if (!gInspectorSession->unwrapObject(&error, cdpIdV8, &plainObject, &context,
-                                       nullptr)) {
-    recordreplay::Print("[RuntimError] could not lookup cdpId: %s",
-                        ToCoreString(error->string()).Ascii().c_str());
-    args.GetReturnValue().SetNull();
-  } else {
+  v8::Local<v8::Object> plainObject;
+  if (getObjectByCdpId(isolate, cdpIdV8, plainObject)) {
     args.GetReturnValue().Set(plainObject);
+  } else {
+    args.GetReturnValue().SetNull();
   }
 }
 
@@ -3674,7 +3706,7 @@ static void HandleNetworkDidReceiveDataEvent(const base::DictionaryValue& info) 
  * ##########################################################################*/
 
 static bool checkCDPResponse(const char* label,
-                             const Response& response,
+                             const protocol::Response& response,
                              const v8::FunctionCallbackInfo<v8::Value>& args) {
   if (!response.IsSuccess()) {
     recordreplay::Print(
@@ -3708,7 +3740,7 @@ static void fromJsGetNodeId(const v8::FunctionCallbackInfo<v8::Value>& args) {
     Node* node = V8Node::ToImpl(nodeObj);
     if (node) {
       // hackfix: bind node here
-      //   (if the DOMAgent was enabled, it would track DOM automatically)
+      //   (if the DOMAgent was enabled, it would track nodes automatically)
       int nodeId = domAgent->BindDocumentNode(node);
       args.GetReturnValue().Set(v8::Number::New(isolate, nodeId));
       return;
@@ -3827,15 +3859,12 @@ static void fromJsCssGetStylesheetByCpdId(
   auto* cssAgent = getOrCreateInspectorCSSAgent(isolate);
 
   CSSStyleSheet* styleSheet = cssAgent->getStyleSheet(sheetId);
-  if (styleSheet) {
-    v8::Local<v8::Value> jsStyleSheet;
-    ScriptState* scriptState = ScriptState::Current(isolate);
-    if (styleSheet->WrapV2(scriptState).ToLocal(&jsStyleSheet)) {
-      args.GetReturnValue().Set(jsStyleSheet);
-      return;
-    }
+  v8::Local<v8::Value> v8StyleSheet;
+  if (styleSheet && getV8FromBlinkObject(isolate, styleSheet, v8StyleSheet)) {
+    args.GetReturnValue().Set(v8StyleSheet);
+  } else {
+    args.GetReturnValue().SetNull();
   }
-  args.GetReturnValue().SetNull();
 }
 
 static void fromJsDomPerformSearch(
@@ -3848,7 +3877,7 @@ static void fromJsDomPerformSearch(
   auto query = ToCoreString(args[0].As<v8::String>());
   auto* domAgent = getOrCreateInspectorDOMAgent(isolate);
 
-  bool includeUserAgentShadowDom = false;
+  bool includeUserAgentShadowDom = true;
   String searchId;
   int resultCount;
   auto response = domAgent->performSearch(query, includeUserAgentShadowDom, &searchId, &resultCount);
@@ -3857,15 +3886,25 @@ static void fromJsDomPerformSearch(
       int fromIndex = 0;
       int toIndex = resultCount;
       std::unique_ptr<protocol::Array<int>> nodeIds;
-      response = domAgent->getSearchResults(searchId, fromIndex, toIndex, &nodeIds);
+      response =
+          domAgent->getSearchResults(searchId, fromIndex, toIndex, &nodeIds);
       if (checkCDPResponse("DOM.getSearchResults", response, args)) {
-        v8::Local<v8::Array> nodes = v8::Array::New(isolate);
-        // TODO: (1) iterate nodeIds -> (2) get v8 objects -> (3) send to JS -> (4) convert to rrpId
-        args.GetReturnValue().Set(nodes);
+        v8::Local<v8::Array> result = v8::Array::New(isolate);
+        uint32_t nWritten = 0;
+        for (uint32_t i = 0; i < nodeIds->size(); ++i) {
+          int nodeId = (*nodeIds)[i];
+          auto* node = domAgent->NodeForId(nodeId);
+          v8::Local<v8::Value> v8Node;
+          if (node && getV8FromBlinkObject(isolate, node, v8Node)) {
+            v8::Local<v8::Context> context = isolate->GetCurrentContext();
+            result->Set(context, nWritten++, v8Node).Check();
+          }
+        }
+        args.GetReturnValue().Set(result);
       }
     } else {
-      v8::Local<v8::Array> nodes = v8::Array::New(isolate);
-      args.GetReturnValue().Set(nodes);
+      v8::Local<v8::Array> result = v8::Array::New(isolate);
+      args.GetReturnValue().Set(result);
     }
   }
 }
@@ -4006,6 +4045,8 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
                       fromJsGetMatchedStylesForNode);
   SetFunctionProperty(isolate, args, "fromJsCssGetStylesheetByCpdId",
                       fromJsCssGetStylesheetByCpdId);
+  SetFunctionProperty(isolate, args, "fromJsDomPerformSearch",
+                      fromJsDomPerformSearch);
 
   // unsorted RR stuff
   SetFunctionProperty(
