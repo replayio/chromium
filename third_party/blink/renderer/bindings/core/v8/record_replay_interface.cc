@@ -1682,10 +1682,9 @@ function DOM_getEventListeners({ node }) {
 
   if (nodeObject.nodeName && nodeObject.nodeName == "HTML") {
     // Add event listeners for the document and window as well.
-    // DDBG TODO: figure out (FF only) ownerGlobal equivalent for chromium
-    //      -> Also use it to implement a better `isInstanceOfNative`
+    // TODO: figure out ownerGlobal for chromium - https://linear.app/replay/issue/RUN-1041
     listenerInfos.push(
-      ...fromJsCollectEventListeners(nodeObject.parentNode) // document
+      ...fromJsCollectEventListeners(nodeObject.parentNode)   // document
       // ...fromJsCollectEventListeners(nodeObject.ownerGlobal)  // window
     );
   }
@@ -3849,7 +3848,6 @@ static void fromJsCollectEventListeners(const v8::FunctionCallbackInfo<v8::Value
       result->Set(context, i++, v8Info).Check();
     }
   }
-  P("DDBG fromJsCollectEventListeners %d", result->Length());
   args.GetReturnValue().Set(result);
 }
 
