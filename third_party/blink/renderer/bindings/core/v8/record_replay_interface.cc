@@ -1717,8 +1717,7 @@ function DOM_performSearch({ query }) {
   query = query.trim();
   const nodeObjects = fromJsDomPerformSearch(query);
   const nodeRrpIds = nodeObjects
-    ?.map(node => gRrpIdByPlainObject.get(node))
-    .filter(rrpId => !!rrpId)
+    ?.map(registerPlainObject)
    || [];
 
   return { nodes: nodeRrpIds, data: {} };
@@ -3162,7 +3161,7 @@ static bool getV8FromBlinkObject(
 
   // weird
   P("[RuntimeError] getV8FromBlinkObject failed");
-    return false;
+  return false;
 }
 
 /**
@@ -3871,7 +3870,9 @@ static void fromJsDomPerformSearch(
           int nodeId = (*nodeIds)[i];
           auto* node = domAgent->NodeForId(nodeId);
           v8::Local<v8::Value> v8Node;
+          P("DDBG performSearch %d %d", i, !!node);
           if (node && getV8FromBlinkObject(isolate, node, v8Node)) {
+            P("DDBG performSearch2 %d %d", i, !!node);
             v8::Local<v8::Context> context = isolate->GetCurrentContext();
             result->Set(context, nWritten++, v8Node).Check();
           }

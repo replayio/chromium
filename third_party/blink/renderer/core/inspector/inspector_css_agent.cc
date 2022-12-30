@@ -1940,7 +1940,7 @@ Response InspectorCSSAgent::AssertEnabled() {
 Response InspectorCSSAgent::AssertInspectorStyleSheetForId(
     const String& style_sheet_id,
     InspectorStyleSheet*& result) {
-  // [recordreplay] allow this to work without being enabled?
+  // [replay] we cannot currently enable these during replay
   // Response response = AssertEnabled();
   // if (!response.IsSuccess())
   //   return response;

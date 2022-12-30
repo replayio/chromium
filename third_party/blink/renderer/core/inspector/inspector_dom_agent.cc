@@ -767,33 +767,37 @@ int InspectorDOMAgent::PushNodePathToFrontend(Node* node_to_push,
   // InspectorDOMAgent might have been resetted already. See crbug.com/450491
   if (!document_)
     return 0;
-  if (!document_node_to_id_map_->Contains(document_))
-    return 0;
 
-  // Return id in case the node is known.
-  int result = node_map->at(node_to_push);
-  if (result)
-    return result;
+  // [replay] PushNodePathToFrontend is bad when `DevToolsSession` not active
+  //    TODO: This does not handle dangling nodes properly - https://linear.app/replay/issue/RUN-1005/
+  return BindDocumentNode(node_to_push);
 
-  Node* node = node_to_push;
-  HeapVector<Member<Node>> path;
+  // if (!document_node_to_id_map_->Contains(document_))
+  //   return 0;
+  // // Return id in case the node is known.
+  // int result = node_map->at(node_to_push);
+  // if (result)
+  //   return result;
 
-  while (true) {
-    Node* parent = InnerParentNode(node);
-    if (!parent)
-      return 0;
-    path.push_back(parent);
-    if (node_map->at(parent))
-      break;
-    node = parent;
-  }
+  // Node* node = node_to_push;
+  // HeapVector<Member<Node>> path;
 
-  for (int i = path.size() - 1; i >= 0; --i) {
-    int node_id = node_map->at(path.at(i).Get());
-    DCHECK(node_id);
-    PushChildNodesToFrontend(node_id);
-  }
-  return node_map->at(node_to_push);
+  // while (true) {
+  //   Node* parent = InnerParentNode(node);
+  //   if (!parent)
+  //     return 0;
+  //   path.push_back(parent);
+  //   if (node_map->at(parent))
+  //     break;
+  //   node = parent;
+  // }
+
+  // for (int i = path.size() - 1; i >= 0; --i) {
+  //   int node_id = node_map->at(path.at(i).Get());
+  //   DCHECK(node_id);
+  //   PushChildNodesToFrontend(node_id);
+  // }
+  // return node_map->at(node_to_push);
 }
 
 int InspectorDOMAgent::PushNodePathToFrontend(Node* node_to_push) {
@@ -1057,7 +1061,7 @@ Response InspectorDOMAgent::performSearch(
     Maybe<bool> optional_include_user_agent_shadow_dom,
     String* search_id,
     int* result_count) {
-  // [replay] comment this out since we cannot currently enable these during replay
+  // [replay] we cannot currently enable these during replay
   // if (!enabled_.Get())
   //   return Response::ServerError("DOM agent is not enabled");
 
@@ -1219,9 +1223,7 @@ Response InspectorDOMAgent::getSearchResults(
 
   *node_ids = std::make_unique<protocol::Array<int>>();
   for (int i = from_index; i < to_index; ++i) {
-    // [replay] PushNodePathToFrontend is unnecessary (and crashes) when nodes are not tracked
-    // (*node_ids)->emplace_back(PushNodePathToFrontend((*it->value)[i].Get()));
-    (*node_ids)->emplace_back(BindDocumentNode((*it->value)[i].Get()));
+    (*node_ids)->emplace_back(PushNodePathToFrontend((*it->value)[i].Get()));
   }
   return Response::Success();
 }
