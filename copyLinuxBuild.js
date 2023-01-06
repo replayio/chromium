@@ -1,3 +1,4 @@
+// Copyright 2021 Record Replay Inc.
 /* Copy the build artifacts which are actually needed to a new directory. */
 
 const fs = require("fs");
