@@ -535,7 +535,6 @@ function isInstanceOfNative(x, target) {
   const name = target?.name;
   return name &&
     x?.constructor?.toString()?.includes('() { [native code] }') &&
-    // fix https://linear.app/replay/issue/RUN-1067/chromium-css-style-object-preview-errors-out
     x.constructor === x.__proto__.constructor &&
     hasInProtoChain(x.constructor, name);
 }
@@ -3212,7 +3211,6 @@ static void fromJsMakeDebuggeeValue(
     const v8::FunctionCallbackInfo<v8::Value>& args) {
   v8::Isolate* isolate = args.GetIsolate();
 
-  // CHECK(args.Length() == 1 && "must be called with a single value");
   CHECK(args.Length() == 1 && args[0]->IsObject() &&
         "must be called with a single object");
 
