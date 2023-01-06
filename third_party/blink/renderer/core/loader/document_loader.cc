@@ -2107,7 +2107,6 @@ void DocumentLoader::CommitNavigation() {
 
   WillCommitNavigation();
 
-  // if (!Url().ProtocolIsAbout() && !Url().ProtocolIsData() && !Url().ProtocolIs("chrome")) {
   if (Url().ProtocolIsInHTTPFamily()) {
     recordreplay::OnNavigationEvent(nullptr, Url().GetString().Utf8().c_str());
   }
