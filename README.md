@@ -98,7 +98,7 @@ sudo apt update
 sudo apt install libssl1.1
 ```
 
-# Merging from upstream
+# Rebase: Merging from upstream
 
 Because chromium's source is split across many git repositories, merging changes from upstream is tricky
 
@@ -138,3 +138,37 @@ git push
 ## Setting dependency revisions
 
 The revision to use for dependent repositories is specified in the [DEPS](./DEPS) file and updated to by running `gclient sync`.  Whenever the revision to use for any dependencies we've modified changes, this file needs to be updated.  Look for `v8_revision`, `skia_revision`, or the revision associated with `https://github.com/replayio/chromium-webrtc.git`.
+
+
+## Adopting a rebased version
+
+After a rebase has happened (e.g. `master` has been rebased to latest `chromium` release version):
+
+1. Probably need to update your local `depot_tools`
+2. If possible, update build dependencies: `./build/install-build-deps.sh` (might not always work because it does not support many systems)
+3. Clean your build (delete `src/out` folder)
+4. Make sure `DEPS` is correct
+   * go to all related forks and make sure the relevant commit number is in `DEPS`
+     ```sh
+     cd ./v8 && git pull
+     cd ../third_party/webrtc && git pull
+     cd ../third_party/skia && git pull
+     ```
+5. Re-do the initial steps:
+   ```
+   cd .../src
+   gclient sync -D
+
+   # just in case `DEPS` are not pointing in the right direction
+   cd ./v8 && git pull && \
+   cd ../third_party/webrtc && git pull && \
+   cd ../skia && git pull && \
+   cd ../..
+
+   # -> make sure to check if `args` have changed. If so, update `args` via:
+   gn gen out/Release
+   gn args out/Release # or manually write `./out/Release/args.gn`
+
+   # WARN: If you did any of the above steps wrong, nuke `out` and try again.
+   node build
+   ```
