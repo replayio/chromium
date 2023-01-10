@@ -167,7 +167,7 @@ After a rebase has happened (e.g. `master` has been rebased to latest `chromium`
    cd .../src
    gclient sync -D
 
-   # -> make sure to check if `args` have changed. If so, update `args` via:
+   # NOTE: `args.gn` has been deleted - fix it again (see above for details)
    gn gen out/Release
    gn args out/Release # or manually write `./out/Release/args.gn`
 
