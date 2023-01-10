@@ -139,6 +139,13 @@ git push
 
 The revision to use for dependent repositories is specified in the [DEPS](./DEPS) file and updated to by running `gclient sync`.  Whenever the revision to use for any dependencies we've modified changes, this file needs to be updated.  Look for `v8_revision`, `skia_revision`, or the revision associated with `https://github.com/replayio/chromium-webrtc.git`.
 
+Verify that all relevant revisions are in `DEPS`, e.g. via:
+```sh
+cd ./v8 && git log
+cd ../third_party/webrtc && git log
+cd ../third_party/skia && git log
+```
+
 
 ## Adopting a rebased version
 
@@ -147,14 +154,7 @@ After a rebase has happened (e.g. `master` has been rebased to latest `chromium`
 1. Probably need to update your local `depot_tools`
 2. If possible, update build dependencies: `./build/install-build-deps.sh` (might not always work because it does not support many systems)
 3. Clean your build (delete `src/out` folder)
-4. Make sure `DEPS` is correct
-   * go to all related forks and make sure the relevant commit number is in `DEPS`
-     ```sh
-     cd ./v8 && git pull
-     cd ../third_party/webrtc && git pull
-     cd ../third_party/skia && git pull
-     ```
-5. Re-do the initial steps:
+4. Re-do the initial steps:
    ```
    cd .../src
    gclient sync -D
