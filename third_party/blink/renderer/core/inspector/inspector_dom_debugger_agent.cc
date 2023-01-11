@@ -734,6 +734,17 @@ void InspectorDOMDebuggerAgent::Did(const probe::ExecuteScript& probe) {
 
 void InspectorDOMDebuggerAgent::Will(const probe::UserCallback& probe) {
   String name = probe.name ? String(probe.name) : probe.atomic_name;
+
+  // TODO: normalize all event names
+  //  -> https://github.com/replayio/devtools/blob/962efa1ff77dc8d0181c8ade76ddffef33def6f7/packages/replay-next/src/constants.ts#L12
+  recordreplay::Print("DDBG InspectorDOMDebuggerAgent::Will %s",
+                      name ? name.Ascii().c_str() : "");
+  if (name == "click") {
+    recordreplay::OnEvent("event.mouse.click", true);
+  } else if (name == "setTimeout") {
+    recordreplay::OnEvent("timer.timeout.set", true);
+  }
+
   if (probe.event_target) {
     Node* node = probe.event_target->ToNode();
     String target_name =
@@ -745,6 +756,16 @@ void InspectorDOMDebuggerAgent::Will(const probe::UserCallback& probe) {
 }
 
 void InspectorDOMDebuggerAgent::Did(const probe::UserCallback& probe) {
+  String name = probe.name ? String(probe.name) : probe.atomic_name;
+
+  recordreplay::Print("DDBG InspectorDOMDebuggerAgent::Did %s",
+                      name ? name.Ascii().c_str() : "");
+  if (name == "click") {
+    recordreplay::OnEvent("event.mouse.click", false);
+  } else if (name == "setTimeout") {
+    recordreplay::OnEvent("timer.timeout.set", false);
+  }
+
   CancelNativeBreakpoint();
 }
 
@@ -826,14 +847,19 @@ void InspectorDOMDebuggerAgent::DidRemoveBreakpoint() {
 }
 
 void InspectorDOMDebuggerAgent::SetEnabled(bool enabled) {
-  if (enabled && !enabled_.Get()) {
-    instrumenting_agents_->AddInspectorDOMDebuggerAgent(this);
-    dom_agent_->AddDOMListener(this);
-    enabled_.Set(true);
-  } else if (!enabled && enabled_.Get()) {
-    instrumenting_agents_->RemoveInspectorDOMDebuggerAgent(this);
-    dom_agent_->RemoveDOMListener(this);
-    enabled_.Set(false);
+  if (!recordreplay::HasDivergedFromRecording() || (
+      instrumenting_agents_ && dom_agent_)
+    ) {
+    // [replay] `instrumenting_agents_` is generally not available
+    if (enabled && !enabled_.Get()) {
+      instrumenting_agents_->AddInspectorDOMDebuggerAgent(this);
+      dom_agent_->AddDOMListener(this);
+      enabled_.Set(true);
+    } else if (!enabled && enabled_.Get()) {
+      instrumenting_agents_->RemoveInspectorDOMDebuggerAgent(this);
+      dom_agent_->RemoveDOMListener(this);
+      enabled_.Set(false);
+    }
   }
 }
 

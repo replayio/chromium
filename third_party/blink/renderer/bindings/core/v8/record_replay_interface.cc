@@ -26,6 +26,7 @@
 #include "third_party/blink/renderer/core/inspector/inspector_css_agent.h"
 #include "third_party/blink/renderer/core/inspector/inspector_dom_agent.h"
 #include "third_party/blink/renderer/core/inspector/inspector_dom_debugger_agent.h"
+#include "third_party/blink/renderer/core/inspector/inspector_dom_debugger_agent.h"
 #include "third_party/blink/renderer/core/inspector/inspector_network_agent.h"
 #include "third_party/blink/renderer/core/inspector/inspector_resource_container.h"
 #include "third_party/blink/renderer/core/inspector/inspector_resource_content_loader.h"
@@ -3096,6 +3097,7 @@ v8::MaybeLocal<v8::Value> convertCborToJSMaybe(v8::Isolate* isolate,
 
 static LocalFrame* gLocalFrame;
 static InspectorDOMAgent* gInspectorDomAgent;
+static InspectorDOMDebuggerAgent* gInspectorDomDebuggerAgent;
 static InspectorNetworkAgent* gInspectorNetworkAgent;
 static InspectorCSSAgent* gInspectorCssAgent;
 static InspectedFrames* gInspectedFrames;
@@ -3123,9 +3125,21 @@ InspectorDOMAgent* getOrCreateInspectorDOMAgent(v8::Isolate* isolate) {
   return gInspectorDomAgent;
 }
 
+InspectorDOMDebuggerAgent* getOrCreateInspectorDOMDebuggerAgent(v8::Isolate* isolate) {
+  if (!gInspectorDomDebuggerAgent) {
+    gInspectorDomDebuggerAgent =
+        MakeGarbageCollected<InspectorDOMDebuggerAgent>(
+            isolate, getOrCreateInspectorDOMAgent(isolate), gInspectorSession);
+
+    // NOTE: registering the agent here allows it to receive `UserCallback` events
+    //   see https://linear.app/replay/issue/RUN-1061#comment-d059a1ce
+    gLocalFrame->GetProbeSink()->AddInspectorDOMDebuggerAgent(gInspectorDomDebuggerAgent);
+  }
+  return gInspectorDomDebuggerAgent;
+}
+
 InspectorNetworkAgent* getOrCreateInspectorNetworkAgent() {
   if (!gInspectorNetworkAgent) {
-    // NOTE: based on WebDevToolsAgentImpl::AttachSession
     InspectedFrames* inspectedFrames = getOrCreateInspectedFrames();
     gInspectorNetworkAgent = MakeGarbageCollected<InspectorNetworkAgent>(
         inspectedFrames, nullptr, gInspectorSession);
@@ -4111,6 +4125,9 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
   if (recordreplay::IsReplaying()) {
     recordreplay::AutoDisallowEvents disallow;
     RunScript(isolate, context, gReplayScript, InternalScriptURL);
+
+    // initialize InspectorDOMDebuggerAgent, so it can pick up user events
+    getOrCreateInspectorDOMDebuggerAgent(isolate);
   }
 }
 
