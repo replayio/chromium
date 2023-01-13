@@ -342,6 +342,9 @@ ThreadControllerWithMessagePumpImpl::DoWork() {
 
   // Special-casing here avoids unnecessarily sampling Now() when out of work.
   if (!next_wake_up) {
+    recordreplay::Assert("[RUN-548] ThreadControllerWithMessagePumpImpl::DoWork #6 %ld",
+                         next_work_info.remaining_delay().ToInternalValue());
+
     main_thread_only().next_delayed_do_work = TimeTicks::Max();
     next_work_info.delayed_run_time = TimeTicks::Max();
     return next_work_info;
@@ -359,6 +362,10 @@ ThreadControllerWithMessagePumpImpl::DoWork() {
     // If we've passed |quit_runloop_after| there's no more work to do.
     if (continuation_lazy_now.Now() >= main_thread_only().quit_runloop_after) {
       next_work_info.delayed_run_time = TimeTicks::Max();
+
+      recordreplay::Assert("[RUN-548] ThreadControllerWithMessagePumpImpl::DoWork #7 %ld",
+                           next_work_info.remaining_delay().ToInternalValue());
+
       return next_work_info;
     }
   }
@@ -366,6 +373,10 @@ ThreadControllerWithMessagePumpImpl::DoWork() {
   next_work_info.delayed_run_time = CapAtOneDay(
       main_thread_only().next_delayed_do_work, &continuation_lazy_now);
   next_work_info.recent_now = continuation_lazy_now.Now();
+
+  recordreplay::Assert("[RUN-548] ThreadControllerWithMessagePumpImpl::DoWork #8 %ld",
+                       next_work_info.remaining_delay().ToInternalValue());
+
   return next_work_info;
 }
 
