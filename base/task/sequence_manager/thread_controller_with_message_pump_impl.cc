@@ -335,6 +335,9 @@ ThreadControllerWithMessagePumpImpl::DoWork() {
           : WorkDeduplicator::NextTask::kIsDelayed;
   if (work_deduplicator_.DidCheckForMoreWork(next_task) ==
       ShouldScheduleWork::kScheduleImmediate) {
+    recordreplay::Assert("[RUN-548] ThreadControllerWithMessagePumpImpl::DoWork #5 %ld",
+                         next_work_info.remaining_delay().ToInternalValue());
+
     // Need to run new work immediately, but due to the contract of DoWork
     // we only need to return a null TimeTicks to ensure that happens.
     return next_work_info;
