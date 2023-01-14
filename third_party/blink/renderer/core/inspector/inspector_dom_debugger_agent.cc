@@ -737,8 +737,9 @@ void InspectorDOMDebuggerAgent::Will(const probe::UserCallback& probe) {
 
   // TODO: normalize all event names
   //  -> https://github.com/replayio/devtools/blob/962efa1ff77dc8d0181c8ade76ddffef33def6f7/packages/replay-next/src/constants.ts#L12
-  recordreplay::Print("DDBG InspectorDOMDebuggerAgent::Will %s",
-                      name ? name.Ascii().c_str() : "");
+  auto isCallback = !!probe.event_target;
+  recordreplay::Print("DDBG InspectorDOMDebuggerAgent::Will %s (callback: %d)",
+                      name ? name.Ascii().c_str() : "", isCallback);
   if (name == "click") {
     recordreplay::OnEvent("event.mouse.click", true);
   } else if (name == "setTimeout") {
@@ -758,6 +759,7 @@ void InspectorDOMDebuggerAgent::Will(const probe::UserCallback& probe) {
 void InspectorDOMDebuggerAgent::Did(const probe::UserCallback& probe) {
   String name = probe.name ? String(probe.name) : probe.atomic_name;
 
+  // TODO: sync w/ Will
   recordreplay::Print("DDBG InspectorDOMDebuggerAgent::Did %s",
                       name ? name.Ascii().c_str() : "");
   if (name == "click") {
