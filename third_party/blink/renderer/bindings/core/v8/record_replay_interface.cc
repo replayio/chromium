@@ -441,8 +441,7 @@ function Pause_evaluateInFrame({ frameId, expression }) {
   return buildRrpObjectResult(rv);
 
   if (expression === '[...arguments]') {
-    // hackfix (TODO: fix in gecko and frontend later)
-    // -> return `arguments` of given frame
+    // short-circuit hackfix: return `arguments` of given frame
     //  see: https://linear.app/replay/issue/RUN-1061#comment-fc1c3ee4
     const args = fromJsGetArgumentsInFrame(frame.callFrameId);
     return args && [...args] || [];
