@@ -28,6 +28,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <unordered_map>
+#include <tuple>
+
 #include "third_party/blink/renderer/core/inspector/inspector_dom_debugger_agent.h"
 
 #include "third_party/blink/renderer/bindings/core/v8/js_based_event_listener.h"
@@ -725,47 +728,38 @@ void InspectorDOMDebuggerAgent::ScriptExecutionBlockedByCSP(
 }
 
 void InspectorDOMDebuggerAgent::Will(const probe::ExecuteScript& probe) {
+  ReplayNotifyWill("scriptFirstStatement");
   AllowNativeBreakpoint("scriptFirstStatement", nullptr, false);
 }
 
 void InspectorDOMDebuggerAgent::Did(const probe::ExecuteScript& probe) {
+  ReplayNotifyDid("scriptFirstStatement");
   CancelNativeBreakpoint();
 }
 
 void InspectorDOMDebuggerAgent::Will(const probe::UserCallback& probe) {
   String name = probe.name ? String(probe.name) : probe.atomic_name;
 
-  // TODO: normalize all event names
-  //  -> https://github.com/replayio/devtools/blob/962efa1ff77dc8d0181c8ade76ddffef33def6f7/packages/replay-next/src/constants.ts#L12
-  auto isCallback = !!probe.event_target;
-  recordreplay::Print("DDBG InspectorDOMDebuggerAgent::Will %s (callback: %d)",
-                      name ? name.Ascii().c_str() : "", isCallback);
-  if (name == "click") {
-    recordreplay::OnEvent("event.mouse.click", true);
-  } else if (name == "setTimeout") {
-    recordreplay::OnEvent("timer.timeout.set", true);
-  }
-
   if (probe.event_target) {
     Node* node = probe.event_target->ToNode();
     String target_name =
         node ? node->nodeName() : probe.event_target->InterfaceName();
+    ReplayNotifyWill(name, probe.event_target, false);
     AllowNativeBreakpoint(name, &target_name, false);
     return;
   }
+  ReplayNotifyWill(name, nullptr, true);
   AllowNativeBreakpoint(name + ".callback", nullptr, false);
 }
 
 void InspectorDOMDebuggerAgent::Did(const probe::UserCallback& probe) {
   String name = probe.name ? String(probe.name) : probe.atomic_name;
 
-  // TODO: sync w/ Will
-  recordreplay::Print("DDBG InspectorDOMDebuggerAgent::Did %s",
-                      name ? name.Ascii().c_str() : "");
-  if (name == "click") {
-    recordreplay::OnEvent("event.mouse.click", false);
-  } else if (name == "setTimeout") {
-    recordreplay::OnEvent("timer.timeout.set", false);
+  if (probe.event_target) {
+    ReplayNotifyDid(name, probe.event_target, false);
+  }
+  else {
+    ReplayNotifyDid(name, nullptr, true);
   }
 
   CancelNativeBreakpoint();
@@ -926,6 +920,103 @@ void InspectorDOMDebuggerAgent::OnContentSecurityPolicyViolation(
       v8_inspector::protocol::Debugger::API::Paused::ReasonEnum::CSPViolation);
 
   v8_session_->breakProgram(listener, json_view);
+}
+
+
+// [replay] lookup qualified event names
+//   -> https://linear.app/replay/issue/RUN-1061/chromium-render-eventslist
+
+// C++ grammar example: https://replit.com/@Domiii/nested-static-initializers#main.cpp
+
+struct CDTEventEntry {
+  std::unordered_map<String, String> qualifiedNamesByTargetName_;
+
+  CDTEventEntry(const std::vector<std::tuple<String, std::vector<String>>>&&
+                    targetNamesByQualifiedName) {
+    for (const auto& [qualifiedName, targetNames] :
+         targetNamesByQualifiedName) {
+      for (const auto& targetName : targetNames) {
+        qualifiedNamesByTargetName_.insert({targetName, qualifiedName});
+      }
+    }
+  }
+};
+using CDTEventEntryMap = std::unordered_map<String, CDTEventEntry>;
+
+// <GENERATED CODE. DO NOT EDIT.>
+static const CDTEventEntryMap& getEventEntryMap() {
+  DEFINE_STATIC_LOCAL(CDTEventEntryMap, cdtToGeckoMap, 
+    ({
+      { String("setTimeout.callback"), {{{String("timer.timeout.fire"), {String("*")}}}} },
+      { String("click"), {{{String("event.mouse.click"), {String("*")}}}} }
+    })
+  );
+  return cdtToGeckoMap;
+}
+// </GENERATED CODE. DO NOT EDIT.>`;
+
+static String buildCdtEventName(
+    const String& eventName, 
+    bool isCallback) {
+  if (isCallback) {
+    StringBuilder builder;
+    builder.Append(eventName);
+    builder.Append(".callback");
+    return builder.ToString();
+  }
+  return eventName;
+}
+
+static const String& ReplayGetQualifiedEventName(const String& eventNameRaw,
+                                                 EventTarget* eventTarget,
+                                                 bool isCallback) {
+  DEFINE_STATIC_LOCAL(String, asterisk, ("*"));
+  DEFINE_STATIC_LOCAL(String, emptyString, (""));
+
+  const auto& eventMap = getEventEntryMap();
+  auto eventName = buildCdtEventName(eventNameRaw, isCallback);
+  auto resultEntry = eventMap.find(eventName);
+  if (resultEntry != eventMap.end()) {
+    // get EventTarget name
+    String targetName;
+    if (eventTarget) {
+      Node* node = eventTarget->ToNode();
+      targetName = node ? node->nodeName() : eventTarget->InterfaceName();
+    } else {
+      targetName = asterisk;
+    }
+
+    // look-up qualified name
+    const auto& nameMap = resultEntry->second.qualifiedNamesByTargetName_;
+    auto qualifiedName = nameMap.find(targetName);
+    if (qualifiedName == nameMap.end() && eventTarget) {
+      qualifiedName = nameMap.find(asterisk);
+    }
+    if (qualifiedName != nameMap.end()) {
+      return qualifiedName->second;
+    }
+  }
+  return emptyString;
+}
+
+void InspectorDOMDebuggerAgent::ReplayNotifyWill(const String& eventName, 
+EventTarget* eventTarget, bool isCallback) {
+  const String& qualifiedEventName = 
+      ReplayGetQualifiedEventName(eventName, eventTarget, isCallback);
+
+  if (!qualifiedEventName.empty()) {
+    recordreplay::OnEvent(qualifiedEventName.Ascii().c_str(), true);
+  }
+}
+
+void InspectorDOMDebuggerAgent::ReplayNotifyDid(const String& eventName,
+                                                       EventTarget* eventTarget,
+                                                       bool isCallback) {
+  const String& qualifiedEventName =
+      ReplayGetQualifiedEventName(eventName, eventTarget, isCallback);
+  if (!qualifiedEventName.empty()) {
+    recordreplay::OnEvent(qualifiedEventName.Ascii().c_str(), false);
+  }
 }
 
 }  // namespace blink

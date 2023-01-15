@@ -195,6 +195,14 @@ class CORE_EXPORT InspectorDOMDebuggerAgent final
   InspectorAgentState::BooleanMap xhr_breakpoints_;
   InspectorAgentState::BooleanMap event_listener_breakpoints_;
   InspectorAgentState::BooleanMap csp_violation_breakpoints_;
+
+  // [replay]
+  static void ReplayNotifyWill(const String& eventName,
+                               EventTarget* eventTarget = nullptr,
+                               bool isCallback = false);
+  static void ReplayNotifyDid(const String& eventName,
+                              EventTarget* eventTarget = nullptr,
+                              bool isCallback = false);
 };
 
 }  // namespace blink
