@@ -521,6 +521,23 @@ function Graphics_getDevicePixelRatio() {
 ///////////////////////////////////////////////////////////////////////////////
 
 /**
+ * NOTE: this is not a guarantee, since `toString()` can be overridden.
+ */
+function isProbablyNativeFunction(f) {
+  return isNativeFunctionDescription(f.toString());
+}
+
+function isNativeFunctionDescription(functionString) {
+  return functionString?.endsWith('() { [native code] }');
+}
+
+// TODO: fix this mess!
+function isPrototype(x) {
+  // this logic is very flawed
+  return x.constructor !== x.__proto__.constructor;
+}
+
+/**
  * Check whether given object `x` is instance of class of given `target.name`,
  * and also has a `native` constructor.
  * NOTE: ideal solution is `x instanceof global[name]`, but we cannot do that.
@@ -537,8 +554,10 @@ function isInstanceOfNative(x, target) {
   // hackfix: check if its native, and has `name` in inheritance chain
   const name = target?.name;
   return name &&
-    x?.constructor?.toString()?.includes('() { [native code] }') &&
+    x?.constructor?.toString &&
+    // avoid false positives for `prototypes` of native classes
     x.constructor === x.__proto__.constructor &&
+    isProbablyNativeFunction(x.constructor) &&
     hasInProtoChain(x.constructor, name);
 }
 
@@ -624,11 +643,15 @@ function clearPauseDataCallback() {
  * @return {CDP.Runtime.RemoteObject}
  * @see https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#type-RemoteObject
  */
-function makeDebuggeeValue(plainObject) {
-  assert(plainObject && !plainObject.objectId);
-  const remoteObject = fromJsMakeDebuggeeValue(plainObject);
-  assert(remoteObject?.objectId);
+function makeDebuggeeValue(plainValue) {
+  assert(!plainValue?.objectId);
+  const remoteObject = fromJsMakeDebuggeeValue(plainValue);
   return remoteObject;
+}
+
+function createRrpValueRaw(plainValue) {
+  const cdpObject = makeDebuggeeValue(plainValue);
+  return buildRrpObjectFromCdpObject(cdpObject);
 }
 
 /**
@@ -738,7 +761,7 @@ function registerRrpPreview(rrpObjectPreview, plainObject) {
     rrpId = gRrpIdByPlainObject.get(plainObject);
   }
 
-  // NOTE: there is no cdpObject because there is no `CDP.Runtime.RemoteObject`.
+  // NOTE: we built a custom "preview object" without a cdpObject, and sometimes without a plainObject
   const cdpObject = null;
   return registerNewRrpObject(rrpId, cdpObject, rrpObjectPreview, plainObject);
 }
@@ -828,20 +851,6 @@ function buildRrpObjectFromCdpObject(cdpObject) {
   }
 }
 
-// /**
-//  * NOTE: This is called `createProtocolValueRaw` in gecko
-//  */
-// function buildRrpObjectFromPlainValue(value) {
-//   let cdpObject;
-//   if (isNonNullObject(value)) {
-//     const rrpId = registerPlainObject(value);
-//     cdpObject = gCdpObjectsByRrpId.get(rrpId);
-//   }
-//   else {
-//     cdpObject = makeDebuggeeValue(value);
-//   }
-//   return buildRrpObjectFromCdpObject(cdpObject);
-// }
 
 /**
  * 
@@ -1033,22 +1042,26 @@ ProtocolObjectPreview.prototype = {
     this.properties.push(property);
   },
 
-  addGetterValue(name, cdpValue, ownerCdpObj, force = false) {
-    if (isObjectPropertyBlacklisted(ownerCdpObj, name)) {
+  addGetterValue(propKey, plainGetter, ownerCdpObject, force = false) {
+    const propName = propKey.toString();
+    if (isObjectPropertyBlacklisted(ownerCdpObject, propName)) {
       return;
     }
+    
     if (!this.getterValues) {
       this.getterValues = new Map();
     }
-    if (this.getterValues.has(name)) {
-      return;
-    }
-    if (!this.startAddItem(force)) {
+    if (this.getterValues.has(propKey)) {
       return;
     }
 
-    const value = buildRrpObjectFromCdpObject(cdpValue);
-    this.getterValues.set(name, { name, ...value });
+    const rrpValue = evalPropRrp(this.raw, propKey);
+    if (rrpValue) {
+      if (!this.startAddItem(force)) {
+        return;
+      }
+      this.getterValues.set(propName, { name: propName, ...rrpValue });
+    }
   },
 
 
@@ -1064,15 +1077,15 @@ ProtocolObjectPreview.prototype = {
 
   fill() {
     // NOTE: we could also use "Runtime.evaluate" with `{ generatePreview: true }`
-    const allProperties = sendMessage("Runtime.getProperties", {
+    // WARNING: this CDP call can cause `UpdateLayout` which calls divergences
+    const cdpProperties = sendMessage("Runtime.getProperties", {
       objectId: this.cdpObj.objectId,
       ownProperties: true,
       generatePreview: false,
     });
-    const properties = allProperties.result;
 
-    // Add data for DOM/CSS objects
-    this.extra = previewBlinkObject(this.cdpObj, allProperties) || {};
+    // Add data for blink objects
+    this.extra = previewBlinkObject(this.cdpObj) || {};
 
     // Add class-specific data.
     const previewer = CustomPreviewers[this.cdpObj.className];
@@ -1083,45 +1096,66 @@ ProtocolObjectPreview.prototype = {
           // NOTE: in chromium we add these to `properties`, but in gecko we add these to `getterValues`
           requiredProperties.push(entry);
         } else {
-          entry.call(this, allProperties);
+          entry.call(this, cdpProperties);
         }
       }
     }
 
-    let prototype;
-    for (const prop of properties) {
-      if (prop.name == "__proto__") {
-        prototype = prop;
-      } else {
-        const protocolProperty = createProtocolPropertyDescriptor(prop);
-        const force = requiredProperties.includes(prop.name);
-        this.addProperty(protocolProperty, force);
-      }
-    }
 
-    let prototypeRrpId;
-    let getterValues;
-    if (prototype?.value?.objectId) {
-      prototypeRrpId = registerCdpObject(prototype.value);
-      const protoProps = sendMessage("Runtime.getProperties", {
-        objectId: prototype.value.objectId,
-        ownProperties: false
-      });
-      for (const prop of protoProps.result) {
-        if (prop.name === "__proto__") {
+    // add properties + getterValues (based on what we did in gecko).
+    const recurse = this.level === "noProperties";
+    const addedProps = new Set();
+    let proto = this.raw;
+    do {
+      const propKeys = [...Object.getOwnPropertyNames(proto), ...Object.getOwnPropertySymbols(proto)];
+      // hackfix: only allow a few native getters to be executed for now, since 
+      //      many of them cause "Progress counter mismatch at checkpoint"
+      const allowedGetters = new Set(['type', 'fromElement', 'target']);
+      for (const propKey of propKeys) {
+        if (propKey === "__proto__" || addedProps.has(propKey)) {
           continue;
         }
-        if (prop.value) {
-          // this.addGetterValue(prop.name, prop.value, this.cdpObj);
+        addedProps.add(propKey);
+        const prop = Object.getOwnPropertyDescriptor(this.raw, propKey);
+        if (!prop) {
+          continue;
         }
-        else if (prop.get) {
-          // TODO: call getter without side-effects? - https://linear.app/replay/issue/RUN-1016
-        }
-      }
 
-      if (this.getterValues) {
-        getterValues = [...this.getterValues.values()];
+        const isNativeGetter = prop.get && isProbablyNativeFunction(prop.get);
+        const allowedGetter = allowedGetters.has(propKey);
+
+        if (
+          isNativeGetter &&
+          allowedGetter
+        ) {
+          // get native getters
+          this.addGetterValue(propKey, prop.get, this.cdpObj);
+        }
+        else if (
+          // only add props of the first level
+          proto === this.raw ||
+          isNativeGetter // also allow native getters to show up
+        ) { 
+          const protocolProperty = createRrpPropertyDescriptor(this.raw, propKey, prop);
+          const force = requiredProperties.includes(prop.name);
+          this.addProperty(protocolProperty, force);
+        }
       }
+      if (!recurse) {
+        break;
+      }
+      proto = Object.getPrototypeOf(proto);
+    }
+    while (proto && proto.constructor !== Object); // ignore Object
+
+    let prototypeCdp = getInternalProp(cdpProperties, '[[Prototype]]')?.value;
+    let prototypeRrpId;
+    let getterValues;
+    if (prototypeCdp) {
+      prototypeRrpId = registerCdpObject(prototypeCdp);
+    }
+    if (this.getterValues) {
+      getterValues = [...this.getterValues.values()];
     }
 
     return {
@@ -1143,7 +1177,7 @@ function getDescriptionCount(description) {
   }
 }
 
-function previewBlinkObject(cdpObject, allProperties) {
+function previewBlinkObject(cdpObject, cdpProperties) {
   const cdpId = cdpObject.objectId;
   const rrpId = gRrpIdByCdpId.get(cdpId);
   assert(rrpId);
@@ -1278,12 +1312,12 @@ function previewTypedArray() {
   }
 }
 
-function previewSetMap(allProperties) {
-  if (!allProperties.internalProperties) {
+function previewSetMap(cdpProperties) {
+  if (!cdpProperties.internalProperties) {
     return;
   }
 
-  const internal = allProperties.internalProperties.find(prop => prop.name == "[[Entries]]");
+  const internal = cdpProperties.internalProperties.find(prop => prop.name == "[[Entries]]");
   if (!internal || !internal.value || !internal.value.objectId) {
     return;
   }
@@ -1346,15 +1380,23 @@ const ErrorProperties = [
   previewError,
 ];
 
-function previewFunction(allProperties) {
-  const nameProperty = allProperties.result.find(prop => prop.name == "name");
+function getInternalProp(cdpProperties, name) {
+  return cdpProperties.internalProperties?.find(
+    prop => prop.name == name
+  );
+}
+
+function getInternalFunctionLocationProp(cdpProperties) {
+  return getInternalProp(cdpProperties, '[[FunctionLocation]]');
+}
+
+function previewFunction(cdpProperties) {
+  const nameProperty = cdpProperties.result.find(prop => prop.name == "name");
   if (nameProperty) {
     this.extra.functionName = nameProperty.value.value;
   }
 
-  const locationProperty = allProperties.internalProperties.find(
-    prop => prop.name == "[[FunctionLocation]]"
-  );
+  const locationProperty = getInternalFunctionLocationProp(cdpProperties);
   if (locationProperty) {
     this.extra.functionLocation = createProtocolLocation(locationProperty.value.value);
   }
@@ -1391,11 +1433,28 @@ const CustomPreviewers = {
   Function: [previewFunction],
 };
 
-function createProtocolPropertyDescriptor(desc) {
-  const { name, value, writable, get, set, configurable, enumerable, symbol } = desc;
+/**
+ * Get given prop from given object and get its value.
+ * Return RRP wrapper.
+ */
+function evalPropRrp(owner, propKey) {
+  try {
+    Verbose && log(`DDBG running evalProp for prop "${propKey.toString()}"...`);
+    const plainValue = owner[propKey];
+    Verbose && log(`DDBG ran evalProp on ${propKey.toString()}`);
+    return createRrpValueRaw(plainValue);
+  }
+  catch (err) {
+    log(`[RuntimeError] prop evaluation exception - calling ${propKey.toString()} on object: ${err.stack}`);
+    return null;
+  }
+}
 
-  const rv = value ? buildRrpObjectFromCdpObject(value) : {};
-  rv.name = name;
+function createRrpPropertyDescriptor(owner, propKey, desc) {
+  const { value, writable, get, set, configurable, enumerable } = desc;
+
+  let rv = value && evalPropRrp(owner, propKey) || {};
+  rv.name = propKey.toString();
 
   let flags = 0;
   if (writable) {
@@ -1418,9 +1477,7 @@ function createProtocolPropertyDescriptor(desc) {
     rv.set = registerCdpObject(set);
   }
 
-  if (symbol) {
-    rv.isSymbol = true;
-  }
+  rv.isSymbol = typeof propKey === 'symbol';
 
   return rv;
 }
@@ -3228,8 +3285,8 @@ static void fromJsMakeDebuggeeValue(
     const v8::FunctionCallbackInfo<v8::Value>& args) {
   v8::Isolate* isolate = args.GetIsolate();
 
-  CHECK(args.Length() == 1 && args[0]->IsObject() &&
-        "must be called with a single object");
+  CHECK(args.Length() == 1 &&
+        "must be called with a single value");
 
   auto context = isolate->GetCurrentContext();
   auto value = args[0];
