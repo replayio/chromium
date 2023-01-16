@@ -926,8 +926,12 @@ void InspectorDOMDebuggerAgent::OnContentSecurityPolicyViolation(
 // [replay] lookup qualified event names
 //   -> https://linear.app/replay/issue/RUN-1061/chromium-render-eventslist
 
-// C++ grammar example: https://replit.com/@Domiii/nested-static-initializers#main.cpp
-
+/**
+ * CDTEventEntry takes all kinds of static-initialized data, and convert it into a
+ * simple map<String, String>.
+ * C++ playground for nested static initializers:
+ *   -> https://replit.com/@Domiii/nested-static-initializers#main.cpp
+ */
 struct CDTEventEntry {
   std::unordered_map<String, String> qualifiedNamesByTargetName_;
 
@@ -941,19 +945,163 @@ struct CDTEventEntry {
     }
   }
 };
+
 using CDTEventEntryMap = std::unordered_map<String, CDTEventEntry>;
 
+
 // <GENERATED CODE. DO NOT EDIT.>
+// NOTE: This code is generated via `ts-node scripts/gen-event-names.ts`
 static const CDTEventEntryMap& getEventEntryMap() {
   DEFINE_STATIC_LOCAL(CDTEventEntryMap, cdtToGeckoMap, 
     ({
+      { String("requestAnimationFrame"), {{{String("animationframe.request"), {String("*")}}}} },
+      { String("cancelAnimationFrame"), {{{String("animationframe.cancel"), {String("*")}}}} },
+      { String("requestAnimationFrame.callback"), {{{String("animationframe.fire"), {String("*")}}}} },
+      { String("setTimeout"), {{{String("timer.timeout.set"), {String("*")}}}} },
+      { String("clearTimeout"), {{{String("timer.timeout.clear"), {String("*")}}}} },
+      { String("setInterval"), {{{String("timer.interval.set"), {String("*")}}}} },
+      { String("clearInterval"), {{{String("timer.interval.clear"), {String("*")}}}} },
       { String("setTimeout.callback"), {{{String("timer.timeout.fire"), {String("*")}}}} },
-      { String("click"), {{{String("event.mouse.click"), {String("*")}}}} }
+      { String("setInterval.callback"), {{{String("timer.interval.fire"), {String("*")}}}} },
+      { String("play"), {{{String("event.media.play"), {String("audio")}}}} },
+      { String("play"), {{{String("event.media.play"), {String("video")}}}} },
+      { String("pause"), {{{String("event.media.pause"), {String("audio")}}}} },
+      { String("pause"), {{{String("event.media.pause"), {String("video")}}}} },
+      { String("playing"), {{{String("event.media.playing"), {String("audio")}}}} },
+      { String("playing"), {{{String("event.media.playing"), {String("video")}}}} },
+      { String("canplay"), {{{String("event.media.canplay"), {String("audio")}}}} },
+      { String("canplay"), {{{String("event.media.canplay"), {String("video")}}}} },
+      { String("canplaythrough"), {{{String("event.media.canplaythrough"), {String("audio")}}}} },
+      { String("canplaythrough"), {{{String("event.media.canplaythrough"), {String("video")}}}} },
+      { String("seeking"), {{{String("event.media.seeking"), {String("audio")}}}} },
+      { String("seeking"), {{{String("event.media.seeking"), {String("video")}}}} },
+      { String("seeked"), {{{String("event.media.seeked"), {String("audio")}}}} },
+      { String("seeked"), {{{String("event.media.seeked"), {String("video")}}}} },
+      { String("timeupdate"), {{{String("event.media.timeupdate"), {String("audio")}}}} },
+      { String("timeupdate"), {{{String("event.media.timeupdate"), {String("video")}}}} },
+      { String("ended"), {{{String("event.media.ended"), {String("audio")}}}} },
+      { String("ended"), {{{String("event.media.ended"), {String("video")}}}} },
+      { String("ratechange"), {{{String("event.media.ratechange"), {String("audio")}}}} },
+      { String("ratechange"), {{{String("event.media.ratechange"), {String("video")}}}} },
+      { String("durationchange"), {{{String("event.media.durationchange"), {String("audio")}}}} },
+      { String("durationchange"), {{{String("event.media.durationchange"), {String("video")}}}} },
+      { String("volumechange"), {{{String("event.media.volumechange"), {String("audio")}}}} },
+      { String("volumechange"), {{{String("event.media.volumechange"), {String("video")}}}} },
+      { String("loadstart"), {{{String("event.media.loadstart"), {String("audio")}}}} },
+      { String("loadstart"), {{{String("event.media.loadstart"), {String("video")}}}} },
+      { String("progress"), {{{String("event.media.progress"), {String("audio")}}}} },
+      { String("progress"), {{{String("event.media.progress"), {String("video")}}}} },
+      { String("suspend"), {{{String("event.media.suspend"), {String("audio")}}}} },
+      { String("suspend"), {{{String("event.media.suspend"), {String("video")}}}} },
+      { String("abort"), {{{String("event.media.abort"), {String("audio")}}}} },
+      { String("abort"), {{{String("event.media.abort"), {String("video")}}}} },
+      { String("error"), {{{String("event.media.error"), {String("audio")}}}} },
+      { String("error"), {{{String("event.media.error"), {String("video")}}}} },
+      { String("emptied"), {{{String("event.media.emptied"), {String("audio")}}}} },
+      { String("emptied"), {{{String("event.media.emptied"), {String("video")}}}} },
+      { String("stalled"), {{{String("event.media.stalled"), {String("audio")}}}} },
+      { String("stalled"), {{{String("event.media.stalled"), {String("video")}}}} },
+      { String("loadedmetadata"), {{{String("event.media.loadedmetadata"), {String("audio")}}}} },
+      { String("loadedmetadata"), {{{String("event.media.loadedmetadata"), {String("video")}}}} },
+      { String("loadeddata"), {{{String("event.media.loadeddata"), {String("audio")}}}} },
+      { String("loadeddata"), {{{String("event.media.loadeddata"), {String("video")}}}} },
+      { String("waiting"), {{{String("event.media.waiting"), {String("audio")}}}} },
+      { String("waiting"), {{{String("event.media.waiting"), {String("video")}}}} },
+      { String("copy"), {{{String("event.clipboard.copy"), {String("*")}}}} },
+      { String("cut"), {{{String("event.clipboard.cut"), {String("*")}}}} },
+      { String("paste"), {{{String("event.clipboard.paste"), {String("*")}}}} },
+      { String("beforecopy"), {{{String("event.clipboard.beforecopy"), {String("*")}}}} },
+      { String("beforecut"), {{{String("event.clipboard.beforecut"), {String("*")}}}} },
+      { String("beforepaste"), {{{String("event.clipboard.beforepaste"), {String("*")}}}} },
+      { String("resize"), {{{String("event.control.resize"), {String("*")}}}} },
+      { String("scroll"), {{{String("event.control.scroll"), {String("*")}}}} },
+      { String("zoom"), {{{String("event.control.zoom"), {String("*")}}}} },
+      { String("focus"), {{{String("event.control.focus"), {String("*")}}}} },
+      { String("blur"), {{{String("event.control.blur"), {String("*")}}}} },
+      { String("select"), {{{String("event.control.select"), {String("*")}}}} },
+      { String("change"), {{{String("event.control.change"), {String("*")}}}} },
+      { String("submit"), {{{String("event.control.submit"), {String("*")}}}} },
+      { String("reset"), {{{String("event.control.reset"), {String("*")}}}} },
+      { String("deviceorientation"), {{{String("event.device.deviceorientation"), {String("*")}}}} },
+      { String("devicemotion"), {{{String("event.device.devicemotio"), {String("*")}}}} },
+      { String("DOMActivate"), {{{String("event.dom-mutation.DOMActivate"), {String("*")}}}} },
+      { String("DOMFocusIn"), {{{String("event.dom-mutation.DOMFocusIn"), {String("*")}}}} },
+      { String("DOMFocusOut"), {{{String("event.dom-mutation.DOMFocusOut"), {String("*")}}}} },
+      { String("DOMAttrModified"), {{{String("event.dom-mutation.DOMAttrModified"), {String("*")}}}} },
+      { String("DOMCharacterDataModified"), {{{String("event.dom-mutation.DOMCharacterDataModified"), {String("*")}}}} },
+      { String("DOMNodeInserted"), {{{String("event.dom-mutation.DOMNodeInserted"), {String("*")}}}} },
+      { String("DOMNodeInsertedIntoDocument"), {{{String("event.dom-mutation.DOMNodeInsertedIntoDocument"), {String("*")}}}} },
+      { String("DOMNodeRemoved"), {{{String("event.dom-mutation.DOMNodeRemoved"), {String("*")}}}} },
+      { String("DOMNodeRemovedFromDocument"), {{{String("event.dom-mutation.DOMNodeRemovedIntoDocument"), {String("*")}}}} },
+      { String("DOMSubtreeModified"), {{{String("event.dom-mutation.DOMSubtreeModified"), {String("*")}}}} },
+      { String("DOMContentLoaded"), {{{String("event.dom-mutation.DOMContentLoaded"), {String("*")}}}} },
+      { String("drag"), {{{String("event.drag-and-drop.drag"), {String("*")}}}} },
+      { String("dragstart"), {{{String("event.drag-and-drop.dragstart"), {String("*")}}}} },
+      { String("dragend"), {{{String("event.drag-and-drop.dragend"), {String("*")}}}} },
+      { String("dragenter"), {{{String("event.drag-and-drop.dragenter"), {String("*")}}}} },
+      { String("dragover"), {{{String("event.drag-and-drop.dragover"), {String("*")}}}} },
+      { String("dragleave"), {{{String("event.drag-and-drop.dragleave"), {String("*")}}}} },
+      { String("drop"), {{{String("event.drag-and-drop.drop"), {String("*")}}}} },
+      { String("keydown"), {{{String("event.keyboard.keydown"), {String("*")}}}} },
+      { String("keyup"), {{{String("event.keyboard.keyup"), {String("*")}}}} },
+      { String("keypress"), {{{String("event.keyboard.keypress"), {String("*")}}}} },
+      { String("input"), {{{String("event.keyboard.input"), {String("*")}}}} },
+      { String("load"), {{{String("event.load.load"), {String("*")}}}} },
+      { String("abort"), {{{String("event.load.abort"), {String("*")}}}} },
+      { String("error"), {{{String("event.load.error"), {String("*")}}}} },
+      { String("hashchange"), {{{String("event.load.hashchange"), {String("*")}}}} },
+      { String("popstate"), {{{String("event.load.popstate"), {String("*")}}}} },
+      { String("auxclick"), {{{String("event.mouse.auxclick"), {String("*")}}}} },
+      { String("click"), {{{String("event.mouse.click"), {String("*")}}}} },
+      { String("dblclick"), {{{String("event.mouse.dblclick"), {String("*")}}}} },
+      { String("mousedown"), {{{String("event.mouse.mousedown"), {String("*")}}}} },
+      { String("mouseup"), {{{String("event.mouse.mouseup"), {String("*")}}}} },
+      { String("mouseover"), {{{String("event.mouse.mouseover"), {String("*")}}}} },
+      { String("mousemove"), {{{String("event.mouse.mousemove"), {String("*")}}}} },
+      { String("mouseout"), {{{String("event.mouse.mouseout"), {String("*")}}}} },
+      { String("mouseenter"), {{{String("event.mouse.mouseenter"), {String("*")}}}} },
+      { String("mouseleave"), {{{String("event.mouse.mouseleave"), {String("*")}}}} },
+      { String("mousewheel"), {{{String("event.mouse.mousewheel"), {String("*")}}}} },
+      { String("wheel"), {{{String("event.mouse.wheel"), {String("*")}}}} },
+      { String("contextmenu"), {{{String("event.mouse.contextmenu"), {String("*")}}}} },
+      { String("pointerover"), {{{String("event.pointer.pointerover"), {String("*")}}}} },
+      { String("pointerout"), {{{String("event.pointer.pointerout"), {String("*")}}}} },
+      { String("pointerenter"), {{{String("event.pointer.pointerenter"), {String("*")}}}} },
+      { String("pointerleave"), {{{String("event.pointer.pointerleave"), {String("*")}}}} },
+      { String("pointerdown"), {{{String("event.pointer.pointerdown"), {String("*")}}}} },
+      { String("pointerup"), {{{String("event.pointer.pointerup"), {String("*")}}}} },
+      { String("pointermove"), {{{String("event.pointer.pointermove"), {String("*")}}}} },
+      { String("pointercancel"), {{{String("event.pointer.pointercancel"), {String("*")}}}} },
+      { String("gotpointercapture"), {{{String("event.pointer.gotpointercapture"), {String("*")}}}} },
+      { String("lostpointercapture"), {{{String("event.pointer.lostpointercapture"), {String("*")}}}} },
+      { String("touchstart"), {{{String("event.touch.touchstart"), {String("*")}}}} },
+      { String("touchmove"), {{{String("event.touch.touchmove"), {String("*")}}}} },
+      { String("touchend"), {{{String("event.touch.touchend"), {String("*")}}}} },
+      { String("touchcancel"), {{{String("event.touch.touchcancel"), {String("*")}}}} },
+      { String("message"), {{{String("event.message"), {String("*")}}}} },
+      { String("messageerror"), {{{String("event.messageerror"), {String("*")}}}} },
+      { String("readystatechange"), {{{String("event.xhr.readystatechange"), {String("xmlhttprequest")}}}} },
+      { String("readystatechange"), {{{String("event.xhr.readystatechange"), {String("xmlhttprequestupload")}}}} },
+      { String("load"), {{{String("event.xhr.load"), {String("xmlhttprequest")}}}} },
+      { String("load"), {{{String("event.xhr.load"), {String("xmlhttprequestupload")}}}} },
+      { String("loadstart"), {{{String("event.xhr.loadstart"), {String("xmlhttprequest")}}}} },
+      { String("loadstart"), {{{String("event.xhr.loadstart"), {String("xmlhttprequestupload")}}}} },
+      { String("loadend"), {{{String("event.xhr.loadend"), {String("xmlhttprequest")}}}} },
+      { String("loadend"), {{{String("event.xhr.loadend"), {String("xmlhttprequestupload")}}}} },
+      { String("abort"), {{{String("event.xhr.abort"), {String("xmlhttprequest")}}}} },
+      { String("abort"), {{{String("event.xhr.abort"), {String("xmlhttprequestupload")}}}} },
+      { String("error"), {{{String("event.xhr.error"), {String("xmlhttprequest")}}}} },
+      { String("error"), {{{String("event.xhr.error"), {String("xmlhttprequestupload")}}}} },
+      { String("progress"), {{{String("event.xhr.progress"), {String("xmlhttprequest")}}}} },
+      { String("progress"), {{{String("event.xhr.progress"), {String("xmlhttprequestupload")}}}} },
+      { String("timeout"), {{{String("event.xhr.timeout"), {String("xmlhttprequest")}}}} },
+      { String("timeout"), {{{String("event.xhr.timeout"), {String("xmlhttprequestupload")}}}} }
     })
   );
   return cdtToGeckoMap;
 }
-// </GENERATED CODE. DO NOT EDIT.>`;
+// </GENERATED CODE. DO NOT EDIT.>
+
 
 static String buildCdtEventName(
     const String& eventName, 
