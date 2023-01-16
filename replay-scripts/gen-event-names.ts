@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { STANDARD_EVENT_CATEGORIES as geckoEvents } from '/home/domi/replay/devtools/packages/replay-next/src/constants';
+import path from 'path';
 import _ from 'lodash';
 import levenshtein from 'js-levenshtein';
 import { EventHandlerType } from "@replayio/protocol";
@@ -196,226 +196,240 @@ function translateCDTToGeckoCategory(category: string) {
  * go!
  * ##########################################################################*/
 
-console.group(`\n=== Parsing and checking CDT events`);
+(async () => {
+  if (!process.env.REPLAY_DIR) {
+    throw new Error(`REPLAY_DIR env variable (parent path of devtools) not found`);
+  }
+  const devtoolsDir = path.resolve(process.env.REPLAY_DIR as string, 'devtools');
+  const eventsSrc = path.resolve(
+    devtoolsDir,
+    'packages/replay-next/src/constants.ts'
+  );
+  if (!fs.existsSync(eventsSrc)) {
+    throw new Error(`devtools source file for events not found:\n  ${eventsSrc}`);
+  }
+  const { 
+    STANDARD_EVENT_CATEGORIES: geckoEvents
+  }: { STANDARD_EVENT_CATEGORIES: EventCategory[] } = await import(eventsSrc);
+  console.group(`\n=== Parsing and checking CDT events`);
 
-const res = cdtEventsSrc.matchAll(
-  /i18nString\(UIStrings\.(.+?)\),\s*?(\[[^\]]*\])(?:,\s*?(\[[^\]]*\]))?.*?/gm
-);
+  const res = cdtEventsSrc.matchAll(
+    /i18nString\(UIStrings\.(.+?)\),\s*?(\[[^\]]*\])(?:,\s*?(\[[^\]]*\]))?.*?/gm
+  );
 
-const cdtCategoriesRaw = [...res];
+  const cdtCategoriesRaw = [...res];
 
 
-// check if we (probably/hopefully) parsed CDT src correctly
-const srcCategoryCount = getInputSrcCategoryCount(cdtEventsSrc);
-const cdtCategoryCount = getInputSrcCategoryCount(cdtCategoriesRaw.join('\n'));
+  // check if we (probably/hopefully) parsed CDT src correctly
+  const srcCategoryCount = getInputSrcCategoryCount(cdtEventsSrc);
+  const cdtCategoryCount = getInputSrcCategoryCount(cdtCategoriesRaw.join('\n'));
 
-const good = srcCategoryCount > 0 && srcCategoryCount === cdtCategoryCount;
-console.log(`Found ${good ? srcCategoryCount : `${cdtCategoryCount}/${srcCategoryCount}`} CDT source categories (w/ duplicates) ${good ? '✅' : '❌'}`);
-assert(good);
+  const good = srcCategoryCount > 0 && srcCategoryCount === cdtCategoryCount;
+  console.log(`Found ${good ? srcCategoryCount : `${cdtCategoryCount}/${srcCategoryCount}`} CDT source categories (w/ duplicates) ${good ? '✅' : '❌'}`);
+  assert(good);
 
-let cdtEvents = cdtCategoriesRaw.map(cat => {
-  const category = cat[1];
-  const events = eval(cat[2]);
-  const eventTargets = (cat[3] && eval(cat[3]) || ['*']) as string[];
-  return {
-    // attempt basic normalization
-    category: translateCDTToGeckoCategory(category),
-    events: events.map((x: string): EventDefinition => ({
-        type: x,
-        label: x,
-        eventTargets
-      })
-    ) as EventDefinition[],
-    eventTargets
-  };
-});
-
-// merge all event sets of the same name
-const cdtEventsByCategory = _.groupBy(cdtEvents, e => e.category);
-cdtEvents = Object.values(cdtEventsByCategory)
-  .map(group => {
-    if (group.length > 1) {
-      console.log(`de-duplicating category: ${group[0].category}`);
-      group.forEach((g, i) => g.category = g.category + i)
-    }
-    return group[0];
+  let cdtEvents = cdtCategoriesRaw.map(cat => {
+    const category = cat[1];
+    const events = eval(cat[2]);
+    const eventTargets = (cat[3] && eval(cat[3]) || ['*']) as string[];
+    return {
+      // attempt basic normalization
+      category: translateCDTToGeckoCategory(category),
+      events: events.map((x: string): EventDefinition => ({
+          type: x,
+          label: x,
+          eventTargets
+        })
+      ) as EventDefinition[],
+      eventTargets
+    };
   });
 
-console.log('Done.');
-console.groupEnd();
+  // merge all event sets of the same name
+  const cdtEventsByCategory = _.groupBy(cdtEvents, e => e.category);
+  cdtEvents = Object.values(cdtEventsByCategory)
+    .map(group => {
+      if (group.length > 1) {
+        console.log(`de-duplicating category: ${group[0].category}`);
+        group.forEach((g, i) => g.category = g.category + i)
+      }
+      return group[0];
+    });
+
+  console.log('Done.');
+  console.groupEnd();
 
 
 
-/** ###########################################################################
- * compare gecko vs. CDT categories
- * ##########################################################################*/
+  /** ###########################################################################
+   * compare gecko vs. CDT categories
+   * ##########################################################################*/
 
-console.group(`\n=== Comparing CDT and gecko categories:`);
+  console.group(`\n=== Comparing CDT and gecko categories:`);
 
-console.table({
-  CDT: {
-    categories: cdtEvents.length,
-    events: cdtEvents.flatMap(e => e.events).length
-  },
-  gecko: {
-    categories: geckoEvents.length,
-    events: geckoEvents.flatMap(e => e.events).length
-  }
-});
+  console.table({
+    CDT: {
+      categories: cdtEvents.length,
+      events: cdtEvents.flatMap(e => e.events).length
+    },
+    gecko: {
+      categories: geckoEvents.length,
+      events: geckoEvents.flatMap(e => e.events).length
+    }
+  });
 
-// compare CDT <-> gecko categories
-const categoriesNotInGecko: EventCategory[] = _.differenceBy(cdtEvents, geckoEvents, 'category');
-const categoriesNotInCDT = _.differenceBy(geckoEvents, cdtEvents, 'category');
-
-
-console.log(`Found ${categoriesNotInGecko.length} Categories in CDT but not in gecko:\n `,
-  categoriesNotInGecko.map(cat => `${cat.category} (${cat.events.length})`).join('\n  '));
-
-console.log(`\nFound ${categoriesNotInCDT.length} Categories in gecko but not in CDT:\n `,
-  categoriesNotInCDT.map(cat => `${cat.category} (${cat.events.length})`).join('\n  '));
-
-const geckoEventsByCategory = Object.fromEntries(
-  geckoEvents.map(category => ([category.category, category]))
-);
-
-console.groupEnd();
+  // compare CDT <-> gecko categories
+  const categoriesNotInGecko: EventCategory[] = _.differenceBy(cdtEvents, geckoEvents, 'category');
+  const categoriesNotInCDT = _.differenceBy(geckoEvents, cdtEvents, 'category');
 
 
-/** ###########################################################################
- * match CDT against gecko events
- * ##########################################################################*/
+  console.log(`Found ${categoriesNotInGecko.length} Categories in CDT but not in gecko:\n `,
+    categoriesNotInGecko.map(cat => `${cat.category} (${cat.events.length})`).join('\n  '));
 
-console.group(`\n=== Matching...`);
+  console.log(`\nFound ${categoriesNotInCDT.length} Categories in gecko but not in CDT:\n `,
+    categoriesNotInCDT.map(cat => `${cat.category} (${cat.events.length})`).join('\n  '));
 
-let badMatches = new Set();
-let matchesNeedingManualVerification: [string, string][] = [];
-const cdtEventByGeckoType: { [key: string]: EventDefinition } = {};
-for (const cdtCategory of cdtEvents) {
-  const geckoCategory = geckoEventsByCategory[cdtCategory.category];
-  if (!geckoCategory) {
-    // cannot currently support this category
-    continue;
-  }
-  const cdtCategoryName = cdtCategory.category.toLowerCase();
-  for (const cdtEvent of cdtCategory.events) {
-    const { type: cdtType } = cdtEvent;
-    let geckoType: string | undefined;
-    if (ignoredCdtEventsByCategory[cdtCategoryName]?.has(cdtType)) {
+  const geckoEventsByCategory = Object.fromEntries(
+    geckoEvents.map(category => ([category.category, category]))
+  );
+
+  console.groupEnd();
+
+
+  /** ###########################################################################
+   * match CDT against gecko events
+   * ##########################################################################*/
+
+  console.group(`\n=== Matching...`);
+
+  let badMatches = new Set();
+  let matchesNeedingManualVerification: [string, string][] = [];
+  const cdtEventByGeckoType: { [key: string]: EventDefinition } = {};
+  for (const cdtCategory of cdtEvents) {
+    const geckoCategory = geckoEventsByCategory[cdtCategory.category];
+    if (!geckoCategory) {
+      // cannot currently support this category
       continue;
     }
-    const geckoLabelOverride = manualCdtToGeckoLabelOverrides[cdtType];
-    if (geckoLabelOverride) {
-      geckoType = geckoCategory.events.find(e => e.label === geckoLabelOverride)?.type;
-      if (!geckoType) {
-        // something went wrong
-        console.error(`BAD MATCH: manualCdtToGeckoLabelOverrides had unmatched geckoLabel="${geckoLabelOverride}" for cdtType="${cdtType}"`);
-        badMatches.add(`<missing geckoType for geckoLabelOverride=${geckoLabelOverride}>`);
+    const cdtCategoryName = cdtCategory.category.toLowerCase();
+    for (const cdtEvent of cdtCategory.events) {
+      const { type: cdtType } = cdtEvent;
+      let geckoType: string | undefined;
+      if (ignoredCdtEventsByCategory[cdtCategoryName]?.has(cdtType)) {
         continue;
       }
-    }
-    let closest: typeof geckoCategory.events[0] | null = null;
-    if (!geckoType) {
-      // for each CDT type in category (if it has no manual override):
-      //     find the best matching gecko type in the same category
-      // NOTE: we match against the gecko label, because it is generally a lot closer than the type
-      // console.group(`distance matching`);
-      closest = _.minBy(geckoCategory.events, geckoEvent => {
-        const dist = levenshtein(geckoEvent.label, cdtType);
-        // console.log(`${[geckoEvent.label, cdtType]}: ${dist}`);
-        return dist;
-      })!;
-      // console.groupEnd();
-      geckoType = closest.type;
-    }
-    if (cdtEventByGeckoType[geckoType]) {
-      if (!manualCdtToGeckoLabelOverrides[cdtEventByGeckoType[geckoType].type]) {
-        // bad: the same gecko event matched with more than one CDT event
-        //      and the previously existing match is not a manual override.
-        badMatches.add(geckoType);
-        if (cdtEventByGeckoType[geckoType].label !== closest?.label) {
-          console.error(`BAD MATCH in "${cdtCategoryName}": gecko type "${geckoType}" (${closest?.label}) fuzzy-matched CDT types "${cdtEventByGeckoType[geckoType].type}" and "${cdtType}"`);
-          delete cdtEventByGeckoType[geckoType];
-        }
-        else {
-          console.error(`BAD MATCH in "${cdtCategoryName}": CDT type "${cdtType}" had invalid match w/ gecko type "${geckoType}" (already matched CDT type "${cdtEventByGeckoType[geckoType].type}")`);
+      const geckoLabelOverride = manualCdtToGeckoLabelOverrides[cdtType];
+      if (geckoLabelOverride) {
+        geckoType = geckoCategory.events.find(e => e.label === geckoLabelOverride)?.type;
+        if (!geckoType) {
+          // something went wrong
+          console.error(`BAD MATCH: manualCdtToGeckoLabelOverrides had unmatched geckoLabel="${geckoLabelOverride}" for cdtType="${cdtType}"`);
+          badMatches.add(`<missing geckoType for geckoLabelOverride=${geckoLabelOverride}>`);
+          continue;
         }
       }
-    }
-    else {
-      cdtEventByGeckoType[geckoType] = cdtEvent;
-      if (closest && cdtType !== closest?.label) {
-        matchesNeedingManualVerification.push([cdtType, geckoType]);
+      let closest: typeof geckoCategory.events[0] | null = null;
+      if (!geckoType) {
+        // for each CDT type in category (if it has no manual override):
+        //     find the best matching gecko type in the same category
+        // NOTE: we match against the gecko label, because it is generally a lot closer than the type
+        // console.group(`distance matching`);
+        closest = _.minBy(geckoCategory.events, geckoEvent => {
+          const dist = levenshtein(geckoEvent.label, cdtType);
+          // console.log(`${[geckoEvent.label, cdtType]}: ${dist}`);
+          return dist;
+        })!;
+        // console.groupEnd();
+        geckoType = closest.type;
+      }
+      if (cdtEventByGeckoType[geckoType]) {
+        if (!manualCdtToGeckoLabelOverrides[cdtEventByGeckoType[geckoType].type]) {
+          // bad: the same gecko event matched with more than one CDT event
+          //      and the previously existing match is not a manual override.
+          badMatches.add(geckoType);
+          if (cdtEventByGeckoType[geckoType].label !== closest?.label) {
+            console.error(`BAD MATCH in "${cdtCategoryName}": gecko type "${geckoType}" (${closest?.label}) fuzzy-matched CDT types "${cdtEventByGeckoType[geckoType].type}" and "${cdtType}"`);
+            delete cdtEventByGeckoType[geckoType];
+          }
+          else {
+            console.error(`BAD MATCH in "${cdtCategoryName}": CDT type "${cdtType}" had invalid match w/ gecko type "${geckoType}" (already matched CDT type "${cdtEventByGeckoType[geckoType].type}")`);
+          }
+        }
+      }
+      else {
+        cdtEventByGeckoType[geckoType] = cdtEvent;
+        if (closest && cdtType !== closest?.label) {
+          matchesNeedingManualVerification.push([cdtType, geckoType]);
+        }
       }
     }
   }
-}
-console.log('Done.\n');
-console.groupEnd();
+  console.log('Done.\n');
+  console.groupEnd();
 
-// get all unmatched events
-const matchedGeckoTypes = Object.keys(cdtEventByGeckoType);
-const missingGeckoTypes = _.difference(
-  geckoEvents.flatMap(e => e.events.map(ee => ee.type)),
-  matchedGeckoTypes
-);
-
-console.group(`=== Found ${missingGeckoTypes.length} unmatched gecko events:`)
-console.log(`${missingGeckoTypes.join('\n')}\n`);
-console.groupEnd();
-
-
-// non-exact matches need manual verification
-matchesNeedingManualVerification = matchesNeedingManualVerification.filter(
-  (c, g) => !badMatches.has(g));
-console.group(`=== Found ${matchesNeedingManualVerification.length} matches needing manual verification:`);
-console.log(`${matchesNeedingManualVerification
-    .map(([gt, ct]) => `${ct} => ${gt}`)
-    .join('\n')
-  }`);
-console.groupEnd();
-
-if (badMatches.size) {
-  // we had bad (duplicate) matches
-  console.error(`\n\nConvert script FAILED due to ${badMatches.size} bad matches.\n  => Fix up manualCdtToGeckoEventOverrides and try again.`);
-  process.exit(-1);
-}
-
-
-// finish it!
-//  TODO: maybe use xclip
-const code = genCpp();
-const codeFile = __dirname + "/event-names-code.gen.cc";
-fs.writeFileSync(codeFile, code);
-console.log(`\n=== Generated code has been written to:\n  ${codeFile}\n`);
-
-
-/** ###########################################################################
- * generate C++ code for matching
- * ##########################################################################*/
-
-function genCpp() {
-  const eventEntries: string[] = Object.entries(cdtEventByGeckoType)
-    .flatMap(([geckoType, cdtEvent]) =>
-      cdtEvent.eventTargets!.map(eventTarget => 
-      // { String("setTimeout.callback"), {{{String("timer.timeout.fire"), {String("*")}}}} }
-      `{ String("${cdtEvent.type}"), {{{String("${geckoType}"), {String("${eventTarget}")}}}} }`
-      )
-    );
-
-  return `
-// <GENERATED CODE. DO NOT EDIT.>
-// NOTE: This code is generated via \`ts-node scripts/gen-event-names.ts\`
-static const CDTEventEntryMap& getEventEntryMap() {
-  DEFINE_STATIC_LOCAL(CDTEventEntryMap, cdtToGeckoMap, 
-    ({
-      ${eventEntries.join(',\n      ')}
-    })
+  // get all unmatched events
+  const matchedGeckoTypes = Object.keys(cdtEventByGeckoType);
+  const missingGeckoTypes = _.difference(
+    geckoEvents.flatMap(e => e.events.map(ee => ee.type)),
+    matchedGeckoTypes
   );
-  return cdtToGeckoMap;
-}
-// </GENERATED CODE. DO NOT EDIT.>`;
-}
 
+  console.group(`=== Found ${missingGeckoTypes.length} unmatched gecko events:`)
+  console.log(`${missingGeckoTypes.join('\n')}\n`);
+  console.groupEnd();
+
+
+  // non-exact matches need manual verification
+  matchesNeedingManualVerification = matchesNeedingManualVerification.filter(
+    (c, g) => !badMatches.has(g));
+  console.group(`=== Found ${matchesNeedingManualVerification.length} matches needing manual verification:`);
+  console.log(`${matchesNeedingManualVerification
+      .map(([gt, ct]) => `${ct} => ${gt}`)
+      .join('\n')
+    }`);
+  console.groupEnd();
+
+  if (badMatches.size) {
+    // we had bad (duplicate) matches
+    console.error(`\n\nConvert script FAILED due to ${badMatches.size} bad matches.\n  => Fix up manualCdtToGeckoEventOverrides and try again.`);
+    process.exit(-1);
+  }
+
+
+  // finish it!
+  //  TODO: maybe use xclip
+  const code = genCpp();
+  const codeFile = __dirname + "/event-names-code.gen.cc";
+  fs.writeFileSync(codeFile, code);
+  console.log(`\n=== Generated code has been written to:\n  ${codeFile}\n`);
+
+  /** ###########################################################################
+   * generate C++ code for matching
+   * ##########################################################################*/
+
+  function genCpp() {
+    const eventEntries: string[] = Object.entries(cdtEventByGeckoType)
+      .flatMap(([geckoType, cdtEvent]) =>
+        cdtEvent.eventTargets!.map(eventTarget => 
+        // { String("setTimeout.callback"), {{{String("timer.timeout.fire"), {String("*")}}}} }
+        `{ String("${cdtEvent.type}"), {{{String("${geckoType}"), {String("${eventTarget}")}}}} }`
+        )
+      );
+
+    return `
+  // <GENERATED CODE. DO NOT EDIT.>
+  // NOTE: This code is generated via \`ts-node scripts/gen-event-names.ts\`
+  static const CDTEventEntryMap& getEventEntryMap() {
+    DEFINE_STATIC_LOCAL(CDTEventEntryMap, cdtToGeckoMap, 
+      ({
+        ${eventEntries.join(',\n      ')}
+      })
+    );
+    return cdtToGeckoMap;
+  }
+  // </GENERATED CODE. DO NOT EDIT.>`;
+  }
+})();
 
 /** ###########################################################################
  * other utils
