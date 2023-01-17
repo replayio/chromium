@@ -1108,7 +1108,7 @@ ProtocolObjectPreview.prototype = {
       const propKeys = [...Object.getOwnPropertyNames(proto), ...Object.getOwnPropertySymbols(proto)];
       
       // TODO: allow all getters - https://linear.app/replay/issue/RUN-1016#comment-90c46ba7
-      const allowedGetters = new Set(['type', 'fromElement', 'target']);
+      const allowedGetters = new Set(['type', 'fromElement', 'target', 'isTrusted']);
 
       for (const propKey of propKeys) {
         if (propKey === "__proto__" || addedProps.has(propKey)) {
