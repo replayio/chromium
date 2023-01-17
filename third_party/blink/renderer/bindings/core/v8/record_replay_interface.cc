@@ -3349,6 +3349,46 @@ static void fromJsGetObjectByCdpId(
   }
 }
 
+/** ###########################################################################
+ * Networking
+ * ##########################################################################*/
+
+// Represents a known network request.  Created and added to
+// `gActiveNetworkRequests` when the request is first seen.  Removed
+// when the request finishes or fails.
+struct NetworkRequestStatus {
+  size_t response_data_received;
+  size_t request_data_sent;
+  std::string method;
+  uint64_t bookmark;
+  NetworkRequestStatus(std::string& method, uint64_t bookmark = 0)
+  : response_data_received(0),
+    request_data_sent(0),
+    method(method),
+    bookmark(bookmark)
+  {}
+};
+// Map of active network requests.
+std::unordered_map<std::string, NetworkRequestStatus>*
+  gActiveNetworkRequests = nullptr;
+
+// Globals storing values to be returned to controller commands
+// `GetCurrentNetwork*`
+static base::Value *gCurrentNetworkRequestEvent = nullptr;
+static std::vector<uint8_t>* gCurrentNetworkStreamData = nullptr;
+
+static void GetCurrentNetworkRequestEvent(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  if (!gCurrentNetworkRequestEvent) {
+    return;
+  }
+
+  v8::Isolate* isolate = args.GetIsolate();
+  std::string json;
+  base::JSONWriter::Write(*gCurrentNetworkRequestEvent, &json);
+  v8::Local<v8::String> json_string = ToV8String(isolate, json.c_str());
+  args.GetReturnValue().Set(json_string);
+}
+
 static void GetCurrentNetworkStreamData(const v8::FunctionCallbackInfo<v8::Value>& args) {
   CHECK(gCurrentNetworkStreamData);
 
@@ -3752,14 +3792,15 @@ static void HandleNetworkDidReceiveDataEvent(const base::DictionaryValue& info) 
  * @see https://chromedevtools.github.io/devtools-protocol/tot/DOM/
  * ##########################################################################*/
 
-
-static bool checkCDPResponse(
-    const char* label, const protocol::Response& response,
-    const v8::FunctionCallbackInfo<v8::Value>& args) {
+static bool checkCDPResponse(const char* label,
+                             const protocol::Response& response,
+                             const v8::FunctionCallbackInfo<v8::Value>& args) {
   if (!response.IsSuccess()) {
     recordreplay::Print(
-        "[RuntimeError] CDP call \"%s\" failed (Code: %d): %s", label,
-        response.Code(), response.Message().c_str());
+        "[RuntimeError] CDP call \"%s\" failed (Code: %d): %s",
+        label,
+        response.Code(),
+        response.Message().c_str());
 
     // result is null
     args.GetReturnValue().SetNull();
@@ -3791,8 +3832,7 @@ static void fromJsGetNodeId(const v8::FunctionCallbackInfo<v8::Value>& args) {
       args.GetReturnValue().Set(v8::Number::New(isolate, nodeId));
       return;
     } else {
-      recordreplay::Print(
-          "[RuntimeError] fromJsGetNodeId failed for cdpId: \"%s\"", *cdpId);
+      recordreplay::Print("[RuntimeError] fromJsGetNodeId failed for cdpId: \"%s\"", *cdpId);
     }
   } else { /* already reported */
   }
@@ -3800,6 +3840,7 @@ static void fromJsGetNodeId(const v8::FunctionCallbackInfo<v8::Value>& args) {
   // auto response = domAgent->requestNode(cdpId, &nodeId);
   args.GetReturnValue().SetNull();
 }
+
 
 static void fromJsGetBoxModel(
     const v8::FunctionCallbackInfo<v8::Value>& args) {
@@ -3819,8 +3860,7 @@ static void fromJsGetBoxModel(
 
   if (!response.IsSuccess()) {
     recordreplay::Print(
-        "[RuntimeError] InspectorDOMAgent.getBoxModel failed (nodeId: %d, "
-        "Code: "
+        "[RuntimeError] InspectorDOMAgent.getBoxModel failed (nodeId: %d, Code: "
         "%d): %s",
         nodeId, response.Code(), response.Message().c_str());
   } else {
@@ -3833,6 +3873,7 @@ static void fromJsGetBoxModel(
 
   args.GetReturnValue().SetNull();
 }
+
 
 static void fromJsGetMatchedStylesForNode(
     const v8::FunctionCallbackInfo<v8::Value>& args) {
@@ -3852,22 +3893,20 @@ static void fromJsGetMatchedStylesForNode(
   Maybe<protocol::Array<protocol::CSS::CSSKeyframesRule>> keyframesRules;
 
   auto response = cssAgent->getMatchedStylesForNode(
-      nodeId, &inlineStyle, &attributesStyle, &matchedRules, &pseudoIdMatches,
-      &inheritedEntries, nullptr, &keyframesRules, nullptr);
+      nodeId, &inlineStyle, &attributesStyle, &matchedRules,
+      &pseudoIdMatches, &inheritedEntries, nullptr, &keyframesRules, nullptr);
 
   // WIP: will fix everything up and clean up when done w/ RUN-981
 
   if (!response.IsSuccess()) {
     recordreplay::Print(
-        "[RuntimeError] CSS.getMatchedStylesForNode failed (nodeId: %d, "
-        "Code: "
+        "[RuntimeError] CSS.getMatchedStylesForNode failed (nodeId: %d, Code: "
         "%d): %s",
         nodeId, response.Code(), response.Message().c_str());
     args.GetReturnValue().SetNull();
   } else {
     v8::Local<v8::Object> result = v8::Object::New(isolate);
-    // NOTE: not sure what `attributesStyle` is and how its different from
-    // `inlineStyle`?
+    // NOTE: not sure what `attributesStyle` is and how its different from `inlineStyle`?
     if (attributesStyle.isJust()) {
       auto rulesJs = convertCborToJS(isolate, attributesStyle.fromJust());
       if (!rulesJs.IsEmpty()) {
@@ -3895,6 +3934,7 @@ static void fromJsGetMatchedStylesForNode(
   }
 }
 
+ 
 static void fromJsCssGetStylesheetByCpdId(
     const v8::FunctionCallbackInfo<v8::Value>& args) {
   CHECK(args.Length() == 1 && args[0]->IsString() &&
@@ -3960,11 +4000,9 @@ static void fromJsDomPerformSearch(
   }
 }
 
-static void fromJsCollectEventListeners(
-    const v8::FunctionCallbackInfo<v8::Value>& args) {
-  CHECK(
-      args.Length() == 1 && args[0]->IsObject() &&
-      "[RuntimeError] must be called with a single plain object (DOM node)");
+static void fromJsCollectEventListeners(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsObject() &&
+        "[RuntimeError] must be called with a single plain object (DOM node)");
 
   v8::Isolate* isolate = args.GetIsolate();
   auto context = isolate->GetCurrentContext();
@@ -3973,10 +4011,9 @@ static void fromJsCollectEventListeners(
 
   v8::Local<v8::Array> result = v8::Array::New(isolate);
   if (!node) {
-    recordreplay::Print(
-        "[RuntimeError] fromJsCollectEventListeners invalid argument is not "
-        "blink Node");
-  } else {
+    recordreplay::Print("[RuntimeError] fromJsCollectEventListeners invalid argument is not blink Node");
+  }
+  else {
     auto report_for_all_contexts = true;
     V8EventListenerInfoList eventListenerInfos;
     InspectorDOMDebuggerAgent::CollectEventListeners(
@@ -4025,8 +4062,7 @@ static void HandleBrowserEvent(const char* name, const char* payload) {
   } else if (!strcmp(name, "Network.NavigationRedirect")) {
     HandleNetworkNavigationRedirectEvent(base::Value::AsDictionaryValue(val));
   } else {
-    recordreplay::Print("HandleBrowserEvent received unrecognized event %s",
-                        name);
+    recordreplay::Print("HandleBrowserEvent received unrecognized event %s", name);
   }
 }
 
@@ -4034,11 +4070,10 @@ static void HandleBrowserEvent(const char* name, const char* payload) {
 // `function __RECORD_REPLAY_ANNOTATION_HOOK__(kind, contents)`
 // Since this function is called from userland JS, we avoid assertions.
 // We don't want flawed uses of the API to crash the recording.
-static void InvokeOnAnnotation(
-    const v8::FunctionCallbackInfo<v8::Value>& args) {
-  if (!(args.Length() >= 2 && args[0]->IsString())) {
+static void InvokeOnAnnotation(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  if (! (args.Length() >= 2 && args[0]->IsString())) {
     recordreplay::Print("%s called with incorrect arguments",
-                        AnnotationHookJSName);
+      AnnotationHookJSName);
     return;
   }
 
@@ -4050,7 +4085,7 @@ static void InvokeOnAnnotation(
   v8::Local<v8::String> json;
   if (!v8::JSON::Stringify(context, payload).ToLocal(&json)) {
     recordreplay::Print("%s contents failed to json stringify",
-                        AnnotationHookJSName);
+      AnnotationHookJSName);
     return;
   }
 
@@ -4059,22 +4094,19 @@ static void InvokeOnAnnotation(
   recordreplay::OnAnnotation(*kind, *contents);
 }
 
-extern "C" void V8RecordReplaySetAPIObjectIdCallback(
-    int (*callback)(v8::Local<v8::Object>));
+extern "C" void V8RecordReplaySetAPIObjectIdCallback(int (*callback)(v8::Local<v8::Object>));
 extern "C" void V8RecordReplayRegisterBrowserEventCallback(
-    void (*callback)(const char* name, const char* payload));
+  void (*callback)(const char* name, const char* payload)
+);
 
-static void RunScript(v8::Isolate * isolate, v8::Local<v8::Context> context,
-                      const char* script, const char* filename) {
+static void RunScript(v8::Isolate* isolate, v8::Local<v8::Context> context, const char* script, const char* filename) {
   v8::Local<v8::String> filename_string = ToV8String(isolate, filename);
   v8::ScriptOrigin origin(isolate, filename_string);
 
   v8::Local<v8::String> source = ToV8String(isolate, script);
 
-  // TODO: check for errors after `Compile` and `Run` -
-  // https://linear.app/replay/issue/RUN-955/chromium-should-not-diverge-and-crash-if-greplayscript-does-not
-  v8::Local<v8::Script> compiled =
-      v8::Script::Compile(context, source, &origin).ToLocalChecked();
+  // TODO: check for errors after `Compile` and `Run` - https://linear.app/replay/issue/RUN-955/chromium-should-not-diverge-and-crash-if-greplayscript-does-not
+  v8::Local<v8::Script> compiled = v8::Script::Compile(context, source, &origin).ToLocalChecked();
   compiled->Run(context).ToLocalChecked();
 }
 
@@ -4083,8 +4115,9 @@ static bool TestEnv(const char* env) {
   return v && v[0] && v[0] != '0';
 }
 
-void SetupRecordReplayCommands(v8::Isolate * isolate,
-                                LocalFrame * localFrame) {
+
+
+void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
   V8RecordReplaySetAPIObjectIdCallback(GetAPIObjectIdCallback);
   V8RecordReplayRegisterBrowserEventCallback(HandleBrowserEvent);
 
@@ -4102,15 +4135,16 @@ void SetupRecordReplayCommands(v8::Isolate * isolate,
                       InvokeOnAnnotation);
 
   v8::Local<v8::Object> args = v8::Object::New(isolate);
-  DefineProperty(isolate, context->Global(), "__RECORD_REPLAY_ARGUMENTS__",
-                  args);
+  DefineProperty(isolate, context->Global(), "__RECORD_REPLAY_ARGUMENTS__", args);
 
-  SetFunctionProperty(isolate, args, "log", LogCallback);
+  SetFunctionProperty(isolate, args, "log",
+                      LogCallback);
 
   // CDP debugger functionality
   SetFunctionProperty(isolate, args, "setCDPMessageCallback",
                       SetCDPMessageCallback);
-  SetFunctionProperty(isolate, args, "sendCDPMessage", SendCDPMessage);
+  SetFunctionProperty(isolate, args, "sendCDPMessage",
+                      SendCDPMessage);
   SetFunctionProperty(isolate, args, "setCommandCallback",
                       v8::FunctionCallbackRecordReplaySetCommandCallback);
 
@@ -4148,18 +4182,24 @@ void SetupRecordReplayCommands(v8::Isolate * isolate,
   SetFunctionProperty(
       isolate, args, "setClearPauseDataCallback",
       v8::FunctionCallbackRecordReplaySetClearPauseDataCallback);
-  SetFunctionProperty(isolate, args, "getCurrentError", GetCurrentError);
-  SetFunctionProperty(isolate, args, "getRecordingId", GetRecordingId);
-  SetFunctionProperty(isolate, args, "sha256DigestHex", SHA256DigestHex);
+  SetFunctionProperty(isolate, args, "getCurrentError",
+                      GetCurrentError);
+  SetFunctionProperty(isolate, args, "getRecordingId",
+                      GetRecordingId);
+  SetFunctionProperty(isolate, args, "sha256DigestHex",
+                      SHA256DigestHex);
   SetFunctionProperty(isolate, args, "writeToRecordingDirectory",
                       WriteToRecordingDirectory);
-  SetFunctionProperty(isolate, args, "addRecordingEvent", AddRecordingEvent);
+  SetFunctionProperty(isolate, args, "addRecordingEvent",
+                      AddRecordingEvent);
   SetFunctionProperty(isolate, args, "addNewScriptHandler",
                       v8::FunctionCallbackRecordReplayAddNewScriptHandler);
   SetFunctionProperty(isolate, args, "getScriptSource",
                       v8::FunctionCallbackRecordReplayGetScriptSource);
-  SetFunctionProperty(isolate, args, "getPersistentId", GetPersistentId);
-  SetFunctionProperty(isolate, args, "checkPersistentId", CheckPersistentId);
+  SetFunctionProperty(isolate, args, "getPersistentId",
+                      GetPersistentId);
+  SetFunctionProperty(isolate, args, "checkPersistentId",
+                      CheckPersistentId);
 
   // This URL will prevent the script from being reported to the recorder.
   const char* InternalScriptURL = "record-replay-internal";
@@ -4178,7 +4218,7 @@ void SetupRecordReplayCommands(v8::Isolate * isolate,
   }
 }
 
-void RunInitialRecordReplayScripts(v8::Isolate * isolate) {
+void RunInitialRecordReplayScripts(v8::Isolate* isolate) {
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
 
   if (recordreplay::FeatureEnabled("react-devtools-backend") &&
@@ -4186,8 +4226,7 @@ void RunInitialRecordReplayScripts(v8::Isolate * isolate) {
     // Note: We use a special URL for the react devtools as this script needs
     // to be reported to the recorder so that evaluations can be performed in
     // its frames.
-    RunScript(isolate, context, gReactDevtoolsScript,
-              "record-replay-react-devtools");
+    RunScript(isolate, context, gReactDevtoolsScript, "record-replay-react-devtools");
   }
 }
 
@@ -4195,7 +4234,7 @@ extern "C" void V8RecordReplayOnConsoleMessage(size_t bookmark);
 
 static ErrorEvent* gCurrentErrorEvent;
 
-void RecordReplayOnErrorEvent(ErrorEvent * error_event) {
+void RecordReplayOnErrorEvent(ErrorEvent* error_event) {
   if (!v8::IsMainThread()) {
     return;
   }
@@ -4217,19 +4256,14 @@ static void GetCurrentError(const v8::FunctionCallbackInfo<v8::Value>& args) {
   v8::Isolate* isolate = args.GetIsolate();
   v8::Local<v8::Object> rv = v8::Object::New(isolate);
 
-  SetDataProperty(
-      isolate, rv, "message",
-      ToV8String(isolate, gCurrentErrorEvent->message().Utf8().c_str()));
-  SetDataProperty(
-      isolate, rv, "filename",
-      ToV8String(isolate, gCurrentErrorEvent->filename().Utf8().c_str()));
-  SetDataProperty(isolate, rv, "line",
-                  v8::Number::New(isolate, gCurrentErrorEvent->lineno()));
-  SetDataProperty(isolate, rv, "column",
-                  v8::Number::New(isolate, gCurrentErrorEvent->colno()));
-  SetDataProperty(
-      isolate, rv, "scriptId",
-      v8::Number::New(isolate, gCurrentErrorEvent->Location()->ScriptId()));
+  SetDataProperty(isolate, rv, "message",
+                  ToV8String(isolate, gCurrentErrorEvent->message().Utf8().c_str()));
+  SetDataProperty(isolate, rv, "filename",
+                  ToV8String(isolate, gCurrentErrorEvent->filename().Utf8().c_str()));
+  SetDataProperty(isolate, rv, "line", v8::Number::New(isolate, gCurrentErrorEvent->lineno()));
+  SetDataProperty(isolate, rv, "column", v8::Number::New(isolate, gCurrentErrorEvent->colno()));
+  SetDataProperty(isolate, rv, "scriptId",
+                  v8::Number::New(isolate, gCurrentErrorEvent->Location()->ScriptId()));
 
   args.GetReturnValue().Set(rv);
 }
