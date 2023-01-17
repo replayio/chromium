@@ -1,3 +1,18 @@
+// Copyright 2021 Record Replay Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+/**
+ * @file In this file, we take all CDT user event names, 
+ * parse them and map them against their `gecko` counterpart.
+ * It outputs (i) verification results, (ii) comparison results
+ * (iii) potential mapping problems, (iv) and C++ code that 
+ * allows easily looking up `gecko` event names by their CDT
+ * counterpart.
+ * 
+ * @see https://linear.app/replay/issue/RUN-1061#comment-bde208c4
+ */
+
 import fs from 'fs';
 import path from 'path';
 import _ from 'lodash';

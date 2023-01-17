@@ -438,8 +438,13 @@ function Pause_evaluateInFrame({ frameId, expression }) {
   const frame = frames[index];
 
   if (expression === '[...arguments]') {
-    // short-circuit hackfix: return `arguments` of given frame
-    //  see: https://linear.app/replay/issue/RUN-1061#comment-fc1c3ee4
+    // Short-circuit hackfix: "universal `arguments`" for any frame. This 
+    // serves to allow the `MAPPER` used by the `devtools` event analysis
+    // to get all arguments for any JS event callback. `arguments` are available
+    // by default in many function frames. However, arrow functions do not 
+    // support them. This "solution" makes sure, `[...arguments]` are 
+    // always available.
+    // See: https://linear.app/replay/issue/RUN-1061#comment-fc1c3ee4
     const args = fromJsGetArgumentsInFrame(frame.callFrameId);
     const argsCdp = makeDebuggeeValue(args && [...args] || []);
     return buildRrpObjectResult({ result: argsCdp });

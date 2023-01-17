@@ -727,6 +727,16 @@ void InspectorDOMDebuggerAgent::ScriptExecutionBlockedByCSP(
   PauseOnNativeEventIfNeeded(std::move(event_data), true);
 }
 
+// Call `ReplayOnEvent` for the given event *before* it happened.
+static void ReplayNotifyWill(const String& eventName,
+                              EventTarget* eventTarget = nullptr,
+                              bool isCallback = false);
+
+// Call `ReplayOnEvent` for the given event *after* it happened.
+static void ReplayNotifyDid(const String& eventName,
+                            EventTarget* eventTarget = nullptr,
+                            bool isCallback = false);
+
 void InspectorDOMDebuggerAgent::Will(const probe::ExecuteScript& probe) {
   ReplayNotifyWill("scriptFirstStatement");
   AllowNativeBreakpoint("scriptFirstStatement", nullptr, false);
@@ -923,14 +933,17 @@ void InspectorDOMDebuggerAgent::OnContentSecurityPolicyViolation(
 }
 
 
-// [replay] lookup qualified event names
-//   -> https://linear.app/replay/issue/RUN-1061/chromium-render-eventslist
+// [replay] This code's primary purpose is to lookup qualified event names.
+// At the core is the ReplayGetQualifiedEventName function, which takes CDT
+// event data, and uses it to lookup the `gecko` qualified event name,
+// which the frontend (currently) expects.
+// See: https://linear.app/replay/issue/RUN-1061#comment-bde208c4
 
 /**
  * CDTEventEntry takes all kinds of static-initialized data, and convert it into a
  * simple map<String, String>.
- * C++ playground for nested static initializers:
- *   -> https://replit.com/@Domiii/nested-static-initializers#main.cpp
+ * Also, here is a C++ playground for nested static initializers:
+ *   https://replit.com/@Domiii/nested-static-initializers#main.cpp
  */
 struct CDTEventEntry {
   std::unordered_map<String, String> qualifiedNamesByTargetName_;
@@ -1147,19 +1160,19 @@ static const String& ReplayGetQualifiedEventName(const String& eventNameRaw,
   return emptyString;
 }
 
-void InspectorDOMDebuggerAgent::ReplayNotifyWill(const String& eventName, 
-EventTarget* eventTarget, bool isCallback) {
+void ReplayNotifyWill(const String& eventName, 
+                      EventTarget* eventTarget,
+                      bool isCallback) {
   const String& qualifiedEventName = 
       ReplayGetQualifiedEventName(eventName, eventTarget, isCallback);
-
   if (!qualifiedEventName.empty()) {
     recordreplay::OnEvent(qualifiedEventName.Ascii().c_str(), true);
   }
 }
 
-void InspectorDOMDebuggerAgent::ReplayNotifyDid(const String& eventName,
-                                                       EventTarget* eventTarget,
-                                                       bool isCallback) {
+void ReplayNotifyDid(const String& eventName,
+                     EventTarget* eventTarget,
+                     bool isCallback) {
   const String& qualifiedEventName =
       ReplayGetQualifiedEventName(eventName, eventTarget, isCallback);
   if (!qualifiedEventName.empty()) {
