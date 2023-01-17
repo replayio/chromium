@@ -83,7 +83,7 @@ const char* gReplayScript = R""""(
 
 const EmptyArray = Object.freeze([]); // reduce unnecessary mem churn
 
-const Verbose = 1;
+const Verbose = false;
 const VerboseCommands = Verbose;
 
 const {
@@ -418,14 +418,14 @@ function getStackFrames() {
 
 
 // Build a protocol Result object from a result/exceptionDetails CDP rval.
-function buildRrpObjectResult({ result, exceptionDetails }) {
-  const value = buildRrpObjectFromCdpObject(result);
+function buildRrpObjectResult({ result: cdpResult, exceptionDetails }) {
+  const rrpId = buildRrpObjectFromCdpObject(cdpResult);
   const protocolResult = { data: {} };
 
   if (exceptionDetails) {
-    protocolResult.exception = value;
+    protocolResult.exception = rrpId;
   } else {
-    protocolResult.returned = value;
+    protocolResult.returned = rrpId;
   }
   return { result: protocolResult };
 }
@@ -437,15 +437,16 @@ function Pause_evaluateInFrame({ frameId, expression }) {
   assert(index < frames.length);
   const frame = frames[index];
 
-  const rv = doEvaluation();
-  return buildRrpObjectResult(rv);
-
   if (expression === '[...arguments]') {
     // short-circuit hackfix: return `arguments` of given frame
     //  see: https://linear.app/replay/issue/RUN-1061#comment-fc1c3ee4
     const args = fromJsGetArgumentsInFrame(frame.callFrameId);
-    return args && [...args] || [];
+    const argsCdp = makeDebuggeeValue(args && [...args] || []);
+    return buildRrpObjectResult({ result: argsCdp });
   }
+
+  const rv = doEvaluation();
+  return buildRrpObjectResult(rv);
 
   function doEvaluation() {
     // In order to do the evaluation in the right frame, the same number of
@@ -528,13 +529,11 @@ function isProbablyNativeFunction(f) {
 }
 
 function isNativeFunctionDescription(functionString) {
-  return functionString?.endsWith('() { [native code] }');
+  return functionString?.endsWith('() { [native code] }') || false;
 }
 
-// TODO: fix this mess!
-function isPrototype(x) {
-  // this logic is very flawed
-  return x.constructor !== x.__proto__.constructor;
+function isPrototype(x) { 
+  return x === x.constructor.prototype;
 }
 
 /**
@@ -553,10 +552,9 @@ function isInstanceOfNative(x, target) {
 
   // hackfix: check if its native, and has `name` in inheritance chain
   const name = target?.name;
-  return name &&
-    x?.constructor?.toString &&
-    // avoid false positives for `prototypes` of native classes
-    x.constructor === x.__proto__.constructor &&
+  return x?.constructor && name &&
+    // avoid false positives for prototypes (see https://linear.app/replay/issue/RUN-1067)
+    x.constructor === x.__proto__?.constructor &&
     isProbablyNativeFunction(x.constructor) &&
     hasInProtoChain(x.constructor, name);
 }
@@ -638,7 +636,7 @@ function clearPauseDataCallback() {
 }
 
 /**
- * Creates and returns a new `RemoteObject` for given JS object.
+ * Creates and returns a new `CDP.RemoteObject` for given JS object.
  * 
  * @return {CDP.Runtime.RemoteObject}
  * @see https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#type-RemoteObject
@@ -1103,20 +1101,21 @@ ProtocolObjectPreview.prototype = {
 
 
     // add properties + getterValues (based on what we did in gecko).
-    const recurse = this.level === "noProperties";
+    const dontRecurse = this.level === "noProperties";
     const addedProps = new Set();
     let proto = this.raw;
     do {
       const propKeys = [...Object.getOwnPropertyNames(proto), ...Object.getOwnPropertySymbols(proto)];
-      // hackfix: only allow a few native getters to be executed for now, since 
-      //      many of them cause "Progress counter mismatch at checkpoint"
+      
+      // TODO: allow all getters - https://linear.app/replay/issue/RUN-1016#comment-90c46ba7
       const allowedGetters = new Set(['type', 'fromElement', 'target']);
+
       for (const propKey of propKeys) {
         if (propKey === "__proto__" || addedProps.has(propKey)) {
           continue;
         }
         addedProps.add(propKey);
-        const prop = Object.getOwnPropertyDescriptor(this.raw, propKey);
+        const prop = Object.getOwnPropertyDescriptor(proto, propKey);
         if (!prop) {
           continue;
         }
@@ -1125,23 +1124,23 @@ ProtocolObjectPreview.prototype = {
         const allowedGetter = allowedGetters.has(propKey);
 
         if (
+          !isPrototype(this.raw) && // don't try to execute getters on prototypes
           isNativeGetter &&
           allowedGetter
         ) {
-          // get native getters
+          // evaluate native getter props
           this.addGetterValue(propKey, prop.get, this.cdpObj);
         }
         else if (
-          // only add props of the first level
-          proto === this.raw ||
-          isNativeGetter // also allow native getters to show up
-        ) { 
+          proto === this.raw
+        ) {
+          // only add complete prop data for own props
           const protocolProperty = createRrpPropertyDescriptor(this.raw, propKey, prop);
           const force = requiredProperties.includes(prop.name);
           this.addProperty(protocolProperty, force);
         }
       }
-      if (!recurse) {
+      if (dontRecurse) {
         break;
       }
       proto = Object.getPrototypeOf(proto);
@@ -1439,9 +1438,7 @@ const CustomPreviewers = {
  */
 function evalPropRrp(owner, propKey) {
   try {
-    Verbose && log(`DDBG running evalProp for prop "${propKey.toString()}"...`);
     const plainValue = owner[propKey];
-    Verbose && log(`DDBG ran evalProp on ${propKey.toString()}`);
     return createRrpValueRaw(plainValue);
   }
   catch (err) {
