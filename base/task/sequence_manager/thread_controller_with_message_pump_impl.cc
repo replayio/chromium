@@ -434,6 +434,13 @@ WorkDetails ThreadControllerWithMessagePumpImpl::DoWorkImpl(
     absl::optional<SequencedTaskSource::SelectedTask> selected_task =
         main_thread_only().task_source->SelectNextTask(lazy_now_select_task,
                                                        select_task_option);
+
+    recordreplay::Assert(
+        "[RUN-1124] ThreadControllerWithMessagePumpImpl::DoWorkImpl #5b %d %s",
+        !!selected_task,
+        selected_task && selected_task->task.posted_from.has_source_info() ? 
+          selected_task->task.posted_from.ToString().c_str() : "");
+
     LazyNow lazy_now_task_selected(time_source_);
     run_level_tracker_.OnApplicationTaskSelected(
         (selected_task && selected_task->task.delayed_run_time.is_null())

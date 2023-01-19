@@ -393,6 +393,13 @@ void TaskQueueImpl::PostTask(PostedTask task) {
   }
 #endif  // DCHECK_IS_ON()
 
+  // TODO: not sure if we want this?
+  recordreplay::Assert(
+    "[RUN-1150] TaskQueueImpl::PostTask %d %lu %s", task.is_delayed(),
+    recordreplay::PointerId(this),
+    task.location.has_source_info() ? task.location.ToString().c_str() : ""
+  );
+
   if (!task.is_delayed()) {
     PostImmediateTaskImpl(std::move(task), current_thread);
   } else {
