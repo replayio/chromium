@@ -436,10 +436,11 @@ WorkDetails ThreadControllerWithMessagePumpImpl::DoWorkImpl(
                                                        select_task_option);
 
     recordreplay::Assert(
-        "[RUN-1124] ThreadControllerWithMessagePumpImpl::DoWorkImpl #5b %d %s",
-        !!selected_task,
-        selected_task && selected_task->task.posted_from.has_source_info() ? 
-          selected_task->task.posted_from.ToString().c_str() : "");
+      "[RUN-1124] ThreadControllerWithMessagePumpImpl::DoWorkImpl #5b %d %s",
+      !!selected_task,
+      selected_task && selected_task->task.posted_from.has_source_info() ? 
+        selected_task->task.posted_from.ToString().c_str() : ""
+    );
 
     LazyNow lazy_now_task_selected(time_source_);
     run_level_tracker_.OnApplicationTaskSelected(
