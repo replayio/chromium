@@ -25,8 +25,6 @@
 #include "mojo/public/cpp/system/simple_watcher.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-#include "base/record_replay.h"
-
 namespace base {
 class Lock;
 }
