@@ -177,6 +177,16 @@ void ThreadControllerWithMessagePumpImpl::ScheduleWork() {
 void ThreadControllerWithMessagePumpImpl::SetNextDelayedDoWork(
     LazyNow* lazy_now,
     absl::optional<WakeUp> wake_up) {
+  if (wake_up) {
+    recordreplay::Assert("[RUN-548] ThreadControllerWithMessagePumpImpl::SetNextDelayedDoWork #1 %ld %ld %d %d",
+                         wake_up->time.ToInternalValue(),
+                         wake_up->leeway.ToInternalValue(),
+                         (int)wake_up->resolution,
+                         (int)wake_up->delay_policy);
+  } else {
+    recordreplay::Assert("[RUN-548] ThreadControllerWithMessagePumpImpl::SetNextDelayedDoWork #2");
+  }
+
   DCHECK(!wake_up || !wake_up->is_immediate());
   TimeTicks run_time =
       wake_up.has_value() ? WakeUpRunTime(*wake_up) : TimeTicks::Max();
