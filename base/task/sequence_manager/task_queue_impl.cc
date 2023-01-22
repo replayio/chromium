@@ -780,13 +780,18 @@ void TaskQueueImpl::MoveReadyDelayedTasksToWorkQueue(
   StackVector<Task, 8> tasks_to_delete;
 
   while (!main_thread_only().delayed_incoming_queue.empty()) {
-    recordreplay::Assert("[RUN-1127] TaskQueueImpl::MoveReadyDelayedTasksToWorkQueue #1");
-
     const Task& task = main_thread_only().delayed_incoming_queue.top();
     CHECK(task.task);
 
     // Leave the top task alone if it hasn't been canceled and it is not ready.
     const bool is_cancelled = task.task.IsCancelled();
+
+    recordreplay::Assert("[RUN-1127] TaskQueueImpl::MoveReadyDelayedTasksToWorkQueue #1 %d %d %ld %ld",
+                         is_cancelled,
+                         (int)task.delay_policy,
+                         task.delayed_run_time.ToInternalValue(),
+                         task.leeway.ToInternalValue());
+
     if (!is_cancelled && task.earliest_delayed_run_time() > lazy_now->Now()) {
       recordreplay::Assert("[RUN-1127] TaskQueueImpl::MoveReadyDelayedTasksToWorkQueue #2");
       break;
