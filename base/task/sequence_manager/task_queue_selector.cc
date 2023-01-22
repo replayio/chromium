@@ -244,12 +244,15 @@ void TaskQueueSelector::SetTaskQueueSelectorObserver(Observer* observer) {
 absl::optional<TaskQueue::QueuePriority>
 TaskQueueSelector::GetHighestPendingPriority(SelectTaskOption option) const {
   DCHECK_CALLED_ON_VALID_THREAD(associated_thread_->thread_checker);
-  if (!active_priority_tracker_.HasActivePriority())
+  if (!active_priority_tracker_.HasActivePriority()) {
+    recordreplay::Assert("[RUN-1127] TaskQueueSelector::GetHighestPendingPriority #1");
     return absl::nullopt;
+  }
 
   TaskQueue::QueuePriority highest_priority =
       active_priority_tracker_.HighestActivePriority();
   if (option != SelectTaskOption::kSkipDelayedTask) {
+    recordreplay::Assert("[RUN-1127] TaskQueueSelector::GetHighestPendingPriority #2 %d", (int)highest_priority);
     return highest_priority;
   }
 
@@ -257,10 +260,12 @@ TaskQueueSelector::GetHighestPendingPriority(SelectTaskOption option) const {
        highest_priority = NextPriority(highest_priority)) {
     if (active_priority_tracker_.IsActive(highest_priority) &&
         !immediate_work_queue_sets_.IsSetEmpty(highest_priority)) {
+      recordreplay::Assert("[RUN-1127] TaskQueueSelector::GetHighestPendingPriority #3 %d", (int)highest_priority);
       return highest_priority;
     }
   }
 
+  recordreplay::Assert("[RUN-1127] TaskQueueSelector::GetHighestPendingPriority #4");
   return absl::nullopt;
 }
 
@@ -282,6 +287,9 @@ void TaskQueueSelector::ActivePriorityTracker::SetActive(
     bool is_active) {
   DCHECK_LT(priority, TaskQueue::QueuePriority::kQueuePriorityCount);
   DCHECK_NE(IsActive(priority), is_active);
+
+  recordreplay::Assert("[RUN-1127] ActivePriorityTracker::SetActive %d %d", (int)priority, is_active);
+
   if (is_active) {
     active_priorities_ |= (1u << static_cast<size_t>(priority));
   } else {
@@ -293,8 +301,13 @@ TaskQueue::QueuePriority
 TaskQueueSelector::ActivePriorityTracker::HighestActivePriority() const {
   DCHECK_NE(active_priorities_, 0u)
       << "CountTrailingZeroBits(0) has undefined behavior";
-  return static_cast<TaskQueue::QueuePriority>(
+  TaskQueue::QueuePriority rv = static_cast<TaskQueue::QueuePriority>(
       bits::CountTrailingZeroBits(active_priorities_));
+
+  recordreplay::Assert("[RUN-1127] ActivePriorityTracker::HighestActivePriority %zu %d",
+                       active_priorities_, (int)rv);
+
+  return rv;
 }
 
 }  // namespace internal

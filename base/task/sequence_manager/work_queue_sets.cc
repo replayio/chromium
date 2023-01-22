@@ -27,6 +27,9 @@ WorkQueueSets::WorkQueueSets(const char* name,
 WorkQueueSets::~WorkQueueSets() = default;
 
 void WorkQueueSets::AddQueue(WorkQueue* work_queue, size_t set_index) {
+  recordreplay::Assert("[RUN-1127] WorkQueueSets::AddQueue %d %zu",
+                       recordreplay::PointerId(work_queue), set_index);
+
   DCHECK(!work_queue->work_queue_sets());
   DCHECK_LT(set_index, work_queue_heaps_.size());
   DCHECK(!work_queue->heap_handle().IsValid());
@@ -42,6 +45,9 @@ void WorkQueueSets::AddQueue(WorkQueue* work_queue, size_t set_index) {
 }
 
 void WorkQueueSets::RemoveQueue(WorkQueue* work_queue) {
+  recordreplay::Assert("[RUN-1127] WorkQueueSets::RemoveQueue %d",
+                       recordreplay::PointerId(work_queue));
+
   DCHECK_EQ(this, work_queue->work_queue_sets());
   work_queue->AssignToWorkQueueSets(nullptr);
   if (!work_queue->heap_handle().IsValid())
@@ -55,6 +61,9 @@ void WorkQueueSets::RemoveQueue(WorkQueue* work_queue) {
 }
 
 void WorkQueueSets::ChangeSetIndex(WorkQueue* work_queue, size_t set_index) {
+  recordreplay::Assert("[RUN-1127] WorkQueueSets::ChangeSetIndex %d %zu",
+                       recordreplay::PointerId(work_queue), set_index);
+
   DCHECK_EQ(this, work_queue->work_queue_sets());
   DCHECK_LT(set_index, work_queue_heaps_.size());
   absl::optional<TaskOrder> key = work_queue->GetFrontTaskOrder();
@@ -75,6 +84,9 @@ void WorkQueueSets::ChangeSetIndex(WorkQueue* work_queue, size_t set_index) {
 }
 
 void WorkQueueSets::OnQueuesFrontTaskChanged(WorkQueue* work_queue) {
+  recordreplay::Assert("[RUN-1127] WorkQueueSets::OnQueuesFrontTaskChanged %d",
+                       recordreplay::PointerId(work_queue));
+
   size_t set_index = work_queue->work_queue_set_index();
   DCHECK_EQ(this, work_queue->work_queue_sets());
   DCHECK_LT(set_index, work_queue_heaps_.size());
@@ -94,6 +106,9 @@ void WorkQueueSets::OnQueuesFrontTaskChanged(WorkQueue* work_queue) {
 }
 
 void WorkQueueSets::OnTaskPushedToEmptyQueue(WorkQueue* work_queue) {
+  recordreplay::Assert("[RUN-1127] WorkQueueSets::OnTaskPushedToEmptyQueue %d",
+                       recordreplay::PointerId(work_queue));
+
   // NOTE if this function changes, we need to keep |WorkQueueSets::AddQueue| in
   // sync.
   DCHECK_EQ(this, work_queue->work_queue_sets());
@@ -111,6 +126,9 @@ void WorkQueueSets::OnTaskPushedToEmptyQueue(WorkQueue* work_queue) {
 }
 
 void WorkQueueSets::OnPopMinQueueInSet(WorkQueue* work_queue) {
+  recordreplay::Assert("[RUN-1127] WorkQueueSets::OnPopMinQueueInSet %d",
+                       recordreplay::PointerId(work_queue));
+
   // Assume that `work_queue` contains the lowest `TaskOrder`.
   size_t set_index = work_queue->work_queue_set_index();
   DCHECK_EQ(this, work_queue->work_queue_sets());
@@ -135,6 +153,9 @@ void WorkQueueSets::OnPopMinQueueInSet(WorkQueue* work_queue) {
 }
 
 void WorkQueueSets::OnQueueBlocked(WorkQueue* work_queue) {
+  recordreplay::Assert("[RUN-1127] WorkQueueSets::OnQueueBlocked %d",
+                       recordreplay::PointerId(work_queue));
+
   DCHECK_EQ(this, work_queue->work_queue_sets());
   HeapHandle heap_handle = work_queue->heap_handle();
   if (!heap_handle.IsValid())
@@ -149,14 +170,18 @@ void WorkQueueSets::OnQueueBlocked(WorkQueue* work_queue) {
 absl::optional<WorkQueueAndTaskOrder>
 WorkQueueSets::GetOldestQueueAndTaskOrderInSet(size_t set_index) const {
   DCHECK_LT(set_index, work_queue_heaps_.size());
-  if (work_queue_heaps_[set_index].empty())
+  if (work_queue_heaps_[set_index].empty()) {
+    recordreplay::Assert("[RUN-1127] WorkQueueSets::GetOldestQueueAndTaskOrderInSet #1 %zu", set_index);
     return absl::nullopt;
+  }
   const OldestTaskOrder& oldest = work_queue_heaps_[set_index].top();
   DCHECK(oldest.value->heap_handle().IsValid());
 #if DCHECK_IS_ON()
   absl::optional<TaskOrder> order = oldest.value->GetFrontTaskOrder();
   DCHECK(order && oldest.key == *order);
 #endif
+  recordreplay::Assert("[RUN-1127] WorkQueueSets::GetOldestQueueAndTaskOrderInSet #2 %zu %d",
+                       set_index, recordreplay::PointerId(oldest.value));
   return WorkQueueAndTaskOrder(*oldest.value, oldest.key);
 }
 
