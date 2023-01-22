@@ -175,10 +175,6 @@ WorkQueue* TaskQueueSelector::SelectWorkQueueToService(
 
   auto highest_priority = GetHighestPendingPriority(option);
 
-  recordreplay::Assert("[RUN-1127] TaskQueueSelector::SelectWorkQueueToService %d %d",
-                       highest_priority.has_value(),
-                       highest_priority.has_value() ? (int)highest_priority.value() : 0);
-
   if (!highest_priority.has_value()) {
     return nullptr;
   }
@@ -201,10 +197,6 @@ WorkQueue* TaskQueueSelector::SelectWorkQueueToService(
             :
 #endif
             ChooseImmediateOnlyWithPriority<SetOperationOldest>(priority);
-
-    recordreplay::Assert("[RUN-1127] TaskQueueSelector::SelectWorkQueueToService #1 %d",
-                         recordreplay::PointerId(queue));
-
     return queue;
   }
 
@@ -214,9 +206,6 @@ WorkQueue* TaskQueueSelector::SelectWorkQueueToService(
                              :
 #endif
                              ChooseWithPriority<SetOperationOldest>(priority);
-
-  recordreplay::Assert("[RUN-1127] TaskQueueSelector::SelectWorkQueueToService #2 %d",
-                       recordreplay::PointerId(queue));
 
   // If we have selected a delayed task while having an immediate task of the
   // same priority, increase the starvation count.
@@ -244,28 +233,22 @@ void TaskQueueSelector::SetTaskQueueSelectorObserver(Observer* observer) {
 absl::optional<TaskQueue::QueuePriority>
 TaskQueueSelector::GetHighestPendingPriority(SelectTaskOption option) const {
   DCHECK_CALLED_ON_VALID_THREAD(associated_thread_->thread_checker);
-  if (!active_priority_tracker_.HasActivePriority()) {
-    recordreplay::Assert("[RUN-1127] TaskQueueSelector::GetHighestPendingPriority #1");
+  if (!active_priority_tracker_.HasActivePriority())
     return absl::nullopt;
-  }
 
   TaskQueue::QueuePriority highest_priority =
       active_priority_tracker_.HighestActivePriority();
-  if (option != SelectTaskOption::kSkipDelayedTask) {
-    recordreplay::Assert("[RUN-1127] TaskQueueSelector::GetHighestPendingPriority #2 %d", (int)highest_priority);
+  if (option != SelectTaskOption::kSkipDelayedTask)
     return highest_priority;
-  }
 
   for (; highest_priority != TaskQueue::kQueuePriorityCount;
        highest_priority = NextPriority(highest_priority)) {
     if (active_priority_tracker_.IsActive(highest_priority) &&
         !immediate_work_queue_sets_.IsSetEmpty(highest_priority)) {
-      recordreplay::Assert("[RUN-1127] TaskQueueSelector::GetHighestPendingPriority #3 %d", (int)highest_priority);
       return highest_priority;
     }
   }
 
-  recordreplay::Assert("[RUN-1127] TaskQueueSelector::GetHighestPendingPriority #4");
   return absl::nullopt;
 }
 
@@ -288,8 +271,6 @@ void TaskQueueSelector::ActivePriorityTracker::SetActive(
   DCHECK_LT(priority, TaskQueue::QueuePriority::kQueuePriorityCount);
   DCHECK_NE(IsActive(priority), is_active);
 
-  recordreplay::Assert("[RUN-1127] ActivePriorityTracker::SetActive %d %d", (int)priority, is_active);
-
   if (is_active) {
     active_priorities_ |= (1u << static_cast<size_t>(priority));
   } else {
@@ -301,13 +282,8 @@ TaskQueue::QueuePriority
 TaskQueueSelector::ActivePriorityTracker::HighestActivePriority() const {
   DCHECK_NE(active_priorities_, 0u)
       << "CountTrailingZeroBits(0) has undefined behavior";
-  TaskQueue::QueuePriority rv = static_cast<TaskQueue::QueuePriority>(
+  return static_cast<TaskQueue::QueuePriority>(
       bits::CountTrailingZeroBits(active_priorities_));
-
-  recordreplay::Assert("[RUN-1127] ActivePriorityTracker::HighestActivePriority %zu %d",
-                       active_priorities_, (int)rv);
-
-  return rv;
 }
 
 }  // namespace internal

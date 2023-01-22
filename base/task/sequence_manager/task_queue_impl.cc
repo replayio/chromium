@@ -767,8 +767,6 @@ bool TaskQueueImpl::RemoveAllCanceledDelayedTasksFromFront(LazyNow* lazy_now) {
 void TaskQueueImpl::MoveReadyDelayedTasksToWorkQueue(
     LazyNow* lazy_now,
     EnqueueOrder enqueue_order) {
-  recordreplay::Assert("[RUN-1127] TaskQueueImpl::MoveReadyDelayedTasksToWorkQueue");
-
   // Enqueue all delayed tasks that should be running now, skipping any that
   // have been canceled.
   WorkQueue::TaskPusher delayed_work_queue_task_pusher(
@@ -785,21 +783,11 @@ void TaskQueueImpl::MoveReadyDelayedTasksToWorkQueue(
 
     // Leave the top task alone if it hasn't been canceled and it is not ready.
     const bool is_cancelled = task.task.IsCancelled();
-
-    recordreplay::Assert("[RUN-1127] TaskQueueImpl::MoveReadyDelayedTasksToWorkQueue #1 %d %d %ld %ld",
-                         is_cancelled,
-                         (int)task.delay_policy,
-                         task.delayed_run_time.ToInternalValue(),
-                         task.leeway.ToInternalValue());
-
-    if (!is_cancelled && task.earliest_delayed_run_time() > lazy_now->Now()) {
-      recordreplay::Assert("[RUN-1127] TaskQueueImpl::MoveReadyDelayedTasksToWorkQueue #2");
+    if (!is_cancelled && task.earliest_delayed_run_time() > lazy_now->Now())
       break;
-    }
 
     Task ready_task = main_thread_only().delayed_incoming_queue.take_top();
     if (is_cancelled) {
-      recordreplay::Assert("[RUN-1127] TaskQueueImpl::MoveReadyDelayedTasksToWorkQueue #3");
       tasks_to_delete->push_back(std::move(ready_task));
       continue;
     }
@@ -818,14 +806,10 @@ void TaskQueueImpl::MoveReadyDelayedTasksToWorkQueue(
     delayed_work_queue_task_pusher.Push(std::move(ready_task));
   }
 
-  recordreplay::Assert("[RUN-1127] TaskQueueImpl::MoveReadyDelayedTasksToWorkQueue #4");
-
   // Explicitly delete tasks last.
   tasks_to_delete->clear();
 
   UpdateWakeUp(lazy_now);
-
-  recordreplay::Assert("[RUN-1127] TaskQueueImpl::MoveReadyDelayedTasksToWorkQueue Done");
 }
 
 void TaskQueueImpl::TraceQueueSize() const {
@@ -1369,14 +1353,8 @@ void TaskQueueImpl::ResetThrottler() {
 }
 
 void TaskQueueImpl::UpdateWakeUp(LazyNow* lazy_now) {
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-1127] TaskQueueImpl::UpdateWakeUp");
-
   absl::optional<WakeUp> wake_up = GetNextDesiredWakeUp();
   if (main_thread_only().throttler && IsQueueEnabled()) {
-    if (!recordreplay::AreEventsDisallowed())
-      recordreplay::Assert("[RUN-1127] TaskQueueImpl::UpdateWakeUp #1");
-
     // GetNextAllowedWakeUp() may return a non-null wake_up even if |wake_up| is
     // nullopt, e.g. to throttle immediate tasks.
     wake_up = main_thread_only().throttler->GetNextAllowedWakeUp(
@@ -1387,10 +1365,6 @@ void TaskQueueImpl::UpdateWakeUp(LazyNow* lazy_now) {
 
 void TaskQueueImpl::SetNextWakeUp(LazyNow* lazy_now,
                                   absl::optional<WakeUp> wake_up) {
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-1127] TaskQueueImpl::SetNextWakeUp %d",
-                         main_thread_only().scheduled_wake_up == wake_up);
-
   if (main_thread_only().scheduled_wake_up == wake_up)
     return;
   main_thread_only().scheduled_wake_up = wake_up;

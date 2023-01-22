@@ -659,10 +659,6 @@ SequenceManagerImpl::SelectNextTaskImpl(LazyNow& lazy_now,
   TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("sequence_manager"),
                "SequenceManagerImpl::SelectNextTask");
 
-  // https://linear.app/replay/issue/RUN-1127
-  recordreplay::Assert("[RUN-1127] SequenceManagerImpl::SelectNextTaskImpl %d %d",
-                       recordreplay::PointerId(this), (int)option);
-
   ReloadEmptyWorkQueues();
   MoveReadyDelayedTasksToWorkQueues(&lazy_now);
 
@@ -677,28 +673,18 @@ SequenceManagerImpl::SelectNextTaskImpl(LazyNow& lazy_now,
     internal::WorkQueue* work_queue =
         main_thread_only().selector.SelectWorkQueueToService(option);
 
-    // https://linear.app/replay/issue/RUN-1127
-    recordreplay::Assert("[RUN-1127] SequenceManagerImpl::SelectNextTaskImpl #1 %d",
-                         recordreplay::PointerId(work_queue));
-
     TRACE_EVENT_OBJECT_SNAPSHOT_WITH_ID(
         TRACE_DISABLED_BY_DEFAULT("sequence_manager.debug"), "SequenceManager",
         this,
         AsValueWithSelectorResultForTracing(work_queue,
                                             /* force_verbose */ false));
 
-    if (!work_queue) {
-      // https://linear.app/replay/issue/RUN-1127
-      recordreplay::Assert("[RUN-1127] SequenceManagerImpl::SelectNextTaskImpl #2");
+    if (!work_queue)
       return absl::nullopt;
-    }
 
     // If the head task was canceled, remove it and run the selector again.
-    if (UNLIKELY(work_queue->RemoveAllCanceledTasksFromFront())) {
-      // https://linear.app/replay/issue/RUN-1127
-      recordreplay::Assert("[RUN-1127] SequenceManagerImpl::SelectNextTaskImpl #3");
+    if (UNLIKELY(work_queue->RemoveAllCanceledTasksFromFront()))
       continue;
-    }
 
     if (UNLIKELY(work_queue->GetFrontTask()->nestable ==
                      Nestable::kNonNestable &&
@@ -712,8 +698,6 @@ SequenceManagerImpl::SelectNextTaskImpl(LazyNow& lazy_now,
           work_queue->queue_type()};
       main_thread_only().non_nestable_task_queue.push_back(
           std::move(deferred_task));
-      // https://linear.app/replay/issue/RUN-1127
-      recordreplay::Assert("[RUN-1127] SequenceManagerImpl::SelectNextTaskImpl #4");
       continue;
     }
 
@@ -721,8 +705,6 @@ SequenceManagerImpl::SelectNextTaskImpl(LazyNow& lazy_now,
             work_queue->task_queue()->GetQueuePriority()))) {
       TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("sequence_manager"),
                    "SequenceManager.YieldToNative");
-      // https://linear.app/replay/issue/RUN-1127
-      recordreplay::Assert("[RUN-1127] SequenceManagerImpl::SelectNextTaskImpl #5");
       return absl::nullopt;
     }
 
@@ -741,9 +723,6 @@ SequenceManagerImpl::SelectNextTaskImpl(LazyNow& lazy_now,
     // Maybe invalidate the delayed task handle. |pending_task| is guaranteed to
     // be valid here (not canceled).
     executing_task.pending_task.WillRunTask();
-
-    // https://linear.app/replay/issue/RUN-1127
-    recordreplay::Assert("[RUN-1127] SequenceManagerImpl::SelectNextTaskImpl Done");
 
     return SelectedTask(
         executing_task.pending_task,
