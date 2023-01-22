@@ -33,8 +33,6 @@
 #include "base/mac/scoped_block.h"
 #endif
 
-#include "base/record_replay.h"
-
 // See base/callback.h for user documentation.
 //
 //
@@ -1583,6 +1581,8 @@ struct CallbackCancellationTraits {
   static constexpr bool is_cancellable = false;
 };
 
+extern uintptr_t CallbackRecordReplayValue(const char* why, uintptr_t value);
+
 // Specialization for method bound to weak pointer receiver.
 template <typename Functor, typename... BoundArgs>
 struct CallbackCancellationTraits<
@@ -1600,7 +1600,7 @@ struct CallbackCancellationTraits<
     // Weak pointers can be cleared non-deterministically when recording/replaying,
     // so record/replay whether they are present so that callers checking the status
     // like TaskQueueImpl behave consistently.
-    return recordreplay::RecordReplayValue("WeakMethodIsCancelled", !receiver);
+    return CallbackRecordReplayValue("WeakMethodIsCancelled", !receiver);
   }
 
   template <typename Receiver, typename... Args>
