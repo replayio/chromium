@@ -139,7 +139,8 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS) Connector : public MessageReceiver {
   // encountered while reading from the pipe or waiting to read from the pipe.
   void set_connection_error_handler(base::OnceClosure error_handler) {
     // https://linear.app/replay/issue/RUN-1123
-    recordreplay::Assert("[RUN-1123] Connector::set_connection_error_handler %d", !!error_handler);
+    recordreplay::Assert("[RUN-1123] Connector::set_connection_error_handler %d %d",
+                         recordreplay::PointerId(this), !!error_handler);
 
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
     connection_error_handler_ = std::move(error_handler);

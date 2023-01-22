@@ -712,7 +712,8 @@ void Connector::HandleError(bool force_pipe_reset, bool force_async_handler) {
       WaitToReadMore();
   } else {
     // https://linear.app/replay/issue/RUN-1123
-    recordreplay::Assert("[RUN-1123] Connector::HandleError #6 %d", !!connection_error_handler_);
+    recordreplay::Assert("[RUN-1123] Connector::HandleError #6 %d %d",
+                         recordreplay::PointerId(this), !!connection_error_handler_);
 
     error_ = true;
     if (connection_error_handler_)

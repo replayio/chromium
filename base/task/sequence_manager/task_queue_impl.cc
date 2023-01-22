@@ -1353,8 +1353,12 @@ void TaskQueueImpl::ResetThrottler() {
 }
 
 void TaskQueueImpl::UpdateWakeUp(LazyNow* lazy_now) {
+  recordreplay::Assert("[RUN-1127] TaskQueueImpl::UpdateWakeUp");
+
   absl::optional<WakeUp> wake_up = GetNextDesiredWakeUp();
   if (main_thread_only().throttler && IsQueueEnabled()) {
+    recordreplay::Assert("[RUN-1127] TaskQueueImpl::UpdateWakeUp #1");
+
     // GetNextAllowedWakeUp() may return a non-null wake_up even if |wake_up| is
     // nullopt, e.g. to throttle immediate tasks.
     wake_up = main_thread_only().throttler->GetNextAllowedWakeUp(
@@ -1365,6 +1369,9 @@ void TaskQueueImpl::UpdateWakeUp(LazyNow* lazy_now) {
 
 void TaskQueueImpl::SetNextWakeUp(LazyNow* lazy_now,
                                   absl::optional<WakeUp> wake_up) {
+  recordreplay::Assert("[RUN-1127] TaskQueueImpl::SetNextWakeUp %d",
+                       main_thread_only().scheduled_wake_up == wake_up);
+
   if (main_thread_only().scheduled_wake_up == wake_up)
     return;
   main_thread_only().scheduled_wake_up = wake_up;
