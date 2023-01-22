@@ -25,6 +25,8 @@
 #include "mojo/public/cpp/system/simple_watcher.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
+#include "base/record_replay.h"
+
 namespace base {
 class Lock;
 }
@@ -136,6 +138,9 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS) Connector : public MessageReceiver {
   // Sets the error handler to receive notifications when an error is
   // encountered while reading from the pipe or waiting to read from the pipe.
   void set_connection_error_handler(base::OnceClosure error_handler) {
+    // https://linear.app/replay/issue/RUN-1123
+    recordreplay::Assert("[RUN-1123] Connector::set_connection_error_handler %d", !!error_handler);
+
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
     connection_error_handler_ = std::move(error_handler);
   }

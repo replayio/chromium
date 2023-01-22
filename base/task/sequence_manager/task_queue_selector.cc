@@ -174,6 +174,11 @@ WorkQueue* TaskQueueSelector::SelectWorkQueueToService(
   DCHECK_CALLED_ON_VALID_THREAD(associated_thread_->thread_checker);
 
   auto highest_priority = GetHighestPendingPriority(option);
+
+  recordreplay::Assert("[RUN-1127] TaskQueueSelector::SelectWorkQueueToService %d %d",
+                       highest_priority.has_value(),
+                       highest_priority.has_value() ? (int)highest_priority.value() : 0);
+
   if (!highest_priority.has_value()) {
     return nullptr;
   }
@@ -196,6 +201,10 @@ WorkQueue* TaskQueueSelector::SelectWorkQueueToService(
             :
 #endif
             ChooseImmediateOnlyWithPriority<SetOperationOldest>(priority);
+
+    recordreplay::Assert("[RUN-1127] TaskQueueSelector::SelectWorkQueueToService #1 %d",
+                         recordreplay::PointerId(queue));
+
     return queue;
   }
 
@@ -205,6 +214,9 @@ WorkQueue* TaskQueueSelector::SelectWorkQueueToService(
                              :
 #endif
                              ChooseWithPriority<SetOperationOldest>(priority);
+
+  recordreplay::Assert("[RUN-1127] TaskQueueSelector::SelectWorkQueueToService #2 %d",
+                       recordreplay::PointerId(queue));
 
   // If we have selected a delayed task while having an immediate task of the
   // same priority, increase the starvation count.

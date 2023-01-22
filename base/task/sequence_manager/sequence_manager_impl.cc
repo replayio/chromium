@@ -787,11 +787,14 @@ absl::optional<WakeUp> SequenceManagerImpl::GetPendingWakeUp(
 
   if (auto priority =
           main_thread_only().selector.GetHighestPendingPriority(option)) {
+    recordreplay::Assert("[RUN-548] SequenceManagerImpl::GetPendingWakeUp #1 %d", (int)*priority);
     // If the selector has non-empty queues we trivially know there is immediate
     // work to be done. However we may want to yield to native work if it is
     // more important.
-    if (UNLIKELY(!ShouldRunTaskOfPriority(*priority)))
+    if (UNLIKELY(!ShouldRunTaskOfPriority(*priority))) {
+      recordreplay::Assert("[RUN-548] SequenceManagerImpl::GetPendingWakeUp #2");
       return AdjustWakeUp(GetNextDelayedWakeUpWithOption(option), lazy_now);
+    }
     return WakeUp{};
   }
 
@@ -802,10 +805,15 @@ absl::optional<WakeUp> SequenceManagerImpl::GetPendingWakeUp(
 
   if (auto priority =
           main_thread_only().selector.GetHighestPendingPriority(option)) {
-    if (UNLIKELY(!ShouldRunTaskOfPriority(*priority)))
+    recordreplay::Assert("[RUN-548] SequenceManagerImpl::GetPendingWakeUp #3 %d", (int)*priority);
+    if (UNLIKELY(!ShouldRunTaskOfPriority(*priority))) {
+      recordreplay::Assert("[RUN-548] SequenceManagerImpl::GetPendingWakeUp #4");
       return AdjustWakeUp(GetNextDelayedWakeUpWithOption(option), lazy_now);
+    }
     return WakeUp{};
   }
+
+  recordreplay::Assert("[RUN-548] SequenceManagerImpl::GetPendingWakeUp #5");
 
   // Otherwise we need to find the shortest delay, if any.  NB we don't need to
   // call MoveReadyDelayedTasksToWorkQueues because it's assumed
