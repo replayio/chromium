@@ -4,7 +4,7 @@
 
 #include "base/functional/callback_helpers.h"
 
-#include <dlsym.h>
+#include <dlfcn.h>
 
 static void* gRecordReplayValueFn;
 
