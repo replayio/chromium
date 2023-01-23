@@ -54,15 +54,11 @@ class CORE_EXPORT MessageEvent final : public Event {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
-  static MessageEvent* Create() {
-    recordreplay::Assert("[RUN-1145] MessageEvent::Create v1");
-    return MakeGarbageCollected<MessageEvent>();
-  }
+  static MessageEvent* Create() { return MakeGarbageCollected<MessageEvent>(); }
   static MessageEvent* Create(MessagePortArray* ports,
                               const String& origin = String(),
                               const String& last_event_id = String(),
                               EventTarget* source = nullptr) {
-    recordreplay::Assert("[RUN-1145] MessageEvent::Create v2");
     return MakeGarbageCollected<MessageEvent>(origin, last_event_id, source,
                                               ports);
   }
@@ -71,14 +67,12 @@ class CORE_EXPORT MessageEvent final : public Event {
                               const String& origin = String(),
                               const String& last_event_id = String(),
                               EventTarget* source = nullptr) {
-    recordreplay::Assert("[RUN-1145] MessageEvent::Create v3");
     return MakeGarbageCollected<MessageEvent>(
         std::move(data), origin, last_event_id, source, ports, nullptr);
   }
   static MessageEvent* Create(MessagePortArray* ports,
                               scoped_refptr<SerializedScriptValue> data,
                               UserActivation* user_activation) {
-    recordreplay::Assert("[RUN-1145] MessageEvent::Create v4");
     return MakeGarbageCollected<MessageEvent>(
         std::move(data), String(), String(), nullptr, ports, user_activation);
   }
@@ -91,7 +85,6 @@ class CORE_EXPORT MessageEvent final : public Event {
       UserActivation* user_activation = nullptr,
       mojom::blink::DelegatedCapability delegated_capability =
           mojom::blink::DelegatedCapability::kNone) {
-    recordreplay::Assert("[RUN-1145] MessageEvent::Create v5");
     return MakeGarbageCollected<MessageEvent>(
         std::move(data), origin, last_event_id, source, std::move(channels),
         user_activation, delegated_capability);
@@ -102,16 +95,13 @@ class CORE_EXPORT MessageEvent final : public Event {
   }
   static MessageEvent* Create(const String& data,
                               const String& origin = String()) {
-    recordreplay::Assert("[RUN-1145] MessageEvent::Create v6");
     return MakeGarbageCollected<MessageEvent>(data, origin);
   }
   static MessageEvent* Create(Blob* data, const String& origin = String()) {
-    recordreplay::Assert("[RUN-1145] MessageEvent::Create v7");
     return MakeGarbageCollected<MessageEvent>(data, origin);
   }
   static MessageEvent* Create(DOMArrayBuffer* data,
                               const String& origin = String()) {
-    recordreplay::Assert("[RUN-1145] MessageEvent::Create v8");
     return MakeGarbageCollected<MessageEvent>(data, origin);
   }
   static MessageEvent* Create(const AtomicString& type,

@@ -512,11 +512,8 @@ MojoResult Connector::ReadMessage(ScopedMessageHandle& message) {
 bool Connector::DispatchMessage(ScopedMessageHandle handle) {
   DCHECK(!paused_);
 
-  recordreplay::Assert("[RUN-1145] Connector::DispatchMessage");
-
   Message message = Message::CreateFromMessageHandle(&handle);
   if (message.IsNull()) {
-    recordreplay::Assert("[RUN-1145] Connector::DispatchMessage #1");
     // If the Message is null, there was a problem extracting handles from it.
     NotifyBadMessage(
         handle.get(),
@@ -527,7 +524,6 @@ bool Connector::DispatchMessage(ScopedMessageHandle handle) {
   }
 
   if (!header_validator_.Accept(&message)) {
-    recordreplay::Assert("[RUN-1145] Connector::DispatchMessage #2");
     HandleError(/*force_pipe_reset=*/true, /*force_async_handler=*/false);
     return false;
   }
@@ -578,11 +574,9 @@ bool Connector::DispatchMessage(ScopedMessageHandle handle) {
 
   bool receiver_result = false;
   if (recorded_has_receiver) {
-    recordreplay::Assert("[RUN-1145] Connector::DispatchMessage has_receiver %d", !!incoming_receiver_);
+    recordreplay::Assert("Connector::DispatchMessage has_receiver %d", !!incoming_receiver_);
     receiver_result = incoming_receiver_ && incoming_receiver_->Accept(&message);
   }
-
-  recordreplay::Assert("[RUN-1145] Connector::DispatchMessage #4");
 
   if (!weak_self)
     return receiver_result;
@@ -629,8 +623,6 @@ void Connector::ScheduleDispatchOfPendingMessagesOrWaitForMore(
 }
 
 void Connector::ReadAllAvailableMessages() {
-  recordreplay::Assert("[RUN-1145] Connector::ReadAllAvailableMessages");
-
   if (paused_ || error_) {
     return;
   }
@@ -641,15 +633,10 @@ void Connector::ReadAllAvailableMessages() {
     ScopedMessageHandle message;
     MojoResult rv = ReadMessage(message);
 
-    recordreplay::Assert("[RUN-1145] Connector::ReadAllAvailableMessages #1 %d", (int)rv);
-
     switch (rv) {
       case MOJO_RESULT_OK:
-        if (!DispatchMessage(std::move(message)) || !weak_self || paused_) {
-          recordreplay::Assert("[RUN-1145] Connector::ReadAllAvailableMessages #2");
+        if (!DispatchMessage(std::move(message)) || !weak_self || paused_)
           return;
-        }
-        recordreplay::Assert("[RUN-1145] Connector::ReadAllAvailableMessages #3");
         break;
 
       case MOJO_RESULT_SHOULD_WAIT:
@@ -673,8 +660,6 @@ void Connector::ReadAllAvailableMessages() {
     }
   } while (weak_self && should_dispatch_messages_immediately());
 
-  recordreplay::Assert("[RUN-1145] Connector::ReadAllAvailableMessages #4");
-
   if (weak_self) {
     const auto pending_message_count = QueryPendingMessageCount();
     ScheduleDispatchOfPendingMessagesOrWaitForMore(pending_message_count);
@@ -690,8 +675,6 @@ void Connector::CancelWait() {
 }
 
 void Connector::HandleError(bool force_pipe_reset, bool force_async_handler) {
-  recordreplay::Assert("[RUN-1145] Connector::HandleError %d %d", force_pipe_reset, force_async_handler);
-
   if (error_ || !message_pipe_.is_valid())
     return;
 
@@ -720,13 +703,8 @@ void Connector::HandleError(bool force_pipe_reset, bool force_async_handler) {
       WaitToReadMore();
   } else {
     error_ = true;
-
-    recordreplay::Assert("[RUN-1145] Connector::HandleError #5 %d", !!connection_error_handler_);
-
     if (connection_error_handler_)
       std::move(connection_error_handler_).Run();
-
-    recordreplay::Assert("[RUN-1145] Connector::HandleError #6");
   }
 }
 

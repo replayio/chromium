@@ -223,8 +223,6 @@ MessageEvent* MessageEvent::Create(const AtomicString& type,
     return nullptr;
   }
 
-  recordreplay::Assert("[RUN-1145] MessageEvent::Create #1");
-
   return MakeGarbageCollected<MessageEvent>(type, initializer);
 }
 
