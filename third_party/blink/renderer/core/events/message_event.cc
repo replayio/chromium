@@ -223,8 +223,7 @@ MessageEvent* MessageEvent::Create(const AtomicString& type,
     return nullptr;
   }
 
-  // https://linear.app/replay/issue/RUN-1150
-  recordreplay::Assert("[RUN-1150] MessageEvent::Create #1");
+  recordreplay::Assert("[RUN-1145] MessageEvent::Create #1");
 
   return MakeGarbageCollected<MessageEvent>(type, initializer);
 }

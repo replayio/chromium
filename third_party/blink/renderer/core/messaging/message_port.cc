@@ -314,6 +314,8 @@ void MessagePort::Trace(Visitor* visitor) const {
 bool MessagePort::Accept(mojo::Message* mojo_message) {
   TRACE_EVENT0("blink", "MessagePort::Accept");
 
+  recordreplay::Assert("[RUN-1145] MessagePort::Accept");
+
   BlinkTransferableMessage message;
   if (!mojom::blink::TransferableMessage::DeserializeFromMessage(
           std::move(*mojo_message), &message)) {
@@ -321,15 +323,22 @@ bool MessagePort::Accept(mojo::Message* mojo_message) {
   }
 
   ExecutionContext* context = GetExecutionContext();
+
+  recordreplay::Assert("[RUN-1145] MessagePort::Accept #1 %d", !!context);
+
   if (!context)
     return true;
 
   // WorkerGlobalScope::close() in Worker onmessage handler should prevent
   // the next message from dispatching.
   if (auto* scope = DynamicTo<WorkerGlobalScope>(context)) {
-    if (scope->IsClosing())
+    if (scope->IsClosing()) {
+      recordreplay::Assert("[RUN-1145] MessagePort::Accept #2");
       return true;
+    }
   }
+
+  recordreplay::Assert("[RUN-1145] MessagePort::Accept #3");
 
   Event* evt = CreateMessageEvent(message);
   // This unique_ptr is here to ensure that the TaskScope remains alive for the
@@ -372,6 +381,8 @@ bool MessagePort::Accept(mojo::Message* mojo_message) {
   DispatchEvent(*evt, "MessagePort::Accept");
   if (debugger)
     debugger->ExternalAsyncTaskFinished(message.sender_stack_trace_id);
+
+  recordreplay::Assert("[RUN-1145] MessagePort::Accept Done");
   return true;
 }
 
