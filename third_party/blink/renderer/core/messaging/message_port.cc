@@ -321,7 +321,6 @@ bool MessagePort::Accept(mojo::Message* mojo_message) {
   }
 
   ExecutionContext* context = GetExecutionContext();
-
   if (!context)
     return true;
 
@@ -373,7 +372,6 @@ bool MessagePort::Accept(mojo::Message* mojo_message) {
   DispatchEvent(*evt, "MessagePort::Accept");
   if (debugger)
     debugger->ExternalAsyncTaskFinished(message.sender_stack_trace_id);
-
   return true;
 }
 
