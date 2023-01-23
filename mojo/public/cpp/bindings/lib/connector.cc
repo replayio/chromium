@@ -570,10 +570,17 @@ bool Connector::DispatchMessage(ScopedMessageHandle handle) {
   if (connection_group_)
     message.set_receiver_connection_group(&connection_group_);
 
-  recordreplay::Assert("[RUN-1145] Connector::DispatchMessage #3 %d", !!incoming_receiver_);
+  // Whether there is a receiver or not can vary when replaying due to different
+  // MessagePort GC behavior. For now we hack around this by only notifying the
+  // receiver if it was present while recording.
+  bool recorded_has_receiver =
+    recordreplay::RecordReplayValue("Connector::DispatchMessage has_receiver", !!incoming_receiver_);
 
-  bool receiver_result =
-      incoming_receiver_ && incoming_receiver_->Accept(&message);
+  bool receiver_result = false;
+  if (recorded_has_receiver) {
+    recordreplay::Assert("[RUN-1145] Connector::DispatchMessage has_receiver %d", !!incoming_receiver_);
+    receiver_result = incoming_receiver_ && incoming_receiver_->Accept(&message);
+  }
 
   recordreplay::Assert("[RUN-1145] Connector::DispatchMessage #4");
 
