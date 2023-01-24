@@ -177,21 +177,20 @@ void MessagePort::start() {
 }
 
 void MessagePort::close() {
-  recordreplay::Assert("[RUN-1123] MessagePort::close %d", closed_);
-
   if (closed_)
     return;
   // A closed port should not be neutered, so rather than merely disconnecting
   // from the mojo message pipe, also entangle with a new dangling message pipe.
   if (!IsNeutered()) {
     // Refuse to entangle the port at non-deterministic points, as this requires
-    // creating mojo resources.
-    if (recordreplay::AreEventsDisallowed())
-      return;
-
-    Disentangle().ReleaseHandle();
-    MessagePortDescriptorPair pipe;
-    Entangle(pipe.TakePort0());
+    // creating mojo resources. close() calls are always treated as non-deterministic
+    // because the port's lifetime is managed by the GC and on destruction the
+    // port is detached from the connector.
+    if (!recordreplay::IsRecordingOrReplaying("disallow-events")) {
+      Disentangle().ReleaseHandle();
+      MessagePortDescriptorPair pipe;
+      Entangle(pipe.TakePort0());
+    }
   }
   closed_ = true;
 }
@@ -322,6 +321,9 @@ bool MessagePort::Accept(mojo::Message* mojo_message) {
   }
 
   ExecutionContext* context = GetExecutionContext();
+  if (!context)
+    return true;
+
   // WorkerGlobalScope::close() in Worker onmessage handler should prevent
   // the next message from dispatching.
   if (auto* scope = DynamicTo<WorkerGlobalScope>(context)) {

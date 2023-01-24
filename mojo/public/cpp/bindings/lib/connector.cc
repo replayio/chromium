@@ -565,8 +565,19 @@ bool Connector::DispatchMessage(ScopedMessageHandle handle) {
 
   if (connection_group_)
     message.set_receiver_connection_group(&connection_group_);
-  bool receiver_result =
-      incoming_receiver_ && incoming_receiver_->Accept(&message);
+
+  // Whether there is a receiver or not can vary when replaying due to different
+  // MessagePort GC behavior. For now we hack around this by only notifying the
+  // receiver if it was present while recording.
+  bool recorded_has_receiver =
+    recordreplay::RecordReplayValue("Connector::DispatchMessage has_receiver", !!incoming_receiver_);
+
+  bool receiver_result = false;
+  if (recorded_has_receiver) {
+    recordreplay::Assert("Connector::DispatchMessage has_receiver %d", !!incoming_receiver_);
+    receiver_result = incoming_receiver_ && incoming_receiver_->Accept(&message);
+  }
+
   if (!weak_self)
     return receiver_result;
 
@@ -624,9 +635,8 @@ void Connector::ReadAllAvailableMessages() {
 
     switch (rv) {
       case MOJO_RESULT_OK:
-        if (!DispatchMessage(std::move(message)) || !weak_self || paused_) {
+        if (!DispatchMessage(std::move(message)) || !weak_self || paused_)
           return;
-        }
         break;
 
       case MOJO_RESULT_SHOULD_WAIT:
@@ -665,20 +675,10 @@ void Connector::CancelWait() {
 }
 
 void Connector::HandleError(bool force_pipe_reset, bool force_async_handler) {
-  // https://linear.app/replay/issue/RUN-1123
-  recordreplay::Assert("[RUN-1123] Connector::HandleError %d %d %d",
-                       recordreplay::PointerId(this), force_pipe_reset, force_async_handler);
-
-  if (error_ || !message_pipe_.is_valid()) {
-    // https://linear.app/replay/issue/RUN-1123
-    recordreplay::Assert("[RUN-1123] Connector::HandleError #1");
+  if (error_ || !message_pipe_.is_valid())
     return;
-  }
 
   if (paused_) {
-    // https://linear.app/replay/issue/RUN-1123
-    recordreplay::Assert("[RUN-1123] Connector::HandleError #2");
-
     // Enforce calling the error handler asynchronously if the user has paused
     // receiving messages. We need to wait until the user starts receiving
     // messages again.
@@ -689,38 +689,23 @@ void Connector::HandleError(bool force_pipe_reset, bool force_async_handler) {
     force_pipe_reset = true;
 
   if (force_pipe_reset) {
-    // https://linear.app/replay/issue/RUN-1123
-    recordreplay::Assert("[RUN-1123] Connector::HandleError #3");
-
     CancelWait();
     internal::MayAutoLock locker(&lock_);
     message_pipe_.reset();
     MessagePipe dummy_pipe;
     message_pipe_ = std::move(dummy_pipe.handle0);
   } else {
-    // https://linear.app/replay/issue/RUN-1123
-    recordreplay::Assert("[RUN-1123] Connector::HandleError #4");
-
     CancelWait();
   }
 
   if (force_async_handler) {
-    // https://linear.app/replay/issue/RUN-1123
-    recordreplay::Assert("[RUN-1123] Connector::HandleError #5 %d", paused_);
-
     if (!paused_)
       WaitToReadMore();
   } else {
-    // https://linear.app/replay/issue/RUN-1123
-    recordreplay::Assert("[RUN-1123] Connector::HandleError #6 %d", !!connection_error_handler_);
-
     error_ = true;
     if (connection_error_handler_)
       std::move(connection_error_handler_).Run();
   }
-
-  // https://linear.app/replay/issue/RUN-1123
-  recordreplay::Assert("[RUN-1123] Connector::HandleError Done");
 }
 
 void Connector::EnsureSyncWatcherExists() {

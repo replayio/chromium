@@ -95,7 +95,7 @@ std::atomic_bool g_explicit_high_resolution_timer_win{false};
 TaskQueueImpl::GuardedTaskPoster::GuardedTaskPoster(TaskQueueImpl* outer)
     : outer_(outer) {
   if (recordreplay::IsRecordingOrReplaying()) {
-    recordreplay::AutoDisallowEvents disallow;
+    recordreplay::AutoDisallowEvents disallow("TaskQueueImpl::GuardedTaskPoster::GuardedTaskPoster");
     record_replay_unordered_operations_controller_.emplace();
   }
 }
@@ -453,11 +453,8 @@ void TaskQueueImpl::PostImmediateTaskImpl(PostedTask task,
 
     bool add_queue_time_to_tasks = sequence_manager_->GetAddQueueTimeToTasks();
     TimeTicks queue_time;
-    if (add_queue_time_to_tasks || delayed_fence_allowed_) {
-      // https://linear.app/replay/issue/RUN-1145
-      recordreplay::Assert("[RUN-1145] TaskQueueImpl::PostImmediateTaskImpl #1");
-      queue_time = sequence_manager_->any_thread_clock()->NowTicks();
-    }
+    if (add_queue_time_to_tasks || delayed_fence_allowed_)
+      queue_time = sequence_manager_->any_thread_clock_maybe_events_disallowed()->NowTicks();
 
     // The sequence number must be incremented atomically with pushing onto the
     // incoming queue. Otherwise if there are several threads posting task we
@@ -1345,7 +1342,7 @@ void TaskQueueImpl::SetThrottler(TaskQueue::Throttler* throttler) {
 
 void TaskQueueImpl::ResetThrottler() {
   main_thread_only().throttler = nullptr;
-  LazyNow lazy_now(sequence_manager_->main_thread_clock());
+  LazyNow lazy_now(sequence_manager_->any_thread_clock_maybe_events_disallowed());
   // The current delayed wake up may have been determined by the Throttler.
   // Update it now that there is no Throttler.
   UpdateWakeUp(&lazy_now);
