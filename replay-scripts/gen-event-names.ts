@@ -3,21 +3,13 @@
 // found in the LICENSE file.
 
 /**
- * @file In this file, we take all CDT user event names, 
- * parse them and map them against their `gecko` counterpart.
- * It outputs (i) verification results, (ii) comparison results
- * (iii) potential mapping problems, (iv) and C++ code that 
- * allows easily looking up `gecko` event names by their CDT
- * counterpart.
- * 
- * @see https://linear.app/replay/issue/RUN-1061#comment-bde208c4
+ * @file In this file, we find all CDT event and category names
+ * and produce a lookup table for `devtools`.
  */
 
 import fs from 'fs';
 import path from 'path';
-import without from 'lodash/without';
 import startCase from 'lodash/startCase';
-import levenshtein from 'js-levenshtein';
 import { EventHandlerType } from "@replayio/protocol";
 
 
@@ -68,7 +60,7 @@ const cdtCategoryOverrides: { [key: string]: string } = {
 };
 
 /**
- * Translate category names from CDT to gecko.
+ * Prettier CDT category names
  */
 function prettyCDTCategory(category: string) {
   category = startCase(category);

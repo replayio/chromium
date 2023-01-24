@@ -767,8 +767,7 @@ void InspectorDOMDebuggerAgent::Did(const probe::UserCallback& probe) {
 
   if (probe.event_target) {
     ReplayNotifyAfterEvent(name, probe.event_target, false);
-  }
-  else {
+  } else {
     ReplayNotifyAfterEvent(name, nullptr, true);
   }
 
