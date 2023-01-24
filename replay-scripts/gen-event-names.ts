@@ -84,10 +84,8 @@ let cdtEvents = cdtCategoriesRaw.map(cat => {
 });
 
 
-
 console.log('Done.');
 console.groupEnd();
-
 
 
 const code = genTs();
@@ -101,15 +99,15 @@ console.log(`\n=== Generated code has been written to:\n  ${codeFile}\n`);
  * ##########################################################################*/
 
 function genTs() {
-  const Indent = 4;
+  const Indent = ' '.repeat(4);
   return `\
 // <GENERATED CODE. DO NOT EDIT.>
-// NOTE: This code is generated via \`ts-node scripts/gen-event-names.ts\`
+// NOTE: This table is generated via \`ts-node $CHROMIUM_DIR/src/replay-scripts/gen-event-names.ts\`
 ${JSON.stringify(cdtEvents, null, 2)}
 // </GENERATED CODE. DO NOT EDIT.>`
   .split('\n')
-    .map(s => ' '.repeat(Indent) + s)
-    .join('\n');
+  .map(s => Indent + s)
+  .join('\n');
 }
 
 
