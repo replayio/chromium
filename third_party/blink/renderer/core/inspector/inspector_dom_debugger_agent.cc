@@ -856,7 +856,7 @@ void InspectorDOMDebuggerAgent::SetEnabled(bool enabled) {
   if (!recordreplay::HasDivergedFromRecording() || (
       instrumenting_agents_ && dom_agent_)
     ) {
-    // [replay] `instrumenting_agents_` is generally not available
+    // [replay] `instrumenting_agents_` is generally not available to us
     if (enabled && !enabled_.Get()) {
       instrumenting_agents_->AddInspectorDOMDebuggerAgent(this);
       dom_agent_->AddDOMListener(this);
@@ -933,39 +933,12 @@ void InspectorDOMDebuggerAgent::OnContentSecurityPolicyViolation(
 }
 
 
-// [replay] This code's primary purpose is to lookup qualified event names.
-// At the core is the ReplayEventType function, which takes CDT
-// event data, and uses it to lookup the `gecko` qualified event name,
-// which the frontend (currently) expects.
-// See: https://linear.app/replay/issue/RUN-1061#comment-bde208c4
-
-/**
- * CDTEventEntry takes all kinds of static-initialized data, and convert it into a
- * simple map<String, String>.
- * Also, here is a C++ playground for nested static initializers:
- *   https://replit.com/@Domiii/nested-static-initializers#main.cpp
- */
-struct CDTEventEntry {
-  std::unordered_map<String, String> qualifiedNamesByTargetName_;
-
-  CDTEventEntry(const std::vector<std::tuple<String, std::vector<String>>>&&
-                    targetNamesByQualifiedName) {
-    for (const auto& [qualifiedName, targetNames] :
-         targetNamesByQualifiedName) {
-      for (const auto& targetName : targetNames) {
-        qualifiedNamesByTargetName_.insert({targetName, qualifiedName});
-      }
-    }
-  }
-};
-
-
 // [replay]
 
 // This gathers and encodes the data points necessary for the "event breakpoint
 // matching logic" of CDT. Based on DOMDebuggerModel:
 // https://chromium.googlesource.com/devtools/devtools-frontend/+/3a80260722c77d984a637b923cad4883857e57dc/front_end/core/sdk/DOMDebuggerModel.ts#L958
-static String ReplayEventType(const String& eventTypeRaw,
+static String MakeReplayEventType(const String& eventTypeRaw,
                                          EventTarget* eventTarget,
                                          bool isCallback) {
   // build final name
@@ -994,7 +967,7 @@ void ReplayNotifyBeforeEvent(const String& eventName,
                       EventTarget* eventTarget,
                       bool isCallback) {
   String qualifiedEventName = 
-      ReplayEventType(eventName, eventTarget, isCallback);
+      MakeReplayEventType(eventName, eventTarget, isCallback);
   recordreplay::Print("DDBG ReplayNotifyBeforeEvent %s",
                       qualifiedEventName.Ascii().c_str());
   recordreplay::OnEvent(qualifiedEventName.Ascii().c_str(), true);
@@ -1004,7 +977,7 @@ void ReplayNotifyAfterEvent(const String& eventName,
                      EventTarget* eventTarget,
                      bool isCallback) {
   String qualifiedEventName =
-      ReplayEventType(eventName, eventTarget, isCallback);
+      MakeReplayEventType(eventName, eventTarget, isCallback);
   recordreplay::Print("DDBG ReplayNotifyAfterEvent %s",
                       qualifiedEventName.Ascii().c_str());
   recordreplay::OnEvent(qualifiedEventName.Ascii().c_str(), false);
