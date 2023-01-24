@@ -934,7 +934,7 @@ void InspectorDOMDebuggerAgent::OnContentSecurityPolicyViolation(
 
 
 // [replay] This code's primary purpose is to lookup qualified event names.
-// At the core is the ReplayMakeEventName function, which takes CDT
+// At the core is the ReplayEventType function, which takes CDT
 // event data, and uses it to lookup the `gecko` qualified event name,
 // which the frontend (currently) expects.
 // See: https://linear.app/replay/issue/RUN-1061#comment-bde208c4
@@ -962,17 +962,15 @@ struct CDTEventEntry {
 
 // [replay]
 
-// This gathers the data points necessary for the "event breakpoint matching logic" of CDT.
-// Source:
+// This gathers and encodes the data points necessary for the "event breakpoint
+// matching logic" of CDT. Based on DOMDebuggerModel:
 // https://chromium.googlesource.com/devtools/devtools-frontend/+/3a80260722c77d984a637b923cad4883857e57dc/front_end/core/sdk/DOMDebuggerModel.ts#L958
-static String ReplayMakeEventName(const String& eventNameRaw,
+static String ReplayEventType(const String& eventTypeRaw,
                                          EventTarget* eventTarget,
                                          bool isCallback) {
-  DEFINE_STATIC_LOCAL(String, emptyString, (""));
-
   // build final name
   StringBuilder builder;
-  builder.Append(eventNameRaw);
+  builder.Append(eventTypeRaw);
   if (isCallback) {
     builder.Append(".callback");
   }
@@ -996,7 +994,9 @@ void ReplayNotifyBeforeEvent(const String& eventName,
                       EventTarget* eventTarget,
                       bool isCallback) {
   String qualifiedEventName = 
-      ReplayMakeEventName(eventName, eventTarget, isCallback);
+      ReplayEventType(eventName, eventTarget, isCallback);
+  recordreplay::Print("DDBG ReplayNotifyBeforeEvent %s",
+                      qualifiedEventName.Ascii().c_str());
   recordreplay::OnEvent(qualifiedEventName.Ascii().c_str(), true);
 }
 
@@ -1004,7 +1004,9 @@ void ReplayNotifyAfterEvent(const String& eventName,
                      EventTarget* eventTarget,
                      bool isCallback) {
   String qualifiedEventName =
-      ReplayMakeEventName(eventName, eventTarget, isCallback);
+      ReplayEventType(eventName, eventTarget, isCallback);
+  recordreplay::Print("DDBG ReplayNotifyAfterEvent %s",
+                      qualifiedEventName.Ascii().c_str());
   recordreplay::OnEvent(qualifiedEventName.Ascii().c_str(), false);
 }
 
