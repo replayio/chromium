@@ -965,21 +965,19 @@ static String MakeReplayEventType(const String& eventTypeRaw,
 void ReplayNotifyBeforeEvent(const String& eventName, 
                       EventTarget* eventTarget,
                       bool isCallback) {
-  String qualifiedEventName = 
-      MakeReplayEventType(eventName, eventTarget, isCallback);
-  recordreplay::Print("DDBG ReplayNotifyBeforeEvent %s",
-                      qualifiedEventName.Ascii().c_str());
-  recordreplay::OnEvent(qualifiedEventName.Ascii().c_str(), true);
+  // Disabled, see https://linear.app/replay/issue/RUN-1206
+  //String qualifiedEventName =
+  //    MakeReplayEventType(eventName, eventTarget, isCallback);
+  //recordreplay::OnEvent(qualifiedEventName.Ascii().c_str(), true);
 }
 
 void ReplayNotifyAfterEvent(const String& eventName,
                      EventTarget* eventTarget,
                      bool isCallback) {
-  String qualifiedEventName =
-      MakeReplayEventType(eventName, eventTarget, isCallback);
-  recordreplay::Print("DDBG ReplayNotifyAfterEvent %s",
-                      qualifiedEventName.Ascii().c_str());
-  recordreplay::OnEvent(qualifiedEventName.Ascii().c_str(), false);
+  // Disabled, see https://linear.app/replay/issue/RUN-1206
+  //String qualifiedEventName =
+  //    MakeReplayEventType(eventName, eventTarget, isCallback);
+  //recordreplay::OnEvent(qualifiedEventName.Ascii().c_str(), false);
 }
 
 }  // namespace blink
