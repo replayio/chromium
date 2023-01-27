@@ -965,19 +965,21 @@ static String MakeReplayEventType(const String& eventTypeRaw,
 void ReplayNotifyBeforeEvent(const String& eventName, 
                       EventTarget* eventTarget,
                       bool isCallback) {
+  String qualifiedEventName =
+      MakeReplayEventType(eventName, eventTarget, isCallback);
   // Disabled, see https://linear.app/replay/issue/RUN-1206
-  //String qualifiedEventName =
-  //    MakeReplayEventType(eventName, eventTarget, isCallback);
   //recordreplay::OnEvent(qualifiedEventName.Ascii().c_str(), true);
+  (void)qualifiedEventName;
 }
 
 void ReplayNotifyAfterEvent(const String& eventName,
                      EventTarget* eventTarget,
                      bool isCallback) {
+  String qualifiedEventName =
+      MakeReplayEventType(eventName, eventTarget, isCallback);
   // Disabled, see https://linear.app/replay/issue/RUN-1206
-  //String qualifiedEventName =
-  //    MakeReplayEventType(eventName, eventTarget, isCallback);
   //recordreplay::OnEvent(qualifiedEventName.Ascii().c_str(), false);
+  (void)qualifiedEventName;
 }
 
 }  // namespace blink
