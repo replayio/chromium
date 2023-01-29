@@ -155,7 +155,7 @@ void BodyStreamBuffer::Init() {
     } else {
       if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers")) {
         // Abort() interacts with the recording so we need it to run consistently.
-        signal_->AddAlgorithm(WTF::BindOnce(&BodyStreamBuffer::Abort, this));
+        signal_->AddAlgorithm(WTF::BindOnce(&BodyStreamBuffer::Abort, WrapPersistent(this)));
       } else {
         signal_->AddAlgorithm(
             WTF::BindOnce(&BodyStreamBuffer::Abort, WrapWeakPersistent(this)));
@@ -243,7 +243,7 @@ void BodyStreamBuffer::StartLoading(FetchDataLoader* loader,
     }
     if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers")) {
       // Client aborts can interact with the recording, so we want them to run consistently.
-      signal_->AddAlgorithm(WTF::BindOnce(&FetchDataLoader::Client::Abort, client));
+      signal_->AddAlgorithm(WTF::BindOnce(&FetchDataLoader::Client::Abort, WrapPersistent(client)));
     } else {
       signal_->AddAlgorithm(WTF::BindOnce(&FetchDataLoader::Client::Abort,
                                           WrapWeakPersistent(client)));
