@@ -21,6 +21,8 @@
 #include "components/power_scheduler/power_mode_voter.h"
 #include "components/power_scheduler/traced_power_mode.h"
 
+#include "base/record_replay.h"
+
 namespace power_scheduler {
 
 using ObserverList = base::ObserverListThreadSafe<PowerModeArbiter::Observer>;
@@ -229,7 +231,9 @@ void PowerModeArbiter::OnVoterDestroyed(PowerModeVoter* voter) {
 void PowerModeArbiter::SetVote(PowerModeVoter* voter, PowerMode mode) {
   bool did_change = false;
   {
-    base::AutoLock lock(lock_);
+    // https://linear.app/replay/issue/RUN-1230
+    recordreplay::AutoLockMaybeEventsDisallowed lock(lock_);
+
     auto it = votes_.find(voter);
     DCHECK(it != votes_.end());
     TracedPowerMode& voter_mode = it->second;
