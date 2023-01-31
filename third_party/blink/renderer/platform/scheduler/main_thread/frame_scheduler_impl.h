@@ -345,7 +345,7 @@ class PLATFORM_EXPORT FrameSchedulerImpl : public FrameScheduler,
   TraceableState<bool, TracingCategory::kInfo> waiting_for_contentful_paint_;
   TraceableState<bool, TracingCategory::kInfo> waiting_for_meaningful_paint_;
 
-  std::unique_ptr<power_scheduler::PowerModeVoter> loading_power_mode_voter_;
+  recordreplay::unique_leaky_ptr<power_scheduler::PowerModeVoter> loading_power_mode_voter_;
 
   // TODO(altimin): Remove after we have have 1:1 relationship between frames
   // and documents.
