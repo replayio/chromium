@@ -886,9 +886,20 @@ class CORE_EXPORT StyleEngine final : public GarbageCollected<StyleEngine>,
 
   Member<CSSFontSelector> font_selector_;
 
-  HeapHashMap<AtomicString, WeakMember<StyleSheetContents>>
+  // RecordReplay: We use strong pointers to StyleSheetContents objects so that
+  // GC doesn't clean them up non-deterministically.
+  //
+  // Instead, the cache is cleared deterministically once its size exceeds a
+  // fixed threshold, or a certain number of accesses are made.
+  static const unsigned kRecordReplayTextToSheetCacheMaxWeight = 1000 * 1000;
+  unsigned record_replay_text_to_sheet_cache_weight_{0};
+
+  static const unsigned kRecordReplayTextToSheetCacheMaxAccessCount = 100;
+  unsigned record_replay_text_to_sheet_cache_access_count_{0};
+
+  HeapHashMap<AtomicString, Member<StyleSheetContents>>
       text_to_sheet_cache_;
-  HeapHashMap<WeakMember<StyleSheetContents>, AtomicString>
+  HeapHashMap<Member<StyleSheetContents>, AtomicString>
       sheet_to_text_cache_;
 
   std::unique_ptr<StyleResolverStats> style_resolver_stats_;

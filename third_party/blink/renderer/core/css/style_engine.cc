@@ -800,6 +800,19 @@ CSSStyleSheet* StyleEngine::CreateSheet(
 
   AtomicString text_content(text);
 
+  // RecordReplay: Clear the cache deterministically once it grows too large
+  // or is accessed too many times.
+  int text_content_length = text_content.length();
+  if (
+    (record_replay_text_to_sheet_cache_weight_ + text_content_length >= kRecordReplayTextToSheetCacheMaxWeight) ||
+    (record_replay_text_to_sheet_cache_access_count_ >= kRecordReplayTextToSheetCacheMaxAccessCount)
+  ) {
+    text_to_sheet_cache_.clear();
+    sheet_to_text_cache_.clear();
+    record_replay_text_to_sheet_cache_weight_ = 0;
+    record_replay_text_to_sheet_cache_access_count_ = 0;
+  }
+
   auto result = text_to_sheet_cache_.insert(text_content, nullptr);
   StyleSheetContents* contents = result.stored_value->value;
 
@@ -814,6 +827,10 @@ CSSStyleSheet* StyleEngine::CreateSheet(
     result.stored_value->value = nullptr;
     style_sheet =
         ParseSheet(element, text, start_position, render_blocking_behavior);
+
+    record_replay_text_to_sheet_cache_weight_ += text_content_length;
+    record_replay_text_to_sheet_cache_access_count_++;
+
     if (style_sheet->Contents()->IsCacheableForStyleElement()) {
       result.stored_value->value = style_sheet->Contents();
       sheet_to_text_cache_.insert(style_sheet->Contents(), text_content);
