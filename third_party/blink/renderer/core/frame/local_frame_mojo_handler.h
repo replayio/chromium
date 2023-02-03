@@ -50,8 +50,6 @@ class LocalFrameMojoHandler
       public device::mojom::blink::DevicePostureProviderClient {
  public:
   explicit LocalFrameMojoHandler(blink::LocalFrame& frame);
-  ~LocalFrameMojoHandler() override;
-
   void Trace(Visitor* visitor) const;
 
   void WasAttachedAsLocalMainFrame();
