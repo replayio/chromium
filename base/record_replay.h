@@ -215,19 +215,21 @@ class unique_leaky_ptr {
   std::unique_ptr<T> p;
 
 public:
+  using pointer = T*;
+ 
   // copy ctor
   template <typename T_>
   unique_leaky_ptr(T_&) = delete;
-
+ 
   // copy assignment
   template <typename T_>
   unique_leaky_ptr& operator=(const T_&) = delete;
-
+ 
   // move ctors
   unique_leaky_ptr(unique_leaky_ptr&& u) : unique_leaky_ptr(std::move(u.p)) {}
   template <typename T_>
   unique_leaky_ptr(T_&& u) : p(std::move(u)) {}
-
+ 
   // move assignments
   unique_leaky_ptr& operator=(unique_leaky_ptr&& u) noexcept {
     p = std::move(u.p);
@@ -239,10 +241,16 @@ public:
   }
 
   // Return the stored pointer.
-  T* operator->() const noexcept { return get(); }
+  pointer operator->() const noexcept { return get(); }
+  pointer get() const noexcept { return p.get(); }
 
-  /// Return the stored pointer.
-  T* get() const noexcept { return p.get(); }
+  // Return @c true if the stored pointer is not null.
+  explicit operator bool() const noexcept {
+    return !!p;
+  }
+
+  // Release ownership of any stored pointer.
+  pointer release() noexcept { return p.release(); }
 
   // dtor
   ~unique_leaky_ptr() {

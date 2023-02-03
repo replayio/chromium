@@ -8,6 +8,7 @@
 #include <string>
 
 #include "base/notreached.h"
+#include "base/record_replay.h"
 #include "components/power_scheduler/power_mode_voter.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -95,7 +96,7 @@ class PLATFORM_EXPORT BeginFrameProvider
   HeapMojoRemote<viz::mojom::blink::CompositorFrameSink> compositor_frame_sink_;
   Member<BeginFrameProviderClient> begin_frame_client_;
 
-  std::unique_ptr<power_scheduler::PowerModeVoter> animation_power_mode_voter_;
+  recordreplay::unique_leaky_ptr<power_scheduler::PowerModeVoter> animation_power_mode_voter_;
 };
 
 }  // namespace blink
