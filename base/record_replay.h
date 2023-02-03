@@ -204,9 +204,10 @@ class SCOPED_LOCKABLE AutoUnlockMaybeEventsDisallowed {
   base::Lock& lock_;
 };
 
-// This drop-in replacement of unique_ptr purposefully leaks owned memory, so as
-// to avoid unwanted cleanup operations, usually in non-deterministic execution
-// paths. First discussed here:
+// This drop-in replacement for unique_ptr purposefully leaks owned memory
+// in non-deterministic execution paths, so as not to perform cleanup operations
+// that require deterministic execution.
+// First discussed here:
 // https://linear.app/replay/issue/RUN-1227/divergence-frameschedulerimpl-destroys-powermodevoter
 // Playground: https://replit.com/@Domiii/Leak-Unique-Ptr#main.cpp
 template <typename T>
@@ -245,8 +246,11 @@ public:
 
   // dtor
   ~unique_leaky_ptr() {
-    // -> leak the allocated memory, before destructing `unique_ptr`.
-    p.release();
+    if (AreEventsDisallowed()) {
+      // Leak the allocated memory before destructing `unique_ptr`
+      // when inside a non-deterministic execution path.
+      p.release();
+    }
   }
 };
 
