@@ -738,12 +738,10 @@ static void ReplayNotifyAfterEvent(const String& eventName,
                             bool isCallback = false);
 
 void InspectorDOMDebuggerAgent::Will(const probe::ExecuteScript& probe) {
-  ReplayNotifyBeforeEvent("scriptFirstStatement");
   AllowNativeBreakpoint("scriptFirstStatement", nullptr, false);
 }
 
 void InspectorDOMDebuggerAgent::Did(const probe::ExecuteScript& probe) {
-  ReplayNotifyAfterEvent("scriptFirstStatement");
   CancelNativeBreakpoint();
 }
 
@@ -970,12 +968,11 @@ void ReplayNotifyBeforeEvent(const String& eventName,
   String replayEventType =
       MakeReplayEventType(eventName, eventTarget, isCallback);
   // Disabled by default, see https://linear.app/replay/issue/RUN-1251
+  recordreplay::Assert("[RUN-1226] ReplayNotifyBeforeEvent %d %s",
+                       gIsEventInFlight,
+                       replayEventType.Ascii().c_str());
   if (recordreplay::IsRecordingOrReplaying() &&
       !recordreplay::FeatureEnabled("disable-collect-events")) {
-    recordreplay::Print("[RUN-1251] DEBUG-EVENTS event START %d %d %s",
-                        recordreplay::AreEventsDisallowed(),
-                        gIsEventInFlight,
-                        replayEventType.Ascii().c_str());
     if (!recordreplay::AreEventsDisallowed()) {
       recordreplay::OnEvent(replayEventType.Ascii().c_str(), true);
       ++gIsEventInFlight;
@@ -991,10 +988,6 @@ void ReplayNotifyAfterEvent(const String& eventName,
   // Disabled by default, see https://linear.app/replay/issue/RUN-1251
   if (recordreplay::IsRecordingOrReplaying() &&
       !recordreplay::FeatureEnabled("disable-collect-events")) {
-    recordreplay::Print("[RUN-1251] DEBUG-EVENTS event END %d %d %s",
-                        recordreplay::AreEventsDisallowed(),
-                        gIsEventInFlight,
-                        replayEventType.Ascii().c_str());
     if (gIsEventInFlight) {
       recordreplay::OnEvent(replayEventType.Ascii().c_str(), false);
       --gIsEventInFlight;
