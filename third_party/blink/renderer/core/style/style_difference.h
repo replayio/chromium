@@ -77,7 +77,10 @@ class StyleDifference {
   }
 
   bool NeedsPaintInvalidation() const { return needs_paint_invalidation_; }
-  void SetNeedsPaintInvalidation() { needs_paint_invalidation_ = true; }
+  void SetNeedsPaintInvalidation() {
+    recordreplay::Assert("[RUN-966] StyleDifference::SetNeedsPaintInvalidation");
+    needs_paint_invalidation_ = true;
+  }
 
   bool NeedsLayout() const { return layout_type_ != kNoLayout; }
   void ClearNeedsLayout() { layout_type_ = kNoLayout; }
