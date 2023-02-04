@@ -215,7 +215,6 @@ MojoResult SimpleWatcher::Arm(MojoResult* ready_result,
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   uint32_t num_blocking_events = 1;
   MojoTrapEvent blocking_event = {sizeof(blocking_event)};
-
   MojoResult rv = MojoArmTrap(trap_handle_.get().value(), nullptr,
                               &num_blocking_events, &blocking_event);
 
