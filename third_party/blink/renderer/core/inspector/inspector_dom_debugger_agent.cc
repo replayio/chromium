@@ -962,24 +962,44 @@ static String MakeReplayEventType(const String& eventTypeRaw,
   return builder.ToString();
 }
 
+static bool gIsEventInFlight = false;
+
 void ReplayNotifyBeforeEvent(const String& eventName, 
-                      EventTarget* eventTarget,
-                      bool isCallback) {
-  String qualifiedEventName =
+                             EventTarget* eventTarget,
+                             bool isCallback) {
+  String replayEventType =
       MakeReplayEventType(eventName, eventTarget, isCallback);
-  // Disabled, see https://linear.app/replay/issue/RUN-1206
-  //recordreplay::OnEvent(qualifiedEventName.Ascii().c_str(), true);
-  (void)qualifiedEventName;
+  // Disabled by default, see https://linear.app/replay/issue/RUN-1251
+  if (recordreplay::IsRecordingOrReplaying() &&
+      !recordreplay::FeatureEnabled("disable-collect-events")) {
+    recordreplay::Print("[RUN-1251] DEBUG-EVENTS event START %d %d %s",
+                        recordreplay::AreEventsDisallowed(),
+                        gIsEventInFlight,
+                        replayEventType.Ascii().c_str());
+    if (!recordreplay::AreEventsDisallowed()) {
+      recordreplay::OnEvent(replayEventType.Ascii().c_str(), true);
+      gIsEventInFlight = true;
+    }
+  }
 }
 
 void ReplayNotifyAfterEvent(const String& eventName,
-                     EventTarget* eventTarget,
-                     bool isCallback) {
-  String qualifiedEventName =
+                            EventTarget* eventTarget,
+                            bool isCallback) {
+  String replayEventType =
       MakeReplayEventType(eventName, eventTarget, isCallback);
-  // Disabled, see https://linear.app/replay/issue/RUN-1206
-  //recordreplay::OnEvent(qualifiedEventName.Ascii().c_str(), false);
-  (void)qualifiedEventName;
+  // Disabled by default, see https://linear.app/replay/issue/RUN-1251
+  if (recordreplay::IsRecordingOrReplaying() &&
+      !recordreplay::FeatureEnabled("disable-collect-events")) {
+    recordreplay::Print("[RUN-1251] DEBUG-EVENTS event END %d %d %s",
+                        recordreplay::AreEventsDisallowed(),
+                        gIsEventInFlight,
+                        replayEventType.Ascii().c_str());
+    if (gIsEventInFlight) {
+      recordreplay::OnEvent(replayEventType.Ascii().c_str(), false);
+      gIsEventInFlight = false;
+    }
+  }
 }
 
 }  // namespace blink
