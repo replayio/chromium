@@ -70,6 +70,10 @@ void WaitableEvent::Reset() {
 void WaitableEvent::Signal() {
   RecordReplayEnsureOrdered(record_replay_ordered_lock_id_);
 
+  absl::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (!record_replay_ordered_lock_id_)
+    disallow.emplace("WaitableEvent::Signal");
+
   mach_msg_empty_send_t msg{};
   msg.header.msgh_bits = MACH_MSGH_BITS_REMOTE(MACH_MSG_TYPE_COPY_SEND);
   msg.header.msgh_size = sizeof(&msg);
@@ -96,6 +100,10 @@ bool WaitableEvent::TimedWait(const TimeDelta& wait_delta) {
     RecordReplayEnsureOrdered(record_replay_ordered_lock_id_);
     return IsSignaled();
   }
+
+  absl::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (!record_replay_ordered_lock_id_)
+    disallow.emplace("WaitableEvent::TimedWait");
 
   // Record the event that this thread is blocking upon (for hang diagnosis) and
   // consider blocked for scheduling purposes. Ignore this for non-blocking
@@ -169,6 +177,11 @@ bool WaitableEvent::TimedWait(const TimeDelta& wait_delta) {
 // static
 size_t WaitableEvent::WaitMany(WaitableEvent** raw_waitables, size_t count) {
   DCHECK(count) << "Cannot wait on no events";
+
+  absl::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (!record_replay_ordered_lock_id_)
+    disallow.emplace("WaitableEvent::WaitMany");
+
   internal::ScopedBlockingCallWithBaseSyncPrimitives scoped_blocking_call(
       FROM_HERE, BlockingType::MAY_BLOCK);
   // Record an event (the first) that this thread is blocking upon.
@@ -266,6 +279,10 @@ size_t WaitableEvent::WaitMany(WaitableEvent** raw_waitables, size_t count) {
 
 // static
 bool WaitableEvent::PeekPort(mach_port_t port, bool dequeue) {
+  absl::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (!record_replay_ordered_lock_id_)
+    disallow.emplace("WaitableEvent::PeekPort");
+
   if (dequeue) {
     mach_msg_empty_rcv_t msg{};
     msg.header.msgh_local_port = port;
