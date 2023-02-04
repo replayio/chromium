@@ -314,6 +314,8 @@ void MessagePort::Trace(Visitor* visitor) const {
 bool MessagePort::Accept(mojo::Message* mojo_message) {
   TRACE_EVENT0("blink", "MessagePort::Accept");
 
+  recordreplay::Assert("[RUN-1126] MessagePort::Accept");
+  
   BlinkTransferableMessage message;
   if (!mojom::blink::TransferableMessage::DeserializeFromMessage(
           std::move(*mojo_message), &message)) {
