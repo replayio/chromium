@@ -64,6 +64,10 @@ WaitableEvent::~WaitableEvent() {
 }
 
 void WaitableEvent::Reset() {
+  absl::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (!record_replay_ordered_lock_id_)
+    disallow.emplace("WaitableEvent::Reset");
+
   PeekPort(receive_right_->Name(), true);
 }
 
@@ -87,6 +91,10 @@ void WaitableEvent::Signal() {
 }
 
 bool WaitableEvent::IsSignaled() {
+  absl::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (!record_replay_ordered_lock_id_)
+    disallow.emplace("WaitableEvent::IsSignaled");
+
   return PeekPort(receive_right_->Name(), policy_ == ResetPolicy::AUTOMATIC);
 }
 
@@ -177,10 +185,6 @@ bool WaitableEvent::TimedWait(const TimeDelta& wait_delta) {
 // static
 size_t WaitableEvent::WaitMany(WaitableEvent** raw_waitables, size_t count) {
   DCHECK(count) << "Cannot wait on no events";
-
-  absl::optional<recordreplay::AutoDisallowEvents> disallow;
-  if (!record_replay_ordered_lock_id_)
-    disallow.emplace("WaitableEvent::WaitMany");
 
   internal::ScopedBlockingCallWithBaseSyncPrimitives scoped_blocking_call(
       FROM_HERE, BlockingType::MAY_BLOCK);
@@ -279,10 +283,6 @@ size_t WaitableEvent::WaitMany(WaitableEvent** raw_waitables, size_t count) {
 
 // static
 bool WaitableEvent::PeekPort(mach_port_t port, bool dequeue) {
-  absl::optional<recordreplay::AutoDisallowEvents> disallow;
-  if (!record_replay_ordered_lock_id_)
-    disallow.emplace("WaitableEvent::PeekPort");
-
   if (dequeue) {
     mach_msg_empty_rcv_t msg{};
     msg.header.msgh_local_port = port;
