@@ -962,7 +962,7 @@ static String MakeReplayEventType(const String& eventTypeRaw,
   return builder.ToString();
 }
 
-static bool gIsEventInFlight = false;
+static int gIsEventInFlight = 0;
 
 void ReplayNotifyBeforeEvent(const String& eventName, 
                              EventTarget* eventTarget,
@@ -978,7 +978,7 @@ void ReplayNotifyBeforeEvent(const String& eventName,
                         replayEventType.Ascii().c_str());
     if (!recordreplay::AreEventsDisallowed()) {
       recordreplay::OnEvent(replayEventType.Ascii().c_str(), true);
-      gIsEventInFlight = true;
+      ++gIsEventInFlight;
     }
   }
 }
@@ -997,7 +997,7 @@ void ReplayNotifyAfterEvent(const String& eventName,
                         replayEventType.Ascii().c_str());
     if (gIsEventInFlight) {
       recordreplay::OnEvent(replayEventType.Ascii().c_str(), false);
-      gIsEventInFlight = false;
+      --gIsEventInFlight;
     }
   }
 }
