@@ -967,10 +967,8 @@ void ReplayNotifyBeforeEvent(const String& eventName,
                              bool isCallback) {
   String replayEventType =
       MakeReplayEventType(eventName, eventTarget, isCallback);
+
   // Disabled by default, see https://linear.app/replay/issue/RUN-1251
-  recordreplay::Assert("[RUN-1226] ReplayNotifyBeforeEvent %d %s",
-                       gIsEventInFlight,
-                       replayEventType.Ascii().c_str());
   if (recordreplay::IsRecordingOrReplaying() &&
       !recordreplay::FeatureEnabled("disable-collect-events")) {
     if (!recordreplay::AreEventsDisallowed()) {
