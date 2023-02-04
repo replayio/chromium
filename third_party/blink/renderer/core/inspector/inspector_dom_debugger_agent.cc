@@ -985,6 +985,7 @@ void ReplayNotifyAfterEvent(const String& eventName,
                             bool isCallback) {
   String replayEventType =
       MakeReplayEventType(eventName, eventTarget, isCallback);
+
   // Disabled by default, see https://linear.app/replay/issue/RUN-1251
   if (recordreplay::IsRecordingOrReplaying() &&
       !recordreplay::FeatureEnabled("disable-collect-events")) {
