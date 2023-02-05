@@ -738,10 +738,12 @@ static void ReplayNotifyAfterEvent(const String& eventName,
                             bool isCallback = false);
 
 void InspectorDOMDebuggerAgent::Will(const probe::ExecuteScript& probe) {
+  ReplayNotifyBeforeEvent("scriptFirstStatement");
   AllowNativeBreakpoint("scriptFirstStatement", nullptr, false);
 }
 
 void InspectorDOMDebuggerAgent::Did(const probe::ExecuteScript& probe) {
+  ReplayNotifyAfterEvent("scriptFirstStatement");
   CancelNativeBreakpoint();
 }
 
