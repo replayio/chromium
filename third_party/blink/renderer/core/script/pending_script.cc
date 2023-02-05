@@ -81,9 +81,6 @@ void PendingScript::Dispose() {
   starting_position_ = TextPosition::BelowRangePosition();
   parser_blocking_load_start_time_ = base::TimeTicks();
 
-  recordreplay::Assert("[RUN-1271] PendingScript::Dispose 1 %d",
-                       starting_position_);
-
   DisposeInternal();
   element_ = nullptr;
 }
@@ -139,7 +136,6 @@ void PendingScript::MarkParserBlockingLoadStartTime() {
 void PendingScript::ExecuteScriptBlock() {
   TRACE_EVENT0("blink", "PendingScript::ExecuteScriptBlock");
   ExecutionContext* context = element_->GetExecutionContext();
-
   if (!context) {
     Dispose();
     return;
@@ -186,12 +182,6 @@ void PendingScript::ExecuteScriptBlock() {
   const bool is_controlled_by_script_runner = IsControlledByScriptRunner();
   ScriptElementBase* element = element_;
   Dispose();
-
-  recordreplay::Assert(
-      "[RUN-1271] PendingScript::ExecuteScriptBlock 3 %d %s %d",
-      script ? (int)script->GetScriptType() : -1,
-      script ? script->SourceUrl().GetString().Utf8().c_str() : "",
-      was_canceled);
 
   // ExecuteScriptBlockInternal() is split just in order to prevent accidential
   // access to |this| after Dispose().
@@ -298,10 +288,6 @@ void PendingScript::ExecuteScriptBlockInternal(
     //
     // <spec step="4.B.2">Run the module script given by the script's
     // script.</spec>
-    recordreplay::Assert(
-        "[RUN-1271] PendingScript::ExecuteScriptBlockInternal %d %s",
-        !!current_script,
-        current_script ? current_script->ChildTextContent().Utf8().c_str() : "");
     script->RunScript(context_document->domWindow());
 
     // <spec step="4.A.4">Set the script element's node document's currentScript
