@@ -40,8 +40,8 @@ Only one build configuration is currently supported.
    is_debug = false # we can't really use most debugging symbols right now
    dcheck_always_on = false # disable dchecks
    enable_nacl = false  # no native targets
-    use_allocator = "none"
-    use_allocator_shim = false
+   use_allocator = "none"
+   use_allocator_shim = false
    ```
    * The following setting may be helpful for looking at stack traces while recording.
      ```ini
