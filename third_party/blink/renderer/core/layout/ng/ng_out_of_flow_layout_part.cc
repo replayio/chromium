@@ -1843,7 +1843,7 @@ const NGLayoutResult* NGOutOfFlowLayoutPart::GenerateFragment(
     bool requires_content_before_breaking,
     RepeatMode repeat_mode) {
   // https://linear.app/replay/issue/RUN-546
-  recordreplay::Assert("[RUN-1219] NGOutOfFlowLayoutPart::GenerateFragment Start %d",
+  recordreplay::Assert("[RUN-546] NGOutOfFlowLayoutPart::GenerateFragment Start %d",
                        node.GetLayoutBox()->RecordReplayId());
 
   const auto& style = node.Style();
