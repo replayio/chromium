@@ -1594,8 +1594,9 @@ bool NGOutOfFlowLayoutPart::TryCalculateOffset(
       is_first_run, test_if_margin_box_fits, allow_first_tier_oof_cache_, node_info.inline_container);
   if (is_first_run && !test_if_margin_box_fits && allow_first_tier_oof_cache_ &&
       !node_info.inline_container) {
-    if (node_info.node.CachedLayoutResultForOutOfFlowPositioned(
-            container_content_size_in_candidate_writing_mode)) {
+    if (const NGLayoutResult* cached_result =
+            node_info.node.CachedLayoutResultForOutOfFlowPositioned(
+                container_content_size_in_candidate_writing_mode)) {
       recordreplay::Assert("[RUN-1239] NGOutOfFlowLayoutPart::TryCalculateOffset B");
       offset_info->initial_layout_result = cached_result;
       offset_info->has_cached_layout_result = true;
