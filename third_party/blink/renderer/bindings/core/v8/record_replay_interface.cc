@@ -4449,10 +4449,6 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
     recordreplay::AutoDisallowEvents disallow("SetupRecordReplayCommands");
     RunScript(isolate, context, gReplayScript, InternalScriptURL);
   }
-  if (recordreplay::IsRecordingOrReplaying()) {
-    // initialize InspectorDOMDebuggerAgent, so it can pick up user events
-    getOrCreateInspectorDOMDebuggerAgent(isolate);
-  }
 }
 
 void RunInitialRecordReplayScripts(v8::Isolate* isolate) {
