@@ -11,7 +11,12 @@
 namespace base {
 namespace internal {
 
-LockImpl::LockImpl() : native_handle_(SRWLOCK_INIT) {}
+extern "C" void V8RecordReplayAddOrderedSRWLock(const char* name, void* aLock);
+
+LockImpl::LockImpl(const char* ordered_name) : native_handle_(SRWLOCK_INIT) {
+  if (ordered_name)
+    V8RecordReplayAddOrderedSRWLock(ordered_name, &native_handle_);
+}
 
 LockImpl::~LockImpl() = default;
 
