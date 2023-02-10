@@ -59,22 +59,21 @@ void ReplayNotifyBeforeEvent(const String& eventName,
   String replayEventType =
     MakeReplayEventType(eventName, eventTarget, isCallback);
 
-  recordreplay::Assert("[RUN-1271] ReplayNotifyBeforeEvent %d %s",
+  Assert("[RUN-1271] ReplayNotifyBeforeEvent %d %s",
                         gIsEventInFlight, replayEventType.Ascii().c_str());
-  recordreplay::OnEvent(replayEventType.Ascii().c_str(), true);
+  OnEvent(replayEventType.Ascii().c_str(), true);
   ++gIsEventInFlight;
 }
 
 void ReplayNotifyAfterEvent(const String& eventName,
                             EventTarget* eventTarget,
                             bool isCallback) {
-  String replayEventType =
-      MakeReplayEventType(eventName, eventTarget, isCallback);
-
   if (gIsEventInFlight) {
-    recordreplay::Assert("[RUN-1271] ReplayNotifyAfterEvent %d %s",
+    String replayEventType =
+      MakeReplayEventType(eventName, eventTarget, isCallback);
+    Assert("[RUN-1271] ReplayNotifyAfterEvent %d %s",
                          gIsEventInFlight, replayEventType.Ascii().c_str());
-    recordreplay::OnEvent(replayEventType.Ascii().c_str(), false);
+    OnEvent(replayEventType.Ascii().c_str(), false);
     --gIsEventInFlight;
   }
 }
@@ -87,9 +86,9 @@ UserEventProbe::UserEventProbe(const char* name,
       event_target_(event_target),
       is_callback_(is_callback) {
   // Disabled by default, see https://linear.app/replay/issue/RUN-1251
-  if (recordreplay::IsRecordingOrReplaying() &&
-      !recordreplay::FeatureEnabled("disable-collect-events") &&
-      !recordreplay::AreEventsDisallowed()) {
+  if (IsRecordingOrReplaying() &&
+      !FeatureEnabled("disable-collect-events") &&
+      !AreEventsDisallowed()) {
     ReplayNotifyBeforeEvent(name_, event_target_, is_callback);
   }
 }
@@ -101,13 +100,17 @@ UserEventProbe::UserEventProbe(const char* name,
 { }
 
 UserEventProbe::UserEventProbe()
-    : UserEventProbe("scriptFirstStatement", AtomicString(), nullptr, false) {}
+    // NOTE: This is used for capturing script run events but it does not work.
+    // TODO: uncomment - https://linear.app/replay/issue/RUN-1271
+    // UserEventProbe("scriptFirstStatement", AtomicString(), nullptr, false) 
+    {}
 
 UserEventProbe::~UserEventProbe() {
   // Disabled by default, see https://linear.app/replay/issue/RUN-1251
-  if (recordreplay::IsRecordingOrReplaying() &&
-      !recordreplay::FeatureEnabled("disable-collect-events")) {
-      ReplayNotifyAfterEvent(name_, event_target_, is_callback_);
+  if (name_ &&
+      IsRecordingOrReplaying() &&
+      !FeatureEnabled("disable-collect-events")) {
+    ReplayNotifyAfterEvent(name_, event_target_, is_callback_);
   }
 }
 
