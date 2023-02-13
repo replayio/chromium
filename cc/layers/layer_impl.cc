@@ -126,7 +126,8 @@ void LayerImpl::UpdateDebugInfo(LayerDebugInfo* debug_info) {
 
 void LayerImpl::SetTransformTreeIndex(int index) {
   transform_tree_index_ = index;
-  recordreplay::Assert("[RUN-550-1329] LayerImpl::SetTransformTreeIndex %d %d", id, index);
+  recordreplay::Assert("[RUN-550-1329] LayerImpl::SetTransformTreeIndex %d %d",
+                       layer_id_, index);
 }
 
 void LayerImpl::SetClipTreeIndex(int index) {
@@ -383,7 +384,7 @@ void LayerImpl::PushPropertiesTo(LayerImpl* layer) {
   DCHECK(layer->IsActive());
 
   recordreplay::Assert("[RUN-550-1329] LayerImpl::PushPropertiesTo %d %d %llu",
-                       transform_tree_index_, id, element_id_.GetStableId());
+                       transform_tree_index_, layer_id_, element_id_.GetStableId());
 
   // The element id should be set first because other setters may
   // depend on it. Referencing element id on a layer is
