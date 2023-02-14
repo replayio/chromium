@@ -795,6 +795,9 @@ void ProxyImpl::ScheduledActionCommit() {
 
   auto* commit_state = data_for_commit_->commit_state.get();
   auto* unsafe_state = data_for_commit_->unsafe_state.get();
+  recordreplay::Assert("[Run-1229] ProxyImpl::ScheduledActionCommit %d %d",
+                       commit_state->source_frame_number,
+                       commit_state->trace_id);
   host_impl_->BeginCommit(commit_state->source_frame_number,
                           commit_state->trace_id);
   host_impl_->FinishCommit(*commit_state, *unsafe_state);
