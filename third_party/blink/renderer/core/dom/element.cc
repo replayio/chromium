@@ -33,6 +33,7 @@
 #include <utility>
 
 #include "base/feature_list.h"
+#include "base/record_replay.h"
 #include "cc/input/snap_selection_strategy.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/privacy_budget/identifiability_metric_builder.h"
@@ -642,7 +643,11 @@ bool IsGuaranteedToEnterNGBlockNodeLayout(const LayoutObject& layout_object) {
 Element::Element(const QualifiedName& tag_name,
                  Document* document,
                  ConstructionType type)
-    : ContainerNode(document, type), tag_name_(tag_name) {}
+    : ContainerNode(document, type), tag_name_(tag_name) {
+  // RUN-1304 - Elements can be constructed non-deterministically,
+  // but we don't understand where.  This should help us get to the bottom of that.
+  recordreplay::Assert("[RUN-1304-1359] Element::Element %08x", (unsigned) type);
+}
 
 Element* Element::GetAnimationTarget() {
   return this;
