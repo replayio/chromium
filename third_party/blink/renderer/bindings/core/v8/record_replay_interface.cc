@@ -412,7 +412,23 @@ function Target_topFrameLocation() {
  */
 function getStackFrames() {
   // NOTE: this is a custom command we added in `src/inspector/v8-debugger-agent-impl.cc`
-  const { callFrames } = sendMessage("Debugger.getCallFrames");
+  const value = sendMessage("Debugger.getCallFrames");
+  if (value === undefined) {
+    return [{
+      callFrameId: "FAILED",
+      functionName: "CALL_STACK_TOO_LARGE",
+      location: {
+        scriptId: "INVALID_SCRIPT_ID",
+        lineNumber: 0,
+        columnNumber: 0,
+      },
+      scopeChain: [],
+      this: {
+        type: "undefined",
+      },
+    }]
+  }
+  const { callFrames } = value;
   return callFrames;
 }
 
@@ -3079,9 +3095,18 @@ static void SendMessageToFrontend(const v8_inspector::StringView& message) {
   v8::HandleScope scope(isolate);
 
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
-  v8::Local<v8::Value> arg = v8::String::NewFromTwoByte(isolate, message.characters16(),
+  v8::Local<v8::Value> arg;
+  if (message.length() > v8::String::kMaxLength) {
+    // Print a record replay log message of the first few characters of
+    // messages that are too long to send to the frontend.
+    recordreplay::Print("SendMessageToFrontend CDP message too long: %.*s",
+      100, message.characters16());
+    arg = v8::Undefined(isolate);
+  } else {
+    arg = v8::String::NewFromTwoByte(isolate, message.characters16(),
                                                         v8::NewStringType::kNormal,
                                                         (int)message.length()).ToLocalChecked();
+  }
   v8::Local<v8::Function> callback = gCDPMessageCallback->Get(isolate);
   v8::MaybeLocal<v8::Value> rv = callback->Call(context, v8::Undefined(isolate), 1, &arg);
   CHECK(!rv.IsEmpty());
