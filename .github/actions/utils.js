@@ -4,7 +4,7 @@ const https = require("https");
 const { spawnSync } = require("child_process");
 
 function getLatestRevision() {
-  return process.env.GITHUB_SHA.substring(12);
+  return process.env.GITHUB_SHA.substring(0, 12);
 }
 
 function sendBuildTestRequest(contents) {
