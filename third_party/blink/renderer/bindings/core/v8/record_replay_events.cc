@@ -85,10 +85,12 @@ UserEventProbe::UserEventProbe(const char* name,
     : name_(name ? String(name) : atomic_name),
       event_target_(event_target),
       is_callback_(is_callback) {
-  // Disabled by default, see https://linear.app/replay/issue/RUN-1251
   if (IsRecordingOrReplaying() &&
-      !FeatureEnabled("disable-collect-events") &&
-      !AreEventsDisallowed()) {
+      !AreEventsDisallowed() &&
+      // // Disabled by default (RUN-1251)
+      // !FeatureEnabled("disable-collect-events") &&
+      // Main-thread only (RUN-1392)
+      IsMainThread()) {
     ReplayNotifyBeforeEvent(name_, event_target_, is_callback);
   }
 }
