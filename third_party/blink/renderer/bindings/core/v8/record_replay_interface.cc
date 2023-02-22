@@ -276,15 +276,9 @@ function commandCallback(method, params) {
   }
 
   try {
-    // track performance temporarily (RUN-1315)
-    const startTime = Date.now();
     VerboseCommands && log(`[Command ${method}] Handling command, params=${JSON_stringify(params)}...`);
     const result = CommandCallbacks[method](params);
     VerboseCommands && log(`[Command ${method}] Handled command, result=${JSON_stringify(result)}`);
-    const timeTaken = (Date.now() - startTime)/1000;
-    if (timeTaken > 0.2) {
-      log(`[RuntimeWarning][Command ${method}] slow: ${timeTaken.toFixed(2)}s, params: ${JSON.stringify(params)}`);
-    }
     return result;
   } catch (e) {
     log(`[RuntimeError][Command ${method}] ${e?.stack || e}`);
@@ -484,19 +478,11 @@ function Pause_evaluateInGlobal({ expression }) {
 // }
 
 function Pause_getAllFrames() {
-  // track performance temporarily (RUN-1315)
-  const startTime = Date.now();
   const frames = getStackFrames().map((frame, index) => {
     // Use our own IDs for frames.
     const id = (index++).toString();
     return createProtocolFrame(id, frame);
   });
-  
-  const timeTaken = (Date.now() - startTime)/1000;
-  if (timeTaken > 0.2) {
-    log(`[RuntimeWarning] Pause_getAllFrames slow: ${timeTaken.toFixed(2)}s`);
-  }
-
   return {
     frames: frames.map(f => f.frameId),
     data: { frames },
@@ -1098,20 +1084,12 @@ ProtocolObjectPreview.prototype = {
 
   fill() {
     // NOTE: we could also use "Runtime.evaluate" with `{ generatePreview: true }`
-    // WARNING: this CDP call can cause `UpdateLayout` which calls divergences
-
-    // track performance temporarily (RUN-1315)
-    const startTime = Date.now();
+    // WARNING: this CDP call can cause `UpdateLayout` which (as of now) can cause crashes.
     const cdpProperties = sendMessage("Runtime.getProperties", {
       objectId: this.cdpObj.objectId,
       ownProperties: true,
       generatePreview: false,
     });
-    const timeTaken = (Date.now() - startTime)/1000;
-    if (timeTaken > 0.2) {
-      const len = Object.keys(this.raw).length;
-      log(`[RuntimeWarning] Runtime.getProperties (${this.rrpId}) slow: ${timeTaken.toFixed(2)}s (${len})`);
-    }
 
     // Add data for blink objects
     this.extra = previewBlinkObject(this.cdpObj) || {};
