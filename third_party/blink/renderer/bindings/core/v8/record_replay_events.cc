@@ -87,8 +87,8 @@ UserEventProbe::UserEventProbe(const char* name,
       is_callback_(is_callback) {
   if (IsRecordingOrReplaying() &&
       !AreEventsDisallowed() &&
-      // // Disabled by default (RUN-1251)
-      // !FeatureEnabled("disable-collect-events") &&
+      // Disabled by default (RUN-1251)
+      !FeatureEnabled("disable-collect-events") &&
       // Main-thread only (RUN-1392)
       IsMainThread()) {
     ReplayNotifyBeforeEvent(name_, event_target_, is_callback);
