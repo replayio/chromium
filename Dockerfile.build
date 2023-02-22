@@ -9,6 +9,6 @@ USER build
 
 ENV PATH=$PATH:/depot_tools
 
-WORKDIR /chromium/src
+WORKDIR /chromium
 
 CMD node build
