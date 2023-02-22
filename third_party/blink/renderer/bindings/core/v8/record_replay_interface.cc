@@ -276,9 +276,15 @@ function commandCallback(method, params) {
   }
 
   try {
+    // track performance temporarily (RUN-1315)
+    const startTime = Date.now();
     VerboseCommands && log(`[Command ${method}] Handling command, params=${JSON_stringify(params)}...`);
     const result = CommandCallbacks[method](params);
     VerboseCommands && log(`[Command ${method}] Handled command, result=${JSON_stringify(result)}`);
+    const timeTaken = (Date.now() - startTime)/1000;
+    if (timeTaken > 0.2) {
+      log(`[RuntimeWarning][Command ${method}] slow: ${timeTaken.toFixed(2)}s, params: ${JSON.stringify(params)}`);
+    }
     return result;
   } catch (e) {
     log(`[RuntimeError][Command ${method}] ${e?.stack || e}`);
@@ -478,11 +484,18 @@ function Pause_evaluateInGlobal({ expression }) {
 // }
 
 function Pause_getAllFrames() {
+  // track performance temporarily (RUN-1315)
+  const startTime = Date.now();
   const frames = getStackFrames().map((frame, index) => {
     // Use our own IDs for frames.
     const id = (index++).toString();
     return createProtocolFrame(id, frame);
   });
+  
+  const timeTaken = (Date.now() - startTime)/1000;
+  if (timeTaken > 0.2) {
+    log(`[RuntimeWarning] Pause_getAllFrames slow: ${timeTaken.toFixed(2)}s`);
+  }
 
   return {
     frames: frames.map(f => f.frameId),
@@ -528,6 +541,7 @@ function Graphics_getDevicePixelRatio() {
 
 /**
  * NOTE: this is not a guarantee, since `toString()` can be overridden.
+ * NOTE2: v8 debugger has `CalculateNativeAccessorFlags` but is expensive and cached and annoying.
  */
 function isProbablyNativeFunction(f) {
   return isNativeFunctionDescription(f.toString());
@@ -920,7 +934,7 @@ function createPauseObject(rrpId, level) {
 
   let preview;
   if (level != "none") {
-    preview = new ProtocolObjectPreview(cdpObj, level).fill();
+    preview = new ProtocolObjectPreview(rrpId, cdpObj, level).fill();
   }
 
   return { objectId: rrpId, persistentId, className, preview };
@@ -1009,7 +1023,8 @@ const MaxItems = {
   "full": 1000,
 };
 
-function ProtocolObjectPreview(obj, level) {
+function ProtocolObjectPreview(rrpId, obj, level) {
+  this.rrpId = rrpId;
   this.cdpObj = obj;
   this.level = level;
   this.overflow = false;
@@ -1084,11 +1099,19 @@ ProtocolObjectPreview.prototype = {
   fill() {
     // NOTE: we could also use "Runtime.evaluate" with `{ generatePreview: true }`
     // WARNING: this CDP call can cause `UpdateLayout` which calls divergences
+
+    // track performance temporarily (RUN-1315)
+    const startTime = Date.now();
     const cdpProperties = sendMessage("Runtime.getProperties", {
       objectId: this.cdpObj.objectId,
       ownProperties: true,
       generatePreview: false,
     });
+    const timeTaken = (Date.now() - startTime)/1000;
+    if (timeTaken > 0.2) {
+      const len = Object.keys(this.raw).length;
+      log(`[RuntimeWarning] Runtime.getProperties (${this.rrpId}) slow: ${timeTaken.toFixed(2)}s (${len})`);
+    }
 
     // Add data for blink objects
     this.extra = previewBlinkObject(this.cdpObj) || {};
@@ -1112,13 +1135,17 @@ ProtocolObjectPreview.prototype = {
     const dontRecurse = this.level === "noProperties";
     const addedProps = new Set();
     let proto = this.raw;
+    let i = 0;
     do {
-      const propKeys = [...Object.getOwnPropertyNames(proto), ...Object.getOwnPropertySymbols(proto)];
+      const propKeys = [...Object.getOwnPropertySymbols(proto), ...Object.getOwnPropertyNames(proto)];
       
       // TODO: allow all getters - https://linear.app/replay/issue/RUN-1016#comment-90c46ba7
       const allowedGetters = new Set(['type', 'fromElement', 'target', 'isTrusted']);
 
       for (const propKey of propKeys) {
+        if (++i > MaxItems[this.level]) {
+          break;
+        }
         if (propKey === "__proto__" || addedProps.has(propKey)) {
           continue;
         }
