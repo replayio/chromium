@@ -8,6 +8,12 @@
 
 #include <windows.h>
 
+namespace recordreplay {
+
+extern void AddOrderedSRWLock(const char* name, void* lock);
+
+} // namespace recordreplay
+
 namespace base {
 namespace internal {
 
@@ -15,7 +21,7 @@ extern "C" void V8RecordReplayAddOrderedSRWLock(const char* name, void* aLock);
 
 LockImpl::LockImpl(const char* ordered_name) : native_handle_(SRWLOCK_INIT) {
   if (ordered_name)
-    V8RecordReplayAddOrderedSRWLock(ordered_name, &native_handle_);
+    recordreplay::AddOrderedSRWLock(ordered_name, &native_handle_);
 }
 
 LockImpl::~LockImpl() = default;

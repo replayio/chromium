@@ -257,7 +257,7 @@ if (is_chromeos || is_linux || is_android || is_win || is_fuchsia) {
       "//mojo/public/c/system:headers",
     ]
     if (is_win) {
-      sources += [ "mojo_core.def", "//base/record_replay_nop.cc" ]
+      sources += [ "mojo_core.def" ]
       deps += [ ":mojo_core_version" ]
     } else {
       configs += [ ":export_only_thunks_api" ]

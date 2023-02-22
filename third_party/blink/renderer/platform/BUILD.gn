@@ -100,7 +100,6 @@ executable("character_data_generator") {
     "text/character_property.h",
     "text/character_property_data.h",
     "text/character_property_data_generator.cc",
-    "//base/record_replay_nop.cc",
   ]
   configs += [ "//third_party/blink/renderer:config" ]
   deps = [

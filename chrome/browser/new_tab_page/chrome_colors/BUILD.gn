@@ -8,7 +8,6 @@ executable("generate_colors_info") {
   sources = [
     "generate_colors_info.cc",
     "selected_colors_info.h",
-    "//base/record_replay_nop.cc",
   ]
   deps = [
     # Avoid adding big generic deps as this target is build for host

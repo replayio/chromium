@@ -4,11 +4,6 @@
 
 #include <stdint.h>
 
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-#include <dlfcn.h>
-
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/check.h"
@@ -53,6 +48,10 @@
 #include "chrome/common/chrome_constants.h"
 #include "chrome/install_static/initialize_from_primary_module.h"
 #include "chrome/install_static/install_details.h"
+
+#if BUILDFLAG(IS_MAC)
+#include <dlfcn.h>
+#endif
 
 #define DLLEXPORT __declspec(dllexport)
 
@@ -110,7 +109,8 @@ int ChromeMain(int argc, const char** argv) {
     V8SetRecordingOrReplaying(nullptr);
   }
 #else
-#error "Unknown platform"
+  fprintf(stderr, "ChromeMain FIXME crashing\n");
+  CHECK(0);
 #endif
 
 #if BUILDFLAG(IS_WIN)

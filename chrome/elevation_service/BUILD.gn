@@ -36,7 +36,6 @@ executable("elevation_service") {
   sources = [
     "elevation_service.cc",
     "elevation_service.rc",
-    "//base/record_replay_nop.cc",
   ]
 
   configs -= [

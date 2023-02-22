@@ -13,7 +13,6 @@ executable("notification_helper") {
     "notification_helper.rc",
     "notification_helper_crash_reporter_client.cc",
     "notification_helper_crash_reporter_client.h",
-    "//base/record_replay_nop.cc",
   ]
 
   configs -= [

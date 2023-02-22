@@ -4,7 +4,7 @@
 
 # TODO(https://crbug.com/1216547): add unit tests
 executable("root_store_tool") {
-  sources = [ "root_store_tool.cc", "//base/record_replay_nop.cc" ]
+  sources = [ "root_store_tool.cc" ]
   deps = [
     "//base",
     "//crypto",

@@ -20,7 +20,7 @@ executable("chrome_proxy") {
 
   data_deps = [ "//chrome/app/version_assembly:version_assembly_manifest" ]
 
-  sources = [ "chrome_proxy_main_win.cc", "//base/record_replay_nop.cc" ]
+  sources = [ "chrome_proxy_main_win.cc" ]
 
   configs -= [
     "//build/config/compiler:cet_shadow_stack",
