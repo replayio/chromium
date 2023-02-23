@@ -142,7 +142,7 @@ function driverExtension() {
  * When changing this: always keep all versions of this in sync, or else, builds will break.
  * @returns {string} "YYYYMMDD" format of UTC timestamp of given revision.
  */
-function getLinkerRevisionDate(
+function getRevisionDate(
   revision = "HEAD",
   spawnOptions
 ) {
@@ -171,7 +171,7 @@ function computeBuildId(driverDate, driverRevision) {
     .stdout.toString()
     .trim();
 
-  const runtimeDate = getLinkerRevisionDate();
+  const runtimeDate = getRevisionDate();
 
   // Use the later of the two dates in the build ID.
   const date = +runtimeDate >= +driverDate ? runtimeDate : driverDate;
