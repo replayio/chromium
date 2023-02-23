@@ -141,6 +141,7 @@ function driverExtension() {
  * WARNING: This is a copy-and-paste from `backend` here.
  * When changing: always keep the two in sync, or else, builds will break.
  * @returns {string} "YYYYMMDD" format of UTC timestamp of given revision.
+ * @see https://github.com/replayio/backend/blob/eda247aacb2ade5481b9fb73d751171576197eba/src/shared/linkerVersion.ts#L23
  */
 function getLinkerRevisionDate(
   revision = "HEAD",
