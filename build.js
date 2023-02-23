@@ -138,8 +138,6 @@ function driverExtension() {
 }
 
 /**
- * WARNING: We have copy-and-pasted `getLinkerRevisionDate` into all our runtimes and `backend`.
- * When changing this: always keep all versions of this in sync, or else, builds will break.
  * @returns {string} "YYYYMMDD" format of UTC timestamp of given revision.
  */
 function getRevisionDate(
@@ -159,6 +157,10 @@ function getRevisionDate(
   return new Date(dateString).toISOString().substring(0, 10).replace(/-/g, "");
 }
 
+/**
+ * WARNING: We have copy-and-pasted `computeBuildId` into all our runtimes and `backend`.
+ * When changing this: always keep all versions of this in sync, or else, builds will break.
+ */
 function computeBuildId(driverDate, driverRevision) {
   // Note: this build ID doesn't include revision etc. information for v8 or other inner git
   // repositories. It would be good to either fix this or enforce that the chromium revision
