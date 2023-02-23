@@ -100,10 +100,11 @@ UserEventProbe::UserEventProbe(const char* name,
                                EventTarget* event_target)
     : UserEventProbe(name, atomic_name, event_target, !event_target) {}
 
-// NOTE: This is used for capturing script run events but it does not work.
+// NOTE: This is used for capturing script run events (`scriptFirstStatement`)
+// but it does not work, possibly because it runs too early or otherwise
+// interferes with our own script runners. Not sure yet.
+// TODO: debug this - https://linear.app/replay/issue/RUN-1271#comment-293243fc
 UserEventProbe::UserEventProbe()
-// TODO: uncomment - https://linear.app/replay/issue/RUN-1271
-// UserEventProbe("scriptFirstStatement", AtomicString(), nullptr, false)
 {}
 
 UserEventProbe::~UserEventProbe() {
