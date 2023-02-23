@@ -83,7 +83,7 @@ fs.writeFileSync(
 namespace recordreplay {
   char gRecordReplayDriver[] = "${driverString}";
   int gRecordReplayDriverSize = ${driverContents.length};
-  char gBuildId[] = "${computeBuildId()}";
+  char gBuildId[] = "${computeBuildId(driverDate, driverRevision)}";
 }
 `
 );
@@ -137,7 +137,29 @@ function driverExtension() {
   return currentPlatform() == "windows" ? "dll" : "so";
 }
 
-function computeBuildId() {
+/**
+ * WARNING: This is a copy-and-paste from `backend` here.
+ * When changing: always keep the two in sync, or else, builds will break.
+ * @returns {string} "YYYYMMDD" format of UTC timestamp of given revision.
+ */
+function getLinkerRevisionDate(
+  revision = "HEAD",
+  spawnOptions
+) {
+  const dateString = spawnChecked(
+    "git",
+    ["show", revision, "--pretty=%cd", "--date=iso-strict", "--no-patch"],
+    spawnOptions
+  )
+    .stdout.toString()
+    .trim();
+
+  // convert to UTC -> then get the date only
+  // explanations: https://github.com/replayio/backend/pull/7115#issue-1587869475
+  return new Date(dateString).toISOString().substring(0, 10).replace(/-/g, "");
+}
+
+function computeBuildId(driverDate, driverRevision) {
   // Note: this build ID doesn't include revision etc. information for v8 or other inner git
   // repositories. It would be good to either fix this or enforce that the chromium revision
   // gets bumped whenever an inner repository changes.
@@ -148,16 +170,8 @@ function computeBuildId() {
   ])
     .stdout.toString()
     .trim();
-  const chromiumDate = spawnChecked("git", [
-    "show",
-    "HEAD",
-    "--pretty=%cd",
-    "--date=short",
-    "--no-patch",
-  ])
-    .stdout.toString()
-    .trim()
-    .replace(/-/g, "");
+
+  const chromiumDate = getLinkerRevisionDate();
 
   // Use the later of the two dates in the build ID.
   const date = +chromiumDate >= +driverDate ? chromiumDate : driverDate;
