@@ -138,8 +138,8 @@ function driverExtension() {
 }
 
 /**
- * WARNING: This is a copy-and-paste from `backend`.
- * When changing: always keep all versions of this in sync, or else, builds will break.
+ * WARNING: We have copy-and-pasted the same code in all our runtimes and `backend`.
+ * When changing this: always keep all versions of this in sync, or else, builds will break.
  * @returns {string} "YYYYMMDD" format of UTC timestamp of given revision.
  * @see https://github.com/replayio/backend/blob/eda247aacb2ade5481b9fb73d751171576197eba/src/shared/linkerVersion.ts#L23
  */
