@@ -138,8 +138,8 @@ function driverExtension() {
 }
 
 /**
- * WARNING: This is a copy-and-paste from `backend` here.
- * When changing: always keep the two in sync, or else, builds will break.
+ * WARNING: This is a copy-and-paste from `backend`.
+ * When changing: always keep all versions of this in sync, or else, builds will break.
  * @returns {string} "YYYYMMDD" format of UTC timestamp of given revision.
  * @see https://github.com/replayio/backend/blob/eda247aacb2ade5481b9fb73d751171576197eba/src/shared/linkerVersion.ts#L23
  */
@@ -172,10 +172,10 @@ function computeBuildId(driverDate, driverRevision) {
     .stdout.toString()
     .trim();
 
-  const chromiumDate = getLinkerRevisionDate();
+  const runtimeDate = getLinkerRevisionDate();
 
   // Use the later of the two dates in the build ID.
-  const date = +chromiumDate >= +driverDate ? chromiumDate : driverDate;
+  const date = +runtimeDate >= +driverDate ? runtimeDate : driverDate;
 
   return `${currentPlatform()}-chromium-${date}-${chromiumRevision}-${driverRevision}`;
 }
