@@ -10,9 +10,44 @@ const { REPLAY_LOCAL_DRIVER_DIR } = process.env;
 
 if (REPLAY_LOCAL_DRIVER_DIR && process.env.DRIVER_REVISION) {
   // local driver should generally be latest
-  throw new Error("Conflicting build settings: environment variables DRIVER_REVISION and REPLAY_LOCAL_DRIVER_DIR cannot coexist.");
+  throw new Error(
+    "Conflicting build settings: environment variables DRIVER_REVISION and REPLAY_LOCAL_DRIVER_DIR cannot coexist."
+  );
 }
 
+// TODO(dmiller): this can probably be path.join(process.env.HOME, chromium, src);
+// We should also make it configurable
+const chromium = "/var/lib/buildkite-agent/chromium/src";
+
+try {
+  spawnChecked("git", ["pull"], { cwd: chromium, stdio: "inherit" });
+} catch (e) {
+  // Ignore errors due to being at a detached head.
+}
+spawnChecked("git", ["fetch"], { cwd: `${chromium}/v8`, stdio: "inherit" });
+spawnChecked("git", ["fetch"], {
+  cwd: `${chromium}/third_party/skia`,
+  stdio: "inherit",
+});
+spawnChecked("git", ["fetch"], {
+  cwd: `${chromium}/third_party/webrtc`,
+  stdio: "inherit",
+});
+
+const branch = process.env["BUILDKITE_BRANCH"];
+
+spawnChecked("git", ["checkout", branch], {
+  cwd: chromium,
+  stdio: "inherit",
+});
+
+// TODO(dmiller): do we actually need to do this?
+// We need to pull again to actually update the checkout ...or do we?
+spawnChecked("git", ["pull"], { cwd: chromium, stdio: "inherit" });
+
+spawnChecked("gclient", ["sync"], { cwd: chromium, stdio: "inherit" });
+
+// TODO(dmiller): now that the user and group IDs are the same we might be able to remove this
 // Ensure that the git repository is "trusted", otherwise we'll get errors like:
 // fatal: unsafe repository ('/chromium/src' is owned by someone else)
 spawnChecked("git", [
@@ -20,7 +55,7 @@ spawnChecked("git", [
   "--global",
   "--add",
   "safe.directory",
-  __dirname,
+  chromium,
 ]);
 
 if (currentPlatform() == "macOS") {
@@ -52,7 +87,6 @@ if (!REPLAY_LOCAL_DRIVER_DIR) {
   fs.unlinkSync(driverArchive);
 }
 
-
 let driverFile = `${currentPlatform()}-recordreplay.${driverExtension()}`;
 let driverJSON = `${currentPlatform()}-recordreplay.json`;
 if (REPLAY_LOCAL_DRIVER_DIR) {
@@ -61,7 +95,9 @@ if (REPLAY_LOCAL_DRIVER_DIR) {
 }
 
 // Embed the driver in the source.
-console.log(`Embedding ${REPLAY_LOCAL_DRIVER_DIR ? 'LOCAL' : 'DOWNLOADED'} driver...`);
+console.log(
+  `Embedding ${REPLAY_LOCAL_DRIVER_DIR ? "LOCAL" : "DOWNLOADED"} driver...`
+);
 const driverContents = fs.readFileSync(driverFile);
 const { revision: driverRevision, date: driverDate } = JSON.parse(
   fs.readFileSync(driverJSON, "utf8")
@@ -105,7 +141,6 @@ spawnChecked("autoninja", ["-C", "out/Release", "chrome"], {
 
 console.log(`Build finished.`);
 
-
 function spawnChecked(cmd, args, options) {
   const prettyCmd = [cmd].concat(args).join(" ");
   console.error(prettyCmd);
@@ -113,9 +148,9 @@ function spawnChecked(cmd, args, options) {
   const rv = spawnSync(cmd, args, options);
 
   if (rv.status != 0 || rv.error) {
-    console.error('Process failed:', rv.error || '');
-    console.log(rv.stdout.toString() || '');
-    console.error(rv.stderr.toString() || '');
+    console.error("Process failed:", rv.error || "");
+    console.log(rv.stdout.toString() || "");
+    console.error(rv.stderr.toString() || "");
     throw new Error(`Spawned process failed with exit code ${rv.status}`);
   }
 
