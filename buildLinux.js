@@ -1,10 +1,12 @@
+const chromium = process.cwd;
+
 try {
   spawnChecked("git", ["pull"], { cwd: chromium, stdio: "inherit" });
 } catch (e) {
   // Ignore errors due to being at a detached head.
 }
 
-spawnChecked("git", ["fetch"], { cwd: `${chromium}/v8`, stdio: "inherit" });
+spawnChecked("git", ["fetch"], { cwd: `${chromium/v8`, stdio: "inherit" });
 spawnChecked("git", ["fetch"], {
   cwd: `${chromium}/third_party/skia`,
   stdio: "inherit",
