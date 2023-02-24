@@ -1,3 +1,6 @@
+const path = require("path");
+const { spawnSync } = require("child_process");
+
 const chromium = process.cwd;
 
 try {
