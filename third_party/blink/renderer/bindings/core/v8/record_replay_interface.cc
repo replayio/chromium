@@ -145,6 +145,18 @@ function assert(v, msg = "") {
   }
 }
 
+/**
+ * Custom prop iterator (RUN-1315).
+ */
+function* iterateProps(o) {
+  // NOTE: symbols cannot be otherwise iterated.
+  yield *Object.getOwnPropertySymbols(o);
+  
+  for (const k in o) {
+    yield k;
+  }
+}
+
 function getSourceMapURLs(sourceURL, relativeSourceMapURL) {
   let sourceBaseURL;
   if (typeof sourceURL === "string" && isValidBaseURL(sourceURL)) {
@@ -983,19 +995,6 @@ function isObjectPropertyBlacklisted(cdpObj, name) {
   return false;
 }
 
-// Get the "own" property names of an object to use.
-function propertyNames(cdpObj) {
-  if (isObjectBlacklisted(cdpObj)) {
-    return [];
-  }
-  try {
-    // [live-object-property-access]
-    return [...cdpObj.getOwnPropertyNames(), ...cdpObj.getOwnPropertySymbols()];
-  } catch (e) {
-    return [];
-  }
-}
-
 // Target limit for the number of items (properties etc.) to include in object
 // previews before overflowing.
 const MaxItems = {
@@ -1049,7 +1048,7 @@ ProtocolObjectPreview.prototype = {
     this.properties.push(property);
   },
 
-  addGetterValue(propKey, plainGetter, ownerCdpObject, force = false) {
+  addGetterValue(propKey, ownerCdpObject, force = false) {
     const propName = propKey.toString();
     if (isObjectPropertyBlacklisted(ownerCdpObject, propName)) {
       return;
@@ -1064,11 +1063,15 @@ ProtocolObjectPreview.prototype = {
 
     const rrpValue = evalPropRrp(this.raw, propKey);
     if (rrpValue) {
-      if (!this.startAddItem(force)) {
-        return;
-      }
-      this.getterValues.set(propName, { name: propName, ...rrpValue });
+      this.setGetterValue(propKey, rrpValue, force);
     }
+  },
+  
+  setGetterValue(key, valueObject, force = true) {
+    if (!this.startAddItem(force)) {
+      return;
+    }
+    this.getterValues.set(key, { name: key, ...valueObject });
   },
 
 
@@ -1095,15 +1098,14 @@ ProtocolObjectPreview.prototype = {
     this.extra = previewBlinkObject(this.cdpObj) || {};
 
     // Add class-specific data.
-    const previewer = CustomPreviewers[this.cdpObj.className];
-    const requiredProperties = [];
-    if (previewer) {
-      for (const entry of previewer) {
-        if (typeof entry == "string") {
-          // NOTE: in chromium we add these to `properties`, but in gecko we add these to `getterValues`
-          requiredProperties.push(entry);
-        } else {
+    const previewers = CustomPreviewers[this.cdpObj.className];
+    if (previewers) {
+      for (const entry of previewers) {
+        if (entry instanceof Function) {
           entry.call(this, cdpProperties);
+        }
+        else {
+          this.addGetterValue(entry, this.cdpObj, /* force */ true);
         }
       }
     }
@@ -1113,15 +1115,14 @@ ProtocolObjectPreview.prototype = {
     const dontRecurse = this.level === "noProperties";
     const addedProps = new Set();
     let proto = this.raw;
-    let i = 0;
-    do {
-      const propKeys = [...Object.getOwnPropertySymbols(proto), ...Object.getOwnPropertyNames(proto)];
-      
-      // TODO: allow all getters - https://linear.app/replay/issue/RUN-1016#comment-90c46ba7
-      const allowedGetters = new Set(['type', 'fromElement', 'target', 'isTrusted']);
+    
+    // TODO: allow all getters - https://linear.app/replay/issue/RUN-1016#comment-90c46ba7
+    const allowedGetters = new Set(['type', 'fromElement', 'target', 'isTrusted']);
 
-      for (const propKey of propKeys) {
-        if (++i > MaxItems[this.level]) {
+    do {
+      for (const propKey of iterateProps(proto)) {
+        if (this.overflow) {
+          // early out
           break;
         }
         if (propKey === "__proto__" || addedProps.has(propKey)) {
@@ -1142,14 +1143,14 @@ ProtocolObjectPreview.prototype = {
           allowedGetter
         ) {
           // evaluate native getter props
-          this.addGetterValue(propKey, prop.get, this.cdpObj);
+          this.addGetterValue(propKey, this.cdpObj);
         }
         else if (
           proto === this.raw
         ) {
           // only add complete prop data for own props
           const protocolProperty = createRrpPropertyDescriptor(this.raw, propKey, prop);
-          const force = requiredProperties.includes(prop.name);
+          const force = false;
           this.addProperty(protocolProperty, force);
         }
       }
@@ -1314,14 +1315,16 @@ function previewBlinkRule(rule) {
   };
 }
 
+function previewArray() {
+  // simply invoke the native getter
+  this.addGetterValue('length', this.cdpObj, /* force */ true);
+}
 
 function previewTypedArray() {
-  // The typed array size isn't available from the object's own property
-  // information, except by parsing the object description.
-  const length = getDescriptionCount(this.cdpObj.description);
-  if (length !== undefined) {
-    this.addProperty({ name: "length", value: length }, /* force */ true);
-  }
+  // simply invoke the native getter
+  this.addGetterValue('length', this.cdpObj, /* force */ true);
+  this.addGetterValue('byteLength', this.cdpObj, /* force */ true);
+  this.addGetterValue('byteOffset', this.cdpObj, /* force */ true);
 }
 
 function previewSetMap(cdpProperties) {
@@ -1334,13 +1337,11 @@ function previewSetMap(cdpProperties) {
     return;
   }
 
-  // Get the container size from the length of the entries.
-  const size = getDescriptionCount(internal.value.description);
-  if (size !== undefined) {
-    this.extra.containerEntryCount = size;
-    if (["Set", "Map"].includes(this.cdpObj.className)) {
-      this.addProperty({ name: "size", value: size }, /* force */ true);
-    }
+  // get size for Set and Map (Weak{Set,Map} don't have an observable size)
+  if (["Set", "Map"].includes(this.cdpObj.className)) {
+    // simply invoke the native getter
+    this.addGetterValue('size', this.cdpObj, /* force */ true);
+    this.extra.containerEntryCount = this.raw.size;
   }
 
   const entries = sendMessage("Runtime.getProperties", {
@@ -1383,7 +1384,7 @@ function previewDate() {
 }
 
 function previewError() {
-  this.addProperty({ name: "name", value: this.cdpObj.className }, /* force */ true);
+  this.setGetterValue("name", { value: this.cdpObj.className });
 }
 
 const ErrorProperties = [
@@ -1417,7 +1418,7 @@ function previewFunction(cdpProperties) {
 
 
 const CustomPreviewers = {
-  Array: ["length"],
+  Array: [previewArray],
   Int8Array: [previewTypedArray],
   Uint8Array: [previewTypedArray],
   Uint8ClampedArray: [previewTypedArray],
