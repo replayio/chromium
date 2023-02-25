@@ -247,7 +247,7 @@ class LayoutUnit {
     LayoutUnit return_value;
 
     // https://linear.app/replay/issue/RUN-1239#comment-df307091
-    recordreplay::Assert("[RUN-1239-1435] LayoutUnit::AddEpsilon %lls", value_);
+    recordreplay::Assert("[RUN-1239-1435] LayoutUnit::AddEpsilon %d", value_);
 
     return_value.SetRawValue(
         value_ < std::numeric_limits<int>::max() ? value_ + 1 : value_);
