@@ -240,8 +240,9 @@ void HTMLImageElement::CollectExtraStyleForPresentationAttribute(
 
 const AtomicString HTMLImageElement::ImageSourceURL() const {
   recordreplay::Assert(
-      "[RUN-658-1438] HTMLImageElement::ImageSourceURL %d %s %s", RecordReplayId(),
-      best_fit_image_url_ ? best_fit_image_url_.Utf8().c_str() : "",
+      "[RUN-658-1438] HTMLImageElement::ImageSourceURL %d %s %s",
+      RecordReplayId(),
+      best_fit_image_url_.Utf8().c_str(),
       FastGetAttribute(html_names::kSrcAttr).Utf8().c_str());
   return best_fit_image_url_.IsNull() ? FastGetAttribute(html_names::kSrcAttr)
                                       : best_fit_image_url_;

@@ -54,7 +54,7 @@ class Attribute {
   Attribute(const QualifiedName& name, const AtomicString& value)
       : name_(name), value_(value) {
     if (name == html_names::kSrcAttr) {
-      recordreplay::Assert("[RUN-658-1438] Attribute::Attribute %d %s",
+      recordreplay::Assert("[RUN-658-1438] Attribute::Attribute %s",
                            value.IsNull() ? "(null)" : value.Utf8().c_str());
     }
   }
@@ -77,7 +77,7 @@ class Attribute {
 
   void SetValue(const AtomicString& value) {
     if (name_ == html_names::kSrcAttr) {
-      recordreplay::Assert("[RUN-658-1438] Attribute::SetValue %d %s",
+      recordreplay::Assert("[RUN-658-1438] Attribute::SetValue %s",
                            value.IsNull() ? "(null)" : value.Utf8().c_str());
     }
     value_ = value;
