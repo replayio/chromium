@@ -57,8 +57,8 @@ void ReplayNotifyBeforeEvent(const String& eventName,
                              EventTarget* eventTarget,
                              bool isCallback) {
   if (IsRecordingOrReplaying() && !AreEventsDisallowed() && eventName &&
-      // Disabled by default (RUN-1251)
-      !FeatureEnabled("disable-collect-events") &&
+      // // Disabled by default (RUN-1251)
+      // !FeatureEnabled("disable-collect-events") &&
       // Main-thread only (RUN-1392)
       IsMainThread()) {
     String replayEventType =
