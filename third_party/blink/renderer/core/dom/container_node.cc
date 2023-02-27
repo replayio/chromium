@@ -1395,15 +1395,13 @@ void ContainerNode::RecalcDescendantStyles(
   DCHECK(GetDocument().InStyleRecalc());
   DCHECK(!NeedsStyleRecalc());
 
-  // https://linear.app/replay/issue/RUN-966
   recordreplay::Assert("[RUN-1436-1437] ContainerNode::RecalcDescendantStyles %d",
                        RecordReplayId());
 
   StyleRecalcChange local_change = change;
   for (Node* child = firstChild(); child; child = child->nextSibling()) {
-    // https://linear.app/replay/issue/RUN-966
     recordreplay::Assert(
-        "[RUN-1436-1437] ContainerNode::RecalcDescendantStyles #1 %d",
+        "[RUN-966] ContainerNode::RecalcDescendantStyles #1 %d",
         child->RecordReplayId());
 
     if (!local_change.TraverseChild(*child))
