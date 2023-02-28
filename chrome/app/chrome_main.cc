@@ -75,7 +75,7 @@ ChromeMain(int argc, const char** argv);
 extern "C" void V8SetRecordingOrReplaying(void* handle);
 extern "C" void V8InitializeNotRecordingOrReplaying();
 
-#if BUILDFLAG(IS_LINUX)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 #include "./record_replay_main.cc"
 #endif
 
@@ -90,12 +90,9 @@ int ChromeMain(int argc, const char** argv) {
 #error Unknown platform.
 #endif
 
-  // On linux ChromeMain is the process entry point, whereas on macOS the main
-  // function is in a different binary in chrome_exe_main_mac.cc. When we get to
-  // ChromeMain we've already started recording/replaying, but still need to
-  // initialize V8's record/replay bindings. On linux we need to start
-  // recording/replaying.
 #if BUILDFLAG(IS_LINUX)
+  // On linux ChromeMain is the process entry point, and we need to start
+  // recording/replaying.
   void* handle = RecordReplayAttach(&argc, &argv);
   if (handle) {
     V8SetRecordingOrReplaying(handle);
@@ -103,15 +100,29 @@ int ChromeMain(int argc, const char** argv) {
     V8InitializeNotRecordingOrReplaying();
   }
 #elif BUILDFLAG(IS_MAC)
+  // On macOS the main function is in a different binary in chrome_exe_main_mac.cc.
+  // When we get to ChromeMain we've already started recording/replaying, but still
+  // need to initialize V8's record/replay bindings.
+  //
   // Note: On macOS the library handle doesn't need to be specified when using dlsym.
   void* sym = dlsym(nullptr, "RecordReplayAttach");
   if (sym) {
     V8SetRecordingOrReplaying(nullptr);
   }
-#else
-  fprintf(stderr, "ChromeMain FIXME crashing\n");
-  CHECK(0);
-#endif
+#elif BUILDFLAG(IS_WIN)
+  // On windows the main function is in a different binary in chrome_exe_main_win.cc.
+  // As for macOS we have already started recording/replaying but initialize V8's
+  // record/replay bindings here. Also make sure we update the command line used in
+  // chrome.dll.
+  if (RecordReplayShouldRecord(nullptr, nullptr)) {
+    HMODULE module = GetModuleHandleA("windows-recordreplay.dll");
+    CHECK(module);
+    V8SetRecordingOrReplaying((void*)module);
+  }
+  (void)RecordReplayAttach;
+#else // !BUILDFLAG(IS_WIN)
+#error Unknown platform
+#endif // !BUILDFLAG(IS_WIN)
 
 #if BUILDFLAG(IS_WIN)
 #if BUILDFLAG(USE_ALLOCATOR_SHIM) && BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)

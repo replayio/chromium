@@ -9,6 +9,9 @@
 
 #if BUILDFLAG(IS_MAC)
 #include <spawn.h>
+#elif BUILDFLAG(IS_WIN)
+#include <fcntl.h>
+#include <io.h>
 #endif
 
 static void (*gRecordReplayAttach)(const char* dispatchAddress, const char* buildId);
@@ -26,7 +29,11 @@ static inline void CastPointer(const Src src, Dst* dst) {
 
 template <typename T>
 static void RecordReplayLoadSymbol(void* handle, const char* name, T& function) {
+#if !BUILDFLAG(IS_WIN)
   void* sym = dlsym(handle, name);
+#else
+  void* sym = (void*)GetProcAddress((HMODULE)handle, name);
+#endif
   if (!sym) {
     fprintf(stderr, "Could not find %s in Record Replay driver.\n", name);
     return;
@@ -57,7 +64,7 @@ static DriverHandle DoLoadDriverHandle(const char* aPath, bool aPrintError = tru
 #else
   HMODULE handle = LoadLibraryA(aPath);
   if (!handle && aPrintError) {
-    fprintf(stderr, "DoLoadDriverHandle: LoadLibraryA failed %s: %u\n", aPath, GetLastError());
+    fprintf(stderr, "DoLoadDriverHandle: LoadLibraryA failed %s: %lu\n", aPath, GetLastError());
   }
   return handle;
 #endif
@@ -142,7 +149,7 @@ static DriverHandle OpenDriverHandle() {
   if (rv < 0) {
     fprintf(stderr, "Recorder initialization warning: waitpid failed %d\n", errno);
   }
-#endif // XP_MACOSX
+#endif // BUILDFLAG(IS_MAC)
 
   rv = rename(tmpFilename, filename);
   if (rv < 0) {
@@ -164,7 +171,27 @@ static void MaybeStartProfiling() {
   gRecordReplayProfileExecution(path);
 }
 
-static void* RecordReplayAttach(int* pargc, const char*** pargv) {
+// Return whether the current process should be recorded. May update the arguments.
+static bool RecordReplayShouldRecord(int* pargc, const char*** pargv) {
+#if BUILDFLAG(IS_WIN)
+
+  // On windows the command line is managed through the CommandLine interface.
+  base::CommandLine::Init(0, nullptr);
+
+  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
+  std::string type = command_line->GetSwitchValueASCII("type");
+
+  if (type.length()) {
+    // Only renderer processes are recorded/replayed.
+    return type == "renderer";
+  }
+
+  // Append required switches, see below.
+  command_line->AppendSwitch("no-sandbox");
+  command_line->AppendSwitch("disable-gpu");
+
+#else // !BUILDFLAG(IS_WIN)
+
   // Figure out what type of process this is.
   const char* type = nullptr;
   for (int i = 0; i < *pargc; i++) {
@@ -173,36 +200,51 @@ static void* RecordReplayAttach(int* pargc, const char*** pargv) {
       break;
     }
   }
+
   if (type) {
     // Only renderer processes are recorded/replayed.
-    if (strcmp(type, "renderer")) {
-      return nullptr;
-    }
-  } else {
-    // If there is no type, this is the main process. Add a couple command line
-    // arguments which are required to record/replay.
-    const char** nargv = new const char*[*pargc + 3];
-    memcpy(nargv, *pargv, *pargc * sizeof(char*));
-    *pargv = nargv;
-
-    // Recording processes currently need the sandbox disabled in order to
-    // write out recording IDs to the specified path name.
-    (*pargv)[*pargc] = strdup("--no-sandbox");
-
-    // Recording/replaying currently requires software rendering.
-    (*pargv)[*pargc + 1] = strdup("--disable-gpu");
-
-    (*pargv)[*pargc + 2] = nullptr;
-    *pargc += 2;
-
-    return nullptr;
+    return !strcmp(type, "renderer");
   }
 
-  // When RECORD_REPLAY_DONT_RECORD we don't record, though the main browser
-  // process will still be configured as if we are recording, see above.
+  // If there is no type, this is the main process. Add a couple command line
+  // arguments which are required to record/replay.
+  const char** nargv = new const char*[*pargc + 3];
+  memcpy(nargv, *pargv, *pargc * sizeof(char*));
+  *pargv = nargv;
+
+  // Recording processes currently need the sandbox disabled in order to
+  // write out recording IDs to the specified path name.
+  (*pargv)[*pargc] = strdup("--no-sandbox");
+
+  // Recording/replaying currently requires software rendering.
+  (*pargv)[*pargc + 1] = strdup("--disable-gpu");
+
+  (*pargv)[*pargc + 2] = nullptr;
+  *pargc += 2;
+
+#endif // !BUILDFLAG(IS_WIN)
+
+  return false;
+}
+
+static __attribute__((noinline)) void BusyWait() {
+  fprintf(stderr, "Busy-waiting...\n");
+  volatile int x = 1;
+  while (x) {}
+}
+
+static void* RecordReplayAttach(int* pargc, const char*** pargv) {
+  // When RECORD_REPLAY_DONT_RECORD we don't record.
   if (getenv("RECORD_REPLAY_DONT_RECORD")) {
     return nullptr;
   }
+
+  if (!RecordReplayShouldRecord(pargc, pargv)) {
+    return nullptr;
+  }
+
+  if (getenv("RECORDING_WAIT_AT_ATTACH"))
+    BusyWait();
 
   std::string apiKey;
   const char* val = getenv("RECORD_REPLAY_API_KEY");
@@ -213,14 +255,15 @@ static void* RecordReplayAttach(int* pargc, const char*** pargv) {
     // by the time gRecordReplayAttach runs, it will have no idea that
     // this value existed and won't capture it in the recording itself,
     // which is ideal for security.
+#if BUILDFLAG(IS_WIN)
+    _putenv("RECORD_REPLAY_API_KEY=");
+#else
     unsetenv("RECORD_REPLAY_API_KEY");
+#endif
   }
 
   void* handle = OpenDriverHandle();
   if (!handle) {
-    const char* error = dlerror();
-    fprintf(stderr, "Loading Record Replay driver failed: %s\n",
-            error ? error : "<no error>");
     return nullptr;
   }
 
@@ -238,7 +281,8 @@ static void* RecordReplayAttach(int* pargc, const char*** pargv) {
   const char* dispatchAddress = getenv("RECORD_REPLAY_SERVER");
 
   gRecordReplayAttach(dispatchAddress, recordreplay::gBuildId);
-  gRecordReplayRecordCommandLineArguments(pargc, (char***)pargv);
+  if (pargc)
+    gRecordReplayRecordCommandLineArguments(pargc, (char***)pargv);
   gRecordReplaySaveRecording(nullptr);
 
   MaybeStartProfiling();
