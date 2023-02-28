@@ -27,10 +27,11 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_DOM_ATTRIBUTE_H_
 
 #include "build/build_config.h"
-#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/dom/qualified_name.h"
-#include "third_party/blink/renderer/core/html_names.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
+
+#include "base/record_replay.h"
+#include "third_party/blink/renderer/core/html_names.h"
 
 namespace blink {
 
