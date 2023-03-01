@@ -70,6 +70,26 @@ static DriverHandle DoLoadDriverHandle(const char* aPath, bool aPrintError = tru
 #endif
 }
 
+#if !BUILDFLAG(IS_WIN)
+static const char* DriverExtension = "so";
+static const char DirectorySeparator = '/';
+#else
+static const char* DriverExtension = "dll";
+static const char DirectorySeparator = '\\';
+#endif
+
+// Get the name to lookup for the recorder module.
+static std::string GetDriverModuleName() {
+  const char* driver = getenv("RECORD_REPLAY_DRIVER");
+  if (driver) {
+    return driver;
+  }
+
+  char filename[1024];
+  snprintf(filename, sizeof(filename), "recordreplay-%s.%s", recordreplay::gBuildId, DriverExtension);
+  return filename;
+}
+
 static DriverHandle OpenDriverHandle() {
   const char* driver = getenv("RECORD_REPLAY_DRIVER");
   if (driver) {
@@ -83,11 +103,8 @@ static DriverHandle OpenDriverHandle() {
   }
 
   char filename[1024];
-#if !BUILDFLAG(IS_WIN)
-  snprintf(filename, sizeof(filename), "%s/recordreplay-%s.so", tmpdir, recordreplay::gBuildId);
-#else
-  snprintf(filename, sizeof(filename), "%s\\recordreplay-%s.dll", tmpdir, recordreplay::gBuildId);
-#endif
+  snprintf(filename, sizeof(filename), "%s%c%s",
+           tmpdir, DirectorySeparator, GetDriverModuleName().c_str());
 
   DriverHandle handle = DoLoadDriverHandle(filename, /* aPrintError */ false);
   if (handle) {
