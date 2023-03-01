@@ -29,7 +29,7 @@ static String MakeReplayEventType(const String& eventTypeRaw,
   }
 
   if (eventTarget) {
-    // Sadly, this is necessary because the lookup logic needs to distinguish
+    // Sadly, this "string assembling" is necessary because the lookup logic needs to distinguish
     // between event and target name:
     // The event name itself is ambiguous. To resolve it, sometimes the target
     // name needs to be used, sometimes it needs to be omitted.
@@ -108,7 +108,9 @@ UserEventProbe::UserEventProbe()
 {}
 
 UserEventProbe::~UserEventProbe() {
-  ReplayNotifyAfterEvent(name_, event_target_, is_callback_);
+  if (name_) { // only trigger this if the probe was initialized
+    ReplayNotifyAfterEvent(name_, event_target_, is_callback_);
+  }
 }
 
 }  // namespace recordreplay
