@@ -108,7 +108,7 @@ UserEventProbe::UserEventProbe()
 {}
 
 UserEventProbe::~UserEventProbe() {
-  if (!name_) {  // only trigger this if the probe was initialized
+  if (!name_.empty()) {  // only trigger this if the probe was initialized
     ReplayNotifyAfterEvent(name_, event_target_, is_callback_);
   }
 }
