@@ -104,11 +104,11 @@ UserEventProbe::UserEventProbe(const char* name,
 // but it does not work, possibly because it runs too early or otherwise
 // interferes with our own script runners. Not sure yet.
 // TODO: debug this - https://linear.app/replay/issue/RUN-1271#comment-293243fc
-UserEventProbe::UserEventProbe() : name_("")
+UserEventProbe::UserEventProbe()
 {}
 
 UserEventProbe::~UserEventProbe() {
-  if (name_) { // only trigger this if the probe was initialized
+  if (!name_) {  // only trigger this if the probe was initialized
     ReplayNotifyAfterEvent(name_, event_target_, is_callback_);
   }
 }
