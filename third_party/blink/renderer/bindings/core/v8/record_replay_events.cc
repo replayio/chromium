@@ -53,14 +53,19 @@ static void ReplayNotifyAfterEvent(const String& eventName,
                                    EventTarget* eventTarget = nullptr,
                                    bool isCallback = false);
 
+bool ShouldNotifyEvent(const String& eventName) {
+  return IsRecordingOrReplaying() && !AreEventsDisallowed() &&
+         !eventName.empty() &&
+         //  // Disabled by default (RUN-1251)
+         //  !FeatureEnabled("disable-collect-events") &&
+         // Main-thread only (RUN-1392)
+         IsMainThread();
+}
+
 void ReplayNotifyBeforeEvent(const String& eventName,
                              EventTarget* eventTarget,
                              bool isCallback) {
-  if (IsRecordingOrReplaying() && !AreEventsDisallowed() && eventName &&
-      // Disabled by default (RUN-1251)
-      !FeatureEnabled("disable-collect-events") &&
-      // Main-thread only (RUN-1392)
-      IsMainThread()) {
+  if (ShouldNotifyEvent(eventName)) {
     String replayEventType =
         MakeReplayEventType(eventName, eventTarget, isCallback);
     Assert("[RUN-1271] ReplayNotifyBeforeEvent %d %s", gIsEventInFlight,
@@ -73,9 +78,7 @@ void ReplayNotifyBeforeEvent(const String& eventName,
 void ReplayNotifyAfterEvent(const String& eventName,
                             EventTarget* eventTarget,
                             bool isCallback) {
-  if (gIsEventInFlight &&
-      // Main-thread only (RUN-1392)
-      IsMainThread()) {
+  if (ShouldNotifyEvent(eventName)) {
     String replayEventType =
         MakeReplayEventType(eventName, eventTarget, isCallback);
     Assert("[RUN-1271] ReplayNotifyAfterEvent %d %s", gIsEventInFlight,
@@ -108,9 +111,7 @@ UserEventProbe::UserEventProbe()
 {}
 
 UserEventProbe::~UserEventProbe() {
-  if (!name_.empty()) {  // only trigger this if the probe was initialized
-    ReplayNotifyAfterEvent(name_, event_target_, is_callback_);
-  }
+  ReplayNotifyAfterEvent(name_, event_target_, is_callback_);
 }
 
 }  // namespace recordreplay
