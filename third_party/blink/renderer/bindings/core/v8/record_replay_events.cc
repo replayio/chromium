@@ -56,8 +56,8 @@ static void ReplayNotifyAfterEvent(const String& eventName,
 bool ShouldNotifyEvent(const String& eventName) {
   return IsRecordingOrReplaying() && !AreEventsDisallowed() &&
          !eventName.empty() &&
-         //  // Disabled by default (RUN-1251)
-         //  !FeatureEnabled("disable-collect-events") &&
+          // Disabled by default (RUN-1251)
+          !FeatureEnabled("disable-collect-events") &&
          // Main-thread only (RUN-1392)
          IsMainThread();
 }
