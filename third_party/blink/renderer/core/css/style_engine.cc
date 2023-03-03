@@ -806,8 +806,10 @@ CSSStyleSheet* StyleEngine::CreateSheet(
   // Divergence is between a call to ParseSheet and a call to
   // CreateInline within this method. Assert the values that
   // introduce the codepath divergence.
-  recordreplay::Assert("[RUN-1065] StyleEngine::CreateSheet is_new_entry=%d contents=%d isCacheable=%d",
-    result.is_new_entry, !!contents, contents && contents->IsCacheableForStyleElement());
+  recordreplay::Assert("[RUN-1065-1390] StyleEngine::CreateSheet %d %d %d %lu",
+                       result.is_new_entry, !!contents,
+                       contents && contents->IsCacheableForStyleElement(),
+                       AtomicStringHash::GetHash(text_content));
 
   if (result.is_new_entry || !contents ||
       !contents->IsCacheableForStyleElement()) {
@@ -2931,6 +2933,10 @@ void StyleEngine::UpdateStyleAndLayoutTree() {
 
   UpdateViewportStyle();
 
+  recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle A %d %d",
+                       !!GetDocument().documentElement(),
+                       NeedsStyleRecalc());
+
   if (GetDocument().documentElement()) {
     NthIndexCache nth_index_cache(GetDocument());
     if (NeedsStyleRecalc()) {
@@ -2938,6 +2944,7 @@ void StyleEngine::UpdateStyleAndLayoutTree() {
       SCOPED_BLINK_UMA_HISTOGRAM_TIMER_HIGHRES("Style.RecalcTime");
       Element* viewport_defining = GetDocument().ViewportDefiningElement();
       RecalcStyle();
+      recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle B");
       if (viewport_defining != GetDocument().ViewportDefiningElement())
         ViewportDefiningElementDidChange();
     }

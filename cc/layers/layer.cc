@@ -120,13 +120,11 @@ Layer::Layer()
       ignore_set_needs_commit_for_test_(false),
       bitflags_(0u),
       subtree_property_changed_(false) {
-  // https://linear.app/replay/issue/RUN-885
-  recordreplay::RegisterPointer("Layer", this);
+  // https://linear.app/replay/issue/RUN-1229
+  recordreplay::Assert("Layer::Layer %d", this->layer_id_);
 }
 
 Layer::~Layer() {
-  recordreplay::UnregisterPointer(this);
-
   // Our parent should be holding a reference to us so there should be no
   // way for us to be destroyed while we still have a parent.
   DCHECK(!parent());
@@ -450,6 +448,12 @@ void Layer::RemoveAllChildren() {
   }
 }
 
+struct LayerHash {
+   size_t operator() (const Layer* layer) const {
+     return std::hash<int>{}(layer->id());
+   }
+};
+
 void Layer::SetChildLayerList(LayerList new_children) {
   DCHECK(IsUsingLayerLists());
 
@@ -460,7 +464,7 @@ void Layer::SetChildLayerList(LayerList new_children) {
 
   // Remove existing children that will not be in the new child list.
   {
-    std::unordered_set<Layer*> children_to_remove;
+    std::unordered_set<Layer*, LayerHash> children_to_remove;
     for (auto& existing_child : children())
       children_to_remove.insert(existing_child.get());
     for (auto& new_child : new_children)

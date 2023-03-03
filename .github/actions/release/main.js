@@ -2,7 +2,6 @@
 const {
   getLatestRevision,
   sendBuildTestRequest,
-  spawnChecked,
   newTask,
 } = require("../utils");
 
@@ -12,6 +11,7 @@ sendBuildTestRequest({
   name: `Chromium Release ${revision}`,
   tasks: [
     ...platformTasks("linux"),
+    ...platformTasks("macOS"),
   ],
 });
 

@@ -17,6 +17,8 @@
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/ref_counted.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_events.h"
+
 namespace blink {
 
 namespace internal {
@@ -34,10 +36,19 @@ class IdleRequestCallbackWrapper
   static void IdleTaskFired(
       scoped_refptr<IdleRequestCallbackWrapper> callback_wrapper,
       base::TimeTicks deadline) {
+
+    if (!recordreplay::AreEventsDisallowed())
+      recordreplay::Assert("[RUN-1335-1336] IdleTaskFired A %d",
+                           callback_wrapper->Id());
+
     if (ScriptedIdleTaskController* controller =
             callback_wrapper->Controller()) {
       // If we are going to yield immediately, reschedule the callback for
       // later.
+
+      if (!recordreplay::AreEventsDisallowed())
+        recordreplay::Assert("[RUN-1335-1336] IdleTaskFired B");
+
       if (ThreadScheduler::Current()->ShouldYieldForHighPriorityWork()) {
         controller->ScheduleCallback(std::move(callback_wrapper),
                                      /* timeout_millis */ 0);
@@ -59,7 +70,10 @@ class IdleRequestCallbackWrapper
     callback_wrapper->Cancel();
   }
 
-  void Cancel() { controller_ = nullptr; }
+  void Cancel() {
+    recordreplay::Assert("[RUN-1335-1391] IdleRequestCallbackWrapper::Cancel %d", Id());
+    controller_ = nullptr;
+  }
 
   ScriptedIdleTaskController::CallbackId Id() const { return id_; }
   ScriptedIdleTaskController* Controller() const { return controller_; }
@@ -204,6 +218,9 @@ void ScriptedIdleTaskController::RunCallback(
                               idle_task->async_task_context());
   probe::UserCallback probe(GetExecutionContext(), "requestIdleCallback",
                             AtomicString(), true);
+
+  recordreplay::UserEventProbe replayEvent("requestIdleCallback",
+                                           AtomicString());
 
   bool cross_origin_isolated_capability =
       GetExecutionContext()
