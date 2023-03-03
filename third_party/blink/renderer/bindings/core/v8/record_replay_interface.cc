@@ -244,6 +244,7 @@ sendMessage("Runtime.enable");
 
 const CommandCallbacks = {
   "Graphics.getDevicePixelRatio": Graphics_getDevicePixelRatio,
+  "Target.evaluatePrivileged": Target_evaluatePrivileged,
   "Target.getCurrentMessageContents": Target_getCurrentMessageContents,
   "Target.getSourceMapURL": Target_getSourceMapURL,
   "Target.getStepOffsets": Target_getStepOffsets,
@@ -284,6 +285,11 @@ function commandCallback(method, params) {
     log(`[RuntimeError][Command ${method}] ${e?.stack || e}`);
     return {};
   }
+}
+
+function Target_evaluatePrivileged({ expression }) {
+  const result = eval(expression);
+  return { result };
 }
 
 // Contents of the last console API call. Runtime.consoleAPICalled will be
