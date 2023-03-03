@@ -108,9 +108,6 @@ const {
   // network
   getCurrentNetworkRequestEvent,
   getCurrentNetworkStreamData,
-
-  // Blink, DOM and more
-  // ?
 } = __RECORD_REPLAY_ARGUMENTS__;
 
 const gSourceMapData = new Map();
@@ -142,18 +139,6 @@ function assert(v, msg = "") {
   if (!v) {
     log(`[RuntimeError] Assertion failed ${msg} ${Error().stack}`);
     throw new Error("Assertion failed!");
-  }
-}
-
-/**
- * Custom prop iterator (RUN-1315).
- */
-function* iterateProps(o) {
-  // NOTE: symbols cannot be otherwise iterated.
-  yield *Object.getOwnPropertySymbols(o);
-  
-  for (const k in o) {
-    yield k;
   }
 }
 
@@ -549,7 +534,7 @@ function isNativeFunctionDescription(functionString) {
   return functionString?.endsWith('() { [native code] }') || false;
 }
 
-function isPrototype(x) { 
+function isPrototype(x) {
   return x === x.constructor.prototype;
 }
 
@@ -1053,7 +1038,7 @@ ProtocolObjectPreview.prototype = {
     if (isObjectPropertyBlacklisted(ownerCdpObject, propName)) {
       return;
     }
-    
+
     if (!this.getterValues) {
       this.getterValues = new Map();
     }
@@ -1066,7 +1051,7 @@ ProtocolObjectPreview.prototype = {
       this.setGetterValue(propKey, rrpValue, force);
     }
   },
-  
+
   setGetterValue(key, valueObject, force = true) {
     if (!this.startAddItem(force)) {
       return;
@@ -1086,13 +1071,22 @@ ProtocolObjectPreview.prototype = {
   },
 
   fill() {
-    // NOTE: we could also use "Runtime.evaluate" with `{ generatePreview: true }`
-    // WARNING: this CDP call can cause `UpdateLayout` which (as of now) can cause crashes.
+    // WARNING: `Runtime.getProperties` evaluates native getters and thus can cause
+    //          lazy calls to `Update{Style,Layout}` etc. which might still cause
+    //          some crashes - https://linear.app/replay/issue/RUN-1016#comment-90c46ba7
     const cdpProperties = sendMessage("Runtime.getProperties", {
       objectId: this.cdpObj.objectId,
-      ownProperties: true,
+      ownProperties: false,
       generatePreview: false,
+      pageIndex: 0,
+      pageSize: MaxItems[this.level] || 1000
     });
+
+    if (!cdpProperties.result) {
+      return {
+        prototypeId: prototypeRrpId
+      };
+    }
 
     // Add data for blink objects
     this.extra = previewBlinkObject(this.cdpObj) || {};
@@ -1112,54 +1106,28 @@ ProtocolObjectPreview.prototype = {
 
 
     // add properties + getterValues (based on what we did in gecko).
-    const dontRecurse = this.level === "noProperties";
     const addedProps = new Set();
-    let proto = this.raw;
-    
-    // TODO: allow all getters - https://linear.app/replay/issue/RUN-1016#comment-90c46ba7
-    const allowedGetters = new Set(['type', 'fromElement', 'target', 'isTrusted']);
 
-    do {
-      for (const propKey of iterateProps(proto)) {
-        if (this.overflow) {
-          // early out
-          break;
-        }
-        if (propKey === "__proto__" || addedProps.has(propKey)) {
-          continue;
-        }
-        addedProps.add(propKey);
-        const prop = Object.getOwnPropertyDescriptor(proto, propKey);
-        if (!prop) {
-          continue;
-        }
-
-        const isNativeGetter = prop.get && isProbablyNativeFunction(prop.get);
-        const allowedGetter = allowedGetters.has(propKey);
-
-        if (
-          !isPrototype(this.raw) && // don't try to execute getters on prototypes
-          isNativeGetter &&
-          allowedGetter
-        ) {
-          // evaluate native getter props
-          this.addGetterValue(propKey, this.cdpObj);
-        }
-        else if (
-          proto === this.raw
-        ) {
-          // only add complete prop data for own props
-          const protocolProperty = createRrpPropertyDescriptor(this.raw, propKey, prop);
-          const force = false;
-          this.addProperty(protocolProperty, force);
-        }
-      }
-      if (dontRecurse) {
+    /**
+     * @see https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#type-PropertyDescriptor
+     */
+    for (const cdpProp of cdpProperties.result) {
+      if (this.overflow) {
+        // early out
         break;
       }
-      proto = Object.getPrototypeOf(proto);
+
+      const { name: propKey } = cdpProp;
+      if (propKey === "__proto__" || addedProps.has(propKey)) {
+        continue;
+      }
+      addedProps.add(propKey);
+
+      // only add complete prop data for own props
+      const protocolProperty = createRrpPropertyDescriptor(this.raw, propKey, cdpProp);
+      const force = false;
+      this.addProperty(protocolProperty, force);
     }
-    while (proto && proto.constructor !== Object); // ignore Object
 
     let prototypeCdp = getInternalProp(cdpProperties, '[[Prototype]]')?.value;
     let prototypeRrpId;
@@ -1461,10 +1429,11 @@ function evalPropRrp(owner, propKey) {
   }
 }
 
-function createRrpPropertyDescriptor(owner, propKey, desc) {
-  const { value, writable, get, set, configurable, enumerable } = desc;
+function createRrpPropertyDescriptor(owner, propKey, cdpProp) {
+  // https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#type-PropertyDescriptor
+  const { value, writable, get, set, configurable, enumerable, symbol } = cdpProp;
 
-  let rv = value && evalPropRrp(owner, propKey) || {};
+  let rv = value !== undefined && createRrpValueRaw(value);
   rv.name = propKey.toString();
 
   let flags = 0;
@@ -1488,7 +1457,7 @@ function createRrpPropertyDescriptor(owner, propKey, desc) {
     rv.set = registerCdpObject(set);
   }
 
-  rv.isSymbol = typeof propKey === 'symbol';
+  rv.isSymbol = !!symbol;
 
   return rv;
 }
@@ -1788,7 +1757,7 @@ function DOM_performSearch({ query }) {
   const nodeObjects = fromJsDomPerformSearch(query);
   const nodeRrpIds = nodeObjects
     ?.map(registerPlainObject)
-   || [];
+    || [];
 
   return { nodes: nodeRrpIds, data: {} };
 }
@@ -1977,7 +1946,7 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
    * @see https://github.com/replayio/chromium/blob/052831f0220b79fe0c3343b49f6d2863ea6de05d/third_party/blink/renderer/core/css/css_style_rule.cc#L94
    */
   const ruleCssText = `${selectorText} {${styleCssText}}`;
-  
+
   const rulePreview = {
     className: 'CSSRule',
     preview: {
