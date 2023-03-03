@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <utility>
+#include <sstream>
 
 #include "base/logging.h"
 #include "base/ranges/algorithm.h"
@@ -703,6 +704,12 @@ void PaintArtifactCompositor::Update(
         tracks_raster_invalidations_, root_layer_->layer_tree_host());
 
     cc::Layer& layer = pending_layer.CcLayer();
+
+    // NOTE: This `Assert` must come after `UpdateCompositedLayer`, since that one sets `pending_layer.CcLayer`.
+    recordreplay::Assert(
+        "[RUN-1229-1434] PaintArtifactCompositor::Update %d %d",
+        host->GetId(), layer.id());
+
     const auto& property_state = pending_layer.GetPropertyTreeState();
     const auto& transform = property_state.Transform();
     const auto& clip = property_state.Clip();
