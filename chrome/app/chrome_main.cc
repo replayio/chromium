@@ -80,6 +80,10 @@ extern "C" void V8InitializeNotRecordingOrReplaying();
 #endif
 
 #if BUILDFLAG(IS_WIN)
+namespace recordreplay { extern void InitBindings(); }
+#endif
+
+#if BUILDFLAG(IS_WIN)
 DLLEXPORT int __cdecl ChromeMain(HINSTANCE instance,
                                  sandbox::SandboxInterfaceInfo* sandbox_info,
                                  int64_t exe_entry_point_ticks) {
@@ -118,7 +122,9 @@ int ChromeMain(int argc, const char** argv) {
     HMODULE module = GetModuleHandleA(GetDriverModuleName().c_str());
     CHECK(module);
     V8SetRecordingOrReplaying((void*)module);
+    recordreplay::InitBindings();
   }
+  // Fix warning.
   (void)RecordReplayAttach;
 #else // !BUILDFLAG(IS_WIN)
 #error Unknown platform

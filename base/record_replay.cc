@@ -8,6 +8,10 @@
 
 #include <stdarg.h>
 
+#if BUILDFLAG(IS_WIN)
+#include <windows.h>
+#endif
+
 namespace recordreplay {
 
 #define ForEachV8API(Macro)                                             \
@@ -107,6 +111,34 @@ ForEachV8API(DefineFunction)
   }
 ForEachV8APIVoid(DefineFunctionVoid)
 #undef DefineFunctionVoid
+
+void InitBindings() {
+  HMODULE module;
+  if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+			  reinterpret_cast<LPCSTR>(InitBindings),
+			  &module)) {
+    fprintf(stderr, "GetModuleHandleExA failed %d, crashing...\n", (int)GetLastError());
+    CHECK(0);
+  }
+
+#define LoadFunction(Name, Formals, Args, ReturnType, DefaultValue)           \
+  g##Name = reinterpret_cast<ReturnType(*)Formals>(GetProcAddress(module, #Name)); \
+  if (!g##Name) {                                                             \
+    fprintf(stderr, "Could not find V8 export %s, crashing...\n", #Name);     \
+    CHECK(0);                                                                 \
+  }
+ForEachV8API(LoadFunction)
+#undef LoadFunction
+
+#define LoadFunctionVoid(Name, Formals, Args)                                 \
+  g##Name = reinterpret_cast<void(*)Formals>(GetProcAddress(module, #Name)); \
+  if (!g##Name) {                                                             \
+    fprintf(stderr, "Could not find V8 export %s, crashing...\n", #Name);     \
+    CHECK(0);                                                                 \
+  }
+ForEachV8APIVoid(LoadFunctionVoid)
+#undef LoadFunctionVoid
+}
 
 #else // !BUILD_FLAG(IS_WIN)
 

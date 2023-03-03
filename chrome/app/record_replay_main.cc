@@ -298,9 +298,21 @@ static void* RecordReplayAttach(int* pargc, const char*** pargv) {
   const char* dispatchAddress = getenv("RECORD_REPLAY_SERVER");
 
   gRecordReplayAttach(dispatchAddress, recordreplay::gBuildId);
-  if (pargc)
-    gRecordReplayRecordCommandLineArguments(pargc, (char***)pargv);
   gRecordReplaySaveRecording(nullptr);
+
+#if BUILDFLAG(IS_WIN)
+  // On windows we don't need to explicitly record/replay the arguments because
+  // they're fetched via a recorded call, but we do need to record the executable
+  // path as the recorder uses this to determine the install directory.
+  char filename[1024];
+  GetModuleFileNameA(nullptr, filename, sizeof(filename));
+  int fake_argc = 1;
+  char* fake_argv[] = { filename };
+  char** pfake_argv[] = { fake_argv };
+  gRecordReplayRecordCommandLineArguments(&fake_argc, pfake_argv);
+#else
+  gRecordReplayRecordCommandLineArguments(pargc, (char***)pargv);
+#endif
 
   MaybeStartProfiling();
 
