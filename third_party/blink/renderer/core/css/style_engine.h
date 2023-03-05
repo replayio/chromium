@@ -886,9 +886,10 @@ class CORE_EXPORT StyleEngine final : public GarbageCollected<StyleEngine>,
 
   Member<CSSFontSelector> font_selector_;
 
-  HeapHashMap<AtomicString, WeakMember<StyleSheetContents>>
-      text_to_sheet_cache_;
-  HeapHashMap<WeakMember<StyleSheetContents>, AtomicString>
+  // ReplayableMember
+  HeapHashMap<AtomicString, Member<StyleSheetContents>> text_to_sheet_cache_;
+  // ReplayableMember
+  HeapHashMap<Member<StyleSheetContents>, AtomicString>
       sheet_to_text_cache_;
 
   std::unique_ptr<StyleResolverStats> style_resolver_stats_;
