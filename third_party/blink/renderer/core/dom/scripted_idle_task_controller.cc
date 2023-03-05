@@ -90,7 +90,7 @@ class IdleRequestCallbackWrapper
   }
 
   ScriptedIdleTaskController::CallbackId id_;
-  Persistent<ScriptedIdleTaskController> controller_;
+  WeakPersistent<ScriptedIdleTaskController> controller_;
 };
 
 }  // namespace internal
