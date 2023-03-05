@@ -70,41 +70,64 @@ static DriverHandle DoLoadDriverHandle(const char* aPath, bool aPrintError = tru
 #endif
 }
 
-#if !BUILDFLAG(IS_WIN)
-static const char* DriverExtension = "so";
-static const char DirectorySeparator = '/';
-#else
-static const char* DriverExtension = "dll";
-static const char DirectorySeparator = '\\';
-#endif
+#if BUILDFLAG(IS_WIN)
 
-// Get the name to lookup for the recorder module.
-static std::string GetDriverModuleName() {
-  const char* driver = getenv("RECORD_REPLAY_DRIVER");
-  if (driver) {
-    return driver;
-  }
+// On windows the driver DLL *must* have this name, as it will be used to
+// lookup symbols in the driver and call them directly in various places
+// that can be compiled in executables that don't contain the V8 wrappers.
+static const char* WindowsDriverDLL = "windows-recordreplay.dll";
 
-  char filename[1024];
-  snprintf(filename, sizeof(filename), "recordreplay-%s.%s", recordreplay::gBuildId, DriverExtension);
-  return filename;
-}
+#endif // BUILDFLAG(IS_WIN)
 
 static DriverHandle OpenDriverHandle() {
-  const char* driver = getenv("RECORD_REPLAY_DRIVER");
-  if (driver) {
-    return DoLoadDriverHandle(driver);
-  }
-
   const char* tmpdir = GetTempDirectory();
   if (!tmpdir) {
     fprintf(stderr, "Can't figure out temporary directory, can't create driver.\n");
     return nullptr;
   }
 
+  const char* driver = getenv("RECORD_REPLAY_DRIVER");
+  if (driver) {
+#if BUILDFLAG(IS_WIN)
+    // On windows we still need to copy the driver in case it has the wrong name.
+    // Don't bother checking to see if it already has the right name, this
+    // setting is normally only used during internal testing.
+    char driverDir[1024];
+    snprintf(driverDir, sizeof(driverDir), "%s\\recordreplay-XXXXXX", tmpdir);
+    _mktemp(driverDir);
+    if (!CreateDirectoryA(driverDir, nullptr)) {
+      fprintf(stderr, "Creating directory for existing driver failed, can't create driver.\n");
+      return nullptr;
+    }
+
+    char newDriver[1024];
+    snprintf(newDriver, sizeof(newDriver), "%s\\%s", driverDir, WindowsDriverDLL);
+
+    if (!CopyFileA(driver, newDriver, /* bFailIfExists */ true)) {
+      fprintf(stderr, "Copying existing driver failed, can't create driver.\n");
+      return nullptr;
+    }
+    return DoLoadDriverHandle(newDriver);
+#else
+    return DoLoadDriverHandle(driver);
+#endif
+  }
+
   char filename[1024];
-  snprintf(filename, sizeof(filename), "%s%c%s",
-           tmpdir, DirectorySeparator, GetDriverModuleName().c_str());
+#if BUILDFLAG(IS_WIN)
+  char driverDir[1024];
+  snprintf(driverDir, sizeof(driverDir), "%s\\%s",
+           tmpdir, recordreplay::gBuildId);
+  if (!CreateDirectoryA(driverDir, nullptr) && GetLastError() != ERROR_ALREADY_EXISTS) {
+    fprintf(stderr, "Creating directory for driver failed, can't create driver.\n");
+    return nullptr;
+  }
+  snprintf(filename, sizeof(filename), "%s\\%s",
+           driverDir, WindowsDriverDLL);
+#else
+  snprintf(filename, sizeof(filename), "%s/%s.so",
+           tmpdir, recordreplay::gBuildId);
+#endif
 
   DriverHandle handle = DoLoadDriverHandle(filename, /* aPrintError */ false);
   if (handle) {

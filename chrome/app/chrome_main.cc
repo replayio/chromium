@@ -119,7 +119,7 @@ int ChromeMain(int argc, const char** argv) {
   // record/replay bindings here. Also make sure we update the command line used in
   // chrome.dll.
   if (RecordReplayShouldRecord(nullptr, nullptr)) {
-    HMODULE module = GetModuleHandleA(GetDriverModuleName().c_str());
+    HMODULE module = GetModuleHandleA("windows-recordreplay.dll");
     CHECK(module);
     V8SetRecordingOrReplaying((void*)module);
     recordreplay::InitBindings();
