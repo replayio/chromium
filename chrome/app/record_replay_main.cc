@@ -7,12 +7,20 @@
 
 #include "../../base/record_replay_driver.cc"
 
-#if BUILDFLAG(IS_MAC)
-#include <spawn.h>
-#elif BUILDFLAG(IS_WIN)
+#if BUILDFLAG(IS_WIN)
+
 #include <fcntl.h>
 #include <io.h>
+
+#else // !BUILDFLAG(IS_WIN)
+
+#include <dlfcn.h>
+
+#if BUILDFLAG(IS_MAC)
+#include <spawn.h>
 #endif
+
+#endif // !BUILDFLAG(IS_WIN)
 
 static void (*gRecordReplayAttach)(const char* dispatchAddress, const char* buildId);
 static void (*gRecordReplaySetApiKey)(const char* apiKey);

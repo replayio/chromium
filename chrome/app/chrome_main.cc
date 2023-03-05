@@ -4,13 +4,6 @@
 
 #include <stdint.h>
 
-#if !BUILDFLAG(IS_WIN)
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-#include <dlfcn.h>
-#endif
-
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/check.h"
