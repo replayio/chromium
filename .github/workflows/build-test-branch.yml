@@ -39,10 +39,9 @@ on:
       test_suites_filter:
         description: "Filter for test suites to run"
         required: false
-      # Commented out due to github limit on workflow inputs :/
-      #test_suite_runs:
-      #  description: "Number of times to run test suites"
-      #  required: false
+      test_suite_runs:
+        description: "Number of times to run test suites"
+        required: false
 
 jobs:
   build-test:
