@@ -49,7 +49,7 @@
 #include "chrome/install_static/initialize_from_primary_module.h"
 #include "chrome/install_static/install_details.h"
 
-#if BUILDFLAG(IS_MAC)
+#if !BUILDFLAG(IS_WIN)
 #include <dlfcn.h>
 #endif
 
