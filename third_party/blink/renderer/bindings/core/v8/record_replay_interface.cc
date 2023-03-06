@@ -1034,8 +1034,7 @@ ProtocolObjectPreview.prototype = {
   },
 
   addGetterValue(propKey, ownerCdpObject, force = false) {
-    const propName = propKey.toString();
-    if (isObjectPropertyBlacklisted(ownerCdpObject, propName)) {
+    if (isObjectPropertyBlacklisted(ownerCdpObject, propKey)) {
       return;
     }
 
@@ -1050,6 +1049,22 @@ ProtocolObjectPreview.prototype = {
     if (rrpValue) {
       this.setGetterValue(propKey, rrpValue, force);
     }
+  },
+
+  addEvalMethodValue(propKey) {
+    if (!this.getterValues) {
+      this.getterValues = new Map();
+    }
+    if (this.getterValues.has(propKey)) {
+      return;
+    }
+
+    const plainValue = this.raw[propKey].call(this.raw);
+    const rrpValue = createRrpValueRaw(plainValue);
+    if (rrpValue) {
+      this.setGetterValue(propKey, rrpValue, /* force */ true);
+    }
+    return plainValue;
   },
 
   setGetterValue(key, valueObject, force = true) {
@@ -1070,6 +1085,12 @@ ProtocolObjectPreview.prototype = {
     this.containerEntries.push(entry);
   },
 
+  get pageIndex() { return 0; }
+
+  get pageSize() {
+    return MaxItems[this.level] || 10;
+  },
+
   fill() {
     // WARNING: `Runtime.getProperties` evaluates native getters and thus can cause
     //          lazy calls to `Update{Style,Layout}` etc. which might still cause
@@ -1078,8 +1099,8 @@ ProtocolObjectPreview.prototype = {
       objectId: this.cdpObj.objectId,
       ownProperties: false,
       generatePreview: false,
-      pageIndex: 0,
-      pageSize: MaxItems[this.level] || 1000
+      pageIndex: this.pageIndex,
+      pageSize: this.pageSize
     });
 
     if (!cdpProperties.result) {
@@ -1300,7 +1321,7 @@ function previewSetMap(cdpProperties) {
     return;
   }
 
-  const internal = cdpProperties.internalProperties.find(prop => prop.name == "[[Entries]]");
+  const internal = getInternalProp(cdpProperties, "[[Entries]]");
   if (!internal || !internal.value || !internal.value.objectId) {
     return;
   }
@@ -1308,14 +1329,15 @@ function previewSetMap(cdpProperties) {
   // get size for Set and Map (Weak{Set,Map} don't have an observable size)
   if (["Set", "Map"].includes(this.cdpObj.className)) {
     // simply invoke the native getter
-    this.addGetterValue('size', this.cdpObj, /* force */ true);
-    this.extra.containerEntryCount = this.raw.size;
+    this.extra.containerEntryCount = this.addEvalMethodValue('size');
   }
 
   const entries = sendMessage("Runtime.getProperties", {
     objectId: internal.value.objectId,
     ownProperties: true,
     generatePreview: false,
+    pageIndex: this.pageIndex,
+    pageSize: this.pageSize
   }).result;
 
   for (const entry of entries) {
@@ -1323,7 +1345,7 @@ function previewSetMap(cdpProperties) {
       const entryProperties = sendMessage("Runtime.getProperties", {
         objectId: entry.value.objectId,
         ownProperties: true,
-        generatePreview: false,
+        generatePreview: false
       }).result;
       const key = entryProperties.find(eprop => eprop.name == "key");
       const value = entryProperties.find(eprop => eprop.name == "value");
