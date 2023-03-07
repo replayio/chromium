@@ -1085,7 +1085,7 @@ ProtocolObjectPreview.prototype = {
     this.containerEntries.push(entry);
   },
 
-  get pageIndex() { return 0; }
+  get pageIndex() { return 0; },
 
   get pageSize() {
     return MaxItems[this.level] || 10;
@@ -1145,9 +1145,9 @@ ProtocolObjectPreview.prototype = {
       addedProps.add(propKey);
 
       // only add complete prop data for own props
-      const protocolProperty = createRrpPropertyDescriptor(this.raw, propKey, cdpProp);
+      const rrpProp = createRrpPropertyDescriptor(cdpProp);
       const force = false;
-      this.addProperty(protocolProperty, force);
+      this.addProperty(rrpProp, force);
     }
 
     let prototypeCdp = getInternalProp(cdpProperties, '[[Prototype]]')?.value;
@@ -1451,12 +1451,12 @@ function evalPropRrp(owner, propKey) {
   }
 }
 
-function createRrpPropertyDescriptor(owner, propKey, cdpProp) {
+function createRrpPropertyDescriptor(cdpProp) {
   // https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#type-PropertyDescriptor
-  const { value, writable, get, set, configurable, enumerable, symbol } = cdpProp;
+  const { name, value: cdpValue, writable, get, set, configurable, enumerable, symbol } = cdpProp;
 
-  let rv = value !== undefined && createRrpValueRaw(value);
-  rv.name = propKey.toString();
+  let rv = cdpValue && buildRrpObjectFromCdpObject(cdpValue);
+  rv.name = name;
 
   let flags = 0;
   if (writable) {
