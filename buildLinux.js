@@ -45,7 +45,7 @@ const dockerArgs = [
   "-e",
   "DRIVER_REVISION",
   "-v",
-  `${path.join(process.env.HOME, "chromium")}:/chromium`,
+  `${path.join(process.env.HOME, "chromium", "src")}:/chromium`,
   "-v",
   `${path.join(process.env.HOME, "depot_tools")}:/depot_tools`,
   "-v",
