@@ -19,11 +19,7 @@ spawnChecked("git", ["fetch"], {
   stdio: "inherit",
 });
 
-console.log("ENV", process.env);
-
 const branch = process.env["BUILDKITE_BRANCH"];
-
-console.log("BRANCH", branch);
 
 spawnChecked("git", ["checkout", branch], {
   cwd: chromium,
@@ -62,7 +58,7 @@ spawnChecked("docker", dockerArgs, { stdio: "inherit" });
 
 function spawnChecked(cmd, args, options) {
   const prettyCmd = [cmd].concat(args).join(" ");
-  console.error(prettyCmd, JSON.stringify(options));
+  console.error(prettyCmd);
 
   const rv = spawnSync(cmd, args, options);
 
