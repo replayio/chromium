@@ -58,7 +58,7 @@ spawnChecked("docker", dockerArgs, { stdio: "inherit" });
 
 function spawnChecked(cmd, args, options) {
   const prettyCmd = [cmd].concat(args).join(" ");
-  console.error(prettyCmd);
+  console.error(prettyCmd, JSON.stringify(options));
 
   const rv = spawnSync(cmd, args, options);
 
