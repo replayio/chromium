@@ -43,9 +43,9 @@ class CORE_EXPORT StyleImageCache {
   // the image.
   HeapHashMap<String, WeakMember<StyleFetchedImage>> fetched_image_map_;
 
-  // Fix weak pointer divergence.
+  // Keep strong pointer on cached `StyleFetchedImage`s to prevent divergence.
   // see https://linear.app/replay/issue/RUN-1065#comment-7e345cbc
-  HeapHashSet<Member<StyleFetchedImage>> record_replay_images_strong_;
+  HeapHashSet<Member<StyleFetchedImage>> fetched_image_map_strong_;
 
   friend class StyleImageCacheTest;
 };

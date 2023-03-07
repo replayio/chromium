@@ -24,7 +24,7 @@ StyleFetchedImage* StyleImageCache::CacheStyleImage(Document& document,
         origin_clean == OriginClean::kTrue, is_ad_related, params.Url());
 
     if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers")) {
-      record_replay_images_strong_.insert(result.stored_value->value);
+      fetched_image_map_strong_.insert(result.stored_value->value);
     }
   }
   return result.stored_value->value;
@@ -32,7 +32,7 @@ StyleFetchedImage* StyleImageCache::CacheStyleImage(Document& document,
 
 void StyleImageCache::Trace(Visitor* visitor) const {
   visitor->Trace(fetched_image_map_);
-  visitor->Trace(record_replay_images_strong_);
+  visitor->Trace(fetched_image_map_strong_);
 }
 
 }  // namespace blink

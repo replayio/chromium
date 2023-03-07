@@ -890,9 +890,9 @@ class CORE_EXPORT StyleEngine final : public GarbageCollected<StyleEngine>,
   HeapHashMap<WeakMember<StyleSheetContents>, AtomicString>
       sheet_to_text_cache_;
 
-  // Fix weak pointer divergence.
+  // Keep strong pointer on cached `StyleSheetContents` to prevent divergence.
   // see https://linear.app/replay/issue/RUN-1065#comment-7e345cbc
-  HeapHashSet<Member<StyleSheetContents>> record_replay_contents_strong_;
+  HeapHashSet<Member<StyleSheetContents>> style_sheet_contents_strong_;
 
   std::unique_ptr<StyleResolverStats> style_resolver_stats_;
   unsigned style_for_element_count_{0};

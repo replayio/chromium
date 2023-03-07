@@ -821,7 +821,7 @@ CSSStyleSheet* StyleEngine::CreateSheet(
       sheet_to_text_cache_.insert(style_sheet->Contents(), text_content);
 
       if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers")) {
-        record_replay_contents_strong_.insert(style_sheet->Contents());
+        style_sheet_contents_strong_.insert(style_sheet->Contents());
       }
     }
   } else {
@@ -3436,7 +3436,7 @@ void StyleEngine::Trace(Visitor* visitor) const {
   visitor->Trace(parent_for_detached_subtree_);
   visitor->Trace(ua_document_transition_style_);
   visitor->Trace(style_image_cache_);
-  visitor->Trace(record_replay_contents_strong_);
+  visitor->Trace(style_sheet_contents_strong_);
   FontSelectorClient::Trace(visitor);
 }
 
