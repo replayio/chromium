@@ -256,6 +256,9 @@ void ReportWasmEvalViolation(
 }
 
 bool CheckEval(const network::mojom::blink::CSPSourceList* directive) {
+  // Allow privileged evaluations after diverging from the recording.
+  if (recordreplay::HasDivergedFromRecording())
+    return true;
   return !directive || directive->allow_eval;
 }
 
