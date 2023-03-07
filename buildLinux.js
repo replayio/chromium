@@ -1,7 +1,7 @@
 const path = require("path");
 const { spawnSync } = require("child_process");
 
-const chromium = process.cwd;
+const chromium = process.cwd();
 
 try {
   spawnChecked("git", ["pull"], { cwd: chromium, stdio: "inherit" });
