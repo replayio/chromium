@@ -19,7 +19,11 @@ spawnChecked("git", ["fetch"], {
   stdio: "inherit",
 });
 
+console.log("ENV", process.env);
+
 const branch = process.env["BUILDKITE_BRANCH"];
+
+console.log("BRANCH", branch);
 
 spawnChecked("git", ["checkout", branch], {
   cwd: chromium,
