@@ -1455,7 +1455,7 @@ function createRrpPropertyDescriptor(cdpProp) {
   // https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#type-PropertyDescriptor
   const { name, value: cdpValue, writable, get, set, configurable, enumerable, symbol } = cdpProp;
 
-  let rv = cdpValue && buildRrpObjectFromCdpObject(cdpValue);
+  let rv = buildRrpObjectFromCdpObject(cdpValue);
   rv.name = name;
 
   let flags = 0;
