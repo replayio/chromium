@@ -79,6 +79,7 @@ struct AutoDisallowEvents {
 };
 
 bool HasDivergedFromRecording();
+bool IsUnhandledDivergenceAllowed();
 
 void RegisterPointer(const char* name, const void* ptr);
 void UnregisterPointer(const void* ptr);
