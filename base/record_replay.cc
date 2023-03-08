@@ -28,7 +28,7 @@ namespace recordreplay {
   Macro(V8RecordReplayAreEventsDisallowed, (), (), bool, false)         \
   Macro(V8RecordReplayAreEventsPassedThrough, (), (), bool, false)      \
   Macro(V8RecordReplayHasDivergedFromRecording, (), (), bool, false)    \
-  Macro(V8RecordReplayIsUnhandledDivergenceAllowed, (), (), bool, true) \
+  Macro(V8RecordReplayAllowSideEffects, (), (), bool, true)             \
   Macro(V8RecordReplayPointerId, (const void* ptr), (ptr), int, 0)      \
   Macro(V8RecordReplayIdPointer, (int id), (id), void*, nullptr)        \
   Macro(V8RecordReplayFeatureEnabled,                                   \
@@ -296,8 +296,8 @@ bool HasDivergedFromRecording() {
   return V8RecordReplayHasDivergedFromRecording();
 }
 
-bool IsUnhandledDivergenceAllowed() {
-  return V8RecordReplayIsUnhandledDivergenceAllowed();
+bool AllowSideEffects() {
+  return V8RecordReplayAllowSideEffects();
 }
 
 void RegisterPointer(const char* name, const void* ptr) {
