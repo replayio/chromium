@@ -5,11 +5,18 @@ const { spawnSync } = require("child_process");
 
 const chromium = process.cwd();
 
-try {
-  spawnChecked("git", ["pull"], { cwd: chromium, stdio: "inherit" });
-} catch (e) {
-  // Ignore errors due to being at a detached head.
-}
+const branch = process.env["BUILDKITE_BRANCH"];
+const commit = process.env["BUILDKITE_COMMIT"] ?? "FETCH_HEAD";
+
+spawnChecked("git", ["fetch", "origin", branch], {
+  cwd: chromium,
+  stdio: "inherit",
+});
+
+spawnChecked("git", ["checkout", commit], {
+  cwd: chromium,
+  stdio: "inherit",
+});
 
 spawnChecked("git", ["fetch"], { cwd: `${chromium}/v8`, stdio: "inherit" });
 spawnChecked("git", ["fetch"], {
@@ -20,17 +27,6 @@ spawnChecked("git", ["fetch"], {
   cwd: `${chromium}/third_party/webrtc`,
   stdio: "inherit",
 });
-
-const branch = process.env["BUILDKITE_BRANCH"];
-
-spawnChecked("git", ["checkout", branch], {
-  cwd: chromium,
-  stdio: "inherit",
-});
-
-// TODO(dmiller): do we actually need to do this?
-// We need to pull again to actually update the checkout ...or do we?
-spawnChecked("git", ["pull"], { cwd: chromium, stdio: "inherit" });
 
 spawnChecked("gclient", ["sync"], { cwd: chromium, stdio: "inherit" });
 
