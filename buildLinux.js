@@ -5,11 +5,6 @@ const { spawnSync } = require("child_process");
 
 const chromium = process.cwd();
 
-spawnChecked("git", ["clean", "-ffdqx"], {
-  cwd: chromium,
-  stdio: "inherit",
-});
-
 const branch = process.env["BUILDKITE_BRANCH"];
 const commit = process.env["BUILDKITE_COMMIT"] ?? "FETCH_HEAD";
 
