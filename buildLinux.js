@@ -1,3 +1,5 @@
+// Script used by buildkite to build Chromium for Linux in CI
+
 const path = require("path");
 const { spawnSync } = require("child_process");
 
