@@ -408,6 +408,7 @@ void PaintArtifactCompositor::LayerizeGroup(
     // C. The next chunk belongs to some subgroup of the current group.
     const auto& chunk_effect = chunk_cursor->properties.Effect().Unalias();
     if (&chunk_effect == &current_group) {
+      recordreplay::Assert("[RUN-1470-1471] PaintArtifactCompositor::LayerizeGroup %d", chunk_cursor->id);
       pending_layers_.emplace_back(chunks, chunk_cursor);
       ++chunk_cursor;
       // force_draws_content doesn't apply to pending layers that require own
@@ -678,12 +679,6 @@ void PaintArtifactCompositor::Update(
   CollectPendingLayers(artifact);
   PendingLayer::DecompositeTransforms(pending_layers_);
 
-  std::stringstream ss;
-  for (auto& pending_layer : pending_layers_) {
-    ss << pending_layer.CcLayer().id() << ", ";
-  }
-  recordreplay::Assert("[Run-1229-1434] PaintArtifactCompositor::Update %d %s", host->GetId(), ss.str().c_str());
-
   LayerListBuilder layer_list_builder;
   PropertyTreeManager property_tree_manager(*this, *host->property_trees(),
                                             *root_layer_, layer_list_builder,
@@ -710,6 +705,12 @@ void PaintArtifactCompositor::Update(
         tracks_raster_invalidations_, root_layer_->layer_tree_host());
 
     cc::Layer& layer = pending_layer.CcLayer();
+
+    // NOTE: This `Assert` must come after `UpdateCompositedLayer`, since that one sets `pending_layer.CcLayer`.
+    recordreplay::Assert(
+        "[RUN-1229-1434] PaintArtifactCompositor::Update %d %d",
+        host->GetId(), layer.id());
+
     const auto& property_state = pending_layer.GetPropertyTreeState();
     const auto& transform = property_state.Transform();
     const auto& clip = property_state.Clip();
@@ -748,6 +749,8 @@ void PaintArtifactCompositor::Update(
     layer.SetEffectTreeIndex(effect_id);
     bool backface_hidden = transform.IsBackfaceHidden();
     layer.SetShouldCheckBackfaceVisibility(backface_hidden);
+
+    recordreplay::Assert("[RUN-1470-1471] %d", layer.subtree_property_changed());
 
     if (layer.subtree_property_changed())
       root_layer_->SetNeedsCommit();
