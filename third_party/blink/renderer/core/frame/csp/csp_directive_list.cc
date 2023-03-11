@@ -33,8 +33,6 @@
 #include "third_party/blink/renderer/platform/wtf/text/string_utf8_adaptor.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
-extern "C" bool V8RecordReplayInsideCommandCallback();
-
 namespace blink {
 
 using network::mojom::ContentSecurityPolicySource;
@@ -259,7 +257,7 @@ void ReportWasmEvalViolation(
 
 bool CheckEval(const network::mojom::blink::CSPSourceList* directive) {
   // Allow privileged evaluations when inspecting state while replaying.
-  if (V8RecordReplayInsideCommandCallback())
+  if (recordreplay::IsReplaying() && recordreplay::AreEventsDisallowed())
     return true;
   return !directive || directive->allow_eval;
 }
