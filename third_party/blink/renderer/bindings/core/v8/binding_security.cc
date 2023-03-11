@@ -49,6 +49,8 @@
 #include "third_party/blink/renderer/platform/web_test_support.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 
+extern "C" bool V8RecordReplayInsideCommandCallback();
+
 namespace blink {
 
 namespace {
@@ -125,7 +127,7 @@ bool CanAccessWindowInternal(
 
   // Allow cross-origin accesses from the replaying script installed to inspect
   // DOM state.
-  if (recordreplay::HasDivergedFromRecording())
+  if (V8RecordReplayInsideCommandCallback())
     return true;
 
   // It's important to check that target_window is a LocalDOMWindow: it's
@@ -390,7 +392,7 @@ bool ShouldAllowAccessToV8ContextInternal(
 
   // Allow cross-origin accesses from the replaying script installed to inspect
   // DOM state.
-  if (recordreplay::HasDivergedFromRecording())
+  if (V8RecordReplayInsideCommandCallback())
     return true;
 
   // remote_object->GetCreationContext() returns the empty handle. Remote
