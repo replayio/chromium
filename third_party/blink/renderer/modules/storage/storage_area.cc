@@ -170,8 +170,9 @@ void StorageArea::NamedPropertyEnumerator(Vector<String>& names,
     // TODO: Use `IsReplayCode` instead -
     // https://linear.app/replay/issue/RUN-1502
 
-    // Ignore side effects during interceptor key collection to execute during
-    // pauses. See: https://linear.app/replay/issue/RUN-1315#comment-26f96699
+    // This ignores crash-inducing side effects observed during interceptor key collection
+    // when handling commands.
+    // See: https://linear.app/replay/issue/RUN-1315#comment-26f96699
     return;
   }
   unsigned length = this->length(exception_state);
