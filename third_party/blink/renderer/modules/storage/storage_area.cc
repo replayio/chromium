@@ -164,6 +164,15 @@ bool StorageArea::Contains(const String& key,
 
 void StorageArea::NamedPropertyEnumerator(Vector<String>& names,
                                           ExceptionState& exception_state) {
+  if (v8::recordreplay::IsReplaying() &&
+      v8::recordreplay::AreEventsDisallowed()) {
+    // TODO: Use `IsReplayCode` instead -
+    // https://linear.app/replay/issue/RUN-1502
+
+    // Ignore side effects during interceptor key collection to execute during
+    // pauses. See: https://linear.app/replay/issue/RUN-1315#comment-26f96699
+    return;
+  }
   unsigned length = this->length(exception_state);
   if (exception_state.HadException())
     return;
