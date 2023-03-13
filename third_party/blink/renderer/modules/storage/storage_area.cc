@@ -164,7 +164,8 @@ bool StorageArea::Contains(const String& key,
 
 void StorageArea::NamedPropertyEnumerator(Vector<String>& names,
                                           ExceptionState& exception_state) {
-  if (v8::recordreplay::IsReplaying() &&
+  if (!cached_area_->memory_used() &&  // This means either empty or not loaded
+      v8::recordreplay::IsReplaying() &&
       v8::recordreplay::AreEventsDisallowed()) {
     // TODO: Use `IsReplayCode` instead -
     // https://linear.app/replay/issue/RUN-1502
