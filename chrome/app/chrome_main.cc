@@ -25,6 +25,7 @@
 #if BUILDFLAG(IS_MAC)
 #include "chrome/app/chrome_main_mac.h"
 #include "chrome/app/notification_metrics.h"
+#include <dlfcn.h>
 #endif
 
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX)
@@ -48,10 +49,6 @@
 #include "chrome/common/chrome_constants.h"
 #include "chrome/install_static/initialize_from_primary_module.h"
 #include "chrome/install_static/install_details.h"
-
-#if BUILDFLAG(IS_MAC)
-#include <dlfcn.h>
-#endif
 
 #define DLLEXPORT __declspec(dllexport)
 
