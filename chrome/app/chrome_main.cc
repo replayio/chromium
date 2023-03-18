@@ -49,6 +49,10 @@
 #include "chrome/install_static/initialize_from_primary_module.h"
 #include "chrome/install_static/install_details.h"
 
+#if BUILDFLAG(IS_MAC)
+#include <dlfcn.h>
+#endif
+
 #define DLLEXPORT __declspec(dllexport)
 
 // We use extern C for the prototype DLLEXPORT to avoid C++ name mangling.
