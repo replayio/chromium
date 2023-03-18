@@ -117,6 +117,10 @@ bool InterfacePtrStateBase::InitializeEndpointClient(
       // will not be used.
       0u, interface_name, method_info_callback, method_name_callback);
 
+  recordreplay::Assert(
+      "[RUN-1544] InterfacePtrStateBase::InitializeEndpointClient %s",
+      interface_name);
+
   // Note that we defer this until after attaching the endpoint. This is in case
   // `runner_` does not run tasks in the current sequence but MultiplexRouter is
   // in SINGLE_INTERFACE mode. In that case, MultiplexRouter elides some

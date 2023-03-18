@@ -86,6 +86,9 @@ bool CallbackInvokeHelper<CallbackBase, mode, return_type_is_promise>::
     bool is_callable = true;
     if constexpr (std::is_same<CallbackBase, CallbackInterfaceBase>::value)
       is_callable = callback_->IsCallbackObjectCallable();
+    recordreplay::Assert(
+        "[RUN-1488-1495] CallbackInvokeHelper::PrepareForCall A %d %d", is_callable,
+        callback_this.IsEmpty());
     if (!is_callable) {
       // step 10.5. Set thisArg to O (overriding the provided value).
       callback_this_ = callback_->CallbackObject();
@@ -96,6 +99,9 @@ bool CallbackInvokeHelper<CallbackBase, mode, return_type_is_promise>::
       callback_this_ =
           callback_this.V8Value(callback_->CallbackRelevantScriptState());
     }
+    recordreplay::Assert(
+        "[RUN-1488-1495] CallbackInvokeHelper::PrepareForCall B",
+        is_callable, callback_this.IsEmpty());
     if (auto* tracker =
             ThreadScheduler::Current()->GetTaskAttributionTracker()) {
       // There are 3 possible callbacks here:

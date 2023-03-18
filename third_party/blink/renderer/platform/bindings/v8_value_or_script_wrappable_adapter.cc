@@ -15,6 +15,9 @@ v8::Local<v8::Value> V8ValueOrScriptWrappableAdapter::V8Value(
   DCHECK(!v8_value_.IsEmpty() || script_wrappable_);
   DCHECK(!(!v8_value_.IsEmpty() && script_wrappable_));
 
+  recordreplay::Assert(
+      "[RUN-1488-1495] V8ValueOrScriptWrappableAdapter::V8Value %d",
+      v8_value_.IsEmpty());
   if (!v8_value_.IsEmpty())
     return v8_value_;
 
