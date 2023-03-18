@@ -3062,6 +3062,8 @@ static void SetCDPMessageCallback(const v8::FunctionCallbackInfo<v8::Value>& arg
 }
 
 static void SendMessageToFrontend(const v8_inspector::StringView& message) {
+  recordreplay::AutoDisallowEvents disallow(
+      "RecordReplay_SendMessageToFrontend");
   CHECK(v8::IsMainThread());
 
   CHECK(gCDPMessageCallback);
@@ -3107,6 +3109,7 @@ RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
     // For now we only connect to the first frame.
     static int ContextGroupId = 1;
 
+    recordreplay::AutoDisallowEvents disallow("RecordReplayRegisterV8Inspector");
     gInspectorSession = gInspector->connect(ContextGroupId,
                                             new InspectorChannel(),
                                             v8_inspector::StringView(),
@@ -3415,7 +3418,8 @@ InspectorDOMAgent* getOrCreateInspectorDOMAgent(v8::Isolate* isolate) {
   return gInspectorDomAgent;
 }
 
-InspectorDOMDebuggerAgent* getOrCreateInspectorDOMDebuggerAgent(v8::Isolate* isolate) {
+InspectorDOMDebuggerAgent* getOrCreateInspectorDOMDebuggerAgent(
+    v8::Isolate* isolate) {
   if (!gInspectorDomDebuggerAgent) {
     gInspectorDomDebuggerAgent =
         MakeGarbageCollected<InspectorDOMDebuggerAgent>(
