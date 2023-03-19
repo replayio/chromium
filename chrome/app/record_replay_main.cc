@@ -294,6 +294,14 @@ static void* RecordReplayAttach(int* pargc, const char*** pargv) {
   if (getenv("RECORDING_WAIT_AT_ATTACH"))
     BusyWait();
 
+#if BUILDFLAG(IS_WIN)
+  FILE* f = fopen("record_replay_1.txt", "w");
+  if (f) {
+    fprintf(f, "HEREIAM WINDOWS. OMG YOU ARE SO STUPID\n");
+    fclose(f);
+  }
+#endif
+
   std::string apiKey;
   const char* val = getenv("RECORD_REPLAY_API_KEY");
   if (val) {
@@ -311,6 +319,15 @@ static void* RecordReplayAttach(int* pargc, const char*** pargv) {
   }
 
   void* handle = OpenDriverHandle();
+
+#if BUILDFLAG(IS_WIN)
+  FILE* f = fopen("record_replay_2.txt", "w");
+  if (f) {
+    fprintf(f, "DRIVER HANDLE %p\n", handle);
+    fclose(f);
+  }
+#endif
+
   if (!handle) {
     return nullptr;
   }
@@ -346,6 +363,14 @@ static void* RecordReplayAttach(int* pargc, const char*** pargv) {
 #endif
 
   MaybeStartProfiling();
+
+#if BUILDFLAG(IS_WIN)
+  FILE* f = fopen("record_replay_3.txt", "w");
+  if (f) {
+    fprintf(f, "ATTACH FINISHED\n");
+    fclose(f);
+  }
+#endif
 
   return handle;
 }
