@@ -25,7 +25,7 @@
 static void ReportFailure(const char* format, ...) {
   {
     va_list args;
-    va_start(args, aFormat);
+    va_start(args, format);
     vfprintf(stderr, format, args);
     fprintf(stderr, "\n");
     va_end(args);
@@ -36,7 +36,7 @@ static void ReportFailure(const char* format, ...) {
   FILE* f = fopen("record_replay_load_recorder_error.txt", "w");
   if (f) {
     va_list args;
-    va_start(args, aFormat);
+    va_start(args, format);
     vfprintf(f, format, args);
     fprintf(f, "\n");
     va_end(args);
