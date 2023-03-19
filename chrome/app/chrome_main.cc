@@ -110,10 +110,12 @@ int ChromeMain(int argc, const char** argv) {
     V8SetRecordingOrReplaying(nullptr);
   }
 #elif BUILDFLAG(IS_WIN)
-  FILE* f = fopen("record_replay_4.txt", "w");
-  if (f) {
-    fprintf(f, "CHROME MAIN STARTED\n");
-    fclose(f);
+  {
+    FILE* f = fopen("record_replay_4.txt", "w");
+    if (f) {
+      fprintf(f, "CHROME MAIN STARTED\n");
+      fclose(f);
+    }
   }
 
   // On windows the main function is in a different binary in chrome_exe_main_win.cc.
@@ -121,28 +123,34 @@ int ChromeMain(int argc, const char** argv) {
   // record/replay bindings here. Also make sure we update the command line used in
   // chrome.dll.
   if (RecordReplayShouldRecord(nullptr, nullptr)) {
-    FILE* f = fopen("record_replay_5.txt", "w");
-    if (f) {
-      fprintf(f, "CHROME MAIN SHOULD RECORD\n");
-      fclose(f);
+    {
+      FILE* f = fopen("record_replay_5.txt", "w");
+      if (f) {
+        fprintf(f, "CHROME MAIN SHOULD RECORD\n");
+        fclose(f);
+      }
     }
 
     HMODULE module = GetModuleHandleA("windows-recordreplay.dll");
 
-    FILE* f = fopen("record_replay_6.txt", "w");
-    if (f) {
-      fprintf(f, "CHROME MAIN MODULE %p\n", module);
-      fclose(f);
+    {
+      FILE* f = fopen("record_replay_6.txt", "w");
+      if (f) {
+        fprintf(f, "CHROME MAIN MODULE %p\n", module);
+        fclose(f);
+      }
     }
 
     CHECK(module);
     V8SetRecordingOrReplaying((void*)module);
     recordreplay::InitBindings();
 
-    FILE* f = fopen("record_replay_7.txt", "w");
-    if (f) {
-      fprintf(f, "CHROME MAIN INITIALIZED\n");
-      fclose(f);
+    {
+      FILE* f = fopen("record_replay_7.txt", "w");
+      if (f) {
+        fprintf(f, "CHROME MAIN INITIALIZED\n");
+        fclose(f);
+      }
     }
   }
   // Fix warning.

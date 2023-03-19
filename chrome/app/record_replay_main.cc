@@ -295,10 +295,12 @@ static void* RecordReplayAttach(int* pargc, const char*** pargv) {
     BusyWait();
 
 #if BUILDFLAG(IS_WIN)
-  FILE* f = fopen("record_replay_1.txt", "w");
-  if (f) {
-    fprintf(f, "HEREIAM WINDOWS. OMG YOU ARE SO STUPID\n");
-    fclose(f);
+  {
+    FILE* f = fopen("record_replay_1.txt", "w");
+    if (f) {
+      fprintf(f, "HEREIAM WINDOWS. OMG YOU ARE SO STUPID\n");
+      fclose(f);
+    }
   }
 #endif
 
@@ -321,10 +323,12 @@ static void* RecordReplayAttach(int* pargc, const char*** pargv) {
   void* handle = OpenDriverHandle();
 
 #if BUILDFLAG(IS_WIN)
-  FILE* f = fopen("record_replay_2.txt", "w");
-  if (f) {
-    fprintf(f, "DRIVER HANDLE %p\n", handle);
-    fclose(f);
+  {
+    FILE* f = fopen("record_replay_2.txt", "w");
+    if (f) {
+      fprintf(f, "DRIVER HANDLE %p\n", handle);
+      fclose(f);
+    }
   }
 #endif
 
@@ -365,10 +369,12 @@ static void* RecordReplayAttach(int* pargc, const char*** pargv) {
   MaybeStartProfiling();
 
 #if BUILDFLAG(IS_WIN)
-  FILE* f = fopen("record_replay_3.txt", "w");
-  if (f) {
-    fprintf(f, "ATTACH FINISHED\n");
-    fclose(f);
+  {
+    FILE* f = fopen("record_replay_3.txt", "w");
+    if (f) {
+      fprintf(f, "ATTACH FINISHED\n");
+      fclose(f);
+    }
   }
 #endif
 
