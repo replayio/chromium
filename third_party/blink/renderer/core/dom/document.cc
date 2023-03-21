@@ -2549,8 +2549,6 @@ void Document::UpdateStyleAndLayout(DocumentUpdateReason reason) {
   if (!recordreplay::AllowSideEffects())
     return;
 
-  recordreplay::Assert("[RUN-1544] Document::UpdateStyleAndLayout %d", (int)reason);
-
   if (reason != DocumentUpdateReason::kBeginMainFrame && frame_view)
     frame_view->WillStartForcedLayout();
 
