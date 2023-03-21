@@ -102,7 +102,7 @@ static DateTimeFormat::FieldType MapCharacterToFieldType(const UChar ch) {
 }
 
 bool DateTimeFormat::Parse(const String& source, TokenHandler& token_handler) {
-  recordreplay::RecordReplayAssert("[RUN-1548] DateTimeFormat::Parse %s", source.Utf8().c_str());
+  recordreplay::Assert("[RUN-1548] DateTimeFormat::Parse %s", source.Utf8().c_str());
 
   enum State {
     kStateInQuote,
