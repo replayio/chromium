@@ -962,15 +962,6 @@ function isObjectPropertyBlacklisted(cdpObj, name) {
   if (isPropNameInObjectBase(name)) {
     return true;
   }
-  switch (`${cdpObj.className}.${name}`) {
-    // NOTE: these are from gecko. Chromium will probably need some adjustments.
-    case "Window.localStorage":
-    case "Window.sysinfo":
-    case "Navigator.hardwareConcurrency":
-    case "XPCWrappedNative_NoHelper.isParentWindowMainWidgetVisible":
-    case "XPCWrappedNative_NoHelper.systemFont":
-      return true;
-  }
   switch (name) {
     case "__proto__":
       // Accessing __proto__ doesn't cause problems, but is redundant with the
@@ -1023,14 +1014,20 @@ ProtocolObjectPreview.prototype = {
     return true;
   },
 
-  addProperty(property, force) {
+  addProperty(ownerCdpObject, rrpProp, force) {
+    if (isObjectPropertyBlacklisted(ownerCdpObject, rrpProp.name)) {
+      return;
+    }
+    if (this.getterValues?.has(rrpProp.name)) {
+      return;
+    }
     if (!this.startAddItem(force)) {
       return;
     }
     if (!this.properties) {
       this.properties = [];
     }
-    this.properties.push(property);
+    this.properties.push(rrpProp);
   },
 
   addGetterValue(propKey, ownerCdpObject, force = false) {
@@ -1120,6 +1117,7 @@ ProtocolObjectPreview.prototype = {
           entry.call(this, cdpProperties);
         }
         else {
+          // entry should be string
           this.addGetterValue(entry, this.cdpObj, /* force */ true);
         }
       }
@@ -1146,8 +1144,11 @@ ProtocolObjectPreview.prototype = {
 
       // only add complete prop data for own props
       const rrpProp = createRrpPropertyDescriptor(cdpProp);
-      const force = false;
-      this.addProperty(rrpProp, force);
+      if (rrpProp.get || Object.hasOwn(this.raw, propKey)) {
+        // only add own props or prototype's getters
+        const force = false;
+        this.addProperty(this.cdpObj, rrpProp, force);
+      }
     }
 
     let prototypeCdp = getInternalProp(cdpProperties, '[[Prototype]]')?.value;
@@ -1314,6 +1315,7 @@ function previewTypedArray() {
   this.addGetterValue('length', this.cdpObj, /* force */ true);
   this.addGetterValue('byteLength', this.cdpObj, /* force */ true);
   this.addGetterValue('byteOffset', this.cdpObj, /* force */ true);
+  this.addGetterValue('buffer', this.cdpObj, /* force */ true);
 }
 
 function previewSetMap(cdpProperties) {
