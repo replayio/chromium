@@ -939,27 +939,9 @@ function isObjectBlacklisted(cdpObj) {
   return false;
 }
 
-const ObjectPropNames = new Set([
-  '__defineGetter__', '__defineSetter__', '__lookupGetter__', '__lookupSetter__',
-  'constructor', 'hasOwnProperty', 'isPrototypeOf', 'parentProp',
-  'propertyIsEnumerable', 'toLocaleString', 'toString', 'valueOf'
-]);
-
-/**
- * Runtime.getProperties, for some reason, adds basic `Object` props, that we don't want.
- * Hackfix: There is no easy way to identify `Object` props, 
- *   so we have to reject certain names categorically :/
- */
-function isPropNameInObjectBase(name) {
-  return ObjectPropNames.has(name);
-}
-
 // Return whether an object's property should be ignored when generating previews.
 function isObjectPropertyBlacklisted(cdpObj, name) {
   if (isObjectBlacklisted(cdpObj)) {
-    return true;
-  }
-  if (isPropNameInObjectBase(name)) {
     return true;
   }
   switch (name) {
