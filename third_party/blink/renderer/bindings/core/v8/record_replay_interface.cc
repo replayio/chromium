@@ -3062,8 +3062,10 @@ static void SetCDPMessageCallback(const v8::FunctionCallbackInfo<v8::Value>& arg
 }
 
 static void SendMessageToFrontend(const v8_inspector::StringView& message) {
-  CHECK(v8::IsMainThread());
+  recordreplay::AutoDisallowEvents disallow(
+      "RecordReplay_SendMessageToFrontend");
 
+  CHECK(v8::IsMainThread());
   CHECK(gCDPMessageCallback);
   CHECK(!message.is8Bit());
 
@@ -3106,6 +3108,8 @@ RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
 
     // For now we only connect to the first frame.
     static int ContextGroupId = 1;
+
+    recordreplay::AutoDisallowEvents disallow("RecordReplayRegisterV8Inspector");
 
     gInspectorSession = gInspector->connect(ContextGroupId,
                                             new InspectorChannel(),
