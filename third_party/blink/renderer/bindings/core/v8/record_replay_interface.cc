@@ -1308,7 +1308,7 @@ function previewSetMap(cdpProperties) {
     return;
   }
 
-  log(`DDBG psm A ${this.rrpId} ${this.raw.size} ${}`);
+  log(`DDBG psm A ${this.rrpId} ${this.raw.size} ${this.raw.toString()} ${this.cdpObj.className} ${this.cdpObj.description}`);
 
   const internal = getInternalProp(cdpProperties, "[[Entries]]");
   if (!internal || !internal.value || !internal.value.objectId) {
