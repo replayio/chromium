@@ -1308,6 +1308,8 @@ function previewSetMap(cdpProperties) {
     return;
   }
 
+  log(`DDBG psm A ${this.rrpId} ${this.raw.size} ${}`);
+
   const internal = getInternalProp(cdpProperties, "[[Entries]]");
   if (!internal || !internal.value || !internal.value.objectId) {
     return;
@@ -1316,8 +1318,11 @@ function previewSetMap(cdpProperties) {
   // get size for Set and Map (Weak{Set,Map} don't have an observable size)
   if (["Set", "Map"].includes(this.cdpObj.className)) {
     // simply invoke the native getter
-    this.extra.containerEntryCount = this.addEvalMethodValue('size');
+    this.addGetterValue('size', this.cdpObj, /* force */ true);
+    this.extra.containerEntryCount = this.raw.size;
   }
+
+  log(`DDBG psm B ${this.rrpId} ${this.raw.size} ${this.pageSize} ${internal.value.objectId}`);
 
   const entries = sendMessage("Runtime.getProperties", {
     objectId: internal.value.objectId,
@@ -1326,6 +1331,8 @@ function previewSetMap(cdpProperties) {
     pageIndex: this.pageIndex,
     pageSize: this.pageSize
   }).result;
+  
+  log(`DDBG psm C ${this.rrpId} ${this.raw.size}`);
 
   for (const entry of entries) {
     if (entry.value.subtype == "internal#entry") {
