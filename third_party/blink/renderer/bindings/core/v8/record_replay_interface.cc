@@ -3103,7 +3103,7 @@ static v8_inspector::V8InspectorSession* gInspectorSession;
 void
 RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
                                 v8::Isolate* isolate) {
-  if (v8::IsMainThread()) {
+  if (v8::IsMainThread() && recordreplay::IsReplaying()) {
     gInspector = inspector;
 
     // For now we only connect to the first frame.
