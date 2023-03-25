@@ -1077,9 +1077,13 @@ ProtocolObjectPreview.prototype = {
 
   get pageSize() {
     return MaxItems[this.level] || 10;
+    // return 0;
   },
 
   fill() {
+    log(`DDBG fill() A ${this.rrpId} ${this.cdpObj.className} ${this.cdpObj.description} ${this.raw.toString()}`);
+    log(`DDBG fill() B ${this.rrpId} ${this.raw.constructor?.name || ''} ${this.cdpObj.className} ${this.cdpObj.description} ${JSON_stringify(Object.keys(this.raw))}`);
+
     // WARNING: `Runtime.getProperties` evaluates native getters and thus can cause
     //          lazy calls to `Update{Style,Layout}` etc. which might still cause
     //          some crashes - https://linear.app/replay/issue/RUN-1016#comment-90c46ba7
@@ -1100,16 +1104,18 @@ ProtocolObjectPreview.prototype = {
     // Add data for blink objects
     this.extra = previewBlinkObject(this.cdpObj) || {};
 
-    // Add class-specific data.
-    const previewers = CustomPreviewers[this.cdpObj.className];
-    if (previewers) {
-      for (const entry of previewers) {
-        if (entry instanceof Function) {
-          entry.call(this, cdpProperties);
-        }
-        else {
-          // entry should be string
-          this.addGetterValue(entry, this.cdpObj, /* force */ true);
+    if (!isPrototype(this.raw)) { // Ignore prototype itself.
+      // Add class-specific data.
+      const previewers = CustomPreviewers[this.cdpObj.className];
+      if (previewers) {
+        for (const entry of previewers) {
+          if (entry instanceof Function) {
+            entry.call(this, cdpProperties);
+          }
+          else {
+            // entry should be string
+            this.addGetterValue(entry, this.cdpObj, /* force */ true);
+          }
         }
       }
     }
@@ -1151,6 +1157,8 @@ ProtocolObjectPreview.prototype = {
     if (this.getterValues) {
       getterValues = [...this.getterValues.values()];
     }
+    
+    log(`DDBG fill() B ${this.rrpId}`);
 
     return {
       prototypeId: prototypeRrpId,
@@ -1328,7 +1336,9 @@ function previewSetMap(cdpProperties) {
     this.extra.containerEntryCount = this.raw.size;
   }
 
-  log(`DDBG psm B ${this.rrpId} ${this.raw.size} ${this.pageSize} ${internal.value.objectId}`);
+  log(`DDBG psm B ${this.rrpId} ${this.raw.size} ${this.pageSize} ${internal.value.objectId} k=${Array.from(this.raw.keys()).join(',')}`);
+  log(`DDBG psm B2 ${this.rrpId} ${Array.from(this.raw.values()).join(',')}`);
+  log(`DDBG psm B3 ${this.rrpId} ${this.raw[0] || this.raw['0']}`);
 
   const entries = sendMessage("Runtime.getProperties", {
     objectId: internal.value.objectId,
@@ -1338,10 +1348,10 @@ function previewSetMap(cdpProperties) {
     pageSize: this.pageSize
   }).result;
   
-  log(`DDBG psm C ${this.rrpId} ${this.raw.size}`);
+  log(`DDBG psm C ${this.rrpId} ${this.raw.size} ${JSON_stringify(entries)}`);
 
   for (const entry of entries) {
-    if (entry.value.subtype == "internal#entry") {
+    if (entry?.value?.subtype == "internal#entry") {
       const entryProperties = sendMessage("Runtime.getProperties", {
         objectId: entry.value.objectId,
         ownProperties: true,
@@ -1360,6 +1370,8 @@ function previewSetMap(cdpProperties) {
       break;
     }
   }
+  
+  log(`DDBG psm D ${this.rrpId}`);
 }
 
 function previewRegExp() {
