@@ -79,6 +79,12 @@ void WaitableEvent::Signal() {
 
   RecordReplayEnsureOrdered(record_replay_ordered_lock_id_);
 
+  if (record_replay_ordered_lock_id_) {
+    recordreplay::Assert("WaitableEvent::Signal %d %d",
+                         record_replay_ordered_lock_id_,
+                         (int)send_right_.get());
+  }
+
   absl::optional<recordreplay::AutoDisallowEvents> disallow;
   if (!record_replay_ordered_lock_id_)
     disallow.emplace("WaitableEvent::Signal");
