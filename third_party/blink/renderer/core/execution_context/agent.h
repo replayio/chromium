@@ -114,6 +114,10 @@ class CORE_EXPORT Agent : public GarbageCollected<Agent>,
 
   RejectedPromises& GetRejectedPromises();
 
+  virtual int RecordReplayId() const {
+    return record_replay_id_;
+  }
+
  protected:
   Agent(v8::Isolate* isolate,
         const base::UnguessableToken& cluster_id,
@@ -128,6 +132,7 @@ class CORE_EXPORT Agent : public GarbageCollected<Agent>,
   bool origin_keyed_because_of_inheritance_;
   const bool is_origin_agent_cluster_;
   const bool origin_agent_cluster_left_as_default_;
+  int record_replay_id_ = 0;
 };
 
 }  // namespace blink
