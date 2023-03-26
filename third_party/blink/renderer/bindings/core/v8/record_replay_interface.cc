@@ -3063,7 +3063,6 @@ static void SendMessageToFrontend(const v8_inspector::StringView& message) {
       "RecordReplay_SendMessageToFrontend");
   CHECK(v8::IsMainThread());
 
-  CHECK(v8::IsMainThread());
   CHECK(gCDPMessageCallback);
   CHECK(!message.is8Bit());
 
