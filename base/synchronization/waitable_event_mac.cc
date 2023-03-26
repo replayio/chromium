@@ -72,7 +72,7 @@ void WaitableEvent::Reset() {
 }
 
 void WaitableEvent::Signal() {
-  recordreplay::Diagnostic("WaitableEvent::Signal %d %d %d",
+  recordreplay::Diagnostic("[RUN-1551] WaitableEvent::Signal %d %d %d",
                            record_replay_ordered_lock_id_,
                            (int)send_right_.get(),
                            recordreplay::AreEventsDisallowed());
@@ -80,7 +80,7 @@ void WaitableEvent::Signal() {
   RecordReplayEnsureOrdered(record_replay_ordered_lock_id_);
 
   if (record_replay_ordered_lock_id_) {
-    recordreplay::Assert("WaitableEvent::Signal %d %d",
+    recordreplay::Assert("[RUN-1551] WaitableEvent::Signal %d %d",
                          record_replay_ordered_lock_id_,
                          (int)send_right_.get());
   }
