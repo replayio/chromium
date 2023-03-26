@@ -241,6 +241,7 @@ sendMessage("Runtime.enable");
 
 const CommandCallbacks = {
   "Graphics.getDevicePixelRatio": Graphics_getDevicePixelRatio,
+  "Target.evaluatePrivileged": Target_evaluatePrivileged,
   "Target.getCurrentMessageContents": Target_getCurrentMessageContents,
   "Target.getSourceMapURL": Target_getSourceMapURL,
   "Target.getStepOffsets": Target_getStepOffsets,
@@ -279,8 +280,20 @@ function commandCallback(method, params) {
     return result;
   } catch (e) {
     log(`[RuntimeError][Command ${method}] ${e?.stack || e}`);
-    return {};
+    // Pass the error up to V8; it can (for now) decide how to handle itself, whether
+    // it should crash or not, etc.  Eventually, the caller of the command should make
+    // that decision.
+    return {
+      is_error: true,
+      message: e?.message || e.toString(),
+      stack: e?.stack?.split?.("\n") || e?.stack || [],
+    };
   }
+}
+
+function Target_evaluatePrivileged({ expression }) {
+  const result = eval(expression);
+  return { result };
 }
 
 // Contents of the last console API call. Runtime.consoleAPICalled will be
@@ -939,37 +952,10 @@ function isObjectBlacklisted(cdpObj) {
   return false;
 }
 
-const ObjectPropNames = new Set([
-  '__defineGetter__', '__defineSetter__', '__lookupGetter__', '__lookupSetter__',
-  'constructor', 'hasOwnProperty', 'isPrototypeOf', 'parentProp',
-  'propertyIsEnumerable', 'toLocaleString', 'toString', 'valueOf'
-]);
-
-/**
- * Runtime.getProperties, for some reason, adds basic `Object` props, that we don't want.
- * Hackfix: There is no easy way to identify `Object` props, 
- *   so we have to reject certain names categorically :/
- */
-function isPropNameInObjectBase(name) {
-  return ObjectPropNames.has(name);
-}
-
 // Return whether an object's property should be ignored when generating previews.
 function isObjectPropertyBlacklisted(cdpObj, name) {
   if (isObjectBlacklisted(cdpObj)) {
     return true;
-  }
-  if (isPropNameInObjectBase(name)) {
-    return true;
-  }
-  switch (`${cdpObj.className}.${name}`) {
-    // NOTE: these are from gecko. Chromium will probably need some adjustments.
-    case "Window.localStorage":
-    case "Window.sysinfo":
-    case "Navigator.hardwareConcurrency":
-    case "XPCWrappedNative_NoHelper.isParentWindowMainWidgetVisible":
-    case "XPCWrappedNative_NoHelper.systemFont":
-      return true;
   }
   switch (name) {
     case "__proto__":
@@ -1023,14 +1009,20 @@ ProtocolObjectPreview.prototype = {
     return true;
   },
 
-  addProperty(property, force) {
+  addProperty(ownerCdpObject, rrpProp, force) {
+    if (isObjectPropertyBlacklisted(ownerCdpObject, rrpProp.name)) {
+      return;
+    }
+    if (this.getterValues?.has(rrpProp.name)) {
+      return;
+    }
     if (!this.startAddItem(force)) {
       return;
     }
     if (!this.properties) {
       this.properties = [];
     }
-    this.properties.push(property);
+    this.properties.push(rrpProp);
   },
 
   addGetterValue(propKey, ownerCdpObject, force = false) {
@@ -1120,6 +1112,7 @@ ProtocolObjectPreview.prototype = {
           entry.call(this, cdpProperties);
         }
         else {
+          // entry should be string
           this.addGetterValue(entry, this.cdpObj, /* force */ true);
         }
       }
@@ -1146,8 +1139,11 @@ ProtocolObjectPreview.prototype = {
 
       // only add complete prop data for own props
       const rrpProp = createRrpPropertyDescriptor(cdpProp);
-      const force = false;
-      this.addProperty(rrpProp, force);
+      if (rrpProp.get || Object.hasOwn(this.raw, propKey)) {
+        // only add own props or prototype's getters
+        const force = false;
+        this.addProperty(this.cdpObj, rrpProp, force);
+      }
     }
 
     let prototypeCdp = getInternalProp(cdpProperties, '[[Prototype]]')?.value;
@@ -1314,6 +1310,7 @@ function previewTypedArray() {
   this.addGetterValue('length', this.cdpObj, /* force */ true);
   this.addGetterValue('byteLength', this.cdpObj, /* force */ true);
   this.addGetterValue('byteOffset', this.cdpObj, /* force */ true);
+  this.addGetterValue('buffer', this.cdpObj, /* force */ true);
 }
 
 function previewSetMap(cdpProperties) {
@@ -3064,6 +3061,7 @@ static void SetCDPMessageCallback(const v8::FunctionCallbackInfo<v8::Value>& arg
 static void SendMessageToFrontend(const v8_inspector::StringView& message) {
   recordreplay::AutoDisallowEvents disallow(
       "RecordReplay_SendMessageToFrontend");
+  CHECK(v8::IsMainThread());
 
   CHECK(v8::IsMainThread());
   CHECK(gCDPMessageCallback);
@@ -3103,14 +3101,13 @@ static v8_inspector::V8InspectorSession* gInspectorSession;
 void
 RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
                                 v8::Isolate* isolate) {
-  if (v8::IsMainThread()) {
+  if (v8::IsMainThread() && recordreplay::IsReplaying()) {
     gInspector = inspector;
 
     // For now we only connect to the first frame.
     static int ContextGroupId = 1;
 
     recordreplay::AutoDisallowEvents disallow("RecordReplayRegisterV8Inspector");
-
     gInspectorSession = gInspector->connect(ContextGroupId,
                                             new InspectorChannel(),
                                             v8_inspector::StringView(),
@@ -3419,7 +3416,8 @@ InspectorDOMAgent* getOrCreateInspectorDOMAgent(v8::Isolate* isolate) {
   return gInspectorDomAgent;
 }
 
-InspectorDOMDebuggerAgent* getOrCreateInspectorDOMDebuggerAgent(v8::Isolate* isolate) {
+InspectorDOMDebuggerAgent* getOrCreateInspectorDOMDebuggerAgent(
+    v8::Isolate* isolate) {
   if (!gInspectorDomDebuggerAgent) {
     gInspectorDomDebuggerAgent =
         MakeGarbageCollected<InspectorDOMDebuggerAgent>(
