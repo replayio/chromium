@@ -55,6 +55,12 @@ WaitableEvent::WaitableEvent(ResetPolicy reset_policy,
   receive_right_ = new ReceiveRight(name);
   send_right_.reset(name);
 
+  if (record_replay_ordered_lock_id_) {
+    recordreplay::Assert("[RUN-1551] WaitableEvent %d %d %d",
+                         recordreplay::PointerId(this),
+                         record_replay_ordered_lock_id_, (int)name);
+  }
+
   if (initial_state == InitialState::SIGNALED)
     Signal();
 }
@@ -80,7 +86,8 @@ void WaitableEvent::Signal() {
   RecordReplayEnsureOrdered(record_replay_ordered_lock_id_);
 
   if (record_replay_ordered_lock_id_) {
-    recordreplay::Assert("[RUN-1551] WaitableEvent::Signal %d %d",
+    recordreplay::Assert("[RUN-1551] WaitableEvent::Signal %d %d %d",
+                         recordreplay::PointerId(this),
                          record_replay_ordered_lock_id_,
                          (int)send_right_.get());
   }
