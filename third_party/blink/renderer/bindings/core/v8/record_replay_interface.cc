@@ -1081,13 +1081,9 @@ ProtocolObjectPreview.prototype = {
 
   get pageSize() {
     return MaxItems[this.level] || 10;
-    // return 0;
   },
 
   fill() {
-    log(`DDBG fill() A ${this.rrpId} ${this.cdpObj.className} ${this.cdpObj.description} ${this.raw.toString()}`);
-    log(`DDBG fill() B ${this.rrpId} ${this.raw.constructor?.name || ''} ${this.cdpObj.className} ${this.cdpObj.description} ${JSON_stringify(Object.keys(this.raw))}`);
-
     // WARNING: `Runtime.getProperties` evaluates native getters and thus can cause
     //          lazy calls to `Update{Style,Layout}` etc. which might still cause
     //          some crashes - https://linear.app/replay/issue/RUN-1016#comment-90c46ba7
@@ -1161,8 +1157,6 @@ ProtocolObjectPreview.prototype = {
     if (this.getterValues) {
       getterValues = [...this.getterValues.values()];
     }
-    
-    log(`DDBG fill() B ${this.rrpId}`);
 
     return {
       prototypeId: prototypeRrpId,
@@ -1326,8 +1320,6 @@ function previewSetMap(cdpProperties) {
     return;
   }
 
-  log(`DDBG psm A ${this.rrpId} ${this.raw.size} ${this.raw.toString()} ${this.cdpObj.className} ${this.cdpObj.description}`);
-
   const internal = getInternalProp(cdpProperties, "[[Entries]]");
   if (!internal || !internal.value || !internal.value.objectId) {
     return;
@@ -1340,10 +1332,6 @@ function previewSetMap(cdpProperties) {
     this.extra.containerEntryCount = this.raw.size;
   }
 
-  log(`DDBG psm B ${this.rrpId} ${this.raw.size} ${this.pageSize} ${internal.value.objectId} k=${Array.from(this.raw.keys()).join(',')}`);
-  log(`DDBG psm B2 ${this.rrpId} ${Array.from(this.raw.values()).join(',')}`);
-  log(`DDBG psm B3 ${this.rrpId} ${this.raw[0] || this.raw['0']}`);
-
   const entries = sendMessage("Runtime.getProperties", {
     objectId: internal.value.objectId,
     ownProperties: true,
@@ -1351,8 +1339,6 @@ function previewSetMap(cdpProperties) {
     pageIndex: this.pageIndex,
     pageSize: this.pageSize
   }).result;
-  
-  log(`DDBG psm C ${this.rrpId} ${this.raw.size} ${JSON_stringify(entries)}`);
 
   for (const entry of entries) {
     if (entry?.value?.subtype == "internal#entry") {
@@ -1374,8 +1360,6 @@ function previewSetMap(cdpProperties) {
       break;
     }
   }
-  
-  log(`DDBG psm D ${this.rrpId}`);
 }
 
 function previewRegExp() {
@@ -3116,10 +3100,20 @@ struct InspectorChannel final : public v8_inspector::V8Inspector::Channel {
 static v8_inspector::V8Inspector* gInspector;
 static v8_inspector::V8InspectorSession* gInspectorSession;
 
+/**
+ * This function makes sure that the session exists and
+ * we are on main thread when accessing it.
+ */
+v8_inspector::V8InspectorSession* getInspectorSession() {
+  CHECK(gInspectorSession);
+  CHECK(v8::IsMainThread());
+  return gInspectorSession;
+}
+
 void
 RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
                                 v8::Isolate* isolate) {
-  if (v8::IsMainThread() && recordreplay::IsReplaying()) {
+  if (v8::IsMainThread()) {
     gInspector = inspector;
 
     // For now we only connect to the first frame.
@@ -3145,15 +3139,13 @@ RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
  * do not provide too much value if they are not hooked up to a `DevToolsSession` and the `UberDispatcher`.
  */
 static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
-  CHECK(v8::IsMainThread());
-  CHECK(gInspectorSession);
   CHECK(args.Length() == 1 && args[0]->IsString() &&
         "must be called with a single string");
   v8::String::Utf8Value message(args.GetIsolate(), args[0]);
 
   std::string nmessage(*message);
   v8_inspector::StringView messageView((const uint8_t*)nmessage.c_str(), nmessage.length());
-  gInspectorSession->dispatchProtocolMessage(messageView);
+  getInspectorSession()->dispatchProtocolMessage(messageView);
 }
 
 static std::string GetRecordingDirectory() {
@@ -3427,7 +3419,7 @@ InspectorDOMAgent* getOrCreateInspectorDOMAgent(v8::Isolate* isolate) {
 
     InspectedFrames* inspectedFrames = getOrCreateInspectedFrames();
     gInspectorDomAgent = MakeGarbageCollected<InspectorDOMAgent>(
-        isolate, inspectedFrames, gInspectorSession);
+        isolate, inspectedFrames, getInspectorSession());
 
     gInspectorDomAgent->FrameDocumentUpdated(gLocalFrame);
   }
@@ -3439,7 +3431,7 @@ InspectorDOMDebuggerAgent* getOrCreateInspectorDOMDebuggerAgent(
   if (!gInspectorDomDebuggerAgent) {
     gInspectorDomDebuggerAgent =
         MakeGarbageCollected<InspectorDOMDebuggerAgent>(
-            isolate, getOrCreateInspectorDOMAgent(isolate), gInspectorSession);
+            isolate, getOrCreateInspectorDOMAgent(isolate), getInspectorSession());
 
     // NOTE: registering the agent here allows it to receive `UserCallback` events
     //   see https://linear.app/replay/issue/RUN-1061#comment-d059a1ce
@@ -3452,7 +3444,7 @@ InspectorNetworkAgent* getOrCreateInspectorNetworkAgent() {
   if (!gInspectorNetworkAgent) {
     InspectedFrames* inspectedFrames = getOrCreateInspectedFrames();
     gInspectorNetworkAgent = MakeGarbageCollected<InspectorNetworkAgent>(
-        inspectedFrames, nullptr, gInspectorSession);
+        inspectedFrames, nullptr, getInspectorSession());
   }
   return gInspectorNetworkAgent;
 }
@@ -3491,7 +3483,7 @@ getObjectByCdpId(v8::Isolate* isolate,
   auto context = isolate->GetCurrentContext();
   std::unique_ptr<v8_inspector::StringBuffer> error;
   v8::Local<v8::Value> unwrapped;
-  if (!gInspectorSession->unwrapObject(&error, cdpIdV8, &unwrapped, &context,
+  if (!getInspectorSession()->unwrapObject(&error, cdpIdV8, &unwrapped, &context,
                                        nullptr)) {
     recordreplay::Print("[RuntimError] could not lookup cdpId: %s",
                         ToCoreString(error->string()).Ascii().c_str());
@@ -3542,7 +3534,7 @@ static void fromJsMakeDebuggeeValue(
 
   // NOTE: `wrapObject` always creates a new `RemoteObject` and binds it
   // to a new id.
-  auto remoteObjSerialized = gInspectorSession->wrapObject(
+  auto remoteObjSerialized = getInspectorSession()->wrapObject(
       context, value, ToV8InspectorStringView(object_group), generatePreview);
 
   if (remoteObjSerialized) {
@@ -3569,7 +3561,7 @@ static void fromJsGetArgumentsInFrame(
   v8_inspector::StringView frameIdV8(frameIdPtr, frameId.length());
 
   // v8::Isolate* isolate = args.GetIsolate();
-  auto result = gInspectorSession->getArgumentsOfCallFrame(frameIdV8);
+  auto result = getInspectorSession()->getArgumentsOfCallFrame(frameIdV8);
 
   if (result.IsEmpty()) {
     args.GetReturnValue().SetNull();
