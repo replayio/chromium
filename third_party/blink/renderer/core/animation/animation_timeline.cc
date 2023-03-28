@@ -31,7 +31,6 @@ void AnimationTimeline::AnimationAttached(Animation* animation) {
 
 void AnimationTimeline::AnimationDetached(Animation* animation) {
   animations_.erase(animation);
-
   if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers"))
     record_replay_animations_strong_.erase(animation);
 
