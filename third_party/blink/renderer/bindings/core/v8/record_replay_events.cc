@@ -54,12 +54,12 @@ static void ReplayNotifyAfterEvent(const String& eventName,
                                    bool isCallback = false);
 
 bool ShouldNotifyEvent(const String& eventName) {
-  return IsRecordingOrReplaying() && !AreEventsDisallowed() &&
-         !eventName.empty() &&
+  return !AreEventsDisallowed() &&
          // check for events feature flag (RUN-1609)
-         FeatureEnabled("collect-events") &&
+         IsRecordingOrReplaying("collect-events") &&
          // Main-thread only (RUN-1392)
-         IsMainThread();
+         IsMainThread() &&
+         !eventName.empty();
 }
 
 void ReplayNotifyBeforeEvent(const String& eventName,
