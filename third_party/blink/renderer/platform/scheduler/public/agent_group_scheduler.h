@@ -23,6 +23,7 @@ class BLINK_PLATFORM_EXPORT AgentGroupScheduler
    public:
     virtual void PerformMicrotaskCheckpoint() = 0;
     virtual void SchedulerDestroyed() = 0;
+
     virtual int RecordReplayId() const = 0;
   };
 

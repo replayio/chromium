@@ -125,6 +125,8 @@ class CORE_EXPORT Agent : public GarbageCollected<Agent>,
         bool is_origin_agent_cluster,
         bool origin_agent_cluster_left_as_default);
 
+  int record_replay_id_ = 0;
+
  private:
   scoped_refptr<RejectedPromises> rejected_promises_;
   scoped_refptr<scheduler::EventLoop> event_loop_;
@@ -132,7 +134,6 @@ class CORE_EXPORT Agent : public GarbageCollected<Agent>,
   bool origin_keyed_because_of_inheritance_;
   const bool is_origin_agent_cluster_;
   const bool origin_agent_cluster_left_as_default_;
-  int record_replay_id_ = 0;
 };
 
 }  // namespace blink
