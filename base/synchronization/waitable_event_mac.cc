@@ -98,14 +98,18 @@ void WaitableEvent::Signal() {
   msg.header.msgh_bits = MACH_MSGH_BITS_REMOTE(MACH_MSG_TYPE_COPY_SEND);
   msg.header.msgh_size = sizeof(&msg);
   msg.header.msgh_remote_port = send_right_.get();
+
+  // Note: We have to be careful to not use any data from the event after
+  // ordering things here, because the thread we are signaling can wake up
+  // immediately after this call when replaying and may destroy the event.
+  RecordReplayEnsureOrdered(record_replay_ordered_lock_id_);
+
   // If the event is already signaled, this will time out because the queue
   // has a length of one.
   kern_return_t kr =
       mach_msg(&msg.header, MACH_SEND_MSG | MACH_SEND_TIMEOUT, sizeof(msg), 0,
                MACH_PORT_NULL, 0, MACH_PORT_NULL);
   MACH_CHECK(kr == KERN_SUCCESS || kr == MACH_SEND_TIMED_OUT, kr) << "mach_msg";
-
-  RecordReplayEnsureOrdered(record_replay_ordered_lock_id_);
 }
 
 bool WaitableEvent::IsSignaled() {
