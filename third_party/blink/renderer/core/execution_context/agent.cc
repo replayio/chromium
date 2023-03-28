@@ -39,9 +39,7 @@ Agent::Agent(v8::Isolate* isolate,
       origin_keyed_because_of_inheritance_(false),
       is_origin_agent_cluster_(is_origin_agent_cluster),
       origin_agent_cluster_left_as_default_(
-          origin_agent_cluster_left_as_default) {
-  record_replay_id_ = recordreplay::NewIdMainThread("blink::Agent");
-}
+          origin_agent_cluster_left_as_default) {}
 
 Agent::~Agent() = default;
 
