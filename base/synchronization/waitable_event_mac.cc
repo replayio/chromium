@@ -83,8 +83,6 @@ void WaitableEvent::Signal() {
                            (int)send_right_.get(),
                            recordreplay::AreEventsDisallowed());
 
-  RecordReplayEnsureOrdered(record_replay_ordered_lock_id_);
-
   if (record_replay_ordered_lock_id_) {
     recordreplay::Assert("[RUN-1551] WaitableEvent::Signal %d %d %d",
                          recordreplay::PointerId(this),
@@ -106,6 +104,8 @@ void WaitableEvent::Signal() {
       mach_msg(&msg.header, MACH_SEND_MSG | MACH_SEND_TIMEOUT, sizeof(msg), 0,
                MACH_PORT_NULL, 0, MACH_PORT_NULL);
   MACH_CHECK(kr == KERN_SUCCESS || kr == MACH_SEND_TIMED_OUT, kr) << "mach_msg";
+
+  RecordReplayEnsureOrdered(record_replay_ordered_lock_id_);
 }
 
 bool WaitableEvent::IsSignaled() {
