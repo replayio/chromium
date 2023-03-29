@@ -37,11 +37,8 @@ FormDataElement::FormDataElement() : type_(kData) {}
 FormDataElement::FormDataElement(const Vector<char>& array)
     : type_(kData), data_(array)
 {
-  if (recordreplay::IsRecordingOrReplaying("values")) {
-    std::string md5 = base::MD5String(base::StringPiece(data_.data(), data_.size()));
-    recordreplay::Assert("[RUN-1350-1386] FormDataElement::FormDataElement len=%u md5=%s",
-      (unsigned) data_.size(), md5.c_str());
-  }
+  recordreplay::Assert("[RUN-1350-1386] FormDataElement::FormDataElement len=%u",
+    (unsigned) data_.size());
 }
 
 FormDataElement::FormDataElement(
