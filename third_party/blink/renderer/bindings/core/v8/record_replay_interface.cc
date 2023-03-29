@@ -324,6 +324,14 @@ function Target_getCurrentMessageContents() {
     };
   }
 
+  if (!gLastConsoleAPICall) {
+    return {
+      source: "UnknownMessageError",
+      level: "error",
+      text: "Could not look up message contents"
+    };
+  }
+
   // Get the protocol representation of the message arguments.
   const argumentValues = [];
   for (const arg of gLastConsoleAPICall.args || []) {
@@ -428,16 +436,25 @@ function getStackFrames() {
 
 
 // Build a protocol Result object from a result/exceptionDetails CDP rval.
-function buildRrpObjectResult({ result: cdpResult, exceptionDetails }) {
-  const rrpId = buildRrpObjectFromCdpObject(cdpResult);
-  const protocolResult = { data: {} };
+function buildRrpObjectResult(cdpReturnValue) {
+  const rrpResult = { data: {} };
+  if (cdpReturnValue) {
+    const { result: cdpResult, exceptionDetails } = cdpReturnValue;
+    const rrpId = buildRrpObjectFromCdpObject(cdpResult);
 
-  if (exceptionDetails) {
-    protocolResult.exception = rrpId;
-  } else {
-    protocolResult.returned = rrpId;
+    if (exceptionDetails) {
+      rrpResult.exception = rrpId;
+    } else {
+      rrpResult.returned = rrpId;
+    }
   }
-  return { result: protocolResult };
+  else {
+    // Sometimes things go wrong.
+    // E.g. sometimes we get "Cannot find default execution context (-32000) when executing" sendMessage 
+    // from Pause_evaluateIn*.
+    rrpResult.failed = true;
+  }
+  return { result: rrpResult };
 }
 
 
@@ -460,7 +477,13 @@ function Pause_evaluateInFrame({ frameId, expression }) {
     return buildRrpObjectResult({ result: argsCdp });
   }
 
-  const rv = doEvaluation();
+  let rv = null;
+  try {
+    rv = doEvaluation();
+  }
+  catch (err) {
+    log(`[RuntimeError] evaluateInFrame err: ${err?.stack || err}`);
+  }
   return buildRrpObjectResult(rv);
 
   function doEvaluation() {
@@ -480,12 +503,15 @@ function Pause_evaluateInFrame({ frameId, expression }) {
 }
 
 function Pause_evaluateInGlobal({ expression }) {
-  const rv = sendMessage("Runtime.evaluate", { expression });
+  let rv = null;
+  try {
+    rv = sendMessage("Runtime.evaluate", { expression });
+  }
+  catch (err) {
+    log(`[RuntimeError] evaluateInGlobal err: ${err?.stack || err}`);
+  }
   return buildRrpObjectResult(rv);
 }
-
-// function onMaybeNewPause() {
-// }
 
 function Pause_getAllFrames() {
   const frames = getStackFrames().map((frame, index) => {
@@ -548,7 +574,7 @@ function isNativeFunctionDescription(functionString) {
 }
 
 function isPrototype(x) {
-  return x === x.constructor.prototype;
+  return x === x?.constructor?.prototype;
 }
 
 
@@ -557,10 +583,17 @@ function isPrototype(x) {
  */
 function isProbablyInstanceOfNativeClass(x) {
   // hackfix: check if its ctor has a native toString
-  return x?.constructor &&
-    // avoid false positives for prototypes (see https://linear.app/replay/issue/RUN-1067)
-    x.constructor === x.__proto__?.constructor &&
-    isProbablyNativeFunction(x.constructor);
+  try {
+    return x?.constructor &&
+      // avoid false positives for prototypes (see https://linear.app/replay/issue/RUN-1067)
+      x.constructor === x.__proto__?.constructor &&
+      isProbablyNativeFunction(x.constructor);
+  }
+  catch (err) {
+    // Note: there can be some errors here, e.g.:
+    // "Error: Blocked a frame with origin ... from accessing a cross-origin frame."
+    log(`[RuntimeError] isProbablyInstanceOfNativeClass err: ${err?.stack || err}`);
+  }
 }
 
 /**
