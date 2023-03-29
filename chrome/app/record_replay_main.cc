@@ -116,7 +116,7 @@ static DriverHandle OpenDriverHandle() {
   // logic below to create a temporary driver (which isn't supported when
   // replaying before calling RecordReplayAttach).
 #if BUILDFLAG(IS_WIN)
-  HMODULE module = GetModuleHandleA("windows-recordreplay.dll");
+  HMODULE module = GetModuleHandleA(WindowsDriverDLL);
   if (module) {
     return module;
   }
