@@ -120,9 +120,11 @@ static DriverHandle OpenDriverHandle() {
   const char* driver = getenv("RECORD_REPLAY_DRIVER");
   if (driver) {
 #if BUILDFLAG(IS_WIN)
-    // On windows we still need to copy the driver in case it has the wrong name.
-    // Don't bother checking to see if it already has the right name, this
-    // setting is normally only used during internal testing.
+    // On windows we can use the driver as specified if it has the right name,
+    // but otherwise we still need to copy the driver.
+    if (strstr(driver, WindowsDriverDLL)) {
+      return DoLoadDriverHandle(driver);
+    }
     char driverDir[1024];
     snprintf(driverDir, sizeof(driverDir), "%s\\recordreplay-XXXXXX", tmpdir);
     _mktemp(driverDir);
