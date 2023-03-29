@@ -52,11 +52,16 @@ std::unique_ptr<SourceLocation> CaptureSourceLocation(
     v8::Isolate* isolate,
     v8::Local<v8::Message> message,
     ExecutionContext* execution_context) {
+  recordreplay::Assert("[RUN-824] CaptureSourceLocation (message) Start");
+
   v8::Local<v8::StackTrace> stack = message->GetStackTrace();
   std::unique_ptr<v8_inspector::V8StackTrace> stack_trace;
   ThreadDebugger* debugger = ThreadDebugger::From(isolate);
   if (debugger)
     stack_trace = debugger->GetV8Inspector()->createStackTrace(stack);
+
+  recordreplay::Assert("[RUN-824] CaptureSourceLocation (message) #1 %d %d",
+                       !!debugger, !!stack_trace);
 
   int script_id = message->GetScriptOrigin().ScriptId();
   if (!stack.IsEmpty() && stack->GetFrameCount() > 0) {
@@ -71,15 +76,23 @@ std::unique_ptr<SourceLocation> CaptureSourceLocation(
       message->GetStartColumn(isolate->GetCurrentContext()).To(&column_number))
     ++column_number;
 
+  recordreplay::Assert("[RUN-824] CaptureSourceLocation (message) #2 %d %d %d",
+                       script_id, line_number, column_number);
+
   if ((!script_id || !line_number) && stack_trace && !stack_trace->isEmpty()) {
+    recordreplay::Assert("[RUN-824] CaptureSourceLocation (message) #3");
+
     return SourceLocation::CreateFromNonEmptyV8StackTraceInternal(
         std::move(stack_trace));
   }
 
   String url = ToCoreStringWithUndefinedOrNullCheck(
       message->GetScriptOrigin().ResourceName());
-  if (url.empty())
+  if (url.empty()) {
+    recordreplay::Assert("[RUN-824] CaptureSourceLocation (message) #4");
     url = execution_context->Url();
+  }
+  recordreplay::Assert("[RUN-824] CaptureSourceLocation (message) #5 %u", url.length());
   return std::make_unique<SourceLocation>(url, String(), line_number,
                                           column_number, std::move(stack_trace),
                                           script_id);
