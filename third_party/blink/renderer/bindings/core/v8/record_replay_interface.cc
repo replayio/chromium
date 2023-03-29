@@ -1179,7 +1179,7 @@ ProtocolObjectPreview.prototype = {
       // NOTE: according to the official docs, CDP will just only provide `get` and `set`
       // for "accessor descriptors only", so we use some heuristics to "kinda" guess what might be good targets
       // while ignoring static members of native classes in the proto chain.
-      // See: https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#type-PropertyDescriptor
+      // See: https://linear.app/replay/issue/RUN-1592#comment-4011cec0
       if (cdpProp.isOwn || (cdpProp.configurable && cdpProp.enumerable)) {
         // Goal: only add own props or prototype's getters
         const force = false;
