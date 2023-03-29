@@ -588,8 +588,9 @@ function isInstanceOfNative(x, target) {
 }
 
 /**
- * This is kinda like `instanceof`, but windows-independent.
- * NOTE: ideal solution is `x instanceof global[name]`, but we cannot do that.
+ * This is kinda like `instanceof`, but window-independent.
+ * NOTE: ideal solution is `x instanceof global[name]`, but we cannot do that since it does not work when operating in
+ * a context with multiple instance of `global` (i.e. windows).
  * @see https://linear.app/replay/issue/RUN-1014/chromium-find-better-way-of-determining-dom-class-membership
  * 
  * NOTE: `instanceof` is implemented in `Object::InstanceOf` -> `JSReceiver::HasInPrototypeChain`
@@ -1176,10 +1177,11 @@ ProtocolObjectPreview.prototype = {
       // only add complete prop data for own props
       const rrpProp = createRrpPropertyDescriptor(cdpProp);
       // NOTE: according to the official docs, CDP will just only provide `get` and `set`
-      // for "accessor descriptors only", so we use some heuristics to "kinda" guess which props we want.
+      // for "accessor descriptors only", so we use some heuristics to "kinda" guess what might be good targets
+      // while ignoring static members of native classes in the proto chain.
       // See: https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#type-PropertyDescriptor
       if (cdpProp.isOwn || (cdpProp.configurable && cdpProp.enumerable)) {
-        // only add own props or prototype's getters
+        // Goal: only add own props or prototype's getters
         const force = false;
         this.addProperty(this.cdpObj, rrpProp, force);
       }
@@ -3150,7 +3152,7 @@ v8_inspector::V8InspectorSession* getInspectorSession() {
 void
 RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
                                 v8::Isolate* isolate) {
-  if (v8::IsMainThread()) {
+  if (v8::IsMainThread() && recordreplay::IsReplaying()) {
     gInspector = inspector;
 
     // For now we only connect to the first frame.
