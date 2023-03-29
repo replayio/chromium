@@ -111,6 +111,17 @@ static const char* WindowsDriverDLL = "windows-recordreplay.dll";
 #endif // BUILDFLAG(IS_WIN)
 
 static DriverHandle OpenDriverHandle() {
+  // When replaying we will already be able to look up the driver DLL.
+  // Use this for an early return on windows so that we don't go through the
+  // logic below to create a temporary driver (which isn't supported when
+  // replaying before calling RecordReplayAttach).
+#if BUILDFLAG(IS_WIN)
+  HMODULE module = GetModuleHandleA("windows-recordreplay.dll");
+  if (module) {
+    return module;
+  }
+#endif
+
   const char* tmpdir = GetTempDirectory();
   if (!tmpdir) {
     ReportFailure("Can't figure out temporary directory, can't create driver.");
@@ -120,11 +131,9 @@ static DriverHandle OpenDriverHandle() {
   const char* driver = getenv("RECORD_REPLAY_DRIVER");
   if (driver) {
 #if BUILDFLAG(IS_WIN)
-    // On windows we can use the driver as specified if it has the right name,
-    // but otherwise we still need to copy the driver.
-    if (strstr(driver, WindowsDriverDLL)) {
-      return DoLoadDriverHandle(driver);
-    }
+    // On windows we still need to copy the driver in case it has the wrong name.
+    // Don't bother checking to see if it already has the right name, this
+    // setting is normally only used during internal testing.
     char driverDir[1024];
     snprintf(driverDir, sizeof(driverDir), "%s\\recordreplay-XXXXXX", tmpdir);
     _mktemp(driverDir);
