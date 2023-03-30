@@ -168,7 +168,7 @@ void EncodedFormData::AppendData(const void* data, wtf_size_t size) {
     elements_.push_back(FormDataElement());
 
   recordreplay::Assert("[RUN-1350-1386] EncodedFormData::AppendData len=%u",
-    (unsigned) size, md5.c_str());
+    (unsigned) size);
 
   FormDataElement& e = elements_.back();
   wtf_size_t old_size = e.data_.size();
