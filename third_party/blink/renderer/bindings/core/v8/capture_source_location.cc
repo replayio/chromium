@@ -60,9 +60,6 @@ std::unique_ptr<SourceLocation> CaptureSourceLocation(
   if (debugger)
     stack_trace = debugger->GetV8Inspector()->createStackTrace(stack);
 
-  recordreplay::Assert("[RUN-824] CaptureSourceLocation (message) #1 %d %d",
-                       !!debugger, !!stack_trace);
-
   int script_id = message->GetScriptOrigin().ScriptId();
   if (!stack.IsEmpty() && stack->GetFrameCount() > 0) {
     int top_script_id = stack->GetFrame(isolate, 0)->GetScriptId();
@@ -76,7 +73,10 @@ std::unique_ptr<SourceLocation> CaptureSourceLocation(
       message->GetStartColumn(isolate->GetCurrentContext()).To(&column_number))
     ++column_number;
 
-  recordreplay::Assert("[RUN-824] CaptureSourceLocation (message) #2 %d %d %d",
+  recordreplay::Assert("[RUN-824] CaptureSourceLocation (message) #1 debugger=%d stack_trace=%d stack=%d stack_count=%d message_script_id=%d script_id=%d line=%d column=%d",
+                       !!debugger, !!stack_trace, stack.IsEmpty(),
+                       stack.IsEmpty() ? -1 : (int)stack->GetFrameCount(),
+                       message->GetScriptOrigin().ScriptId(),
                        script_id, line_number, column_number);
 
   if ((!script_id || !line_number) && stack_trace && !stack_trace->isEmpty()) {
