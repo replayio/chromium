@@ -55,6 +55,16 @@ std::unique_ptr<SourceLocation> CaptureSourceLocation(
   recordreplay::Assert("[RUN-824] CaptureSourceLocation (message) Start");
 
   v8::Local<v8::StackTrace> stack = message->GetStackTrace();
+
+  // When replaying the stack may be present even if it wasn't when recording,
+  // due to additional inspector features being enabled. Clear the stack out if
+  // necessary so the resulting source location matches.
+  if (!recordreplay::AreEventsDisallowed() &&
+      recordreplay::RecordReplayValue("CaptureSourceLocation", stack.IsEmpty()) &&
+      !stack.IsEmpty()) {
+    stack.Clear();
+  }
+
   std::unique_ptr<v8_inspector::V8StackTrace> stack_trace;
   ThreadDebugger* debugger = ThreadDebugger::From(isolate);
   if (debugger)
