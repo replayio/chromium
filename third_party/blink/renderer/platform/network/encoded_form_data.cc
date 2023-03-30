@@ -167,11 +167,8 @@ void EncodedFormData::AppendData(const void* data, wtf_size_t size) {
   if (elements_.empty() || elements_.back().type_ != FormDataElement::kData)
     elements_.push_back(FormDataElement());
 
-  if (recordreplay::IsRecordingOrReplaying("values")) {
-    std::string md5 = base::MD5String(base::StringPiece(reinterpret_cast<const char*>(data), size));
-    recordreplay::Assert("[RUN-1350-1386] EncodedFormData::AppendData len=%u md5=%s",
-      (unsigned) size, md5.c_str());
-  }
+  recordreplay::Assert("[RUN-1350-1386] EncodedFormData::AppendData len=%u",
+    (unsigned) size, md5.c_str());
 
   FormDataElement& e = elements_.back();
   wtf_size_t old_size = e.data_.size();
