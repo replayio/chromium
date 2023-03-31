@@ -100,6 +100,9 @@ class CORE_EXPORT ScriptedIdleTaskController
                      base::TimeTicks deadline,
                      IdleDeadline::CallbackType);
 
+  // [RUN-1485] Allow asserting on idle task count.
+  unsigned ReplayIdleTaskCount() const { return idle_tasks_.size(); }
+
  private:
   friend class internal::IdleRequestCallbackWrapper;
 
