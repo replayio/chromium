@@ -833,10 +833,11 @@ DispatchEventResult EventTarget::FireEventListeners(Event& event) {
 
   bool fired_event_listeners = false;
   recordreplay::Assert(
-      "[RUN-1260] EventTarget::FireEventListeners 2 %d %d %d",
+      "[RUN-1260] EventTarget::FireEventListeners 2 %d %d %d %d %s",
       listeners_vector ? listeners_vector->size() : -1,
       legacy_listeners_vector ? legacy_listeners_vector->size() : -1,
-      event.isTrusted());
+      event.isTrusted(), HasJSBasedEventListeners(event.type()),
+      GetHumanReadableName());
   if (listeners_vector) {
     fired_event_listeners = FireEventListeners(event, d, *listeners_vector);
   } else if (event.isTrusted() && legacy_listeners_vector) {
@@ -980,10 +981,7 @@ void EventTarget::RemoveAllEventListeners() {
   if (!d)
     return;
 
-  if (!recordreplay::AreEventsDisallowed()) {
-    // don't Assert during GC
-    recordreplay::Assert("[RUN-1260-1332] EventTarget::RemoveAllEventListeners");
-  }
+  recordreplay::Assert("[RUN-1260-1332] EventTarget::RemoveAllEventListeners");
 
   d->event_listener_map.Clear();
 

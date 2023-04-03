@@ -3662,7 +3662,7 @@ void LocalFrameView::ServiceScriptedAnimations(base::TimeTicks start_time) {
 
 void LocalFrameView::ScheduleAnimation(base::TimeDelta delay,
                                        base::Location location) {
-  recordreplay::Assert("[RUN-966] LocalFrameView::ScheduleAnimation");
+  recordreplay::Assert("[RUN-1641] LocalFrameView::ScheduleAnimation");
 
   TRACE_EVENT("cc", "LocalFrameView::ScheduleAnimation", "frame", GetFrame(),
               "delay", delay, "location", location);

@@ -4631,7 +4631,7 @@ void LayoutObject::SetMayNeedPaintInvalidationAnimatedBackgroundImage() {
     return;
 
   // https://linear.app/replay/issue/RUN-966
-  recordreplay::Assert("[RUN-966] LayoutObject::SetMayNeedPaintInvalidationAnimatedBackgroundImage #1");
+  recordreplay::Assert("[RUN-1641] LayoutObject::SetMayNeedPaintInvalidationAnimatedBackgroundImage #1");
 
   bitfields_.SetMayNeedPaintInvalidationAnimatedBackgroundImage(true);
   SetShouldCheckForPaintInvalidationWithoutGeometryChange();
