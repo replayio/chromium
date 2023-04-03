@@ -4554,7 +4554,7 @@ void LayoutObject::
     return;
   }
 
-    recordreplay::Assert("[RUN-1436] LayoutObject::SetShouldDoFullPaintInvalidationWithoutGeometryChangeInternal #1");
+  recordreplay::Assert("[RUN-1436] LayoutObject::SetShouldDoFullPaintInvalidationWithoutGeometryChangeInternal #1");
 
   SetShouldCheckForPaintInvalidationWithoutGeometryChange();
   if (reason == PaintInvalidationReason::kFull) {
