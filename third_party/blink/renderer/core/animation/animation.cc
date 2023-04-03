@@ -2380,8 +2380,7 @@ absl::optional<AnimationTimeDelta> Animation::TimeToEffectChange() {
 }
 
 void Animation::cancel() {
-  // https://linear.app/replay/issue/RUN-966
-  recordreplay::Assert("[RUN-1641] Animation::cancel %d", RecordReplayId());
+    recordreplay::Assert("[RUN-1641] Animation::cancel %d", RecordReplayId());
 
   AnimationTimeDelta current_time_before_cancel =
       CurrentTimeInternal().value_or(AnimationTimeDelta());
