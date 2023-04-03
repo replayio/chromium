@@ -2905,11 +2905,11 @@ void Document::Shutdown() {
 
   probe::DocumentDetached(this);
 
-  if (scripted_idle_task_controller_ && scripted_idle_task_controller_->ReplayIdleTaskCount()) {
+  if (scripted_idle_task_controller_ && scripted_idle_task_controller_->IdleTaskCount()) {
     // We have queued idle tasks, but the page got shutdown.
     // This situation is always discerning and likely to cause divergences, no matter if `EventsDisallowed` or not.
     recordreplay::Assert("[RUN-1335-1485] Document::Shutdown IdleTaskCount=%u",
-                         scripted_idle_task_controller_->ReplayIdleTaskCount());
+                         scripted_idle_task_controller_->IdleTaskCount());
   }
   scripted_idle_task_controller_.Clear();
 
