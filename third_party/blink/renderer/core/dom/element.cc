@@ -5832,7 +5832,7 @@ bool Element::IsBaseElementFocusable() const {
 }
 
 bool Element::IsFocusable() const {
-    recordreplay::Assert("[RUN-966] Element::IsFocusable %d", RecordReplayId());
+    recordreplay::Assert("[RUN-1436] Element::IsFocusable %d", RecordReplayId());
 
   return IsMouseFocusable() || IsKeyboardFocusable();
 }
