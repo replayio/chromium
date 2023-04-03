@@ -310,8 +310,8 @@ LocalFrameView::LocalFrameView(LocalFrame& frame, gfx::Rect frame_rect)
 }
 
 LocalFrameView::~LocalFrameView() {
-// https://linear.app/replay/issue/RUN-966
-recordreplay::UnregisterPointer(this);
+  // https://linear.app/replay/issue/RUN-966
+  recordreplay::UnregisterPointer(this);
 
 #if DCHECK_IS_ON()
   DCHECK(has_been_disposed_);
@@ -1712,7 +1712,7 @@ void LocalFrameView::SetBaseBackgroundColor(const Color& background_color) {
 
 void LocalFrameView::SetUseColorAdjustBackground(UseColorAdjustBackground use,
                                                  bool color_scheme_changed) {
-    recordreplay::Assert("[RUN-1436] LocalFrameView::SetUseColorAdjustBackground %d",
+  recordreplay::Assert("[RUN-1436] LocalFrameView::SetUseColorAdjustBackground %d",
                        recordreplay::PointerId(this));
 
   if (use_color_adjust_background_ == use && !color_scheme_changed)
@@ -2158,7 +2158,7 @@ void LocalFrameView::ScheduleVisualUpdateForPaintInvalidationIfNeeded() {
   // We need a full lifecycle update to clear pending paint invalidations.
   if (local_frame_root.View()->target_state_ < DocumentLifecycle::kPaintClean ||
       Lifecycle().GetState() >= DocumentLifecycle::kPrePaintClean) {
-        recordreplay::Assert("[RUN-1436] LocalFrameView::ScheduleVisualUpdateForPaintInvalidationIfNeeded #1");
+    recordreplay::Assert("[RUN-1436] LocalFrameView::ScheduleVisualUpdateForPaintInvalidationIfNeeded #1");
 
     // Schedule visual update to process the paint invalidation in the next
     // cycle.

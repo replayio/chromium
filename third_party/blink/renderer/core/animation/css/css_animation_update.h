@@ -156,8 +156,6 @@ class CORE_EXPORT CSSAnimationUpdate final {
     suppressed_animations_.insert(animation);
   }
   void UpdateCompositorKeyframes(Animation* animation) {
-    recordreplay::Assert(
-        "[RUN-1641] CSSAnimationUpdate::UpdateCompositorKeyframes %d", animation->RecordReplayId());
     updated_compositor_keyframes_.push_back(animation);
   }
 
