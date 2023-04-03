@@ -1607,7 +1607,7 @@ void LocalFrame::ScheduleVisualUpdateUnlessThrottled() {
   if (ShouldThrottleRendering())
     return;
 
-    recordreplay::Assert("[RUN-1436] LocalFrame::ScheduleVisualUpdateUnlessThrottled #1");
+  recordreplay::Assert("[RUN-1436] LocalFrame::ScheduleVisualUpdateUnlessThrottled #1");
 
   GetPage()->Animator().ScheduleVisualUpdate(this);
 }

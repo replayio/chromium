@@ -310,8 +310,8 @@ LocalFrameView::LocalFrameView(LocalFrame& frame, gfx::Rect frame_rect)
 }
 
 LocalFrameView::~LocalFrameView() {
-  // https://linear.app/replay/issue/RUN-966
-  recordreplay::UnregisterPointer(this);
+// https://linear.app/replay/issue/RUN-966
+recordreplay::UnregisterPointer(this);
 
 #if DCHECK_IS_ON()
   DCHECK(has_been_disposed_);
