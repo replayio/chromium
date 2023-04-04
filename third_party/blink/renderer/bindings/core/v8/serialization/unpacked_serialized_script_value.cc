@@ -41,6 +41,12 @@ UnpackedSerializedScriptValue::UnpackedSerializedScriptValue(
         });
     image_bitmap_contents.clear();
   }
+
+  if (recordreplay::IsRecordingOrReplaying("values")) {
+    recordreplay::Assert("[RUN-1618] UnpackedSerializedScriptValue::UnpackedSerializedScriptValue %zu %u",
+                         value_->GetWireData().size(),
+                         base::FastHash(value_->GetWireData()));
+  }
 }
 
 UnpackedSerializedScriptValue::~UnpackedSerializedScriptValue() = default;
