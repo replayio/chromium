@@ -14,7 +14,7 @@
 
 namespace blink {
 
-inline int HashBytes(const void* aPtr, size_t aSize) {
+static inline int HashBytes(const void* aPtr, size_t aSize) {
   int hash = 0;
   uint8_t* ptr = (uint8_t*)aPtr;
   for (size_t i = 0; i < aSize; i++) {
