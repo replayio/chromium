@@ -14,6 +14,15 @@
 
 namespace blink {
 
+inline int HashBytes(const void* aPtr, size_t aSize) {
+  int hash = 0;
+  uint8_t* ptr = (uint8_t*)aPtr;
+  for (size_t i = 0; i < aSize; i++) {
+    hash = (((hash << 5) - hash) + ptr[i]) | 0;
+  }
+  return hash;
+}
+
 UnpackedSerializedScriptValue::UnpackedSerializedScriptValue(
     scoped_refptr<SerializedScriptValue> value)
     : value_(std::move(value)) {
@@ -45,7 +54,7 @@ UnpackedSerializedScriptValue::UnpackedSerializedScriptValue(
   if (recordreplay::IsRecordingOrReplaying("values")) {
     recordreplay::Assert("[RUN-1618] UnpackedSerializedScriptValue::UnpackedSerializedScriptValue %zu %u",
                          value_->GetWireData().size(),
-                         base::FastHash(value_->GetWireData()));
+                         HashBytes(value_->GetWireData().data(), value_->GetWireData().size()));
   }
 }
 
