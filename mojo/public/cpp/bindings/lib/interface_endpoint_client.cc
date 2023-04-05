@@ -959,7 +959,7 @@ bool InterfaceEndpointClient::HandleValidatedMessage(Message* message) {
   recordreplay::Assert("[RUN-1489-1494] HandleValidatedMessage id=%lu interface_id=%lu flags=%lu name=%lu num_bytes=%zu hash=%d",
                        handle_.id(), message->interface_id(),
                        message->header()->flags, message->header()->name,
-                       message->data_num_bytes(), HashBytes(message->data()));
+                       message->data_num_bytes(), HashBytes(message->data(), message->data_num_bytes()));
 
   DCHECK_EQ(handle_.id(), message->interface_id());
 
