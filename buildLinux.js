@@ -1,6 +1,6 @@
 // Script used by buildkite to build Chromium for Linux in CI
 const path = require("path");
-const { spawnSync } = require("child_process");
+const { spawnChecked } = require("./replay_build_scripts/common.mjs");
 const { updateRepo } = require("./replay_build_scripts/updateRepo");
 
 updateRepo();
@@ -30,20 +30,3 @@ const dockerArgs = [
 ];
 
 spawnChecked("docker", dockerArgs, { stdio: "inherit" });
-
-function spawnChecked(cmd, args, options) {
-  const prettyCmd = [cmd].concat(args).join(" ");
-  console.error(prettyCmd);
-
-  const rv = spawnSync(cmd, args, options);
-
-  if (rv.status != 0 || rv.error) {
-    console.error("Process failed:", rv.error || "");
-    console.log(rv.stdout.toString() || "");
-    console.error(rv.stderr.toString() || "");
-    throw new Error(`Spawned process failed with exit code ${rv.status}`);
-  }
-
-  return rv;
-}
-exports.spawnChecked = spawnChecked;
