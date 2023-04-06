@@ -1,7 +1,9 @@
 // Script used by buildkite to build Chromium for Linux in CI
 const path = require("path");
-const { spawnChecked } = require("./replay_build_scripts/common.mjs");
-const { updateRepo } = require("./replay_build_scripts/updateRepo");
+const {
+  spawnChecked,
+  updateRepo,
+} = require("./replay_build_scripts/common.mjs");
 
 updateRepo();
 
