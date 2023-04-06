@@ -303,10 +303,14 @@ Message Message::CreateFromMessageHandle(ScopedMessageHandle* message_handle) {
   const MessageHandle& handle = message_handle->get();
   DCHECK(handle.is_valid());
 
+  recordreplay::Assert("[RUN-1618] Message::CreateFromMessageHandle Start");
+
   uintptr_t context_value = 0;
   MojoResult get_context_result =
       MojoGetMessageContext(handle.value(), nullptr, &context_value);
   if (get_context_result == MOJO_RESULT_NOT_FOUND) {
+    recordreplay::Assert("[RUN-1618] Message::CreateFromMessageHandle #1");
+
     // It's a serialized message. Extract handles if possible.
     uint32_t num_bytes;
     void* buffer;
@@ -327,6 +331,8 @@ Message Message::CreateFromMessageHandle(ScopedMessageHandle* message_handle) {
       return Message();
     }
 
+    recordreplay::Assert("[RUN-1618] Message::CreateFromMessageHandle #2");
+
     return Message(std::move(*message_handle), std::move(handles),
                    internal::Buffer(buffer, num_bytes, num_bytes),
                    true /* serialized */);
@@ -342,6 +348,10 @@ Message Message::CreateFromMessageHandle(ScopedMessageHandle* message_handle) {
   internal::Buffer payload_buffer(context->header(),
                                   sizeof(internal::MessageHeaderV1),
                                   sizeof(internal::MessageHeaderV1));
+
+  recordreplay::Assert("[RUN-1618] Message::CreateFromMessageHandle #3 %d",
+                       HashBytes(context->header(), sizeof(internal::MessageHeaderV1));
+
   return Message(std::move(*message_handle), {}, std::move(payload_buffer),
                  false /* serialized */);
 }

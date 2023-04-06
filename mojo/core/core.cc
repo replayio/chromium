@@ -46,6 +46,8 @@
 #include "mojo/public/cpp/bindings/mojo_buildflags.h"
 #include "mojo/public/cpp/platform/platform_handle_internal.h"
 
+#include "base/record_replay.h"
+
 namespace mojo {
 namespace core {
 
@@ -460,6 +462,10 @@ MojoResult Core::GetMessageData(MojoMessageHandle message_handle,
   } else if (buffer) {
     *buffer = nullptr;
   }
+
+  recordreplay::Assert("[RUN-1618] Core::GetMessageData #1 num_bytes=%u hash=%d",
+                       num_bytes ? *num_bytes : 0,
+                       (buffer && num_bytes) ? HashBytes(*buffer, *num_bytes) : 0);
 
   if (options && (options->flags & MOJO_GET_MESSAGE_DATA_FLAG_IGNORE_HANDLES))
     return MOJO_RESULT_OK;

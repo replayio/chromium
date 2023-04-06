@@ -521,6 +521,8 @@ static inline int HashBytes(const void* aPtr, size_t aSize) {
 bool Connector::DispatchMessage(ScopedMessageHandle handle) {
   DCHECK(!paused_);
 
+  recordreplay::Assert("[RUN-1618] Connector::DispatchMessage Start");
+
   Message message = Message::CreateFromMessageHandle(&handle);
 
   recordreplay::Assert("[RUN-1618] Connector::DispatchMessage interface_id=%lu flags=%lu name=%lu num_bytes=%zu hash=%d",
