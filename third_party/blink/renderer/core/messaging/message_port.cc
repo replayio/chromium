@@ -320,18 +320,32 @@ static inline int HashBytes(const void* aPtr, size_t aSize) {
   return hash;
 }
 
+static int gShouldAssertSerializedScriptValueContents;
+
+extern "C" bool ShouldAssertSerializedScriptValueContents() {
+  return v8::IsMainThread() && gShouldAssertSerializedScriptValueContents;
+}
+
 bool MessagePort::Accept(mojo::Message* mojo_message) {
   TRACE_EVENT0("blink", "MessagePort::Accept");
 
-  recordreplay::Assert("[RUN-1126] MessagePort::Accept %u %d",
+  recordreplay::Assert("[RUN-1126] MessagePort::Accept %u %d %u %d",
                        mojo_message->data_num_bytes(),
-                       HashBytes(mojo_message->data(), mojo_message->data_num_bytes()));
+                       HashBytes(mojo_message->data(), mojo_message->data_num_bytes()),
+                       mojo_message->payload_num_bytes(),
+                       HashBytes(mojo_message->payload(), mojo_message->payload_num_bytes()));
+
+  if (v8::IsMainThread())
+    gShouldAssertSerializedScriptValueContents++;
 
   BlinkTransferableMessage message;
   if (!mojom::blink::TransferableMessage::DeserializeFromMessage(
           std::move(*mojo_message), &message)) {
     return false;
   }
+
+  if (v8::IsMainThread())
+    gShouldAssertSerializedScriptValueContents--;
 
   recordreplay::Assert("[RUN-1126] MessagePort::Accept #1 %zu %d",
                        message.message ? message.message->DataLengthInBytes() : 0,

@@ -256,7 +256,27 @@ SerializedScriptValue::SerializedScriptValue(DataBufferPtr data,
                                              size_t data_size)
     : data_buffer_(std::move(data)),
       data_buffer_size_(data_size),
-      has_registered_external_allocation_(false) {}
+      has_registered_external_allocation_(false) {
+  MaybeAssertContents();
+}
+
+extern "C" bool ShouldAssertSerializedScriptValueContents();
+
+static inline int HashBytes(const void* aPtr, size_t aSize) {
+  int hash = 0;
+  uint8_t* ptr = (uint8_t*)aPtr;
+  for (size_t i = 0; i < aSize; i++) {
+    hash = (((hash << 5) - hash) + ptr[i]) | 0;
+  }
+  return hash;
+}
+
+void SerializedScriptValue::MaybeAssertContents() {
+  if (ShouldAssertSerializedScriptValueContents()) {
+    recordreplay::Assert("[RUN-1618] SerializedScriptValue::MaybeAssertContents %zu %d",
+                         DataLengthInBytes(), HashBytes(Data(), DataLengthInBytes()));
+  }
+}
 
 void SerializedScriptValue::SetImageBitmapContentsArray(
     ImageBitmapContentsArray contents) {

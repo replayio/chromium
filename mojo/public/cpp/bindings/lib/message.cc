@@ -542,14 +542,31 @@ bool Message::DeserializeAssociatedEndpointHandles(
   return result;
 }
 
+static inline int HashBytes(const void* aPtr, size_t aSize) {
+  int hash = 0;
+  uint8_t* ptr = (uint8_t*)aPtr;
+  for (size_t i = 0; i < aSize; i++) {
+    hash = (((hash << 5) - hash) + ptr[i]) | 0;
+  }
+  return hash;
+}
+
 void Message::SerializeIfNecessary() {
   MojoResult rv = MojoSerializeMessage(handle_->value(), nullptr);
-  if (rv == MOJO_RESULT_FAILED_PRECONDITION)
+  if (rv == MOJO_RESULT_FAILED_PRECONDITION) {
+    recordreplay::Assert("[RUN-1618] Message::SerializeIfNecessary #1");
     return;
+  }
 
   // Reconstruct this Message instance from the serialized message's handle.
   ScopedMessageHandle handle = std::move(handle_);
   *this = CreateFromMessageHandle(&handle);
+
+  recordreplay::Assert("[RUN-1618] Message::SerializeIfNecessary #2 %u %d %u %d",
+                       data_num_bytes(),
+                       HashBytes(data(), data_num_bytes()),
+                       payload_num_bytes(),
+                       HashBytes(payload(), payload_num_bytes()));
 }
 
 std::unique_ptr<internal::UnserializedMessageContext>

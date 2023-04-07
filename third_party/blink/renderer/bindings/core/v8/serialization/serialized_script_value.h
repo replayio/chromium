@@ -359,7 +359,10 @@ class CORE_EXPORT SerializedScriptValue
   void SetData(DataBufferPtr data, size_t size) {
     data_buffer_ = std::move(data);
     data_buffer_size_ = size;
+    MaybeAssertContents();
   }
+
+  void MaybeAssertContents();
 
   void TransferArrayBuffers(v8::Isolate*,
                             const ArrayBufferArray&,
