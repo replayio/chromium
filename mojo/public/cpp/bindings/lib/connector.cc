@@ -509,6 +509,15 @@ MojoResult Connector::ReadMessage(ScopedMessageHandle& message) {
                         MOJO_READ_MESSAGE_FLAG_NONE);
 }
 
+static inline int HashBytes(const void* aPtr, size_t aSize) {
+  int hash = 0;
+  uint8_t* ptr = (uint8_t*)aPtr;
+  for (size_t i = 0; i < aSize; i++) {
+    hash = (((hash << 5) - hash) + ptr[i]) | 0;
+  }
+  return hash;
+}
+
 bool Connector::DispatchMessage(ScopedMessageHandle handle) {
   DCHECK(!paused_);
 
@@ -516,10 +525,11 @@ bool Connector::DispatchMessage(ScopedMessageHandle handle) {
 
   Message message = Message::CreateFromMessageHandle(&handle);
 
-  recordreplay::Assert("[RUN-1618] Connector::DispatchMessage interface_id=%lu flags=%lu name=%lu num_bytes=%zu",
+  recordreplay::Assert("[RUN-1618] Connector::DispatchMessage interface_id=%lu flags=%lu name=%lu num_bytes=%zu hash=%d",
                        message.interface_id(),
                        message.header()->flags, message.header()->name,
-                       message.data_num_bytes());
+                       message.data_num_bytes(),
+                       HashBytes(message.data(), message.data_num_bytes()));
   recordreplay::AssertBytes("[RUN-1618] Connector::DispatchMessage",
                             message.data(), message.data_num_bytes());
 

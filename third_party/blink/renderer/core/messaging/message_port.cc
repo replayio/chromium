@@ -311,16 +311,31 @@ void MessagePort::Trace(Visitor* visitor) const {
   EventTargetWithInlineData::Trace(visitor);
 }
 
+static inline int HashBytes(const void* aPtr, size_t aSize) {
+  int hash = 0;
+  uint8_t* ptr = (uint8_t*)aPtr;
+  for (size_t i = 0; i < aSize; i++) {
+    hash = (((hash << 5) - hash) + ptr[i]) | 0;
+  }
+  return hash;
+}
+
 bool MessagePort::Accept(mojo::Message* mojo_message) {
   TRACE_EVENT0("blink", "MessagePort::Accept");
 
-  recordreplay::Assert("[RUN-1126] MessagePort::Accept");
-  
+  recordreplay::Assert("[RUN-1126] MessagePort::Accept %u %d",
+                       mojo_message->data_num_bytes(),
+                       HashBytes(mojo_message->data(), mojo_message->data_num_bytes()));
+
   BlinkTransferableMessage message;
   if (!mojom::blink::TransferableMessage::DeserializeFromMessage(
           std::move(*mojo_message), &message)) {
     return false;
   }
+
+  recordreplay::Assert("[RUN-1126] MessagePort::Accept #1 %zu %d",
+                       message.message ? message.message->DataLengthInBytes() : 0,
+                       message.message ? HashBytes(message.message->Data(), message.message->DataLengthInBytes()) : 0);
 
   ExecutionContext* context = GetExecutionContext();
   if (!context)
