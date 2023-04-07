@@ -143,8 +143,12 @@ bool UnionTraits<
     mojo_base::mojom::BigBufferDataView,
     mojo_base::BigBufferView>::Read(mojo_base::mojom::BigBufferDataView data,
                                     mojo_base::BigBufferView* out) {
+  recordreplay::Assert("Traits<BigBufferDataView>::Read");
+
   switch (data.tag()) {
     case mojo_base::mojom::BigBufferDataView::Tag::kBytes: {
+      recordreplay::Assert("Traits<BigBufferDataView>::Read #1");
+
       mojo::ArrayDataView<uint8_t> bytes_view;
       data.GetBytesDataView(&bytes_view);
       out->SetBytes(bytes_view);
@@ -152,6 +156,8 @@ bool UnionTraits<
     }
 
     case mojo_base::mojom::BigBufferDataView::Tag::kSharedMemory: {
+      recordreplay::Assert("Traits<BigBufferDataView>::Read #2");
+
       mojo_base::internal::BigBufferSharedMemoryRegion shared_memory;
       if (!data.ReadSharedMemory(&shared_memory))
         return false;

@@ -103,6 +103,11 @@ scoped_refptr<SerializedScriptValue> SerializedScriptValue::Create(
   DataBufferPtr data_buffer = AllocateBuffer(data_buffer_size.ValueOrDie());
   data.CopyTo(reinterpret_cast<UChar*>(data_buffer.get()), 0, data.length());
 
+  if (ShouldAssertSerializedScriptValueContents()) {
+    recordreplay::Assert("[RUN-1618] SerializedScriptValue::Create #1 %zu %d",
+                         data_buffer_size, HashBytes(data_buffer.get(), data_buffer_size));
+  }
+
   return base::AdoptRef(new SerializedScriptValue(
       std::move(data_buffer), data_buffer_size.ValueOrDie()));
 }
@@ -223,9 +228,19 @@ scoped_refptr<SerializedScriptValue> SerializedScriptValue::Create(
   if (!data)
     return Create();
 
+  if (ShouldAssertSerializedScriptValueContents()) {
+    recordreplay::Assert("[RUN-1618] SerializedScriptValue::Create #2 %zu %d",
+                         length, HashBytes(data, length));
+  }
+
   DataBufferPtr data_buffer = AllocateBuffer(length);
   std::copy(data, data + length, data_buffer.get());
   SwapWiredDataIfNeeded(data_buffer.get(), length);
+
+  if (ShouldAssertSerializedScriptValueContents()) {
+    recordreplay::Assert("[RUN-1618] SerializedScriptValue::Create #3 %d",
+                         HashBytes(data_buffer.get(), length));
+  }
 
   return base::AdoptRef(
       new SerializedScriptValue(std::move(data_buffer), length));
