@@ -57,6 +57,8 @@
 #include "content/public/common/result_codes.h"
 #include "third_party/crashpad/crashpad/util/win/initial_client_data.h"
 
+#include "base/record_replay.h"
+
 #if defined(WIN_CONSOLE_APP)
 // Forward declaration of main.
 int main();
