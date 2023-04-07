@@ -93,6 +93,17 @@ scoped_refptr<SerializedScriptValue> SerializedScriptValue::Create() {
   return base::AdoptRef(new SerializedScriptValue);
 }
 
+extern "C" bool ShouldAssertSerializedScriptValueContents();
+
+static inline int HashBytes(const void* aPtr, size_t aSize) {
+  int hash = 0;
+  uint8_t* ptr = (uint8_t*)aPtr;
+  for (size_t i = 0; i < aSize; i++) {
+    hash = (((hash << 5) - hash) + ptr[i]) | 0;
+  }
+  return hash;
+}
+
 scoped_refptr<SerializedScriptValue> SerializedScriptValue::Create(
     const String& data) {
   base::CheckedNumeric<size_t> data_buffer_size = data.length();
@@ -273,17 +284,6 @@ SerializedScriptValue::SerializedScriptValue(DataBufferPtr data,
       data_buffer_size_(data_size),
       has_registered_external_allocation_(false) {
   MaybeAssertContents();
-}
-
-extern "C" bool ShouldAssertSerializedScriptValueContents();
-
-static inline int HashBytes(const void* aPtr, size_t aSize) {
-  int hash = 0;
-  uint8_t* ptr = (uint8_t*)aPtr;
-  for (size_t i = 0; i < aSize; i++) {
-    hash = (((hash << 5) - hash) + ptr[i]) | 0;
-  }
-  return hash;
 }
 
 void SerializedScriptValue::MaybeAssertContents() {
