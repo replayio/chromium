@@ -359,7 +359,7 @@ Message Message::CreateFromMessageHandle(ScopedMessageHandle* message_handle) {
                                   sizeof(internal::MessageHeaderV1));
 
   recordreplay::Assert("[RUN-1618] Message::CreateFromMessageHandle #3 %d",
-                       HashBytes(context->header(), sizeof(internal::MessageHeaderV1));
+                       HashBytes(context->header(), sizeof(internal::MessageHeaderV1)));
 
   return Message(std::move(*message_handle), {}, std::move(payload_buffer),
                  false /* serialized */);
