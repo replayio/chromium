@@ -116,7 +116,7 @@ scoped_refptr<SerializedScriptValue> SerializedScriptValue::Create(
 
   if (ShouldAssertSerializedScriptValueContents()) {
     recordreplay::Assert("[RUN-1618] SerializedScriptValue::Create #1 %zu %d",
-                         data_buffer_size, HashBytes(data_buffer.get(), data_buffer_size));
+                         data_buffer_size, HashBytes(data_buffer.get(), data_buffer_size.ValueOrDie()));
   }
 
   return base::AdoptRef(new SerializedScriptValue(
