@@ -27,6 +27,19 @@ static bool RecordReplayIsReplaying() {
   return false;
 }
 
+static void RecordReplayPrint(const char* aFormat, ...) {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayPrint");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    va_list ap;
+    va_start(ap, aFormat);
+    reinterpret_cast<void(*)(const char*, va_list)>(fnptr)(aFormat, ap);
+    va_end(ap);
+  }
+}
+
 namespace {
 
 // Function pointers used for registry access.
@@ -95,6 +108,8 @@ bool IsThisProcWow64() {
 
 bool InitNativeRegApi() {
   HMODULE ntdll = ::GetModuleHandleW(L"ntdll.dll");
+
+  RecordReplayPrint("InitNativeRegApi");
 
   // Setup the global function pointers for registry access.
   g_rtl_init_unicode_string = reinterpret_cast<RtlInitUnicodeStringFunction>(
