@@ -161,6 +161,11 @@ bool UnionTraits<
       mojo_base::internal::BigBufferSharedMemoryRegion shared_memory;
       if (!data.ReadSharedMemory(&shared_memory))
         return false;
+
+      base::span<const uint8_t> data = out->data();
+      recordreplay::RecordReplayBytes("Traits<BigBufferDataView>::Read",
+                                      shared_memory.memory(), shared_memory.size());
+
       out->SetSharedMemory(std::move(shared_memory));
       return true;
     }
