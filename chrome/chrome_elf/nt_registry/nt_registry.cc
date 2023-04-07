@@ -16,8 +16,6 @@ static void* LookupRecordReplaySymbol(const char* name) {
   return fnptr ? fnptr : reinterpret_cast<void*>(1);
 }
 
-// We check whether we are replaying in some areas to avoid complex interactions
-// with the system during static initializers.
 static bool RecordReplayIsReplaying() {
   static void* fnptr;
   if (!fnptr) {
@@ -923,6 +921,7 @@ bool QueryRegValueSZ(ROOT_KEY root,
                      const wchar_t* key_path,
                      const wchar_t* value_name,
                      std::wstring* out_sz) {
+  // Avoid complex interactions with the system during static initializers.
   if (RecordReplayIsReplaying())
     return true;
 
