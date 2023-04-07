@@ -40,6 +40,19 @@ static void RecordReplayPrint(const char* aFormat, ...) {
   }
 }
 
+static void RecordReplayAssert(const char* aFormat, ...) {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayAssert");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    va_list ap;
+    va_start(ap, aFormat);
+    reinterpret_cast<void(*)(const char*, va_list)>(fnptr)(aFormat, ap);
+    va_end(ap);
+  }
+}
+
 namespace {
 
 // Function pointers used for registry access.
@@ -659,11 +672,15 @@ bool CreateRegKey(ROOT_KEY root,
                   const wchar_t* key_path,
                   ACCESS_MASK access,
                   HANDLE* out_handle OPTIONAL) {
+  RecordReplayAssert("CreateRegKey");
+
   // |key_path| can be null or empty, but it can't be longer than
   // |g_kRegMaxPathLen| at this point.
   if (key_path &&
       ::wcsnlen(key_path, g_kRegMaxPathLen + 1) == g_kRegMaxPathLen + 1)
     return false;
+
+  RecordReplayAssert("CreateRegKey #1 %d", g_initialized);
 
   if (!g_initialized && !InitNativeRegApi())
     return false;
