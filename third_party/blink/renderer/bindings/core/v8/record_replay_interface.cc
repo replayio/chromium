@@ -98,7 +98,7 @@ const {
   fromJsMakeDebuggeeValue,
   fromJsGetArgumentsInFrame,
   fromJsGetObjectByCdpId,
-  fromJsIsNativeObject,
+  fromJsIsBlinkObject,
   fromJsGetNodeId,
   fromJsGetBoxModel,
   fromJsGetMatchedStylesForNode,
@@ -569,28 +569,16 @@ function isPrototype(x) {
 /**
  * Check whether given object `x` is a native object.
  */
-function isNativeObject(x) {
-  return fromJsIsNativeObject(x);
+function isBlinkObject(x) {
+  return fromJsIsBlinkObject(x);
 }
 
 /**
- * Check whether the object has what looks like a native ctor and
- * is not a plain object or array.
- * @see https://linear.app/replay/issue/RUN-1592#comment-4011cec0
- */
-function isBlinkObject(plainObject, cdpObj) {
-  return isNativeObject(plainObject) && 
-    cdpObj.subtype !== 'array' &&
-    cdpObj.subtype !== 'typedarray' &&
-    cdpObj.className !== 'Object';
-}
-
-/**
- * Check whether given object `x` is native object and its 
+ * Check whether given object `x` is a blink object and its 
  * class name is `target.name`.
  */
-function isInstanceOfNative(x, target) {
-  return isNativeObject(x) &&
+function isBlinkInstanceOf(x, target) {
+  return isBlinkObject(x) &&
     target?.name &&
     hasInProtoChain(x.constructor, target.name);
 }
@@ -1112,9 +1100,9 @@ ProtocolObjectPreview.prototype = {
   get pageIndex() { return 0; },
 
   get pageSize() {
-    if (isBlinkObject(this.raw, this.cdpObj)) {
-      // Don't limit native objects because in gecko, we add all native getters,
-      // independent of prop limits.
+    if (isBlinkObject(this.raw, this.cdpObj) || CustomPreviewers[this.cdpObj.className]) {
+      // Don't limit props of native objects, and ignore prop limits.
+      // (Because that is how we do it in gecko.)
       return 0;
     }
     return MaxItems[this.level] || 10;
@@ -1156,8 +1144,12 @@ ProtocolObjectPreview.prototype = {
             entry.call(this, cdpProperties);
           }
           else {
-            // entry should be string
-            this.addGetterValue(entry, this.cdpObj, /* force */ true);
+            // entry should be string -> Look it up in results
+            const cdpEntry = cdpProperties.result.find(prop => prop.name === entry);
+            if (cdpEntry) {
+              const rrpEntry = buildRrpObjectFromCdpObject(cdpEntry);
+              this.setGetterValue(entry, rrpEntry);
+            }
           }
         }
       }
@@ -1230,13 +1222,13 @@ function previewBlinkObject(cdpObject, cdpProperties) {
   assert(rrpId);
   const plainObject = getPlainObjectByRrpId(rrpId);
 
-  if (isInstanceOfNative(plainObject, Node)) {
+  if (isBlinkInstanceOf(plainObject, Node)) {
     return {
       node: previewBlinkNode(plainObject)
     }
   }
 
-  if (isInstanceOfNative(plainObject, CSSStyleDeclaration)) {
+  if (isBlinkInstanceOf(plainObject, CSSStyleDeclaration)) {
     return {
       style: previewBlinkStyle(plainObject)
     }
@@ -1245,7 +1237,7 @@ function previewBlinkObject(cdpObject, cdpProperties) {
 
 function previewBlinkNode(node) {
   let attributes, pseudoType;
-  if (isInstanceOfNative(node, Element)) {
+  if (isBlinkInstanceOf(node, Element)) {
     attributes = [];
     for (const { name, value } of node.attributes) {
       attributes.push({ name, value });
@@ -1840,7 +1832,7 @@ function CSS_getComputedStyle({ node }) {
   const nodeObj = getPlainObjectByRrpId(node);
 
   const computedStyle = [];
-  if (isInstanceOfNative(nodeObj, Element)) {
+  if (isBlinkInstanceOf(nodeObj, Element)) {
     // NOTE: tested successfully for same-CSP elements of different iframes
     const ownerGlobal = window;
 
@@ -2114,7 +2106,7 @@ function CSS_getAppliedRules({ node: nodeRrpId }) {
   let rules = gCssRulesByNodeRrpId.get(nodeRrpId);
   const data = {};
 
-  if (!rules && isInstanceOfNative(nodeObj, Element)) {
+  if (!rules && isBlinkInstanceOf(nodeObj, Element)) {
     const nodeId = getBlinkNodeIdByRrpId(nodeRrpId);
 
     // NOTE: CSS domain commands are not accessible via `sendMessage`, so we have to get the data indirectly.
@@ -3631,14 +3623,13 @@ static void fromJsGetObjectByCdpId(
 }
 
 /**
- * Whether a given value is a native object.
+ * Whether a given value is a blink object.
  * 
- * WARNING: We currently don't have a general solution to this.
- * This effectively only checks whether the given value is a **blink** object.
- * If we want to generalize, we probably have to expose |v8::internal::Script::type|,
- * which is also used by |CallSiteInfo::IsNative| for that purpose.
+ * NOTE: If we want a generalized |isNativeObject| function, 
+ * we probably have to expose |v8::internal::Script::type|
+ * (which is also used by |CallSiteInfo::IsNative|).
  */
-static void fromJsIsNativeObject(
+static void fromJsIsBlinkObject(
     const v8::FunctionCallbackInfo<v8::Value>& args) {
   CHECK(args.Length() == 1 && 
         "[RuntimeError] must be called with a single value");
@@ -4502,8 +4493,8 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
                       fromJsGetArgumentsInFrame);
   SetFunctionProperty(isolate, args, "fromJsGetObjectByCdpId",
                       fromJsGetObjectByCdpId);
-  SetFunctionProperty(isolate, args, "fromJsIsNativeObject",
-                      fromJsIsNativeObject);
+  SetFunctionProperty(isolate, args, "fromJsIsBlinkObject",
+                      fromJsIsBlinkObject);
 
   // networking
   SetFunctionProperty(isolate, args, "getCurrentNetworkRequestEvent",
