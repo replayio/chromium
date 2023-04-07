@@ -27,20 +27,37 @@ static bool RecordReplayIsReplaying() {
   return false;
 }
 
-static void RecordReplayPrint(const char* aFormat, ...) {
+static void RecordReplayBeginDisallowEventsWithLabel(const char* label) {
   static void* fnptr;
   if (!fnptr) {
-    fnptr = LookupRecordReplaySymbol("RecordReplayPrint");
+    fnptr = LookupRecordReplaySymbol("RecordReplayBeginDisallowEventsWithLabel");
   }
   if (fnptr != reinterpret_cast<void*>(1)) {
-    va_list ap;
-    va_start(ap, aFormat);
-    reinterpret_cast<void(*)(const char*, va_list)>(fnptr)(aFormat, ap);
-    va_end(ap);
+    reinterpret_cast<void(*)(const char*)>(fnptr)(label);
+  }
+}
+
+static void RecordReplayEndDisallowEvents() {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayEndDisallowEvents");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    reinterpret_cast<void(*)()>(fnptr)();
   }
 }
 
 namespace {
+
+struct RecordReplayAutoDisallowEvents {
+  RecordReplayAutoDisallowEvents(const char* label) {
+    RecordReplayBeginDisallowEventsWithLabel(label);
+  }
+
+  ~RecordReplayAutoDisallowEvents() {
+    RecordReplayEndDisallowEvents();
+  }
+};
 
 // Function pointers used for registry access.
 RtlInitUnicodeStringFunction g_rtl_init_unicode_string = nullptr;
@@ -109,7 +126,8 @@ bool IsThisProcWow64() {
 bool InitNativeRegApi() {
   HMODULE ntdll = ::GetModuleHandleW(L"ntdll.dll");
 
-  RecordReplayPrint("InitNativeRegApi");
+  // Initialization happens at different points when recording vs. replaying.
+  RecordReplayAutoDisallowEvents disallow("InitNativeRegApi");
 
   // Setup the global function pointers for registry access.
   g_rtl_init_unicode_string = reinterpret_cast<RtlInitUnicodeStringFunction>(

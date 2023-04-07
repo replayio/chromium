@@ -64,6 +64,25 @@
 int main();
 #endif
 
+static void* LookupRecordReplaySymbol(const char* name) {
+  HMODULE module = GetModuleHandleA("windows-recordreplay.dll");
+  void* fnptr = module ? (void*)GetProcAddress(module, name) : nullptr;
+  return fnptr ? fnptr : reinterpret_cast<void*>(1);
+}
+
+static void RecordReplayAssert(const char* aFormat, ...) {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayAssert");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    va_list ap;
+    va_start(ap, aFormat);
+    reinterpret_cast<void(*)(const char*, va_list)>(fnptr)(aFormat, ap);
+    va_end(ap);
+  }
+}
+
 namespace {
 
 // Sets the current working directory for the process to the directory holding
@@ -246,7 +265,7 @@ int main() {
 
   RecordReplayAttach(nullptr, nullptr);
 
-  recordreplay::Assert("wWinMain #1");
+  RecordReplayAssert("wWinMain #1");
 
 #if defined(ARCH_CPU_32_BITS)
   enum class FiberStatus { kConvertFailed, kCreateFiberFailed, kSuccess };
@@ -288,7 +307,7 @@ int main() {
   // If we are already a fiber then continue normal execution.
 #endif  // defined(ARCH_CPU_32_BITS)
 
-  recordreplay::Assert("wWinMain #2");
+  RecordReplayAssert("wWinMain #2");
 
   SetCwdForBrowserProcess();
   install_static::InitializeFromPrimaryModule();
@@ -382,14 +401,14 @@ int main() {
     return RunFallbackCrashHandler(*command_line);
   }
 
-  recordreplay::Assert("wWinMain #3");
+  RecordReplayAssert("wWinMain #3");
 
   const base::TimeTicks exe_entry_point_ticks = base::TimeTicks::Now();
 
   // Signal Chrome Elf that Chrome has begun to start.
   SignalChromeElf();
 
-  recordreplay::Assert("wWinMain #4");
+  RecordReplayAssert("wWinMain #4");
 
   // The exit manager is in charge of calling the dtors of singletons.
   base::AtExitManager exit_manager;
@@ -399,17 +418,17 @@ int main() {
 
   RemoveAppCompatFlagsEntry();
 
-  recordreplay::Assert("wWinMain #5");
+  RecordReplayAssert("wWinMain #5");
 
   // Load and launch the chrome dll. *Everything* happens inside.
   VLOG(1) << "About to load main DLL.";
   MainDllLoader* loader = MakeMainDllLoader();
 
-  recordreplay::Assert("wWinMain #6");
+  RecordReplayAssert("wWinMain #6");
 
   int rc = loader->Launch(instance, exe_entry_point_ticks);
 
-  recordreplay::Assert("wWinMain #7");
+  RecordReplayAssert("wWinMain #7");
 
   loader->RelaunchChromeBrowserWithNewCommandLineIfNeeded();
   delete loader;
