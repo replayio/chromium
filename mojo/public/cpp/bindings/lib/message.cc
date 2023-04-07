@@ -297,15 +297,6 @@ Message::Message(base::span<const uint8_t> payload,
   serialized_ = true;
 }
 
-static inline int HashBytes(const void* aPtr, size_t aSize) {
-  int hash = 0;
-  uint8_t* ptr = (uint8_t*)aPtr;
-  for (size_t i = 0; i < aSize; i++) {
-    hash = (((hash << 5) - hash) + ptr[i]) | 0;
-  }
-  return hash;
-}
-
 // static
 Message Message::CreateFromMessageHandle(ScopedMessageHandle* message_handle) {
   DCHECK(message_handle);
@@ -350,6 +341,10 @@ Message Message::CreateFromMessageHandle(ScopedMessageHandle* message_handle) {
   DCHECK_EQ(MOJO_RESULT_OK, get_context_result);
   auto* context =
       reinterpret_cast<internal::UnserializedMessageContext*>(context_value);
+
+  recordreplay::RecordReplayBytes("[RUN-1618] Message::CreateFromMessageHandle #3",
+                                  context->header(), sizeof(internal::MessageHeaderV1));
+
   // Dummy data address so common header accessors still behave properly. The
   // choice is V1 reflects unserialized message capabilities: we may or may
   // not need to support request IDs (which require at least V1), but we never
@@ -357,9 +352,6 @@ Message Message::CreateFromMessageHandle(ScopedMessageHandle* message_handle) {
   internal::Buffer payload_buffer(context->header(),
                                   sizeof(internal::MessageHeaderV1),
                                   sizeof(internal::MessageHeaderV1));
-
-  recordreplay::Assert("[RUN-1618] Message::CreateFromMessageHandle #3 %d",
-                       HashBytes(context->header(), sizeof(internal::MessageHeaderV1)));
 
   return Message(std::move(*message_handle), {}, std::move(payload_buffer),
                  false /* serialized */);

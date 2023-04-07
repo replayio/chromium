@@ -31,8 +31,6 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #endif
 
-#include "base/record_replay.h"
-
 namespace {
 
 typedef void (*MojoGetSystemThunksFunction)(MojoSystemThunks2* thunks);
@@ -356,26 +354,14 @@ MojoResult MojoAppendMessageData(MojoMessageHandle message,
                       num_handles, options, buffer, buffer_size);
 }
 
-static inline int HashBytes(const void* aPtr, size_t aSize) {
-  int hash = 0;
-  uint8_t* ptr = (uint8_t*)aPtr;
-  for (size_t i = 0; i < aSize; i++) {
-    hash = (((hash << 5) - hash) + ptr[i]) | 0;
-  }
-  return hash;
-}
-
 MojoResult MojoGetMessageData(MojoMessageHandle message,
                               const MojoGetMessageDataOptions* options,
                               void** buffer,
                               uint32_t* num_bytes,
                               MojoHandle* handles,
                               uint32_t* num_handles) {
-  MojoResult rv = INVOKE_THUNK(GetMessageData, message, options, buffer, num_bytes,
-                               handles, num_handles);
-  recordreplay::Assert("[RUN-1618] MojoGetMessageData num_bytes=%u hash=%d",
-                       *num_bytes, HashBytes(*buffer, *num_bytes));
-  return rv;
+  return INVOKE_THUNK(GetMessageData, message, options, buffer, num_bytes,
+                      handles, num_handles);
 }
 
 MojoResult MojoSetMessageContext(MojoMessageHandle message,

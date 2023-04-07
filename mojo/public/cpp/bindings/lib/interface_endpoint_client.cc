@@ -903,15 +903,6 @@ void InterfaceEndpointClient::OnAssociationEvent(
   }
 }
 
-static inline int HashBytes(const void* aPtr, size_t aSize) {
-  int hash = 0;
-  uint8_t* ptr = (uint8_t*)aPtr;
-  for (size_t i = 0; i < aSize; i++) {
-    hash = (((hash << 5) - hash) + ptr[i]) | 0;
-  }
-  return hash;
-}
-
 bool InterfaceEndpointClient::HandleValidatedMessage(Message* message) {
   TRACE_EVENT("toplevel",
               perfetto::StaticString{method_name_callback_(*message)},
@@ -956,10 +947,11 @@ bool InterfaceEndpointClient::HandleValidatedMessage(Message* message) {
                 perfetto::Flow::Global(message->GetTraceId())(ctx);
               });
 
-  recordreplay::Assert("[RUN-1489-1494] HandleValidatedMessage id=%lu interface_id=%lu flags=%lu name=%lu num_bytes=%zu hash=%d",
+  recordreplay::Assert("[RUN-1489-1494] HandleValidatedMessage id=%lu interface_id=%lu flags=%lu name=%lu num_bytes=%zu",
                        handle_.id(), message->interface_id(),
                        message->header()->flags, message->header()->name,
-                       message->data_num_bytes(), HashBytes(message->data(), message->data_num_bytes()));
+                       message->data_num_bytes());
+  recordreplay::AssertBytes("[RUN-1489-1494] HandleValidatedMessage", message->data(), message->data_num_bytes());
 
   DCHECK_EQ(handle_.id(), message->interface_id());
 

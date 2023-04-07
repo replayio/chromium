@@ -433,15 +433,6 @@ MojoResult Core::AppendMessageData(MojoMessageHandle message_handle,
   return MOJO_RESULT_OK;
 }
 
-static inline int HashBytes(const void* aPtr, size_t aSize) {
-  int hash = 0;
-  uint8_t* ptr = (uint8_t*)aPtr;
-  for (size_t i = 0; i < aSize; i++) {
-    hash = (((hash << 5) - hash) + ptr[i]) | 0;
-  }
-  return hash;
-}
-
 MojoResult Core::GetMessageData(MojoMessageHandle message_handle,
                                 const MojoGetMessageDataOptions* options,
                                 void** buffer,
@@ -472,9 +463,10 @@ MojoResult Core::GetMessageData(MojoMessageHandle message_handle,
     *buffer = nullptr;
   }
 
-  recordreplay::Assert("[RUN-1618] Core::GetMessageData #1 num_bytes=%u hash=%d",
-                       num_bytes ? *num_bytes : 0,
-                       (buffer && num_bytes) ? HashBytes(*buffer, *num_bytes) : 0);
+  recordreplay::Assert("[RUN-1618] Core::GetMessageData #1 num_bytes=%u",
+                       num_bytes ? *num_bytes : 0);
+  if (buffer && num_bytes)
+    recordreplay::RecordReplayBytes("[RUN-1618] Core::GetMessageData #1", *buffer, *num_bytes);
 
   if (options && (options->flags & MOJO_GET_MESSAGE_DATA_FLAG_IGNORE_HANDLES))
     return MOJO_RESULT_OK;
