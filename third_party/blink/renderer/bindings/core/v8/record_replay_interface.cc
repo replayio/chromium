@@ -1083,6 +1083,9 @@ ProtocolObjectPreview.prototype = {
     if (!this.startAddItem(force)) {
       return;
     }
+    if (!this.getterValues) {
+      this.getterValues = new Map();
+    }
     this.getterValues.set(key, { name: key, ...valueObject });
   },
 
