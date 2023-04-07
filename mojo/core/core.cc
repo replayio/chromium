@@ -433,6 +433,15 @@ MojoResult Core::AppendMessageData(MojoMessageHandle message_handle,
   return MOJO_RESULT_OK;
 }
 
+static inline int HashBytes(const void* aPtr, size_t aSize) {
+  int hash = 0;
+  uint8_t* ptr = (uint8_t*)aPtr;
+  for (size_t i = 0; i < aSize; i++) {
+    hash = (((hash << 5) - hash) + ptr[i]) | 0;
+  }
+  return hash;
+}
+
 MojoResult Core::GetMessageData(MojoMessageHandle message_handle,
                                 const MojoGetMessageDataOptions* options,
                                 void** buffer,

@@ -297,6 +297,15 @@ Message::Message(base::span<const uint8_t> payload,
   serialized_ = true;
 }
 
+static inline int HashBytes(const void* aPtr, size_t aSize) {
+  int hash = 0;
+  uint8_t* ptr = (uint8_t*)aPtr;
+  for (size_t i = 0; i < aSize; i++) {
+    hash = (((hash << 5) - hash) + ptr[i]) | 0;
+  }
+  return hash;
+}
+
 // static
 Message Message::CreateFromMessageHandle(ScopedMessageHandle* message_handle) {
   DCHECK(message_handle);
