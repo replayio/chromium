@@ -515,6 +515,7 @@ function Pause_evaluateInGlobal({ expression }) {
 }
 
 function Pause_getAllFrames() {
+  log(`DDBG Pause_getAllFrames start`);
   const frames = getStackFrames().map((frame, index) => {
     // Use our own IDs for frames.
     const id = (index++).toString();
@@ -1275,7 +1276,7 @@ function previewBlinkNode(node) {
   }
 
   let childNodes;
-  if (node.nodeName == "IFRAME") {
+  if (node.nodeName == "IFRAME" && node.contentDocument) {
     // Treat an iframe's content document as one of its child nodes.
     childNodes = [registerPlainObject(node.contentDocument)];
   } else if (node.childNodes.length) {
