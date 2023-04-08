@@ -163,6 +163,10 @@ void ProxyMain::BeginMainFrame(
     layer_tree_host_->scheduling_client()->DidRunBeginMainFrame();
   }
 
+  if (recordreplay::HasDivergedFromRecording()) {
+    recordreplay::Diagnostic("[RUN-1687] ProxyMain::BeginMainFrame #4");
+  }
+
   // We need to issue image decode callbacks whether or not we will abort this
   // update and commit, since the request ids are only stored in
   // |begin_main_frame_state|.
