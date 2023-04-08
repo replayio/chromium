@@ -324,7 +324,7 @@ class CORE_EXPORT SerializedScriptValue
   }
 
   // RUN-1618: Ensure this serialized script value has a consistent length when
-  // recording vs. replaying. When possible we want to tolerate different
+  // recording vs. replaying. When necessary we want to tolerate different
   // serialized value lengths when replaying, to improve robustness and allow
   // the replay to continue.
   void RecordReplayDataSize() {
@@ -359,10 +359,7 @@ class CORE_EXPORT SerializedScriptValue
   void SetData(DataBufferPtr data, size_t size) {
     data_buffer_ = std::move(data);
     data_buffer_size_ = size;
-    MaybeAssertContents();
   }
-
-  void MaybeAssertContents();
 
   void TransferArrayBuffers(v8::Isolate*,
                             const ArrayBufferArray&,

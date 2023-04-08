@@ -947,11 +947,9 @@ bool InterfaceEndpointClient::HandleValidatedMessage(Message* message) {
                 perfetto::Flow::Global(message->GetTraceId())(ctx);
               });
 
-  recordreplay::Assert("[RUN-1489-1494] HandleValidatedMessage id=%lu interface_id=%lu flags=%lu name=%lu num_bytes=%zu",
+  recordreplay::Assert("[RUN-1489-1494] HandleValidatedMessage %lu %lu %lu %lu",
                        handle_.id(), message->interface_id(),
-                       message->header()->flags, message->header()->name,
-                       message->data_num_bytes());
-  recordreplay::AssertBytes("[RUN-1489-1494] HandleValidatedMessage", message->data(), message->data_num_bytes());
+                       message->header()->flags, message->header()->name);
 
   DCHECK_EQ(handle_.id(), message->interface_id());
 

@@ -861,24 +861,11 @@ void LocalFrameMojoHandler::OnPostureChanged(
       MediaValueChange::kOther);
 }
 
-static inline int HashBytes(const void* aPtr, size_t aSize) {
-  int hash = 0;
-  uint8_t* ptr = (uint8_t*)aPtr;
-  for (size_t i = 0; i < aSize; i++) {
-    hash = (((hash << 5) - hash) + ptr[i]) | 0;
-  }
-  return hash;
-}
-
 void LocalFrameMojoHandler::PostMessageEvent(
     const absl::optional<RemoteFrameToken>& source_frame_token,
     const String& source_origin,
     const String& target_origin,
     BlinkTransferableMessage message) {
-  recordreplay::Assert("[RUN-1618] LocalFrameMojoHandler::PostMessageEvent %d %d",
-                       message.message ? (int)message.message->DataLengthInBytes() : -1,
-                       message.message ? HashBytes(message.message->Data(), message.message->DataLengthInBytes()) : 0);
-
   frame_->PostMessageEvent(source_frame_token, source_origin, target_origin,
                            std::move(message));
 }

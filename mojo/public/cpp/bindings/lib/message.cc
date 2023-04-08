@@ -303,14 +303,10 @@ Message Message::CreateFromMessageHandle(ScopedMessageHandle* message_handle) {
   const MessageHandle& handle = message_handle->get();
   DCHECK(handle.is_valid());
 
-  recordreplay::Assert("[RUN-1618] Message::CreateFromMessageHandle Start");
-
   uintptr_t context_value = 0;
   MojoResult get_context_result =
       MojoGetMessageContext(handle.value(), nullptr, &context_value);
   if (get_context_result == MOJO_RESULT_NOT_FOUND) {
-    recordreplay::Assert("[RUN-1618] Message::CreateFromMessageHandle #1");
-
     // It's a serialized message. Extract handles if possible.
     uint32_t num_bytes;
     void* buffer;
@@ -331,8 +327,6 @@ Message Message::CreateFromMessageHandle(ScopedMessageHandle* message_handle) {
       return Message();
     }
 
-    recordreplay::Assert("[RUN-1618] Message::CreateFromMessageHandle #2");
-
     return Message(std::move(*message_handle), std::move(handles),
                    internal::Buffer(buffer, num_bytes, num_bytes),
                    true /* serialized */);
@@ -341,10 +335,6 @@ Message Message::CreateFromMessageHandle(ScopedMessageHandle* message_handle) {
   DCHECK_EQ(MOJO_RESULT_OK, get_context_result);
   auto* context =
       reinterpret_cast<internal::UnserializedMessageContext*>(context_value);
-
-  recordreplay::RecordReplayBytes("[RUN-1618] Message::CreateFromMessageHandle #3",
-                                  context->header(), sizeof(internal::MessageHeaderV1));
-
   // Dummy data address so common header accessors still behave properly. The
   // choice is V1 reflects unserialized message capabilities: we may or may
   // not need to support request IDs (which require at least V1), but we never
@@ -352,7 +342,6 @@ Message Message::CreateFromMessageHandle(ScopedMessageHandle* message_handle) {
   internal::Buffer payload_buffer(context->header(),
                                   sizeof(internal::MessageHeaderV1),
                                   sizeof(internal::MessageHeaderV1));
-
   return Message(std::move(*message_handle), {}, std::move(payload_buffer),
                  false /* serialized */);
 }
@@ -542,31 +531,14 @@ bool Message::DeserializeAssociatedEndpointHandles(
   return result;
 }
 
-static inline int HashBytes(const void* aPtr, size_t aSize) {
-  int hash = 0;
-  uint8_t* ptr = (uint8_t*)aPtr;
-  for (size_t i = 0; i < aSize; i++) {
-    hash = (((hash << 5) - hash) + ptr[i]) | 0;
-  }
-  return hash;
-}
-
 void Message::SerializeIfNecessary() {
   MojoResult rv = MojoSerializeMessage(handle_->value(), nullptr);
-  if (rv == MOJO_RESULT_FAILED_PRECONDITION) {
-    recordreplay::Assert("[RUN-1618] Message::SerializeIfNecessary #1");
+  if (rv == MOJO_RESULT_FAILED_PRECONDITION)
     return;
-  }
 
   // Reconstruct this Message instance from the serialized message's handle.
   ScopedMessageHandle handle = std::move(handle_);
   *this = CreateFromMessageHandle(&handle);
-
-  recordreplay::Assert("[RUN-1618] Message::SerializeIfNecessary #2 %u %d %u %d",
-                       data_num_bytes(),
-                       HashBytes(data(), data_num_bytes()),
-                       payload_num_bytes(),
-                       HashBytes(payload(), payload_num_bytes()));
 }
 
 std::unique_ptr<internal::UnserializedMessageContext>
