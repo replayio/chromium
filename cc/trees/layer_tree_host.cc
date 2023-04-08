@@ -162,6 +162,8 @@ LayerTreeHost::LayerTreeHost(InitParams params, CompositorMode mode)
 
   rendering_stats_instrumentation_->set_record_rendering_stats(
       pending_commit_state_->debug_state.RecordRenderingStats());
+
+  recordreplay::Diagnostic("[RUN-1686] LayerTreeHost::LayerTreeHost %p", this);
 }
 
 bool LayerTreeHost::IsMobileOptimized() const {
@@ -247,6 +249,8 @@ void LayerTreeHost::InitializeProxy(std::unique_ptr<Proxy> proxy) {
 }
 
 LayerTreeHost::~LayerTreeHost() {
+  recordreplay::Diagnostic("[RUN-1686] LayerTreeHost::~LayerTreeHost %p", this);
+
   // Track when we're inside a main frame to see if compositor is being
   // destroyed midway which causes a crash. crbug.com/895883
   CHECK(!inside_main_frame_);
