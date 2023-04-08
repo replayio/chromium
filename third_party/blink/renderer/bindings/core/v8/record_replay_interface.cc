@@ -286,7 +286,7 @@ function commandCallback(method, params) {
     // that decision.
     return {
       is_error: true,
-      message: e?.message || e.toString(),
+      message: e?.message || (e + ''),
       stack: e?.stack?.split?.("\n") || e?.stack || [],
     };
   }
@@ -515,8 +515,20 @@ function Pause_evaluateInGlobal({ expression }) {
 }
 
 function Pause_getAllFrames() {
-  log(`DDBG Pause_getAllFrames start`);
-  const frames = getStackFrames().map((frame, index) => {
+  let frames;
+  try {
+    frames = getStackFrames();
+  }
+  catch (err) {
+    // Work around "ghostly" cross-origin errors.
+    // https://linear.app/replay/issue/RUN-1680#comment-1dfa142b
+    log(`[RuntimeError] getStackFrames failed (${err.message})`);
+    return {
+      frames: [],
+      data: { frames: [] },
+    };
+  }
+  frames = frames.map((frame, index) => {
     // Use our own IDs for frames.
     const id = (index++).toString();
     return createProtocolFrame(id, frame);

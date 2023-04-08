@@ -28,6 +28,7 @@ char* GetRecordingId();
 
 void Print(const char* format, ...);
 void Diagnostic(const char* format, ...);
+void Warning(const char* format, ...);
 void Assert(const char* format, ...);
 void AssertBytes(const char* why, const void* buf, size_t size);
 

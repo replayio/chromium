@@ -48,6 +48,9 @@ namespace recordreplay {
   Macro(V8RecordReplayDiagnosticVA,                                     \
         (const char* format, va_list args),                             \
         (format, args))                                                 \
+  Macro(V8RecordReplayWarning,                                          \
+        (const char* format, va_list args),                             \
+        (format, args))                                                 \
   Macro(V8RecordReplayBytes,                                            \
         (const char* why, void* buf, size_t size),                      \
         (why, buf, size))                                               \
@@ -185,6 +188,15 @@ void Diagnostic(const char* format, ...) {
   va_list ap;
   va_start(ap, format);
   V8RecordReplayDiagnosticVA(format, ap);
+  va_end(ap);
+#endif
+}
+
+void Warning(const char* format, ...) {
+#ifndef NACL_TC_REV
+  va_list ap;
+  va_start(ap, format);
+  V8RecordReplayWarning(format, ap);
   va_end(ap);
 #endif
 }

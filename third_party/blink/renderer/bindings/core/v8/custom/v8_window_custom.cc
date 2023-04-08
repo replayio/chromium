@@ -245,15 +245,6 @@ void V8Window::NamedPropertyGetterCustom(
       return;
     }
 
-    if (recordreplay::IsReplaying()) {
-      auto* local_dom_window = CurrentDOMWindow(info.GetIsolate());
-      recordreplay::Print(
-          "DDBG V8Window::NamedPropertyGetterCustom FailedAccessCheckFor %d %s",
-          recordreplay::AreEventsDisallowed(),
-          local_dom_window->GetSecurityOrigin()->ToString().Utf8().c_str());
-      CHECK(false && "ddbg intentional crash");
-    }
-
     BindingSecurity::FailedAccessCheckFor(
         info.GetIsolate(), window->GetWrapperTypeInfo(), info.Holder());
     return;
