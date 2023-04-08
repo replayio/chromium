@@ -50,7 +50,7 @@ static void RecordReplayEndPassThroughEvents() {
 namespace {
 
 struct RecordReplayAutoPassThroughEvents {
-  RecordReplayAutoPassThroughEvents(const char* label) {
+  RecordReplayAutoPassThroughEvents() {
     RecordReplayBeginPassThroughEvents();
   }
 
