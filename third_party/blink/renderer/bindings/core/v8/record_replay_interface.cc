@@ -194,7 +194,24 @@ let gCurrentMessageResult;
 function sendMessage(method, params) {
   const id = gNextMessageId++;
   gCurrentMessageId = id;
-  sendCDPMessage(JSON_stringify({ method, params, id }));
+  gCurrentMessageResult = undefined;
+  try {
+    sendCDPMessage(JSON_stringify({ method, params, id }));
+  }
+  catch (err) {
+    if (!gCurrentMessageResult) {
+      throw err;
+    }
+    else {
+      // Work around "ghostly" cross-origin (and maybe other?) errors:
+      // Generally speaking, CDP commands should not throw.
+      // If they do, there is a chance that the error was triggered by user JS
+      // and only happens to still be pending when Replay commands were 
+      // triggered.
+      // E.g.: https://linear.app/replay/issue/RUN-1680#comment-1dfa142b
+      log(`[RuntimeError][RUN-1680] sendCDPMessage(${method}) failed: ${err?.message}`);
+    }
+  }
   gCurrentMessageId = undefined;
   if (gCurrentMessageResult?.result) {
     return gCurrentMessageResult.result;
@@ -515,20 +532,7 @@ function Pause_evaluateInGlobal({ expression }) {
 }
 
 function Pause_getAllFrames() {
-  let frames;
-  try {
-    frames = getStackFrames();
-  }
-  catch (err) {
-    // Work around "ghostly" cross-origin errors.
-    // https://linear.app/replay/issue/RUN-1680#comment-1dfa142b
-    log(`[RuntimeError] getStackFrames failed (${err.message})`);
-    return {
-      frames: [],
-      data: { frames: [] },
-    };
-  }
-  frames = frames.map((frame, index) => {
+  const frames = getStackFrames().map((frame, index) => {
     // Use our own IDs for frames.
     const id = (index++).toString();
     return createProtocolFrame(id, frame);
