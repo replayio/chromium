@@ -151,8 +151,17 @@ void ProxyMain::BeginMainFrame(
       frame_args.frame_id.sequence_number);
 
   // This needs to run unconditionally, so do it before any early-returns.
-  if (layer_tree_host_->scheduling_client())
+  if (layer_tree_host_->scheduling_client()) {
+    if (recordreplay::HasDivergedFromRecording()) {
+      recordreplay::Diagnostic("[RUN-1686] ProxyMain::BeginMainFrame #1 %p",
+                               layer_tree_host_->scheduling_client());
+      recordreplay::Diagnostic("[RUN-1686] ProxyMain::BeginMainFrame #2 %p",
+                               *(void**)layer_tree_host_->scheduling_client());
+      recordreplay::Diagnostic("[RUN-1686] ProxyMain::BeginMainFrame #3 %p",
+                               **(void***)layer_tree_host_->scheduling_client());
+    }
     layer_tree_host_->scheduling_client()->DidRunBeginMainFrame();
+  }
 
   // We need to issue image decode callbacks whether or not we will abort this
   // update and commit, since the request ids are only stored in
