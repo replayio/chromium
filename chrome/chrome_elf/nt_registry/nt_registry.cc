@@ -27,20 +27,20 @@ static bool RecordReplayIsReplaying() {
   return false;
 }
 
-static void RecordReplayBeginDisallowEventsWithLabel(const char* label) {
+static void RecordReplayBeginPassThroughEvents() {
   static void* fnptr;
   if (!fnptr) {
-    fnptr = LookupRecordReplaySymbol("RecordReplayBeginDisallowEventsWithLabel");
+    fnptr = LookupRecordReplaySymbol("RecordReplayBeginPassThroughEvents");
   }
   if (fnptr != reinterpret_cast<void*>(1)) {
-    reinterpret_cast<void(*)(const char*)>(fnptr)(label);
+    reinterpret_cast<void(*)()>(fnptr)();
   }
 }
 
-static void RecordReplayEndDisallowEvents() {
+static void RecordReplayEndPassThroughEvents() {
   static void* fnptr;
   if (!fnptr) {
-    fnptr = LookupRecordReplaySymbol("RecordReplayEndDisallowEvents");
+    fnptr = LookupRecordReplaySymbol("RecordReplayEndPassThroughEvents");
   }
   if (fnptr != reinterpret_cast<void*>(1)) {
     reinterpret_cast<void(*)()>(fnptr)();
@@ -49,13 +49,13 @@ static void RecordReplayEndDisallowEvents() {
 
 namespace {
 
-struct RecordReplayAutoDisallowEvents {
-  RecordReplayAutoDisallowEvents(const char* label) {
-    RecordReplayBeginDisallowEventsWithLabel(label);
+struct RecordReplayAutoPassThroughEvents {
+  RecordReplayAutoPassThroughEvents(const char* label) {
+    RecordReplayBeginPassThroughEvents();
   }
 
-  ~RecordReplayAutoDisallowEvents() {
-    RecordReplayEndDisallowEvents();
+  ~RecordReplayAutoPassThroughEvents() {
+    RecordReplayEndPassThroughEvents();
   }
 };
 
@@ -127,7 +127,7 @@ bool InitNativeRegApi() {
   HMODULE ntdll = ::GetModuleHandleW(L"ntdll.dll");
 
   // Initialization happens at different points when recording vs. replaying.
-  RecordReplayAutoDisallowEvents disallow("InitNativeRegApi");
+  RecordReplayAutoPassThroughEvents pt;
 
   // Setup the global function pointers for registry access.
   g_rtl_init_unicode_string = reinterpret_cast<RtlInitUnicodeStringFunction>(
