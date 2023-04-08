@@ -333,11 +333,6 @@ void ProxyMain::BeginMainFrame(
   if (begin_main_frame_state->evicted_ui_resources)
     final_pipeline_stage_ = COMMIT_PIPELINE_STAGE;
 
-  // When repainting, force a commit to occur so that a paint will happen even if
-  // nothing has changed since the last one.
-  if (recordreplay::HasDivergedFromRecording())
-    final_pipeline_stage_ = COMMIT_PIPELINE_STAGE;
-
   current_pipeline_stage_ = UPDATE_LAYERS_PIPELINE_STAGE;
   bool should_update_layers =
       final_pipeline_stage_ >= UPDATE_LAYERS_PIPELINE_STAGE;
