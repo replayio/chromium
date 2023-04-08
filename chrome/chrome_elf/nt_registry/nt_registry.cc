@@ -27,37 +27,7 @@ static bool RecordReplayIsReplaying() {
   return false;
 }
 
-static void RecordReplayBeginPassThroughEvents() {
-  static void* fnptr;
-  if (!fnptr) {
-    fnptr = LookupRecordReplaySymbol("RecordReplayBeginPassThroughEvents");
-  }
-  if (fnptr != reinterpret_cast<void*>(1)) {
-    reinterpret_cast<void(*)()>(fnptr)();
-  }
-}
-
-static void RecordReplayEndPassThroughEvents() {
-  static void* fnptr;
-  if (!fnptr) {
-    fnptr = LookupRecordReplaySymbol("RecordReplayEndPassThroughEvents");
-  }
-  if (fnptr != reinterpret_cast<void*>(1)) {
-    reinterpret_cast<void(*)()>(fnptr)();
-  }
-}
-
 namespace {
-
-struct RecordReplayAutoPassThroughEvents {
-  RecordReplayAutoPassThroughEvents() {
-    RecordReplayBeginPassThroughEvents();
-  }
-
-  ~RecordReplayAutoPassThroughEvents() {
-    RecordReplayEndPassThroughEvents();
-  }
-};
 
 // Function pointers used for registry access.
 RtlInitUnicodeStringFunction g_rtl_init_unicode_string = nullptr;
@@ -125,9 +95,6 @@ bool IsThisProcWow64() {
 
 bool InitNativeRegApi() {
   HMODULE ntdll = ::GetModuleHandleW(L"ntdll.dll");
-
-  // Initialization happens at different points when recording vs. replaying.
-  RecordReplayAutoPassThroughEvents pt;
 
   // Setup the global function pointers for registry access.
   g_rtl_init_unicode_string = reinterpret_cast<RtlInitUnicodeStringFunction>(
@@ -668,6 +635,10 @@ NTSTATUS CreateKeyWrapper(const std::wstring& key_path,
 }  // namespace
 
 namespace nt {
+
+void RecordReplayResetRegApiInitialization() {
+  g_initialized = false;
+}
 
 //------------------------------------------------------------------------------
 // Create, open, delete, close functions
