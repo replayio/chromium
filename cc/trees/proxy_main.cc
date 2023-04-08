@@ -133,6 +133,10 @@ void ProxyMain::BeginMainFrame(
     std::unique_ptr<BeginMainFrameAndCommitState> begin_main_frame_state) {
   recordreplay::SetCompositorProxy(this);
 
+  if (recordreplay::HasDivergedFromRecording()) {
+    recordreplay::Diagnostic("[RUN-1686] ProxyMain::BeginMainFrame %p", this);
+  }
+
   DCHECK(IsMainThread());
   DCHECK_EQ(NO_PIPELINE_STAGE, current_pipeline_stage_);
 
@@ -150,21 +154,26 @@ void ProxyMain::BeginMainFrame(
       benchmark_instrumentation::kDoBeginFrame,
       frame_args.frame_id.sequence_number);
 
+  if (recordreplay::HasDivergedFromRecording()) {
+    recordreplay::Diagnostic("[RUN-1686] ProxyMain::BeginMainFrame #1 %p",
+                             (void*)layer_tree_host_);
+    recordreplay::Diagnostic("[RUN-1686] ProxyMain::BeginMainFrame #2 %p",
+                             (void*)layer_tree_host_->scheduling_client());
+  }
+
   // This needs to run unconditionally, so do it before any early-returns.
   if (layer_tree_host_->scheduling_client()) {
     if (recordreplay::HasDivergedFromRecording()) {
-      recordreplay::Diagnostic("[RUN-1686] ProxyMain::BeginMainFrame #1 %p",
-                               layer_tree_host_->scheduling_client());
-      recordreplay::Diagnostic("[RUN-1686] ProxyMain::BeginMainFrame #2 %p",
-                               *(void**)layer_tree_host_->scheduling_client());
       recordreplay::Diagnostic("[RUN-1686] ProxyMain::BeginMainFrame #3 %p",
+                               *(void**)layer_tree_host_->scheduling_client());
+      recordreplay::Diagnostic("[RUN-1686] ProxyMain::BeginMainFrame #4 %p",
                                **(void***)layer_tree_host_->scheduling_client());
     }
     layer_tree_host_->scheduling_client()->DidRunBeginMainFrame();
   }
 
   if (recordreplay::HasDivergedFromRecording()) {
-    recordreplay::Diagnostic("[RUN-1687] ProxyMain::BeginMainFrame #4");
+    recordreplay::Diagnostic("[RUN-1687] ProxyMain::BeginMainFrame #5");
   }
 
   // We need to issue image decode callbacks whether or not we will abort this
