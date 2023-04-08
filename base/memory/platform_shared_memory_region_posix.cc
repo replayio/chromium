@@ -14,6 +14,8 @@
 #include "base/threading/thread_restrictions.h"
 #include "build/build_config.h"
 
+#include "base/record_replay.h"
+
 namespace base {
 namespace subtle {
 
@@ -35,6 +37,12 @@ using ScopedPathUnlinker =
 #if !BUILDFLAG(IS_NACL)
 bool CheckFDAccessMode(int fd, int expected_mode) {
   int fd_status = fcntl(fd, F_GETFL);
+
+  // RUN-1685: Ignore the fcntl result after diverging from the recording,
+  // the recorder will start returning errors and we don't want to crash the process.
+  if (recordreplay::HasDivergedFromRecording())
+    return true;
+
   if (fd_status == -1) {
     // TODO(crbug.com/838365): convert to DLOG when bug fixed.
     PLOG(ERROR) << "fcntl(" << fd << ", F_GETFL) failed";
