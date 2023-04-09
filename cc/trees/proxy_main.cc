@@ -129,6 +129,9 @@ void ProxyMain::DidCompletePageScaleAnimation() {
   layer_tree_host_->DidCompletePageScaleAnimation();
 }
 
+extern bool LayerTreeHostPointerIsValid(void* layer_tree_host);
+extern bool LayerTreeHostPointerIsAllocated(void* layer_tree_host);
+
 void ProxyMain::BeginMainFrame(
     std::unique_ptr<BeginMainFrameAndCommitState> begin_main_frame_state) {
   recordreplay::SetCompositorProxy(this);
@@ -155,8 +158,10 @@ void ProxyMain::BeginMainFrame(
       frame_args.frame_id.sequence_number);
 
   if (recordreplay::HasDivergedFromRecording()) {
-    recordreplay::Diagnostic("[RUN-1686] ProxyMain::BeginMainFrame #1 %p",
-                             (void*)layer_tree_host_);
+    recordreplay::Diagnostic("[RUN-1686] ProxyMain::BeginMainFrame #1 %p %d %d",
+                             (void*)layer_tree_host_,
+                             LayerTreeHostPointerIsValid(layer_tree_host_),
+                             LayerTreeHostPointerIsAllocated(layer_tree_host_));
     recordreplay::Diagnostic("[RUN-1686] ProxyMain::BeginMainFrame #2 %p",
                              (void*)layer_tree_host_->scheduling_client());
   }
