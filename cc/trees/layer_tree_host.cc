@@ -137,22 +137,32 @@ std::unique_ptr<LayerTreeHost> LayerTreeHost::CreateSingleThreaded(
 }
 
 // LayerTreeHost pointers that were originally allocated and haven't been freed yet.
-static std::unordered_set<void*> gValidLayerTreeHosts;
+static std::unordered_set<void*>& ValidLayerTreeHosts(base::AutoLock&) {
+  static base::NoDestructor<std::unordered_set<void*>> hosts;
+  return hosts;
+}
 
 // LayerTreeHost pointers that were ever allocated, even if they have been freed since.
-static std::unordered_set<void*> gAllocatedLayerTreeHosts;
+static std::unordered_set<void*>& AllocatedLayerTreeHosts(base::AutoLock&) {
+  static base::NoDestructor<std::unordered_set<void*>> hosts;
+  return hosts;
+}
 
-static base::LazyInstance<base::Lock>::Leaky gLayerTreeHostPointerLock =
-    LAZY_INSTANCE_INITIALIZER;
+static base::Lock& LayerTreeHostPointerLock() {
+  static base::NoDestructor<base::Lock> lock;
+  return lock;
+}
 
 bool LayerTreeHostPointerIsValid(void* layer_tree_host) {
-  base::AutoLock auto_lock(gLayerTreeHostPointerLock.Get());
-  return gValidLayerTreeHosts.find(layer_tree_host) != gValidLayerTreeHosts.end();
+  base::AutoLock auto_lock(LayerTreeHostPointerLock());
+  auto& hosts = ValidLayerTreeHosts(auto_lock);
+  return hosts.find(layer_tree_host) != gValidLayerTreeHosts.end();
 }
 
 bool LayerTreeHostPointerIsAllocated(void* layer_tree_host) {
-  base::AutoLock auto_lock(gLayerTreeHostPointerLock.Get());
-  return gAllocatedLayerTreeHosts.find(layer_tree_host) != gAllocatedLayerTreeHosts.end();
+  base::AutoLock auto_lock(LayerTreeHostPointerLock());
+  auto& hosts = AllocatedLayerTreeHosts(auto_lock);
+  return hosts.find(layer_tree_host) != hosts.end();
 }
 
 LayerTreeHost::LayerTreeHost(InitParams params, CompositorMode mode)
@@ -183,9 +193,9 @@ LayerTreeHost::LayerTreeHost(InitParams params, CompositorMode mode)
       pending_commit_state_->debug_state.RecordRenderingStats());
 
   {
-    base::AutoLock auto_lock(gLayerTreeHostPointerLock.Get());
-    gValidLayerTreeHosts.insert(this);
-    gAllocatedLayerTreeHosts.insert(this);
+    base::AutoLock auto_lock(LayerTreeHostPointerLock());
+    ValidLayerTreeHosts(auto_lock).insert(this);
+    AllocatedLayerTreeHosts(auto_lock).insert(this);
   }
 }
 
@@ -273,8 +283,8 @@ void LayerTreeHost::InitializeProxy(std::unique_ptr<Proxy> proxy) {
 
 LayerTreeHost::~LayerTreeHost() {
   {
-    base::AutoLock auto_lock(gLayerTreeHostPointerLock.Get());
-    gValidLayerTreeHosts.erase(this);
+    base::AutoLock auto_lock(LayerTreeHostPointerLock());
+    ValidLayerTreeHosts(auto_lock).erase(this);
   }
 
   // Track when we're inside a main frame to see if compositor is being
