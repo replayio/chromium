@@ -328,7 +328,7 @@ bool SecurityOrigin::CanAccess(const SecurityOrigin* other,
     detail = AccessResultDomainDetail::kDomainNotRelevant;
     return true;
   }
-  if (recordreplay::AllowCrossDomainAccesses()) {
+  if (recordreplay::IsInReplayCode()) {
     detail = AccessResultDomainDetail::kDomainNotRelevant;
     return true;
   }

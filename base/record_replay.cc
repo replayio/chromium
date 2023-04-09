@@ -404,7 +404,7 @@ int NewIdAnyThread(const char* name) {
   return 0;
 }
 
-bool AllowCrossDomainAccesses() {
+bool IsInReplayCode() {
   // Allow cross-origin accesses from the replaying script installed to inspect
   // DOM state. Events are disallowed when running replaying specific scripts.
   // FIXME Use a separate API for this https://linear.app/replay/issue/RUN-1502

@@ -123,7 +123,7 @@ bool CanAccessWindowInternal(
   DCHECK_EQ(DOMWindow::CrossDocumentAccessPolicy::kAllowed,
             *cross_document_access);
 
-  if (recordreplay::AllowCrossDomainAccesses())
+  if (recordreplay::IsInReplayCode())
     return true;
 
   // It's important to check that target_window is a LocalDOMWindow: it's
@@ -256,7 +256,7 @@ bool BindingSecurity::ShouldAllowAccessTo(
     ErrorReportOption reporting_option) {
   DCHECK(target);
 
-  if (recordreplay::AllowCrossDomainAccesses())
+  if (recordreplay::IsInReplayCode())
     return true;
 
   // TODO(https://crbug.com/723057): This is intended to match the legacy
@@ -389,7 +389,7 @@ bool ShouldAllowAccessToV8ContextInternal(
   // Workers and worklets do not support multiple contexts, so both of
   // |accessing_context| and |target_context| must be windows at this point.
 
-  if (recordreplay::AllowCrossDomainAccesses())
+  if (recordreplay::IsInReplayCode())
     return true;
 
   // remote_object->GetCreationContext() returns the empty handle. Remote

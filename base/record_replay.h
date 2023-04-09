@@ -98,7 +98,7 @@ void OnNavigationEvent(const char* kind, const char* url);
 int NewIdMainThread(const char* name);
 int NewIdAnyThread(const char* name);
 
-bool AllowCrossDomainAccesses();
+bool IsInReplayCode();
 
 // stl comparator that uses pointer IDs to compare elements when recording/replaying,
 // giving a deterministic sort order.
