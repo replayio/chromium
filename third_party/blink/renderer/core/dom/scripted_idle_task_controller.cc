@@ -37,26 +37,33 @@ class IdleRequestCallbackWrapper
       scoped_refptr<IdleRequestCallbackWrapper> callback_wrapper,
       base::TimeTicks deadline) {
 
-    recordreplay::Assert("[RUN-1335-1336] IdleTaskFired A %d",
-                          callback_wrapper->Id());
+    // [RUN-1335] This might execute even after the controller has been marked
+    // for collection. We avoid possible divergence by checking for whether 
+    // it is still registered first.
+    bool hasCallback = callback_wrapper->Controller()
+                            && callback_wrapper->Controller()
+                               ->ContainsCallback(callback_wrapper->Id());
+    recordreplay::Assert("[RUN-1335-1336] IdleTaskFired A %d %d",
+                         callback_wrapper->Id(),
+                         hasCallback);
 
-    if (ScriptedIdleTaskController* controller =
-            callback_wrapper->Controller()) {
-      // If we are going to yield immediately, reschedule the callback for
-      // later.
+    if (hasCallback)
+      if (ScriptedIdleTaskController* controller =
+              callback_wrapper->Controller()) {
+        // If we are going to yield immediately, reschedule the callback for
+        // later.
+        recordreplay::Assert("[RUN-1335-1456] IdleTaskFired B %d",
+                             callback_wrapper->Id());
 
-      recordreplay::Assert("[RUN-1335-1456] IdleTaskFired B %d",
-                           callback_wrapper->Id());
-
-      if (ThreadScheduler::Current()->ShouldYieldForHighPriorityWork()) {
-        controller->ScheduleCallback(std::move(callback_wrapper),
-                                     /* timeout_millis */ 0);
-        return;
+        if (ThreadScheduler::Current()->ShouldYieldForHighPriorityWork()) {
+          controller->ScheduleCallback(std::move(callback_wrapper),
+                                       /* timeout_millis */ 0);
+          return;
+        }
+        controller->CallbackFired(callback_wrapper->Id(), deadline,
+                                  IdleDeadline::CallbackType::kCalledWhenIdle);
       }
-      controller->CallbackFired(callback_wrapper->Id(), deadline,
-                                IdleDeadline::CallbackType::kCalledWhenIdle);
-    }
-    
+
     recordreplay::Assert("[RUN-1335-1456] IdleTaskFired C %d",
                          callback_wrapper->Id());
 
