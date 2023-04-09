@@ -195,8 +195,9 @@ function sendMessage(method, params) {
   const id = gNextMessageId++;
   gCurrentMessageId = id;
   gCurrentMessageResult = undefined;
+  const cdpArgs = JSON_stringify({ method, params, id });
   try {
-    sendCDPMessage(JSON_stringify({ method, params, id }));
+    sendCDPMessage(cdpArgs);
   }
   catch (err) {
     if (!gCurrentMessageResult) {
