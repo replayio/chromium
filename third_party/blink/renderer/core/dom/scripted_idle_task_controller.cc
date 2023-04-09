@@ -50,11 +50,12 @@ class IdleRequestCallbackWrapper
     if (hasCallback)
       if (ScriptedIdleTaskController* controller =
               callback_wrapper->Controller()) {
-        // If we are going to yield immediately, reschedule the callback for
-        // later.
+
         recordreplay::Assert("[RUN-1335-1456] IdleTaskFired B %d",
                              callback_wrapper->Id());
 
+        // If we are going to yield immediately, reschedule the callback for
+        // later.
         if (ThreadScheduler::Current()->ShouldYieldForHighPriorityWork()) {
           controller->ScheduleCallback(std::move(callback_wrapper),
                                        /* timeout_millis */ 0);
