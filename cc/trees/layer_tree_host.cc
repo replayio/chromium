@@ -139,24 +139,24 @@ std::unique_ptr<LayerTreeHost> LayerTreeHost::CreateSingleThreaded(
 // LayerTreeHost pointers that were originally allocated and haven't been freed yet.
 static std::unordered_set<void*>& ValidLayerTreeHosts(base::AutoLock&) {
   static base::NoDestructor<std::unordered_set<void*>> hosts;
-  return hosts;
+  return *hosts;
 }
 
 // LayerTreeHost pointers that were ever allocated, even if they have been freed since.
 static std::unordered_set<void*>& AllocatedLayerTreeHosts(base::AutoLock&) {
   static base::NoDestructor<std::unordered_set<void*>> hosts;
-  return hosts;
+  return *hosts;
 }
 
 static base::Lock& LayerTreeHostPointerLock() {
   static base::NoDestructor<base::Lock> lock;
-  return lock;
+  return *lock;
 }
 
 bool LayerTreeHostPointerIsValid(void* layer_tree_host) {
   base::AutoLock auto_lock(LayerTreeHostPointerLock());
   auto& hosts = ValidLayerTreeHosts(auto_lock);
-  return hosts.find(layer_tree_host) != gValidLayerTreeHosts.end();
+  return hosts.find(layer_tree_host) != hosts.end();
 }
 
 bool LayerTreeHostPointerIsAllocated(void* layer_tree_host) {
