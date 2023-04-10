@@ -214,6 +214,7 @@ PlatformSharedMemoryRegion PlatformSharedMemoryRegion::Create(Mode mode,
           false /* executable */,
 #endif
           &directory)) {
+    recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::Create #1");
     return {};
   }
 
@@ -231,6 +232,7 @@ PlatformSharedMemoryRegion PlatformSharedMemoryRegion::Create(Mode mode,
                    << "/dev/shm.  Try 'sudo chmod 1777 /dev/shm' to fix.";
       }
     }
+    recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::Create #2");
     return {};
   }
 
@@ -245,11 +247,13 @@ PlatformSharedMemoryRegion PlatformSharedMemoryRegion::Create(Mode mode,
     readonly_fd.reset(HANDLE_EINTR(open(path.value().c_str(), O_RDONLY)));
     if (!readonly_fd.is_valid()) {
       DPLOG(ERROR) << "open(\"" << path.value() << "\", O_RDONLY) failed";
+      recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::Create #3");
       return {};
     }
   }
 
   if (!AllocateFileRegion(&shm_file, 0, size)) {
+    recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::Create #4");
     return {};
   }
 
@@ -257,18 +261,21 @@ PlatformSharedMemoryRegion PlatformSharedMemoryRegion::Create(Mode mode,
     stat_wrapper_t shm_stat;
     if (File::Fstat(shm_file.GetPlatformFile(), &shm_stat) != 0) {
       DPLOG(ERROR) << "fstat(fd) failed";
+      recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::Create #5");
       return {};
     }
 
     stat_wrapper_t readonly_stat;
     if (File::Fstat(readonly_fd.get(), &readonly_stat) != 0) {
       DPLOG(ERROR) << "fstat(readonly_fd) failed";
+      recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::Create #6");
       return {};
     }
 
     if (shm_stat.st_dev != readonly_stat.st_dev ||
         shm_stat.st_ino != readonly_stat.st_ino) {
       LOG(ERROR) << "Writable and read-only inodes don't match; bailing";
+      recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::Create #7");
       return {};
     }
   }
