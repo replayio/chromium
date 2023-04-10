@@ -218,7 +218,7 @@ class CORE_EXPORT WorkerThread : public Thread::TaskObserver {
 
     recordreplay::Assert("[RUN-1537-1689] CallOnAllWorkerThreads %zu %u",
                          threads.size(),
-                         WorkerThreadCount());
+                         InitializingWorkerThreads().size());
 
     for (WorkerThread* thread : threads) {
       PostCrossThreadTask(
