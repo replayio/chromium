@@ -37,6 +37,8 @@
 
 namespace cc {
 
+extern bool LayerTreeHostPointerIsValid(void* layer_tree_host);
+
 ProxyMain::ProxyMain(LayerTreeHost* layer_tree_host,
                      TaskRunnerProvider* task_runner_provider)
     : layer_tree_host_(layer_tree_host),
@@ -133,8 +135,6 @@ void ProxyMain::DidCompletePageScaleAnimation() {
   DCHECK(IsMainThread());
   layer_tree_host_->DidCompletePageScaleAnimation();
 }
-
-extern bool LayerTreeHostPointerIsValid(void* layer_tree_host);
 
 void ProxyMain::BeginMainFrame(
     std::unique_ptr<BeginMainFrameAndCommitState> begin_main_frame_state) {
