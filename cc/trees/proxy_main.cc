@@ -145,6 +145,7 @@ void ProxyMain::BeginMainFrame(
   if (recordreplay::HasDivergedFromRecording() && !LayerTreeHostPointerIsValid(layer_tree_host_)) {
     recordreplay::Warning("[RUN-1686] ProxyMain::BeginMainFrame layer tree host not valid %p",
                           (void*)layer_tree_host_);
+    return;
   }
 
   DCHECK(IsMainThread());
