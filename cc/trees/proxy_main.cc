@@ -52,6 +52,11 @@ ProxyMain::ProxyMain(LayerTreeHost* layer_tree_host,
   TRACE_EVENT0("cc", "ProxyMain::ProxyMain");
   DCHECK(task_runner_provider_);
   DCHECK(IsMainThread());
+
+  if (recordreplay::IsRecordingOrReplaying() && !LayerTreeHostPointerIsValid(layer_tree_host_)) {
+    recordreplay::Warning("[RUN-1686] ProxyMain::ProxyMain layer tree host not valid %p",
+                          (void*)layer_tree_host_);
+  }
 }
 
 ProxyMain::~ProxyMain() {
@@ -130,14 +135,16 @@ void ProxyMain::DidCompletePageScaleAnimation() {
 }
 
 extern bool LayerTreeHostPointerIsValid(void* layer_tree_host);
-extern bool LayerTreeHostPointerIsAllocated(void* layer_tree_host);
 
 void ProxyMain::BeginMainFrame(
     std::unique_ptr<BeginMainFrameAndCommitState> begin_main_frame_state) {
   recordreplay::SetCompositorProxy(this);
 
-  if (recordreplay::HasDivergedFromRecording()) {
-    recordreplay::Diagnostic("[RUN-1686] ProxyMain::BeginMainFrame %p", this);
+  // Sometimes we try to repaint when the layer tree host pointer isn't valid,
+  // for an unknown reason. Deal with this by refusing to update the frame.
+  if (recordreplay::HasDivergedFromRecording() && !LayerTreeHostPointerIsValid(layer_tree_host_)) {
+    recordreplay::Warning("[RUN-1686] ProxyMain::BeginMainFrame layer tree host not valid %p",
+                          (void*)layer_tree_host_);
   }
 
   DCHECK(IsMainThread());
@@ -157,29 +164,9 @@ void ProxyMain::BeginMainFrame(
       benchmark_instrumentation::kDoBeginFrame,
       frame_args.frame_id.sequence_number);
 
-  if (recordreplay::HasDivergedFromRecording()) {
-    recordreplay::Diagnostic("[RUN-1686] ProxyMain::BeginMainFrame #1 %p %d %d",
-                             (void*)layer_tree_host_,
-                             LayerTreeHostPointerIsValid(layer_tree_host_),
-                             LayerTreeHostPointerIsAllocated(layer_tree_host_));
-    recordreplay::Diagnostic("[RUN-1686] ProxyMain::BeginMainFrame #2 %p",
-                             (void*)layer_tree_host_->scheduling_client());
-  }
-
   // This needs to run unconditionally, so do it before any early-returns.
-  if (layer_tree_host_->scheduling_client()) {
-    if (recordreplay::HasDivergedFromRecording()) {
-      recordreplay::Diagnostic("[RUN-1686] ProxyMain::BeginMainFrame #3 %p",
-                               *(void**)layer_tree_host_->scheduling_client());
-      recordreplay::Diagnostic("[RUN-1686] ProxyMain::BeginMainFrame #4 %p",
-                               **(void***)layer_tree_host_->scheduling_client());
-    }
+  if (layer_tree_host_->scheduling_client())
     layer_tree_host_->scheduling_client()->DidRunBeginMainFrame();
-  }
-
-  if (recordreplay::HasDivergedFromRecording()) {
-    recordreplay::Diagnostic("[RUN-1687] ProxyMain::BeginMainFrame #5");
-  }
 
   // We need to issue image decode callbacks whether or not we will abort this
   // update and commit, since the request ids are only stored in
