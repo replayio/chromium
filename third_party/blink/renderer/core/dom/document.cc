@@ -1083,6 +1083,8 @@ Element* Document::CreateElementForBinding(const AtomicString& name,
     return nullptr;
   }
 
+  recordreplay::Assert("[RUN-1692] Document::CreateElementForBinding %s", name.GetString().Utf8().c_str());
+
   if (IsXHTMLDocument() || IsA<HTMLDocument>(this)) {
     // 2. If the context object is an HTML document, let localName be
     // converted to ASCII lowercase.

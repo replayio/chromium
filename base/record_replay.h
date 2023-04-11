@@ -68,6 +68,15 @@ bool AreEventsDisallowed();
 
 bool FeatureEnabled(const char* feature);
 
+/**
+ * Main-thread only.
+ * Ask the JS runtime for the current JS stack, if there is any.
+ * This will return a pointer to a heap-allocated string.
+ * That string will be re-used upon the next invocation of this call, so
+ * don't keep it around.
+ */
+const char* GetCurrentJSStackTmp();
+
 void BrowserEvent(const char* msg, const base::DictionaryValue& info);
 
 struct AutoPassThroughEvents {
