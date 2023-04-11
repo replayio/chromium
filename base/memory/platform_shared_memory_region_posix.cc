@@ -281,9 +281,13 @@ PlatformSharedMemoryRegion PlatformSharedMemoryRegion::Create(Mode mode,
 
     if (shm_stat.st_dev != readonly_stat.st_dev ||
         shm_stat.st_ino != readonly_stat.st_ino) {
-      LOG(ERROR) << "Writable and read-only inodes don't match; bailing";
-      recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::Create #7");
-      return {};
+      // Note: We can't get statistics from the file after diverging from the
+      // recording, as above.
+      if (!recordreplay::HasDivergedFromRecording()) {
+        LOG(ERROR) << "Writable and read-only inodes don't match; bailing";
+        recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::Create #7");
+        return {};
+      }
     }
   }
 
