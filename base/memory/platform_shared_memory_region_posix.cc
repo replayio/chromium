@@ -246,9 +246,16 @@ PlatformSharedMemoryRegion PlatformSharedMemoryRegion::Create(Mode mode,
     // Also open as readonly so that we can ConvertToReadOnly().
     readonly_fd.reset(HANDLE_EINTR(open(path.value().c_str(), O_RDONLY)));
     if (!readonly_fd.is_valid()) {
-      DPLOG(ERROR) << "open(\"" << path.value() << "\", O_RDONLY) failed";
-      recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::Create #3");
-      return {};
+      // When diverged from the recording we can't open files that weren't
+      // originally opened when recording. Make up a fake file descriptor
+      // so execution can still proceed.
+      if (recordreplay::HasDivergedFromRecording()) {
+        readonly_fd.reset(42);
+      } else {
+        DPLOG(ERROR) << "open(\"" << path.value() << "\", O_RDONLY) failed";
+        recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::Create #3");
+        return {};
+      }
     }
   }
 
