@@ -67,6 +67,8 @@
 #include <grp.h>
 #endif
 
+#include "base/record_replay.h"
+
 // We need to do this on AIX due to some inconsistencies in how AIX
 // handles XOPEN_SOURCE and ALL_SOURCE.
 #if BUILDFLAG(IS_AIX)
