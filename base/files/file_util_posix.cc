@@ -93,6 +93,17 @@ static void RecordReplayDiagnostic (const char* aFormat, ...) {
   }
 }
 
+static bool RecordReplayHasDivergedFromRecording() {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayHasDivergedFromRecording");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    return reinterpret_cast<bool(*)()>(fnptr)();
+  }
+  return false;
+}
+
 namespace base {
 
 namespace {
