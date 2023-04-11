@@ -224,6 +224,7 @@ SVGImage::~SVGImage() {
       // Since the dtor is called by the GC, we leak the scheduler, so it won't
       // try touching the recording stream during `WillBeDestroyed` below.
       // https://linear.app/replay/issue/RUN-1347#comment-73b7832e
+      CHECK(IsMainThread());
       if (!gReplayLeakedSchedulers) {
         gReplayLeakedSchedulers = new std::vector<std::unique_ptr<PageScheduler>>();
       }
