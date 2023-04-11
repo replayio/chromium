@@ -930,6 +930,12 @@ bool WriteFileDescriptor(int fd, StringPiece data) {
 bool AllocateFileRegion(File* file, int64_t offset, size_t size) {
   DCHECK(file);
 
+  // Trying to resize a file for e.g. shared memory will fail when diverged
+  // from the recording. Pretend things worked, there isn't a file or shared
+  // memory backing anyways.
+  if (RecordReplayHasDivergedFromRecording())
+    return true;
+
   // Explicitly extend |file| to the maximum size. Zeros will fill the new
   // space. It is assumed that the existing file is fully realized as
   // otherwise the entire file would have to be read and possibly written.
