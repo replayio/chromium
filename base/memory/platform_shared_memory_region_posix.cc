@@ -266,28 +266,27 @@ PlatformSharedMemoryRegion PlatformSharedMemoryRegion::Create(Mode mode,
 
   if (readonly_fd.is_valid()) {
     stat_wrapper_t shm_stat;
-    if (File::Fstat(shm_file.GetPlatformFile(), &shm_stat) != 0) {
+    if (File::Fstat(shm_file.GetPlatformFile(), &shm_stat) != 0 &&
+        !recordreplay::HasDivergedFromRecording()) {
       DPLOG(ERROR) << "fstat(fd) failed";
       recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::Create #5");
       return {};
     }
 
     stat_wrapper_t readonly_stat;
-    if (File::Fstat(readonly_fd.get(), &readonly_stat) != 0) {
+    if (File::Fstat(readonly_fd.get(), &readonly_stat) != 0 &&
+        !recordreplay::HasDivergedFromRecording()) {
       DPLOG(ERROR) << "fstat(readonly_fd) failed";
       recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::Create #6");
       return {};
     }
 
-    if (shm_stat.st_dev != readonly_stat.st_dev ||
-        shm_stat.st_ino != readonly_stat.st_ino) {
-      // Note: We can't get statistics from the file after diverging from the
-      // recording, as above.
-      if (!recordreplay::HasDivergedFromRecording()) {
-        LOG(ERROR) << "Writable and read-only inodes don't match; bailing";
-        recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::Create #7");
-        return {};
-      }
+    if ((shm_stat.st_dev != readonly_stat.st_dev ||
+         shm_stat.st_ino != readonly_stat.st_ino) &&
+        !recordreplay::HasDivergedFromRecording()) {
+      LOG(ERROR) << "Writable and read-only inodes don't match; bailing";
+      recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::Create #7");
+      return {};
     }
   }
 
