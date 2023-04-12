@@ -165,6 +165,13 @@ bool PlatformSharedMemoryRegion::ConvertToReadOnly() {
 
   recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::ConvertToReadOnly #2");
 
+  // ScopedGeneric::reset crashes when resetting e.g. the fd to an identical fd.
+  // When we're diverged from the recording this can happen because dummy file
+  // descriptors can be used, and the reset() check isn't applicable here because
+  // closing a file descriptor doesn't do anything when replaying.
+  if (recordreplay::HasDivergedFromRecording())
+    handle_.fd.reset();
+
   handle_.fd.reset(handle_.readonly_fd.release());
   mode_ = Mode::kReadOnly;
   return true;
