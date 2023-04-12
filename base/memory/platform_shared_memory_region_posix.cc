@@ -153,11 +153,17 @@ PlatformSharedMemoryRegion PlatformSharedMemoryRegion::Duplicate() const {
 }
 
 bool PlatformSharedMemoryRegion::ConvertToReadOnly() {
+  recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::ConvertToReadOnly Start");
+
   if (!IsValid())
     return false;
 
+  recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::ConvertToReadOnly #1 %d", (int)mode_);
+
   CHECK_EQ(mode_, Mode::kWritable)
       << "Only writable shared memory region can be converted to read-only";
+
+  recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::ConvertToReadOnly #2");
 
   handle_.fd.reset(handle_.readonly_fd.release());
   mode_ = Mode::kReadOnly;
@@ -188,6 +194,8 @@ PlatformSharedMemoryRegion PlatformSharedMemoryRegion::Create(Mode mode,
   // Untrusted code can't create descriptors or handles.
   return {};
 #else
+  recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::Create Start %d", (int)mode);
+
   if (size == 0) {
     return {};
   }
@@ -289,6 +297,8 @@ PlatformSharedMemoryRegion PlatformSharedMemoryRegion::Create(Mode mode,
       return {};
     }
   }
+
+  recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::Create Done %d", (int)mode);
 
   return PlatformSharedMemoryRegion(
       {ScopedFD(shm_file.TakePlatformFile()), std::move(readonly_fd)}, mode,
