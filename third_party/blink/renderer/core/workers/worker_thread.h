@@ -214,10 +214,12 @@ class CORE_EXPORT WorkerThread : public Thread::TaskObserver {
     for (WorkerThread* thread : WorkerThreads()) {
       // Do not try to call on workers which have already been |requested_to_terminate_|.
       // https://linear.app/replay/issue/RUN-1537#comment-d8416380
-      if (!recordreplay::IsRecordingOrReplaying("task-lifetime") ||
-          !thread->requested_to_terminate_) {
-        threads.push_back(thread);
+      if (recordreplay::IsRecordingOrReplaying("task-lifetime")) {
+          base::AutoLock thread_locker(thread->lock_);
+          if (thread->requested_to_terminate_)
+            continue;
       }
+      threads.push_back(thread);
     }
     std::sort(threads.begin(), threads.end(),
               recordreplay::CompareByPointerId());
