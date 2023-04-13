@@ -316,6 +316,9 @@ class CORE_EXPORT Animation : public EventTargetWithInlineData,
   bool AnimationHasNoEffect() const { return animation_has_no_effect_; }
   bool AtScrollTimelineBoundary();
 
+  // RUN-1716
+  int RecordReplayId() const override { return recordreplay::PointerId(this); }
+
  protected:
   DispatchEventResult DispatchEventInternal(Event&) override;
   void AddedEventListener(const AtomicString& event_type,

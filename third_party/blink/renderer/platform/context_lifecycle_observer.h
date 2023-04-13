@@ -31,7 +31,7 @@ class PLATFORM_EXPORT ContextLifecycleObserver : public GarbageCollectedMixin {
 
   void Trace(Visitor*) const override;
 
-  int RecordReplayId() const { return recordreplay::PointerId(this); }
+  virtual int RecordReplayId() const { return recordreplay::PointerId(this); }
 
  protected:
   ContextLifecycleObserver();

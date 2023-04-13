@@ -192,7 +192,7 @@ void ExecutionContext::CountDeprecation(WebFeature feature) {
   Deprecation::CountDeprecation(this, feature);
 }
 
-HeapObserverSet<ContextLifecycleObserver>&
+ContextLifecycleHeapObserverSet&
 ExecutionContext::ContextLifecycleObserverSet() {
   return ContextLifecycleNotifier::observers();
 }
