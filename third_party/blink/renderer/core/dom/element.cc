@@ -3808,14 +3808,22 @@ scoped_refptr<ComputedStyle> Element::StyleForLayoutObject(
   if (ElementAnimations* element_animations = GetElementAnimations())
     element_animations->CssAnimations().ClearPendingUpdate();
 
+  bool has_custom_style_callbacks = HasCustomStyleCallbacks();
+  recordreplay::Assert("[RUN-1219-1708] Element::StyleForLayoutObject %d #0 %d",
+    this->RecordReplayId(),
+    (int) has_custom_style_callbacks);
   scoped_refptr<ComputedStyle> style =
-      HasCustomStyleCallbacks()
+      has_custom_style_callbacks
           ? CustomStyleForLayoutObject(style_recalc_context)
           : OriginalStyleForLayoutObject(style_recalc_context);
   if (!style) {
+    recordreplay::Assert("[RUN-1219-1708] Element::StyleForLayoutObject %d #1",
+      this->RecordReplayId());
     DCHECK(IsPseudoElement());
     return nullptr;
   }
+  recordreplay::Assert("[RUN-1219-1708] Element::StyleForLayoutObject %d #2",
+    this->RecordReplayId());
 
   style->UpdateIsStackingContextWithoutContainment(
       this == GetDocument().documentElement(), IsInTopLayer(),
@@ -3975,6 +3983,8 @@ StyleRecalcChange Element::RecalcStyle(
   StyleRecalcChange child_change = change.ForChildren(*this);
   if (change.ShouldRecalcStyleFor(*this)) {
     child_change = RecalcOwnStyle(change, style_recalc_context);
+    recordreplay::Assert("[RUN-1219-1706] Element::RecalcStyle %d AfterRecalcOwnStyle",
+                         RecordReplayId());
     if (GetStyleChangeType() == kSubtreeStyleChange) {
       child_change =
           child_change.EnsureAtLeast(StyleRecalcChange::kRecalcDescendants);
@@ -4065,6 +4075,8 @@ StyleRecalcChange Element::RecalcStyle(
   }
 
   if (child_change.TraversePseudoElements(*this)) {
+    recordreplay::Assert("[RUN-1219-1706] Element::RecalcStyle %d UpdatePseudoElement#1",
+      RecordReplayId());
     UpdatePseudoElement(kPseudoIdBackdrop, child_change, child_recalc_context);
     UpdatePseudoElement(kPseudoIdMarker, child_change, child_recalc_context);
     UpdatePseudoElement(kPseudoIdBefore, child_change, child_recalc_context);
@@ -4087,6 +4099,8 @@ StyleRecalcChange Element::RecalcStyle(
   recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle E");
 
   if (child_change.TraversePseudoElements(*this)) {
+    recordreplay::Assert("[RUN-1219-1706] Element::RecalcStyle %d UpdatePseudoElement#2",
+      RecordReplayId());
     UpdatePseudoElement(kPseudoIdAfter, child_change, child_recalc_context);
 
     // If we are re-attaching us or any of our descendants, we need to attach
@@ -4303,7 +4317,11 @@ StyleRecalcChange Element::RecalcOwnStyle(
     // This is the normal flow through the function; calculates
     // the element's style more or less from scratch (typically
     // ending up calling StyleResolver::ResolveStyle()).
+    recordreplay::Assert("[RUN-1219-1708] Element::RecalcOwnStyle %d StyleForLayoutObject-pre",
+      this->RecordReplayId());
     new_style = StyleForLayoutObject(new_style_recalc_context);
+    recordreplay::Assert("[RUN-1219-1708] Element::RecalcOwnStyle %d StyleForLayoutObject-post",
+      this->RecordReplayId());
   }
   if (new_style && !ShouldStoreComputedStyle(*new_style))
     new_style = nullptr;
