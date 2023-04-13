@@ -23,16 +23,12 @@ MappedReadOnlyRegion ReadOnlySharedMemoryRegion::Create(
 
   subtle::PlatformSharedMemoryRegion handle =
       subtle::PlatformSharedMemoryRegion::CreateWritable(size);
-  if (!handle.IsValid()) {
-    recordreplay::Diagnostic("[RUN-1685] ReadOnlySharedMemoryRegion::Create #1");
+  if (!handle.IsValid())
     return {};
-  }
 
   auto result = handle.MapAt(0, handle.GetSize(), mapper);
-  if (!result.has_value()) {
-    recordreplay::Diagnostic("[RUN-1685] ReadOnlySharedMemoryRegion::Create #2");
+  if (!result.has_value())
     return {};
-  }
 
   WritableSharedMemoryMapping mapping(result.value(), size, handle.GetGUID(),
                                       mapper);
@@ -43,10 +39,8 @@ MappedReadOnlyRegion ReadOnlySharedMemoryRegion::Create(
 #endif  // BUILDFLAG(IS_MAC)
   ReadOnlySharedMemoryRegion region(std::move(handle));
 
-  if (!region.IsValid() || !mapping.IsValid()) {
-    recordreplay::Diagnostic("[RUN-1685] ReadOnlySharedMemoryRegion::Create #3");
+  if (!region.IsValid() || !mapping.IsValid())
     return {};
-  }
 
   return {std::move(region), std::move(mapping)};
 }

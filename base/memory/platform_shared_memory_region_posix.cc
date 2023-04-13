@@ -153,17 +153,11 @@ PlatformSharedMemoryRegion PlatformSharedMemoryRegion::Duplicate() const {
 }
 
 bool PlatformSharedMemoryRegion::ConvertToReadOnly() {
-  recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::ConvertToReadOnly Start");
-
   if (!IsValid())
     return false;
 
-  recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::ConvertToReadOnly #1 %d", (int)mode_);
-
   CHECK_EQ(mode_, Mode::kWritable)
       << "Only writable shared memory region can be converted to read-only";
-
-  recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::ConvertToReadOnly #2");
 
   // ScopedGeneric::reset crashes when resetting e.g. the fd to an identical fd.
   // When we're diverged from the recording this can happen because dummy file
@@ -201,8 +195,6 @@ PlatformSharedMemoryRegion PlatformSharedMemoryRegion::Create(Mode mode,
   // Untrusted code can't create descriptors or handles.
   return {};
 #else
-  recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::Create Start %d", (int)mode);
-
   if (size == 0) {
     return {};
   }
@@ -229,7 +221,6 @@ PlatformSharedMemoryRegion PlatformSharedMemoryRegion::Create(Mode mode,
           false /* executable */,
 #endif
           &directory)) {
-    recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::Create #1");
     return {};
   }
 
@@ -247,7 +238,6 @@ PlatformSharedMemoryRegion PlatformSharedMemoryRegion::Create(Mode mode,
                    << "/dev/shm.  Try 'sudo chmod 1777 /dev/shm' to fix.";
       }
     }
-    recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::Create #2");
     return {};
   }
 
@@ -268,14 +258,12 @@ PlatformSharedMemoryRegion PlatformSharedMemoryRegion::Create(Mode mode,
         readonly_fd.reset(42);
       } else {
         DPLOG(ERROR) << "open(\"" << path.value() << "\", O_RDONLY) failed";
-        recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::Create #3");
         return {};
       }
     }
   }
 
   if (!AllocateFileRegion(&shm_file, 0, size)) {
-    recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::Create #4");
     return {};
   }
 
@@ -284,7 +272,6 @@ PlatformSharedMemoryRegion PlatformSharedMemoryRegion::Create(Mode mode,
     if (File::Fstat(shm_file.GetPlatformFile(), &shm_stat) != 0 &&
         !recordreplay::HasDivergedFromRecording()) {
       DPLOG(ERROR) << "fstat(fd) failed";
-      recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::Create #5");
       return {};
     }
 
@@ -292,7 +279,6 @@ PlatformSharedMemoryRegion PlatformSharedMemoryRegion::Create(Mode mode,
     if (File::Fstat(readonly_fd.get(), &readonly_stat) != 0 &&
         !recordreplay::HasDivergedFromRecording()) {
       DPLOG(ERROR) << "fstat(readonly_fd) failed";
-      recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::Create #6");
       return {};
     }
 
@@ -300,12 +286,9 @@ PlatformSharedMemoryRegion PlatformSharedMemoryRegion::Create(Mode mode,
          shm_stat.st_ino != readonly_stat.st_ino) &&
         !recordreplay::HasDivergedFromRecording()) {
       LOG(ERROR) << "Writable and read-only inodes don't match; bailing";
-      recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::Create #7");
       return {};
     }
   }
-
-  recordreplay::Diagnostic("[RUN-1685] PlatformSharedMemoryRegion::Create Done %d", (int)mode);
 
   return PlatformSharedMemoryRegion(
       {ScopedFD(shm_file.TakePlatformFile()), std::move(readonly_fd)}, mode,

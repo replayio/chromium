@@ -80,19 +80,6 @@ static void* LookupRecordReplaySymbol(const char* name) {
   return fnptr ? fnptr : reinterpret_cast<void*>(1);
 }
 
-static void RecordReplayDiagnostic (const char* aFormat, ...) {
-  static void* fnptr;
-  if (!fnptr) {
-    fnptr = LookupRecordReplaySymbol("RecordReplayDiagnostic");
-  }
-  if (fnptr != reinterpret_cast<void*>(1)) {
-    va_list ap;
-    va_start(ap, aFormat);
-    reinterpret_cast<void(*)(const char*, va_list)>(fnptr)(aFormat, ap);
-    va_end(ap);
-  }
-}
-
 static bool RecordReplayHasDivergedFromRecording() {
   static void* fnptr;
   if (!fnptr) {
@@ -953,7 +940,6 @@ bool AllocateFileRegion(File* file, int64_t offset, size_t size) {
   const int64_t original_file_len = file->GetLength();
   if (original_file_len < 0) {
     DPLOG(ERROR) << "fstat " << file->GetPlatformFile();
-    RecordReplayDiagnostic("[RUN-1685] AllocateFileRegion #1");
     return false;
   }
 
@@ -967,7 +953,6 @@ bool AllocateFileRegion(File* file, int64_t offset, size_t size) {
       !IsValueInRangeForNumericType<off_t>(new_file_len) ||
       !file->SetLength(std::max(original_file_len, new_file_len))) {
     DPLOG(ERROR) << "ftruncate " << file->GetPlatformFile();
-    RecordReplayDiagnostic("[RUN-1685] AllocateFileRegion #2");
     return false;
   }
 
@@ -1011,7 +996,6 @@ bool AllocateFileRegion(File* file, int64_t offset, size_t size) {
     char existing_byte;
     if (HANDLE_EINTR(pread(file->GetPlatformFile(), &existing_byte, 1,
                            static_cast<off_t>(i))) != 1) {
-      RecordReplayDiagnostic("[RUN-1685] AllocateFileRegion #3");
       return false;  // Can't read? Not viable.
     }
     if (existing_byte != 0) {
@@ -1019,7 +1003,6 @@ bool AllocateFileRegion(File* file, int64_t offset, size_t size) {
     }
     if (HANDLE_EINTR(pwrite(file->GetPlatformFile(), &existing_byte, 1,
                             static_cast<off_t>(i))) != 1) {
-      RecordReplayDiagnostic("[RUN-1685] AllocateFileRegion #4");
       return false;  // Can't write? Not viable.
     }
   }
