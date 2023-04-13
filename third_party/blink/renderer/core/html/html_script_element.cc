@@ -54,9 +54,7 @@ HTMLScriptElement::HTMLScriptElement(Document& document,
     : HTMLElement(html_names::kScriptTag, document),
       children_changed_by_api_(false),
       blocking_attribute_(MakeGarbageCollected<BlockingAttribute>(this)),
-      loader_(InitializeScriptLoader(flags)) {
-  recordreplay::Print("DDBG HTMLScriptElement::HTMLScriptElement %s", recordreplay::GetCurrentJSStackTmp());
-}
+      loader_(InitializeScriptLoader(flags)) {}
 
 const AttrNameToTrustedType& HTMLScriptElement::GetCheckedAttributeTypes()
     const {
