@@ -9,6 +9,8 @@
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/member.h"
 
+#include "third_party/blink/renderer/platform/heap_observer_set.h"
+
 namespace blink {
 
 class ContextLifecycleNotifier;
@@ -29,6 +31,8 @@ class PLATFORM_EXPORT ContextLifecycleObserver : public GarbageCollectedMixin {
 
   void Trace(Visitor*) const override;
 
+  int RecordReplayId() const { return recordreplay::PointerId(this); }
+
  protected:
   ContextLifecycleObserver();
 
@@ -40,6 +44,13 @@ class PLATFORM_EXPORT ContextLifecycleObserver : public GarbageCollectedMixin {
   bool waiting_for_context_destroyed_ = false;
 #endif
 };
+
+// RUN-1716
+typedef HeapObserverSet<
+    ContextLifecycleObserver,
+    HeapHashSet<WeakMember<ContextLifecycleObserver>,
+                WTF::MemberHashRecordReplayId<ContextLifecycleObserver>>>
+    ContextLifecycleHeapObserverSet;
 
 }  // namespace blink
 
