@@ -14,7 +14,8 @@ namespace blink {
 
 // A set of observers. Ensures list is not mutated while iterating. Observers
 // are not retained.
-template <class ObserverType>
+template <typename ObserverType,
+          typename ObserverSet = HeapHashSet<WeakMember<ObserverType>>>
 class PLATFORM_EXPORT HeapObserverSet {
   DISALLOW_NEW();
 
@@ -72,8 +73,6 @@ class PLATFORM_EXPORT HeapObserverSet {
   void Trace(Visitor* visitor) const { visitor->Trace(observers_); }
 
  private:
-  using ObserverSet = HeapHashSet<WeakMember<ObserverType>>;
-
   // TODO(keishi): Clean up iteration state once transition from
   // LifecycleObserver is complete.
   enum IterationState {
