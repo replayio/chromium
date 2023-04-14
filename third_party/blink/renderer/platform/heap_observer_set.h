@@ -14,6 +14,8 @@ namespace blink {
 
 // A set of observers. Ensures list is not mutated while iterating. Observers
 // are not retained.
+// [Replay] We made some changes to allow for deterministic hash functions for
+// a subset of all |ObserverType|s.
 template <typename ObserverType,
           typename ObserverSet = HeapHashSet<WeakMember<ObserverType>>>
 class PLATFORM_EXPORT HeapObserverSet {
