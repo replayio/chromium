@@ -317,7 +317,9 @@ class CORE_EXPORT Animation : public EventTargetWithInlineData,
   bool AtScrollTimelineBoundary();
 
   // RUN-1716
-  int RecordReplayId() const override { return recordreplay::PointerId(this); }
+  int RecordReplayId() const override {
+    return ScriptWrappable::RecordReplayId();
+  }
 
  protected:
   DispatchEventResult DispatchEventInternal(Event&) override;
