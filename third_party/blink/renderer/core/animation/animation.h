@@ -317,6 +317,8 @@ class CORE_EXPORT Animation : public EventTargetWithInlineData,
   bool AtScrollTimelineBoundary();
 
   // RUN-1716
+  // Disambiguate between ScriptWrappable::RecordReplayId and
+  // ContextLifecycleObserver::RecordReplayId.
   int RecordReplayId() const override {
     return ScriptWrappable::RecordReplayId();
   }
