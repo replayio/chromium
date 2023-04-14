@@ -46,11 +46,10 @@ class PLATFORM_EXPORT ContextLifecycleObserver : public GarbageCollectedMixin {
 };
 
 // RUN-1716
-typedef HeapObserverSet<
+using ContextLifecycleHeapObserverSet = HeapObserverSet<
     ContextLifecycleObserver,
     HeapHashSet<WeakMember<ContextLifecycleObserver>,
-                WTF::MemberHashRecordReplayId<ContextLifecycleObserver>>>
-    ContextLifecycleHeapObserverSet;
+                WTF::MemberHashRecordReplayId<ContextLifecycleObserver>>>;
 
 }  // namespace blink
 
