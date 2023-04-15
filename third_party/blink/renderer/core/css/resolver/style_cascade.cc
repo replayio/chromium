@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/core/css/resolver/style_cascade.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/animation/css/css_animations.h"
 #include "third_party/blink/renderer/core/animation/css_interpolation_environment.h"
 #include "third_party/blink/renderer/core/animation/css_interpolation_types_map.h"
@@ -171,6 +172,7 @@ void StyleCascade::AddInterpolations(const ActiveInterpolationsMap* map,
 }
 
 void StyleCascade::Apply(CascadeFilter filter) {
+  recordreplay::Assert("[RUN-1219-1708] StyleCascade::Apply #0");
   AnalyzeIfNeeded();
 
   CascadeResolver resolver(filter, ++generation_);
@@ -202,6 +204,7 @@ void StyleCascade::Apply(CascadeFilter filter) {
   }
 
   ApplyHighPriority(resolver);
+  recordreplay::Assert("[RUN-1219-1708] StyleCascade::Apply #1");
 
   if (map_.NativeBitset().Has(CSSPropertyID::kLineHeight)) {
     LookupAndApply(GetCSSPropertyLineHeight(), resolver);
@@ -245,6 +248,7 @@ void StyleCascade::Apply(CascadeFilter filter) {
   //
   if (!state_.GetElement().HasTagName(html_names::kH1Tag))
     return;
+
   if (CascadePriority* priority =
           map_.Find(GetCSSPropertyFontSize().GetCSSPropertyName())) {
     if (priority->GetOrigin() != CascadeOrigin::kUserAgent)

@@ -26,13 +26,13 @@
 #include "third_party/blink/renderer/core/inspector/inspector_css_agent.h"
 #include "third_party/blink/renderer/core/inspector/inspector_dom_agent.h"
 #include "third_party/blink/renderer/core/inspector/inspector_dom_debugger_agent.h"
-#include "third_party/blink/renderer/core/inspector/inspector_dom_debugger_agent.h"
 #include "third_party/blink/renderer/core/inspector/inspector_network_agent.h"
 #include "third_party/blink/renderer/core/inspector/inspector_resource_container.h"
 #include "third_party/blink/renderer/core/inspector/inspector_resource_content_loader.h"
 #include "third_party/blink/renderer/core/inspector/resolve_node.h"
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
+#include "third_party/blink/renderer/platform/bindings/v8_dom_wrapper.h"
 #include "third_party/inspector_protocol/crdtp/maybe.h"
 #include "v8/include/v8-inspector.h"
 
@@ -98,6 +98,7 @@ const {
   fromJsMakeDebuggeeValue,
   fromJsGetArgumentsInFrame,
   fromJsGetObjectByCdpId,
+  fromJsIsBlinkObject,
   fromJsGetNodeId,
   fromJsGetBoxModel,
   fromJsGetMatchedStylesForNode,
@@ -193,7 +194,25 @@ let gCurrentMessageResult;
 function sendMessage(method, params) {
   const id = gNextMessageId++;
   gCurrentMessageId = id;
-  sendCDPMessage(JSON_stringify({ method, params, id }));
+  gCurrentMessageResult = undefined;
+  const cdpArgs = JSON_stringify({ method, params, id });
+  try {
+    sendCDPMessage(cdpArgs);
+  }
+  catch (err) {
+    if (!gCurrentMessageResult) {
+      throw err;
+    }
+    else {
+      // Work around "ghostly" cross-origin (and maybe other?) errors:
+      // Generally speaking, CDP commands should not throw.
+      // If they do, there is a chance that the error was triggered by user JS
+      // and only happens to still be pending when Replay commands were 
+      // triggered.
+      // E.g.: https://linear.app/replay/issue/RUN-1680#comment-1dfa142b
+      log(`[RuntimeError][RUN-1680] sendCDPMessage(${method}) failed: ${err?.message}`);
+    }
+  }
   gCurrentMessageId = undefined;
   if (gCurrentMessageResult?.result) {
     return gCurrentMessageResult.result;
@@ -225,7 +244,13 @@ function messageCallback(message) {
       }
     }
   } catch (e) {
-    log(`[RuntimeError] Message callback exception: ${e}`);
+    log(`[RuntimeError] Message callback exception: ${e?.stack || e}`);
+
+    return JSON.stringify({
+      is_error: true,
+      message: e?.message || (e + ''),
+      stack: e?.stack?.split?.("\n") || e?.stack || [],
+    });
   }
 }
 
@@ -235,8 +260,34 @@ function messageCallback(message) {
 
 // Methods for interacting with the record/replay driver.
 
+// Track all current execution contexts so that any scripts that we
+// inject via evaluatePrivilegd can know what contexts are available.
+const gExecutionContexts = new Map();
+const gContextChangeCallbacks = new Set();
+
 initMessages();
 addEventListener("Runtime.consoleAPICalled", onConsoleAPICall);
+addEventListener("Runtime.executionContextCreated", ({ context }) => {
+  gExecutionContexts.set(context.id, context);
+  for (const callback of gContextChangeCallbacks) {
+    callback(context, "add");
+  }
+});
+addEventListener("Runtime.executionContextDestroyed", ({ executionContextId }) => {
+  const context = gExecutionContexts.get(executionContextId);
+  for (const callback of gContextChangeCallbacks) {
+    callback(context, "remove");
+  }
+  gExecutionContexts.delete(executionContextId);
+});
+addEventListener("Runtime.executionContextsCleared", () => {
+  for (const context of gExecutionContexts.values()) {
+    for (const callback of gContextChangeCallbacks) {
+      callback(context, "remove");
+    }
+  }
+  gExecutionContexts.clear();
+});
 sendMessage("Runtime.enable");
 
 const CommandCallbacks = {
@@ -285,7 +336,7 @@ function commandCallback(method, params) {
     // that decision.
     return {
       is_error: true,
-      message: e?.message || e.toString(),
+      message: e?.message || (e + ''),
       stack: e?.stack?.split?.("\n") || e?.stack || [],
     };
   }
@@ -561,63 +612,25 @@ function Graphics_getDevicePixelRatio() {
 // Utilities
 ///////////////////////////////////////////////////////////////////////////////
 
-/**
- * NOTE: this is not a guarantee, since `toString()` can be overridden.
- * NOTE2: v8 debugger has `CalculateNativeAccessorFlags` but is expensive and cached and annoying.
- */
-function isProbablyNativeFunction(f) {
-  return isNativeFunctionDescription(f.toString());
-}
-
-function isNativeFunctionDescription(functionString) {
-  return functionString?.endsWith('() { [native code] }') || false;
-}
-
 function isPrototype(x) {
   return x === x?.constructor?.prototype;
 }
 
-
 /**
- * Check whether given object `x` has what looks like a native ctor.
+ * Check whether given object `x` is a native object.
  */
-function isProbablyInstanceOfNativeClass(x) {
-  // hackfix: check if its ctor has a native toString
-  try {
-    return x?.constructor &&
-      // avoid false positives for prototypes (see https://linear.app/replay/issue/RUN-1067)
-      x.constructor === x.__proto__?.constructor &&
-      isProbablyNativeFunction(x.constructor);
-  }
-  catch (err) {
-    // Note: there can be some errors here, e.g.:
-    // "Error: Blocked a frame with origin ... from accessing a cross-origin frame."
-    log(`[RuntimeError] isProbablyInstanceOfNativeClass err: ${err?.stack || err}`);
-  }
+function isBlinkObject(x) {
+  return fromJsIsBlinkObject(x);
 }
 
 /**
- * Check whether the object has what looks like a native ctor and
- * is not a plain object or array.
- * @see https://linear.app/replay/issue/RUN-1592#comment-4011cec0
+ * Check whether given object `x` is a blink object and its 
+ * class name is `target.name`.
  */
-function isProbablyInstanceOfSpecificNativeClass(plainObject, cdpObj) {
-  return isProbablyInstanceOfNativeClass(plainObject) && 
-    cdpObj.subtype !== 'array' &&
-    cdpObj.subtype !== 'typedarray' &&
-    cdpObj.className !== 'Object';
-}
-
-/**
- * Check whether given object `x` is instance of class of given `target.name`,
- * and also has what looks like a native ctor.
- */
-function isInstanceOfNative(x, target) {
-  // hackfix: check if its native, and has `name` in inheritance chain
-  const name = target?.name;
-  return name &&
-    isProbablyInstanceOfNativeClass(x) &&
-    hasInProtoChain(x.constructor, name);
+function isBlinkInstanceOf(x, target) {
+  return isBlinkObject(x) &&
+    target?.name &&
+    hasInProtoChain(x.constructor, target.name);
 }
 
 /**
@@ -1120,6 +1133,9 @@ ProtocolObjectPreview.prototype = {
     if (!this.startAddItem(force)) {
       return;
     }
+    if (!this.getterValues) {
+      this.getterValues = new Map();
+    }
     this.getterValues.set(key, { name: key, ...valueObject });
   },
 
@@ -1137,9 +1153,9 @@ ProtocolObjectPreview.prototype = {
   get pageIndex() { return 0; },
 
   get pageSize() {
-    if (isProbablyInstanceOfSpecificNativeClass(this.raw, this.cdpObj)) {
-      // Don't limit native objects because in gecko, we add all native getters,
-      // independent of prop limits.
+    if (isBlinkObject(this.raw, this.cdpObj) || CustomPreviewers[this.cdpObj.className]) {
+      // Don't limit props of native objects, and ignore prop limits.
+      // (Because that is how we do it in gecko.)
       return 0;
     }
     return MaxItems[this.level] || 10;
@@ -1181,8 +1197,12 @@ ProtocolObjectPreview.prototype = {
             entry.call(this, cdpProperties);
           }
           else {
-            // entry should be string
-            this.addGetterValue(entry, this.cdpObj, /* force */ true);
+            // entry should be string -> Look it up in results
+            const cdpEntry = cdpProperties.result.find(prop => prop.name === entry);
+            if (cdpEntry) {
+              const rrpEntry = buildRrpObjectFromCdpObject(cdpEntry);
+              this.setGetterValue(entry, rrpEntry);
+            }
           }
         }
       }
@@ -1255,13 +1275,13 @@ function previewBlinkObject(cdpObject, cdpProperties) {
   assert(rrpId);
   const plainObject = getPlainObjectByRrpId(rrpId);
 
-  if (isInstanceOfNative(plainObject, Node)) {
+  if (isBlinkInstanceOf(plainObject, Node)) {
     return {
       node: previewBlinkNode(plainObject)
     }
   }
 
-  if (isInstanceOfNative(plainObject, CSSStyleDeclaration)) {
+  if (isBlinkInstanceOf(plainObject, CSSStyleDeclaration)) {
     return {
       style: previewBlinkStyle(plainObject)
     }
@@ -1270,7 +1290,7 @@ function previewBlinkObject(cdpObject, cdpProperties) {
 
 function previewBlinkNode(node) {
   let attributes, pseudoType;
-  if (isInstanceOfNative(node, Element)) {
+  if (isBlinkInstanceOf(node, Element)) {
     attributes = [];
     for (const { name, value } of node.attributes) {
       attributes.push({ name, value });
@@ -1305,7 +1325,7 @@ function previewBlinkNode(node) {
   }
 
   let childNodes;
-  if (node.nodeName == "IFRAME") {
+  if (node.nodeName == "IFRAME" && node.contentDocument) {
     // Treat an iframe's content document as one of its child nodes.
     childNodes = [registerPlainObject(node.contentDocument)];
   } else if (node.childNodes.length) {
@@ -1506,6 +1526,7 @@ const CustomPreviewers = {
   TypeError: ErrorProperties,
   URIError: ErrorProperties,
   Function: [previewFunction],
+  AsyncFunction: [previewFunction],
 };
 
 /**
@@ -1865,7 +1886,7 @@ function CSS_getComputedStyle({ node }) {
   const nodeObj = getPlainObjectByRrpId(node);
 
   const computedStyle = [];
-  if (isInstanceOfNative(nodeObj, Element)) {
+  if (isBlinkInstanceOf(nodeObj, Element)) {
     // NOTE: tested successfully for same-CSP elements of different iframes
     const ownerGlobal = window;
 
@@ -2139,7 +2160,7 @@ function CSS_getAppliedRules({ node: nodeRrpId }) {
   let rules = gCssRulesByNodeRrpId.get(nodeRrpId);
   const data = {};
 
-  if (!rules && isInstanceOfNative(nodeObj, Element)) {
+  if (!rules && isBlinkInstanceOf(nodeObj, Element)) {
     const nodeId = getBlinkNodeIdByRrpId(nodeRrpId);
 
     // NOTE: CSS domain commands are not accessible via `sendMessage`, so we have to get the data indirectly.
@@ -3156,6 +3177,21 @@ static void SendMessageToFrontend(const v8_inspector::StringView& message) {
   v8::Local<v8::Function> callback = gCDPMessageCallback->Get(isolate);
   v8::MaybeLocal<v8::Value> rv = callback->Call(context, v8::Undefined(isolate), 1, &arg);
   CHECK(!rv.IsEmpty());
+
+  // If we get back a string from the call, report it as an error to the log (in such a way as it
+  // can be recovered by our error reporting), and then crash.
+  v8::Local<v8::Value> result = rv.ToLocalChecked();
+  CHECK(result->IsUndefined() || result->IsString());
+
+  if (result->IsString()) {
+    v8::String::Utf8Value messageValue(isolate, result);
+    std::string messageStr(*messageValue);
+
+    // TODO: Replace this with an API call to `RecordReplaySetCrashReasonCallback`
+    // See RUN-1562: https://linear.app/replay/issue/RUN-1562
+    recordreplay::Print("ErrorFatal %s:%d %s", "js", 0, messageStr.c_str());
+    IMMEDIATE_CRASH();
+  }
 }
 
 struct InspectorChannel final : public v8_inspector::V8Inspector::Channel {
@@ -3317,17 +3353,9 @@ extern "C" void V8RecordReplayFinishRecording();
 // associated with a given API object.
 static int GetAPIObjectIdCallback(v8::Local<v8::Object> object) {
   v8::Isolate* isolate = v8::Isolate::GetCurrent();
-  const WrapperTypeInfo* infos[] = {
-    // ScriptWrappable itself doesn't have wrapper type info, so check subclasses.
-    Node::GetStaticWrapperTypeInfo(),
-    Event::GetStaticWrapperTypeInfo(),
-    CSSStyleDeclaration::GetStaticWrapperTypeInfo()
-  };
-  for (const WrapperTypeInfo* info : infos) {
-    if (V8PerIsolateData::From(isolate)->HasInstance(info, object)) {
-      ScriptWrappable* wrappable = ToScriptWrappable(object);
-      return wrappable->RecordReplayId();
-    }
+  if (V8DOMWrapper::IsWrapper(isolate, object)) {
+    ScriptWrappable* wrappable = ToScriptWrappable(object);
+    return wrappable->RecordReplayId();
   }
   return 0;
 }
@@ -3661,6 +3689,25 @@ static void fromJsGetObjectByCdpId(
   } else {
     args.GetReturnValue().SetNull();
   }
+}
+
+/**
+ * Whether a given value is a blink object.
+ * 
+ * NOTE: If we want a generalized |isNativeObject| function, 
+ * we probably have to expose |v8::internal::Script::type|
+ * (which is also used by |CallSiteInfo::IsNative|).
+ */
+static void fromJsIsBlinkObject(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && 
+        "[RuntimeError] must be called with a single value");
+
+  v8::Isolate* isolate = args.GetIsolate();
+  
+  bool result = V8DOMWrapper::IsWrapper(isolate, args[0]);
+  
+  args.GetReturnValue().Set(result);
 }
 
 /** ###########################################################################
@@ -4508,13 +4555,15 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
   SetFunctionProperty(isolate, args, "setCommandCallback",
                       v8::FunctionCallbackRecordReplaySetCommandCallback);
 
-  // Object Management
+  // Object Util
   SetFunctionProperty(isolate, args, "fromJsMakeDebuggeeValue",
                       fromJsMakeDebuggeeValue);
   SetFunctionProperty(isolate, args, "fromJsGetArgumentsInFrame",
                       fromJsGetArgumentsInFrame);
   SetFunctionProperty(isolate, args, "fromJsGetObjectByCdpId",
                       fromJsGetObjectByCdpId);
+  SetFunctionProperty(isolate, args, "fromJsIsBlinkObject",
+                      fromJsIsBlinkObject);
 
   // networking
   SetFunctionProperty(isolate, args, "getCurrentNetworkRequestEvent",
