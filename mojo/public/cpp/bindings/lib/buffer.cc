@@ -62,10 +62,10 @@ Buffer& Buffer::operator=(Buffer&& other) {
 static int gRecordReplayAssertAllocations = 0;
 static const char* gRecordReplayAssertLabel = "";
 
-AutoRecordReplayAssertBufferAllocations::AutoRecordReplayAssertBufferAllocations(const char* label) {
+AutoRecordReplayAssertBufferAllocations::AutoRecordReplayAssertBufferAllocations(const char* issueLabel) {
   if (recordreplay::IsMainThread()) {
     if (!gRecordReplayAssertAllocations)
-      gRecordReplayAssertLabel = label;
+      gRecordReplayAssertLabel = issueLabel;
     ++gRecordReplayAssertAllocations;
   }
 }
