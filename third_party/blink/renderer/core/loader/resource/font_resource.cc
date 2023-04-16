@@ -100,28 +100,28 @@ void FontResource::StartLoadLimitTimersIfNecessary(
   load_limit_state_ = LoadLimitState::kUnderLimit;
 
   if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers")) {
-  font_load_short_limit_ = PostDelayedCancellableTask(
-      *task_runner, FROM_HERE,
-      WTF::BindOnce(&FontResource::FontLoadShortLimitCallback,
-                    WrapPersistent(this)),
-      kFontLoadWaitShort);
-  font_load_long_limit_ = PostDelayedCancellableTask(
-      *task_runner, FROM_HERE,
-      WTF::BindOnce(&FontResource::FontLoadLongLimitCallback,
-                    WrapPersistent(this)),
-      kFontLoadWaitLong);
+    font_load_short_limit_ = PostDelayedCancellableTask(
+        *task_runner, FROM_HERE,
+        WTF::BindOnce(&FontResource::FontLoadShortLimitCallback,
+                      WrapPersistent(this)),
+        kFontLoadWaitShort);
+    font_load_long_limit_ = PostDelayedCancellableTask(
+        *task_runner, FROM_HERE,
+        WTF::BindOnce(&FontResource::FontLoadLongLimitCallback,
+                      WrapPersistent(this)),
+        kFontLoadWaitLong);
   }
   else {
-  font_load_short_limit_ = PostDelayedCancellableTask(
-      *task_runner, FROM_HERE,
-      WTF::BindOnce(&FontResource::FontLoadShortLimitCallback,
-                    WrapWeakPersistent(this)),
-      kFontLoadWaitShort);
-  font_load_long_limit_ = PostDelayedCancellableTask(
-      *task_runner, FROM_HERE,
-      WTF::BindOnce(&FontResource::FontLoadLongLimitCallback,
-                    WrapWeakPersistent(this)),
-      kFontLoadWaitLong);
+    font_load_short_limit_ = PostDelayedCancellableTask(
+        *task_runner, FROM_HERE,
+        WTF::BindOnce(&FontResource::FontLoadShortLimitCallback,
+                      WrapWeakPersistent(this)),
+        kFontLoadWaitShort);
+    font_load_long_limit_ = PostDelayedCancellableTask(
+        *task_runner, FROM_HERE,
+        WTF::BindOnce(&FontResource::FontLoadLongLimitCallback,
+                      WrapWeakPersistent(this)),
+        kFontLoadWaitLong);
   }
 }
 
