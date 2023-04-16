@@ -58,6 +58,8 @@
 #include "third_party/blink/renderer/platform/wtf/wtf_size_t.h"
 #include "ui/gfx/geometry/rect_f.h"
 
+#include "third_party/blink/renderer/platform/heap/member.h"
+
 namespace gfx {
 class QuadF;
 class Vector2dF;

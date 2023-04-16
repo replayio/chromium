@@ -39,6 +39,8 @@
 #include "ui/gfx/geometry/quad_f.h"
 #include "ui/gfx/geometry/rect_f.h"
 
+#include "third_party/blink/renderer/platform/heap/member.h"
+
 namespace cc {
 class Region;
 }

@@ -38,6 +38,8 @@
 #include "third_party/blink/renderer/platform/wtf/casting.h"
 #include "third_party/blink/renderer/platform/wtf/hash_counted_set.h"
 
+#include "third_party/blink/renderer/platform/heap/member.h"
+
 namespace blink {
 
 class ExceptionState;
