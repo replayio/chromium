@@ -40,6 +40,8 @@ class PLATFORM_EXPORT ResourceFinishObserver
   virtual String DebugName() const = 0;
 
   virtual void Trace(Visitor* visitor) const {}
+
+  int RecordReplayId() const { return recordreplay::PointerId(this); }
 };
 
 }  // namespace blink
