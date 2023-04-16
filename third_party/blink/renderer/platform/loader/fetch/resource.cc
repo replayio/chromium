@@ -64,7 +64,8 @@ namespace blink {
 namespace {
 
 void NotifyFinishObservers(
-    HeapHashSet<WeakMember<ResourceFinishObserver>, WTF::MemberHashRecordReplayId<ResourceFinishObserver>>* observers) {
+    HeapHashSet<WeakMember<ResourceFinishObserver>, WTF::MemberHashRecordReplayId<ResourceFinishObserver>>* observers,
+    HeapVector<Member<ResourceFinishObserver>>* observers_strong) {
   for (const auto& observer : *observers)
     observer->NotifyFinished();
 }
@@ -291,6 +292,16 @@ void Resource::TriggerNotificationForFinishObservers(
   if (finish_observers_.empty())
     return;
 
+  // RUN-1724
+  // [RUN-1457 cleanup]
+  HeapVector<Member<ResourceFinishObserver>>* new_collections_strong =
+      MakeGarbageCollected<HeapVector<Member<ResourceFinishObserver>>>();
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers")) {
+    new_collections_strong->AppendRange(replay_finish_observers_strong_.begin(), replay_finish_observers_strong_.end());
+    replay_finish_observers_strong_.clear();
+  }
+
+
   auto* new_collections =
       MakeGarbageCollected<HeapHashSet<WeakMember<ResourceFinishObserver>, WTF::MemberHashRecordReplayId<ResourceFinishObserver>>>(
           std::move(finish_observers_));
@@ -298,7 +309,8 @@ void Resource::TriggerNotificationForFinishObservers(
 
   task_runner->PostTask(
       FROM_HERE,
-      WTF::BindOnce(&NotifyFinishObservers, WrapPersistent(new_collections)));
+      WTF::BindOnce(&NotifyFinishObservers, WrapPersistent(new_collections),
+                    WrapPersistent(new_collections_strong)));
 
   DidRemoveClientOrObserver();
 }
@@ -671,6 +683,8 @@ void Resource::RemoveFinishObserver(ResourceFinishObserver* client) {
   CHECK(!is_add_remove_client_prohibited_);
 
   finish_observers_.erase(client);
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers"))
+    replay_finish_observers_strong_.erase(client);
   DidRemoveClientOrObserver();
 }
 

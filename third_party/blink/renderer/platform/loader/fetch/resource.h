@@ -71,9 +71,8 @@ namespace blink {
 
 class BlobDataHandle;
 class FetchParameters;
-// RUN-1724
-// class ResourceClient;
-// class ResourceFinishObserver;
+class ResourceClient;
+class ResourceFinishObserver;
 class ResourceLoader;
 class ResponseBodyLoaderDrainableInterface;
 class SecurityOrigin;

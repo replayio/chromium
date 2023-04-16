@@ -25,7 +25,7 @@ class PLATFORM_EXPORT ResourceFinishObserver
     : public GarbageCollected<ResourceFinishObserver> {
  public:
   ResourceFinishObserver() {
-    // Pointer registration is needed for sorting in NotifyFinishObservers.
+    // RUN-1724
     recordreplay::RegisterPointer("ResourceFinishObserver", this);
   }
   virtual ~ResourceFinishObserver() {
