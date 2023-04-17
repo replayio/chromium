@@ -1,5 +1,5 @@
 // Script used by buildkite to build Chromium for Linux in CI
-const path = require("path");
+import path from "path";
 import { spawnChecked, updateRepo } from "./replay_build_scripts/common.mjs";
 
 updateRepo();
