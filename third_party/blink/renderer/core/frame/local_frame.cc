@@ -28,6 +28,8 @@
  * Boston, MA 02110-1301, USA.
  */
 
+#include "third_party/blink/renderer/core/dom/node.h"
+
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 
 #include <limits>
