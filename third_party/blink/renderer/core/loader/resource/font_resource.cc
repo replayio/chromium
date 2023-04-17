@@ -99,30 +99,26 @@ void FontResource::StartLoadLimitTimersIfNecessary(
   DCHECK(!font_load_long_limit_.IsActive());
   load_limit_state_ = LoadLimitState::kUnderLimit;
 
+  // RUN-1724
+  // [RUN-1457 cleanup]
+#define POST_TIMER_TASKS(self) \
+  font_load_short_limit_ = PostDelayedCancellableTask( \
+      *task_runner, FROM_HERE, \
+      WTF::BindOnce(&FontResource::FontLoadShortLimitCallback, \
+                    self), \
+      kFontLoadWaitShort); \
+  font_load_long_limit_ = PostDelayedCancellableTask( \
+      *task_runner, FROM_HERE, \
+      WTF::BindOnce(&FontResource::FontLoadLongLimitCallback, \
+                    self), \
+      kFontLoadWaitLong);
+
   if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers")) {
-    font_load_short_limit_ = PostDelayedCancellableTask(
-        *task_runner, FROM_HERE,
-        WTF::BindOnce(&FontResource::FontLoadShortLimitCallback,
-                      WrapPersistent(this)),
-        kFontLoadWaitShort);
-    font_load_long_limit_ = PostDelayedCancellableTask(
-        *task_runner, FROM_HERE,
-        WTF::BindOnce(&FontResource::FontLoadLongLimitCallback,
-                      WrapPersistent(this)),
-        kFontLoadWaitLong);
+    POST_TIMER_TASKS(WrapPersistent(this))
+  } else {
+    POST_TIMER_TASKS(WrapWeakPersistent(this))
   }
-  else {
-    font_load_short_limit_ = PostDelayedCancellableTask(
-        *task_runner, FROM_HERE,
-        WTF::BindOnce(&FontResource::FontLoadShortLimitCallback,
-                      WrapWeakPersistent(this)),
-        kFontLoadWaitShort);
-    font_load_long_limit_ = PostDelayedCancellableTask(
-        *task_runner, FROM_HERE,
-        WTF::BindOnce(&FontResource::FontLoadLongLimitCallback,
-                      WrapWeakPersistent(this)),
-        kFontLoadWaitLong);
-  }
+#undef POST_TIMER_TASKS
 }
 
 scoped_refptr<FontCustomPlatformData> FontResource::GetCustomFontData() {
