@@ -21,6 +21,8 @@ extern bool RecordReplayStateEnsureInitialized();
 
 namespace recordreplay {
 
+extern bool IsMainThread();
+
 struct SharedBitmapInfo {
   viz::SharedBitmapId id_;
   uint8_t* memory_;
