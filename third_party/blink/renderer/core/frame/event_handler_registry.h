@@ -5,13 +5,15 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_FRAME_EVENT_HANDLER_REGISTRY_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_FRAME_EVENT_HANDLER_REGISTRY_H_
 
+// Include these first so the default hash for EventTarget can be determined.
+#include "third_party/blink/renderer/core/dom/events/event_target.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
+
 #include "base/dcheck_is_on.h"
 #include "third_party/blink/renderer/core/core_export.h"  // TODO(sashab): Remove this.
 #include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/platform/heap/forward.h"
 #include "third_party/blink/renderer/platform/wtf/hash_counted_set.h"
-
-#include "third_party/blink/renderer/platform/heap/member.h"
 
 namespace blink {
 

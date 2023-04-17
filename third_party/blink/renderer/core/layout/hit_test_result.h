@@ -24,6 +24,10 @@
 
 #include <tuple>
 
+// Include these first so the default hash for Node can be determined.
+#include "third_party/blink/renderer/core/dom/node.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
+
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/editing/forward.h"
 #include "third_party/blink/renderer/core/layout/geometry/physical_offset.h"
@@ -38,8 +42,6 @@
 #include "third_party/blink/renderer/platform/wtf/vector_traits.h"
 #include "ui/gfx/geometry/quad_f.h"
 #include "ui/gfx/geometry/rect_f.h"
-
-#include "third_party/blink/renderer/platform/heap/member.h"
 
 namespace cc {
 class Region;
