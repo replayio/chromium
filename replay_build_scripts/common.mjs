@@ -125,9 +125,3 @@ function getChromiumDeps() {
 
   return results;
 }
-
-function assert(value, msg) {
-  if (!value) {
-    throw new Error(msg);
-  }
-}
