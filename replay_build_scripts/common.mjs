@@ -1,5 +1,6 @@
 import { spawnSync } from "child_process";
 import * as fs from "fs";
+import * as path from "path";
 
 export function spawnChecked(cmd, args, options) {
   const prettyCmd = [cmd].concat(args).join(" ");
