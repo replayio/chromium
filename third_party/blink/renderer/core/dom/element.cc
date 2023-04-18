@@ -4084,9 +4084,7 @@ StyleRecalcChange Element::RecalcStyle(
 
   if (child_change.TraverseChildren(*this)) {
     SelectorFilterParentScope filter_scope(*this);
-    recordreplay::Assert(
-        "[RUN-1436-1764] Element::RecalcStyle D %d %d",
-        GetShadowRoot() ? GetShadowRoot()->RecordReplayId() : -1, RecordReplayId());
+    recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle D %d", !!GetShadowRoot());
     if (ShadowRoot* root = GetShadowRoot()) {
       root->RecalcDescendantStyles(child_change, child_recalc_context);
       if (child_change.RecalcDescendants())
