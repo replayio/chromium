@@ -83,7 +83,7 @@ Attr* NamedNodeMap::setNamedItemNS(Attr* attr,
 }
 
 Attr* NamedNodeMap::item(uint32_t index) const {
-  if (recordreplay::AreEventsDisallowed() &&
+  if (recordreplay::IsInReplayCode() &&
       !recordreplay::HasDivergedFromRecording()) {
     // [RUN-1764] Do not try to create blink objects in our Replay-only scripts,
     // unless explicitly diverged.
