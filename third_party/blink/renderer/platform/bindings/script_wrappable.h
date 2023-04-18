@@ -213,6 +213,9 @@ class PLATFORM_EXPORT ScriptWrappable
 
  protected:
   ScriptWrappable() {
+    if (recordreplay::AreEventsDisallowed() &&
+        !recordreplay::HasDivergedFromRecording())
+      recordreplay::Warning("[RUN-1735-1764] ScriptWrappable::ScriptWrappable");
     record_replay_id_ = recordreplay::NewIdAnyThread("ScriptWrappable");
   }
 
