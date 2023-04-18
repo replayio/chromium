@@ -27,6 +27,8 @@
 #include "base/win/scoped_handle.h"
 #include "base/win/win_util.h"
 
+#include "base/record_replay.h"
+
 namespace mojo {
 namespace core {
 
