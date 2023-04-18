@@ -631,7 +631,10 @@ function isBlinkObject(x) {
 function isBlinkInstanceOf(x, target) {
   return isBlinkObject(x) &&
     target?.name &&
-    hasInProtoChain(x.constructor, target.name);
+    hasInProtoChain(
+      x.constructor,
+      target.name
+    );
 }
 
 /**
@@ -1308,7 +1311,11 @@ function previewBlinkNode(node) {
   let parentNode;
   if (node.parentNode) {
     parentNode = registerPlainObject(node.parentNode);
-  } else if (node.defaultView && node.defaultView.parent != node.defaultView && node.defaultView.parent.document) {
+  } else if (
+    node.defaultView &&
+    node.defaultView.parent != node.defaultView &&
+    node.defaultView.parent?.document
+  ) {
     /**
      * Nested documents use the parent element instead of null.
      * 

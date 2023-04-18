@@ -83,15 +83,15 @@ Attr* NamedNodeMap::setNamedItemNS(Attr* attr,
 }
 
 Attr* NamedNodeMap::item(uint32_t index) const {
-  AttributeCollection attributes = element_->Attributes();
-  if (index >= attributes.size())
-    return nullptr;
-  if (recordreplay::IsInReplayCode() &&
+  if (recordreplay::AreEventsDisallowed() &&
       !recordreplay::HasDivergedFromRecording()) {
     // [RUN-1764] Do not try to create blink objects in our Replay-only scripts,
     // unless explicitly diverged.
     return nullptr;
   }
+  AttributeCollection attributes = element_->Attributes();
+  if (index >= attributes.size())
+    return nullptr;
   return element_->EnsureAttr(attributes[index].GetName());
 }
 
