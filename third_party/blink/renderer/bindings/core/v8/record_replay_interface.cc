@@ -3421,6 +3421,8 @@ static void WriteToRecordingDirectory(const v8::FunctionCallbackInfo<v8::Value>&
   v8::String::Utf8Value filename(isolate, args[0]);
   v8::String::Utf8Value content(isolate, args[1]);
 
+  recordreplay::Assert("[RUN-1670-1764] WriteToRecordingDirectory %s (%zu)", *filename, (size_t)strlen(*content));
+
   std::string path = GetRecordingDirectory() + DirectorySeparator + std::string(*filename);
   std::ofstream stream(path);
   stream << *content;

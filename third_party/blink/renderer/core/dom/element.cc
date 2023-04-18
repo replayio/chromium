@@ -7936,8 +7936,9 @@ Attr* Element::AttrIfExists(const QualifiedName& name) {
 Attr* Element::EnsureAttr(const QualifiedName& name) {
   Attr* attr_node = AttrIfExists(name);
   if (!attr_node) {
-    if (recordreplay::AreEventsDisallowed() && !recordreplay::HasDivergedFromRecording()) {
-      recordreplay::Warning("[RUN-1735-1764] Element::EnsureAttr %s", name.ToString().Utf8().c_str());
+    if (recordreplay::IsInReplayCode() && !recordreplay::HasDivergedFromRecording()) {
+      // [RUN-1764] Do not try to create blink objects in our Replay-only scripts, unless paused.
+      return nullptr;
     }
 
     attr_node = MakeGarbageCollected<Attr>(*this, name);
