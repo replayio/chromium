@@ -362,6 +362,13 @@ class ElementRareData final : public NodeRareData {
 
   void TraceAfterDispatch(blink::Visitor*) const;
 
+  
+  // Replay edit: Upstream, there is now GetWrappedField so we won't need this
+  // in the future.
+  InlineCSSStyleDeclaration* GetInlineCSSStyleDeclaration() const {
+    return cssom_wrapper_.Get();
+  }
+
  private:
   ScrollOffset saved_layer_scroll_offset_;
 
