@@ -81,8 +81,7 @@ constexpr base::TimeDelta kForcibleTerminationDelay = base::Seconds(2);
 }  // namespace
 
 base::Lock& WorkerThread::ThreadSetLock() {
-  // DEFINE_THREAD_SAFE_STATIC_LOCAL(base::Lock, lock, ("WorkerThread::ThreadSetLock"));
-  DEFINE_THREAD_SAFE_STATIC_LOCAL(base::Lock, lock, ());
+  DEFINE_THREAD_SAFE_STATIC_LOCAL(base::Lock, lock, ("WorkerThread::ThreadSetLock"));
   return lock;
 }
 
