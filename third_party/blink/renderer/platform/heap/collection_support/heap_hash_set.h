@@ -9,6 +9,7 @@
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/heap_allocator_impl.h"
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
+#include "third_party/blink/renderer/platform/wtf/type_traits.h"
 
 namespace blink {
 
@@ -25,6 +26,11 @@ class HeapHashSet final
 
   void Trace(Visitor* visitor) const {
     HashSet<ValueArg, HashArg, TraitsArg, HeapAllocator>::Trace(visitor);
+  }
+
+  HashSet<ValueArg, HashArg, TraitsArg, HeapAllocator>::iterator begin() const {
+    static_assert(WTF::IsRecordReplayDeterministicHashV<HashArg>);
+    return HashSet<ValueArg, HashArg, TraitsArg, HeapAllocator>::begin();
   }
 
  private:

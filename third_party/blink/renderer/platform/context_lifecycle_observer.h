@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_CONTEXT_LIFECYCLE_OBSERVER_H_
 
 #include "base/dcheck_is_on.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/member.h"
 
@@ -15,7 +16,9 @@ class ContextLifecycleNotifier;
 
 // Observer that gets notified when the context is destroyed. Used to observe
 // ExecutionContext from platform/.
-class PLATFORM_EXPORT ContextLifecycleObserver : public GarbageCollectedMixin {
+class PLATFORM_EXPORT ContextLifecycleObserver
+    : public GarbageCollectedMixin,
+      public recordreplay::RecordReplayIdMixin {
  public:
   virtual ~ContextLifecycleObserver();
   void NotifyContextDestroyed();

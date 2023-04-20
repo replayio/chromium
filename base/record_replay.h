@@ -232,6 +232,16 @@ struct ReplayRefPointerIdHash : ReplayPointerIdHash<T> {
   static bool Equal(const scoped_refptr<T>& a, T* b) { return a == b; }
 };
 
+class RecordReplayIdMixin {
+ public:
+  RecordReplayIdMixin()
+      : record_replay_id_(NewIdAnyThread("RecordReplayIdMixin")) {}
+
+  int RecordReplayId() const { return record_replay_id_; }
+
+ private:
+  int record_replay_id_ = 0;
+};
 
 // For taking ordered locks when events might be disallowed. Passes through
 // events during the acquire to avoid generating a warning.

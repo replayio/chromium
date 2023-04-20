@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "base/files/safe_base_name.h"
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/mojom/devtools/console_message.mojom-blink.h"
@@ -109,7 +110,8 @@ bool CanShareInternal(const LocalDOMWindow& window,
 }  // namespace
 
 class NavigatorShare::ShareClientImpl final
-    : public GarbageCollected<ShareClientImpl> {
+    : public GarbageCollected<ShareClientImpl>,
+      public recordreplay::RecordReplayIdMixin {
  public:
   ShareClientImpl(NavigatorShare*, bool has_files, ScriptPromiseResolver*);
 

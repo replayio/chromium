@@ -8,6 +8,7 @@
 #include "base/types/pass_key.h"
 #include "components/shared_highlighting/core/common/shared_highlighting_metrics.h"
 #include "third_party/blink/public/mojom/annotation/annotation.mojom-blink.h"
+#include "third_party/blink/renderer/core/annotation/annotation_agent_impl.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/fragment_directive/text_fragment_selector_generator.h"
@@ -20,7 +21,7 @@
 namespace blink {
 
 class AnnotationAgentContainerImplTest;
-class AnnotationAgentImpl;
+// class AnnotationAgentImpl;
 class AnnotationSelector;
 class LocalFrame;
 class AnnotationAgentGenerator;

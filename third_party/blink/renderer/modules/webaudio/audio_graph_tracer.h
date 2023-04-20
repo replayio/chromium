@@ -9,15 +9,19 @@
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/supplementable.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
+
+// Included for `RecordReplayId` visibility.
+#include "third_party/blink/renderer/modules/webaudio/base_audio_context.h"
 
 namespace blink {
 
 class AudioListener;
 class AudioNode;
 class AudioParam;
-class BaseAudioContext;
+// class BaseAudioContext;
 class Document;
 class InspectorWebAudioAgent;
 class Page;
@@ -75,7 +79,9 @@ class MODULES_EXPORT AudioGraphTracer final
 
  private:
   Member<InspectorWebAudioAgent> inspector_agent_;
-  HeapHashSet<WeakMember<BaseAudioContext>> contexts_;
+  HeapHashSet<WeakMember<BaseAudioContext>,
+              WTF::MemberHashRecordReplayId<ScriptWrappable>>
+      contexts_;
 };
 
 }  // namespace blink

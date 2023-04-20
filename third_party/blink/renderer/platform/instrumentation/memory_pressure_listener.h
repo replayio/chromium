@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_INSTRUMENTATION_MEMORY_PRESSURE_LISTENER_H_
 
 #include "base/memory/memory_pressure_listener.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -17,7 +18,9 @@ namespace blink {
 
 class NonMainThread;
 
-class PLATFORM_EXPORT MemoryPressureListener : public GarbageCollectedMixin {
+class PLATFORM_EXPORT MemoryPressureListener
+    : public GarbageCollectedMixin,
+      public recordreplay::RecordReplayIdMixin {
  public:
   virtual ~MemoryPressureListener() = default;
 

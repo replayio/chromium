@@ -22,11 +22,15 @@
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_wrapper_mode.h"
 #include "third_party/blink/renderer/platform/supplementable.h"
 
+// Included for visibility into `recordreplay::RecordReplayId()`.
+#include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
+
 namespace blink {
 
 class ExceptionState;
 class NavigatorBase;
-class ScriptPromiseResolver;
+// Replaced with #include directive.
+// class ScriptPromiseResolver;
 class ScriptState;
 class USBDevice;
 class USBDeviceRequestOptions;

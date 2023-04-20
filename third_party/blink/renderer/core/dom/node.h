@@ -28,6 +28,7 @@
 
 #include "base/dcheck_is_on.h"
 #include "base/notreached.h"
+#include "base/record_replay.h"
 #include "third_party/blink/public/mojom/input/focus_type.mojom-blink-forward.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/events/event_target.h"
@@ -160,7 +161,8 @@ enum class LinkHighlightCandidate {
 // A Node is a base class for all objects in the DOM tree.
 // The spec governing this interface can be found here:
 // https://dom.spec.whatwg.org/#interface-node
-class CORE_EXPORT Node : public EventTarget {
+class CORE_EXPORT Node : public EventTarget,
+                         public recordreplay::RecordReplayIdMixin {
   DEFINE_WRAPPERTYPEINFO();
   friend class TreeScope;
   friend class TreeScopeAdopter;

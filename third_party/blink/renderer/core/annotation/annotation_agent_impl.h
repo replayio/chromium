@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_ANNOTATION_ANNOTATION_AGENT_IMPL_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_ANNOTATION_ANNOTATION_AGENT_IMPL_H_
 
+#include "base/record_replay.h"
 #include "base/types/pass_key.h"
 #include "third_party/blink/public/mojom/annotation/annotation.mojom-blink.h"
 #include "third_party/blink/renderer/core/core_export.h"
@@ -47,7 +48,8 @@ class RangeInFlatTree;
 // closes the connection, the AnnotationAgentImpl will be removed)
 class CORE_EXPORT AnnotationAgentImpl final
     : public GarbageCollected<AnnotationAgentImpl>,
-      public mojom::blink::AnnotationAgent {
+      public mojom::blink::AnnotationAgent,
+      public recordreplay::RecordReplayIdMixin {
  public:
   using PassKey = base::PassKey<AnnotationAgentImpl>;
 

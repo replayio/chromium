@@ -35,6 +35,7 @@
 #include <memory>
 #include <utility>
 
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/platform/modules/mediastream/web_media_stream_source.h"
@@ -58,7 +59,8 @@ class WebAudioDestinationConsumer;
 // GarbageCollected wrapper of a WebPlatformMediaStreamSource, which acts as a
 // source backing one or more MediaStreamTracks.
 class PLATFORM_EXPORT MediaStreamSource final
-    : public GarbageCollected<MediaStreamSource> {
+    : public GarbageCollected<MediaStreamSource>,
+      public recordreplay::RecordReplayIdMixin {
   USING_PRE_FINALIZER(MediaStreamSource, Dispose);
 
  public:

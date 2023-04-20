@@ -176,7 +176,7 @@ struct MemberHashRecordReplayId
             std::enable_if_t<WTF::IsAnyMemberType<Member>::value>* = nullptr>
   static unsigned GetHash(const Member& m) {
     if (recordreplay::IsRecordingOrReplaying()) {
-      int id = m.Get()->RecordReplayId();
+      int id = static_cast<T*>(m.Get())->RecordReplayId();
       // Ids are allowed to be zero if we've diverged from the recording.
       if (recordreplay::HasDivergedFromRecording()) {
         if (id > 0) {
@@ -201,15 +201,31 @@ struct MemberHashRecordReplayId
   static constexpr bool kIsRecordReplayDeterministicHash = true;
 };
 
+// template <typename T>
+// class HasRecordReplayId {
+//   template <typename U>
+//   static auto Check(U* u) -> decltype(u->RecordReplayId(), std::true_type());
+//   template <typename>
+//   static std::false_type Check(...);
+
+//  public:
+//   static constexpr bool value = decltype(Check<T>(nullptr))::value;
+// };
+
 template <typename T>
 class HasRecordReplayId {
-  template <typename U>
-  static auto Check(U* u) -> decltype(u->RecordReplayId(), std::true_type());
-  template <typename>
-  static std::false_type Check(...);
+  typedef char one;
+  struct two {
+    char x[2];
+  };
+
+  template <typename C>
+  static one test(decltype(&C::RecordReplayId));
+  template <typename C>
+  static two test(...);
 
  public:
-  static constexpr bool value = decltype(Check<T>(nullptr))::value;
+  enum { value = sizeof(test<T>(0)) == sizeof(char) };
 };
 
 template <typename T>

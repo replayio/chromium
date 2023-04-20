@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_GEOLOCATION_GEO_NOTIFIER_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_GEOLOCATION_GEO_NOTIFIER_H_
 
+#include "base/record_replay.h"
 #include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_position_callback.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_position_error_callback.h"
@@ -20,7 +21,8 @@ class GeolocationPositionError;
 class Geoposition;
 
 class GeoNotifier final : public GarbageCollected<GeoNotifier>,
-                          public NameClient {
+                          public NameClient,
+                          public recordreplay::RecordReplayIdMixin {
  public:
   GeoNotifier(Geolocation*,
               V8PositionCallback*,

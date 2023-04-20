@@ -33,6 +33,7 @@ class MODULES_EXPORT NDEFReader : public EventTargetWithInlineData,
   DEFINE_WRAPPERTYPEINFO();
 
  public:
+  using ScriptWrappable::RecordReplayId;
   static NDEFReader* Create(ExecutionContext*);
 
   NDEFReader(ExecutionContext*);

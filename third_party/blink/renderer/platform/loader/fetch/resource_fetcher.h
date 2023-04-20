@@ -30,6 +30,7 @@
 #include <memory>
 #include <utility>
 
+#include "base/record_replay.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/unguessable_token.h"
 #include "services/metrics/public/cpp/mojo_ukm_recorder.h"
@@ -92,7 +93,8 @@ struct ResourceLoaderOptions;
 // keep a ResourceFetcher alive past detach if scripts still reference the
 // Document.
 class PLATFORM_EXPORT ResourceFetcher
-    : public GarbageCollected<ResourceFetcher> {
+    : public GarbageCollected<ResourceFetcher>,
+      public recordreplay::RecordReplayIdMixin {
   USING_PRE_FINALIZER(ResourceFetcher, ClearPreloads);
 
  public:

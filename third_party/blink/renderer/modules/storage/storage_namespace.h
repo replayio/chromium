@@ -35,6 +35,7 @@
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_wrapper_mode.h"
 #include "third_party/blink/renderer/platform/storage/blink_storage_key.h"
@@ -122,7 +123,9 @@ class MODULES_EXPORT StorageNamespace final
  private:
   void EnsureConnected();
 
-  HeapHashSet<WeakMember<InspectorDOMStorageAgent>> inspector_agents_;
+  HeapHashSet<WeakMember<InspectorDOMStorageAgent>,
+              WTF::MemberHashRecordReplayId<InspectorDOMStorageAgent>>
+      inspector_agents_;
 
   // Lives globally.
   StorageController* controller_;

@@ -28,10 +28,12 @@ class XRWebGLLayer;
 
 // This class manages requesting and dispatching frame updates, which includes
 // pose information for a given XRDevice.
-class XRFrameProvider final : public GarbageCollected<XRFrameProvider> {
+class XRFrameProvider final : public GarbageCollected<XRFrameProvider>,
+                              public recordreplay::RecordReplayIdMixin {
  public:
   // Class
-  class ImmersiveSessionObserver : public GarbageCollectedMixin {
+  class ImmersiveSessionObserver : public GarbageCollectedMixin,
+                                   public recordreplay::RecordReplayIdMixin {
    public:
     virtual void OnImmersiveSessionStart() = 0;
     virtual void OnImmersiveSessionEnd() = 0;
