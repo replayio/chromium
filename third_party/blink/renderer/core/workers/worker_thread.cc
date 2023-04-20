@@ -163,7 +163,6 @@ WorkerThread::~WorkerThread() {
       (int)exit_code_, (int)thread_state_);
 
   base::AutoLock locker(ThreadSetLock());
-
   DCHECK(InitializingWorkerThreads().Contains(this) ||
          WorkerThreads().Contains(this));
   InitializingWorkerThreads().erase(this);
