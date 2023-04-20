@@ -81,7 +81,8 @@ constexpr base::TimeDelta kForcibleTerminationDelay = base::Seconds(2);
 }  // namespace
 
 base::Lock& WorkerThread::ThreadSetLock() {
-  DEFINE_THREAD_SAFE_STATIC_LOCAL(base::Lock, lock, ("WorkerThread::ThreadSetLock"));
+  // DEFINE_THREAD_SAFE_STATIC_LOCAL(base::Lock, lock, ("WorkerThread::ThreadSetLock"));
+  DEFINE_THREAD_SAFE_STATIC_LOCAL(base::Lock, lock, ());
   return lock;
 }
 
@@ -155,15 +156,15 @@ class WorkerThread::InterruptData {
 WorkerThread::~WorkerThread() {
   recordreplay::UnregisterPointer(this);
   DCHECK_CALLED_ON_VALID_THREAD(parent_thread_checker_);
-  base::AutoLock locker(ThreadSetLock());
 
-  if (!recordreplay::AreEventsDisallowed() ||
-      exit_code_ != ExitCode::kGracefullyTerminated) {
-    recordreplay::Assert(
-        "[RUN-1537-1689] WorkerThread::~WorkerThread %d %d (%d %d %d)",
-        recordreplay::PointerId(this), worker_thread_id_,
-        requested_to_terminate_, (int)exit_code_, (int)thread_state_);
-  }
+  // if (!recordreplay::AreEventsDisallowed() ||
+  //     exit_code_ != ExitCode::kGracefullyTerminated)
+  recordreplay::Assert(
+      "[RUN-1537-1689] WorkerThread::~WorkerThread %d %d (%d %d %d)",
+      recordreplay::PointerId(this), worker_thread_id_, requested_to_terminate_,
+      (int)exit_code_, (int)thread_state_);
+
+  base::AutoLock locker(ThreadSetLock());
 
   DCHECK(InitializingWorkerThreads().Contains(this) ||
          WorkerThreads().Contains(this));
