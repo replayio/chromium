@@ -212,21 +212,6 @@ class CORE_EXPORT WorkerThread : public Thread::TaskObserver {
 
     std::vector<WorkerThread*> threads;
     for (WorkerThread* thread : WorkerThreads()) {
-      // Do not try to call on workers which are about to shutdown.
-      // https://linear.app/replay/issue/RUN-1537#comment-d8416380
-      if (recordreplay::IsRecordingOrReplaying("task-lifetime")) {
-          base::AutoLock thread_locker(thread->lock_);
-          if (thread->requested_to_terminate_ ||
-              thread->exit_code_ != ExitCode::kNotTerminated)
-            continue;
-
-          recordreplay::Assert(
-              "[RUN-1537-1689] CallOnAllWorkerThreads %zu %d (%d %d %d)",
-              threads.size(), thread->worker_thread_id_,
-              thread->requested_to_terminate_,
-              (int)thread->exit_code_,
-              (int)thread->thread_state_);
-      }
       threads.push_back(thread);
     }
     std::sort(threads.begin(), threads.end(),
