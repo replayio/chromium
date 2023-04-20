@@ -217,6 +217,9 @@ class CORE_EXPORT WorkerThread : public Thread::TaskObserver {
     std::sort(threads.begin(), threads.end(),
               recordreplay::CompareByPointerId());
 
+    recordreplay::Assert("[RUN-1537-1689] CallOnAllWorkerThreads %zu",
+                         threads.size());
+
     for (WorkerThread* thread : threads) {
       PostCrossThreadTask(
           *thread->GetTaskRunner(task_type), FROM_HERE,
