@@ -394,12 +394,15 @@ MessagePipeDispatcher::~MessagePipeDispatcher() {
 
 MojoResult MessagePipeDispatcher::CloseNoLock() {
   signal_lock_.AssertAcquired();
+
+  recordreplay::Assert(
+      "[RUN-1307-1773] MessagePipeDispatcher::CloseNoLock %d %d %d",
+      port_closed_, in_transit_, port_transferred_);
   if (port_closed_ || in_transit_)
     return MOJO_RESULT_INVALID_ARGUMENT;
 
   port_closed_.Set(true);
   watchers_.NotifyClosed();
-
   if (!port_transferred_) {
     recordreplay::AutoUnlockMaybeEventsDisallowed unlock(signal_lock_);
     node_controller_->ClosePort(port_);

@@ -629,6 +629,7 @@ bool InterfaceEndpointClient::SendMessageWithResponder(
     SyncSendMode sync_send_mode,
     std::unique_ptr<MessageReceiver> responder) {
   RecordReplayEnsureConsistentMessageSize(message);
+  recordreplay::Assert("InterfaceEndpointClient::SendMessageWithResponder");
 
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(message->has_flag(Message::kFlagExpectsResponse));
