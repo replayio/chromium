@@ -790,6 +790,7 @@ void NodeController::SendPeerEvent(const ports::NodeName& name,
     broker->RequestIntroduction(name);
   else if (peer)
     peer->SendChannelMessage(std::move(event_message));
+  recordreplay::Assert("[RUN-1307-1773] NodeController::SendPeerEvent E");
 }
 
 void NodeController::DropAllPeers() {
@@ -833,12 +834,14 @@ void NodeController::ForwardEvent(const ports::NodeName& node,
                                   ports::ScopedEvent event) {
   DCHECK(event);
 
-  recordreplay::Assert("[RUN-1307-1773] NodeController::ForwardEvent %d",
+  recordreplay::Assert("[RUN-1307-1773] NodeController::ForwardEvent A %d",
                        node == name_);
   if (node == name_)
     node_->AcceptEvent(name_, std::move(event));
   else
     SendPeerEvent(node, std::move(event));
+
+  recordreplay::Assert("[RUN-1307-1773] NodeController::ForwardEvent B");
 
   AttemptShutdownIfRequested();
 }
