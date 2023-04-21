@@ -39,6 +39,9 @@
 #include "ui/gfx/geometry/quad_f.h"
 #include "ui/gfx/geometry/rect_f.h"
 
+// For RecordReplayId
+#include "third_party/blink/renderer/core/scroll/scrollbar.h"
+
 namespace cc {
 class Region;
 }
@@ -55,7 +58,7 @@ class MediaSourceHandle;
 class MediaStreamDescriptor;
 class NGPhysicalBoxFragment;
 class Node;
-class Scrollbar;
+// class Scrollbar;
 struct PhysicalOffset;
 
 // List-based hit test testing can continue even after a hit has been found.

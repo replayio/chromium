@@ -10,8 +10,11 @@
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/member.h"
 
+// For RecordReplayId.
+#include "third_party/blink/renderer/core/frame/platform_event_controller.h"
+
 namespace blink {
-class PlatformEventController;
+// class PlatformEventController;
 class LocalDOMWindow;
 
 class CORE_EXPORT PlatformEventDispatcher : public GarbageCollectedMixin {

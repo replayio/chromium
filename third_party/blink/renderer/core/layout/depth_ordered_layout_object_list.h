@@ -9,6 +9,7 @@
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "third_party/blink/renderer/platform/wtf/vector_traits.h"
@@ -62,7 +63,9 @@ class DepthOrderedLayoutObjectList {
   int size() const;
   CORE_EXPORT bool IsEmpty() const;
 
-  const HeapHashSet<Member<LayoutObject>>& Unordered() const;
+  const HeapHashSet<Member<LayoutObject>,
+                    WTF::MemberHashRecordReplayId<LayoutObject>>&
+  Unordered() const;
   const HeapVector<LayoutObjectWithDepth>& Ordered();
 
  private:

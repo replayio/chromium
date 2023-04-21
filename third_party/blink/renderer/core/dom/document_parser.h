@@ -30,12 +30,16 @@
 #include "third_party/blink/renderer/platform/bindings/name_client.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
+
+// For RecordReplayId
+#include "third_party/blink/renderer/core/dom/document_parser_client.h"
 
 namespace blink {
 
 class Document;
-class DocumentParserClient;
+// class DocumentParserClient;
 class ScriptableDocumentParser;
 class TextResourceDecoder;
 

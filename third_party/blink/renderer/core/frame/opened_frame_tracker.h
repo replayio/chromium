@@ -7,6 +7,7 @@
 
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 
 namespace blink {
@@ -40,7 +41,8 @@ class OpenedFrameTracker {
   void Dispose();
 
  private:
-  HeapHashSet<Member<Frame>> opened_frames_;
+  HeapHashSet<Member<Frame>, WTF::MemberHashRecordReplayId<Frame>>
+      opened_frames_;
 };
 
 }  // namespace blink

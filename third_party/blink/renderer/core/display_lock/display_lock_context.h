@@ -7,6 +7,7 @@
 
 #include <utility>
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/css/style_recalc_change.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"

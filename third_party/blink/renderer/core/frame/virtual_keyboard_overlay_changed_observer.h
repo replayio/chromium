@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_FRAME_VIRTUAL_KEYBOARD_OVERLAY_CHANGED_OBSERVER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_FRAME_VIRTUAL_KEYBOARD_OVERLAY_CHANGED_OBSERVER_H_
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 
@@ -21,7 +22,8 @@ class LocalFrame;
 // Browser process receives these VK showing/hiding events from the OS input
 // services. It is reported as a rectangle that occludes the web content.
 class CORE_EXPORT VirtualKeyboardOverlayChangedObserver
-    : public GarbageCollectedMixin {
+    : public GarbageCollectedMixin,
+      public recordreplay::RecordReplayIdMixin {
  public:
   // This is used to fire a VK overlay geometry change JS event.
   // The |Rect| is the VK rectangle that occludes the web content.

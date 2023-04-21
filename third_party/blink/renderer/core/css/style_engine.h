@@ -60,6 +60,7 @@
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/loader/fetch/render_blocking_behavior.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
@@ -449,10 +450,10 @@ class CORE_EXPORT StyleEngine final : public GarbageCollected<StyleEngine>,
                                               Element& removed_element,
                                               Element& after_element);
   void ScheduleNthPseudoInvalidations(ContainerNode&);
-  void ScheduleInvalidationsForRuleSets(TreeScope&,
-                                        const HeapHashSet<Member<RuleSet>>&,
-                                        InvalidationScope =
-                                            kInvalidateCurrentScope);
+  void ScheduleInvalidationsForRuleSets(
+      TreeScope&,
+      const HeapHashSet<Member<RuleSet>>&,
+      InvalidationScope = kInvalidateCurrentScope);
   void ScheduleCustomElementInvalidations(HashSet<AtomicString> tag_names);
   void ScheduleInvalidationsForHasPseudoAffectedByInsertion(
       Element* parent,
@@ -647,7 +648,9 @@ class CORE_EXPORT StyleEngine final : public GarbageCollected<StyleEngine>,
 
   Document& GetDocument() const { return *document_; }
 
-  typedef HeapHashSet<Member<TreeScope>> UnorderedTreeScopeSet;
+  typedef HeapHashSet<Member<TreeScope>,
+                      WTF::MemberHashRecordReplayId<TreeScope>>
+      UnorderedTreeScopeSet;
 
   bool MediaQueryAffectingValueChanged(const ActiveStyleSheetVector&,
                                        MediaValueChange);
@@ -886,7 +889,8 @@ class CORE_EXPORT StyleEngine final : public GarbageCollected<StyleEngine>,
 
   Member<CSSFontSelector> font_selector_;
 
-  HeapHashMap<AtomicString, WeakMember<StyleSheetContents>> text_to_sheet_cache_;
+  HeapHashMap<AtomicString, WeakMember<StyleSheetContents>>
+      text_to_sheet_cache_;
   HeapHashMap<WeakMember<StyleSheetContents>, AtomicString>
       sheet_to_text_cache_;
 

@@ -112,6 +112,8 @@ class CORE_EXPORT HTMLMediaElement
   USING_PRE_FINALIZER(HTMLMediaElement, Dispose);
 
  public:
+  using ScriptWrappable::RecordReplayId;
+
   // Limits the range of media playback rate.
   static constexpr double kMinPlaybackRate = 0.0625;
   static constexpr double kMaxPlaybackRate = 16.0;

@@ -52,13 +52,15 @@ class SVGPropertyBase;
 class SVGSVGElement;
 class SVGUseElement;
 
-typedef HeapHashSet<Member<SVGElement>> SVGElementSet;
+typedef HeapHashSet<Member<SVGElement>, WTF::MemberHashRecordReplayId<SVGElement>> SVGElementSet;
 
 class CORE_EXPORT SVGElement : public Element {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
   ~SVGElement() override;
+
+  using ScriptWrappable::RecordReplayId;
 
   bool SupportsFocus() const override { return false; }
 

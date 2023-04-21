@@ -144,6 +144,7 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
     }
 
     static const bool safe_to_compare_to_empty_or_deleted = true;
+    static constexpr bool kIsRecordReplayDeterministicHash = true;
   };
 
   using PageSet = HeapHashSet<WeakMember<Page>, PageHash>;

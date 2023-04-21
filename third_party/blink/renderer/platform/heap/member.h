@@ -176,7 +176,7 @@ struct MemberHashRecordReplayId
             std::enable_if_t<WTF::IsAnyMemberType<Member>::value>* = nullptr>
   static unsigned GetHash(const Member& m) {
     if (recordreplay::IsRecordingOrReplaying()) {
-      int id = static_cast<T*>(m.Get())->RecordReplayId();
+      int id = m.Get()->T::RecordReplayId();
       // Ids are allowed to be zero if we've diverged from the recording.
       if (recordreplay::HasDivergedFromRecording()) {
         if (id > 0) {

@@ -41,6 +41,7 @@
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/heap/prefinalizer.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
@@ -58,9 +59,12 @@ class Node;
 class ScriptState;
 class V8MutationCallback;
 
-using MutationObserverSet = HeapHashSet<Member<MutationObserver>>;
+using MutationObserverSet =
+    HeapHashSet<Member<MutationObserver>,
+                WTF::MemberHashRecordReplayId<MutationObserver>>;
 using MutationObserverRegistrationSet =
-    HeapHashSet<WeakMember<MutationObserverRegistration>>;
+    HeapHashSet<WeakMember<MutationObserverRegistration>,
+                WTF::MemberHashRecordReplayId<MutationObserverRegistration>>;
 using MutationObserverVector = HeapVector<Member<MutationObserver>>;
 using MutationRecordVector = HeapVector<Member<MutationRecord>>;
 
@@ -73,6 +77,8 @@ class CORE_EXPORT MutationObserver final
   USING_PRE_FINALIZER(MutationObserver, CancelInspectorAsyncTasks);
 
  public:
+  using ScriptWrappable::RecordReplayId;
+
   enum ObservationFlags { kSubtree = 1 << 3, kAttributeFilter = 1 << 4 };
 
   enum DeliveryFlags {

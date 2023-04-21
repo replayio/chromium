@@ -53,6 +53,8 @@ class CORE_EXPORT ShadowRoot final : public DocumentFragment, public TreeScope {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
+  using ScriptWrappable::RecordReplayId;
+
   ShadowRoot(Document&, ShadowRootType);
   ~ShadowRoot() override;
   ShadowRoot(const ShadowRoot&) = delete;

@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_DOM_SYNCHRONOUS_MUTATION_OBSERVER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_DOM_SYNCHRONOUS_MUTATION_OBSERVER_H_
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/container_node.h"
 #include "third_party/blink/renderer/core/dom/qualified_name.h"
@@ -39,7 +40,9 @@ class Text;
 //  - SelectionController
 //  - Range set
 //  - NodeIterator set
-class CORE_EXPORT SynchronousMutationObserver : public GarbageCollectedMixin {
+class CORE_EXPORT SynchronousMutationObserver
+    : public GarbageCollectedMixin,
+      public recordreplay::RecordReplayIdMixin {
  public:
   // TODO(yosin): We will have following member functions:
   //  - dataWillBeChanged(const CharacterData&);

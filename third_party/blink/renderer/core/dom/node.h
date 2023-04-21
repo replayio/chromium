@@ -41,6 +41,7 @@
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/custom_spaces.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/text/text_direction.h"
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
 
@@ -161,13 +162,14 @@ enum class LinkHighlightCandidate {
 // A Node is a base class for all objects in the DOM tree.
 // The spec governing this interface can be found here:
 // https://dom.spec.whatwg.org/#interface-node
-class CORE_EXPORT Node : public EventTarget,
-                         public recordreplay::RecordReplayIdMixin {
+class CORE_EXPORT Node : public EventTarget {
   DEFINE_WRAPPERTYPEINFO();
   friend class TreeScope;
   friend class TreeScopeAdopter;
 
  public:
+  using ScriptWrappable::RecordReplayId;
+
   enum NodeType {
     kElementNode = 1,
     kAttributeNode = 2,
@@ -1179,7 +1181,9 @@ class CORE_EXPORT Node : public EventTarget,
 
   const HeapVector<Member<MutationObserverRegistration>>*
   MutationObserverRegistry();
-  const HeapHashSet<Member<MutationObserverRegistration>>*
+  const HeapHashSet<
+      Member<MutationObserverRegistration>,
+      WTF::MemberHashRecordReplayId<MutationObserverRegistration>>*
   TransientMutationObserverRegistry();
 
   NodeRareData* DataAsNodeRareData() const {

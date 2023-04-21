@@ -50,6 +50,8 @@ class SVGSVGElement final : public SVGGraphicsElement,
   explicit SVGSVGElement(Document&);
   ~SVGSVGElement() override;
 
+  using ScriptWrappable::RecordReplayId;
+
   absl::optional<float> IntrinsicWidth() const;
   absl::optional<float> IntrinsicHeight() const;
   gfx::SizeF CurrentViewportSize() const;

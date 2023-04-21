@@ -28,6 +28,7 @@
 
 #include "base/callback.h"
 #include "base/containers/lru_cache.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/platform/fonts/font_cache_key.h"
 #include "third_party/blink/renderer/platform/fonts/font_selection_types.h"
 #include "third_party/blink/renderer/platform/fonts/segmented_font_data.h"
@@ -87,7 +88,8 @@ class FontFaceList : public GarbageCollected<FontFaceList> {
 };
 
 class CSSSegmentedFontFace final
-    : public GarbageCollected<CSSSegmentedFontFace> {
+    : public GarbageCollected<CSSSegmentedFontFace>,
+      public recordreplay::RecordReplayIdMixin {
  public:
   static CSSSegmentedFontFace* Create(FontSelectionCapabilities);
 

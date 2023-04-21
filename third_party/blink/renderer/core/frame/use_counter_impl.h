@@ -27,6 +27,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_FRAME_USE_COUNTER_IMPL_H_
 
 #include <bitset>
+#include "base/record_replay.h"
 #include "third_party/blink/public/common/use_counter/use_counter_feature_tracker.h"
 #include "third_party/blink/public/common/user_agent/user_agent_metadata.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy_feature.mojom-blink-forward.h"
@@ -102,7 +103,8 @@ class CORE_EXPORT UseCounterImpl final {
   // An interface to observe UseCounterImpl changes. Note that this is never
   // notified when the counter is disabled by |m_muteCount| or when |m_context|
   // is kDisabledContext.
-  class Observer : public GarbageCollected<Observer> {
+  class Observer : public GarbageCollected<Observer>,
+                   public recordreplay::RecordReplayIdMixin {
    public:
     // Notified when a feature is counted for the first time. This should return
     // true if it no longer needs to observe changes so that the counter can

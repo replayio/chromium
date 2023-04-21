@@ -263,9 +263,11 @@ void SerializerMarkupAccumulator::AppendRewrittenAttribute(
   elements_with_rewritten_links_.insert(&element);
 
   if (html_names::kSrcAttr.LocalName().GetString() == attribute_name) {
-    recordreplay::Assert("[RUN-658-1438] SerializerMarkupAccumulator::AppendRewrittenAttribute %d %s",
-                         element.RecordReplayId(),
-                         attribute_value.Utf8().c_str());
+    recordreplay::Assert(
+        "[RUN-658-1438] SerializerMarkupAccumulator::AppendRewrittenAttribute "
+        "%d %s",
+        element.ScriptWrappable::RecordReplayId(),
+        attribute_value.Utf8().c_str());
   }
 
   // Append the rewritten attribute.

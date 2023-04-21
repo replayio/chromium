@@ -53,13 +53,16 @@
 #include "ui/gfx/geometry/rect_f.h"
 #include "ui/gfx/geometry/size.h"
 
+// For RecordReplayId
+#include "third_party/blink/renderer/core/html/canvas/canvas_draw_listener.h"
+
 #define CanvasDefaultInterpolationQuality kInterpolationLow
 
 namespace blink {
 
 class Canvas2DLayerBridge;
 class CanvasContextCreationAttributesCore;
-class CanvasDrawListener;
+// class CanvasDrawListener;
 class CanvasHighDynamicRangeOptions;
 class CanvasRenderingContext;
 class CanvasRenderingContextFactory;

@@ -33,6 +33,7 @@
 #include "base/dcheck_is_on.h"
 #include "base/functional/function_ref.h"
 #include "base/gtest_prod_util.h"
+#include "base/record_replay.h"
 #include "base/time/time.h"
 #include "third_party/blink/public/common/metrics/document_update_reason.h"
 #include "third_party/blink/public/mojom/frame/lifecycle.mojom-blink-forward.h"
@@ -54,12 +55,16 @@
 #include "third_party/blink/renderer/platform/graphics/paint/cull_rect.h"
 #include "third_party/blink/renderer/platform/graphics/paint_invalidation_reason.h"
 #include "third_party/blink/renderer/platform/graphics/subtree_paint_property_update_reason.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cancellable_task.h"
 #include "third_party/blink/renderer/platform/timer.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
 #include "ui/gfx/geometry/rect.h"
+
+// For RecordReplayId
+#include "third_party/blink/renderer/core/exported/web_plugin_container_impl.h"
 
 template <typename T>
 class sk_sp;
@@ -72,7 +77,7 @@ class PaintOpBuffer;
 enum class PaintHoldingCommitTrigger;
 using PaintRecord = PaintOpBuffer;
 struct PaintBenchmarkResult;
-}
+}  // namespace cc
 
 namespace gfx {
 class SizeF;
@@ -115,7 +120,7 @@ class Scrollbar;
 class ScrollingCoordinator;
 class TransformState;
 class LocalFrameUkmAggregator;
-class WebPluginContainerImpl;
+// class WebPluginContainerImpl;
 struct AnnotatedRegionValue;
 struct IntrinsicSizingInfo;
 struct MobileFriendliness;
@@ -147,7 +152,8 @@ class CORE_EXPORT LocalFrameView final
 
  public:
   class CORE_EXPORT LifecycleNotificationObserver
-      : public GarbageCollectedMixin {
+      : public GarbageCollectedMixin,
+        public recordreplay::RecordReplayIdMixin {
    public:
     // These are called when the lifecycle updates start/finish.
     virtual void WillStartLifecycleUpdate(const LocalFrameView&) {}
@@ -306,7 +312,8 @@ class CORE_EXPORT LocalFrameView final
   void AdjustMediaTypeForPrinting(bool printing);
 
   typedef HeapHashSet<Member<LayoutObject>,
-                      WTF::MemberHashRecordReplayId<LayoutObject>> ObjectSet;
+                      WTF::MemberHashRecordReplayId<LayoutObject>>
+      ObjectSet;
   void AddFixedPositionObject(LayoutObject&);
   void RemoveFixedPositionObject(LayoutObject&);
   const ObjectSet* FixedPositionObjects() const {
@@ -453,7 +460,9 @@ class CORE_EXPORT LocalFrameView final
     return is_tracking_raster_invalidations_;
   }
 
-  using ScrollableAreaSet = HeapHashSet<Member<PaintLayerScrollableArea>, WTF::MemberHashRecordReplayId<PaintLayerScrollableArea>>;
+  using ScrollableAreaSet =
+      HeapHashSet<Member<PaintLayerScrollableArea>,
+                  WTF::MemberHashRecordReplayId<PaintLayerScrollableArea>>;
   void AddScrollAnchoringScrollableArea(PaintLayerScrollableArea*);
   void RemoveScrollAnchoringScrollableArea(PaintLayerScrollableArea*);
   const ScrollableAreaSet* ScrollAnchoringScrollableAreas() const {
@@ -1020,7 +1029,8 @@ class CORE_EXPORT LocalFrameView final
   LayoutSize size_;
 
   typedef HeapHashSet<Member<LayoutEmbeddedObject>,
-                      WTF::MemberHashRecordReplayId<LayoutEmbeddedObject>> EmbeddedObjectSet;
+                      WTF::MemberHashRecordReplayId<LayoutEmbeddedObject>>
+      EmbeddedObjectSet;
   EmbeddedObjectSet part_update_set_;
 
   Member<LocalFrame> frame_;
@@ -1178,7 +1188,9 @@ class CORE_EXPORT LocalFrameView final
   // possible, avoids needing to walk the tree to update them. See:
   // https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/core/paint/README.md#Transform-update-optimization
   // for more on the fast path
-  Member<HeapHashSet<Member<LayoutObject>>> pending_transform_updates_;
+  Member<HeapHashSet<Member<LayoutObject>,
+                     WTF::MemberHashRecordReplayId<LayoutObject>>>
+      pending_transform_updates_;
 
   // TODO(1370937): Currently we don't yet know how to handle soft navigation
   // UKM reporting. This flag indicates that First Contentful Paint was reported

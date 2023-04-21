@@ -4,13 +4,15 @@
 
 #include "third_party/blink/renderer/core/html/custom/custom_state_set.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/css/css_selector.h"
 #include "third_party/blink/renderer/core/css/parser/css_parser_idioms.h"
 #include "third_party/blink/renderer/core/dom/element.h"
 
 namespace blink {
 
-class CustomStateIterationSource : public CustomStateSet::IterationSource {
+class CustomStateIterationSource : public CustomStateSet::IterationSource,
+                                   public recordreplay::RecordReplayIdMixin {
  public:
   explicit CustomStateIterationSource(CustomStateSet& states)
       : states_(states) {}

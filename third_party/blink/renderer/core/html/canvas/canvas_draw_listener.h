@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_HTML_CANVAS_CANVAS_DRAW_LISTENER_H_
 
 #include "base/memory/ref_counted.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/platform/graphics/static_bitmap_image.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -16,7 +17,9 @@ class VideoFrame;
 
 namespace blink {
 
-class CORE_EXPORT CanvasDrawListener : public GarbageCollectedMixin {
+class CORE_EXPORT CanvasDrawListener
+    : public GarbageCollectedMixin,
+      public recordreplay::RecordReplayIdMixin {
  public:
   virtual ~CanvasDrawListener();
   // GetNewFrameCallback returns a once-callback to be made with a VideoFrame
