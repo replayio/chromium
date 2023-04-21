@@ -430,7 +430,7 @@ int Node::GetMessage(const PortRef& port_ref,
 
 int Node::SendUserMessage(const PortRef& port_ref,
                           std::unique_ptr<UserMessageEvent> message) {
-  recordreplay::Assert("Node::SendUserMessage");
+  recordreplay::Assert("[RUN-1307-1773] Node::SendUserMessage");
   int rv = SendUserMessageInternal(port_ref, &message);
   if (rv != OK) {
     // If send failed, close all carried ports. Note that we're careful not to
