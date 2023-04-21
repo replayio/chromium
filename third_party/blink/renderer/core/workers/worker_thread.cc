@@ -153,13 +153,13 @@ class WorkerThread::InterruptData {
 };
 
 WorkerThread::~WorkerThread() {
-  recordreplay::UnregisterPointer(this);
-  DCHECK_CALLED_ON_VALID_THREAD(parent_thread_checker_);
-
   recordreplay::Assert(
       "[RUN-1537-1689] WorkerThread::~WorkerThread %d %d (%d %d %d)",
       recordreplay::PointerId(this), worker_thread_id_, requested_to_terminate_,
       (int)exit_code_, (int)thread_state_);
+
+  recordreplay::UnregisterPointer(this);
+  DCHECK_CALLED_ON_VALID_THREAD(parent_thread_checker_);
 
   base::AutoLock locker(ThreadSetLock());
   DCHECK(InitializingWorkerThreads().Contains(this) ||
