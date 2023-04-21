@@ -628,7 +628,7 @@ ChannelLinux::~ChannelLinux() = default;
 void ChannelLinux::Write(MessagePtr message) {
   recordreplay::Assert("[RUN-1307-1773] ChannelLinux::Write %d %d %d",
                        !shared_mem_writer_, message->has_handles(),
-                       reject_writes_);
+                       (int)reject_writes_);
   if (!shared_mem_writer_ || message->has_handles() || reject_writes_) {
     // Let the ChannelPosix deal with this.
     return ChannelPosix::Write(std::move(message));

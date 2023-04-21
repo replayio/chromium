@@ -397,7 +397,7 @@ MojoResult MessagePipeDispatcher::CloseNoLock() {
 
   recordreplay::Assert(
       "[RUN-1307-1773] MessagePipeDispatcher::CloseNoLock %d %d %d",
-      port_closed_, in_transit_, port_transferred_);
+      (int)port_closed_, (int)in_transit_, (int)port_transferred_);
   if (port_closed_ || in_transit_)
     return MOJO_RESULT_INVALID_ARGUMENT;
 
