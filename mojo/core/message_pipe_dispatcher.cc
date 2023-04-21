@@ -403,6 +403,7 @@ MojoResult MessagePipeDispatcher::CloseNoLock() {
 
   port_closed_.Set(true);
   watchers_.NotifyClosed();
+
   if (!port_transferred_) {
     recordreplay::AutoUnlockMaybeEventsDisallowed unlock(signal_lock_);
     node_controller_->ClosePort(port_);
