@@ -160,7 +160,6 @@ WorkerThread::~WorkerThread() {
 
   recordreplay::UnregisterPointer(this);
   DCHECK_CALLED_ON_VALID_THREAD(parent_thread_checker_);
-
   base::AutoLock locker(ThreadSetLock());
   DCHECK(InitializingWorkerThreads().Contains(this) ||
          WorkerThreads().Contains(this));
