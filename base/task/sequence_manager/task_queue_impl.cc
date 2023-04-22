@@ -280,6 +280,8 @@ TaskQueueImpl::TaskQueueImpl(SequenceManagerImpl* sequence_manager,
 TaskQueueImpl::~TaskQueueImpl() {
   recordreplay::UnregisterPointer(this);
 #if DCHECK_IS_ON()
+  if (!recordreplay::AreEventsDisallowed())
+    recordreplay::Assert("[RUN-1769] TaskQueueImpl::~TaskQueueImpl");
   base::internal::CheckedAutoLock lock(any_thread_lock_);
   // NOTE this check shouldn't fire because |SequenceManagerImpl::queues_|
   // contains a strong reference to this TaskQueueImpl and the
@@ -419,6 +421,8 @@ void TaskQueueImpl::RemoveCancelableTask(HeapHandle heap_handle) {
 TimeDelta TaskQueueImpl::GetTaskDelayAdjustment(CurrentThread current_thread) {
 #if DCHECK_IS_ON()
   if (current_thread == TaskQueueImpl::CurrentThread::kNotMainThread) {
+    if (!recordreplay::AreEventsDisallowed())
+      recordreplay::Assert("[RUN-1769] TaskQueueImpl::GetTaskDelayAdjustment");
     base::internal::CheckedAutoLock lock(any_thread_lock_);
     // Add a per-priority delay to cross thread tasks. This can help diagnose
     // scheduler induced flakiness by making things flake most of the time.
@@ -445,6 +449,9 @@ void TaskQueueImpl::PostImmediateTaskImpl(PostedTask task,
     bool events_disallowed = recordreplay::AreEventsDisallowed();
     if (events_disallowed)
       recordreplay::BeginPassThroughEvents();
+
+    if (!events_disallowed)
+      recordreplay::Assert("[RUN-1769] TaskQueueImpl::PostImmediateTaskImpl #0");
 
     // TODO(alexclarke): Maybe add a main thread only immediate_incoming_queue
     // See https://crbug.com/901800
@@ -503,6 +510,9 @@ void TaskQueueImpl::PostImmediateTaskImpl(PostedTask task,
       should_schedule_work =
           any_thread_.post_immediate_task_should_schedule_work;
     }
+
+    if (!events_disallowed)
+      recordreplay::Assert("[RUN-1769] TaskQueueImpl::PostImmediateTaskImpl #5");
   }
 
   // On windows it's important to call this outside of a lock because calling a
@@ -1028,7 +1038,14 @@ void TaskQueueImpl::InsertFence(Fence current_fence) {
       main_thread_only().delayed_work_queue->InsertFence(current_fence);
 
   {
+    if (!recordreplay::AreEventsDisallowed())
+      recordreplay::Assert("[RUN-1769] TaskQueueImpl::InsertFence #1");
+
     base::internal::CheckedAutoLock lock(any_thread_lock_);
+
+    if (!recordreplay::AreEventsDisallowed())
+      recordreplay::Assert("[RUN-1769] TaskQueueImpl::InsertFence #2");
+
     if (!front_task_unblocked && previous_fence &&
         previous_fence->task_order() < current_fence.task_order()) {
       if (!any_thread_.immediate_incoming_queue.empty() &&

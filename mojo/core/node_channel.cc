@@ -585,6 +585,9 @@ void NodeChannel::OnChannelMessage(const void* payload,
   }
 
   const Header* header = static_cast<const Header*>(payload);
+
+  recordreplay::Assert("[RUN-1768] NodeChannel::OnChannelMessage %d", (int)header->type);
+
   switch (header->type) {
     case MessageType::ACCEPT_INVITEE: {
       AcceptInviteeData data;

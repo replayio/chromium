@@ -116,6 +116,8 @@ Node::~Node() {
 }
 
 bool Node::CanShutdownCleanly(ShutdownPolicy policy) {
+  recordreplay::Assert("[RUN-1793] Node::CanShutdownCleanly");
+
   PortLocker::AssertNoPortsLockedOnCurrentThread();
   base::AutoLock ports_lock(ports_lock_);
 
@@ -157,6 +159,8 @@ bool Node::CanShutdownCleanly(ShutdownPolicy policy) {
 }
 
 int Node::GetPort(const PortName& port_name, PortRef* port_ref) {
+  recordreplay::Assert("[RUN-1793] Node::GetPort");
+
   PortLocker::AssertNoPortsLockedOnCurrentThread();
   base::AutoLock lock(ports_lock_);
   auto iter = ports_.find(port_name);
@@ -190,6 +194,8 @@ int Node::InitializePort(const PortRef& port_ref,
                          const PortName& peer_port_name,
                          const NodeName& prev_node_name,
                          const PortName& prev_port_name) {
+  recordreplay::Assert("[RUN-1793] Node::InitializePort");
+
   {
     // Must be acquired for UpdatePortPeerAddress below.
     PortLocker::AssertNoPortsLockedOnCurrentThread();
@@ -619,6 +625,8 @@ int Node::AcceptEvent(const NodeName& from_node, ScopedEvent event) {
 int Node::MergePorts(const PortRef& port_ref,
                      const NodeName& destination_node_name,
                      const PortName& destination_port_name) {
+  recordreplay::Assert("[RUN-1793] Node::MergePorts");
+
   PortName new_port_name;
   Event::PortDescriptor new_port_descriptor;
   PendingUpdatePreviousPeer pending_update_event{.from_port = port_ref.name()};
@@ -779,6 +787,8 @@ int Node::OnPortAccepted(const PortRef& port_ref,
 
 int Node::OnObserveProxy(const PortRef& port_ref,
                          std::unique_ptr<ObserveProxyEvent> event) {
+  recordreplay::Assert("[RUN-1793] Node::OnObserveProxy");
+
   if (event->port_name() == kInvalidPortName) {
     // An ObserveProxy with an invalid target port name is a broadcast used to
     // inform ports when their peer (which was itself a proxy) has become
@@ -790,6 +800,7 @@ int Node::OnObserveProxy(const PortRef& port_ref,
     DCHECK_EQ(event->proxy_target_node_name(), kInvalidNodeName);
     DCHECK_EQ(event->proxy_target_port_name(), kInvalidPortName);
     DestroyAllPortsWithPeer(event->proxy_node_name(), event->proxy_port_name());
+    recordreplay::Assert("[RUN-1793] Node::OnObserveProxy #1");
     return OK;
   }
 
@@ -799,6 +810,7 @@ int Node::OnObserveProxy(const PortRef& port_ref,
   if (!port_ref.is_valid()) {
     DVLOG(1) << "ObserveProxy: " << event->port_name() << "@" << name_
              << " not found";
+    recordreplay::Assert("[RUN-1793] Node::OnObserveProxy #2");
     return OK;
   }
 
@@ -812,12 +824,18 @@ int Node::OnObserveProxy(const PortRef& port_ref,
   ScopedEvent event_to_forward;
   NodeName event_target_node;
   {
+    recordreplay::Assert("[RUN-1793] Node::OnObserveProxy #3");
+
     // Must be acquired for UpdatePortPeerAddress below.
     PortLocker::AssertNoPortsLockedOnCurrentThread();
     base::AutoLock ports_locker(ports_lock_);
 
+    recordreplay::Assert("[RUN-1793] Node::OnObserveProxy #4");
+
     SinglePortLocker locker(&port_ref);
     auto* port = locker.port();
+
+    recordreplay::Assert("[RUN-1793] Node::OnObserveProxy #5");
 
     if (port->peer_node_name == event->proxy_node_name() &&
         port->peer_port_name == event->proxy_port_name()) {
@@ -1324,6 +1342,8 @@ int Node::SendUserMessageInternal(const PortRef& port_ref,
 int Node::MergePortsInternal(const PortRef& port0_ref,
                              const PortRef& port1_ref,
                              bool allow_close_on_bad_state) {
+  recordreplay::Assert("[RUN-1793] Node::MergePortsInternal");
+
   const PortRef* port_refs[2] = {&port0_ref, &port1_ref};
   PendingUpdatePreviousPeer pending_update_events[2];
   uint64_t original_sequence_number[2];
@@ -1449,6 +1469,8 @@ int Node::MergePortsInternal(const PortRef& port0_ref,
 
     return OK;
   }
+
+  recordreplay::Assert("[RUN-1793] Node::MergePortsInternal #5");
 
   // If we failed to forward proxied messages, we keep the system in a
   // consistent state by undoing the peer swap and closing the ports.
@@ -1579,6 +1601,8 @@ int Node::PrepareToForwardUserMessage(const PortRef& forwarding_port_ref,
         return ERROR_PORT_STATE_UNEXPECTED;
       }
     }
+
+    recordreplay::Assert("[RUN-1793] Node::PrepareToForwardUserMessage #4");
 
     // Must be held because ConvertToProxy needs to update |peer_port_maps_|.
     PortLocker::AssertNoPortsLockedOnCurrentThread();
@@ -1895,6 +1919,8 @@ void Node::DestroyAllPortsWithPeer(const NodeName& node_name,
 
   ScopedEvent closure_event;
   NodeName closure_event_target_node;
+
+  recordreplay::Assert("[RUN-1793] Node::DestroyAllPortsWithPeer");
 
   {
     PortLocker::AssertNoPortsLockedOnCurrentThread();
