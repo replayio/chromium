@@ -950,7 +950,9 @@ bool Channel::OnReadComplete(size_t bytes_read, size_t* next_read_size_hint) {
       read_buffer_->Realign();
     }
 
-    recordreplay::Assert("[RUN-1768] Channel::OnReadComplete #2");
+    recordreplay::AssertBytes("[RUN-1768] Channel::OnReadComplete #2",
+                              read_buffer_->occupied_bytes(),
+                              read_buffer_->num_occupied_bytes());
 
     DispatchResult result =
         TryDispatchMessage(base::make_span(read_buffer_->occupied_bytes(),
