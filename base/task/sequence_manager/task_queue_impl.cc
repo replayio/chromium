@@ -651,8 +651,7 @@ void TaskQueueImpl::ReloadEmptyImmediateWorkQueue() {
 }
 
 void TaskQueueImpl::TakeImmediateIncomingQueueTasks(TaskDeque* queue, TaskDeque* record_replay_unordered_queue) {
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-1769] TaskQueueImpl::TakeImmediateIncomingQueueTasks");
+  recordreplay::Assert("[RUN-1769] TaskQueueImpl::TakeImmediateIncomingQueueTasks Start");
 
   DCHECK(queue->empty());
   // Now is a good time to consider reducing the empty queue's capacity if we're
@@ -688,6 +687,8 @@ void TaskQueueImpl::TakeImmediateIncomingQueueTasks(TaskDeque* queue, TaskDeque*
   }
 
   UpdateCrossThreadQueueStateLocked();
+
+  recordreplay::Assert("[RUN-1769] TaskQueueImpl::TakeImmediateIncomingQueueTasks Done");
 }
 
 bool TaskQueueImpl::IsEmpty() const {
