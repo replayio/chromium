@@ -17,8 +17,8 @@ steps:
       - "queue=runtime"
     artifact_paths:
       - "build_id/**"
-  - label: "Build chromium - Linux"
-    key: "build-chromium-linux"
+  - label: "Build chromium - Mac"
+    key: "build-chromium-mac"
     plugins:
       - thedyrt/skip-checkout#v0.1.1: ~
     command: "cd /Users/administrator/chromium/src && node buildMac.mjs &&  node replay_build_scripts/upload_build_artifacts.mjs"
