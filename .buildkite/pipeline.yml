@@ -29,8 +29,9 @@ steps:
       - "runtimeType=chromiumbuild"
       - "os=macos"
       - "queue=runtime"
-    artifact_paths:
-      - "build_id/**"
+    # TODO(dmiller): this might race with the linux build, we should store these under separate paths
+    # artifact_paths:
+    #   - "build_id/**"
   - trigger: "testing-runtime-e2e"
     label: ":hammer: Trigger Runtime Tests"
     depends_on: "build-chromium-linux"
