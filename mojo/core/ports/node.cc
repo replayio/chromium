@@ -160,9 +160,13 @@ bool Node::CanShutdownCleanly(ShutdownPolicy policy) {
 
 int Node::GetPort(const PortName& port_name, PortRef* port_ref) {
   recordreplay::Assert("[RUN-1793] Node::GetPort");
+  recordreplay::Diagnostic("[RUN-1793] Node::GetPort");
 
   PortLocker::AssertNoPortsLockedOnCurrentThread();
   base::AutoLock lock(ports_lock_);
+
+  recordreplay::Assert("[RUN-1793] Node::GetPort #1");
+
   auto iter = ports_.find(port_name);
   if (iter == ports_.end())
     return ERROR_PORT_UNKNOWN;

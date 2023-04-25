@@ -8,6 +8,8 @@
 
 #include <windows.h>
 
+#include "base/record_replay.h"
+
 namespace recordreplay {
 
 extern void AddOrderedSRWLock(const char* name, void* lock);
@@ -27,8 +29,15 @@ LockImpl::LockImpl(const char* ordered_name) : native_handle_(SRWLOCK_INIT) {
 LockImpl::~LockImpl() = default;
 
 void LockImpl::LockInternalWithTracking() {
+  recordreplay::Diagnostic("LockImpl::LockInternalWithTracking");
+
   base::debug::ScopedLockAcquireActivity lock_activity(this);
+
+  recordreplay::Diagnostic("LockImpl::LockInternalWithTracking #1");
+
   ::AcquireSRWLockExclusive(reinterpret_cast<PSRWLOCK>(&native_handle_));
+
+  recordreplay::Diagnostic("LockImpl::LockInternalWithTracking Done");
 }
 
 }  // namespace internal
