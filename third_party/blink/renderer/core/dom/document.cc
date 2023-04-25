@@ -819,7 +819,7 @@ Document::Document(const DocumentInit& initializer,
   // Documents are registered so that we can test the validity of document
   // pointers while replaying to avoid crashes.
   // See V8Window::NamedPropertyGetterCustom
-  recordreplay::RegisterPointer(this);
+  recordreplay::RegisterPointer("Document", this);
 
   if (base::FeatureList::IsEnabled(features::kDelayAsyncScriptExecution))
     script_runner_delayer_->Activate();
