@@ -727,7 +727,7 @@ SequenceManagerImpl::SelectNextTaskImpl(LazyNow& lazy_now,
 
     recordreplay::Assert(
         "[RUN-1124-1803] SequenceManagerImpl::SelectNextTaskImpl D %zu %s",
-        work_queue->Size(), work_queue->name(), work_queue->Size());
+        work_queue->Size(), work_queue->name());
 
     return SelectedTask(
         executing_task.pending_task,
