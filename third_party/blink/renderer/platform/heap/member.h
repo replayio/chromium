@@ -21,10 +21,13 @@ namespace blink {
 template <typename T>
 using Member = cppgc::Member<T>;
 
+// template <typename T>
+// using WeakMember = cppgc::ReplayWeakMember<T>;
+// template <typename T>
+// using _WeakMember = cppgc::WeakMember<T>;
+
 template <typename T>
-using WeakMember = cppgc::ReplayWeakMember<T>;
-template <typename T>
-using _WeakMember = cppgc::WeakMember<T>;
+using WeakMember = cppgc::WeakMember<T>;
 
 template <typename T>
 using UntracedMember = cppgc::UntracedMember<T>;

@@ -122,16 +122,11 @@ v8::Isolate* AgentGroupSchedulerImpl::Isolate() {
 void AgentGroupSchedulerImpl::AddAgent(Agent* agent) {
   DCHECK(agents_->find(agent) == agents_->end());
   agents_->insert(agent);
-  
-  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers"))
-    replay_agents_strong_->insert(agent);
 }
 
 void AgentGroupSchedulerImpl::RemoveAgent(Agent* agent) {
   DCHECK(agents_->find(agent) != agents_->end());
   agents_->erase(agent);
-  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers"))
-    replay_agents_strong_->erase(agent);
 }
 
 void AgentGroupSchedulerImpl::PerformMicrotaskCheckpoint() {
