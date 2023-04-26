@@ -49,8 +49,7 @@ AgentGroupSchedulerImpl::AgentGroupSchedulerImpl(
       main_thread_scheduler_(main_thread_scheduler) {
   DCHECK(!default_task_queue_->GetFrameScheduler());
   DCHECK_EQ(default_task_queue_->GetAgentGroupScheduler(), this);
-  agents_ = MakeGarbageCollected<HeapHashSet<WeakMember<Agent>, WTF::MemberHashRecordReplayId<Agent>>>();
-  replay_agents_strong_ = MakeGarbageCollected<HeapHashSet<Member<Agent>>>();
+  agents_ = MakeGarbageCollected<HeapHashSet<ReplayWeakMember<Agent>, WTF::MemberHashRecordReplayId<Agent>>>();
   record_replay_id_ = recordreplay::NewIdAnyThread("AgentGroupSchedulerImpl");
 }
 
