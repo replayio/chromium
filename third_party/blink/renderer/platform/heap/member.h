@@ -29,13 +29,15 @@ template <typename T>
 using ReplayWeakMember = cppgc::ReplayWeakMember<T>;
 template <typename T>
 using WeakMember = cppgc::ReplayWeakMember<T>;
-template <typename T>
-using _WeakMember = cppgc::WeakMember<T>;
 
-// template <typename T>
-// using WeakMember = cppgc::WeakMember<T>;
+TODO; // TODO: move `WeakMember` override to V8!
+//  (because blink calls some V8 things directly which depends on WeakMember, e.g. visitor.h)
 // template <typename T>
 // using ReplayWeakMember = cppgc::ReplayWeakMember<T>;
+// template <typename T>
+// using WeakMember = cppgc::ReplayWeakMember<T>;
+// template <typename T>
+// using _WeakMember = cppgc::WeakMember<T>;
 
 template <typename T>
 using UntracedMember = cppgc::UntracedMember<T>;
