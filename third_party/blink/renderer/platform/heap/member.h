@@ -17,17 +17,25 @@
 #include "third_party/blink/renderer/platform/wtf/type_traits.h"
 #include "v8/include/cppgc/member.h"
 
+
+#define REPLAY_LEAK_WEAK recordreplay::IsRecordingOrReplaying("avoid-weak-pointers")
+#include "v8/include/cppgc/member-replay.h"
+
 namespace blink {
 template <typename T>
 using Member = cppgc::Member<T>;
 
-// template <typename T>
-// using WeakMember = cppgc::ReplayWeakMember<T>;
-// template <typename T>
-// using _WeakMember = cppgc::WeakMember<T>;
-
 template <typename T>
-using WeakMember = cppgc::WeakMember<T>;
+using ReplayWeakMember = cppgc::ReplayWeakMember<T>;
+template <typename T>
+using WeakMember = cppgc::ReplayWeakMember<T>;
+template <typename T>
+using _WeakMember = cppgc::WeakMember<T>;
+
+// template <typename T>
+// using WeakMember = cppgc::WeakMember<T>;
+// template <typename T>
+// using ReplayWeakMember = cppgc::ReplayWeakMember<T>;
 
 template <typename T>
 using UntracedMember = cppgc::UntracedMember<T>;
@@ -50,6 +58,12 @@ struct ThreadingTrait<blink::WeakMember<T>> {
   STATIC_ONLY(ThreadingTrait);
   static constexpr ThreadAffinity kAffinity = ThreadingTrait<T>::kAffinity;
 };
+
+// template <typename T>
+// struct ThreadingTrait<blink::ReplayWeakMember<T>> {
+//   STATIC_ONLY(ThreadingTrait);
+//   static constexpr ThreadAffinity kAffinity = ThreadingTrait<T>::kAffinity;
+// };
 
 template <typename T>
 struct ThreadingTrait<blink::UntracedMember<T>> {
@@ -238,6 +252,12 @@ struct DefaultHash<blink::WeakMember<T>> {
   STATIC_ONLY(DefaultHash);
   using Hash = DefaultHashTypeForMember<T>;
 };
+
+// template <typename T>
+// struct DefaultHash<blink::ReplayWeakMember<T>> {
+//   STATIC_ONLY(DefaultHash);
+//   using Hash = DefaultHashTypeForMember<T>;
+// };
 
 template <typename T>
 struct DefaultHash<blink::UntracedMember<T>> {

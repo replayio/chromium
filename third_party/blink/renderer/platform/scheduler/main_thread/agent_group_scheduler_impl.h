@@ -14,12 +14,6 @@
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/scheduler/public/agent_group_scheduler.h"
 
-
-#include "v8/include/cppgc/member-replay.h"
-
-template <typename T>
-using ReplayWeakMember = cppgc::ReplayWeakMember<T>;
-
 namespace base {
 class SingleThreadTaskRunner;
 }
@@ -67,7 +61,7 @@ class PLATFORM_EXPORT AgentGroupSchedulerImpl : public AgentGroupScheduler {
   scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner_;
   MainThreadSchedulerImpl& main_thread_scheduler_;  // Not owned.
   Persistent<
-      HeapHashSet<ReplayWeakMember<Agent>, WTF::MemberHashRecordReplayId<Agent>>>
+      HeapHashSet<WeakMember<Agent>, WTF::MemberHashRecordReplayId<Agent>>>
       agents_;
 
   BrowserInterfaceBrokerProxy broker_;
