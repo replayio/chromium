@@ -232,7 +232,7 @@ async function main(options) {
   // Write the build_id artifact.  This is how buildkite agents will know which build
   // to download from S3: by first downloading this file.
   fs.rmSync(BUILDKITE_ARTIFACT_DIRECTORY, { force: true, recursive: true });
-  fs.mkdirSync(BUILDKITE_ARTIFACT_DIRECTORY, { recursive: true }});
+  fs.mkdirSync(BUILDKITE_ARTIFACT_DIRECTORY, { recursive: true });
   fs.writeFileSync(
     path.join(BUILDKITE_ARTIFACT_DIRECTORY, BUILDKITE_BUILD_ID_ARTIFACT),
     buildId
