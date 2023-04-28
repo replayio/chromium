@@ -225,11 +225,13 @@ async function main(options) {
     .map((uri) =>
       uri.replace("s3://recordreplay-website", "https://static.replay.io")
     )
-    .map((url) => `* [${url}](${url})`)
+    .map((uri) => `* [${path.basename(uri)}](${uri})`)
     .join("\n");
 
+  const markdownMessage = `# Download Links\n\n${markdownDownloadList}\n`;
+
   spawnChecked("buildkite-agent", ["annotate", "-"], {
-    input: markdownDownloadList,
+    input: markdownMessage,
     stdio: "inherit",
   });
 
