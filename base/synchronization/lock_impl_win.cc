@@ -13,6 +13,7 @@
 namespace recordreplay {
 
 extern void AddOrderedSRWLock(const char* name, void* lock);
+extern void RemoveOrderedSRWLock(void* lock);
 
 } // namespace recordreplay
 
@@ -26,7 +27,9 @@ LockImpl::LockImpl(const char* ordered_name) : native_handle_(SRWLOCK_INIT) {
     recordreplay::AddOrderedSRWLock(ordered_name, &native_handle_);
 }
 
-LockImpl::~LockImpl() = default;
+LockImpl::~LockImpl() {
+  recordreplay::RemoveOrderedSRWLock(&native_handle_);
+}
 
 void LockImpl::LockInternalWithTracking() {
   recordreplay::Diagnostic("LockImpl::LockInternalWithTracking");
