@@ -999,7 +999,6 @@ void TaskQueueImpl::InsertFence(Fence current_fence) {
 
   {
     base::internal::CheckedAutoLock lock(any_thread_lock_);
-
     if (!front_task_unblocked && previous_fence &&
         previous_fence->task_order() < current_fence.task_order()) {
       if (!any_thread_.immediate_incoming_queue.empty() &&

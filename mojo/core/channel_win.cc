@@ -27,8 +27,6 @@
 #include "base/win/scoped_handle.h"
 #include "base/win/win_util.h"
 
-#include "base/record_replay.h"
-
 namespace mojo {
 namespace core {
 
@@ -312,12 +310,9 @@ class ChannelWin : public Channel,
 
     if (bytes_read > 0) {
       size_t next_read_size = 0;
-      recordreplay::Assert("[RUN-1768] ChannelWin::OnReadDone #1");
       if (OnReadComplete(bytes_read, &next_read_size)) {
-        recordreplay::Assert("[RUN-1768] ChannelWin::OnReadDone #2");
         ReadMore(next_read_size);
       } else {
-        recordreplay::Assert("[RUN-1768] ChannelWin::OnReadDone #3");
         OnError(Error::kReceivedMalformedData);
       }
     } else if (bytes_read == 0) {

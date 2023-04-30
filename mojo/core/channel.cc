@@ -945,9 +945,6 @@ bool Channel::OnReadComplete(size_t bytes_read, size_t* next_read_size_hint) {
   const size_t header_size = is_for_ipcz_ ? sizeof(Message::IpczHeader)
                                           : sizeof(Message::LegacyHeader);
 
-  recordreplay::Assert("[RUN-1768] Channel::OnReadComplete #1 %d %zu",
-                       is_for_ipcz_, read_buffer_->num_occupied_bytes());
-
   while (read_buffer_->num_occupied_bytes() >= header_size) {
     // Ensure the occupied data is properly aligned. If it isn't, a SIGBUS could
     // happen on architectures that don't allow misaligned words access (i.e.
@@ -956,10 +953,6 @@ bool Channel::OnReadComplete(size_t bytes_read, size_t* next_read_size_hint) {
             reinterpret_cast<uintptr_t>(read_buffer_->occupied_bytes()))) {
       read_buffer_->Realign();
     }
-
-    recordreplay::AssertBytes("[RUN-1768] Channel::OnReadComplete #2",
-                              read_buffer_->occupied_bytes(),
-                              read_buffer_->num_occupied_bytes());
 
     DispatchResult result =
         TryDispatchMessage(base::make_span(read_buffer_->occupied_bytes(),
@@ -982,8 +975,6 @@ bool Channel::OnReadComplete(size_t bytes_read, size_t* next_read_size_hint) {
 Channel::DispatchResult Channel::TryDispatchMessage(
     base::span<const char> buffer,
     size_t* size_hint) {
-  recordreplay::Assert("[RUN-1768] Channel::TryDispatchMessage");
-
   TRACE_EVENT(TRACE_DISABLED_BY_DEFAULT("toplevel.ipc"),
               "Mojo dispatch message");
   if (is_for_ipcz_) {
@@ -995,13 +986,10 @@ Channel::DispatchResult Channel::TryDispatchMessage(
     const size_t header_size = header.size;
     const size_t num_bytes = header.num_bytes;
     const size_t num_handles = header.num_handles;
-    if (header_size < sizeof(header) || num_bytes < header_size) {
-      recordreplay::Assert("[RUN-1768] Channel::TryDispatchMessage #1");
+    if (header_size < sizeof(header) || num_bytes < header_size)
       return DispatchResult::kError;
-    }
 
     if (buffer.size() < num_bytes) {
-      recordreplay::Assert("[RUN-1768] Channel::TryDispatchMessage #2");
       *size_hint = num_bytes - buffer.size();
       return DispatchResult::kNotEnoughData;
     }
@@ -1010,16 +998,12 @@ Channel::DispatchResult Channel::TryDispatchMessage(
     if (num_handles > 0) {
       if (handle_policy_ == HandlePolicy::kRejectHandles ||
           !GetReadPlatformHandlesForIpcz(num_handles, handles)) {
-        recordreplay::Assert("[RUN-1768] Channel::TryDispatchMessage #3");
         return DispatchResult::kError;
       }
       if (handles.empty()) {
-        recordreplay::Assert("[RUN-1768] Channel::TryDispatchMessage #4");
         return DispatchResult::kMissingHandles;
       }
     }
-
-    recordreplay::Assert("[RUN-1768] Channel::TryDispatchMessage #5");
 
     auto data = buffer.first(num_bytes).subspan(header_size);
     delegate_->OnChannelMessage(data.data(), data.size(), std::move(handles));
