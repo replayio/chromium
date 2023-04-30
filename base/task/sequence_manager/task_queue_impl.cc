@@ -280,8 +280,6 @@ TaskQueueImpl::TaskQueueImpl(SequenceManagerImpl* sequence_manager,
 TaskQueueImpl::~TaskQueueImpl() {
   recordreplay::UnregisterPointer(this);
 #if DCHECK_IS_ON()
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-1769] TaskQueueImpl::~TaskQueueImpl");
   base::internal::CheckedAutoLock lock(any_thread_lock_);
   // NOTE this check shouldn't fire because |SequenceManagerImpl::queues_|
   // contains a strong reference to this TaskQueueImpl and the
@@ -316,9 +314,6 @@ scoped_refptr<SingleThreadTaskRunner> TaskQueueImpl::CreateTaskRunner(
 }
 
 void TaskQueueImpl::UnregisterTaskQueue() {
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-1769] TaskQueueImpl::UnregisterTaskQueue");
-
   TRACE_EVENT0("base", "TaskQueueImpl::UnregisterTaskQueue");
   // Detach task runners.
   {
@@ -421,8 +416,6 @@ void TaskQueueImpl::RemoveCancelableTask(HeapHandle heap_handle) {
 TimeDelta TaskQueueImpl::GetTaskDelayAdjustment(CurrentThread current_thread) {
 #if DCHECK_IS_ON()
   if (current_thread == TaskQueueImpl::CurrentThread::kNotMainThread) {
-    if (!recordreplay::AreEventsDisallowed())
-      recordreplay::Assert("[RUN-1769] TaskQueueImpl::GetTaskDelayAdjustment");
     base::internal::CheckedAutoLock lock(any_thread_lock_);
     // Add a per-priority delay to cross thread tasks. This can help diagnose
     // scheduler induced flakiness by making things flake most of the time.
@@ -449,9 +442,6 @@ void TaskQueueImpl::PostImmediateTaskImpl(PostedTask task,
     bool events_disallowed = recordreplay::AreEventsDisallowed();
     if (events_disallowed)
       recordreplay::BeginPassThroughEvents();
-
-    if (!events_disallowed)
-      recordreplay::Assert("[RUN-1769] TaskQueueImpl::PostImmediateTaskImpl #0");
 
     // TODO(alexclarke): Maybe add a main thread only immediate_incoming_queue
     // See https://crbug.com/901800
@@ -510,9 +500,6 @@ void TaskQueueImpl::PostImmediateTaskImpl(PostedTask task,
       should_schedule_work =
           any_thread_.post_immediate_task_should_schedule_work;
     }
-
-    if (!events_disallowed)
-      recordreplay::Assert("[RUN-1769] TaskQueueImpl::PostImmediateTaskImpl #5");
   }
 
   // On windows it's important to call this outside of a lock because calling a
@@ -651,8 +638,6 @@ void TaskQueueImpl::ReloadEmptyImmediateWorkQueue() {
 }
 
 void TaskQueueImpl::TakeImmediateIncomingQueueTasks(TaskDeque* queue, TaskDeque* record_replay_unordered_queue) {
-  recordreplay::Assert("[RUN-1769] TaskQueueImpl::TakeImmediateIncomingQueueTasks Start");
-
   DCHECK(queue->empty());
   // Now is a good time to consider reducing the empty queue's capacity if we're
   // wasting memory, before we make it the `immediate_incoming_queue`.
@@ -687,31 +672,20 @@ void TaskQueueImpl::TakeImmediateIncomingQueueTasks(TaskDeque* queue, TaskDeque*
   }
 
   UpdateCrossThreadQueueStateLocked();
-
-  recordreplay::Assert("[RUN-1769] TaskQueueImpl::TakeImmediateIncomingQueueTasks Done");
 }
 
 bool TaskQueueImpl::IsEmpty() const {
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-1769] TaskQueueImpl::IsEmpty");
-
   if (!main_thread_only().delayed_work_queue->Empty() ||
       !main_thread_only().delayed_incoming_queue.empty() ||
       !main_thread_only().immediate_work_queue->Empty()) {
     return false;
   }
 
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-1769] TaskQueueImpl::IsEmpty #1");
-
   base::internal::CheckedAutoLock lock(any_thread_lock_);
   return any_thread_.immediate_incoming_queue.empty();
 }
 
 size_t TaskQueueImpl::GetNumberOfPendingTasks() const {
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-1769] TaskQueueImpl::GetNumberOfPendingTasks");
-
   size_t task_count = 0;
   task_count += main_thread_only().delayed_work_queue->Size();
   task_count += main_thread_only().delayed_incoming_queue.size();
@@ -723,9 +697,6 @@ size_t TaskQueueImpl::GetNumberOfPendingTasks() const {
 }
 
 bool TaskQueueImpl::HasTaskToRunImmediatelyOrReadyDelayedTask() const {
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-1769] TaskQueueImpl::HasTaskToRunImmediatelyOrReadyDelayedTask");
-
   // Any work queue tasks count as immediate work.
   if (!main_thread_only().delayed_work_queue->Empty() ||
       !main_thread_only().immediate_work_queue->Empty()) {
@@ -739,9 +710,6 @@ bool TaskQueueImpl::HasTaskToRunImmediatelyOrReadyDelayedTask() const {
           sequence_manager_->main_thread_clock()->NowTicks()) {
     return true;
   }
-
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-1769] TaskQueueImpl::HasTaskToRunImmediatelyOrReadyDelayedTask #1");
 
   // Finally tasks on |immediate_incoming_queue| count as immediate work.
   base::internal::CheckedAutoLock lock(any_thread_lock_);
@@ -858,9 +826,6 @@ void TaskQueueImpl::TraceQueueSize() const {
   if (!associated_thread_->IsBoundToCurrentThread())
     return;
 
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-1769] TaskQueueImpl::TraceQueueSize #1");
-
   size_t total_task_count;
   {
     base::internal::CheckedAutoLock lock(any_thread_lock_);
@@ -914,9 +879,6 @@ TaskQueue::QueuePriority TaskQueueImpl::GetQueuePriority() const {
 }
 
 Value::Dict TaskQueueImpl::AsValue(TimeTicks now, bool force_verbose) const {
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-1769] TaskQueueImpl::AsValue");
-
   base::internal::CheckedAutoLock lock(any_thread_lock_);
   Value::Dict state;
   state.Set("name", GetName());
@@ -1022,9 +984,6 @@ void TaskQueueImpl::InsertFence(TaskQueue::InsertFencePosition position) {
 }
 
 void TaskQueueImpl::InsertFence(Fence current_fence) {
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-1769] TaskQueueImpl::InsertFence");
-
   // Only one fence may be present at a time.
   main_thread_only().delayed_fence = absl::nullopt;
 
@@ -1039,13 +998,7 @@ void TaskQueueImpl::InsertFence(Fence current_fence) {
       main_thread_only().delayed_work_queue->InsertFence(current_fence);
 
   {
-    if (!recordreplay::AreEventsDisallowed())
-      recordreplay::Assert("[RUN-1769] TaskQueueImpl::InsertFence #1");
-
     base::internal::CheckedAutoLock lock(any_thread_lock_);
-
-    if (!recordreplay::AreEventsDisallowed())
-      recordreplay::Assert("[RUN-1769] TaskQueueImpl::InsertFence #2");
 
     if (!front_task_unblocked && previous_fence &&
         previous_fence->task_order() < current_fence.task_order()) {
@@ -1078,9 +1031,6 @@ void TaskQueueImpl::InsertFenceAt(TimeTicks time) {
 }
 
 void TaskQueueImpl::RemoveFence() {
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-1769] TaskQueueImpl::RemoveFence");
-
   absl::optional<Fence> previous_fence = main_thread_only().current_fence;
   main_thread_only().current_fence = absl::nullopt;
   main_thread_only().delayed_fence = absl::nullopt;
@@ -1109,9 +1059,6 @@ void TaskQueueImpl::RemoveFence() {
 }
 
 bool TaskQueueImpl::BlockedByFence() const {
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-1769] TaskQueueImpl::BlockedByFence");
-
   if (!main_thread_only().current_fence)
     return false;
 
@@ -1119,9 +1066,6 @@ bool TaskQueueImpl::BlockedByFence() const {
       !main_thread_only().delayed_work_queue->BlockedByFence()) {
     return false;
   }
-
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-1769] TaskQueueImpl::BlockedByFence #1");
 
   base::internal::CheckedAutoLock lock(any_thread_lock_);
   if (any_thread_.immediate_incoming_queue.empty())
@@ -1260,9 +1204,6 @@ void TaskQueueImpl::SetQueueEnabled(bool enabled) {
   // immediate tasks inside UpdateWakeUp().
   UpdateWakeUp(&lazy_now);
 
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-1769] TaskQueueImpl::SetQueueEnabled #1");
-
   {
     base::internal::CheckedAutoLock lock(any_thread_lock_);
     UpdateCrossThreadQueueStateLocked();
@@ -1302,9 +1243,6 @@ void TaskQueueImpl::SetShouldReportPostedTasksWhenDisabled(bool should_report) {
   }
 
   main_thread_only().should_report_posted_tasks_when_disabled = should_report;
-
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-1769] TaskQueueImpl::SetShouldReportPostedTasksWhenDisabled #1");
 
   // Mirror the state to the AnyThread struct as well.
   {
@@ -1358,9 +1296,6 @@ void TaskQueueImpl::ReclaimMemory(TimeTicks now) {
   main_thread_only().delayed_work_queue->MaybeShrinkQueue();
   main_thread_only().immediate_work_queue->MaybeShrinkQueue();
 
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-1769] TaskQueueImpl::ReclaimMemory #1");
-
   {
     base::internal::CheckedAutoLock lock(any_thread_lock_);
     any_thread_.immediate_incoming_queue.MaybeShrinkQueue();
@@ -1368,9 +1303,6 @@ void TaskQueueImpl::ReclaimMemory(TimeTicks now) {
 }
 
 void TaskQueueImpl::PushImmediateIncomingTaskForTest(Task task) {
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-1769] TaskQueueImpl::PushImmediateIncomingTaskForTest");
-
   base::internal::CheckedAutoLock lock(any_thread_lock_);
   any_thread_.immediate_incoming_queue.push_back(std::move(task));
 }
@@ -1392,9 +1324,6 @@ void TaskQueueImpl::RequeueDeferredNonNestableTask(
     // the lock to avoid a cross-thread post task setting it again before
     // we actually make |immediate_work_queue| non-empty.
     if (main_thread_only().immediate_work_queue->Empty()) {
-      if (!recordreplay::AreEventsDisallowed())
-        recordreplay::Assert("[RUN-1769] TaskQueueImpl::RequeueDeferredNonNestableTask #1");
-
       base::internal::CheckedAutoLock lock(any_thread_lock_);
       empty_queues_to_reload_handle_.SetActive(false);
 
@@ -1453,9 +1382,6 @@ bool TaskQueueImpl::HasTaskToRunImmediately() const {
     return true;
   }
 
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-1769] TaskQueueImpl::HasTaskToRunImmediately #1");
-
   // Finally tasks on |immediate_incoming_queue| count as immediate work.
   base::internal::CheckedAutoLock lock(any_thread_lock_);
   return !any_thread_.immediate_incoming_queue.empty();
@@ -1501,9 +1427,6 @@ bool TaskQueueImpl::RequiresTaskTiming() const {
 
 std::unique_ptr<TaskQueue::OnTaskPostedCallbackHandle>
 TaskQueueImpl::AddOnTaskPostedHandler(OnTaskPostedHandler handler) {
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-1769] TaskQueueImpl::AddOnTaskPostedHandler");
-
   DCHECK(should_notify_observers_ && !handler.is_null());
   std::unique_ptr<OnTaskPostedCallbackHandleImpl> handle =
       std::make_unique<OnTaskPostedCallbackHandleImpl>(this,
@@ -1517,9 +1440,6 @@ TaskQueueImpl::AddOnTaskPostedHandler(OnTaskPostedHandler handler) {
 void TaskQueueImpl::RemoveOnTaskPostedHandler(
     TaskQueueImpl::OnTaskPostedCallbackHandleImpl*
         on_task_posted_callback_handle) {
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-1769] TaskQueueImpl::RemoveOnTaskPostedHandler");
-
   base::internal::CheckedAutoLock lock(any_thread_lock_);
   any_thread_.on_task_posted_handlers.erase(on_task_posted_callback_handle);
 }
@@ -1531,9 +1451,6 @@ void TaskQueueImpl::SetTaskExecutionTraceLogger(
 }
 
 bool TaskQueueImpl::IsUnregistered() const {
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-1769] TaskQueueImpl::IsUnregistered");
-
   recordreplay::AutoLockMaybeEventsDisallowed lock(any_thread_lock_);
   return any_thread_.unregistered;
 }
@@ -1622,9 +1539,6 @@ void TaskQueueImpl::MaybeReportIpcTaskQueuedFromAnyThreadUnlocked(
                                      &tracing_enabled);
   if (!tracing_enabled)
     return;
-
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-1769] TaskQueueImpl::MaybeReportIpcTaskQueuedFromAnyThreadUnlocked #1");
 
   base::TimeDelta time_since_disabled;
   bool should_report = false;

@@ -32,15 +32,8 @@ LockImpl::~LockImpl() {
 }
 
 void LockImpl::LockInternalWithTracking() {
-  recordreplay::Diagnostic("LockImpl::LockInternalWithTracking");
-
   base::debug::ScopedLockAcquireActivity lock_activity(this);
-
-  recordreplay::Diagnostic("LockImpl::LockInternalWithTracking #1");
-
   ::AcquireSRWLockExclusive(reinterpret_cast<PSRWLOCK>(&native_handle_));
-
-  recordreplay::Diagnostic("LockImpl::LockInternalWithTracking Done");
 }
 
 }  // namespace internal
