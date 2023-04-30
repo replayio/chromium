@@ -585,7 +585,6 @@ void NodeChannel::OnChannelMessage(const void* payload,
   }
 
   const Header* header = static_cast<const Header*>(payload);
-
   switch (header->type) {
     case MessageType::ACCEPT_INVITEE: {
       AcceptInviteeData data;

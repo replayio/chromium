@@ -944,7 +944,6 @@ bool Channel::OnReadComplete(size_t bytes_read, size_t* next_read_size_hint) {
 
   const size_t header_size = is_for_ipcz_ ? sizeof(Message::IpczHeader)
                                           : sizeof(Message::LegacyHeader);
-
   while (read_buffer_->num_occupied_bytes() >= header_size) {
     // Ensure the occupied data is properly aligned. If it isn't, a SIGBUS could
     // happen on architectures that don't allow misaligned words access (i.e.
@@ -986,8 +985,9 @@ Channel::DispatchResult Channel::TryDispatchMessage(
     const size_t header_size = header.size;
     const size_t num_bytes = header.num_bytes;
     const size_t num_handles = header.num_handles;
-    if (header_size < sizeof(header) || num_bytes < header_size)
+    if (header_size < sizeof(header) || num_bytes < header_size) {
       return DispatchResult::kError;
+    }
 
     if (buffer.size() < num_bytes) {
       *size_hint = num_bytes - buffer.size();
@@ -1004,7 +1004,6 @@ Channel::DispatchResult Channel::TryDispatchMessage(
         return DispatchResult::kMissingHandles;
       }
     }
-
     auto data = buffer.first(num_bytes).subspan(header_size);
     delegate_->OnChannelMessage(data.data(), data.size(), std::move(handles));
     *size_hint = num_bytes;

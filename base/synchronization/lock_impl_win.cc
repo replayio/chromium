@@ -8,8 +8,6 @@
 
 #include <windows.h>
 
-#include "base/record_replay.h"
-
 namespace recordreplay {
 
 extern void AddOrderedSRWLock(const char* name, void* lock);

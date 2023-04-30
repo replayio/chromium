@@ -159,7 +159,6 @@ bool Node::CanShutdownCleanly(ShutdownPolicy policy) {
 int Node::GetPort(const PortName& port_name, PortRef* port_ref) {
   PortLocker::AssertNoPortsLockedOnCurrentThread();
   base::AutoLock lock(ports_lock_);
-
   auto iter = ports_.find(port_name);
   if (iter == ports_.end())
     return ERROR_PORT_UNKNOWN;
