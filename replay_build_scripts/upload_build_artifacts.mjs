@@ -230,10 +230,13 @@ async function main(options) {
 
   const markdownMessage = `# Download Links\n\n${markdownDownloadList}\n`;
 
-  spawnChecked("buildkite-agent", ["annotate", "-"], {
-    input: markdownMessage,
-    stdio: "inherit",
-  });
+  spawnChecked(
+    "buildkite-agent",
+    ["annotate", "--style", "info", markdownMessage],
+    {
+      stdio: "inherit",
+    }
+  );
 
   const symbolsFile = `${buildId}.symbols.tgz`;
   uploadToAllBuckets(symbolsFile, `symbols/${symbolsFile}`);
