@@ -39,9 +39,9 @@ scoped_refptr<FontFallbackList> FontFallbackMap::Get(
 }
 
 void FontFallbackMap::Remove(const FontDescription& font_description) {
-  recordreplay::Assert("[RUN-1219-1718] FontFallbackMap::Remove #0 %d %s",
-    record_replay_id_,
-    font_description.ToString().Utf8().data());
+  recordreplay::Assert("[RUN-1219-1718] FontFallbackMap::Remove #0 %d %u",
+    record_replay_id_, StringHash::GetHash(font_description.ToString()));
+    
   AutoLockForParallelTextShaping guard(lock_);
   auto iter = fallback_list_for_description_.find(font_description);
   DCHECK_NE(iter, fallback_list_for_description_.end());
@@ -51,8 +51,14 @@ void FontFallbackMap::Remove(const FontDescription& font_description) {
 }
 
 void FontFallbackMap::InvalidateAll() {
-  recordreplay::Assert("[RUN-1219-1718] FontFallbackMap::InvalidateAll %d",
-    record_replay_id_);
+  // Only assert if events aren't disallowed.
+  // This is called from the font-fallback-map destructor, which may
+  // execute during GC.
+  if (!recordreplay::AreEventsDisallowed()) {
+    recordreplay::Assert("[RUN-1219-1718] FontFallbackMap::InvalidateAll %d",
+      record_replay_id_);
+  }
+
   lock_.AssertAcquired();
   for (auto& entry : fallback_list_for_description_)
     entry.value->MarkInvalid();
