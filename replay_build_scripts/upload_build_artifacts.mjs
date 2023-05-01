@@ -179,7 +179,9 @@ async function main(options) {
   let buildArchives = [];
   const buildId = await buildChromiumSymbols(options);
 
-  switch (currentPlatform()) {
+  const platform = currentPlatform();
+
+  switch (platform) {
     case "linux":
       buildArchives = prepareLinuxBinaries(buildId);
       break;
@@ -228,11 +230,11 @@ async function main(options) {
     .map((uri) => `* [${path.basename(uri)}](${uri})`)
     .join("\n");
 
-  const markdownMessage = `# Download Links\n\n${markdownDownloadList}\n`;
+  const markdownMessage = `# ${platform} links\n\n${markdownDownloadList}\n`;
 
   spawnChecked(
     "buildkite-agent",
-    ["annotate", "--style", "info", markdownMessage],
+    ["annotate", "--append", "--style", "info", markdownMessage],
     {
       stdio: "inherit",
     }
