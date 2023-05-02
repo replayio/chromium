@@ -33,17 +33,18 @@ if (currentPlatform() == "macOS") {
   spawnChecked("touch", [`${__dirname}/chrome/app/chrome_exe_main_mac.cc`]);
 }
 
+const archSuffix = buildArm ? "-arm" : "";
+
 if (!REPLAY_LOCAL_DRIVER_DIR) {
   // Download the record/replay driver archive, using the latest version unless
   // it was overridden via the environment.
   console.log(`Downloading driver...`);
-  const suffix = buildArm ? "-arm" : "";
-  let driverArchive = `${currentPlatform()}-recordreplay${suffix}.tgz`;
+  let driverArchive = `${currentPlatform()}-recordreplay${archSuffix}.tgz`;
   let downloadArchive = driverArchive;
   if (process.env.DRIVER_REVISION) {
     downloadArchive = `${currentPlatform()}-recordreplay-${
       process.env.DRIVER_REVISION
-    }${suffix}.tgz`;
+    }${archSuffix}.tgz`;
   }
   spawnChecked(
     "curl",
@@ -58,8 +59,8 @@ if (!REPLAY_LOCAL_DRIVER_DIR) {
   fs.unlinkSync(driverArchive);
 }
 
-let driverFile = `${currentPlatform()}-recordreplay.${driverExtension()}`;
-let driverJSON = `${currentPlatform()}-recordreplay.json`;
+let driverFile = `${currentPlatform()}-recordreplay${archSuffix}.${driverExtension()}`;
+let driverJSON = `${currentPlatform()}-recordreplay${archSuffix}.json`;
 if (REPLAY_LOCAL_DRIVER_DIR) {
   driverFile = path.resolve(REPLAY_LOCAL_DRIVER_DIR, driverFile);
   driverJSON = path.resolve(REPLAY_LOCAL_DRIVER_DIR, driverJSON);
