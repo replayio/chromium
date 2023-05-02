@@ -129,7 +129,10 @@ static void InitializationError(const char* format, ...) {
 #if BUILDFLAG(IS_WIN)
   // Additionally write the message to a new file. Capturing the output written to
   // stderr by browser subprocesses on windows is surprisingly difficult.
-  FILE* f = fopen("record_replay_initialization_error.txt", "w");
+  const char* dir = getenv("RECORD_REPLAY_LOG_DIRECTORY");
+  char file[1024];
+  snprintf(file, sizeof(file), "%s\\record_replay_initialization_error.txt", dir ? dir : ".");
+  FILE* f = fopen(file, "w");
   if (f) {
     va_list args;
     va_start(args, format);
