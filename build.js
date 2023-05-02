@@ -15,7 +15,8 @@ if (REPLAY_LOCAL_DRIVER_DIR && process.env.DRIVER_REVISION) {
   );
 }
 
-const outdir = process.env.REPLAY_BUILD_DIRECTORY || "out/Release";
+const buildArm = !!process.env.REPLAY_BUILD_ARM;
+const outdir = buildArm ? "out/Release-ARM" : "out/Release";
 
 // Ensure that the git repository is "trusted", otherwise we'll get errors like:
 // fatal: unsafe repository ('/chromium/src' is owned by someone else)
@@ -36,12 +37,13 @@ if (!REPLAY_LOCAL_DRIVER_DIR) {
   // Download the record/replay driver archive, using the latest version unless
   // it was overridden via the environment.
   console.log(`Downloading driver...`);
-  let driverArchive = `${currentPlatform()}-recordreplay.tgz`;
+  const suffix = buildArm ? "-arm" : "";
+  let driverArchive = `${currentPlatform()}-recordreplay${suffix}.tgz`;
   let downloadArchive = driverArchive;
   if (process.env.DRIVER_REVISION) {
     downloadArchive = `${currentPlatform()}-recordreplay-${
       process.env.DRIVER_REVISION
-    }.tgz`;
+    }${suffix}.tgz`;
   }
   spawnChecked(
     "curl",
