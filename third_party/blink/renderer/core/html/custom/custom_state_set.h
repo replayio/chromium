@@ -8,6 +8,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/iterable.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
 namespace blink {
@@ -52,7 +53,9 @@ class CustomStateSet final : public ScriptWrappable,
   // If the O(size()) operations are problematic, we should change the type of
   // the following data member.
   Vector<String> list_;
-  HeapHashSet<WeakMember<CustomStateIterationSource>> iterators_;
+  HeapHashSet<WeakMember<CustomStateIterationSource>,
+              WTF::MemberHashRecordReplayId<CustomStateIterationSource>>
+      iterators_;
 
   friend class CustomStateIterationSource;
 };

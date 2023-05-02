@@ -9,9 +9,11 @@
 #include "third_party/blink/renderer/core/html/media/html_media_element.h"
 #include "third_party/blink/renderer/platform/supplementable.h"
 
+// For visibility of `RecordReplayId()`.
+#include "third_party/blink/renderer/core/html/media/remote_playback_observer.h"
 namespace blink {
 
-class RemotePlaybackObserver;
+// class RemotePlaybackObserver;
 
 // Interface exposing RemotePlayback to core/. It is meant to replace
 // WebRemotePlaybackClient in the long run when there will be no need to expose

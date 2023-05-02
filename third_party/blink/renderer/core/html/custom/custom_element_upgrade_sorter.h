@@ -9,6 +9,7 @@
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 
 namespace blink {
@@ -35,7 +36,8 @@ class CORE_EXPORT CustomElementUpgradeSorter {
   void Sorted(HeapVector<Member<Element>>* result, Node* parent);
 
  private:
-  using ChildSet = HeapHashSet<Member<Node>>;
+  using ChildSet =
+      HeapHashSet<Member<Node>, WTF::MemberHashRecordReplayId<Node>>;
   using ParentChildMap = HeapHashMap<Member<Node>, Member<ChildSet>>;
 
   enum AddResult { kParentAlreadyExistsInMap, kParentAddedToMap };

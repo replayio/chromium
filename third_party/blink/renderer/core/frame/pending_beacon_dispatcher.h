@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_FRAME_PENDING_BEACON_DISPATCHER_H_
 
 #include "base/gtest_prod_util.h"
+#include "base/record_replay.h"
 #include "base/time/time.h"
 #include "base/types/pass_key.h"
 #include "third_party/blink/public/mojom/frame/pending_beacon.mojom-blink.h"
@@ -73,7 +74,8 @@ class CORE_EXPORT PendingBeaconDispatcher
   // pending beacon object. "pending" means this beacon is ok to send.
   // PendingBeaconDispatcher uses this abstraction, instead of the entire
   // blink::PendingBeacon, to schedule tasks to send out pending beacons.
-  class CORE_EXPORT PendingBeacon : public GarbageCollectedMixin {
+  class CORE_EXPORT PendingBeacon : public GarbageCollectedMixin,
+                                    public recordreplay::RecordReplayIdMixin {
    public:
     // Returns a background timeout to help schedule calls to `Send()` when the
     // page where this beacon created enters hidden visibility state.

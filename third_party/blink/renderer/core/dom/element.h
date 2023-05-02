@@ -211,6 +211,8 @@ class CORE_EXPORT Element : public ContainerNode, public Animatable {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
+  using ScriptWrappable::RecordReplayId;
+
   Element(const QualifiedName& tag_name,
           Document*,
           ConstructionType = kCreateElement);

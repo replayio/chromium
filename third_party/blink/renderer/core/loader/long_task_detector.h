@@ -16,7 +16,8 @@
 
 namespace blink {
 
-class CORE_EXPORT LongTaskObserver : public GarbageCollectedMixin {
+class CORE_EXPORT LongTaskObserver : public GarbageCollectedMixin,
+                                     public recordreplay::RecordReplayIdMixin {
  public:
   LongTaskObserver() {
     // Pointer registration is needed for sorting in LongTaskDetector methods.

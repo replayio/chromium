@@ -26,6 +26,7 @@
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/heap/thread_state_storage.h"
 #include "third_party/blink/renderer/platform/wtf/bit_field.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
@@ -55,7 +56,10 @@ class NodeMutationObserverData final
     return registry_;
   }
 
-  const HeapHashSet<Member<MutationObserverRegistration>>& TransientRegistry() {
+  const HeapHashSet<
+      Member<MutationObserverRegistration>,
+      WTF::MemberHashRecordReplayId<MutationObserverRegistration>>&
+  TransientRegistry() {
     return transient_registry_;
   }
 
@@ -68,7 +72,9 @@ class NodeMutationObserverData final
 
  private:
   HeapVector<Member<MutationObserverRegistration>> registry_;
-  HeapHashSet<Member<MutationObserverRegistration>> transient_registry_;
+  HeapHashSet<Member<MutationObserverRegistration>,
+              WTF::MemberHashRecordReplayId<MutationObserverRegistration>>
+      transient_registry_;
 };
 
 class NodeData : public GarbageCollected<NodeData> {

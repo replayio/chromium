@@ -26,6 +26,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_SCROLL_SCROLLBAR_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_SCROLL_SCROLLBAR_H_
 
+#include "base/record_replay.h"
 #include "third_party/blink/public/common/input/web_input_event.h"
 #include "third_party/blink/public/mojom/frame/color_scheme.mojom-blink-forward.h"
 #include "third_party/blink/renderer/core/core_export.h"
@@ -53,7 +54,8 @@ class WebMouseEvent;
 class WebPointerEvent;
 
 class CORE_EXPORT Scrollbar : public GarbageCollected<Scrollbar>,
-                              public DisplayItemClient {
+                              public DisplayItemClient,
+                              public recordreplay::RecordReplayIdMixin {
  public:
   // Theme object ownership remains with the caller and it must outlive the
   // scrollbar.

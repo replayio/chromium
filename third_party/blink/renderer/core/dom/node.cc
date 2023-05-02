@@ -129,6 +129,7 @@
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/v8_dom_wrapper.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/instrumentation/instance_counters.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/traced_value.h"
@@ -141,7 +142,9 @@
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
-namespace v8 { extern std::string RecordReplayGetScriptedCaller(); }
+namespace v8 {
+extern std::string RecordReplayGetScriptedCaller();
+}
 
 namespace blink {
 
@@ -1598,7 +1601,7 @@ void Node::AttachLayoutTree(AttachContext& context) {
 
 void Node::DetachLayoutTree(bool performing_reattach) {
   recordreplay::Assert("[RUN-1219-1694] Node::DetachLayoutTree %d",
-    this->RecordReplayId());
+                       this->RecordReplayId());
   DCHECK(GetDocument().Lifecycle().StateAllowsDetach() ||
          GetDocument().GetStyleEngine().InContainerQueryStyleRecalc());
   DCHECK(!performing_reattach ||
@@ -2045,9 +2048,11 @@ void Node::setTextContent(const String& text_arg) {
   // layout behavior diverges afterwards. See also Text::Create.
   if (recordreplay::IsRecordingOrReplaying("values")) {
     std::string contents = text.Utf8();
-    size_t recordedLength = recordreplay::RecordReplayValue("Node::setTextContent length", contents.length());
+    size_t recordedLength = recordreplay::RecordReplayValue(
+        "Node::setTextContent length", contents.length());
     contents.resize(recordedLength, ' ');
-    recordreplay::RecordReplayBytes("Node::setTextContent string", &contents[0], recordedLength);
+    recordreplay::RecordReplayBytes("Node::setTextContent string", &contents[0],
+                                    recordedLength);
     text = String::FromUTF8(&contents[0], recordedLength);
 
     // https://linear.app/replay/issue/RUN-809
@@ -2767,7 +2772,8 @@ Node::MutationObserverRegistry() {
   return &data->Registry();
 }
 
-const HeapHashSet<Member<MutationObserverRegistration>>*
+const HeapHashSet<Member<MutationObserverRegistration>,
+                  WTF::MemberHashRecordReplayId<MutationObserverRegistration>>*
 Node::TransientMutationObserverRegistry() {
   if (!HasRareData())
     return nullptr;
@@ -2870,8 +2876,7 @@ void Node::RegisterTransientMutationObserver(
 
 void Node::UnregisterTransientMutationObserver(
     MutationObserverRegistration* registration) {
-  const HeapHashSet<Member<MutationObserverRegistration>>* transient_registry =
-      TransientMutationObserverRegistry();
+  const auto* transient_registry = TransientMutationObserverRegistry();
   DCHECK(transient_registry);
   if (!transient_registry)
     return;

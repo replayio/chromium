@@ -15,6 +15,7 @@
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
 #include "third_party/blink/renderer/platform/supplementable.h"
 
@@ -60,7 +61,9 @@ class MODULES_EXPORT NavigatorShare final
   // This set must have at most 1 element on non-Android platforms. This is a
   // set, and not just and object in order to work around an Android specific
   // bug in opposition to the web-share spec.
-  HeapHashSet<Member<ShareClientImpl>> clients_;
+  HeapHashSet<Member<ShareClientImpl>,
+              WTF::MemberHashRecordReplayId<ShareClientImpl>>
+      clients_;
 };
 
 }  // namespace blink

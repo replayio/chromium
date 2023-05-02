@@ -31,6 +31,7 @@
 
 #include "base/check_op.h"
 #include "base/i18n/rtl.h"
+#include "base/record_replay.h"
 #include "base/unguessable_token.h"
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -98,7 +99,8 @@ enum class FrameInsertType { kInsertInConstructor, kInsertLater };
 // Frame is the base class of LocalFrame and RemoteFrame and should only contain
 // functionality shared between both. In particular, any method related to
 // input, layout, or painting probably belongs on LocalFrame.
-class CORE_EXPORT Frame : public GarbageCollected<Frame> {
+class CORE_EXPORT Frame : public GarbageCollected<Frame>,
+                          public recordreplay::RecordReplayIdMixin {
  public:
   // Returns the Frame instance for the given |frame_token|.
   // Note that this Frame can be either a LocalFrame or Remote instance.

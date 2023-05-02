@@ -12,14 +12,23 @@
 #include "third_party/blink/renderer/modules/wake_lock/wake_lock_type.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_wrapper_mode.h"
+
+// For visibility into `recordreplay::RecordReplayId()`.
+#include "third_party/blink/renderer/modules/wake_lock/wake_lock_sentinel.h"
 
 namespace blink {
 
 class ExecutionContext;
 class ScriptPromiseResolver;
-class WakeLockSentinel;
+// class WakeLockSentinel;
+
+void Foo() {
+  WakeLockSentinel* sentinel = nullptr;
+  sentinel->RecordReplayId();
+}
 
 // https://w3c.github.io/screen-wake-lock/#dfn-activelocks
 // Per-document and per-wake lock type internal data.
@@ -39,6 +48,7 @@ class MODULES_EXPORT WakeLockManager final
   // Handle connection errors from |wake_lock_|.
   void OnWakeLockConnectionError();
 
+  static_assert(WTF::has_record_replay_id<WakeLockSentinel>);
   // A set with all WakeLockSentinel instances belonging to this
   // Navigator/WorkerNavigator.
   HeapHashSet<Member<WakeLockSentinel>> wake_lock_sentinels_;

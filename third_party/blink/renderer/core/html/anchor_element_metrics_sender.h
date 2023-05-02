@@ -14,10 +14,13 @@
 #include "third_party/blink/renderer/platform/supplementable.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
+// For RecordReplayId.
+#include "third_party/blink/renderer/core/html/html_anchor_element.h"
+
 namespace blink {
 
 class Document;
-class HTMLAnchorElement;
+// class HTMLAnchorElement;
 class IntersectionObserver;
 class IntersectionObserverEntry;
 class AnchorElementMetrics;

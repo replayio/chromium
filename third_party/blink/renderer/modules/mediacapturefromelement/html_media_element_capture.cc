@@ -147,7 +147,9 @@ class MediaElementEventListener final : public NativeEventListener {
  private:
   Member<HTMLMediaElement> media_element_;
   Member<MediaStream> media_stream_;
-  HeapHashSet<WeakMember<MediaStreamSource>> sources_;
+  HeapHashSet<WeakMember<MediaStreamSource>,
+              WTF::MemberHashRecordReplayId<MediaStreamSource>>
+      sources_;
 };
 
 MediaElementEventListener::MediaElementEventListener(HTMLMediaElement* element,

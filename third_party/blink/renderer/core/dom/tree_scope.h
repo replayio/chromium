@@ -27,6 +27,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_DOM_TREE_SCOPE_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_DOM_TREE_SCOPE_H_
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_observable_array_css_style_sheet.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/css/css_style_sheet.h"
@@ -59,7 +60,8 @@ class ScopedStyleResolver;
 // A class which inherits both Node and TreeScope must call clearRareData() in
 // its destructor so that the Node destructor no longer does problematic
 // NodeList cache manipulation in the destructor.
-class CORE_EXPORT TreeScope : public GarbageCollectedMixin {
+class CORE_EXPORT TreeScope : public GarbageCollectedMixin,
+                              public recordreplay::RecordReplayIdMixin {
  public:
   enum HitTestPointType {
     kInternal = 1 << 1,

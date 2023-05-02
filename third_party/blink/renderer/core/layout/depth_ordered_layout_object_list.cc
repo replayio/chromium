@@ -9,6 +9,7 @@
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
 #include "third_party/blink/renderer/core/layout/layout_object.h"
 #include "third_party/blink/renderer/core/layout/ng/legacy_layout_tree_walking.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 
 namespace blink {
 
@@ -24,7 +25,11 @@ class DepthOrderedLayoutObjectListData
   HeapVector<LayoutObjectWithDepth>& ordered_objects() {
     return ordered_objects_;
   }
-  HeapHashSet<Member<LayoutObject>>& objects() { return objects_; }
+  HeapHashSet<Member<LayoutObject>,
+              WTF::MemberHashRecordReplayId<LayoutObject>>&
+  objects() {
+    return objects_;
+  }
 
   // LayoutObjects sorted by depth (deepest first). This structure is only
   // populated at the beginning of enumerations. See ordered().
@@ -33,7 +38,8 @@ class DepthOrderedLayoutObjectListData
   // Outside of layout, LayoutObjects can be added and removed as needed such
   // as when style was changed or destroyed. They're kept in this hashset to
   // keep those operations fast.
-  HeapHashSet<Member<LayoutObject>> objects_;
+  HeapHashSet<Member<LayoutObject>, WTF::MemberHashRecordReplayId<LayoutObject>>
+      objects_;
 };
 
 DepthOrderedLayoutObjectList::DepthOrderedLayoutObjectList()
@@ -107,7 +113,8 @@ unsigned LayoutObjectWithDepth::DetermineDepth(LayoutObject* object) {
   return depth;
 }
 
-const HeapHashSet<Member<LayoutObject>>&
+const HeapHashSet<Member<LayoutObject>,
+                  WTF::MemberHashRecordReplayId<LayoutObject>>&
 DepthOrderedLayoutObjectList::Unordered() const {
   return data_->objects();
 }

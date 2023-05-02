@@ -43,7 +43,7 @@ class ExceptionState;
 class ExecutionContext;
 class HTMLMediaElement;
 class HTMLElement;
-class TextTrack;
+// class TextTrack;
 class TextTrackCue;
 class TextTrackCueList;
 class TextTrackList;

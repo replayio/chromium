@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/core/frame/opened_frame_tracker.h"
 
 #include "third_party/blink/renderer/core/frame/frame.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 
 namespace blink {
 
@@ -33,7 +34,8 @@ void OpenedFrameTracker::Remove(Frame* frame) {
 void OpenedFrameTracker::TransferTo(Frame* opener) const {
   // Copy the set of opened frames, since changing the owner will mutate this
   // set.
-  HeapHashSet<Member<Frame>> frames(opened_frames_);
+  HeapHashSet<Member<Frame>, WTF::MemberHashRecordReplayId<Frame>> frames(
+      opened_frames_);
   for (const auto& frame : frames)
     frame->SetOpenerDoNotNotify(opener);
 }

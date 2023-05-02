@@ -29,6 +29,9 @@
 #include "third_party/blink/renderer/bindings/modules/v8/v8_decode_error_callback.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_decode_success_callback.h"
 
+// Included for `RecordReplayId()`.
+#include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
+
 namespace base {
 class SingleThreadTaskRunner;
 }
@@ -39,7 +42,8 @@ class AudioBuffer;
 class AudioBus;
 class BaseAudioContext;
 class DOMArrayBuffer;
-class ScriptPromiseResolver;
+// Replaced with #include directive.
+// class ScriptPromiseResolver;
 class ExceptionContext;
 class ExceptionState;
 

@@ -33,9 +33,12 @@
 #include "third_party/blink/renderer/platform/wtf/forward.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_hash.h"
 
+// For RecordReplayId
+#include "third_party/blink/renderer/core/dom/id_target_observer.h"
+
 namespace blink {
 
-class IdTargetObserver;
+// class IdTargetObserver;
 
 class CORE_EXPORT IdTargetObserverRegistry final
     : public GarbageCollected<IdTargetObserverRegistry> {

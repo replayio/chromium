@@ -88,6 +88,9 @@
 #include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
 #include "ui/gfx/geometry/transform.h"
 
+// For RecordReplayId
+#include "third_party/blink/renderer/core/frame/virtual_keyboard_overlay_changed_observer.h"
+
 namespace base {
 class SingleThreadTaskRunner;
 }
@@ -142,7 +145,7 @@ class StorageKey;
 class SystemClipboard;
 class TextFragmentHandler;
 class TextSuggestionController;
-class VirtualKeyboardOverlayChangedObserver;
+// class VirtualKeyboardOverlayChangedObserver;
 class WebContentSettingsClient;
 class WebInputEventAttribution;
 class WebPluginContainerImpl;

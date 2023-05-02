@@ -280,7 +280,8 @@ struct RecalcLayoutOverflowResult {
 // See the individual getters below for more details about what each width is.
 class CORE_EXPORT LayoutObject : public GarbageCollected<LayoutObject>,
                                  public ImageResourceObserver,
-                                 public DisplayItemClient {
+                                 public DisplayItemClient,
+                                 public recordreplay::RecordReplayIdMixin {
   friend class LayoutObjectChildList;
   FRIEND_TEST_ALL_PREFIXES(LayoutObjectTest, MutableForPaintingClearPaintFlags);
   FRIEND_TEST_ALL_PREFIXES(

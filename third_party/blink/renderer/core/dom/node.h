@@ -28,6 +28,7 @@
 
 #include "base/dcheck_is_on.h"
 #include "base/notreached.h"
+#include "base/record_replay.h"
 #include "third_party/blink/public/mojom/input/focus_type.mojom-blink-forward.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/events/event_target.h"
@@ -40,6 +41,7 @@
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/custom_spaces.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/text/text_direction.h"
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
 
@@ -166,6 +168,8 @@ class CORE_EXPORT Node : public EventTarget {
   friend class TreeScopeAdopter;
 
  public:
+  using ScriptWrappable::RecordReplayId;
+
   enum NodeType {
     kElementNode = 1,
     kAttributeNode = 2,
@@ -1177,7 +1181,9 @@ class CORE_EXPORT Node : public EventTarget {
 
   const HeapVector<Member<MutationObserverRegistration>>*
   MutationObserverRegistry();
-  const HeapHashSet<Member<MutationObserverRegistration>>*
+  const HeapHashSet<
+      Member<MutationObserverRegistration>,
+      WTF::MemberHashRecordReplayId<MutationObserverRegistration>>*
   TransientMutationObserverRegistry();
 
   NodeRareData* DataAsNodeRareData() const {

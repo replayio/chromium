@@ -31,11 +31,13 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_DOM_MUTATION_OBSERVER_REGISTRATION_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_DOM_MUTATION_OBSERVER_REGISTRATION_H_
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/mutation_observer.h"
 #include "third_party/blink/renderer/platform/bindings/name_client.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string_hash.h"
@@ -46,7 +48,8 @@ class QualifiedName;
 
 class CORE_EXPORT MutationObserverRegistration final
     : public GarbageCollected<MutationObserverRegistration>,
-      public NameClient {
+      public NameClient,
+      public recordreplay::RecordReplayIdMixin {
  public:
   MutationObserverRegistration(MutationObserver&,
                                Node*,
@@ -91,7 +94,8 @@ class CORE_EXPORT MutationObserverRegistration final
   Member<MutationObserver> observer_;
   WeakMember<Node> registration_node_;
   Member<Node> registration_node_keep_alive_;
-  typedef HeapHashSet<Member<Node>> NodeHashSet;
+  typedef HeapHashSet<Member<Node>, WTF::MemberHashRecordReplayId<Node>>
+      NodeHashSet;
   Member<NodeHashSet> transient_registration_nodes_;
 
   MutationObserverOptions options_;

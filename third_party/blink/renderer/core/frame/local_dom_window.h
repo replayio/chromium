@@ -29,6 +29,7 @@
 
 #include <memory>
 
+#include "base/record_replay.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
 #include "services/network/public/mojom/content_security_policy.mojom-blink.h"
@@ -108,7 +109,9 @@ class CORE_EXPORT LocalDOMWindow final : public DOMWindow,
   USING_PRE_FINALIZER(LocalDOMWindow, Dispose);
 
  public:
-  class CORE_EXPORT EventListenerObserver : public GarbageCollectedMixin {
+  class CORE_EXPORT EventListenerObserver
+      : public GarbageCollectedMixin,
+        public recordreplay::RecordReplayIdMixin {
    public:
     virtual void DidAddEventListener(LocalDOMWindow*, const AtomicString&) = 0;
     virtual void DidRemoveEventListener(LocalDOMWindow*,

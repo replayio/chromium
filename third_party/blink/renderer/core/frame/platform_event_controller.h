@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_FRAME_PLATFORM_EVENT_CONTROLLER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_FRAME_PLATFORM_EVENT_CONTROLLER_H_
 
+#include "base/record_replay.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/page/page_visibility_observer.h"
@@ -20,7 +21,9 @@ class LocalDOMWindow;
 // It watches page visibility and calls stopUpdating when page is not visible.
 // It provides a DidUpdateData() callback method which is called when new data
 // it available.
-class CORE_EXPORT PlatformEventController : public PageVisibilityObserver {
+class CORE_EXPORT PlatformEventController
+    : public PageVisibilityObserver,
+      public recordreplay::RecordReplayIdMixin {
  public:
   void StartUpdating();
   void StopUpdating();

@@ -31,13 +31,15 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_FONTS_FONT_CACHE_CLIENT_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_FONTS_FONT_CACHE_CLIENT_H_
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 
 namespace blink {
 
 class PLATFORM_EXPORT FontCacheClient
-    : public GarbageCollected<FontCacheClient> {
+    : public GarbageCollected<FontCacheClient>,
+      public recordreplay::RecordReplayIdMixin {
  public:
   virtual ~FontCacheClient() = default;
 

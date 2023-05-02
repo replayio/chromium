@@ -32,6 +32,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_CLIPBOARD_DATA_OBJECT_H_
 
 #include "base/memory/scoped_refptr.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/clipboard/data_object_item.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
@@ -56,7 +57,8 @@ enum class PasteMode;
 class CORE_EXPORT DataObject : public GarbageCollected<DataObject>,
                                public Supplementable<DataObject> {
  public:
-  struct CORE_EXPORT Observer : public GarbageCollectedMixin {
+  struct CORE_EXPORT Observer : public GarbageCollectedMixin,
+                                public recordreplay::RecordReplayIdMixin {
     // Called whenever |item_list_| is modified. Note it can be called multiple
     // times for a single mutation. For example, DataObject::SetData() calls
     // both ClearData() and Add(), each of which can call this method.

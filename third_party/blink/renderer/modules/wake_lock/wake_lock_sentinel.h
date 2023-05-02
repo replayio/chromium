@@ -29,6 +29,8 @@ class MODULES_EXPORT WakeLockSentinel final
   DEFINE_WRAPPERTYPEINFO();
 
  public:
+  using ScriptWrappable::RecordReplayId;
+
   WakeLockSentinel(ScriptState* script_state,
                    V8WakeLockType::Enum type,
                    WakeLockManager* manager);

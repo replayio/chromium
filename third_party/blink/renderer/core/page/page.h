@@ -27,6 +27,7 @@
 
 #include "base/check_op.h"
 #include "base/dcheck_is_on.h"
+#include "base/record_replay.h"
 #include "base/types/pass_key.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/features.h"
@@ -102,7 +103,8 @@ typedef uint64_t LinkHash;
 class CORE_EXPORT Page final : public GarbageCollected<Page>,
                                public Supplementable<Page>,
                                public SettingsDelegate,
-                               public PageScheduler::Delegate {
+                               public PageScheduler::Delegate,
+                               public recordreplay::RecordReplayIdMixin {
   friend class Settings;
 
  public:
@@ -142,6 +144,7 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
     }
 
     static const bool safe_to_compare_to_empty_or_deleted = true;
+    static constexpr bool kIsRecordReplayDeterministicHash = true;
   };
 
   using PageSet = HeapHashSet<WeakMember<Page>, PageHash>;

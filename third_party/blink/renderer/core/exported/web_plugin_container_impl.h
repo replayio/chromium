@@ -33,6 +33,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_EXPORTED_WEB_PLUGIN_CONTAINER_IMPL_H_
 
 #include "base/memory/scoped_refptr.h"
+#include "base/record_replay.h"
 #include "third_party/blink/public/common/input/web_coalesced_input_event.h"
 #include "third_party/blink/public/common/input/web_touch_event.h"
 #include "third_party/blink/public/mojom/input/focus_type.mojom-blink-forward.h"
@@ -71,7 +72,8 @@ struct WebPrintPresetOptions;
 class CORE_EXPORT WebPluginContainerImpl final
     : public GarbageCollected<WebPluginContainerImpl>,
       public EmbeddedContentView,
-      public WebPluginContainer {
+      public WebPluginContainer,
+      public recordreplay::RecordReplayIdMixin {
   USING_PRE_FINALIZER(WebPluginContainerImpl, PreFinalize);
 
  public:

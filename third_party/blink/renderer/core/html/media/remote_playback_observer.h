@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_HTML_MEDIA_REMOTE_PLAYBACK_OBSERVER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_HTML_MEDIA_REMOTE_PLAYBACK_OBSERVER_H_
 
+#include "base/record_replay.h"
 #include "third_party/blink/public/mojom/presentation/presentation.mojom-blink.h"
 
 namespace blink {
@@ -12,7 +13,8 @@ namespace blink {
 // Interface to be implemented by objects that intend to be notified by remote
 // playback status changes on an HTMLMediaElement. The object should self-add
 // itself to the RemotePlaybackController using the add/remove observer methods.
-class RemotePlaybackObserver : public GarbageCollectedMixin {
+class RemotePlaybackObserver : public GarbageCollectedMixin,
+                               public recordreplay::RecordReplayIdMixin {
  public:
   // Called when the remote playback state is changed. The state is related to
   // the connection to a remote device.
