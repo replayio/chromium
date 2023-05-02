@@ -24,6 +24,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_WTF_HASH_TABLE_H_
 
 #include <memory>
+#include <vector>
 
 #include "base/check_op.h"
 #include "base/dcheck_is_on.h"
@@ -289,49 +290,49 @@ class HashTableConstIterator final {
                                  Allocator>;
 
   void SkipEmptyBuckets() {
-    while (position_ != end_position_ &&
-           HashTableType::IsEmptyOrDeletedBucket(*position_))
+    while (position_ != end_position_ && *position_ == -1)
       ++position_;
   }
 
   void ReverseSkipEmptyBuckets() {
     // Don't need to check for out-of-bounds positions, as begin position is
     // always going to be a non-empty bucket.
-    while (HashTableType::IsEmptyOrDeletedBucket(*position_)) {
+    while (*position_ == -1) {
 #if DCHECK_IS_ON()
-      DCHECK_NE(position_, begin_position_);
+      assert(position_ != begin_position_);
+      //DCHECK_NE(position_, begin_position_);
 #endif
       --position_;
     }
   }
 
-  HashTableConstIterator(PointerType position,
-                         PointerType begin_position,
-                         PointerType end_position,
+  HashTableConstIterator(std::vector<ssize_t>::const_iterator position,
+                         std::vector<ssize_t>::const_iterator begin_position,
+                         std::vector<ssize_t>::const_iterator end_position,
                          const HashTableType* container)
       : position_(position),
-        end_position_(end_position)
+        end_position_(end_position),
+        container_(container)
 #if DCHECK_IS_ON()
         ,
         begin_position_(begin_position),
-        container_(container),
         container_modifications_(container->Modifications())
 #endif
   {
     SkipEmptyBuckets();
   }
 
-  HashTableConstIterator(PointerType position,
-                         PointerType begin_position,
-                         PointerType end_position,
+  HashTableConstIterator(std::vector<ssize_t>::const_iterator position,
+                         std::vector<ssize_t>::const_iterator begin_position,
+                         std::vector<ssize_t>::const_iterator end_position,
                          const HashTableType* container,
                          HashItemKnownGoodTag)
       : position_(position),
-        end_position_(end_position)
+        end_position_(end_position),
+        container_(container)
 #if DCHECK_IS_ON()
         ,
         begin_position_(begin_position),
-        container_(container),
         container_modifications_(container->Modifications())
 #endif
   {
@@ -357,7 +358,7 @@ class HashTableConstIterator final {
 
   GetType Get() const {
     CheckModifications();
-    return position_;
+    return &container_->table_[*position_];
   }
   typename Traits::IteratorConstReferenceType operator*() const {
     return Traits::GetToReferenceConstConversion(Get());
@@ -365,7 +366,8 @@ class HashTableConstIterator final {
   GetType operator->() const { return Get(); }
 
   const_iterator& operator++() {
-    DCHECK_NE(position_, end_position_);
+    assert(position_ != end_position_);
+    //DCHECK_NE(position_, end_position_);
     CheckModifications();
     ++position_;
     SkipEmptyBuckets();
@@ -376,7 +378,8 @@ class HashTableConstIterator final {
 
   const_iterator& operator--() {
 #if DCHECK_IS_ON()
-    DCHECK_NE(position_, begin_position_);
+    assert(position_ != end_position_);
+    //DCHECK_NE(position_, begin_position_);
 #endif
     CheckModifications();
     --position_;
@@ -405,15 +408,18 @@ class HashTableConstIterator final {
       return stream << "iterator representing <end>";
     // TODO(tkent): Change |position_| to |*position_| to show the
     // pointed object. It requires a lot of new stream printer functions.
-    return stream << "iterator pointing to " << position_;
+    return stream << "iterator pointing to " << &container_->table_[*position_];
   }
 
  private:
-  PointerType position_;
-  PointerType end_position_;
-#if DCHECK_IS_ON()
-  PointerType begin_position_;
+  std::vector<ssize_t>::const_iterator position_;
+  std::vector<ssize_t>::const_iterator end_position_;
   const HashTableType* container_;
+  //PointerType position_;
+  //PointerType end_position_;
+#if DCHECK_IS_ON()
+  std::vector<ssize_t>::const_iterator begin_position_;
+  //PointerType begin_position_;
   int64_t container_modifications_;
 #endif
 };
@@ -483,14 +489,14 @@ class HashTableIterator final {
                          KeyTraits,
                          Allocator>;
 
-  HashTableIterator(PointerType pos,
-                    PointerType begin,
-                    PointerType end,
+  HashTableIterator(std::vector<ssize_t>::iterator pos,
+                    std::vector<ssize_t>::iterator begin,
+                    std::vector<ssize_t>::iterator end,
                     const HashTableType* container)
       : iterator_(pos, begin, end, container) {}
-  HashTableIterator(PointerType pos,
-                    PointerType begin,
-                    PointerType end,
+  HashTableIterator(std::vector<ssize_t>::iterator pos,
+                    std::vector<ssize_t>::iterator begin,
+                    std::vector<ssize_t>::iterator end,
                     const HashTableType* container,
                     HashItemKnownGoodTag tag)
       : iterator_(pos, begin, end, container, tag) {}
@@ -768,13 +774,13 @@ class HashTable final
   // for begin.  This is more efficient because we don't have to skip all the
   // empty and deleted buckets, and iterating an empty table is a common case
   // that's worth optimizing.
-  iterator begin() { return empty() ? end() : MakeIterator(table_); }
-  iterator end() { return MakeKnownGoodIterator(table_ + table_size_); }
+  iterator begin() { return empty() ? end() : MakeIterator(idxorder_.begin()); }
+  iterator end() { return MakeKnownGoodIterator(idxorder_.end()); }
   const_iterator begin() const {
-    return empty() ? end() : MakeConstIterator(table_);
+    return empty() ? end() : MakeConstIterator(idxorder_.cbegin());
   }
   const_iterator end() const {
-    return MakeKnownGoodConstIterator(table_ + table_size_);
+    return MakeKnownGoodConstIterator(idxorder_.end());
   }
 
   unsigned size() const {
@@ -847,6 +853,9 @@ class HashTable final
   ValueType* Lookup(const T&);
   template <typename HashTranslator, typename T>
   const ValueType* Lookup(const T&) const;
+
+  template <typename HashTranslator, typename T>
+  ssize_t LookupIdx(const T&) const;
 
   ValueType** GetBufferSlot() { return &table_; }
 
@@ -938,18 +947,28 @@ class HashTable final
     return FullLookupType(LookupType(position, found), hash);
   }
 
-  iterator MakeIterator(ValueType* pos) {
-    return iterator(pos, table_, table_ + table_size_, this);
+  iterator MakeIterator(std::vector<ssize_t>::iterator pos) {
+    return iterator(pos,
+                    idxmap_.begin(),
+                    idxmap_.end(),
+                    this);
   }
-  const_iterator MakeConstIterator(const ValueType* pos) const {
-    return const_iterator(pos, table_, table_ + table_size_, this);
+  const_iterator MakeConstIterator(std::vector<ssize_t>::const_iterator pos) const {
+    return const_iterator(pos,
+                          idxmap_.cbegin(),
+                          idxmap_.cend(),
+                          this);
   }
-  iterator MakeKnownGoodIterator(ValueType* pos) {
-    return iterator(pos, table_, table_ + table_size_, this,
+  iterator MakeKnownGoodIterator(std::vector<ssize_t>::iterator pos) {
+    return iterator(pos,
+                    idxmap_.begin(),
+                    idxmap_.end(), this,
                     kHashItemKnownGood);
   }
-  const_iterator MakeKnownGoodConstIterator(const ValueType* pos) const {
-    return const_iterator(pos, table_, table_ + table_size_, this,
+  const_iterator MakeKnownGoodConstIterator(std::vector<ssize_t>::const_iterator pos) const {
+    return const_iterator(pos,
+                          idxmap_.cbegin(),
+                          idxmap_.cend(), this,
                           kHashItemKnownGood);
   }
 
@@ -970,6 +989,8 @@ class HashTable final
   struct RawStorageTag {};
   HashTable(RawStorageTag, ValueType* table, unsigned size)
       : table_(table),
+	idxmap_(size, -1),
+	idxorder_(),
         table_size_(size),
         key_count_(0),
         deleted_count_(0),
@@ -982,7 +1003,12 @@ class HashTable final
   {
   }
 
+public:
   ValueType* table_;
+private:
+  std::vector<ssize_t> idxmap_;
+  std::vector<ssize_t> idxorder_;
+
   unsigned table_size_;
   unsigned key_count_;
 #if DCHECK_IS_ON()
@@ -1101,6 +1127,55 @@ HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
   // Call the const version of Lookup<HashTranslator, T>().
   return const_cast<Value*>(
       const_cast<const HashTable*>(this)->Lookup<HashTranslator>(key));
+}
+
+template <typename Key,
+          typename Value,
+          typename Extractor,
+          typename HashFunctions,
+          typename Traits,
+          typename KeyTraits,
+          typename Allocator>
+template <typename HashTranslator, typename T>
+inline ssize_t
+HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
+    LookupIdx(const T& key) const {
+  DCHECK(!AccessForbidden());
+  DCHECK((HashTableKeyChecker<
+          HashTranslator, KeyTraits,
+          HashFunctions::safe_to_compare_to_empty_or_deleted>::CheckKey(key)));
+  const ValueType* table = table_;
+  if (!table)
+    return -1;
+
+  size_t size_mask = TableSizeMask();
+  unsigned h = HashTranslator::GetHash(key);
+  size_t i = h & size_mask;
+  size_t probe_count = 0;
+
+  UPDATE_ACCESS_COUNTS();
+
+  while (true) {
+    const ValueType* entry = table + i;
+
+    if (HashFunctions::safe_to_compare_to_empty_or_deleted) {
+      if (HashTranslator::Equal(Extractor::Extract(*entry), key))
+        return idxmap_.at(i);
+
+      if (IsEmptyBucket(*entry))
+        return -1;
+    } else {
+      if (IsEmptyBucket(*entry))
+        return -1;
+
+      if (!IsDeletedBucket(*entry) &&
+          HashTranslator::Equal(Extractor::Extract(*entry), key))
+        return idxmap_.at(i);
+    }
+    ++probe_count;
+    UPDATE_PROBE_COUNTS();
+    i = (i + probe_count) & size_mask;
+  }
 }
 
 template <typename Key,
@@ -1383,22 +1458,29 @@ HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
       break;
 
     if (HashFunctions::safe_to_compare_to_empty_or_deleted) {
-      if (HashTranslator::Equal(Extractor::Extract(*entry), key))
+      if (HashTranslator::Equal(Extractor::Extract(*entry), key)){
+	idxmap_[i] = idxorder_.size();
+        idxorder_.push_back(i);
         return AddResult(this, entry, false);
+      }
 
       if (IsDeletedBucket(*entry) && can_reuse_deleted_entry)
         deleted_entry = entry;
     } else {
       if (IsDeletedBucket(*entry) && can_reuse_deleted_entry)
         deleted_entry = entry;
-      else if (HashTranslator::Equal(Extractor::Extract(*entry), key))
+      else if (HashTranslator::Equal(Extractor::Extract(*entry), key)){
+	idxmap_[i] = idxorder_.size();
+        idxorder_.push_back(i);
         return AddResult(this, entry, false);
+      }
     }
     ++probe_count;
     UPDATE_PROBE_COUNTS();
     i = (i + probe_count) & size_mask;
   }
-
+  idxmap_[i] = idxorder_.size();
+  idxorder_.push_back(i);
   RegisterModification();
 
   if (deleted_entry) {
@@ -1539,11 +1621,11 @@ inline typename HashTable<Key,
                           Allocator>::iterator
 HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
     Find(const T& key) {
-  ValueType* entry = Lookup<HashTranslator>(key);
-  if (!entry)
+  auto idx = LookupIdx<HashTranslator>(key);
+  if (idx == -1)
     return end();
 
-  return MakeKnownGoodIterator(entry);
+  return MakeKnownGoodIterator(idxorder_.begin() + idx);
 }
 
 template <typename Key,
@@ -1563,11 +1645,11 @@ inline typename HashTable<Key,
                           Allocator>::const_iterator
 HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
     Find(const T& key) const {
-  const ValueType* entry = Lookup<HashTranslator>(key);
-  if (!entry)
+  auto idx = LookupIdx<HashTranslator>(key);
+  if (idx == -1)
     return end();
 
-  return MakeKnownGoodConstIterator(entry);
+  return MakeKnownGoodConstIterator(idxorder_.begin() + idx);
 }
 
 template <typename Key,
@@ -1632,7 +1714,7 @@ HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
     erase(iterator it) {
   if (it == end())
     return;
-  erase(it.iterator_.position_);
+  erase(&table_[*it.iterator_.position_]);
 }
 
 template <typename Key,
@@ -1647,7 +1729,7 @@ HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
     erase(const_iterator it) {
   if (it == end())
     return;
-  erase(it.position_);
+  erase(&table_[*it.position_]);
 }
 
 template <typename Key,
@@ -1876,6 +1958,8 @@ HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
   // the current table has to be atomic to prevent races with concurrent marker.
   AsAtomicPtr(&table_)->store(new_hash_table.table_, std::memory_order_relaxed);
   Allocator::template BackingWriteBarrier(&table_);
+  idxmap_ = new_hash_table.idxmap_;
+  idxorder_ = new_hash_table.idxorder_;
   table_size_ = new_table_size;
 
   new_hash_table.table_ = old_table;
