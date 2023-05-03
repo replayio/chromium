@@ -57,12 +57,18 @@ WritableSharedMemoryMapping UnsafeSharedMemoryRegion::MapAt(
     uint64_t offset,
     size_t size,
     SharedMemoryMapper* mapper) const {
-  if (!IsValid())
+  recordreplay::Assert("[RUN-1858] UnsafeSharedMemoryRegion::MapAt");
+
+  if (!IsValid()) {
+    recordreplay::Assert("[RUN-1858] UnsafeSharedMemoryRegion::MapAt #1");
     return {};
+  }
 
   auto result = handle_.MapAt(offset, size, mapper);
-  if (!result.has_value())
+  if (!result.has_value()) {
+    recordreplay::Assert("[RUN-1858] UnsafeSharedMemoryRegion::MapAt #2");
     return {};
+  }
 
   return WritableSharedMemoryMapping(result.value(), size, handle_.GetGUID(),
                                      mapper);

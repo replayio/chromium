@@ -90,7 +90,8 @@ class ChannelWin : public Channel,
         base::MessagePumpForIO::IOHandler(FROM_HERE),
         is_untrusted_process_(connection_params.is_untrusted_process()),
         self_(this),
-        io_task_runner_(io_task_runner) {
+        io_task_runner_(io_task_runner),
+        write_lock_("ChannelWin.write_lock_") {
     if (connection_params.server_endpoint().is_valid()) {
       handle_ = connection_params.TakeServerEndpoint()
                     .TakePlatformHandle()
@@ -119,6 +120,8 @@ class ChannelWin : public Channel,
   }
 
   void Write(MessagePtr message) override {
+    recordreplay::Assert("[RUN-1816] ChannelWin::Write");
+
     if (remote_process().IsValid()) {
       // If we know the remote process handle, we transfer all outgoing handles
       // to the process now rewriting them in the message.
@@ -152,6 +155,8 @@ class ChannelWin : public Channel,
                                 base::BindOnce(&ChannelWin::OnWriteError, this,
                                                Error::kDisconnected));
     }
+
+    recordreplay::Assert("[RUN-1816] ChannelWin::Write Done");
   }
 
   void LeakHandle() override {
@@ -275,6 +280,8 @@ class ChannelWin : public Channel,
   void OnIOCompleted(base::MessagePumpForIO::IOContext* context,
                      DWORD bytes_transfered,
                      DWORD error) override {
+    recordreplay::Assert("[RUN-1816] ChannelWin::OnIOCompleted");
+
     if (error != ERROR_SUCCESS) {
       if (context == &write_context_) {
         {
@@ -302,6 +309,8 @@ class ChannelWin : public Channel,
       OnWriteDone(static_cast<size_t>(bytes_transfered));
     }
     Release();
+
+    recordreplay::Assert("[RUN-1816] ChannelWin::OnIOCompleted Done");
   }
 
   void OnReadDone(size_t bytes_read) {
