@@ -12,6 +12,8 @@
 #include "base/numerics/checked_math.h"
 #include "base/system/sys_info.h"
 
+#include "base/record_replay.h"
+
 namespace base {
 namespace subtle {
 
