@@ -77,6 +77,12 @@ class OrderedAtomic {
     return value_.is_lock_free();
   }
 
+  T operator=(T v) {
+    AutoOrderedLock ordered(ordered_lock_id_);
+    value_ = v;
+    return v;
+  }
+
  private:
   int ordered_lock_id_;
   std::atomic<T> value_;
