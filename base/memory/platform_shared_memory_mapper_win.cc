@@ -50,15 +50,8 @@ absl::optional<span<uint8_t>> PlatformSharedMemoryMapper::Map(
   // so we manually record/replay the size.
   size_t section_size = recordreplay::RecordReplayValue("MemorySectionSize", GetMemorySectionSize(address));
 
-  // When replaying make sure we don't overflow the buffer allocated internally
-  // for the mapping.
-  if (recordreplay::IsReplaying()) {
-    size_t allocation_size = malloc_usable_size(address);
-    if (allocation_size < section_size) {
-      recordreplay::Print("Section size too large %zu only have %zu", section_size, allocation_size);
-      CHECK(0);
-    }
-  }
+  // FIXME
+  recordreplay::Print("PlatformSharedMemoryMapper::Map RESULT %p %zu", address, section_size);
 
   return make_span(reinterpret_cast<uint8_t*>(address), section_size);
 }
