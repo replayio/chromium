@@ -78,9 +78,12 @@ class OrderedAtomic {
   }
 
   T operator=(T v) {
-    AutoOrderedLock ordered(ordered_lock_id_);
-    value_ = v;
+    store(v);
     return v;
+  }
+
+  T operator() {
+    return load();
   }
 
  private:
