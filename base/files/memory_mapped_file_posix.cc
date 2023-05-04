@@ -17,7 +17,25 @@
 #include "base/threading/scoped_blocking_call.h"
 #include "build/build_config.h"
 
-#include "base/record_replay.h"
+#include <dlfcn.h>
+
+static void* LookupRecordReplaySymbol(const char* name) {
+  void* fnptr = dlsym(RTLD_DEFAULT, name);
+  return fnptr ? fnptr : reinterpret_cast<void*>(1);
+}
+
+static void RecordReplayAssert(const char* aFormat, ...) {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayAssert");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    va_list ap;
+    va_start(ap, aFormat);
+    reinterpret_cast<void(*)(const char*, va_list)>(fnptr)(aFormat, ap);
+    va_end(ap);
+  }
+}
 
 namespace base {
 
@@ -29,7 +47,7 @@ bool MemoryMappedFile::MapFileRegionToMemory(
     Access access) {
   ScopedBlockingCall scoped_blocking_call(FROM_HERE, BlockingType::MAY_BLOCK);
 
-  recordreplay::Assert("[RUN-1867] MemoryMappedFile::MapFileRegionToMemory");
+  RecordReplayAssert("[RUN-1867] MemoryMappedFile::MapFileRegionToMemory");
 
   off_t map_start = 0;
   size_t map_size = 0;
@@ -38,13 +56,13 @@ bool MemoryMappedFile::MapFileRegionToMemory(
   if (region == MemoryMappedFile::Region::kWholeFile) {
     int64_t file_len = file_.GetLength();
     if (file_len < 0) {
-      recordreplay::Assert("[RUN-1867] MemoryMappedFile::MapFileRegionToMemory #1");
+      RecordReplayAssert("[RUN-1867] MemoryMappedFile::MapFileRegionToMemory #1");
 
       DPLOG(ERROR) << "fstat " << file_.GetPlatformFile();
       return false;
     }
     if (!IsValueInRangeForNumericType<size_t>(file_len)) {
-      recordreplay::Assert("[RUN-1867] MemoryMappedFile::MapFileRegionToMemory #2");
+      RecordReplayAssert("[RUN-1867] MemoryMappedFile::MapFileRegionToMemory #2");
       return false;
     }
     map_size = static_cast<size_t>(file_len);
@@ -65,7 +83,7 @@ bool MemoryMappedFile::MapFileRegionToMemory(
     // Ensure that the casts in the mmap call below are sane.
     if (aligned_start < 0 ||
         !IsValueInRangeForNumericType<off_t>(aligned_start)) {
-      recordreplay::Assert("[RUN-1867] MemoryMappedFile::MapFileRegionToMemory #3");
+      RecordReplayAssert("[RUN-1867] MemoryMappedFile::MapFileRegionToMemory #3");
 
       DLOG(ERROR) << "Region bounds are not valid for mmap";
       return false;
@@ -90,7 +108,7 @@ bool MemoryMappedFile::MapFileRegionToMemory(
       flags |= PROT_READ | PROT_WRITE;
 
       if (!AllocateFileRegion(&file_, region.offset, region.size)) {
-        recordreplay::Assert("[RUN-1867] MemoryMappedFile::MapFileRegionToMemory #4");
+        RecordReplayAssert("[RUN-1867] MemoryMappedFile::MapFileRegionToMemory #4");
         return false;
       }
 
@@ -100,13 +118,13 @@ bool MemoryMappedFile::MapFileRegionToMemory(
   data_ = static_cast<uint8_t*>(mmap(nullptr, map_size, flags, MAP_SHARED,
                                      file_.GetPlatformFile(), map_start));
   if (data_ == MAP_FAILED) {
-    recordreplay::Assert("[RUN-1867] MemoryMappedFile::MapFileRegionToMemory #5");
+    RecordReplayAssert("[RUN-1867] MemoryMappedFile::MapFileRegionToMemory #5");
 
     DPLOG(ERROR) << "mmap " << file_.GetPlatformFile();
     return false;
   }
 
-  recordreplay::Assert("[RUN-1867] MemoryMappedFile::MapFileRegionToMemory Done");
+  RecordReplayAssert("[RUN-1867] MemoryMappedFile::MapFileRegionToMemory Done");
 
   data_ += data_offset;
   return true;

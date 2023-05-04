@@ -13,7 +13,25 @@
 #include "base/system/sys_info.h"
 #include "build/build_config.h"
 
-#include "base/record_replay.h"
+#include <dlfcn.h>
+
+static void* LookupRecordReplaySymbol(const char* name) {
+  void* fnptr = dlsym(RTLD_DEFAULT, name);
+  return fnptr ? fnptr : reinterpret_cast<void*>(1);
+}
+
+static void RecordReplayAssert(const char* aFormat, ...) {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayAssert");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    va_list ap;
+    va_start(ap, aFormat);
+    reinterpret_cast<void(*)(const char*, va_list)>(fnptr)(aFormat, ap);
+    va_end(ap);
+  }
+}
 
 namespace base {
 
@@ -35,10 +53,10 @@ MemoryMappedFile::~MemoryMappedFile() {
 
 #if !BUILDFLAG(IS_NACL)
 bool MemoryMappedFile::Initialize(const FilePath& file_name, Access access) {
-  recordreplay::Assert("[RUN-1867] MemoryMappedFile::Initialize %s", file_name.value().c_str());
+  RecordReplayAssert("[RUN-1867] MemoryMappedFile::Initialize %s", file_name.value().c_str());
 
   if (IsValid()) {
-    recordreplay::Assert("[RUN-1867] MemoryMappedFile::Initialize #1");
+    RecordReplayAssert("[RUN-1867] MemoryMappedFile::Initialize #1");
     return false;
   }
 
@@ -64,20 +82,20 @@ bool MemoryMappedFile::Initialize(const FilePath& file_name, Access access) {
   file_.Initialize(file_name, flags);
 
   if (!file_.IsValid()) {
-    recordreplay::Assert("[RUN-1867] MemoryMappedFile::Initialize #2");
+    RecordReplayAssert("[RUN-1867] MemoryMappedFile::Initialize #2");
 
     DLOG(ERROR) << "Couldn't open " << file_name.AsUTF8Unsafe();
     return false;
   }
 
   if (!MapFileRegionToMemory(Region::kWholeFile, access)) {
-    recordreplay::Assert("[RUN-1867] MemoryMappedFile::Initialize #3");
+    RecordReplayAssert("[RUN-1867] MemoryMappedFile::Initialize #3");
 
     CloseHandles();
     return false;
   }
 
-  recordreplay::Assert("[RUN-1867] MemoryMappedFile::Initialize Done");
+  RecordReplayAssert("[RUN-1867] MemoryMappedFile::Initialize Done");
 
   return true;
 }
