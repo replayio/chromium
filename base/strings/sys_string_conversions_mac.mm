@@ -40,7 +40,7 @@ static void RecordReplayAssertBytes(const char* why, const void* ptr, size_t nby
     fnptr = LookupRecordReplaySymbol("RecordReplayAssertBytes");
   }
   if (fnptr != reinterpret_cast<void*>(1)) {
-    gRecordReplayAssertBytesFn(why, ptr, nbytes);
+    reinterpret_cast<void(*)(const char*, const void*, size_t)>(fnptr)(why, ptr, nbytes);
   }
 }
 
@@ -131,7 +131,7 @@ ScopedCFTypeRef<CFStringRef> StringPieceToCFStringWithEncodingsT(
   RecordReplayAssert("StringPieceToCFStringWithEncodingsT %d %zu", (int)in_encoding, (size_t)in_length);
   RecordReplayAssertBytes("StringPieceToCFStringWithEncodingsT",
                           reinterpret_cast<const UInt8*>(in.data()),
-                          checked_cast<CFIndex>(in_length * sizeof(CharT)));
+                          (size_t)(in_length * sizeof(CharT)));
 
   return ScopedCFTypeRef<CFStringRef>(CFStringCreateWithBytes(
       kCFAllocatorDefault, reinterpret_cast<const UInt8*>(in.data()),
