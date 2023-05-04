@@ -63,6 +63,10 @@ void WaitableEvent::Reset() {
   base::AutoLock locked(kernel_->lock_);
   kernel_->signaled_ = false;
 }
+void WaitableEvent::ResetDuringRecordReplayDisallowEvents() {
+  recordreplay::AutoLockMaybeEventsDisallowed locked(kernel_->lock_);
+  kernel_->signaled_ = false;
+}
 
 void WaitableEvent::Signal() {
   base::AutoLock locked(kernel_->lock_);

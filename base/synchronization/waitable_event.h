@@ -80,6 +80,9 @@ class BASE_EXPORT WaitableEvent {
   // Put the event in the un-signaled state.
   void Reset();
 
+  // [RecordReplay] Allow resetting this waiter non-deterministically.
+  void ResetDuringRecordReplayDisallowEvents();
+
   // Put the event in the signaled state.  Causing any thread blocked on Wait
   // to be woken up.
   void Signal();
