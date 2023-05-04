@@ -307,14 +307,16 @@ class HashTableConstIterator final {
   }
 
   HashTableConstIterator(const ssize_t* position,
+		  	 const Value* table,
                          const ssize_t* begin_position,
                          const ssize_t* end_position,
                          const HashTableType* container)
       : position_(position),
-        end_position_(end_position),
-        container_(container)
+	table_(table),
+        end_position_(end_position)
 #if DCHECK_IS_ON()
-        ,
+	,
+        container_(container),
         begin_position_(begin_position),
         container_modifications_(container->Modifications())
 #endif
@@ -323,15 +325,17 @@ class HashTableConstIterator final {
   }
 
   HashTableConstIterator(const ssize_t* position,
+		  	 const Value* table,
                          const ssize_t* begin_position,
                          const ssize_t* end_position,
                          const HashTableType* container,
                          HashItemKnownGoodTag)
       : position_(position),
-        end_position_(end_position),
-        container_(container)
+	table_(table),
+        end_position_(end_position)
 #if DCHECK_IS_ON()
-        ,
+	,
+        container_(container),
         begin_position_(begin_position),
         container_modifications_(container->Modifications())
 #endif
@@ -358,7 +362,7 @@ class HashTableConstIterator final {
 
   GetType Get() const {
     CheckModifications();
-    return &container_->table_[*position_];
+    return &table_[*position_];
   }
   typename Traits::IteratorConstReferenceType operator*() const {
     return Traits::GetToReferenceConstConversion(Get());
@@ -408,16 +412,15 @@ class HashTableConstIterator final {
       return stream << "iterator representing <end>";
     // TODO(tkent): Change |position_| to |*position_| to show the
     // pointed object. It requires a lot of new stream printer functions.
-    return stream << "iterator pointing to " << &container_->table_[*position_];
+    return stream << "iterator pointing to " << &table_[*position_];
   }
 
  private:
   const ssize_t* position_;
+  const Value* table_;
   const ssize_t* end_position_;
-  const HashTableType* container_;
-  //PointerType position_;
-  //PointerType end_position_;
 #if DCHECK_IS_ON()
+  const HashTableType* container_;
   const ssize_t* begin_position_;
   //PointerType begin_position_;
   int64_t container_modifications_;
@@ -490,16 +493,18 @@ class HashTableIterator final {
                          Allocator>;
 
   HashTableIterator(ssize_t* pos,
+		    Value* table,
                     ssize_t* begin,
                     ssize_t* end,
                     const HashTableType* container)
-      : iterator_(pos, begin, end, container) {}
+      : iterator_(pos, table, begin, end, container) {}
   HashTableIterator(ssize_t* pos,
+		    Value* table,
                     ssize_t* begin,
                     ssize_t* end,
                     const HashTableType* container,
                     HashItemKnownGoodTag tag)
-      : iterator_(pos, begin, end, container, tag) {}
+      : iterator_(pos, table, begin, end, container, tag) {}
 
  public:
   HashTableIterator() = default;
@@ -949,18 +954,21 @@ class HashTable final
 
   iterator MakeIterator(ssize_t* pos) {
     return iterator(pos,
+		    table_,
                     idxorder_,
                     idxorder_ + key_count_,
                     this);
   }
   const_iterator MakeConstIterator(const ssize_t* pos) const {
     return const_iterator(pos,
+		    	  table_,
                           idxorder_,
                           idxorder_ + key_count_,
                           this);
   }
   iterator MakeKnownGoodIterator(ssize_t* pos) {
     return iterator(pos,
+		    table_,
                     idxorder_,
                     idxorder_ + key_count_,
                     this,
@@ -968,6 +976,7 @@ class HashTable final
   }
   const_iterator MakeKnownGoodConstIterator(const ssize_t* pos) const {
     return const_iterator(pos,
+		          table_,
                           idxorder_,
                           idxorder_ + key_count_,
                           this,
@@ -1569,6 +1578,8 @@ HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
   // doing that in the translator so that they can be easily customized.
   ConstructTraits<ValueType, Traits, Allocator>::NotifyNewElement(entry);
 
+  idxorder_[key_count_] = entry - table_;
+  idxmap_[entry - table_] = key_count_;
   ++key_count_;
   if (ShouldExpand())
     entry = Expand(entry);
@@ -1941,7 +1952,7 @@ HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
   HashTable new_hash_table(RawStorageTag{}, new_table, new_table_size);
 
   Value* new_entry = nullptr;
-  for (unsigned i = 0; i != table_size_; ++i) {
+  for (size_t i = 0; i != table_size_; ++i) {
     if (IsEmptyOrDeletedBucket(table_[i])) {
       DCHECK_NE(&table_[i], entry);
       continue;
