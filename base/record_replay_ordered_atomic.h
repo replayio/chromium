@@ -82,7 +82,7 @@ class OrderedAtomic {
     return v;
   }
 
-  T operator() {
+  T operator()() {
     return load();
   }
 
