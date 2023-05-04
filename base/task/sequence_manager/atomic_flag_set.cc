@@ -113,6 +113,8 @@ AtomicFlagSet::AtomicFlag AtomicFlagSet::AddFlag(RepeatingClosure callback) {
 void AtomicFlagSet::RunActiveCallbacks() const {
   DCHECK_CALLED_ON_VALID_THREAD(associated_thread_->thread_checker);
 
+  recordreplay::Assert("[RUN-1880] AtomicFlagSet::RunActiveCallbacks");
+
   for (Group* iter = alloc_list_head_.get(); iter; iter = iter->next.get()) {
     // Acquire semantics are required to guarantee that all memory side-effects
     // made by other threads that were allowed to perform operations are
@@ -129,9 +131,16 @@ void AtomicFlagSet::RunActiveCallbacks() const {
       int index = Group::IndexOfFirstFlagSet(active_flags);
       // Clear the flag.
       active_flags ^= size_t{1} << index;
+
+      recordreplay::Assert("[RUN-1880] AtomicFlagSet::RunActiveCallbacks #1 %d", index);
+
       iter->flag_callbacks[index].Run();
+
+      recordreplay::Assert("[RUN-1880] AtomicFlagSet::RunActiveCallbacks #2");
     }
   }
+
+  recordreplay::Assert("[RUN-1880] AtomicFlagSet::RunActiveCallbacks Done");
 }
 
 AtomicFlagSet::Group::Group() {}
