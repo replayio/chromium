@@ -52,6 +52,8 @@
 #endif
 #endif  // V8_USE_EXTERNAL_STARTUP_DATA
 
+#include "base/record_replay.h"
+
 namespace gin {
 
 namespace {
@@ -119,6 +121,7 @@ const char* GetSnapshotFileName(const V8SnapshotFileType file_type) {
 }
 
 void GetV8FilePath(const char* file_name, base::FilePath* path_out) {
+  recordreplay::Assert("[RUN-1879] GetV8FilePath %s", file_name);
 #if BUILDFLAG(IS_ANDROID)
   // This is the path within the .apk.
   *path_out =

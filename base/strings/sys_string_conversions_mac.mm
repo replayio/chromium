@@ -128,8 +128,8 @@ ScopedCFTypeRef<CFStringRef> StringPieceToCFStringWithEncodingsT(
   if (in_length == 0)
     return ScopedCFTypeRef<CFStringRef>(CFSTR(""), base::scoped_policy::RETAIN);
 
-  RecordReplayAssert("StringPieceToCFStringWithEncodingsT %d %zu", (int)in_encoding, (size_t)in_length);
-  RecordReplayAssertBytes("StringPieceToCFStringWithEncodingsT",
+  RecordReplayAssert("[RUN-1879] StringPieceToCFStringWithEncodingsT %d %zu", (int)in_encoding, (size_t)in_length);
+  RecordReplayAssertBytes("[RUN-1879] StringPieceToCFStringWithEncodingsT",
                           reinterpret_cast<const UInt8*>(in.data()),
                           (size_t)(in_length * sizeof(CharT)));
 
