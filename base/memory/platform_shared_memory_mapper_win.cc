@@ -49,13 +49,6 @@ absl::optional<span<uint8_t>> PlatformSharedMemoryMapper::Map(
   // Calling VirtualQuery in GetMemorySectionSize will fail when replaying,
   // so we manually record/replay the size.
   size_t section_size = recordreplay::RecordReplayValue("MemorySectionSize", GetMemorySectionSize(address));
-
-  // When replaying only |size| bytes will be allocated above, don't overflow the buffer.
-  if (recordreplay::IsReplaying() && section_size != size) {
-    recordreplay::Print("Section size too large %zu expected %zu", section_size, size);
-    CHECK(section_size == size);
-  }
-
   return make_span(reinterpret_cast<uint8_t*>(address), section_size);
 }
 
