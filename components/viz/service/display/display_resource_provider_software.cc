@@ -128,14 +128,11 @@ DisplayResourceProviderSoftware::ScopedReadLockSkImage::ScopedReadLockSkImage(
   if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
     SkBitmap sk_bitmap;
     if (recordreplay::PopulateSkBitmapWithResource(&sk_bitmap, resource_id)) {
-      recordreplay::Assert("[RUN-593-1863] ScopedReadLockSkImage::ScopedReadLockSkImage A");
       sk_bitmap.setImmutable();
       sk_image_ = SkImage::MakeFromBitmap(sk_bitmap);
     }
-    recordreplay::Assert("[RUN-593-1863] ScopedReadLockSkImage::ScopedReadLockSkImage B");
     return;
   }
-  recordreplay::Assert("[RUN-593-1863] ScopedReadLockSkImage::ScopedReadLockSkImage C");
 
   const ChildResource* resource = resource_provider->LockForRead(resource_id);
   DCHECK(resource);
@@ -144,14 +141,9 @@ DisplayResourceProviderSoftware::ScopedReadLockSkImage::ScopedReadLockSkImage(
   // Use cached SkImage if possible.
   auto it = resource_provider_->resource_sk_images_.find(resource_id);
   if (it != resource_provider_->resource_sk_images_.end()) {
-    recordreplay::Assert(
-        "[RUN-593-1863] ScopedReadLockSkImage::ScopedReadLockSkImage D");
     sk_image_ = it->second;
     return;
   }
-  recordreplay::Assert(
-      "[RUN-593-1863] ScopedReadLockSkImage::ScopedReadLockSkImage E %d",
-      !!resource->shared_bitmap);
 
   if (!resource->shared_bitmap) {
     // If a CompositorFrameSink is destroyed, it destroys all SharedBitmapIds
