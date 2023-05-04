@@ -82,8 +82,12 @@ class OrderedAtomic {
     return v;
   }
 
-  T operator()() {
+  T operator()() const {
     return load();
+  }
+
+  operator bool() const {
+    return !!load();
   }
 
  private:
