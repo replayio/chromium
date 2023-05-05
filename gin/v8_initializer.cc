@@ -120,7 +120,7 @@ const char* GetSnapshotFileName(const V8SnapshotFileType file_type) {
   return nullptr;
 }
 
-extern "C" DLLEXPORT bool V8RecordReplayIsARM();
+extern "C" bool V8RecordReplayIsARM();
 
 void GetV8FilePath(const char* file_name, base::FilePath* path_out) {
   // The snapshot file is arch specific, record/replay its contents when we recorded
