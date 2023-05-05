@@ -46,6 +46,9 @@ void AtomicFlagSet::AtomicFlag::SetActive(bool active) {
   DCHECK(group_);
   recordreplay::AutoOrderedLock lock(outer_->ordered_lock_id_);
 
+  recordreplay::Assert("[RUN-1880] AtomicFlag::SetActive %d %d %d",
+                       outer_->ordered_lock_id_, (int)flag_bit_, active);
+
   if (active) {
     // Release semantics are required to ensure that all memory accesses made on
     // this thread happen-before any others done on the thread running the
