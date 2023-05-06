@@ -107,7 +107,7 @@ bool TaskQueueImpl::GuardedTaskPoster::PostTask(PostedTask task) {
   // has to do this) as it can lead to a deadlock and defer it instead.
   ScopedDeferTaskPosting disallow_task_posting;
 
-  if (recordreplay::AreEventsDisallowed()) {
+  if (recordreplay::AreEventsDisallowed() || recordreplay::AreEventsPassedThrough()) {
     auto token = record_replay_unordered_operations_controller_.value().TryBeginOperation();
     if (!token)
       return false;
@@ -439,7 +439,9 @@ void TaskQueueImpl::PostImmediateTaskImpl(PostedTask task,
 
   bool should_schedule_work = false;
   {
-    bool events_disallowed = recordreplay::AreEventsDisallowed();
+    bool events_disallowed =
+      recordreplay::AreEventsDisallowed() ||
+      recordreplay::AreEventsPassedThrough();
     if (events_disallowed)
       recordreplay::BeginPassThroughEvents();
 
