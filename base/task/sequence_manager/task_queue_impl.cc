@@ -153,7 +153,7 @@ TaskQueueImpl::TaskRunner::~TaskRunner() {}
 bool TaskQueueImpl::TaskRunner::PostDelayedTask(const Location& location,
                                                 OnceClosure callback,
                                                 TimeDelta delay) {
-  if (!recordreplay::AreEventsDisallowed())
+  if (!recordreplay::AreEventsDisallowed() && !recordreplay::AreEventsPassedThrough())
     recordreplay::Assert("TaskQueueImpl::TaskRunner::PostDelayedTask %d", recordreplay::PointerId(this));
 
   return task_poster_->PostTask(PostedTask(this, std::move(callback), location,
