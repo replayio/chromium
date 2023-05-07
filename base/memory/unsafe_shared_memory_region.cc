@@ -8,8 +8,6 @@
 
 #include "base/check_op.h"
 
-#include "base/record_replay.h"
-
 namespace base {
 
 UnsafeSharedMemoryRegion::CreateFunction*

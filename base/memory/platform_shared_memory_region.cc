@@ -12,8 +12,6 @@
 #include "base/numerics/checked_math.h"
 #include "base/system/sys_info.h"
 
-#include "base/record_replay.h"
-
 namespace base {
 namespace subtle {
 
@@ -60,8 +58,9 @@ absl::optional<span<uint8_t>> PlatformSharedMemoryRegion::MapAt(
     return absl::nullopt;
 
   size_t end_byte;
-  if (!CheckAdd(offset, size).AssignIfValid(&end_byte) || end_byte > size_)
+  if (!CheckAdd(offset, size).AssignIfValid(&end_byte) || end_byte > size_) {
     return absl::nullopt;
+  }
 
   // TODO(dcheng): Presumably the actual size of the mapping is rounded to
   // `SysInfo::VMAllocationGranularity()`. Should this accounting be done with
