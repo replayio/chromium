@@ -517,10 +517,6 @@ class ChannelMac : public Channel,
         MACH_RCV_MSG | MACH_RCV_TIMEOUT |
         MACH_RCV_TRAILER_TYPE(MACH_MSG_TRAILER_FORMAT_0) |
         MACH_RCV_TRAILER_ELEMENTS(MACH_RCV_TRAILER_AUDIT);
-
-    recordreplay::Assert("[RUN-1887] ChannelMac::OnMachMessageReceived %d %d",
-                         (int)rcv_options, (int)receive_port_.get());
-
     kern_return_t kr =
         mach_msg(header, rcv_options, 0, header->msgh_size, receive_port_.get(),
                  /*timeout=*/0, MACH_PORT_NULL);

@@ -23,26 +23,6 @@
 #include "base/os_compat_android.h"
 #endif
 
-#include <dlfcn.h>
-
-static void* LookupRecordReplaySymbol(const char* name) {
-  void* fnptr = dlsym(RTLD_DEFAULT, name);
-  return fnptr ? fnptr : reinterpret_cast<void*>(1);
-}
-
-static void RecordReplayAssert(const char* aFormat, ...) {
-  static void* fnptr;
-  if (!fnptr) {
-    fnptr = LookupRecordReplaySymbol("RecordReplayAssert");
-  }
-  if (fnptr != reinterpret_cast<void*>(1)) {
-    va_list ap;
-    va_start(ap, aFormat);
-    reinterpret_cast<void(*)(const char*, va_list)>(fnptr)(aFormat, ap);
-    va_end(ap);
-  }
-}
-
 namespace base {
 
 // Make sure our Whence mappings match the system headers.
@@ -383,15 +363,9 @@ int64_t File::GetLength() {
 
   SCOPED_FILE_TRACE("GetLength");
 
-  RecordReplayAssert("File::GetLength %d", file_.get());
-
   stat_wrapper_t file_info;
-  if (Fstat(file_.get(), &file_info)) {
-    RecordReplayAssert("File::GetLength #1 %s", strerror(errno));
+  if (Fstat(file_.get(), &file_info))
     return -1;
-  }
-
-  RecordReplayAssert("File::GetLength #2 %zu", (size_t)file_info.st_size);
 
   return file_info.st_size;
 }

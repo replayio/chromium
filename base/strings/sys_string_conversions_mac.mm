@@ -14,36 +14,6 @@
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/string_piece.h"
 
-#include <dlfcn.h>
-
-static void* LookupRecordReplaySymbol(const char* name) {
-  void* fnptr = dlsym(RTLD_DEFAULT, name);
-  return fnptr ? fnptr : reinterpret_cast<void*>(1);
-}
-
-static void RecordReplayAssert(const char* aFormat, ...) {
-  static void* fnptr;
-  if (!fnptr) {
-    fnptr = LookupRecordReplaySymbol("RecordReplayAssert");
-  }
-  if (fnptr != reinterpret_cast<void*>(1)) {
-    va_list ap;
-    va_start(ap, aFormat);
-    reinterpret_cast<void(*)(const char*, va_list)>(fnptr)(aFormat, ap);
-    va_end(ap);
-  }
-}
-
-static void RecordReplayAssertBytes(const char* why, const void* ptr, size_t nbytes) {
-  static void* fnptr;
-  if (!fnptr) {
-    fnptr = LookupRecordReplaySymbol("RecordReplayAssertBytes");
-  }
-  if (fnptr != reinterpret_cast<void*>(1)) {
-    reinterpret_cast<void(*)(const char*, const void*, size_t)>(fnptr)(why, ptr, nbytes);
-  }
-}
-
 namespace base {
 
 namespace {
@@ -127,11 +97,6 @@ ScopedCFTypeRef<CFStringRef> StringPieceToCFStringWithEncodingsT(
   const auto in_length = in.length();
   if (in_length == 0)
     return ScopedCFTypeRef<CFStringRef>(CFSTR(""), base::scoped_policy::RETAIN);
-
-  RecordReplayAssert("[RUN-1879] StringPieceToCFStringWithEncodingsT %d %zu", (int)in_encoding, (size_t)in_length);
-  RecordReplayAssertBytes("[RUN-1879] StringPieceToCFStringWithEncodingsT",
-                          reinterpret_cast<const UInt8*>(in.data()),
-                          (size_t)(in_length * sizeof(CharT)));
 
   return ScopedCFTypeRef<CFStringRef>(CFStringCreateWithBytes(
       kCFAllocatorDefault, reinterpret_cast<const UInt8*>(in.data()),
