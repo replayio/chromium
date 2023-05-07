@@ -27,8 +27,6 @@
 #include "base/win/scoped_handle.h"
 #include "base/win/win_util.h"
 
-#include "base/record_replay.h"
-
 namespace mojo {
 namespace core {
 
@@ -122,8 +120,6 @@ class ChannelWin : public Channel,
   }
 
   void Write(MessagePtr message) override {
-    recordreplay::Assert("[RUN-1816] ChannelWin::Write");
-
     if (remote_process().IsValid()) {
       // If we know the remote process handle, we transfer all outgoing handles
       // to the process now rewriting them in the message.
@@ -157,8 +153,6 @@ class ChannelWin : public Channel,
                                 base::BindOnce(&ChannelWin::OnWriteError, this,
                                                Error::kDisconnected));
     }
-
-    recordreplay::Assert("[RUN-1816] ChannelWin::Write Done");
   }
 
   void LeakHandle() override {
@@ -282,8 +276,6 @@ class ChannelWin : public Channel,
   void OnIOCompleted(base::MessagePumpForIO::IOContext* context,
                      DWORD bytes_transfered,
                      DWORD error) override {
-    recordreplay::Assert("[RUN-1816] ChannelWin::OnIOCompleted");
-
     if (error != ERROR_SUCCESS) {
       if (context == &write_context_) {
         {
@@ -311,8 +303,6 @@ class ChannelWin : public Channel,
       OnWriteDone(static_cast<size_t>(bytes_transfered));
     }
     Release();
-
-    recordreplay::Assert("[RUN-1816] ChannelWin::OnIOCompleted Done");
   }
 
   void OnReadDone(size_t bytes_read) {

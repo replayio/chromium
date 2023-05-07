@@ -48,12 +48,8 @@ absl::optional<span<uint8_t>> PlatformSharedMemoryMapper::Map(
 
   // Calling VirtualQuery in GetMemorySectionSize will fail when replaying,
   // so we manually record/replay the size.
-  size_t section_size = recordreplay::RecordReplayValue("MemorySectionSize", GetMemorySectionSize(address));
-
-  // FIXME
-  recordreplay::Print("PlatformSharedMemoryMapper::Map RESULT %p %zu", address, section_size);
-
-  return make_span(reinterpret_cast<uint8_t*>(address), section_size);
+  return make_span(reinterpret_cast<uint8_t*>(address),
+                   recordreplay::RecordReplayValue("MemorySectionSize", GetMemorySectionSize(address)));
 }
 
 void PlatformSharedMemoryMapper::Unmap(span<uint8_t> mapping) {

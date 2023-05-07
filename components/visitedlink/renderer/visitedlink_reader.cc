@@ -11,8 +11,6 @@
 #include "base/check.h"
 #include "third_party/blink/public/web/web_view.h"
 
-#include "base/record_replay.h"
-
 using blink::WebView;
 
 namespace visitedlink {
@@ -39,20 +37,14 @@ void VisitedLinkReader::UpdateVisitedLinks(
   FreeTable();
   DCHECK(hash_table_ == nullptr);
 
-  recordreplay::Assert("[RUN-1858] VisitedLinkReader::UpdateVisitedLinks");
-
   int32_t table_len = 0;
   {
     // Map the header into our process so we can see how long the rest is,
     // and set the salt.
     base::ReadOnlySharedMemoryMapping header_mapping =
         table_region.MapAt(0, sizeof(SharedHeader));
-    if (!header_mapping.IsValid()) {
-      recordreplay::Assert("[RUN-1858] VisitedLinkReader::UpdateVisitedLinks #1");
+    if (!header_mapping.IsValid())
       return;
-    }
-
-    recordreplay::Assert("[RUN-1858] VisitedLinkReader::UpdateVisitedLinks #2");
 
     const SharedHeader* header =
         static_cast<const SharedHeader*>(header_mapping.memory());
@@ -62,12 +54,8 @@ void VisitedLinkReader::UpdateVisitedLinks(
 
   // Now we know the length, so map the table contents.
   table_mapping_ = table_region.Map();
-  if (!table_mapping_.IsValid()) {
-    recordreplay::Assert("[RUN-1858] VisitedLinkReader::UpdateVisitedLinks #3");
+  if (!table_mapping_.IsValid())
     return;
-  }
-
-  recordreplay::Assert("[RUN-1858] VisitedLinkReader::UpdateVisitedLinks Done");
 
   // Commit the data.
   hash_table_ = const_cast<Fingerprint*>(reinterpret_cast<const Fingerprint*>(

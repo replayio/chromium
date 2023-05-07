@@ -462,35 +462,22 @@ DataPipeConsumerDispatcher::~DataPipeConsumerDispatcher() {
 }
 
 bool DataPipeConsumerDispatcher::InitializeNoLock() {
-  recordreplay::Assert("[RUN-1858] DataPipeConsumerDispatcher::InitializeNoLock");
-
   lock_.AssertAcquired();
-  if (!shared_ring_buffer_.IsValid()) {
-    recordreplay::Assert("[RUN-1858] DataPipeConsumerDispatcher::InitializeNoLock #1");
+  if (!shared_ring_buffer_.IsValid())
     return false;
-  }
 
   DCHECK(!ring_buffer_mapping_.IsValid());
   ring_buffer_mapping_ = shared_ring_buffer_.Map();
-
-  recordreplay::Assert("[RUN-1858] DataPipeConsumerDispatcher::InitializeNoLock #2");
-
   if (!ring_buffer_mapping_.IsValid()) {
-    recordreplay::Assert("[RUN-1858] DataPipeConsumerDispatcher::InitializeNoLock #3");
-
     DLOG(ERROR) << "Failed to map shared buffer.";
     shared_ring_buffer_ = base::UnsafeSharedMemoryRegion();
     is_closed_ = true;
     return false;
   }
 
-  recordreplay::Assert("[RUN-1858] DataPipeConsumerDispatcher::InitializeNoLock #4");
-
   base::AutoUnlock unlock(lock_);
   node_controller_->SetPortObserver(
       control_port_, base::MakeRefCounted<PortObserverThunk>(this));
-
-  recordreplay::Assert("[RUN-1858] DataPipeConsumerDispatcher::InitializeNoLock Done");
 
   return true;
 }

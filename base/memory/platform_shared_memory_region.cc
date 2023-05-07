@@ -53,29 +53,20 @@ absl::optional<span<uint8_t>> PlatformSharedMemoryRegion::MapAt(
     uint64_t offset,
     size_t size,
     SharedMemoryMapper* mapper) const {
-  recordreplay::Assert("[RUN-1858] PlatformSharedMemoryRegion::MapAt");
-
-  if (!IsValid()) {
-    recordreplay::Assert("[RUN-1858] PlatformSharedMemoryRegion::MapAt #1");
+  if (!IsValid())
     return absl::nullopt;
-  }
 
-  if (size == 0) {
-    recordreplay::Assert("[RUN-1858] PlatformSharedMemoryRegion::MapAt #2");
+  if (size == 0)
     return absl::nullopt;
-  }
 
   size_t end_byte;
-  if (!CheckAdd(offset, size).AssignIfValid(&end_byte) || end_byte > size_) {
-    recordreplay::Assert("[RUN-1858] PlatformSharedMemoryRegion::MapAt #3");
+  if (!CheckAdd(offset, size).AssignIfValid(&end_byte) || end_byte > size_)
     return absl::nullopt;
-  }
 
   // TODO(dcheng): Presumably the actual size of the mapping is rounded to
   // `SysInfo::VMAllocationGranularity()`. Should this accounting be done with
   // that in mind?
   if (!SharedMemorySecurityPolicy::AcquireReservationForMapping(size)) {
-    recordreplay::Assert("[RUN-1858] PlatformSharedMemoryRegion::MapAt #4");
     RecordMappingWasBlockedHistogram(/*blocked=*/true);
     return absl::nullopt;
   }
@@ -96,11 +87,7 @@ absl::optional<span<uint8_t>> PlatformSharedMemoryRegion::MapAt(
   auto result = mapper->Map(GetPlatformHandle(), write_allowed, aligned_offset,
                             size + adjustment_for_alignment);
 
-  recordreplay::Assert("[RUN-1858] PlatformSharedMemoryRegion::MapAt #5");
-
   if (result.has_value()) {
-    recordreplay::Assert("[RUN-1858] PlatformSharedMemoryRegion::MapAt #6");
-
     DCHECK(IsAligned(result.value().data(), kMapMinimumAlignment));
     if (offset != 0) {
       // Undo the previous adjustment so the returned mapping respects the exact
@@ -108,8 +95,6 @@ absl::optional<span<uint8_t>> PlatformSharedMemoryRegion::MapAt(
       result = result->subspan(adjustment_for_alignment);
     }
   } else {
-    recordreplay::Assert("[RUN-1858] PlatformSharedMemoryRegion::MapAt #7");
-
     SharedMemorySecurityPolicy::ReleaseReservationForMapping(size);
   }
 

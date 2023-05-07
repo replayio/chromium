@@ -640,8 +640,6 @@ void TaskQueueImpl::ReloadEmptyImmediateWorkQueue() {
 }
 
 void TaskQueueImpl::TakeImmediateIncomingQueueTasks(TaskDeque* queue, TaskDeque* record_replay_unordered_queue) {
-  recordreplay::Assert("[RUN-1880] TaskQueueImpl::TakeImmediateIncomingQueueTasks");
-
   DCHECK(queue->empty());
   // Now is a good time to consider reducing the empty queue's capacity if we're
   // wasting memory, before we make it the `immediate_incoming_queue`.
@@ -657,16 +655,10 @@ void TaskQueueImpl::TakeImmediateIncomingQueueTasks(TaskDeque* queue, TaskDeque*
   // so we have to check all immediate tasks and use their enqueue order for
   // a fence.
   if (main_thread_only().delayed_fence) {
-    recordreplay::Assert("[RUN-1880] TaskQueueImpl::TakeImmediateIncomingQueueTasks #1");
-
     for (const Task& task : *queue) {
-      recordreplay::Assert("[RUN-1880] TaskQueueImpl::TakeImmediateIncomingQueueTasks #2");
-
       DCHECK(!task.queue_time.is_null());
       DCHECK(task.delayed_run_time.is_null());
       if (task.queue_time >= main_thread_only().delayed_fence.value()) {
-        recordreplay::Assert("[RUN-1880] TaskQueueImpl::TakeImmediateIncomingQueueTasks #3");
-
         main_thread_only().delayed_fence = absl::nullopt;
         DCHECK(!main_thread_only().current_fence);
         main_thread_only().current_fence = Fence(task.task_order());
@@ -681,11 +673,7 @@ void TaskQueueImpl::TakeImmediateIncomingQueueTasks(TaskDeque* queue, TaskDeque*
     }
   }
 
-  recordreplay::Assert("[RUN-1880] TaskQueueImpl::TakeImmediateIncomingQueueTasks #4");
-
   UpdateCrossThreadQueueStateLocked();
-
-  recordreplay::Assert("[RUN-1880] TaskQueueImpl::TakeImmediateIncomingQueueTasks Done");
 }
 
 bool TaskQueueImpl::IsEmpty() const {

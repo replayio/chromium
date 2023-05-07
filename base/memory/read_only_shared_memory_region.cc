@@ -78,20 +78,12 @@ ReadOnlySharedMemoryMapping ReadOnlySharedMemoryRegion::MapAt(
     uint64_t offset,
     size_t size,
     SharedMemoryMapper* mapper) const {
-  recordreplay::Assert("[RUN-1858] ReadOnlySharedMemoryRegion::MapAt");
-
-  if (!IsValid()) {
-    recordreplay::Assert("[RUN-1858] ReadOnlySharedMemoryRegion::MapAt #1");
+  if (!IsValid())
     return {};
-  }
 
   auto result = handle_.MapAt(offset, size, mapper);
-  if (!result.has_value()) {
-    recordreplay::Assert("[RUN-1858] ReadOnlySharedMemoryRegion::MapAt #2");
+  if (!result.has_value())
     return {};
-  }
-
-  recordreplay::Assert("[RUN-1858] ReadOnlySharedMemoryRegion::MapAt #3");
 
 #ifdef OS_MAC
   recordreplay::RecordReplayBytes("ReadOnlySharedMemoryRegion::MapAt",

@@ -46,9 +46,6 @@ void AtomicFlagSet::AtomicFlag::SetActive(bool active) {
   DCHECK(group_);
   recordreplay::AutoOrderedLock lock(outer_->ordered_lock_id_);
 
-  recordreplay::Assert("[RUN-1880] AtomicFlag::SetActive %d %d %d",
-                       outer_->ordered_lock_id_, (int)flag_bit_, active);
-
   if (active) {
     // Release semantics are required to ensure that all memory accesses made on
     // this thread happen-before any others done on the thread running the
@@ -116,8 +113,6 @@ AtomicFlagSet::AtomicFlag AtomicFlagSet::AddFlag(RepeatingClosure callback) {
 void AtomicFlagSet::RunActiveCallbacks() const {
   DCHECK_CALLED_ON_VALID_THREAD(associated_thread_->thread_checker);
 
-  recordreplay::Assert("[RUN-1880] AtomicFlagSet::RunActiveCallbacks %d", ordered_lock_id_);
-
   for (Group* iter = alloc_list_head_.get(); iter; iter = iter->next.get()) {
     // Acquire semantics are required to guarantee that all memory side-effects
     // made by other threads that were allowed to perform operations are
@@ -129,23 +124,14 @@ void AtomicFlagSet::RunActiveCallbacks() const {
         &iter->flags, size_t{0}, std::memory_order_acquire);
     }
 
-    recordreplay::Assert("[RUN-1880] AtomicFlagSet::RunActiveCallbacks #0 %zu", active_flags);
-
     // This is O(number of bits set).
     while (active_flags) {
       int index = Group::IndexOfFirstFlagSet(active_flags);
       // Clear the flag.
       active_flags ^= size_t{1} << index;
-
-      recordreplay::Assert("[RUN-1880] AtomicFlagSet::RunActiveCallbacks #1 %d", index);
-
       iter->flag_callbacks[index].Run();
-
-      recordreplay::Assert("[RUN-1880] AtomicFlagSet::RunActiveCallbacks #2");
     }
   }
-
-  recordreplay::Assert("[RUN-1880] AtomicFlagSet::RunActiveCallbacks Done");
 }
 
 AtomicFlagSet::Group::Group() {}
