@@ -322,7 +322,10 @@ void NodeController::ClosePort(const ports::PortRef& port) {
 int NodeController::SendUserMessage(
     const ports::PortRef& port,
     std::unique_ptr<ports::UserMessageEvent> message) {
-  return node_->SendUserMessage(port, std::move(message));
+  recordreplay::Assert("[RUN-1816] NodeController::SendUserMessage Start");
+  int rv = node_->SendUserMessage(port, std::move(message));
+  recordreplay::Assert("[RUN-1816] NodeController::SendUserMessage Done %d", rv);
+  return rv;
 }
 
 void NodeController::MergePortIntoInviter(const std::string& name,
@@ -727,6 +730,8 @@ void NodeController::DropPeer(const ports::NodeName& node_name,
 void NodeController::SendPeerEvent(const ports::NodeName& name,
                                    ports::ScopedEvent event) {
   Channel::MessagePtr event_message = SerializeEventMessage(std::move(event));
+  recordreplay::Assert("[RUN-1307-1773] NodeController::SendPeerEvent A %d",
+                       !!event_message);
   if (!event_message)
     return;
   scoped_refptr<NodeChannel> peer = GetPeerChannel(name);
@@ -748,6 +753,8 @@ void NodeController::SendPeerEvent(const ports::NodeName& name,
   }
 #endif  // BUILDFLAG(IS_WIN)
 
+  recordreplay::Assert("[RUN-1307-1773] NodeController::SendPeerEvent B %d",
+                       !!peer);
   if (peer) {
     peer->SendChannelMessage(std::move(event_message));
     return;
@@ -757,6 +764,8 @@ void NodeController::SendPeerEvent(const ports::NodeName& name,
   // the peer is invalid, i.e., it's either a junk name or has already been
   // disconnected.
   scoped_refptr<NodeChannel> broker = GetBrokerChannel();
+  recordreplay::Assert("[RUN-1307-1773] NodeController::SendPeerEvent C %d",
+                       !!broker);
   if (!broker) {
     DVLOG(1) << "Dropping message for unknown peer: " << name;
     return;
@@ -778,10 +787,13 @@ void NodeController::SendPeerEvent(const ports::NodeName& name,
       peer = it->second;
     }
   }
+  recordreplay::Assert("[RUN-1307-1773] NodeController::SendPeerEvent D %d %d",
+                       !!needs_introduction, !!peer);
   if (needs_introduction)
     broker->RequestIntroduction(name);
   else if (peer)
     peer->SendChannelMessage(std::move(event_message));
+  recordreplay::Assert("[RUN-1307-1773] NodeController::SendPeerEvent E");
 }
 
 void NodeController::DropAllPeers() {
@@ -825,10 +837,14 @@ void NodeController::ForwardEvent(const ports::NodeName& node,
                                   ports::ScopedEvent event) {
   DCHECK(event);
 
+  recordreplay::Assert("[RUN-1307-1773] NodeController::ForwardEvent A %d",
+                       node == name_);
   if (node == name_)
     node_->AcceptEvent(name_, std::move(event));
   else
     SendPeerEvent(node, std::move(event));
+
+  recordreplay::Assert("[RUN-1307-1773] NodeController::ForwardEvent B");
 
   AttemptShutdownIfRequested();
 }

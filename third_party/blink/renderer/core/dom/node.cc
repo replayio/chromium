@@ -329,10 +329,6 @@ Node::Node(TreeScope* tree_scope, ConstructionType type)
   // Document is required for probe sink.
   if (tree_scope_)
     probe::NodeCreated(this);
-
-  if (recordreplay::AreEventsDisallowed()) {
-    recordreplay::Warning("[RUN-1735-1736] Node::Node with AreEventsDisallowed");
-  }
 }
 
 Node::~Node() {
@@ -1601,8 +1597,6 @@ void Node::AttachLayoutTree(AttachContext& context) {
 }
 
 void Node::DetachLayoutTree(bool performing_reattach) {
-  recordreplay::Assert("[RUN-1219-1694] Node::DetachLayoutTree %d",
-    this->RecordReplayId());
   DCHECK(GetDocument().Lifecycle().StateAllowsDetach() ||
          GetDocument().GetStyleEngine().InContainerQueryStyleRecalc());
   DCHECK(!performing_reattach ||

@@ -36,10 +36,7 @@ FormDataElement::FormDataElement() : type_(kData) {}
 
 FormDataElement::FormDataElement(const Vector<char>& array)
     : type_(kData), data_(array)
-{
-  recordreplay::Assert("[RUN-1350-1386] FormDataElement::FormDataElement len=%u",
-    (unsigned) data_.size());
-}
+{}
 
 FormDataElement::FormDataElement(
     const String& filename,
@@ -166,9 +163,6 @@ scoped_refptr<EncodedFormData> EncodedFormData::DeepCopy() const {
 void EncodedFormData::AppendData(const void* data, wtf_size_t size) {
   if (elements_.empty() || elements_.back().type_ != FormDataElement::kData)
     elements_.push_back(FormDataElement());
-
-  recordreplay::Assert("[RUN-1350-1386] EncodedFormData::AppendData len=%u",
-    (unsigned) size);
 
   FormDataElement& e = elements_.back();
   wtf_size_t old_size = e.data_.size();

@@ -33,7 +33,8 @@ namespace recordreplay {
   Macro(V8RecordReplayIdPointer, (int id), (id), void*, nullptr)        \
   Macro(V8RecordReplayFeatureEnabled,                                   \
         (const char* feature), (feature), bool, false)                  \
-  Macro(V8IsMainThread, (), (), bool, false)
+  Macro(V8IsMainThread, (), (), bool, false)                            \
+  Macro(V8RecordReplayHadMismatch, (), (), bool, false)
 
 #define ForEachV8APIVoid(Macro)                                         \
   Macro(V8RecordReplayAssertVA,                                         \
@@ -94,6 +95,7 @@ namespace recordreplay {
         (const char* kind, const char* url), (kind, url))               \
   Macro(V8RecordReplayAddOrderedSRWLock,                                \
         (const char* name, void* lock), (name, lock))                   \
+  Macro(V8RecordReplayRemoveOrderedSRWLock, (void* lock), (lock))       \
   Macro(V8RecordReplayMaybeTerminate,                                   \
         (void (*callback)(void*), void* data), (callback, data))
 
@@ -172,6 +174,10 @@ bool IsReplaying() {
 
 char* GetRecordingId() {
   return V8GetRecordingId();
+}
+
+bool HadMismatch() {
+  return V8RecordReplayHadMismatch();
 }
 
 void Assert(const char* format, ...) {
@@ -377,37 +383,51 @@ bool IsMainThread() {
 
 static int gNextMainThreadId = 1;
 
-int NewIdMainThread(const char* name) {
-  if (IsRecordingOrReplaying()) {
-    if (!V8IsMainThread()) {
-      fprintf(stderr, "NewIdMainThread not main thread: %s\n", name);
-      CHECK(V8IsMainThread());
-    }
-    Assert("NewId %s", name);
-    return gNextMainThreadId++;
+static bool CheckNewId(const char* name) {
+  if (!IsRecordingOrReplaying()) {
+    // Don't track anything.
+    return false;
   }
-  return 0;
+  if (HasDivergedFromRecording()) {
+    // Everything is allowed when explicitly diverged.
+    return true;
+  }
+  if (AreEventsDisallowed()) {
+    // IDs can be created when events are disallowed when our own scripts
+    // create URL objects. This would be nice to improve.
+    if (!IsInReplayCode()) {
+      Warning("NewId when not allowed %s", name);
+    }
+    return false;
+  }
+  Assert("NewId %s", name);
+  return true;
+}
+
+int NewIdMainThread(const char* name) {
+  if (!CheckNewId(name)) {
+    return 0;
+  }
+  if (!V8IsMainThread()) {
+    fprintf(stderr, "NewIdMainThread not main thread: %s\n", name);
+    CHECK(V8IsMainThread());
+  }
+  return gNextMainThreadId++;
 }
 
 static std::atomic<int> gNextAnyThreadId{1};
 
 int NewIdAnyThread(const char* name) {
-  if (IsRecordingOrReplaying()) {
-    // IDs can be created when events are disallowed when gReplayScript
-    // creates URL objects. This would be nice to improve.
-    if (AreEventsDisallowed())
-      return 0;
-
-    Assert("NewId %s", name);
-    return (int)RecordReplayValue("NewId", (uintptr_t)gNextAnyThreadId++);
+  if (!CheckNewId(name)) {
+    return 0;
   }
-  return 0;
+  return (int)RecordReplayValue("NewId", (uintptr_t)gNextAnyThreadId++);
 }
 
 bool IsInReplayCode() {
-  // Allow cross-origin accesses from the replaying script installed to inspect
-  // DOM state. Events are disallowed when running replaying specific scripts.
-  // FIXME Use a separate API for this https://linear.app/replay/issue/RUN-1502
+  // Events are disallowed when running Replay's own scripts.
+  // FIXME Add to Recording API.
+  // https://linear.app/replay/issue/RUN-1502
   return IsReplaying() && AreEventsDisallowed();
 }
 
@@ -422,6 +442,10 @@ void RecordReplayString(const char* why, std::string& str) {
 
 void AddOrderedSRWLock(const char* name, void* lock) {
   V8RecordReplayAddOrderedSRWLock(name, lock);
+}
+
+void RemoveOrderedSRWLock(void* lock) {
+  V8RecordReplayRemoveOrderedSRWLock(lock);
 }
 
 void MaybeTerminate(void (*callback)(void*), void* data) {

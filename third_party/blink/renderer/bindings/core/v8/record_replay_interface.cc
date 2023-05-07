@@ -79,6 +79,7 @@ using RemoteObjectIdType = WTF::String;
 // Script which defines handlers for recorder commands, and is only loaded while
 // replaying.
 const char* gReplayScript = R""""(
+//js
 (() => {
 
 const EmptyArray = Object.freeze([]); // reduce unnecessary mem churn
@@ -630,7 +631,10 @@ function isBlinkObject(x) {
 function isBlinkInstanceOf(x, target) {
   return isBlinkObject(x) &&
     target?.name &&
-    hasInProtoChain(x.constructor, target.name);
+    hasInProtoChain(
+      x.constructor,
+      target.name
+    );
 }
 
 /**
@@ -886,6 +890,10 @@ function registerRrpCpdId(rrpId, cdpId, cdpObject = null) {
 
 
 // Strings longer than this will be truncated when creating protocol values.
+// TODO This limit creates problems when we try to evaluate large strings in routines,
+// such as stringifying a large object/array (like 2000+ unmounted fiber IDs).
+// The RDT routine works around this by splitting the string into chunks, but
+// we should find a better long-term solution (like bypassing the limit for evals).
 const MaxStringLength = 10000;
 
 const cdpRefTypes = ['object', 'function'];
@@ -1292,7 +1300,7 @@ function previewBlinkNode(node) {
   let attributes, pseudoType;
   if (isBlinkInstanceOf(node, Element)) {
     attributes = [];
-    for (const { name, value } of node.attributes) {
+    for (const { name, value } of node.attributes || []) {
       attributes.push({ name, value });
     }
     // TODO: We cannot access pseudo elements using the JS DOM API - https://linear.app/replay/issue/RUN-953/
@@ -1307,7 +1315,11 @@ function previewBlinkNode(node) {
   let parentNode;
   if (node.parentNode) {
     parentNode = registerPlainObject(node.parentNode);
-  } else if (node.defaultView && node.defaultView.parent != node.defaultView && node.defaultView.parent.document) {
+  } else if (
+    node.defaultView &&
+    node.defaultView.parent != node.defaultView &&
+    node.defaultView.parent?.document
+  ) {
     /**
      * Nested documents use the parent element instead of null.
      * 
@@ -1328,7 +1340,7 @@ function previewBlinkNode(node) {
   if (node.nodeName == "IFRAME" && node.contentDocument) {
     // Treat an iframe's content document as one of its child nodes.
     childNodes = [registerPlainObject(node.contentDocument)];
-  } else if (node.childNodes.length) {
+  } else if (node.childNodes?.length) {
     childNodes = [...node.childNodes].map((n) => registerPlainObject(n));
   }
 
@@ -2593,7 +2605,7 @@ function shiftRect(rect, offset) {
 // Script which sets a handler for collecting source maps from scripts in the
 // recording. Runs when recording/replaying if source map collection is enabled.
 const char* gSourceMapScript = R""""(
-
+//js
 (() => {
 
 const {
@@ -2812,12 +2824,14 @@ function isValidBaseURL(url) {
 // Script that injects React DevTools "stub" functions to capture 
 // marker annotations while recording, for use in later processing
 const char* gReactDevtoolsScript = R""""(
-
+//js 
 (() => {
 
 const stubFiberRoots = {};
+const unmountedFibersByRenderer = {};
 
 const stubHook = {
+  isStub: true,
   supportsFiber: true,
   inject,
   onCommitFiberUnmount,
@@ -2827,14 +2841,20 @@ const stubHook = {
 };
 
 
-function stubGetFiberRoots(rendererID) {
-  const roots = stubFiberRoots;
-
-  if (!roots[rendererID]) {
-    roots[rendererID] = new Set();
+function getFiberRootsSetForRenderer(rendererID) {
+  if (!stubFiberRoots[rendererID]) {
+    stubFiberRoots[rendererID] = new Set();
   }
 
-  return roots[rendererID];
+  return stubFiberRoots[rendererID];
+}
+
+function getUnmountedFibersSetForRenderer(rendererID) {
+  if (!unmountedFibersByRenderer[rendererID]) {
+    unmountedFibersByRenderer[rendererID] = new Set();
+  }
+
+  return unmountedFibersByRenderer[rendererID];
 }
 
 window.__REACT_DEVTOOLS_SAVED_RENDERERS__ = [];
@@ -2851,33 +2871,57 @@ Object.defineProperty(window, "__REACT_DEVTOOLS_GLOBAL_HOOK__", {
 let uidCounter = 0;
 
 function inject(renderer) {
+  // Declare these enum strings in scope for later routine use
+  const annotationType = "inject";
+
   const id = ++uidCounter;
-  window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook", "inject");
+  window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook:v1:" + annotationType, "");
   window.__REACT_DEVTOOLS_SAVED_RENDERERS__.push(renderer);
   return id;
 }
 
 function onCommitFiberUnmount(rendererID, fiber) {
-  window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook", "commit-fiber-unmount");
+  const annotationType = "commit-fiber-unmount"
+
+  // Unmounts are always one fiber at a time during the commit phase.
+  // Stash the unmounted fibers here, so we can map them to persistent 
+  // object IDs inside of `onCommitFiberRoot` processing in the routine.
+  const unmountedFibersSet = getUnmountedFibersSetForRenderer(rendererID);
+  unmountedFibersSet.add(fiber);
+
+  window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook:v1:" + annotationType, "");
 }
 
 function onCommitFiberRoot(rendererID, root, priorityLevel) {
-  const mountedRoots = stubGetFiberRoots(rendererID);
+  // The "commit" handler should be the only one the routine needs to do the work as of 2023-05-01.
+  // We capture unmounted fibers in the unmount handler above, and the routine
+  // will process them when we evaluate at the commit annotation point.
+  // The others mostly exist for hypothetical completeness.
+  const annotationType = "commit-fiber-root";
+
+  const mountedRoots = getFiberRootsSetForRenderer(rendererID);
   const current = root.current;
   const isKnownRoot = mountedRoots.has(root);
-  const isUnmounting = current.memoizedState == null || current.memoizedState.element == null; // Keep track of mounted roots so we can hydrate when DevTools connect.
+  // Keep track of mounted roots so we can hydrate when DevTools connect.
+  const isUnmounting = current.memoizedState == null || current.memoizedState.element == null; 
 
   if (!isKnownRoot && !isUnmounting) {
     mountedRoots.add(root);
   } else if (isKnownRoot && isUnmounting) {
     mountedRoots.delete(root);
   }
+
+  // Get these so it's in scope in the routine eval, and we can clear it after the annotation
+  const unmountedFibersSet = getUnmountedFibersSetForRenderer(rendererID);
   
-  window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook", "commit-fiber-root");
+  window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook:v1:" + annotationType, "");
+
+  unmountedFibersSet.clear();
 }
 
 function onPostCommitFiberRoot(rendererID, root) {
-  window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook", "post-commit-fiber-root");
+  const annotationType = "post-commit-fiber-root";
+  window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook:v1:" + annotationType, "");
 }
 
 })();
@@ -2889,7 +2933,7 @@ function onPostCommitFiberRoot(rendererID, root) {
 // Script that injects Redux DevTools "stub" functions to capture 
 // marker annotations while recording, for use in later processing
 const char* gReduxDevtoolsScript = R""""(
-
+//js
 (() => { // webpackBootstrap
 /******/ 	"use strict";
 var __webpack_exports__ = {};
@@ -3107,6 +3151,120 @@ window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ = reduxDevtoolsExtensionCompose;
 
 
 
+// Script that copies the React and Redux DevTools global variables into
+// each iframe that gets added to the page.
+// This is primarily to support React DevTools in Cypress tests, as Cypress
+// runs the user's app in an iframe, but it should be a general solution for
+// other iframe usages in any application as well.
+const char* gDevtoolsIframeSetupScript = R""""(
+//js
+;(() => {
+  // TODO This _shouldn't_ be needed now that we allow cross-domain access at the C++ level
+  function canAccessIframe(iframe) {
+    try {
+      if (!iframe.src || iframe.src === 'about:blank') {
+        return false
+      }
+
+      const url = new URL(iframe.src)
+      const sameHost = url.hostname === window?.location?.hostname
+      const contentDocExists = !!iframe.contentDocument
+      return sameHost && contentDocExists
+    } catch (e) {
+      return false
+    }
+  }
+
+  function watchForIframeSrcChanges(iframe) {
+    let oldSrc = iframe.src
+    const iframeSrcObserver = new MutationObserver(function (mutations) {
+      mutations.forEach(function (mutation) {
+        if (mutation.type === 'attributes') {
+          const changedAttrName = mutation.attributeName
+          // Cypress has changed the blank iframe src to the app url.
+          if (changedAttrName === 'src') {
+            const oldLocation = iframe.contentWindow.location.href
+
+            let counter = 0
+
+            // Once the `src` has changed, it still takes time for the browser
+            // to navigate inside the iframe. We need to mutate the iframe's `window`
+            // _after_ it has navigated to the new page, but _before_ any JS starts running
+            // (such as ReactDOM initializing itself).
+            // This `setTimeout` loop is a brute-force hack, but it appears to work consistently.
+            function checkForLocationChange() {
+              try {
+                const newLocation = iframe.contentWindow.location.href
+                if (newLocation !== oldLocation) {
+                  iframeSrcObserver.disconnect()
+                  addDevtoolsToIframe(iframe)
+                  return
+                }
+              } catch (err) {
+              }
+
+              counter++
+
+              // Arbitrary limit to prevent infinite loops.
+              if (counter < 100) {
+                setTimeout(checkForLocationChange, 0)
+              }
+            }
+
+            setTimeout(checkForLocationChange, 0)
+
+            oldSrc = iframe.src
+          }
+        }
+      })
+    })
+
+    iframeSrcObserver.observe(iframe, {
+      attributes: true,
+    })
+  }
+
+  function addDevtoolsToIframe(iframe) {
+    // React DevTools especially cannot see React code in an iframe by default.
+    // It needs the main window's "global hook" reference to be copied into an iframe.
+    // That way React in the iframe attaches itself correctly, and the extension code
+    // can see the render updates. Redux likely needs the same kind of setup.
+    if (canAccessIframe(iframe)) {
+      iframe.contentWindow.__REACT_DEVTOOLS_GLOBAL_HOOK__ = window.__REACT_DEVTOOLS_GLOBAL_HOOK__
+      iframe.contentWindow.__REDUX_DEVTOOLS_EXTENSION__ = window.__REDUX_DEVTOOLS_EXTENSION__
+      iframe.contentWindow.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ = window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', (event) => {
+    const initialIframes = document.querySelectorAll('iframe')
+    initialIframes.forEach(function (iframe) {
+      addDevtoolsToIframe(iframe)
+      watchForIframeSrcChanges(iframe)
+    })
+
+    const iframeAddedObserver = new MutationObserver(function (mutations) {
+      mutations.forEach(function (mutation) {
+        ;[].filter
+          .call(mutation.addedNodes, function (node) {
+            return node.nodeName === 'IFRAME'
+          })
+          .forEach(function (iframe) {
+            watchForIframeSrcChanges(iframe)
+          })
+      })
+    })
+    iframeAddedObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+    })
+  })
+})()
+
+)"""";
+
+
+
 static v8::Local<v8::String> ToV8String(v8::Isolate* isolate, const char* value) {
   return v8::String::NewFromUtf8(isolate, value,
                                  v8::NewStringType::kInternalized).ToLocalChecked();
@@ -3305,6 +3463,8 @@ static void WriteToRecordingDirectory(const v8::FunctionCallbackInfo<v8::Value>&
   v8::String::Utf8Value filename(isolate, args[0]);
   v8::String::Utf8Value content(isolate, args[1]);
 
+  recordreplay::Assert("[RUN-1670-1764] WriteToRecordingDirectory %s (%zu)", *filename, (size_t)strlen(*content));
+
   std::string path = GetRecordingDirectory() + DirectorySeparator + std::string(*filename);
   std::ofstream stream(path);
   stream << *content;
@@ -3325,7 +3485,7 @@ static void AddRecordingEvent(const v8::FunctionCallbackInfo<v8::Value>& args) {
 }
 
 static void GetPersistentId(const v8::FunctionCallbackInfo<v8::Value>& args) {
-  if (args.Length() >= 1 && recordreplay::HasDivergedFromRecording()) {
+  if (args.Length() >= 1 && recordreplay::IsInReplayCode()) {
     int id = v8::internal::RecordReplayObjectId(args.GetIsolate(),
                                                 args.GetIsolate()->GetCurrentContext(),
                                                 args[0], /* allow_create */ false);
@@ -4634,6 +4794,7 @@ void RunInitialRecordReplayScripts(v8::Isolate* isolate) {
     // its frames.
     RunScript(isolate, context, gReactDevtoolsScript, "record-replay-react-devtools");
     RunScript(isolate, context, gReduxDevtoolsScript, "record-replay-redux-devtools");
+    RunScript(isolate, context, gDevtoolsIframeSetupScript, "record-replay-devtools-iframes");
   }
 }
 

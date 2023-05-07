@@ -21,6 +21,8 @@ extern bool RecordReplayStateEnsureInitialized();
 
 namespace recordreplay {
 
+extern bool IsMainThread();
+
 struct SharedBitmapInfo {
   viz::SharedBitmapId id_;
   uint8_t* memory_;
@@ -254,10 +256,22 @@ void OnRepaintFinished() {
 static cc::ProxyMain* gCurrentCompositorProxy;
 
 void SetCompositorProxy(cc::ProxyMain* proxy) {
+  CHECK(IsMainThread());
   gCurrentCompositorProxy = proxy;
 }
 
+void CompositorProxyDestroyed(cc::ProxyMain* proxy) {
+  CHECK(IsMainThread());
+  if (gCurrentCompositorProxy == proxy)
+    gCurrentCompositorProxy = nullptr;
+}
+
 static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
+  CHECK(IsMainThread());
+
+  if (!gCurrentCompositorProxy)
+    return nullptr;
+
   gRepaintMimeType = mime_type;
   gRepaintJPEGQuality = jpeg_quality;
   gRepaintResult = nullptr;
