@@ -412,11 +412,6 @@ MultiplexRouter::MultiplexRouter(
 }
 
 void MultiplexRouter::StartReceiving() {
-  // https://linear.app/replay/issue/RUN-999
-  recordreplay::Diagnostic("[RUN-999] MultiplexRouter::StartReceiving %d %d",
-                           recordreplay::AreEventsDisallowed(),
-                           recordreplay::AreEventsPassedThrough());
-
   connector_.set_connection_error_handler(
       base::BindOnce(&MultiplexRouter::OnPipeConnectionError,
                      base::Unretained(this), false /* force_async_dispatch */));
@@ -519,6 +514,11 @@ ScopedInterfaceEndpointHandle MultiplexRouter::CreateLocalEndpointHandle(
 void MultiplexRouter::CloseEndpointHandle(
     InterfaceId id,
     const absl::optional<DisconnectReason>& reason) {
+  recordreplay::Assert(
+      "[RUN-1209-1784] MultiplexRouter::CloseEndpointHandle %u %d %d %u %s", id,
+      IsValidInterfaceId(id), IsPrimaryInterfaceId(id), 
+      reason.has_value() ? reason->custom_reason : (uint32_t)-1,
+      reason.has_value() ? reason->description.c_str() : "");
   if (!IsValidInterfaceId(id))
     return;
 

@@ -55,6 +55,8 @@ ProxyMain::ProxyMain(LayerTreeHost* layer_tree_host,
 }
 
 ProxyMain::~ProxyMain() {
+  recordreplay::CompositorProxyDestroyed(this);
+
   TRACE_EVENT0("cc", "ProxyMain::~ProxyMain");
   DCHECK(IsMainThread());
   DCHECK(!started_);
@@ -65,12 +67,19 @@ void ProxyMain::InitializeOnImplThread(
     int id,
     const LayerTreeSettings* settings,
     RenderingStatsInstrumentation* rendering_stats_instrumentation) {
+  recordreplay::Assert("[RUN-1881] ProxyMain::InitializeOnImplThread");
+
   DCHECK(task_runner_provider_->IsImplThread());
   DCHECK(!proxy_impl_);
   proxy_impl_ = std::make_unique<ProxyImpl>(
       weak_factory_.GetWeakPtr(), layer_tree_host_, id, settings,
       rendering_stats_instrumentation, task_runner_provider_);
+
+  recordreplay::Assert("[RUN-1881] ProxyMain::InitializeOnImplThread #1");
+
   completion_event->Signal();
+
+  recordreplay::Assert("[RUN-1881] ProxyMain::InitializeOnImplThread Done");
 }
 
 void ProxyMain::DestroyProxyImplOnImplThread(
@@ -333,11 +342,6 @@ void ProxyMain::BeginMainFrame(
   if (begin_main_frame_state->evicted_ui_resources)
     final_pipeline_stage_ = COMMIT_PIPELINE_STAGE;
 
-  // When repainting, force a commit to occur so that a paint will happen even if
-  // nothing has changed since the last one.
-  if (recordreplay::HasDivergedFromRecording())
-    final_pipeline_stage_ = COMMIT_PIPELINE_STAGE;
-
   current_pipeline_stage_ = UPDATE_LAYERS_PIPELINE_STAGE;
   bool should_update_layers =
       final_pipeline_stage_ >= UPDATE_LAYERS_PIPELINE_STAGE;
@@ -468,6 +472,7 @@ void ProxyMain::BeginMainFrame(
       begin_main_frame_state->active_sequence_trackers);
   if (blocking)
     commit_trace_.reset();
+  recordreplay::Assert("[RUN-1675-1826] ProxyMain::BeginMainFrame");
 }
 
 void ProxyMain::DidCompleteCommit(CommitTimestamps commit_timestamps) {

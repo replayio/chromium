@@ -34,6 +34,7 @@ namespace recordreplay {
   Macro(V8RecordReplayFeatureEnabled,                                   \
         (const char* feature), (feature), bool, false)                  \
   Macro(V8IsMainThread, (), (), bool, false)                            \
+  Macro(V8RecordReplayHadMismatch, (), (), bool, false)                 \
   Macro(V8RecordReplayGetCurrentJSStackTmp, (), (), const char*, "")
 
 #define ForEachV8APIVoid(Macro)                                         \
@@ -95,6 +96,7 @@ namespace recordreplay {
         (const char* kind, const char* url), (kind, url))               \
   Macro(V8RecordReplayAddOrderedSRWLock,                                \
         (const char* name, void* lock), (name, lock))                   \
+  Macro(V8RecordReplayRemoveOrderedSRWLock, (void* lock), (lock))       \
   Macro(V8RecordReplayMaybeTerminate,                                   \
         (void (*callback)(void*), void* data), (callback, data))
 
@@ -117,20 +119,45 @@ ForEachV8API(DefineFunction)
 ForEachV8APIVoid(DefineFunctionVoid)
 #undef DefineFunctionVoid
 
+static void InitializationError(const char* format, ...) {
+  {
+    va_list args;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+  }
+
+#if BUILDFLAG(IS_WIN)
+  // Additionally write the message to a new file. Capturing the output written to
+  // stderr by browser subprocesses on windows is surprisingly difficult.
+  const char* dir = getenv("RECORD_REPLAY_LOG_DIRECTORY");
+  char file[1024];
+  snprintf(file, sizeof(file), "%s\\record_replay_initialization_error.txt", dir ? dir : ".");
+  FILE* f = fopen(file, "w");
+  if (f) {
+    va_list args;
+    va_start(args, format);
+    vfprintf(f, format, args);
+    va_end(args);
+    fclose(f);
+  }
+#endif
+
+  CHECK(0);
+}
+
 void InitBindings() {
   HMODULE module;
   if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
 			  reinterpret_cast<LPCSTR>(InitBindings),
 			  &module)) {
-    fprintf(stderr, "GetModuleHandleExA failed %d, crashing...\n", (int)GetLastError());
-    CHECK(0);
+    InitializationError("GetModuleHandleExA failed %d, crashing...\n", (int)GetLastError());
   }
 
 #define LoadFunction(Name, Formals, Args, ReturnType, DefaultValue)           \
   g##Name = reinterpret_cast<ReturnType(*)Formals>(GetProcAddress(module, #Name)); \
   if (!g##Name) {                                                             \
-    fprintf(stderr, "Could not find V8 export %s, crashing...\n", #Name);     \
-    CHECK(0);                                                                 \
+    InitializationError("Could not find V8 export %s, crashing...\n", #Name); \
   }
 ForEachV8API(LoadFunction)
 #undef LoadFunction
@@ -138,8 +165,7 @@ ForEachV8API(LoadFunction)
 #define LoadFunctionVoid(Name, Formals, Args)                                 \
   g##Name = reinterpret_cast<void(*)Formals>(GetProcAddress(module, #Name)); \
   if (!g##Name) {                                                             \
-    fprintf(stderr, "Could not find V8 export %s, crashing...\n", #Name);     \
-    CHECK(0);                                                                 \
+    InitializationError("Could not find V8 export %s, crashing...\n", #Name); \
   }
 ForEachV8APIVoid(LoadFunctionVoid)
 #undef LoadFunctionVoid
@@ -173,6 +199,10 @@ bool IsReplaying() {
 
 char* GetRecordingId() {
   return V8GetRecordingId();
+}
+
+bool HadMismatch() {
+  return V8RecordReplayHadMismatch();
 }
 
 void Assert(const char* format, ...) {
@@ -382,37 +412,51 @@ bool IsMainThread() {
 
 static int gNextMainThreadId = 1;
 
-int NewIdMainThread(const char* name) {
-  if (IsRecordingOrReplaying()) {
-    if (!V8IsMainThread()) {
-      fprintf(stderr, "NewIdMainThread not main thread: %s\n", name);
-      CHECK(V8IsMainThread());
-    }
-    Assert("NewId %s", name);
-    return gNextMainThreadId++;
+static bool CheckNewId(const char* name) {
+  if (!IsRecordingOrReplaying()) {
+    // Don't track anything.
+    return false;
   }
-  return 0;
+  if (HasDivergedFromRecording()) {
+    // Everything is allowed when explicitly diverged.
+    return true;
+  }
+  if (AreEventsDisallowed()) {
+    // IDs can be created when events are disallowed when our own scripts
+    // create URL objects. This would be nice to improve.
+    if (!IsInReplayCode()) {
+      Warning("NewId when not allowed %s", name);
+    }
+    return false;
+  }
+  Assert("NewId %s", name);
+  return true;
+}
+
+int NewIdMainThread(const char* name) {
+  if (!CheckNewId(name)) {
+    return 0;
+  }
+  if (!V8IsMainThread()) {
+    fprintf(stderr, "NewIdMainThread not main thread: %s\n", name);
+    CHECK(V8IsMainThread());
+  }
+  return gNextMainThreadId++;
 }
 
 static std::atomic<int> gNextAnyThreadId{1};
 
 int NewIdAnyThread(const char* name) {
-  if (IsRecordingOrReplaying()) {
-    // IDs can be created when events are disallowed when gReplayScript
-    // creates URL objects. This would be nice to improve.
-    if (AreEventsDisallowed())
-      return 0;
-
-    Assert("NewId %s", name);
-    return (int)RecordReplayValue("NewId", (uintptr_t)gNextAnyThreadId++);
+  if (!CheckNewId(name)) {
+    return 0;
   }
-  return 0;
+  return (int)RecordReplayValue("NewId", (uintptr_t)gNextAnyThreadId++);
 }
 
 bool IsInReplayCode() {
-  // Allow cross-origin accesses from the replaying script installed to inspect
-  // DOM state. Events are disallowed when running replaying specific scripts.
-  // FIXME Use a separate API for this https://linear.app/replay/issue/RUN-1502
+  // Events are disallowed when running Replay's own scripts.
+  // FIXME Add to Recording API.
+  // https://linear.app/replay/issue/RUN-1502
   return IsReplaying() && AreEventsDisallowed();
 }
 
@@ -427,6 +471,10 @@ void RecordReplayString(const char* why, std::string& str) {
 
 void AddOrderedSRWLock(const char* name, void* lock) {
   V8RecordReplayAddOrderedSRWLock(name, lock);
+}
+
+void RemoveOrderedSRWLock(void* lock) {
+  V8RecordReplayRemoveOrderedSRWLock(lock);
 }
 
 void MaybeTerminate(void (*callback)(void*), void* data) {

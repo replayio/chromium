@@ -15,6 +15,9 @@ if (REPLAY_LOCAL_DRIVER_DIR && process.env.DRIVER_REVISION) {
   );
 }
 
+const buildArm = !!process.env.REPLAY_BUILD_ARM;
+const outdir = buildArm ? "out/Release-ARM" : "out/Release";
+
 // Ensure that the git repository is "trusted", otherwise we'll get errors like:
 // fatal: unsafe repository ('/chromium/src' is owned by someone else)
 spawnChecked("git", [
@@ -30,16 +33,18 @@ if (currentPlatform() == "macOS") {
   spawnChecked("touch", [`${__dirname}/chrome/app/chrome_exe_main_mac.cc`]);
 }
 
+const archSuffix = buildArm ? "-arm" : "";
+
 if (!REPLAY_LOCAL_DRIVER_DIR) {
   // Download the record/replay driver archive, using the latest version unless
   // it was overridden via the environment.
   console.log(`Downloading driver...`);
-  let driverArchive = `${currentPlatform()}-recordreplay.tgz`;
+  let driverArchive = `${currentPlatform()}-recordreplay${archSuffix}.tgz`;
   let downloadArchive = driverArchive;
   if (process.env.DRIVER_REVISION) {
     downloadArchive = `${currentPlatform()}-recordreplay-${
       process.env.DRIVER_REVISION
-    }.tgz`;
+    }${archSuffix}.tgz`;
   }
   spawnChecked(
     "curl",
@@ -54,8 +59,8 @@ if (!REPLAY_LOCAL_DRIVER_DIR) {
   fs.unlinkSync(driverArchive);
 }
 
-let driverFile = `${currentPlatform()}-recordreplay.${driverExtension()}`;
-let driverJSON = `${currentPlatform()}-recordreplay.json`;
+let driverFile = `${currentPlatform()}-recordreplay${archSuffix}.${driverExtension()}`;
+let driverJSON = `${currentPlatform()}-recordreplay${archSuffix}.json`;
 if (REPLAY_LOCAL_DRIVER_DIR) {
   driverFile = path.resolve(REPLAY_LOCAL_DRIVER_DIR, driverFile);
   driverJSON = path.resolve(REPLAY_LOCAL_DRIVER_DIR, driverJSON);
@@ -104,12 +109,12 @@ if (useGoma) {
 
 // ensure that build configuration is written with correct paths
 const gn = currentPlatform() == "windows" ? "gn.bat" : "gn";
-spawnChecked(gn, ["gen", "out/Release"]);
+spawnChecked(gn, ["gen", outdir]);
 
 console.log(`Building...`);
 const autoninja =
   currentPlatform() == "windows" ? "autoninja.bat" : "autoninja";
-spawnChecked(autoninja, ["-C", "out/Release", "chrome"], {
+spawnChecked(autoninja, ["-C", outdir, "chrome"], {
   stdio: "inherit",
 });
 

@@ -11,7 +11,7 @@ sendBuildTestRequest({
   name: `Chromium Build/Test ${revision}`,
   tasks: [
     ...platformTasks("linux"),
-    //...platformTasks("macOS"),
+    ...platformTasks("macOS"),
     //...platformTasks("windows"),
   ],
 });
@@ -29,6 +29,20 @@ function platformTasks(platform) {
     platform
   );
   tasks.push(buildTask);
+
+  if (platform == "macOS") {
+    const buildARMTask = newTask(
+      `Build Chromium ${platform} ARM`,
+      {
+        kind: "BuildRuntime",
+        runtime: "chromium",
+        revision,
+        useARM: true,
+      },
+      platform
+    );
+    tasks.push(buildARMTask);
+  }
 
   const testStaticTask = newTask(
     `Chromium Static Tests ${platform}`,

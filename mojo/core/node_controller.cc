@@ -62,8 +62,9 @@ ports::NodeName GetRandomNodeName() {
 
 Channel::MessagePtr SerializeEventMessage(ports::ScopedEvent event) {
   // https://linear.app/replay/issue/RUN-1243
-  recordreplay::Assert("[RUN-1243] NodeController::SerializeEventMessage eventType=%d",
-    event->type());
+  recordreplay::Assert(
+      "[RUN-1243] NodeController::SerializeEventMessage eventType=%d",
+      event->type());
 
   if (event->type() == ports::Event::Type::kUserMessage) {
     // User message events must already be partially serialized.
@@ -655,8 +656,16 @@ void NodeController::DropPeer(const ports::NodeName& node_name,
     auto it = peers_.find(name);
 
     if (it != peers_.end()) {
+      auto channel_has_one_ref = it->second.get()->HasOneRef();
+
+      // Since some amount of work happens after this point, there's no
+      // guarantee that this assert will fire even if there is a thread
+      // interleaving issue present.
+      //
       // https://linear.app/replay/issue/RUN-1050
-      recordreplay::Assert("[RUN-1050] NodeController::DropPeer #1");
+      recordreplay::Assert(
+          "[RUN-1050] NodeController::DropPeer #1 has_one_ref=%d",
+          channel_has_one_ref);
 
       ports::NodeName peer = it->first;
       peers_.erase(it);
@@ -718,6 +727,8 @@ void NodeController::DropPeer(const ports::NodeName& node_name,
 void NodeController::SendPeerEvent(const ports::NodeName& name,
                                    ports::ScopedEvent event) {
   Channel::MessagePtr event_message = SerializeEventMessage(std::move(event));
+  recordreplay::Assert("[RUN-1307-1773] NodeController::SendPeerEvent A %d",
+                       !!event_message);
   if (!event_message)
     return;
   scoped_refptr<NodeChannel> peer = GetPeerChannel(name);
@@ -739,6 +750,8 @@ void NodeController::SendPeerEvent(const ports::NodeName& name,
   }
 #endif  // BUILDFLAG(IS_WIN)
 
+  recordreplay::Assert("[RUN-1307-1773] NodeController::SendPeerEvent B %d",
+                       !!peer);
   if (peer) {
     peer->SendChannelMessage(std::move(event_message));
     return;
@@ -748,6 +761,8 @@ void NodeController::SendPeerEvent(const ports::NodeName& name,
   // the peer is invalid, i.e., it's either a junk name or has already been
   // disconnected.
   scoped_refptr<NodeChannel> broker = GetBrokerChannel();
+  recordreplay::Assert("[RUN-1307-1773] NodeController::SendPeerEvent C %d",
+                       !!broker);
   if (!broker) {
     DVLOG(1) << "Dropping message for unknown peer: " << name;
     return;
@@ -769,10 +784,13 @@ void NodeController::SendPeerEvent(const ports::NodeName& name,
       peer = it->second;
     }
   }
+  recordreplay::Assert("[RUN-1307-1773] NodeController::SendPeerEvent D %d %d",
+                       !!needs_introduction, !!peer);
   if (needs_introduction)
     broker->RequestIntroduction(name);
   else if (peer)
     peer->SendChannelMessage(std::move(event_message));
+  recordreplay::Assert("[RUN-1307-1773] NodeController::SendPeerEvent E");
 }
 
 void NodeController::DropAllPeers() {
@@ -816,10 +834,14 @@ void NodeController::ForwardEvent(const ports::NodeName& node,
                                   ports::ScopedEvent event) {
   DCHECK(event);
 
+  recordreplay::Assert("[RUN-1307-1773] NodeController::ForwardEvent A %d",
+                       node == name_);
   if (node == name_)
     node_->AcceptEvent(name_, std::move(event));
   else
     SendPeerEvent(node, std::move(event));
+
+  recordreplay::Assert("[RUN-1307-1773] NodeController::ForwardEvent B");
 
   AttemptShutdownIfRequested();
 }
@@ -1131,7 +1153,7 @@ void NodeController::OnEventMessage(const ports::NodeName& from_node,
 
   // https://linear.app/replay/issue/RUN-1243
   recordreplay::Assert("[RUN-1243] NodeController::OnEventMessage eventType=%d",
-    (int) event->type());
+                       (int)event->type());
 
   node_->AcceptEvent(from_node, std::move(event));
 

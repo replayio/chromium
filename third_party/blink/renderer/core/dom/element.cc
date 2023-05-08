@@ -1003,6 +1003,16 @@ HeapVector<Member<Element>>* Element::GetElementArrayAttribute(
 NamedNodeMap* Element::attributesForBindings() const {
   ElementRareData& rare_data =
       const_cast<Element*>(this)->EnsureElementRareData();
+
+  if (recordreplay::IsInReplayCode() &&
+      !recordreplay::HasDivergedFromRecording()) {
+    if (!rare_data.AttributeMap()) {
+      // [RUN-1764] Do not try to create blink API objects in our Replay-only
+      // scripts, unless explicitly diverged. Creating rare data is fine.
+      return nullptr;
+    }
+  }
+
   if (NamedNodeMap* attribute_map = rare_data.AttributeMap())
     return attribute_map;
 
@@ -3809,21 +3819,14 @@ scoped_refptr<ComputedStyle> Element::StyleForLayoutObject(
     element_animations->CssAnimations().ClearPendingUpdate();
 
   bool has_custom_style_callbacks = HasCustomStyleCallbacks();
-  recordreplay::Assert("[RUN-1219-1708] Element::StyleForLayoutObject %d #0 %d",
-    this->RecordReplayId(),
-    (int) has_custom_style_callbacks);
   scoped_refptr<ComputedStyle> style =
       has_custom_style_callbacks
           ? CustomStyleForLayoutObject(style_recalc_context)
           : OriginalStyleForLayoutObject(style_recalc_context);
   if (!style) {
-    recordreplay::Assert("[RUN-1219-1708] Element::StyleForLayoutObject %d #1",
-      this->RecordReplayId());
     DCHECK(IsPseudoElement());
     return nullptr;
   }
-  recordreplay::Assert("[RUN-1219-1708] Element::StyleForLayoutObject %d #2",
-    this->RecordReplayId());
 
   style->UpdateIsStackingContextWithoutContainment(
       this == GetDocument().documentElement(), IsInTopLayer(),
@@ -3983,8 +3986,6 @@ StyleRecalcChange Element::RecalcStyle(
   StyleRecalcChange child_change = change.ForChildren(*this);
   if (change.ShouldRecalcStyleFor(*this)) {
     child_change = RecalcOwnStyle(change, style_recalc_context);
-    recordreplay::Assert("[RUN-1219-1706] Element::RecalcStyle %d AfterRecalcOwnStyle",
-                         RecordReplayId());
     if (GetStyleChangeType() == kSubtreeStyleChange) {
       child_change =
           child_change.EnsureAtLeast(StyleRecalcChange::kRecalcDescendants);
@@ -4075,8 +4076,6 @@ StyleRecalcChange Element::RecalcStyle(
   }
 
   if (child_change.TraversePseudoElements(*this)) {
-    recordreplay::Assert("[RUN-1219-1706] Element::RecalcStyle %d UpdatePseudoElement#1",
-      RecordReplayId());
     UpdatePseudoElement(kPseudoIdBackdrop, child_change, child_recalc_context);
     UpdatePseudoElement(kPseudoIdMarker, child_change, child_recalc_context);
     UpdatePseudoElement(kPseudoIdBefore, child_change, child_recalc_context);
@@ -4099,8 +4098,6 @@ StyleRecalcChange Element::RecalcStyle(
   recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle E");
 
   if (child_change.TraversePseudoElements(*this)) {
-    recordreplay::Assert("[RUN-1219-1706] Element::RecalcStyle %d UpdatePseudoElement#2",
-      RecordReplayId());
     UpdatePseudoElement(kPseudoIdAfter, child_change, child_recalc_context);
 
     // If we are re-attaching us or any of our descendants, we need to attach
@@ -4317,11 +4314,7 @@ StyleRecalcChange Element::RecalcOwnStyle(
     // This is the normal flow through the function; calculates
     // the element's style more or less from scratch (typically
     // ending up calling StyleResolver::ResolveStyle()).
-    recordreplay::Assert("[RUN-1219-1708] Element::RecalcOwnStyle %d StyleForLayoutObject-pre",
-      this->RecordReplayId());
     new_style = StyleForLayoutObject(new_style_recalc_context);
-    recordreplay::Assert("[RUN-1219-1708] Element::RecalcOwnStyle %d StyleForLayoutObject-post",
-      this->RecordReplayId());
   }
   if (new_style && !ShouldStoreComputedStyle(*new_style))
     new_style = nullptr;
@@ -7108,7 +7101,6 @@ PseudoElement* Element::CreatePseudoElementIfNeeded(
     PseudoId pseudo_id,
     const StyleRecalcContext& style_recalc_context,
     const AtomicString& document_transition_tag) {
-  recordreplay::Assert("[RUN-1219-1694] Element::CreatePseudoElementIfNeeded");
   if (!CanGeneratePseudoElement(pseudo_id))
     return nullptr;
   if (pseudo_id == kPseudoIdFirstLetter) {
@@ -8079,6 +8071,14 @@ void Element::SynchronizeStyleAttributeInternal() const {
 CSSStyleDeclaration* Element::style() {
   if (!IsStyledElement())
     return nullptr;
+
+  if (recordreplay::IsInReplayCode() &&
+      !recordreplay::HasDivergedFromRecording()) {
+    // [RUN-1764] Do not try to create blink API objects in our Replay-only
+    // scripts, unless explicitly diverged.
+    return EnsureElementRareData().GetInlineCSSStyleDeclaration();
+  }
+
   return &EnsureElementRareData().EnsureInlineCSSStyleDeclaration(this);
 }
 
