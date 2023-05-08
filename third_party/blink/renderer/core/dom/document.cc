@@ -1090,8 +1090,6 @@ Element* Document::CreateElementForBinding(const AtomicString& name,
     return nullptr;
   }
 
-  recordreplay::Warning("DDBG Document::CreateElementForBinding %s stack=%s", 
-    name.GetString().Utf8().c_str(), recordreplay::GetCurrentJSStackTmp());
 
   if (IsXHTMLDocument() || IsA<HTMLDocument>(this)) {
     // 2. If the context object is an HTML document, let localName be
