@@ -420,8 +420,9 @@ bool EventTarget::AddEventListenerInternal(
     EventListener* listener,
     const AddEventListenerOptionsResolved* options) {
   recordreplay::Assert(
-      "[RUN-1260-1332] EventTarget::AddEventListenerInternal A %d %d %d %s",
-      !!listener, options->hasSignal() && options->signal()->aborted(),
+      "[RUN-1260-1332] EventTarget::AddEventListenerInternal A %d %d %d %d %s",
+      RecordReplayId(), !!listener,
+      options->hasSignal() && options->signal()->aborted(),
       !!GetExecutionContext(), event_type.GetString().Utf8().c_str());
 
   if (!listener) {
@@ -493,7 +494,8 @@ bool EventTarget::AddEventListenerInternal(
       event_type, listener, options, &registered_listener);
 
   recordreplay::Assert(
-      "[RUN-1260-1332] EventTarget::AddEventListenerInternal D %d", added);
+      "[RUN-1260-1332] EventTarget::AddEventListenerInternal D %d %d", 
+      RecordReplayId(), added);
 
   if (added) {
     if (options->hasSignal()) {
@@ -625,8 +627,8 @@ bool EventTarget::RemoveEventListenerInternal(
   if (!recordreplay::AreEventsDisallowed()) {
     // don't Assert during GC
     recordreplay::Assert(
-        "[RUN-1260-1332] EventTarget::RemoveEventListenerInternal %s",
-        event_type.GetString().Utf8().c_str());
+        "[RUN-1260-1332] EventTarget::RemoveEventListenerInternal %d %s",
+        RecordReplayId(), event_type.GetString().Utf8().c_str());
   }
 
   if (!d->event_listener_map.Remove(event_type, listener, options,
@@ -822,8 +824,8 @@ DispatchEventResult EventTarget::FireEventListeners(Event& event) {
   DCHECK(event.WasInitialized());
 
   EventTargetData* d = GetEventTargetData();
-  recordreplay::Assert("[RUN-1260] EventTarget::FireEventListeners 1 %d",
-                       !!d);
+  recordreplay::Assert("[RUN-1260] EventTarget::FireEventListeners 1 %d %d",
+                       RecordReplayId(), !!d);
   if (!d)
     return DispatchEventResult::kNotCanceled;
 
@@ -837,7 +839,8 @@ DispatchEventResult EventTarget::FireEventListeners(Event& event) {
 
   bool fired_event_listeners = false;
   recordreplay::Assert(
-      "[RUN-1260] EventTarget::FireEventListeners 2 %d %d %d",
+      "[RUN-1260] EventTarget::FireEventListeners 2 %d %d %d %d",
+      RecordReplayId(),
       listeners_vector ? listeners_vector->size() : -1,
       legacy_listeners_vector ? legacy_listeners_vector->size() : -1,
       event.isTrusted());
@@ -986,7 +989,9 @@ void EventTarget::RemoveAllEventListeners() {
 
   if (!recordreplay::AreEventsDisallowed()) {
     // don't Assert during GC
-    recordreplay::Assert("[RUN-1260-1332] EventTarget::RemoveAllEventListeners");
+    recordreplay::Assert(
+        "[RUN-1260-1332] EventTarget::RemoveAllEventListeners %d",
+        RecordReplayId());
   }
 
   d->event_listener_map.Clear();
