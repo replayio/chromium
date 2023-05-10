@@ -1486,17 +1486,20 @@ HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
     UPDATE_PROBE_COUNTS();
     i = (i + probe_count) & size_mask;
   }
-  idxorder_.push_back(i);
-  idxmap_[i] = key_count_;
   RegisterModification();
 
   if (deleted_entry) {
     DCHECK(can_reuse_deleted_entry);
     // Overwrite any data left over from last use, using placement new or
     // memset.
+    idxmap_[deleted_entry - table_] = idxorder_.size();
+    idxorder_.push_back(deleted_entry - table_);
     ReinitializeBucket(*deleted_entry);
     entry = deleted_entry;
     --deleted_count_;
+  } else {
+    idxmap_[i] = idxorder_.size();
+    idxorder_.push_back(i);
   }
 
   HashTranslator::Translate(*entry, std::forward<T>(key),
@@ -1574,8 +1577,8 @@ HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
   // doing that in the translator so that they can be easily customized.
   ConstructTraits<ValueType, Traits, Allocator>::NotifyNewElement(entry);
 
+  idxmap_[entry - table_] = idxorder_.size();
   idxorder_.push_back(entry - table_);
-  idxmap_[entry - table_] = key_count_;
   ++key_count_;
   if (ShouldExpand())
     entry = Expand(entry);
@@ -1609,7 +1612,7 @@ HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
   Mover<ValueType, Allocator, Traits,
         Traits::template NeedsToForbidGCOnMove<>::value>::Move(std::move(entry),
                                                                *new_entry);
-  idxmap_[new_entry - table_] = key_count_;
+  idxmap_[new_entry - table_] = idxorder_.size();
   idxorder_.push_back(new_entry - table_);
   key_count_++;
   return new_entry;
@@ -1951,7 +1954,7 @@ HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
   Value* new_entry = nullptr;
   for (auto i : idxorder_) {
     // deleted entries show up in the order as -1
-    if (i < 0)
+    if (i < 0 || IsEmptyOrDeletedBucket(table_[i]))
       continue;
     Value* reinserted_entry = new_hash_table.Reinsert(std::move(table_[i]));
     if (&table_[i] == entry) {
@@ -2056,6 +2059,8 @@ void HashTable<Key,
   DeleteAllBucketsAndDeallocate(table_, table_size_);
   LeaveAccessForbiddenScope();
   AsAtomicPtr(&table_)->store(nullptr, std::memory_order_relaxed);
+  idxorder_.clear();
+  idxmap_.clear();
   table_size_ = 0;
   key_count_ = 0;
 }
@@ -2154,6 +2159,8 @@ void HashTable<Key,
   }
   std::swap(table_size_, other.table_size_);
   std::swap(key_count_, other.key_count_);
+  std::swap(idxorder_, other.idxorder_);
+  std::swap(idxmap_, other.idxmap_);
   // std::swap does not work for bit fields.
   unsigned deleted = deleted_count_;
   deleted_count_ = other.deleted_count_;
