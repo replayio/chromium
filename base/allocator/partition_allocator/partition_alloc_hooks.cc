@@ -54,10 +54,10 @@ void PartitionAllocHooks::SetObserverHooks(AllocationObserverHook* alloc_hook,
 void PartitionAllocHooks::SetOverrideHooks(AllocationOverrideHook* alloc_hook,
                                            FreeOverrideHook* free_hook,
                                            ReallocOverrideHook realloc_hook) {
-  //if (recordreplay::IsRecordingOrReplaying()) {
+  if (recordreplay::IsRecordingOrReplaying()) {
     // Always use the default allocators when recording/replaying.
-  //  return;
-  //}
+    return;
+  }
 
   internal::ScopedGuard guard(GetHooksLock());
 

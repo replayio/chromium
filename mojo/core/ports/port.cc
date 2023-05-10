@@ -34,11 +34,11 @@ Port::Port(uint64_t next_sequence_num_to_send,
       peer_lost_unexpectedly(false),
       lock_("Port.lock_") {
   // Registering new ports is needed for sorting, see port_locker.cc
-  //recordreplay::RegisterPointer("Port", this);
+  recordreplay::RegisterPointer("Port", this);
 }
 
 Port::~Port() {
-  //recordreplay::UnregisterPointer(this);
+  recordreplay::UnregisterPointer(this);
 }
 
 bool Port::IsNextEvent(const NodeName& from_node, const Event& event) {

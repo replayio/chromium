@@ -161,20 +161,19 @@ ForEachV8APIVoid(DefineFunctionVoid)
 #endif // !BUILD_FLAG(IS_WIN)
 
 bool IsRecordingOrReplaying(const char* feature) {
-  return false; //V8IsRecordingOrReplaying(feature);
+  return V8IsRecordingOrReplaying(feature);
 }
 
 bool IsRecording() {
-  return false; //V8IsRecording();
+  return V8IsRecording();
 }
 
 bool IsReplaying() {
-  return false; //V8IsReplaying();
+  return V8IsReplaying();
 }
 
 char* GetRecordingId() {
-  static char ret[1] = "";
-  return ret; //V8GetRecordingId();
+  return V8GetRecordingId();
 }
 
 bool HadMismatch() {
@@ -185,7 +184,7 @@ void Assert(const char* format, ...) {
 #ifndef NACL_TC_REV
   va_list ap;
   va_start(ap, format);
-  //V8RecordReplayAssertVA(format, ap);
+  V8RecordReplayAssertVA(format, ap);
   va_end(ap);
 #endif
 }
@@ -194,7 +193,7 @@ void Diagnostic(const char* format, ...) {
 #ifndef NACL_TC_REV
   va_list ap;
   va_start(ap, format);
-  //V8RecordReplayDiagnosticVA(format, ap);
+  V8RecordReplayDiagnosticVA(format, ap);
   va_end(ap);
 #endif
 }
@@ -203,151 +202,151 @@ void Warning(const char* format, ...) {
 #ifndef NACL_TC_REV
   va_list ap;
   va_start(ap, format);
-  //V8RecordReplayWarning(format, ap);
+  V8RecordReplayWarning(format, ap);
   va_end(ap);
 #endif
 }
 
 void AssertBytes(const char* why, const void* buf, size_t size) {
-  //V8RecordReplayAssertBytes(why, buf, size);
+  V8RecordReplayAssertBytes(why, buf, size);
 }
 
 void Print(const char* format, ...) {
 #ifndef NACL_TC_REV
   va_list ap;
   va_start(ap, format);
-  //V8RecordReplayPrintVA(format, ap);
+  V8RecordReplayPrintVA(format, ap);
   va_end(ap);
 #endif
 }
 
 uintptr_t RecordReplayValue(const char* why, uintptr_t v) {
-  return 0; //V8RecordReplayValue(why, v);
+  return V8RecordReplayValue(why, v);
 }
 
 void RecordReplayBytes(const char* why, void* buf, size_t size) {
-  //V8RecordReplayBytes(why, buf, size);
+  V8RecordReplayBytes(why, buf, size);
 }
 
 int CreateOrderedLock(const char* name) {
-  return 0; //(int)V8RecordReplayCreateOrderedLock(name);
+  return (int)V8RecordReplayCreateOrderedLock(name);
 }
 
 void OrderedLock(int lock) {
-  //V8RecordReplayOrderedLock(lock);
+  V8RecordReplayOrderedLock(lock);
 }
 
 void OrderedUnlock(int lock) {
-  //V8RecordReplayOrderedUnlock(lock);
+  V8RecordReplayOrderedUnlock(lock);
 }
 
 void NewCheckpoint() {
-  //V8RecordReplayNewCheckpoint();
+  V8RecordReplayNewCheckpoint();
 }
 
 uint64_t NewBookmark() {
-  return 0; //V8RecordReplayNewBookmark();
+  return V8RecordReplayNewBookmark();
 }
 
 void OnAnnotation(const char* kind, const char* contents) {
-  //V8RecordReplayOnAnnotation(kind, contents);
+  V8RecordReplayOnAnnotation(kind, contents);
 }
 
 void OnNetworkRequest(const char* id, const char* kind, uint64_t bookmark) {
-  //V8RecordReplayOnNetworkRequest(id, kind, bookmark);
+  V8RecordReplayOnNetworkRequest(id, kind, bookmark);
 }
 
 void OnNetworkRequestEvent(const char* id) {
-  //V8RecordReplayOnNetworkRequestEvent(id);
+  V8RecordReplayOnNetworkRequestEvent(id);
 }
 
 void OnNetworkStreamStart(const char* id, const char* kind, const char* parentId) {
-  //V8RecordReplayOnNetworkStreamStart(id, kind, parentId);
+  V8RecordReplayOnNetworkStreamStart(id, kind, parentId);
 }
 
 void OnNetworkStreamData(const char* id, size_t offset, size_t length, uint64_t bookmark) {
-  //V8RecordReplayOnNetworkStreamData(id, offset, length, bookmark);
+  V8RecordReplayOnNetworkStreamData(id, offset, length, bookmark);
 }
 
 void OnNetworkStreamEnd(const char* id, size_t length) {
-  //V8RecordReplayOnNetworkStreamEnd(id, length);
+  V8RecordReplayOnNetworkStreamEnd(id, length);
 }
 
 bool AreEventsDisallowed() {
-  return false; //V8RecordReplayAreEventsDisallowed();
+  return V8RecordReplayAreEventsDisallowed();
 }
 
 void BeginDisallowEvents() {
-  //V8RecordReplayBeginDisallowEvents();
+  V8RecordReplayBeginDisallowEvents();
 }
 
 void BeginDisallowEventsWithLabel(const char* label) {
-  //iV8RecordReplayBeginDisallowEventsWithLabel(label);
+  V8RecordReplayBeginDisallowEventsWithLabel(label);
 }
 
 void EndDisallowEvents() {
-  //V8RecordReplayEndDisallowEvents();
+  V8RecordReplayEndDisallowEvents();
 }
 
 bool AreEventsPassedThrough() {
-  return 0; //V8RecordReplayAreEventsPassedThrough();
+  return V8RecordReplayAreEventsPassedThrough();
 }
 
 void BeginPassThroughEvents() {
-  //V8RecordReplayBeginPassThroughEvents();
+  V8RecordReplayBeginPassThroughEvents();
 }
 
 void EndPassThroughEvents() {
-  //V8RecordReplayEndPassThroughEvents();
+  V8RecordReplayEndPassThroughEvents();
 }
 
 bool FeatureEnabled(const char* feature) {
-  return false;//V8RecordReplayFeatureEnabled(feature);
+  return V8RecordReplayFeatureEnabled(feature);
 }
 
 void BrowserEvent(const char* name, const base::DictionaryValue& info) {
-  //std::string json;
-  //base::JSONWriter::Write(info, &json);
-  //V8RecordReplayBrowserEvent(name, json.c_str());
+  std::string json;
+  base::JSONWriter::Write(info, &json);
+  V8RecordReplayBrowserEvent(name, json.c_str());
 }
 
 bool HasDivergedFromRecording() {
-  return false;//V8RecordReplayHasDivergedFromRecording();
+  return V8RecordReplayHasDivergedFromRecording();
 }
 
 bool AllowSideEffects() {
-  return false; //V8RecordReplayAllowSideEffects();
+  return V8RecordReplayAllowSideEffects();
 }
 
 void RegisterPointer(const char* name, const void* ptr) {
-  //V8RecordReplayRegisterPointer(name, ptr);
+  V8RecordReplayRegisterPointer(name, ptr);
 }
 
 void UnregisterPointer(const void* ptr) {
-  //V8RecordReplayUnregisterPointer(ptr);
+  V8RecordReplayUnregisterPointer(ptr);
 }
 
 int PointerId(const void* ptr) {
-  return 0; //V8RecordReplayPointerId(ptr);
+  return V8RecordReplayPointerId(ptr);
 }
 
 void* IdPointer(int id) {
-  return nullptr; //V8RecordReplayIdPointer(id);
+  return V8RecordReplayIdPointer(id);
 }
 
 void OnEvent(const char* aEvent, bool aBefore) {
-  //V8RecordReplayOnEvent(aEvent, aBefore);
+  V8RecordReplayOnEvent(aEvent, aBefore);
 }
 void OnMouseEvent(const char* kind,
                                 size_t clientX,
                                 size_t clientY) {
-  //V8RecordReplayOnMouseEvent(kind, clientX, clientY);
+  V8RecordReplayOnMouseEvent(kind, clientX, clientY);
 }
 void OnKeyEvent(const char* kind, const char* key) {
-  //V8RecordReplayOnKeyEvent(kind, key);
+  V8RecordReplayOnKeyEvent(kind, key);
 }
 void OnNavigationEvent(const char* kind, const char* url) {
-  //V8RecordReplayOnNavigationEvent(kind, url);
+  V8RecordReplayOnNavigationEvent(kind, url);
 }
 
 AutoLockMaybeEventsDisallowed::AutoLockMaybeEventsDisallowed(
@@ -379,29 +378,50 @@ AutoUnlockMaybeEventsDisallowed::~AutoUnlockMaybeEventsDisallowed() {
 }
 
 bool IsMainThread() {
-  return false; //V8IsMainThread();
+  return V8IsMainThread();
 }
 
-//static int gNextMainThreadId = 1;
+static int gNextMainThreadId = 1;
+
+static bool CheckNewId(const char* name) {
+  if (!IsRecordingOrReplaying()) {
+    // Don't track anything.
+    return false;
+  }
+  if (HasDivergedFromRecording()) {
+    // Everything is allowed when explicitly diverged.
+    return true;
+  }
+  if (AreEventsDisallowed()) {
+    // IDs can be created when events are disallowed when our own scripts
+    // create URL objects. This would be nice to improve.
+    if (!IsInReplayCode()) {
+      Warning("NewId when not allowed %s", name);
+    }
+    return false;
+  }
+  Assert("NewId %s", name);
+  return true;
+}
+
 int NewIdMainThread(const char* name) {
-//  if (IsRecordingOrReplaying()) {
-//    if (!V8IsMainThread()) {
-//      fprintf(stderr, "NewIdMainThread not main thread: %s\n", name);
-//      CHECK(V8IsMainThread());
-//    }
-//    Assert("NewId %s", name);
-//    return gNextMainThreadId++;
-//  }
-  return 0;
+  if (!CheckNewId(name)) {
+    return 0;
+  }
+  if (!V8IsMainThread()) {
+    fprintf(stderr, "NewIdMainThread not main thread: %s\n", name);
+    CHECK(V8IsMainThread());
+  }
+  return gNextMainThreadId++;
 }
 
-//static std::atomic<int> gNextAnyThreadId{1};
+static std::atomic<int> gNextAnyThreadId{1};
 
 int NewIdAnyThread(const char* name) {
-  //if (!CheckNewId(name)) {
+  if (!CheckNewId(name)) {
     return 0;
-  //}
-  //return (int)RecordReplayValue("NewId", (uintptr_t)gNextAnyThreadId++);
+  }
+  return (int)RecordReplayValue("NewId", (uintptr_t)gNextAnyThreadId++);
 }
 
 bool IsInReplayCode() {
@@ -421,7 +441,7 @@ void RecordReplayString(const char* why, std::string& str) {
 }
 
 void AddOrderedSRWLock(const char* name, void* lock) {
-  //V8RecordReplayAddOrderedSRWLock(name, lock);
+  V8RecordReplayAddOrderedSRWLock(name, lock);
 }
 
 void RemoveOrderedSRWLock(void* lock) {
@@ -429,7 +449,7 @@ void RemoveOrderedSRWLock(void* lock) {
 }
 
 void MaybeTerminate(void (*callback)(void*), void* data) {
-  //V8RecordReplayMaybeTerminate(callback, data);
+  V8RecordReplayMaybeTerminate(callback, data);
 }
 
 } // namespace recordreplay

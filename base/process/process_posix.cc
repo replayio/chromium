@@ -277,7 +277,7 @@ void Process::TerminateCurrentProcessImmediately(int exit_code) {
 #if BUILDFLAG(CLANG_PROFILING)
   WriteClangProfilingProfile();
 #endif
-  //V8RecordReplayFinishRecording();
+  V8RecordReplayFinishRecording();
   _exit(exit_code);
 }
 

@@ -385,9 +385,9 @@ ALWAYS_INLINE void ShimAlignedFree(void* address, void* context) {
 #include "base/allocator/partition_allocator/shim/allocator_shim_override_glibc_weak_symbols.h"
 #endif
 
-//static inline bool MaybeRecordingOrReplaying() {
-//  return true;
-//}
+static inline bool MaybeRecordingOrReplaying() {
+  return true;
+}
 
 #if BUILDFLAG(IS_APPLE)
 namespace allocator_shim {
