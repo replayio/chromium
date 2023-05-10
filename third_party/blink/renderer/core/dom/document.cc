@@ -1090,7 +1090,6 @@ Element* Document::CreateElementForBinding(const AtomicString& name,
     return nullptr;
   }
 
-
   if (IsXHTMLDocument() || IsA<HTMLDocument>(this)) {
     // 2. If the context object is an HTML document, let localName be
     // converted to ASCII lowercase.
