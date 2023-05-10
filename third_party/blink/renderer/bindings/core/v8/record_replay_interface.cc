@@ -344,7 +344,9 @@ function commandCallback(method, params) {
 }
 
 function Target_evaluatePrivileged({ expression }) {
+  log(`EvaluatePrivileged Start ${expression}`);
   const result = eval(expression);
+  log(`EvaluatePrivileged Done`);
   return { result };
 }
 
