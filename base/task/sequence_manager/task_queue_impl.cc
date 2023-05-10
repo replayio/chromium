@@ -640,6 +640,9 @@ void TaskQueueImpl::ReloadEmptyImmediateWorkQueue() {
 }
 
 void TaskQueueImpl::TakeImmediateIncomingQueueTasks(TaskDeque* queue, TaskDeque* record_replay_unordered_queue) {
+  recordreplay::Assert("[RUN-1916] TaskQueueImpl::TakeImmediateIncomingQueueTasks %zu",
+                       queue->size());
+
   DCHECK(queue->empty());
   // Now is a good time to consider reducing the empty queue's capacity if we're
   // wasting memory, before we make it the `immediate_incoming_queue`.
@@ -787,6 +790,8 @@ void TaskQueueImpl::MoveReadyDelayedTasksToWorkQueue(
 
     // Leave the top task alone if it hasn't been canceled and it is not ready.
     const bool is_cancelled = task.task.IsCancelled();
+    recordreplay::Assert("[RUN-1916] TaskQueueImpl::MoveReadyDelayedTasksToWorkQueue #2 %d %d",
+                         is_cancelled, lazy_now->has_value());
     if (!is_cancelled && task.earliest_delayed_run_time() > lazy_now->Now())
       break;
 
