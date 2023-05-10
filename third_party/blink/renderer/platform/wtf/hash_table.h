@@ -299,8 +299,7 @@ class HashTableConstIterator final {
     // always going to be a non-empty bucket.
     while (*position_ == -1) {
 #if DCHECK_IS_ON()
-      assert(position_ != begin_position_);
-      //DCHECK_NE(position_, begin_position_);
+      DCHECK_NE(position_, begin_position_);
 #endif
       --position_;
     }
@@ -370,8 +369,6 @@ class HashTableConstIterator final {
   GetType operator->() const { return Get(); }
 
   const_iterator& operator++() {
-    assert(position_ != end_position_);
-    //DCHECK_NE(position_, end_position_);
     CheckModifications();
     ++position_;
     SkipEmptyBuckets();
@@ -917,6 +914,12 @@ class HashTable final
 
   bool ShouldExpand() const {
     return (key_count_ + deleted_count_) * kMaxLoad >= table_size_;
+  }
+  // if the same key and value is inserted and deleted, the ordering
+  // vector can grow without bound; we want to do a no-op resize if
+  // the key count is significantly smaller than the ordering size
+  bool ShouldCompress() const {
+      return key_count_ < kMaxLoad * idxorder_.size();
   }
   bool MustRehashInPlace() const {
     return key_count_ * kMinLoad < table_size_ * 2;
@@ -1513,6 +1516,8 @@ HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
 
   if (ShouldExpand()) {
     entry = Expand(entry);
+  } else if (ShouldCompress()) {
+    entry = Rehash(table_size_, entry);
   } else if (WTF::IsWeak<ValueType>::value && ShouldShrink()) {
     // When weak hash tables are processed by the garbage collector,
     // elements with no other strong references to them will have their
@@ -1582,6 +1587,8 @@ HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
   ++key_count_;
   if (ShouldExpand())
     entry = Expand(entry);
+  else if (ShouldCompress())
+    entry = Rehash(table_size_, entry);
 
   return AddResult(this, entry, true);
 }
