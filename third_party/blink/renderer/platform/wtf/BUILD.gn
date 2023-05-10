@@ -18,7 +18,6 @@ visibility = [
 ]
 
 config("wtf_config") {
-  cflags = ["-g", "-O0"]
   if (is_win) {
     cflags = [
       # Don't complain about calling specific versions of templatized
@@ -243,7 +242,6 @@ component("wtf") {
     sources += [ "text/ascii_fast_path.cc" ]
   }
 
-  cflags = ["-g", "-O0"]
   if (is_win) {
     cflags = [ "/wd4068" ]  # Unknown pragma.
 
@@ -281,13 +279,11 @@ component("wtf") {
 
 test("wtf_unittests") {
   deps = [ ":wtf_unittests_sources" ]
-  cflags = ["-g", "-O0"]
 }
 
 source_set("wtf_unittests_sources") {
   visibility = []  # Allow re-assignment of list.
   visibility = [ "*" ]
-  cflags = ["-g", "-O0"]
   testonly = true
 
   sources = [
