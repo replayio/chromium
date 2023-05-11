@@ -310,7 +310,7 @@ const CSSValue* CSSComputedStyleDeclaration::GetPropertyCSSValue(
 
   if (!recordreplay::AreEventsDisallowed()) {
     recordreplay::Assert(
-        "[RUN-1918] CSSComputedStyleDeclaration::GetPropertyCSSValue B %s",
+        "[RUN-1918-1921] CSSComputedStyleDeclaration::GetPropertyCSSValue B %s",
         value ? value->CssText().Ascii().c_str() : "");
   }
 
