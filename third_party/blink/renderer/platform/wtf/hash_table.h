@@ -305,10 +305,10 @@ class HashTableConstIterator final {
     }
   }
 
-  HashTableConstIterator(std::vector<ssize_t>::const_iterator position,
+  HashTableConstIterator(ssize_t* position,
 		  	 const Value* table,
-                         std::vector<ssize_t>::const_iterator begin_position,
-                         std::vector<ssize_t>::const_iterator end_position,
+                         ssize_t* begin_position,
+                         ssize_t* end_position,
                          const HashTableType* container)
       : position_(position),
 	table_(table),
@@ -323,10 +323,10 @@ class HashTableConstIterator final {
     SkipEmptyBuckets();
   }
 
-  HashTableConstIterator(std::vector<ssize_t>::const_iterator position,
+  HashTableConstIterator(ssize_t* position,
 		  	 const Value* table,
-                         std::vector<ssize_t>::const_iterator begin_position,
-                         std::vector<ssize_t>::const_iterator end_position,
+                         ssize_t* begin_position,
+                         ssize_t* end_position,
                          const HashTableType* container,
                          HashItemKnownGoodTag)
       : position_(position),
@@ -413,12 +413,12 @@ class HashTableConstIterator final {
   }
 
  private:
-  std::vector<ssize_t>::const_iterator position_;
+  ssize_t* position_;
   const Value* table_;
-  std::vector<ssize_t>::const_iterator end_position_;
+  ssize_t* end_position_;
 #if DCHECK_IS_ON()
   const HashTableType* container_;
-  std::vector<ssize_t>::const_iterator begin_position_;
+  ssize_t* begin_position_;
   //PointerType begin_position_;
   int64_t container_modifications_;
 #endif
@@ -489,16 +489,16 @@ class HashTableIterator final {
                          KeyTraits,
                          Allocator>;
 
-  HashTableIterator(std::vector<ssize_t>::iterator pos,
+  HashTableIterator(ssize_t* pos,
 		    Value* table,
-                    std::vector<ssize_t>::iterator  begin,
-                    std::vector<ssize_t>::iterator  end,
+                    ssize_t* begin,
+                    ssize_t* end,
                     const HashTableType* container)
       : iterator_(pos, table, begin, end, container) {}
-  HashTableIterator(std::vector<ssize_t>::iterator  pos,
+  HashTableIterator(ssize_t* pos,
 		    Value* table,
-                    std::vector<ssize_t>::iterator  begin,
-                    std::vector<ssize_t>::iterator  end,
+                    ssize_t* begin,
+                    ssize_t* end,
                     const HashTableType* container,
                     HashItemKnownGoodTag tag)
       : iterator_(pos, table, begin, end, container, tag) {}
@@ -776,13 +776,13 @@ class HashTable final
   // for begin.  This is more efficient because we don't have to skip all the
   // empty and deleted buckets, and iterating an empty table is a common case
   // that's worth optimizing.
-  iterator begin() { return empty() ? end() : MakeIterator(idxorder_.begin()); }
-  iterator end() { return MakeKnownGoodIterator(idxorder_.end()); }
+  iterator begin() { return empty() ? end() : MakeIterator(idxorder_); }
+  iterator end() { return MakeKnownGoodIterator(idxorder_ + idxorder_count_); }
   const_iterator begin() const {
-    return empty() ? end() : MakeConstIterator(idxorder_.cbegin());
+    return empty() ? end() : MakeConstIterator(idxorder_);
   }
   const_iterator end() const {
-    return MakeKnownGoodConstIterator(idxorder_.cend());
+    return MakeKnownGoodConstIterator(idxorder_ + idxorder_count_);
   }
 
   unsigned size() const {
@@ -918,8 +918,11 @@ class HashTable final
   // if the same key and value is inserted and deleted, the ordering
   // vector can grow without bound; we want to do a no-op resize if
   // the key count is significantly smaller than the ordering size
+  // 
+  // We need to compress to make sure that the count does not grow
+  // past the size of the backing array.
   bool ShouldCompress() const {
-      return key_count_ < kMaxLoad * idxorder_.size();
+      return idxorder_count_ == table_size_ - 1;
   }
   bool MustRehashInPlace() const {
     return key_count_ * kMinLoad < table_size_ * 2;
@@ -955,33 +958,33 @@ class HashTable final
     return FullLookupType(LookupType(position, found), hash);
   }
 
-  iterator MakeIterator(std::vector<ssize_t>::iterator pos) {
+  iterator MakeIterator(ssize_t* pos) {
     return iterator(pos,
 		    table_,
-                    idxorder_.begin(),
-                    idxorder_.end(),
+                    idxorder_,
+                    idxorder_ + idxorder_count_,
                     this);
   }
-  const_iterator MakeConstIterator(std::vector<ssize_t>::const_iterator pos) const {
+  const_iterator MakeConstIterator(ssize_t* pos) const {
     return const_iterator(pos,
 		    	  table_,
-                          idxorder_.cbegin(),
-                          idxorder_.cend(),
+                          idxorder_,
+                          idxorder_ + idxorder_count_,
                           this);
   }
-  iterator MakeKnownGoodIterator(std::vector<ssize_t>::iterator pos) {
+  iterator MakeKnownGoodIterator(ssize_t* pos) {
     return iterator(pos,
 		    table_,
-                    idxorder_.begin(),
-                    idxorder_.end(),
+                    idxorder_,
+                    idxorder_ + idxorder_count_,
                     this,
                     kHashItemKnownGood);
   }
-  const_iterator MakeKnownGoodConstIterator(std::vector<ssize_t>::const_iterator pos) const {
+  const_iterator MakeKnownGoodConstIterator(ssize_t* pos) const {
     return const_iterator(pos,
 		          table_,
-                          idxorder_.cbegin(),
-                          idxorder_.cend(),
+                          idxorder_,
+                          idxorder_ + idxorder_count_,
                           this,
                           kHashItemKnownGood);
   }
@@ -1003,8 +1006,7 @@ class HashTable final
   struct RawStorageTag {};
   HashTable(RawStorageTag, ValueType* table, unsigned size)
       : table_(table),
-	idxmap_(size, -1),
-	idxorder_(),
+	idxorder_count_(0),
         table_size_(size),
         key_count_(0),
         deleted_count_(0),
@@ -1015,13 +1017,18 @@ class HashTable final
         modifications_(0)
 #endif
   {
+	idxmap_ = Allocator::template AllocateVectorBacking<ssize_t>(size*sizeof(ssize_t));
+	idxorder_ = Allocator::template AllocateVectorBacking<ssize_t>(size*sizeof(ssize_t));
+	for(size_t i = 0; i < size; i++)
+		idxmap_[i] = -1;
   }
 
 public:
   ValueType* table_;
 private:
-  std::vector<ssize_t> idxmap_;
-  std::vector<ssize_t> idxorder_;
+  ssize_t* idxmap_;
+  ssize_t* idxorder_;
+  size_t idxorder_count_;
 
   unsigned table_size_;
   unsigned key_count_;
@@ -1074,6 +1081,9 @@ inline HashTable<Key,
                  KeyTraits,
                  Allocator>::HashTable()
     : table_(nullptr),
+      idxmap_(nullptr),
+      idxorder_(nullptr),
+      idxorder_count_(0),
       table_size_(0),
       key_count_(0),
       deleted_count_(0),
@@ -1495,14 +1505,14 @@ HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
     DCHECK(can_reuse_deleted_entry);
     // Overwrite any data left over from last use, using placement new or
     // memset.
-    idxmap_[deleted_entry - table_] = idxorder_.size();
-    idxorder_.push_back(deleted_entry - table_);
+    idxmap_[deleted_entry - table_] = idxorder_count_;
+    idxorder_[idxorder_count_++] = deleted_entry - table_;
     ReinitializeBucket(*deleted_entry);
     entry = deleted_entry;
     --deleted_count_;
   } else {
-    idxmap_[i] = idxorder_.size();
-    idxorder_.push_back(i);
+    idxmap_[i] = idxorder_count_;
+    idxorder_[idxorder_count_++] = i;
   }
 
   HashTranslator::Translate(*entry, std::forward<T>(key),
@@ -1582,8 +1592,8 @@ HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
   // doing that in the translator so that they can be easily customized.
   ConstructTraits<ValueType, Traits, Allocator>::NotifyNewElement(entry);
 
-  idxmap_[entry - table_] = idxorder_.size();
-  idxorder_.push_back(entry - table_);
+  idxmap_[entry - table_] = idxorder_count_;
+  idxorder_[idxorder_count_++] = entry - table_;
   ++key_count_;
   if (ShouldExpand())
     entry = Expand(entry);
@@ -1619,8 +1629,8 @@ HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
   Mover<ValueType, Allocator, Traits,
         Traits::template NeedsToForbidGCOnMove<>::value>::Move(std::move(entry),
                                                                *new_entry);
-  idxmap_[new_entry - table_] = idxorder_.size();
-  idxorder_.push_back(new_entry - table_);
+  idxmap_[new_entry - table_] = idxorder_count_;
+  idxorder_[idxorder_count_++] = new_entry - table_;
   key_count_++;
   return new_entry;
 }
@@ -1646,7 +1656,7 @@ HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
   if (idx == -1)
     return end();
 
-  return MakeKnownGoodIterator(idxorder_.begin() + idx);
+  return MakeKnownGoodIterator(idxorder_ + idx);
 }
 
 template <typename Key,
@@ -1670,7 +1680,7 @@ HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
   if (idx == -1)
     return end();
 
-  return MakeKnownGoodConstIterator(idxorder_.begin() + idx);
+  return MakeKnownGoodConstIterator(idxorder_ + idx);
 }
 
 template <typename Key,
@@ -1959,8 +1969,9 @@ HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
   HashTable new_hash_table(RawStorageTag{}, new_table, new_table_size);
 
   Value* new_entry = nullptr;
-  for (auto i : idxorder_) {
+  for (size_t idx = 0; idx < idxorder_count_; idx++) {
     // deleted entries show up in the order as -1
+    size_t i = idxorder_[idx];
     if (i < 0 || IsEmptyOrDeletedBucket(table_[i]))
       continue;
     Value* reinserted_entry = new_hash_table.Reinsert(std::move(table_[i]));
@@ -1973,9 +1984,9 @@ HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
   Allocator::TraceBackingStoreIfMarked(new_hash_table.table_);
 
   ValueType* old_table = table_;
-  auto old_table_size = table_size_;
-  //auto old_table_order = std::move(idxorder_);
-  //auto old_table_map = std::move(idxmap_);
+  unsigned old_table_size = table_size_;
+  ssize_t* old_table_order = idxorder_;
+  ssize_t* old_table_map = idxmap_;
 
   // This swaps the newly allocated buffer with the current one. The store to
   // the current table has to be atomic to prevent races with concurrent marker.
@@ -1987,8 +1998,8 @@ HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
 
   new_hash_table.table_ = old_table;
   new_hash_table.table_size_ = old_table_size;
-  //new_hash_table.idxorder_ = std::move(old_table_order);
-  //new_hash_table.idxmap_ = std::move(old_table_map);
+  new_hash_table.idxorder_ = old_table_order;
+  new_hash_table.idxmap_ = old_table_map;
 
   // Explicitly clear since garbage collected HashTables don't do this on
   // destruction.
@@ -2064,10 +2075,13 @@ void HashTable<Key,
 
   EnterAccessForbiddenScope();
   DeleteAllBucketsAndDeallocate(table_, table_size_);
+  Allocator::FreeVectorBacking(idxorder_);
+  Allocator::FreeVectorBacking(idxmap_);
   LeaveAccessForbiddenScope();
   AsAtomicPtr(&table_)->store(nullptr, std::memory_order_relaxed);
-  idxorder_.clear();
-  idxmap_.clear();
+  AsAtomicPtr(&idxmap_)->store(nullptr, std::memory_order_relaxed);
+  AsAtomicPtr(&idxorder_)->store(nullptr, std::memory_order_relaxed);
+  idxorder_count_ = 0;
   table_size_ = 0;
   key_count_ = 0;
 }
@@ -2082,6 +2096,9 @@ template <typename Key,
 HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
     HashTable(const HashTable& other)
     : table_(nullptr),
+      idxmap_(nullptr),
+      idxorder_(nullptr),
+      idxorder_count_(0),
       table_size_(0),
       key_count_(0),
       deleted_count_(0),
@@ -2115,6 +2132,9 @@ template <typename Key,
 HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
     HashTable(HashTable&& other)
     : table_(nullptr),
+      idxmap_(nullptr),
+      idxorder_(nullptr),
+      idxorder_count_(0),
       table_size_(0),
       key_count_(0),
       deleted_count_(0),
