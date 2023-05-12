@@ -34,8 +34,7 @@ namespace recordreplay {
   Macro(V8RecordReplayFeatureEnabled,                                   \
         (const char* feature), (feature), bool, false)                  \
   Macro(V8IsMainThread, (), (), bool, false)                            \
-  Macro(V8RecordReplayHadMismatch, (), (), bool, false)                 \
-  Macro(V8RecordReplayGetCurrentJSStackTmp, (), (), const char*, "")
+  Macro(V8RecordReplayHadMismatch, (), (), bool, false)
 
 #define ForEachV8APIVoid(Macro)                                         \
   Macro(V8RecordReplayAssertVA,                                         \
@@ -98,7 +97,9 @@ namespace recordreplay {
         (const char* name, void* lock), (name, lock))                   \
   Macro(V8RecordReplayRemoveOrderedSRWLock, (void* lock), (lock))       \
   Macro(V8RecordReplayMaybeTerminate,                                   \
-        (void (*callback)(void*), void* data), (callback, data))
+        (void (*callback)(void*), void* data), (callback, data))        \
+  Macro(V8RecordReplayGetCurrentJSStack,                                \
+        (std::string* stackTrace), (stackTrace))
 
 #if BUILDFLAG(IS_WIN)
 
@@ -329,8 +330,8 @@ bool FeatureEnabled(const char* feature) {
   return V8RecordReplayFeatureEnabled(feature);
 }
 
-const char* GetCurrentJSStackTmp() {
-  return V8RecordReplayGetCurrentJSStackTmp();
+void GetCurrentJSStack(std::string* stackTrace) {
+  return V8RecordReplayGetCurrentJSStack(stackTrace);
 }
 
 void BrowserEvent(const char* name, const base::DictionaryValue& info) {

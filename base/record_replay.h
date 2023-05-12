@@ -77,7 +77,7 @@ bool FeatureEnabled(const char* feature);
  * That string will be re-used upon the next invocation of this call, so
  * don't keep it around.
  */
-const char* GetCurrentJSStackTmp();
+void GetCurrentJSStack(std::string* stackTrace);
 
 void BrowserEvent(const char* msg, const base::DictionaryValue& info);
 
