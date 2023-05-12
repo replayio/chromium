@@ -429,6 +429,11 @@ HRESULT DWriteFontCollectionProxy::CreateStreamFromKey(
     const void* font_file_reference_key,
     UINT32 font_file_reference_key_size,
     IDWriteFontFileStream** font_file_stream) {
+  recordreplay::Print("[RUN-1912] DWriteFontCollectionProxy::CreateStreamFromKey %d %d",
+                      recordreplay::AreEventsDisallowed(),
+                      recordreplay::AreEventsPassedThrough());
+  recordreplay::Assert("[RUN-1912] DWriteFontCollectionProxy::CreateStreamFromKey");
+
   if (font_file_reference_key_size != sizeof(HANDLE)) {
     return E_FAIL;
   }
@@ -800,6 +805,8 @@ HRESULT FontFileEnumerator::GetCurrentFontFile(IDWriteFontFile** file) {
 
   TRACE_EVENT0("dwrite,fonts", "FontFileEnumerator::GetCurrentFontFile");
 
+  recordreplay::Print("[RUN-1912] FontFileEnumerator::GetCurrentFontFile #1");
+
   // CreateCustomFontFileReference ends up calling
   // DWriteFontCollectionProxy::CreateStreamFromKey.
   HRESULT hr = factory_->CreateCustomFontFileReference(
@@ -807,6 +814,9 @@ HRESULT FontFileEnumerator::GetCurrentFontFile(IDWriteFontFile** file) {
       sizeof(files_[current_file_]), loader_.Get() /*IDWriteFontFileLoader*/,
       file);
   DCHECK(SUCCEEDED(hr));
+
+  recordreplay::Print("[RUN-1912] FontFileEnumerator::GetCurrentFontFile #2");
+
   return hr;
 }
 
