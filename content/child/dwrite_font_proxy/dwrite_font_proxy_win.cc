@@ -815,7 +815,8 @@ HRESULT FontFileEnumerator::GetCurrentFontFile(IDWriteFontFile** file) {
 
   TRACE_EVENT0("dwrite,fonts", "FontFileEnumerator::GetCurrentFontFile");
 
-  recordreplay::Print("[RUN-1912] FontFileEnumerator::GetCurrentFontFile #1");
+  recordreplay::Print("[RUN-1912] FontFileEnumerator::GetCurrentFontFile #1 %d",
+                      recordreplay::AreEventsPassedThrough());
 
   // CreateCustomFontFileReference ends up calling
   // DWriteFontCollectionProxy::CreateStreamFromKey.
