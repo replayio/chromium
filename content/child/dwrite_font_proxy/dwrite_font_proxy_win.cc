@@ -371,7 +371,10 @@ HRESULT DWriteFontCollectionProxy::CreateEnumeratorFromKey(
     const void* collection_key,
     UINT32 collection_key_size,
     IDWriteFontFileEnumerator** font_file_enumerator) {
+  recordreplay::Print("[RUN-1912] DWriteFontCollectionProxy::CreateEnumeratorFromKey");
+
   if (!collection_key || collection_key_size != sizeof(uint32_t)) {
+    recordreplay::Print("[RUN-1912] DWriteFontCollectionProxy::CreateEnumeratorFromKey #1");
     LogFontProxyError(COLLECTION_KEY_INVALID);
     return E_INVALIDARG;
   }
@@ -392,6 +395,7 @@ HRESULT DWriteFontCollectionProxy::CreateEnumeratorFromKey(
     base::ScopedAllowBaseSyncPrimitives allow_sync;
     if (!GetFontProxy().GetFontFiles(*family_index, &file_names,
                                      &file_handles)) {
+      recordreplay::Print("[RUN-1912] DWriteFontCollectionProxy::CreateEnumeratorFromKey #2");
       LogFontProxyError(GET_FONT_FILES_SEND_FAILED);
       return E_FAIL;
     }
@@ -416,6 +420,8 @@ HRESULT DWriteFontCollectionProxy::CreateEnumeratorFromKey(
 
   HRESULT hr = mswr::MakeAndInitialize<FontFileEnumerator>(
       font_file_enumerator, factory, this, &handles);
+
+  recordreplay::Print("[RUN-1912] DWriteFontCollectionProxy::CreateEnumeratorFromKey Done");
 
   if (!SUCCEEDED(hr)) {
     DCHECK(false);
@@ -490,12 +496,16 @@ bool DWriteFontCollectionProxy::LoadFamily(
     IDWriteFontCollection** containing_collection) {
   TRACE_EVENT0("dwrite,fonts", "FontProxy::LoadFamily");
 
+  recordreplay::Print("[RUN-1912] DWriteFontCollectionProxy::LoadFamily");
+
   uint32_t index = family_index;
   // CreateCustomFontCollection ends up calling
   // DWriteFontCollectionProxy::CreateEnumeratorFromKey.
   HRESULT hr = factory_->CreateCustomFontCollection(
       this /*collectionLoader*/, reinterpret_cast<const void*>(&index),
       sizeof(index), containing_collection);
+
+  recordreplay::Print("[RUN-1912] DWriteFontCollectionProxy::LoadFamily Done");
 
   return SUCCEEDED(hr);
 }
