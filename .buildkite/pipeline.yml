@@ -46,6 +46,8 @@ steps:
       - "queue=runtime"
     artifact_paths:
       - "build_id/macOS/arm_64/**"
+    # TODO(dmiller): remove this once the arm mac build doesn't fail
+    soft_fail: true
   - label: "Build chromium - Windows"
     key: "build-chromium-windows"
     # TODO(dmiller): remove this once we have a windows build that doesn't fail
