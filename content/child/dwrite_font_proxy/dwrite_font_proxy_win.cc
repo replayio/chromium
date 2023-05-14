@@ -859,7 +859,12 @@ HRESULT FontFileEnumerator::RuntimeClassInitialize(
 
 FontFileStream::FontFileStream() = default;
 
-FontFileStream::~FontFileStream() = default;
+FontFileStream::~FontFileStream() {
+  // The FontFileStream has a different lifetime when replaying so we disallow
+  // events when it is destroyed.
+  recordreplay::AutoDisallowEvents disallow("FontFileStream::~FontFileStream");
+  data_.CloseHandles();
+}
 
 HRESULT FontFileStream::GetFileSize(UINT64* file_size) {
   *file_size = data_.length();
