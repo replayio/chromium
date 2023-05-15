@@ -371,10 +371,10 @@ HRESULT DWriteFontCollectionProxy::CreateEnumeratorFromKey(
     const void* collection_key,
     UINT32 collection_key_size,
     IDWriteFontFileEnumerator** font_file_enumerator) {
-  recordreplay::Print("[RUN-1912] DWriteFontCollectionProxy::CreateEnumeratorFromKey");
+  recordreplay::Diagnostic("[RUN-1912] DWriteFontCollectionProxy::CreateEnumeratorFromKey");
 
   if (!collection_key || collection_key_size != sizeof(uint32_t)) {
-    recordreplay::Print("[RUN-1912] DWriteFontCollectionProxy::CreateEnumeratorFromKey #1");
+    recordreplay::Diagnostic("[RUN-1912] DWriteFontCollectionProxy::CreateEnumeratorFromKey #1");
     LogFontProxyError(COLLECTION_KEY_INVALID);
     return E_INVALIDARG;
   }
@@ -395,7 +395,7 @@ HRESULT DWriteFontCollectionProxy::CreateEnumeratorFromKey(
     base::ScopedAllowBaseSyncPrimitives allow_sync;
     if (!GetFontProxy().GetFontFiles(*family_index, &file_names,
                                      &file_handles)) {
-      recordreplay::Print("[RUN-1912] DWriteFontCollectionProxy::CreateEnumeratorFromKey #2");
+      recordreplay::Diagnostic("[RUN-1912] DWriteFontCollectionProxy::CreateEnumeratorFromKey #2");
       LogFontProxyError(GET_FONT_FILES_SEND_FAILED);
       return E_FAIL;
     }
@@ -421,7 +421,7 @@ HRESULT DWriteFontCollectionProxy::CreateEnumeratorFromKey(
   HRESULT hr = mswr::MakeAndInitialize<FontFileEnumerator>(
       font_file_enumerator, factory, this, &handles);
 
-  recordreplay::Print("[RUN-1912] DWriteFontCollectionProxy::CreateEnumeratorFromKey Done");
+  recordreplay::Diagnostic("[RUN-1912] DWriteFontCollectionProxy::CreateEnumeratorFromKey Done");
 
   if (!SUCCEEDED(hr)) {
     DCHECK(false);
@@ -435,12 +435,13 @@ HRESULT DWriteFontCollectionProxy::CreateStreamFromKey(
     const void* font_file_reference_key,
     UINT32 font_file_reference_key_size,
     IDWriteFontFileStream** font_file_stream) {
-  recordreplay::Print("[RUN-1912] DWriteFontCollectionProxy::CreateStreamFromKey %d %d",
-                      recordreplay::AreEventsDisallowed(),
-                      recordreplay::AreEventsPassedThrough());
+  recordreplay::Diagnostic("[RUN-1912] DWriteFontCollectionProxy::CreateStreamFromKey %d %d",
+                           recordreplay::AreEventsDisallowed(),
+                           recordreplay::AreEventsPassedThrough());
   recordreplay::Assert("[RUN-1912] DWriteFontCollectionProxy::CreateStreamFromKey");
 
   if (font_file_reference_key_size != sizeof(HANDLE)) {
+    recordreplay::Diagnostic("[RUN-1912] DWriteFontCollectionProxy::CreateStreamFromKey #2");
     return E_FAIL;
   }
 
@@ -450,6 +451,7 @@ HRESULT DWriteFontCollectionProxy::CreateStreamFromKey(
       *reinterpret_cast<const HANDLE*>(font_file_reference_key);
 
   if (file_handle == NULL || file_handle == INVALID_HANDLE_VALUE) {
+    recordreplay::Diagnostic("[RUN-1912] DWriteFontCollectionProxy::CreateStreamFromKey #3");
     DCHECK(false);
     return E_FAIL;
   }
@@ -457,9 +459,11 @@ HRESULT DWriteFontCollectionProxy::CreateStreamFromKey(
   mswr::ComPtr<FontFileStream> stream;
   if (!SUCCEEDED(
           mswr::MakeAndInitialize<FontFileStream>(&stream, file_handle))) {
+    recordreplay::Diagnostic("[RUN-1912] DWriteFontCollectionProxy::CreateStreamFromKey #4");
     return E_FAIL;
   }
   *font_file_stream = stream.Detach();
+  recordreplay::Diagnostic("[RUN-1912] DWriteFontCollectionProxy::CreateStreamFromKey Done");
   return S_OK;
 }
 
@@ -496,7 +500,7 @@ bool DWriteFontCollectionProxy::LoadFamily(
     IDWriteFontCollection** containing_collection) {
   TRACE_EVENT0("dwrite,fonts", "FontProxy::LoadFamily");
 
-  recordreplay::Print("[RUN-1912] DWriteFontCollectionProxy::LoadFamily");
+  recordreplay::Diagnostic("[RUN-1912] DWriteFontCollectionProxy::LoadFamily");
 
   uint32_t index = family_index;
   // CreateCustomFontCollection ends up calling
@@ -505,7 +509,7 @@ bool DWriteFontCollectionProxy::LoadFamily(
       this /*collectionLoader*/, reinterpret_cast<const void*>(&index),
       sizeof(index), containing_collection);
 
-  recordreplay::Print("[RUN-1912] DWriteFontCollectionProxy::LoadFamily Done");
+  recordreplay::Diagnostic("[RUN-1912] DWriteFontCollectionProxy::LoadFamily Done");
 
   return SUCCEEDED(hr);
 }
@@ -815,8 +819,8 @@ HRESULT FontFileEnumerator::GetCurrentFontFile(IDWriteFontFile** file) {
 
   TRACE_EVENT0("dwrite,fonts", "FontFileEnumerator::GetCurrentFontFile");
 
-  recordreplay::Print("[RUN-1912] FontFileEnumerator::GetCurrentFontFile #1 %d",
-                      recordreplay::AreEventsPassedThrough());
+  recordreplay::Diagnostic("[RUN-1912] FontFileEnumerator::GetCurrentFontFile #1 %d",
+                           recordreplay::AreEventsPassedThrough());
 
   // CreateCustomFontFileReference ends up calling
   // DWriteFontCollectionProxy::CreateStreamFromKey.
@@ -826,7 +830,7 @@ HRESULT FontFileEnumerator::GetCurrentFontFile(IDWriteFontFile** file) {
       file);
   DCHECK(SUCCEEDED(hr));
 
-  recordreplay::Print("[RUN-1912] FontFileEnumerator::GetCurrentFontFile #2");
+  recordreplay::Diagnostic("[RUN-1912] FontFileEnumerator::GetCurrentFontFile #2");
 
   return hr;
 }
