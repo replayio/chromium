@@ -922,7 +922,7 @@ class HashTable final
   // We need to compress to make sure that the count does not grow
   // past the size of the backing array.
   bool ShouldCompress() const {
-      return idxorder_count_ == table_size_ - 1;
+      return idxorder_count_ >= table_size_ - 1;
   }
   bool MustRehashInPlace() const {
     return key_count_ * kMinLoad < table_size_ * 2;
@@ -1971,7 +1971,7 @@ HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
   Value* new_entry = nullptr;
   for (size_t idx = 0; idx < idxorder_count_; idx++) {
     // deleted entries show up in the order as -1
-    size_t i = idxorder_[idx];
+    ssize_t i = idxorder_[idx];
     if (i < 0 || IsEmptyOrDeletedBucket(table_[i]))
       continue;
     Value* reinserted_entry = new_hash_table.Reinsert(std::move(table_[i]));
@@ -1994,6 +1994,7 @@ HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, Allocator>::
   Allocator::template BackingWriteBarrier(&table_);
   idxmap_ = new_hash_table.idxmap_;
   idxorder_ = new_hash_table.idxorder_;
+  idxorder_count_ = new_hash_table.idxorder_count_;
   table_size_ = new_table_size;
 
   new_hash_table.table_ = old_table;
@@ -2187,6 +2188,7 @@ void HashTable<Key,
   std::swap(table_size_, other.table_size_);
   std::swap(key_count_, other.key_count_);
   std::swap(idxorder_, other.idxorder_);
+  std::swap(idxorder_count_, other.idxorder_count_);
   std::swap(idxmap_, other.idxmap_);
   // std::swap does not work for bit fields.
   unsigned deleted = deleted_count_;
