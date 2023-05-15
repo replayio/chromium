@@ -135,11 +135,8 @@ class BASE_EXPORT MemoryMappedFile {
   // success, false on any kind of failure. This is a helper for Initialize().
   bool MapFileRegionToMemory(const Region& region, Access access);
 
- // Replay: this is public so the file can be closed manually when events are disallowed.
- public:
   // Closes all open handles.
   void CloseHandles();
- private:
 
   File file_;
   // TODO(crbug.com/1298696): Breaks one of the test suites.
