@@ -76,7 +76,8 @@ using RemoteObjectIdTypeRaw = std::u16string;
 // The more convenient type that we use
 using RemoteObjectIdType = WTF::String;
 
-const char* REPLAY_CDT_PAUSE_OBJECT_GROUP = "REPLAY_CDT_PAUSE_OBJECT_GROUP";
+static const char REPLAY_CDT_PAUSE_OBJECT_GROUP[] =
+    "REPLAY_CDT_PAUSE_OBJECT_GROUP";
 
 // Script which defines handlers for recorder commands, and is only loaded while
 // replaying.
