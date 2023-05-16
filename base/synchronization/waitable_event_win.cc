@@ -56,9 +56,6 @@ void WaitableEvent::Reset() {
 }
 
 void WaitableEvent::Signal() {
-  recordreplay::Diagnostic("[RUN-1961] WaitableEvent::Signal %p %d",
-                           handle_.get(), recordreplay::PointerId(this));
-
   SetEvent(handle_.get());
 }
 
