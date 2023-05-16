@@ -118,9 +118,20 @@ SharedState* SharedStateFromSharedMemory(
   return static_cast<SharedState*>(shared_memory.memory());
 }
 
+extern "C" bool V8RecordReplayIsARM();
+
+static size_t RecordReplayPageSize() {
+  // The page size is different when recording/replaying on ARM. Use the larger one
+  // from the original ARM recording.
+  if (V8RecordReplayIsARM()) {
+    return 4096 * 4;
+  }
+  return base::GetPageSize();
+}
+
 // Round up |size| to a multiple of page size.
 size_t AlignToPageSize(size_t size) {
-  return bits::AlignUp(size, base::GetPageSize());
+  return bits::AlignUp(size, RecordReplayPageSize());
 }
 
 #if BUILDFLAG(IS_ANDROID)
@@ -179,7 +190,7 @@ bool DiscardableSharedMemory::CreateAndMap(size_t size) {
   mapped_size_ = shared_memory_mapping_.mapped_size() -
                  AlignToPageSize(sizeof(SharedState));
 
-  locked_page_count_ = AlignToPageSize(mapped_size_) / base::GetPageSize();
+  locked_page_count_ = AlignToPageSize(mapped_size_) / RecordReplayPageSize();
 #if DCHECK_IS_ON()
   for (size_t page = 0; page < locked_page_count_; ++page)
     locked_pages_.insert(page);
@@ -206,7 +217,7 @@ bool DiscardableSharedMemory::Map(size_t size) {
   mapped_size_ = shared_memory_mapping_.mapped_size() -
                  AlignToPageSize(sizeof(SharedState));
 
-  locked_page_count_ = AlignToPageSize(mapped_size_) / base::GetPageSize();
+  locked_page_count_ = AlignToPageSize(mapped_size_) / RecordReplayPageSize();
 #if DCHECK_IS_ON()
   for (size_t page = 0; page < locked_page_count_; ++page)
     locked_pages_.insert(page);
@@ -277,10 +288,10 @@ DiscardableSharedMemory::LockResult DiscardableSharedMemory::Lock(
   if (!length)
     length = AlignToPageSize(mapped_size_) - offset;
 
-  size_t start = offset / base::GetPageSize();
-  size_t end = start + length / base::GetPageSize();
+  size_t start = offset / RecordReplayPageSize();
+  size_t end = start + length / RecordReplayPageSize();
   DCHECK_LE(start, end);
-  DCHECK_LE(end, AlignToPageSize(mapped_size_) / base::GetPageSize());
+  DCHECK_LE(end, AlignToPageSize(mapped_size_) / RecordReplayPageSize());
 
   // Add pages to |locked_page_count_|.
   // Note: Locking a page that is already locked is an error.
@@ -349,10 +360,10 @@ void DiscardableSharedMemory::Unlock(size_t offset, size_t length) {
   UnlockPages(shared_memory_region_,
               AlignToPageSize(sizeof(SharedState)) + offset, length);
 
-  size_t start = offset / base::GetPageSize();
-  size_t end = start + length / base::GetPageSize();
+  size_t start = offset / RecordReplayPageSize();
+  size_t end = start + length / RecordReplayPageSize();
   DCHECK_LE(start, end);
-  DCHECK_LE(end, AlignToPageSize(mapped_size_) / base::GetPageSize());
+  DCHECK_LE(end, AlignToPageSize(mapped_size_) / RecordReplayPageSize());
 
   // Remove pages from |locked_page_count_|.
   // Note: Unlocking a page that is not locked is an error.
