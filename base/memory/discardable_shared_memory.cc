@@ -191,6 +191,10 @@ bool DiscardableSharedMemory::CreateAndMap(size_t size) {
                  AlignToPageSize(sizeof(SharedState));
 
   locked_page_count_ = AlignToPageSize(mapped_size_) / RecordReplayPageSize();
+
+  recordreplay::Assert("[RUN-1963] DiscardableSharedMemory::CreateAndMap #1 %zu %zu",
+                       mapped_size_, locked_page_count_);
+
 #if DCHECK_IS_ON()
   for (size_t page = 0; page < locked_page_count_; ++page)
     locked_pages_.insert(page);
@@ -218,6 +222,10 @@ bool DiscardableSharedMemory::Map(size_t size) {
                  AlignToPageSize(sizeof(SharedState));
 
   locked_page_count_ = AlignToPageSize(mapped_size_) / RecordReplayPageSize();
+
+  recordreplay::Assert("[RUN-1963] DiscardableSharedMemory::Map #1 %zu %zu %zu",
+                       size, mapped_size_, locked_page_count_);
+
 #if DCHECK_IS_ON()
   for (size_t page = 0; page < locked_page_count_; ++page)
     locked_pages_.insert(page);
@@ -296,6 +304,10 @@ DiscardableSharedMemory::LockResult DiscardableSharedMemory::Lock(
   // Add pages to |locked_page_count_|.
   // Note: Locking a page that is already locked is an error.
   locked_page_count_ += end - start;
+
+  recordreplay::Assert("[RUN-1963] DiscardableSharedMemory::Lock #1 %zu %zu %zu %zu %zu",
+                       offset, length, start, end, locked_page_count_);
+
 #if DCHECK_IS_ON()
   // Detect incorrect usage by keeping track of exactly what pages are locked.
   for (auto page = start; page < end; ++page) {
@@ -369,6 +381,10 @@ void DiscardableSharedMemory::Unlock(size_t offset, size_t length) {
   // Note: Unlocking a page that is not locked is an error.
   DCHECK_GE(locked_page_count_, end - start);
   locked_page_count_ -= end - start;
+
+  recordreplay::Assert("[RUN-1963] DiscardableSharedMemory::Unlock #1 %zu %zu %zu %zu %zu",
+                       offset, length, start, end, locked_page_count_);
+
 #if DCHECK_IS_ON()
   // Detect incorrect usage by keeping track of exactly what pages are locked.
   for (auto page = start; page < end; ++page) {
