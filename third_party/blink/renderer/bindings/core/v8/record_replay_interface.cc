@@ -488,7 +488,9 @@ function Target_topFrameLocation() {
  */
 function getStackFrames() {
   // NOTE: this is a custom command we added in `src/inspector/v8-debugger-agent-impl.cc`
-  const { callFrames } = sendMessage("Debugger.getCallFrames");
+  const { callFrames } = sendMessage("Debugger.getCallFrames", {
+    objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
+  });
   return callFrames;
 }
 
@@ -736,11 +738,6 @@ function clearPauseDataCallback() {
     // RUN-1832
     sendMessage("Runtime.releaseObjectGroup", {
       objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP,
-    });
-    sendMessage("Runtime.releaseObjectGroup", {
-      // V8's internal Pause object group: |kBacktraceObjectGroup|.
-      // https://github.com/replayio/chromium-v8/blob/c3db336fec5faa5d3f62e02aa6880841566c7ca3/src/inspector/v8-debugger-agent-impl.cc#L62
-      objectGroup: "backtrace",
     });
   } catch (e) {
     log(`[RuntimeError] clearPauseDataCallback exception: ${e}`);
