@@ -180,10 +180,7 @@ class ChannelMac : public Channel,
 
   void StartOnIOThread() {
     vm_address_t address = 0;
-    // Note: We hardcode the size instead of calling getpagesize to ensure a
-    // consistent size when recording on ARM and replaying on x64, when the
-    // system page size differs.
-    const vm_size_t size = 4096 * 4; // getpagesize();
+    const vm_size_t size = getpagesize();
     kern_return_t kr =
         vm_allocate(mach_task_self(), &address, size,
                     VM_MAKE_TAG(VM_MEMORY_MACH_MSG) | VM_FLAGS_ANYWHERE);
