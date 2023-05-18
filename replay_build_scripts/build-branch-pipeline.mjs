@@ -40,8 +40,6 @@ async function main() {
     return true;
   });
 
-  console.log("yamlWithoutExcludedBuildSteps", yamlWithoutExcludedBuildSteps);
-
   const buf = Buffer.from(JSON.stringify(yamlWithoutExcludedBuildSteps));
 
   spawnChecked("buildkite-agent", ["pipeline", "upload"], {
