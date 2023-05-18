@@ -795,6 +795,13 @@ void ProxyImpl::ScheduledActionCommit() {
 
   auto* commit_state = data_for_commit_->commit_state.get();
   auto* unsafe_state = data_for_commit_->unsafe_state.get();
+
+  // NOTE: Both, RUN-1229 and RUN-550 are hitting a divergence in layers/trees.
+  recordreplay::Assert("[RUN-1229-1342] ProxyImpl::ScheduledActionCommit %d %d %llu",
+                       commit_state->source_frame_number,
+                       unsafe_state->property_trees.sequence_number(),
+                       commit_state->trace_id);
+
   host_impl_->BeginCommit(commit_state->source_frame_number,
                           commit_state->trace_id);
   host_impl_->FinishCommit(*commit_state, *unsafe_state);
@@ -882,9 +889,6 @@ void ProxyImpl::ScheduledActionBeginMainFrameNotExpectedUntil(
                                 proxy_main_weak_ptr_, time));
 }
 
-// Sequence number used for frames triggered while repainting when replaying.
-static const uint64_t RepaintSequenceNumber = UINT32_MAX;
-
 DrawResult ProxyImpl::DrawInternal(bool forced_draw) {
   DCHECK(IsImplThread());
   DCHECK(host_impl_.get());
@@ -918,11 +922,6 @@ DrawResult ProxyImpl::DrawInternal(bool forced_draw) {
     draw_frame = forced_draw || result == DRAW_SUCCESS;
   } else {
     result = DRAW_ABORTED_CANT_DRAW;
-  }
-
-  if (recordreplay::HasDivergedFromRecording() &&
-      frame.begin_frame_ack.frame_id.sequence_number == RepaintSequenceNumber) {
-    recordreplay::OnCompositorRepainting();
   }
 
   if (draw_frame) {
@@ -1017,6 +1016,9 @@ bool ProxyImpl::DataForCommit::IsValid() const {
          (base::FeatureList::IsEnabled(features::kNonBlockingCommit) ||
           commit_timestamps);
 }
+
+// Sequence number used for frames triggered while repainting when replaying.
+static const uint64_t RepaintSequenceNumber = UINT32_MAX;
 
 void ProxyImpl::RecordReplayRepaint() {
   // When repainting, the main thread has already updated the layout tree and committed

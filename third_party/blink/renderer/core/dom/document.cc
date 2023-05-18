@@ -816,6 +816,11 @@ Document::Document(const DocumentInit& initializer,
               ? MakeGarbageCollected<RenderBlockingResourceManager>(*this)
               : nullptr),
       data_(MakeGarbageCollected<DocumentData>(GetExecutionContext())) {
+  // Documents are registered so that we can test the validity of document
+  // pointers while replaying to avoid crashes.
+  // See V8Window::NamedPropertyGetterCustom
+  recordreplay::RegisterPointer("Document", this);
+
   if (base::FeatureList::IsEnabled(features::kDelayAsyncScriptExecution))
     script_runner_delayer_->Activate();
 
@@ -893,6 +898,8 @@ Document::Document(const DocumentInit& initializer,
 }
 
 Document::~Document() {
+  recordreplay::UnregisterPointer(this);
+
   DCHECK(!GetLayoutView());
   DCHECK(!ParentTreeScope());
   // If a top document with a cache, verify that it was comprehensively
@@ -2543,6 +2550,12 @@ void Document::UpdateStyleAndLayout(DocumentUpdateReason reason) {
   DCHECK(IsMainThread());
   LocalFrameView* frame_view = View();
 
+  // Refuse to update style and layout state if side effects are not allowed.
+  // We are doing something while replaying that didn't happen while recording and
+  // isn't supposed to interact with the recording, like getting object previews.
+  if (!recordreplay::AllowSideEffects())
+    return;
+
   if (reason != DocumentUpdateReason::kBeginMainFrame && frame_view)
     frame_view->WillStartForcedLayout();
 
@@ -2778,15 +2791,10 @@ void Document::UpdateUseShadowTreesIfNeeded() {
 
   // Breadth-first search since nested use elements add to the queue.
   while (!use_elements_needing_update_.empty()) {
-    HeapHashSet<Member<SVGUseElement>> elements;
+    HeapHashSet<Member<SVGUseElement>, WTF::MemberHashRecordReplayId<SVGUseElement>> elements;
     use_elements_needing_update_.swap(elements);
-    HeapVector<Member<SVGUseElement>> elements_vector;
-    for (SVGUseElement* element : elements) {
-      elements_vector.push_back(element);
-    }
-    std::sort(elements_vector.begin(), elements_vector.end(),
-              recordreplay::CompareMemberByRecordReplayId<Member<SVGUseElement>>());
-    for (SVGUseElement* element : elements_vector)
+
+    for (SVGUseElement* element : elements)
       element->BuildPendingResource();
   }
 }
@@ -2904,6 +2912,11 @@ void Document::Shutdown() {
 
   probe::DocumentDetached(this);
 
+  if (recordreplay::IsRecordingOrReplaying("task-lifetime") &&
+      scripted_idle_task_controller_) {
+    // [RUN-1335] We might have queued idle tasks, but the page got shutdown. Get rid of them!
+    scripted_idle_task_controller_->ClearCallbacks();
+  }
   scripted_idle_task_controller_.Clear();
 
   if (SvgExtensions())

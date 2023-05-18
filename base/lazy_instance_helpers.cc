@@ -8,39 +8,11 @@
 
 #include "base/at_exit.h"
 #include "base/threading/platform_thread.h"
+#include "base/record_replay_inline.h"
 
-#include <dlfcn.h>
 
 namespace base {
 namespace internal {
-
-static void (*gRecordReplayBeginPassThroughEventsFn)();
-
-static void RecordReplayBeginPassThroughEvents() {
-  if (!gRecordReplayBeginPassThroughEventsFn) {
-    void* fnptr = dlsym(RTLD_DEFAULT, "RecordReplayBeginPassThroughEvents");
-    if (!fnptr) {
-      return;
-    }
-    gRecordReplayBeginPassThroughEventsFn = reinterpret_cast<void(*)()>(fnptr);
-  }
-
-  gRecordReplayBeginPassThroughEventsFn();
-}
-
-static void (*gRecordReplayEndPassThroughEventsFn)();
-
-static void RecordReplayEndPassThroughEvents() {
-  if (!gRecordReplayEndPassThroughEventsFn) {
-    void* fnptr = dlsym(RTLD_DEFAULT, "RecordReplayEndPassThroughEvents");
-    if (!fnptr) {
-      return;
-    }
-    gRecordReplayEndPassThroughEventsFn = reinterpret_cast<void(*)()>(fnptr);
-  }
-
-  gRecordReplayEndPassThroughEventsFn();
-}
 
 bool NeedsLazyInstance(std::atomic<uintptr_t>& state) {
   // Try to create the instance, if we're the first, will go from 0 to
@@ -64,7 +36,7 @@ bool NeedsLazyInstance(std::atomic<uintptr_t>& state) {
   if (state.load(std::memory_order_acquire) == kLazyInstanceStateCreating) {
     // Don't interact with the recording while we get the current time or sleep
     // in non-deterministic ways.
-    RecordReplayBeginPassThroughEvents();
+    RecordReplayAutoPassThroughEvents pt;
 
     const base::TimeTicks start = base::TimeTicks::Now();
     do {
@@ -79,8 +51,6 @@ bool NeedsLazyInstance(std::atomic<uintptr_t>& state) {
         PlatformThread::Sleep(Milliseconds(1));
     } while (state.load(std::memory_order_acquire) ==
              kLazyInstanceStateCreating);
-
-    RecordReplayEndPassThroughEvents();
   }
   // Someone else created the instance.
   return false;

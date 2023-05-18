@@ -10,6 +10,18 @@ console.log("BranchName", branchName);
 
 const chromiumRevision = getLatestRevision();
 
+const linuxBuildInput = process.env.INPUT_LINUX_BUILD;
+console.log("LinuxBuild", linuxBuildInput);
+const linuxBuild = linuxBuildInput == "true";
+
+const macBuildInput = process.env.INPUT_MAC_BUILD;
+console.log("MacBuild", macBuildInput);
+const macBuild = macBuildInput == "true";
+
+const windowsBuildInput = process.env.INPUT_WINDOWS_BUILD;
+console.log("WindowsBuild", windowsBuildInput);
+const windowsBuild = windowsBuildInput == "true";
+
 const driverRevision = process.env.INPUT_DRIVER_REVISION;
 console.log("DriverRevision", driverRevision);
 
@@ -21,13 +33,9 @@ const slotInput = process.env.INPUT_SLOT;
 console.log("Slot", slotInput);
 const slot = slotInput ? +slotInput : undefined;
 
-const runStaticTestsInput = process.env.INPUT_RUN_STATIC_TESTS;
-console.log("RunStaticTests", runStaticTestsInput);
-const runStaticTests = runStaticTestsInput == "true";
-
 const numStaticTestsInput = process.env.INPUT_NUM_STATIC_TESTS;
 console.log("NumStaticTests", numStaticTestsInput);
-const numStaticTests = numStaticTestsInput ? +numStaticTestsInput : undefined;
+const numStaticTests = numStaticTestsInput ? +numStaticTestsInput : 30;
 
 const runTestSuitesInput = process.env.INPUT_RUN_TEST_SUITES;
 console.log("RunTestSuites", runTestSuitesInput);
@@ -48,12 +56,18 @@ if (slot) {
   requestName += ` slot ${slot}`;
 }
 
-sendBuildTestRequest({
-  name: requestName,
-  tasks: [
-    ...platformTasks("linux"),
-  ],
-});
+const allTasks = [];
+if (linuxBuild) {
+  allTasks.push(...platformTasks("linux"));
+}
+if (macBuild) {
+  allTasks.push(...platformTasks("macOS"));
+}
+if (windowsBuild) {
+  allTasks.push(...platformTasks("windows"));
+}
+
+sendBuildTestRequest({ name: requestName, tasks: allTasks });
 
 function platformTasks(platform) {
   const buildTask = newTask(
@@ -72,7 +86,25 @@ function platformTasks(platform) {
 
   const tasks = [buildTask];
 
-  if (runStaticTests) {
+  if (platform == "macOS") {
+    const buildARMTask = newTask(
+      `Build Chromium ${platform} ARM`,
+      {
+        kind: "BuildRuntime",
+        runtime: "chromium",
+        revision: chromiumRevision,
+        branch: branchName,
+        branchSlot: slot,
+        driverRevision,
+        clobber,
+        useARM: true,
+      },
+      platform
+    );
+    tasks.push(buildARMTask);
+  }
+
+  if (numStaticTests) {
     const testStaticTask = newTask(
       `Chromium Static Tests ${platform}`,
       {

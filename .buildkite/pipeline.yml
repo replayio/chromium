@@ -1,0 +1,70 @@
+env:
+  FORCE_COLOR: 1
+  GIT_TERMINAL_PROMPT: 0
+
+steps:
+  - label: "Build chromium - Linux"
+    key: "build-chromium-linux"
+    plugins:
+      - thedyrt/skip-checkout#v0.1.1: ~
+    command: "cd /home/ubuntu/chromium/src && docker build -t chromium-build-new - < Dockerfile.build && git status && node buildLinux.mjs && node replay_build_scripts/upload_build_artifacts.mjs"
+    env:
+      GOMA_SERVER_HOST: simpsonite.goma.engflow.com
+      GOMACTL_USE_PROXY: false
+    agents:
+      - "runtimeType=chromiumbuild"
+      - "os=linux"
+      - "queue=runtime"
+    artifact_paths:
+      - "build_id/linux/x86_64/**"
+  - label: "Build chromium - Mac (x86)"
+    key: "build-chromium-mac-x86_64"
+    plugins:
+      - thedyrt/skip-checkout#v0.1.1: ~
+    command: "cd /Users/administrator/chromium/src && node buildMac.mjs &&  node replay_build_scripts/upload_build_artifacts.mjs"
+    env:
+      GOMA_SERVER_HOST: simpsonite.goma.engflow.com
+      GOMACTL_USE_PROXY: false
+    agents:
+      - "runtimeType=chromiumbuild"
+      - "os=macos"
+      - "queue=runtime"
+    artifact_paths:
+      - "build_id/macOS/x86_64/**"
+  - label: "Build chromium - Mac (arm64)"
+    key: "build-chromium-mac-arm64"
+    plugins:
+      - thedyrt/skip-checkout#v0.1.1: ~
+    command: "cd /Users/administrator/chromium/src && node buildMac.mjs &&  node replay_build_scripts/upload_build_artifacts.mjs"
+    env:
+      GOMA_SERVER_HOST: simpsonite.goma.engflow.com
+      GOMACTL_USE_PROXY: false
+      REPLAY_BUILD_ARM: true
+    agents:
+      - "runtimeType=chromiumbuild"
+      - "os=macos"
+      - "queue=runtime"
+    artifact_paths:
+      - "build_id/macOS/arm_64/**"
+    # TODO(dmiller): remove this once the arm mac build doesn't fail
+    soft_fail: true
+  - label: "Build chromium - Windows"
+    key: "build-chromium-windows"
+    # TODO(dmiller): remove this once we have a windows build that doesn't fail
+    soft_fail: true
+    plugins:
+      # Necessary to override this until https://github.com/thedyrt/skip-checkout-buildkite-plugin/pull/6 is merged
+      - https://github.com/jazzdan/skip-checkout-buildkite-plugin.git#jazzdan/windows-support: ~
+    command: "cd C:\\Users\\Administrator\\chromium\\src && node buildWindows.mjs &&  node replay_build_scripts/upload_build_artifacts.mjs"
+    env:
+      GOMA_SERVER_HOST: simpsonite.goma.engflow.com
+      GOMACTL_USE_PROXY: false
+    agents:
+      - "runtimeType=chromiumbuild"
+      - "os=windows"
+      - "queue=runtime"
+    artifact_paths:
+      - "build_id/windows/x86_64/**"
+  - trigger: "testing-runtime-e2e"
+    label: ":hammer: Trigger Runtime Tests (Linux)"
+    depends_on: "build-chromium-linux"

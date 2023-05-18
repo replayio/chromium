@@ -134,6 +134,7 @@ class PLATFORM_EXPORT FontFallbackList : public RefCounted<FontFallbackList> {
   bool is_invalid_ : 1;
 
   base::WeakPtr<ShapeCache> shape_cache_;
+  int record_replay_id_;
 };
 
 }  // namespace blink

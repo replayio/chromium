@@ -415,10 +415,6 @@ void SequenceManagerImpl::CompleteInitializationOnBoundThread() {
 }
 
 void SequenceManagerImpl::SetTimeDomain(TimeDomain* time_domain) {
-  // https://linear.app/replay/issue/RUN-1145
-  recordreplay::Assert("[RUN-1145] SequenceManagerImpl::SetTimeDomain %d",
-                       recordreplay::PointerId(this));
-
   DCHECK(!main_thread_only().time_domain);
   DCHECK(time_domain);
   time_domain->OnAssignedToSequenceManager(this);
@@ -428,10 +424,6 @@ void SequenceManagerImpl::SetTimeDomain(TimeDomain* time_domain) {
 }
 
 void SequenceManagerImpl::ResetTimeDomain() {
-  // https://linear.app/replay/issue/RUN-1145
-  recordreplay::Assert("[RUN-1145] SequenceManagerImpl::ResetTimeDomain %d",
-                       recordreplay::PointerId(this));
-
   controller_->SetTickClock(main_thread_only().default_clock);
   clock_.store(main_thread_only().default_clock.get(),
                std::memory_order_release);
@@ -682,9 +674,15 @@ SequenceManagerImpl::SelectNextTaskImpl(LazyNow& lazy_now,
     if (!work_queue)
       return absl::nullopt;
 
+    recordreplay::Assert(
+        "[RUN-1124-1803] SequenceManagerImpl::SelectNextTaskImpl A %zu %s", work_queue->Size(), work_queue->name());
+
     // If the head task was canceled, remove it and run the selector again.
     if (UNLIKELY(work_queue->RemoveAllCanceledTasksFromFront()))
       continue;
+
+    recordreplay::Assert(
+        "[RUN-1124-1803] SequenceManagerImpl::SelectNextTaskImpl B");
 
     if (UNLIKELY(work_queue->GetFrontTask()->nestable ==
                      Nestable::kNonNestable &&
@@ -700,6 +698,9 @@ SequenceManagerImpl::SelectNextTaskImpl(LazyNow& lazy_now,
           std::move(deferred_task));
       continue;
     }
+
+    recordreplay::Assert(
+        "[RUN-1124-1803] SequenceManagerImpl::SelectNextTaskImpl C");
 
     if (UNLIKELY(!ShouldRunTaskOfPriority(
             work_queue->task_queue()->GetQueuePriority()))) {
@@ -723,6 +724,10 @@ SequenceManagerImpl::SelectNextTaskImpl(LazyNow& lazy_now,
     // Maybe invalidate the delayed task handle. |pending_task| is guaranteed to
     // be valid here (not canceled).
     executing_task.pending_task.WillRunTask();
+
+    recordreplay::Assert(
+        "[RUN-1124-1803] SequenceManagerImpl::SelectNextTaskImpl D %zu %s",
+        work_queue->Size(), work_queue->name());
 
     return SelectedTask(
         executing_task.pending_task,
@@ -1048,7 +1053,7 @@ EnqueueOrder SequenceManagerImpl::GetNextSequenceNumber() {
   EnqueueOrder rv = enqueue_order_generator_.GenerateNext();
 
   // Use a zero enqueue order for all unordered tasks when recording/replaying.
-  if (recordreplay::AreEventsDisallowed()) {
+  if (recordreplay::AreEventsDisallowed() || recordreplay::AreEventsPassedThrough()) {
     memset(&rv, 0, sizeof(rv));
     return rv;
   }
@@ -1173,7 +1178,7 @@ void SequenceManagerImpl::SetDefaultTaskRunner(
 }
 
 const TickClock* SequenceManagerImpl::GetTickClock() const {
-  return any_thread_clock();
+  return any_thread_clock_maybe_events_disallowed();
 }
 
 TimeTicks SequenceManagerImpl::NowTicks() const {

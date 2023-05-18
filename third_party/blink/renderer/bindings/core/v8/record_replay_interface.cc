@@ -10,10 +10,10 @@
 #include "third_party/inspector_protocol/crdtp/json.h"
 #include "third_party/inspector_protocol/crdtp/serializable.h"
 
-
 #include "base/base64.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
+#include "base/process/process_handle.h"
 #include "base/record_replay.h"
 #include "content/public/renderer/render_thread.h"
 #include "content/public/renderer/v8_value_converter.h"
@@ -32,6 +32,7 @@
 #include "third_party/blink/renderer/core/inspector/resolve_node.h"
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
+#include "third_party/blink/renderer/platform/bindings/v8_dom_wrapper.h"
 #include "third_party/inspector_protocol/crdtp/maybe.h"
 #include "v8/include/v8-inspector.h"
 
@@ -75,9 +76,13 @@ using RemoteObjectIdTypeRaw = std::u16string;
 // The more convenient type that we use
 using RemoteObjectIdType = WTF::String;
 
+static const char REPLAY_CDT_PAUSE_OBJECT_GROUP[] =
+    "REPLAY_CDT_PAUSE_OBJECT_GROUP";
+
 // Script which defines handlers for recorder commands, and is only loaded while
 // replaying.
 const char* gReplayScript = R""""(
+//js
 (() => {
 
 const EmptyArray = Object.freeze([]); // reduce unnecessary mem churn
@@ -95,7 +100,9 @@ const {
   getCurrentError,
 
   fromJsMakeDebuggeeValue,
+  fromJsGetArgumentsInFrame,
   fromJsGetObjectByCdpId,
+  fromJsIsBlinkObject,
   fromJsGetNodeId,
   fromJsGetBoxModel,
   fromJsGetMatchedStylesForNode,
@@ -107,8 +114,8 @@ const {
   getCurrentNetworkRequestEvent,
   getCurrentNetworkStreamData,
 
-  // Blink, DOM and more
-  // ?
+  // constants
+  REPLAY_CDT_PAUSE_OBJECT_GROUP
 } = __RECORD_REPLAY_ARGUMENTS__;
 
 const gSourceMapData = new Map();
@@ -194,7 +201,25 @@ let gCurrentMessageResult;
 function sendMessage(method, params) {
   const id = gNextMessageId++;
   gCurrentMessageId = id;
-  sendCDPMessage(JSON_stringify({ method, params, id }));
+  gCurrentMessageResult = undefined;
+  const cdpArgs = JSON_stringify({ method, params, id });
+  try {
+    sendCDPMessage(cdpArgs);
+  }
+  catch (err) {
+    if (!gCurrentMessageResult) {
+      throw err;
+    }
+    else {
+      // Work around "ghostly" cross-origin (and maybe other?) errors:
+      // Generally speaking, CDP commands should not throw.
+      // If they do, there is a chance that the error was triggered by user JS
+      // and only happens to still be pending when Replay commands were 
+      // triggered.
+      // E.g.: https://linear.app/replay/issue/RUN-1680#comment-1dfa142b
+      log(`[RuntimeError][RUN-1680] sendCDPMessage(${method}) failed: ${err?.message}`);
+    }
+  }
   gCurrentMessageId = undefined;
   if (gCurrentMessageResult?.result) {
     return gCurrentMessageResult.result;
@@ -226,7 +251,13 @@ function messageCallback(message) {
       }
     }
   } catch (e) {
-    log(`[RuntimeError] Message callback exception: ${e}`);
+    log(`[RuntimeError] Message callback exception: ${e?.stack || e}`);
+
+    return JSON.stringify({
+      is_error: true,
+      message: e?.message || (e + ''),
+      stack: e?.stack?.split?.("\n") || e?.stack || [],
+    });
   }
 }
 
@@ -236,12 +267,39 @@ function messageCallback(message) {
 
 // Methods for interacting with the record/replay driver.
 
+// Track all current execution contexts so that any scripts that we
+// inject via evaluatePrivilegd can know what contexts are available.
+const gExecutionContexts = new Map();
+const gContextChangeCallbacks = new Set();
+
 initMessages();
 addEventListener("Runtime.consoleAPICalled", onConsoleAPICall);
+addEventListener("Runtime.executionContextCreated", ({ context }) => {
+  gExecutionContexts.set(context.id, context);
+  for (const callback of gContextChangeCallbacks) {
+    callback(context, "add");
+  }
+});
+addEventListener("Runtime.executionContextDestroyed", ({ executionContextId }) => {
+  const context = gExecutionContexts.get(executionContextId);
+  for (const callback of gContextChangeCallbacks) {
+    callback(context, "remove");
+  }
+  gExecutionContexts.delete(executionContextId);
+});
+addEventListener("Runtime.executionContextsCleared", () => {
+  for (const context of gExecutionContexts.values()) {
+    for (const callback of gContextChangeCallbacks) {
+      callback(context, "remove");
+    }
+  }
+  gExecutionContexts.clear();
+});
 sendMessage("Runtime.enable");
 
 const CommandCallbacks = {
   "Graphics.getDevicePixelRatio": Graphics_getDevicePixelRatio,
+  "Target.evaluatePrivileged": Target_evaluatePrivileged,
   "Target.getCurrentMessageContents": Target_getCurrentMessageContents,
   "Target.getSourceMapURL": Target_getSourceMapURL,
   "Target.getStepOffsets": Target_getStepOffsets,
@@ -280,8 +338,20 @@ function commandCallback(method, params) {
     return result;
   } catch (e) {
     log(`[RuntimeError][Command ${method}] ${e?.stack || e}`);
-    return {};
+    // Pass the error up to V8; it can (for now) decide how to handle itself, whether
+    // it should crash or not, etc.  Eventually, the caller of the command should make
+    // that decision.
+    return {
+      is_error: true,
+      message: e?.message || (e + ''),
+      stack: e?.stack?.split?.("\n") || e?.stack || [],
+    };
   }
+}
+
+function Target_evaluatePrivileged({ expression }) {
+  const result = eval(expression);
+  return { result };
 }
 
 // Contents of the last console API call. Runtime.consoleAPICalled will be
@@ -309,6 +379,14 @@ function Target_getCurrentMessageContents() {
       sourceId: scriptId ? scriptId.toString() : undefined,
       line,
       column,
+    };
+  }
+
+  if (!gLastConsoleAPICall) {
+    return {
+      source: "UnknownMessageError",
+      level: "error",
+      text: "Could not look up message contents"
     };
   }
 
@@ -410,22 +488,33 @@ function Target_topFrameLocation() {
  */
 function getStackFrames() {
   // NOTE: this is a custom command we added in `src/inspector/v8-debugger-agent-impl.cc`
-  const { callFrames } = sendMessage("Debugger.getCallFrames");
+  const { callFrames } = sendMessage("Debugger.getCallFrames", {
+    objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
+  });
   return callFrames;
 }
 
 
 // Build a protocol Result object from a result/exceptionDetails CDP rval.
-function buildRrpObjectResult({ result, exceptionDetails }) {
-  const value = buildRrpObjectFromCdpObject(result);
-  const protocolResult = { data: {} };
+function buildRrpObjectResult(cdpReturnValue) {
+  const rrpResult = { data: {} };
+  if (cdpReturnValue) {
+    const { result: cdpResult, exceptionDetails } = cdpReturnValue;
+    const rrpId = buildRrpObjectFromCdpObject(cdpResult);
 
-  if (exceptionDetails) {
-    protocolResult.exception = value;
-  } else {
-    protocolResult.returned = value;
+    if (exceptionDetails) {
+      rrpResult.exception = rrpId;
+    } else {
+      rrpResult.returned = rrpId;
+    }
   }
-  return { result: protocolResult };
+  else {
+    // Sometimes things go wrong.
+    // E.g. sometimes we get "Cannot find default execution context (-32000) when executing" sendMessage 
+    // from Pause_evaluateIn*.
+    rrpResult.failed = true;
+  }
+  return { result: rrpResult };
 }
 
 
@@ -435,7 +524,26 @@ function Pause_evaluateInFrame({ frameId, expression }) {
   assert(index < frames.length);
   const frame = frames[index];
 
-  const rv = doEvaluation();
+  if (expression === '[...arguments]') {
+    // Short-circuit hackfix: "universal `arguments`" for any frame. This 
+    // serves to allow the `MAPPER` used by the `devtools` event analysis
+    // to get all arguments for any JS event callback. `arguments` are available
+    // by default in many function frames. However, arrow functions do not 
+    // support them. This "solution" makes sure, `[...arguments]` are 
+    // always available.
+    // See: https://linear.app/replay/issue/RUN-1061#comment-fc1c3ee4
+    const args = fromJsGetArgumentsInFrame(frame.callFrameId);
+    const argsCdp = makeDebuggeeValue(args && [...args] || []);
+    return buildRrpObjectResult({ result: argsCdp });
+  }
+
+  let rv = null;
+  try {
+    rv = doEvaluation();
+  }
+  catch (err) {
+    log(`[RuntimeError] evaluateInFrame err: ${err?.stack || err}`);
+  }
   return buildRrpObjectResult(rv);
 
   function doEvaluation() {
@@ -449,18 +557,25 @@ function Pause_evaluateInFrame({ frameId, expression }) {
       {
         callFrameId: frame.callFrameId,
         expression,
+        objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
       }
     );
   }
 }
 
 function Pause_evaluateInGlobal({ expression }) {
-  const rv = sendMessage("Runtime.evaluate", { expression });
+  let rv = null;
+  try {
+    rv = sendMessage("Runtime.evaluate", {
+      expression,
+      objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
+    });
+  }
+  catch (err) {
+    log(`[RuntimeError] evaluateInGlobal err: ${err?.stack || err}`);
+  }
   return buildRrpObjectResult(rv);
 }
-
-// function onMaybeNewPause() {
-// }
 
 function Pause_getAllFrames() {
   const frames = getStackFrames().map((frame, index) => {
@@ -468,7 +583,6 @@ function Pause_getAllFrames() {
     const id = (index++).toString();
     return createProtocolFrame(id, frame);
   });
-
   return {
     frames: frames.map(f => f.frameId),
     data: { frames },
@@ -476,7 +590,9 @@ function Pause_getAllFrames() {
 }
 
 function Pause_getExceptionValue() {
-  const rv = sendMessage("Debugger.getPendingException", {});
+  const rv = sendMessage("Debugger.getPendingException", {
+    objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
+  });
   return { exception: rv.exception ? buildRrpObjectFromCdpObject(rv.exception) : undefined, data: {} };
 }
 
@@ -492,6 +608,7 @@ function Pause_getObjectProperty({ object, name }) {
     {
       functionDeclaration: `function() { return this["${name}"] }`,
       objectId: cdpObj.objectId,
+      objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
     }
   );
   return buildRrpObjectResult(rv);
@@ -511,28 +628,41 @@ function Graphics_getDevicePixelRatio() {
 // Utilities
 ///////////////////////////////////////////////////////////////////////////////
 
-/**
- * Check whether given object `x` is instance of class of given `target.name`,
- * and also has a `native` constructor.
- * NOTE: ideal solution is `x instanceof global[name]`, but we cannot do that.
- * @see https://linear.app/replay/issue/RUN-1014/chromium-find-better-way-of-determining-dom-class-membership
- */
-function isInstanceOfNative(x, target) {
-  /**
-   * NOTE: `instanceof` is implemented in `Object::InstanceOf` -> `JSReceiver::HasInPrototypeChain`
-   * @see https://github.com/replayio/gecko-dev/blob/592992ff7e15cb8ad1dd6fb109f19bd3523cd452/devtools/server/actors/replay/module.js#L1937
-   * @see https://github.com/replayio/chromium-v8/blob/51140a440949dbbeea7a4e6c2185ccdeb8b6276e/src/objects/objects.cc#L929
-   * @see https://github.com/replayio/chromium-v8/blob/51140a440949dbbeea7a4e6c2185ccdeb8b6276e/src/objects/js-objects.cc#170
-   */
-
-  // hackfix: check if its native, and has `name` in inheritance chain
-  const name = target?.name;
-  return name &&
-    x?.constructor?.toString()?.includes('() { [native code] }') &&
-    x.constructor === x.__proto__.constructor &&
-    hasInProtoChain(x.constructor, name);
+function isPrototype(x) {
+  return x === x?.constructor?.prototype;
 }
 
+/**
+ * Check whether given object `x` is a native object.
+ */
+function isBlinkObject(x) {
+  return fromJsIsBlinkObject(x);
+}
+
+/**
+ * Check whether given object `x` is a blink object and its 
+ * class name is `target.name`.
+ */
+function isBlinkInstanceOf(x, target) {
+  return isBlinkObject(x) &&
+    target?.name &&
+    hasInProtoChain(
+      x.constructor,
+      target.name
+    );
+}
+
+/**
+ * This is kinda like `instanceof`, but window-independent.
+ * NOTE: ideal solution is `x instanceof global[name]`, but we cannot do that since it does not work when operating in
+ * a context with multiple instance of `global` (i.e. windows).
+ * @see https://linear.app/replay/issue/RUN-1014/chromium-find-better-way-of-determining-dom-class-membership
+ * 
+ * NOTE: `instanceof` is implemented in `Object::InstanceOf` -> `JSReceiver::HasInPrototypeChain`
+ * @see https://github.com/replayio/gecko-dev/blob/592992ff7e15cb8ad1dd6fb109f19bd3523cd452/devtools/server/actors/replay/module.js#L1937
+ * @see https://github.com/replayio/chromium-v8/blob/51140a440949dbbeea7a4e6c2185ccdeb8b6276e/src/objects/objects.cc#L929
+ * @see https://github.com/replayio/chromium-v8/blob/51140a440949dbbeea7a4e6c2185ccdeb8b6276e/src/objects/js-objects.cc#170
+ */
 function hasInProtoChain(x, name) {
   if (x.name === name) {
     return true;
@@ -604,22 +734,31 @@ function clearPauseDataCallback() {
     gLastBoundingClientRectsByNodeRrpId.clear();
     gCssRulesByNodeRrpId.clear();
     gLastRrpId = 0;
+
+    // RUN-1832
+    sendMessage("Runtime.releaseObjectGroup", {
+      objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP,
+    });
   } catch (e) {
     log(`[RuntimeError] clearPauseDataCallback exception: ${e}`);
   }
 }
 
 /**
- * Creates and returns a new `RemoteObject` for given JS object.
+ * Creates and returns a new `CDP.RemoteObject` for given JS object.
  * 
  * @return {CDP.Runtime.RemoteObject}
  * @see https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#type-RemoteObject
  */
-function makeDebuggeeValue(plainObject) {
-  assert(plainObject && !plainObject.objectId);
-  const remoteObject = fromJsMakeDebuggeeValue(plainObject);
-  assert(remoteObject?.objectId);
+function makeDebuggeeValue(plainValue) {
+  assert(!plainValue?.objectId);
+  const remoteObject = fromJsMakeDebuggeeValue(plainValue);
   return remoteObject;
+}
+
+function createRrpValueRaw(plainValue) {
+  const cdpObject = makeDebuggeeValue(plainValue);
+  return buildRrpObjectFromCdpObject(cdpObject);
 }
 
 /**
@@ -729,7 +868,7 @@ function registerRrpPreview(rrpObjectPreview, plainObject) {
     rrpId = gRrpIdByPlainObject.get(plainObject);
   }
 
-  // NOTE: there is no cdpObject because there is no `CDP.Runtime.RemoteObject`.
+  // NOTE: we built a custom "preview object" without a cdpObject, and sometimes without a plainObject
   const cdpObject = null;
   return registerNewRrpObject(rrpId, cdpObject, rrpObjectPreview, plainObject);
 }
@@ -771,6 +910,10 @@ function registerRrpCpdId(rrpId, cdpId, cdpObject = null) {
 
 
 // Strings longer than this will be truncated when creating protocol values.
+// TODO This limit creates problems when we try to evaluate large strings in routines,
+// such as stringifying a large object/array (like 2000+ unmounted fiber IDs).
+// The RDT routine works around this by splitting the string into chunks, but
+// we should find a better long-term solution (like bypassing the limit for evals).
 const MaxStringLength = 10000;
 
 const cdpRefTypes = ['object', 'function'];
@@ -784,6 +927,9 @@ function isCdpRefType(cdpObject) {
  * @return {RRP.Pause.Object}
  */
 function buildRrpObjectFromCdpObject(cdpObject) {
+  if (!cdpObject) {
+    return {};
+  }
   switch (cdpObject.type) {
     case "undefined":
       return {};
@@ -819,20 +965,6 @@ function buildRrpObjectFromCdpObject(cdpObject) {
   }
 }
 
-// /**
-//  * NOTE: This is called `createProtocolValueRaw` in gecko
-//  */
-// function buildRrpObjectFromPlainValue(value) {
-//   let cdpObject;
-//   if (isNonNullObject(value)) {
-//     const rrpId = registerPlainObject(value);
-//     cdpObject = gCdpObjectsByRrpId.get(rrpId);
-//   }
-//   else {
-//     cdpObject = makeDebuggeeValue(value);
-//   }
-//   return buildRrpObjectFromCdpObject(cdpObject);
-// }
 
 /**
  * 
@@ -896,7 +1028,7 @@ function createPauseObject(rrpId, level) {
 
   let preview;
   if (level != "none") {
-    preview = new ProtocolObjectPreview(cdpObj, level).fill();
+    preview = new ProtocolObjectPreview(rrpId, cdpObj, level).fill();
   }
 
   return { objectId: rrpId, persistentId, className, preview };
@@ -918,37 +1050,10 @@ function isObjectBlacklisted(cdpObj) {
   return false;
 }
 
-const ObjectPropNames = new Set([
-  '__defineGetter__', '__defineSetter__', '__lookupGetter__', '__lookupSetter__',
-  'constructor', 'hasOwnProperty', 'isPrototypeOf', 'parentProp',
-  'propertyIsEnumerable', 'toLocaleString', 'toString', 'valueOf'
-]);
-
-/**
- * Runtime.getProperties, for some reason, adds basic `Object` props, that we don't want.
- * Hackfix: There is no easy way to identify `Object` props, 
- *   so we have to reject certain names categorically :/
- */
-function isPropNameInObjectBase(name) {
-  return ObjectPropNames.has(name);
-}
-
 // Return whether an object's property should be ignored when generating previews.
 function isObjectPropertyBlacklisted(cdpObj, name) {
   if (isObjectBlacklisted(cdpObj)) {
     return true;
-  }
-  if (isPropNameInObjectBase(name)) {
-    return true;
-  }
-  switch (`${cdpObj.className}.${name}`) {
-    // NOTE: these are from gecko. Chromium will probably need some adjustments.
-    case "Window.localStorage":
-    case "Window.sysinfo":
-    case "Navigator.hardwareConcurrency":
-    case "XPCWrappedNative_NoHelper.isParentWindowMainWidgetVisible":
-    case "XPCWrappedNative_NoHelper.systemFont":
-      return true;
   }
   switch (name) {
     case "__proto__":
@@ -957,19 +1062,6 @@ function isObjectPropertyBlacklisted(cdpObj, name) {
       return true;
   }
   return false;
-}
-
-// Get the "own" property names of an object to use.
-function propertyNames(cdpObj) {
-  if (isObjectBlacklisted(cdpObj)) {
-    return [];
-  }
-  try {
-    // [live-object-property-access]
-    return [...cdpObj.getOwnPropertyNames(), ...cdpObj.getOwnPropertySymbols()];
-  } catch (e) {
-    return [];
-  }
 }
 
 // Target limit for the number of items (properties etc.) to include in object
@@ -985,7 +1077,8 @@ const MaxItems = {
   "full": 1000,
 };
 
-function ProtocolObjectPreview(obj, level) {
+function ProtocolObjectPreview(rrpId, obj, level) {
+  this.rrpId = rrpId;
   this.cdpObj = obj;
   this.level = level;
   this.overflow = false;
@@ -1014,32 +1107,64 @@ ProtocolObjectPreview.prototype = {
     return true;
   },
 
-  addProperty(property, force) {
+  addProperty(ownerCdpObject, rrpProp, force) {
+    if (isObjectPropertyBlacklisted(ownerCdpObject, rrpProp.name)) {
+      return;
+    }
+    if (this.getterValues?.has(rrpProp.name)) {
+      return;
+    }
     if (!this.startAddItem(force)) {
       return;
     }
     if (!this.properties) {
       this.properties = [];
     }
-    this.properties.push(property);
+    this.properties.push(rrpProp);
   },
 
-  addGetterValue(name, cdpValue, ownerCdpObj, force = false) {
-    if (isObjectPropertyBlacklisted(ownerCdpObj, name)) {
+  addGetterValue(propKey, ownerCdpObject, force = false) {
+    if (isObjectPropertyBlacklisted(ownerCdpObject, propKey)) {
+      return;
+    }
+
+    if (!this.getterValues) {
+      this.getterValues = new Map();
+    }
+    if (this.getterValues.has(propKey)) {
+      return;
+    }
+
+    const rrpValue = evalPropRrp(this.raw, propKey);
+    if (rrpValue) {
+      this.setGetterValue(propKey, rrpValue, force);
+    }
+  },
+
+  addEvalMethodValue(propKey) {
+    if (!this.getterValues) {
+      this.getterValues = new Map();
+    }
+    if (this.getterValues.has(propKey)) {
+      return;
+    }
+
+    const plainValue = this.raw[propKey].call(this.raw);
+    const rrpValue = createRrpValueRaw(plainValue);
+    if (rrpValue) {
+      this.setGetterValue(propKey, rrpValue, /* force */ true);
+    }
+    return plainValue;
+  },
+
+  setGetterValue(key, valueObject, force = true) {
+    if (!this.startAddItem(force)) {
       return;
     }
     if (!this.getterValues) {
       this.getterValues = new Map();
     }
-    if (this.getterValues.has(name)) {
-      return;
-    }
-    if (!this.startAddItem(force)) {
-      return;
-    }
-
-    const value = buildRrpObjectFromCdpObject(cdpValue);
-    this.getterValues.set(name, { name, ...value });
+    this.getterValues.set(key, { name: key, ...valueObject });
   },
 
 
@@ -1053,66 +1178,105 @@ ProtocolObjectPreview.prototype = {
     this.containerEntries.push(entry);
   },
 
+  get pageIndex() { return 0; },
+
+  get pageSize() {
+    if (isBlinkObject(this.raw, this.cdpObj) || CustomPreviewers[this.cdpObj.className]) {
+      // Don't limit props of native objects, and ignore prop limits.
+      // (Because that is how we do it in gecko.)
+      return 0;
+    }
+    return MaxItems[this.level] || 10;
+  },
+
   fill() {
-    // NOTE: we could also use "Runtime.evaluate" with `{ generatePreview: true }`
-    const allProperties = sendMessage("Runtime.getProperties", {
-      objectId: this.cdpObj.objectId,
-      ownProperties: true,
-      generatePreview: false,
-    });
-    const properties = allProperties.result;
+    let cdpProperties;
+    if (this.level !== 'noProperties') {
+      // WARNING: we manage possible divergences caused by `Runtime.getProperties` evaluating native getter
+      //    in V8's |doesAttributeHaveObservableSideEffectOnGet|.
+      //    see: https://github.com/replayio/chromium-v8/pull/115/files#diff-72ee0a91d32565577bd78ed94b034ae3b4bf51676c5d42165e9363cad18dccf9R1328
+      cdpProperties = sendMessage("Runtime.getProperties", {
+        objectId: this.cdpObj.objectId,
+        ownProperties: false,
+        generatePreview: false,
+        pageIndex: this.pageIndex,
+        pageSize: this.pageSize,
+        objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
+      });
+    }
+    else {
+      cdpProperties = { result: [] };
+    }
 
-    // Add data for DOM/CSS objects
-    this.extra = previewBlinkObject(this.cdpObj, allProperties) || {};
+    if (!cdpProperties.result) {
+      return {
+        prototypeId: prototypeRrpId
+      };
+    }
 
-    // Add class-specific data.
-    const previewer = CustomPreviewers[this.cdpObj.className];
-    const requiredProperties = [];
-    if (previewer) {
-      for (const entry of previewer) {
-        if (typeof entry == "string") {
-          // NOTE: in chromium we add these to `properties`, but in gecko we add these to `getterValues`
-          requiredProperties.push(entry);
-        } else {
-          entry.call(this, allProperties);
+    // Add data for blink objects
+    this.extra = previewBlinkObject(this.cdpObj) || {};
+
+    if (!isPrototype(this.raw)) { // Ignore prototype itself.
+      // Add class-specific data.
+      const previewers = CustomPreviewers[this.cdpObj.className];
+      if (previewers) {
+        for (const entry of previewers) {
+          if (entry instanceof Function) {
+            entry.call(this, cdpProperties);
+          }
+          else {
+            // entry should be string -> Look it up in results
+            const cdpEntry = cdpProperties.result.find(prop => prop.name === entry);
+            if (cdpEntry) {
+              const rrpEntry = buildRrpObjectFromCdpObject(cdpEntry.value);
+              this.setGetterValue(entry, rrpEntry);
+            }
+          }
         }
       }
     }
 
-    let prototype;
-    for (const prop of properties) {
-      if (prop.name == "__proto__") {
-        prototype = prop;
-      } else {
-        const protocolProperty = createProtocolPropertyDescriptor(prop);
-        const force = requiredProperties.includes(prop.name);
-        this.addProperty(protocolProperty, force);
+
+    // add properties + getterValues (based on what we did in gecko).
+    const addedProps = new Set();
+
+    /**
+     * @see https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#type-PropertyDescriptor
+     */
+    for (const cdpProp of cdpProperties.result) {
+      if (this.overflow) {
+        // early out
+        break;
+      }
+
+      const { name: propKey } = cdpProp;
+      if (propKey === "__proto__" || addedProps.has(propKey)) {
+        continue;
+      }
+      addedProps.add(propKey);
+
+      // only add complete prop data for own props
+      const rrpProp = createRrpPropertyDescriptor(cdpProp);
+      // NOTE: according to the official docs, CDP will just only provide `get` and `set`
+      // for "accessor descriptors only", so we use some heuristics to "kinda" guess what might be good targets
+      // while ignoring static members of native classes in the proto chain.
+      // See: https://linear.app/replay/issue/RUN-1592#comment-4011cec0
+      if (cdpProp.isOwn || (cdpProp.configurable && cdpProp.enumerable)) {
+        // Goal: only add own props or prototype's getters
+        const force = false;
+        this.addProperty(this.cdpObj, rrpProp, force);
       }
     }
 
+    let prototypeCdp = getInternalProp(cdpProperties, '[[Prototype]]')?.value;
     let prototypeRrpId;
     let getterValues;
-    if (prototype?.value?.objectId) {
-      prototypeRrpId = registerCdpObject(prototype.value);
-      const protoProps = sendMessage("Runtime.getProperties", {
-        objectId: prototype.value.objectId,
-        ownProperties: false
-      });
-      for (const prop of protoProps.result) {
-        if (prop.name === "__proto__") {
-          continue;
-        }
-        if (prop.value) {
-          // this.addGetterValue(prop.name, prop.value, this.cdpObj);
-        }
-        else if (prop.get) {
-          // TODO: call getter without side-effects? - https://linear.app/replay/issue/RUN-1016
-        }
-      }
-
-      if (this.getterValues) {
-        getterValues = [...this.getterValues.values()];
-      }
+    if (prototypeCdp) {
+      prototypeRrpId = registerCdpObject(prototypeCdp);
+    }
+    if (this.getterValues) {
+      getterValues = [...this.getterValues.values()];
     }
 
     return {
@@ -1134,19 +1298,19 @@ function getDescriptionCount(description) {
   }
 }
 
-function previewBlinkObject(cdpObject, allProperties) {
+function previewBlinkObject(cdpObject, cdpProperties) {
   const cdpId = cdpObject.objectId;
   const rrpId = gRrpIdByCdpId.get(cdpId);
   assert(rrpId);
   const plainObject = getPlainObjectByRrpId(rrpId);
 
-  if (isInstanceOfNative(plainObject, Node)) {
+  if (isBlinkInstanceOf(plainObject, Node)) {
     return {
       node: previewBlinkNode(plainObject)
     }
   }
 
-  if (isInstanceOfNative(plainObject, CSSStyleDeclaration)) {
+  if (isBlinkInstanceOf(plainObject, CSSStyleDeclaration)) {
     return {
       style: previewBlinkStyle(plainObject)
     }
@@ -1155,9 +1319,9 @@ function previewBlinkObject(cdpObject, allProperties) {
 
 function previewBlinkNode(node) {
   let attributes, pseudoType;
-  if (isInstanceOfNative(node, Element)) {
+  if (isBlinkInstanceOf(node, Element)) {
     attributes = [];
-    for (const { name, value } of node.attributes) {
+    for (const { name, value } of node.attributes || []) {
       attributes.push({ name, value });
     }
     // TODO: We cannot access pseudo elements using the JS DOM API - https://linear.app/replay/issue/RUN-953/
@@ -1172,7 +1336,11 @@ function previewBlinkNode(node) {
   let parentNode;
   if (node.parentNode) {
     parentNode = registerPlainObject(node.parentNode);
-  } else if (node.defaultView && node.defaultView.parent != node.defaultView && node.defaultView.parent.document) {
+  } else if (
+    node.defaultView &&
+    node.defaultView.parent != node.defaultView &&
+    node.defaultView.parent?.document
+  ) {
     /**
      * Nested documents use the parent element instead of null.
      * 
@@ -1190,10 +1358,10 @@ function previewBlinkNode(node) {
   }
 
   let childNodes;
-  if (node.nodeName == "IFRAME") {
+  if (node.nodeName == "IFRAME" && node.contentDocument) {
     // Treat an iframe's content document as one of its child nodes.
     childNodes = [registerPlainObject(node.contentDocument)];
-  } else if (node.childNodes.length) {
+  } else if (node.childNodes?.length) {
     childNodes = [...node.childNodes].map((n) => registerPlainObject(n));
   }
 
@@ -1259,47 +1427,52 @@ function previewBlinkRule(rule) {
   };
 }
 
-
-function previewTypedArray() {
-  // The typed array size isn't available from the object's own property
-  // information, except by parsing the object description.
-  const length = getDescriptionCount(this.cdpObj.description);
-  if (length !== undefined) {
-    this.addProperty({ name: "length", value: length }, /* force */ true);
-  }
+function previewArray() {
+  // simply invoke the native getter
+  this.addGetterValue('length', this.cdpObj, /* force */ true);
 }
 
-function previewSetMap(allProperties) {
-  if (!allProperties.internalProperties) {
+function previewTypedArray() {
+  // simply invoke the native getter
+  this.addGetterValue('length', this.cdpObj, /* force */ true);
+  this.addGetterValue('byteLength', this.cdpObj, /* force */ true);
+  this.addGetterValue('byteOffset', this.cdpObj, /* force */ true);
+  this.addGetterValue('buffer', this.cdpObj, /* force */ true);
+}
+
+function previewSetMap(cdpProperties) {
+  if (!cdpProperties.internalProperties) {
     return;
   }
 
-  const internal = allProperties.internalProperties.find(prop => prop.name == "[[Entries]]");
+  const internal = getInternalProp(cdpProperties, "[[Entries]]");
   if (!internal || !internal.value || !internal.value.objectId) {
     return;
   }
 
-  // Get the container size from the length of the entries.
-  const size = getDescriptionCount(internal.value.description);
-  if (size !== undefined) {
-    this.extra.containerEntryCount = size;
-    if (["Set", "Map"].includes(this.cdpObj.className)) {
-      this.addProperty({ name: "size", value: size }, /* force */ true);
-    }
+  // get size for Set and Map (Weak{Set,Map} don't have an observable size)
+  if (["Set", "Map"].includes(this.cdpObj.className)) {
+    // simply invoke the native getter
+    this.addGetterValue('size', this.cdpObj, /* force */ true);
+    this.extra.containerEntryCount = this.raw.size;
   }
 
   const entries = sendMessage("Runtime.getProperties", {
     objectId: internal.value.objectId,
     ownProperties: true,
     generatePreview: false,
+    pageIndex: this.pageIndex,
+    pageSize: this.pageSize,
+    objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
   }).result;
 
   for (const entry of entries) {
-    if (entry.value.subtype == "internal#entry") {
+    if (entry?.value?.subtype == "internal#entry") {
       const entryProperties = sendMessage("Runtime.getProperties", {
         objectId: entry.value.objectId,
         ownProperties: true,
         generatePreview: false,
+        objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
       }).result;
       const key = entryProperties.find(eprop => eprop.name == "key");
       const value = entryProperties.find(eprop => eprop.name == "value");
@@ -1328,7 +1501,7 @@ function previewDate() {
 }
 
 function previewError() {
-  this.addProperty({ name: "name", value: this.cdpObj.className }, /* force */ true);
+  this.setGetterValue("name", { value: this.cdpObj.className });
 }
 
 const ErrorProperties = [
@@ -1337,15 +1510,23 @@ const ErrorProperties = [
   previewError,
 ];
 
-function previewFunction(allProperties) {
-  const nameProperty = allProperties.result.find(prop => prop.name == "name");
+function getInternalProp(cdpProperties, name) {
+  return cdpProperties.internalProperties?.find(
+    prop => prop.name == name
+  );
+}
+
+function getInternalFunctionLocationProp(cdpProperties) {
+  return getInternalProp(cdpProperties, '[[FunctionLocation]]');
+}
+
+function previewFunction(cdpProperties) {
+  const nameProperty = cdpProperties.result.find(prop => prop.name == "name");
   if (nameProperty) {
     this.extra.functionName = nameProperty.value.value;
   }
 
-  const locationProperty = allProperties.internalProperties.find(
-    prop => prop.name == "[[FunctionLocation]]"
-  );
+  const locationProperty = getInternalFunctionLocationProp(cdpProperties);
   if (locationProperty) {
     this.extra.functionLocation = createProtocolLocation(locationProperty.value.value);
   }
@@ -1354,7 +1535,7 @@ function previewFunction(allProperties) {
 
 
 const CustomPreviewers = {
-  Array: ["length"],
+  Array: [previewArray],
   Int8Array: [previewTypedArray],
   Uint8Array: [previewTypedArray],
   Uint8ClampedArray: [previewTypedArray],
@@ -1380,12 +1561,29 @@ const CustomPreviewers = {
   TypeError: ErrorProperties,
   URIError: ErrorProperties,
   Function: [previewFunction],
+  AsyncFunction: [previewFunction],
 };
 
-function createProtocolPropertyDescriptor(desc) {
-  const { name, value, writable, get, set, configurable, enumerable, symbol } = desc;
+/**
+ * Get given prop from given object and get its value.
+ * Return RRP wrapper.
+ */
+function evalPropRrp(owner, propKey) {
+  try {
+    const plainValue = owner[propKey];
+    return createRrpValueRaw(plainValue);
+  }
+  catch (err) {
+    log(`[RuntimeError] prop evaluation exception - calling ${propKey.toString()} on object: ${err.stack}`);
+    return null;
+  }
+}
 
-  const rv = value ? buildRrpObjectFromCdpObject(value) : {};
+function createRrpPropertyDescriptor(cdpProp) {
+  // https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#type-PropertyDescriptor
+  const { name, value: cdpValue, writable, get, set, configurable, enumerable, symbol } = cdpProp;
+
+  let rv = buildRrpObjectFromCdpObject(cdpValue);
   rv.name = name;
 
   let flags = 0;
@@ -1409,9 +1607,7 @@ function createProtocolPropertyDescriptor(desc) {
     rv.set = registerCdpObject(set);
   }
 
-  if (symbol) {
-    rv.isSymbol = true;
-  }
+  rv.isSymbol = !!symbol;
 
   return rv;
 }
@@ -1470,6 +1666,7 @@ function createRrpScope(scopeId) {
       objectId: cdpScope.object.objectId,
       ownProperties: true,
       generatePreview: false,
+      objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
     }).result;
     for (const { name, value: cdpProp } of properties) {
       const rrpProp = buildRrpObjectFromCdpObject(cdpProp);
@@ -1711,7 +1908,7 @@ function DOM_performSearch({ query }) {
   const nodeObjects = fromJsDomPerformSearch(query);
   const nodeRrpIds = nodeObjects
     ?.map(registerPlainObject)
-   || [];
+    || [];
 
   return { nodes: nodeRrpIds, data: {} };
 }
@@ -1725,7 +1922,7 @@ function CSS_getComputedStyle({ node }) {
   const nodeObj = getPlainObjectByRrpId(node);
 
   const computedStyle = [];
-  if (isInstanceOfNative(nodeObj, Element)) {
+  if (isBlinkInstanceOf(nodeObj, Element)) {
     // NOTE: tested successfully for same-CSP elements of different iframes
     const ownerGlobal = window;
 
@@ -1900,7 +2097,7 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
    * @see https://github.com/replayio/chromium/blob/052831f0220b79fe0c3343b49f6d2863ea6de05d/third_party/blink/renderer/core/css/css_style_rule.cc#L94
    */
   const ruleCssText = `${selectorText} {${styleCssText}}`;
-  
+
   const rulePreview = {
     className: 'CSSRule',
     preview: {
@@ -1999,7 +2196,7 @@ function CSS_getAppliedRules({ node: nodeRrpId }) {
   let rules = gCssRulesByNodeRrpId.get(nodeRrpId);
   const data = {};
 
-  if (!rules && isInstanceOfNative(nodeObj, Element)) {
+  if (!rules && isBlinkInstanceOf(nodeObj, Element)) {
     const nodeId = getBlinkNodeIdByRrpId(nodeRrpId);
 
     // NOTE: CSS domain commands are not accessible via `sendMessage`, so we have to get the data indirectly.
@@ -2432,7 +2629,7 @@ function shiftRect(rect, offset) {
 // Script which sets a handler for collecting source maps from scripts in the
 // recording. Runs when recording/replaying if source map collection is enabled.
 const char* gSourceMapScript = R""""(
-
+//js
 (() => {
 
 const {
@@ -2651,12 +2848,14 @@ function isValidBaseURL(url) {
 // Script that injects React DevTools "stub" functions to capture 
 // marker annotations while recording, for use in later processing
 const char* gReactDevtoolsScript = R""""(
-
+//js 
 (() => {
 
 const stubFiberRoots = {};
+const unmountedFibersByRenderer = {};
 
 const stubHook = {
+  isStub: true,
   supportsFiber: true,
   inject,
   onCommitFiberUnmount,
@@ -2666,14 +2865,20 @@ const stubHook = {
 };
 
 
-function stubGetFiberRoots(rendererID) {
-  const roots = stubFiberRoots;
-
-  if (!roots[rendererID]) {
-    roots[rendererID] = new Set();
+function getFiberRootsSetForRenderer(rendererID) {
+  if (!stubFiberRoots[rendererID]) {
+    stubFiberRoots[rendererID] = new Set();
   }
 
-  return roots[rendererID];
+  return stubFiberRoots[rendererID];
+}
+
+function getUnmountedFibersSetForRenderer(rendererID) {
+  if (!unmountedFibersByRenderer[rendererID]) {
+    unmountedFibersByRenderer[rendererID] = new Set();
+  }
+
+  return unmountedFibersByRenderer[rendererID];
 }
 
 window.__REACT_DEVTOOLS_SAVED_RENDERERS__ = [];
@@ -2690,33 +2895,57 @@ Object.defineProperty(window, "__REACT_DEVTOOLS_GLOBAL_HOOK__", {
 let uidCounter = 0;
 
 function inject(renderer) {
+  // Declare these enum strings in scope for later routine use
+  const annotationType = "inject";
+
   const id = ++uidCounter;
-  window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook", "inject");
+  window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook:v1:" + annotationType, "");
   window.__REACT_DEVTOOLS_SAVED_RENDERERS__.push(renderer);
   return id;
 }
 
 function onCommitFiberUnmount(rendererID, fiber) {
-  window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook", "commit-fiber-unmount");
+  const annotationType = "commit-fiber-unmount"
+
+  // Unmounts are always one fiber at a time during the commit phase.
+  // Stash the unmounted fibers here, so we can map them to persistent 
+  // object IDs inside of `onCommitFiberRoot` processing in the routine.
+  const unmountedFibersSet = getUnmountedFibersSetForRenderer(rendererID);
+  unmountedFibersSet.add(fiber);
+
+  window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook:v1:" + annotationType, "");
 }
 
 function onCommitFiberRoot(rendererID, root, priorityLevel) {
-  const mountedRoots = stubGetFiberRoots(rendererID);
+  // The "commit" handler should be the only one the routine needs to do the work as of 2023-05-01.
+  // We capture unmounted fibers in the unmount handler above, and the routine
+  // will process them when we evaluate at the commit annotation point.
+  // The others mostly exist for hypothetical completeness.
+  const annotationType = "commit-fiber-root";
+
+  const mountedRoots = getFiberRootsSetForRenderer(rendererID);
   const current = root.current;
   const isKnownRoot = mountedRoots.has(root);
-  const isUnmounting = current.memoizedState == null || current.memoizedState.element == null; // Keep track of mounted roots so we can hydrate when DevTools connect.
+  // Keep track of mounted roots so we can hydrate when DevTools connect.
+  const isUnmounting = current.memoizedState == null || current.memoizedState.element == null; 
 
   if (!isKnownRoot && !isUnmounting) {
     mountedRoots.add(root);
   } else if (isKnownRoot && isUnmounting) {
     mountedRoots.delete(root);
   }
+
+  // Get these so it's in scope in the routine eval, and we can clear it after the annotation
+  const unmountedFibersSet = getUnmountedFibersSetForRenderer(rendererID);
   
-  window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook", "commit-fiber-root");
+  window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook:v1:" + annotationType, "");
+
+  unmountedFibersSet.clear();
 }
 
 function onPostCommitFiberRoot(rendererID, root) {
-  window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook", "post-commit-fiber-root");
+  const annotationType = "post-commit-fiber-root";
+  window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook:v1:" + annotationType, "");
 }
 
 })();
@@ -2728,7 +2957,7 @@ function onPostCommitFiberRoot(rendererID, root) {
 // Script that injects Redux DevTools "stub" functions to capture 
 // marker annotations while recording, for use in later processing
 const char* gReduxDevtoolsScript = R""""(
-
+//js
 (() => { // webpackBootstrap
 /******/ 	"use strict";
 var __webpack_exports__ = {};
@@ -2946,6 +3175,120 @@ window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ = reduxDevtoolsExtensionCompose;
 
 
 
+// Script that copies the React and Redux DevTools global variables into
+// each iframe that gets added to the page.
+// This is primarily to support React DevTools in Cypress tests, as Cypress
+// runs the user's app in an iframe, but it should be a general solution for
+// other iframe usages in any application as well.
+const char* gDevtoolsIframeSetupScript = R""""(
+//js
+;(() => {
+  // TODO This _shouldn't_ be needed now that we allow cross-domain access at the C++ level
+  function canAccessIframe(iframe) {
+    try {
+      if (!iframe.src || iframe.src === 'about:blank') {
+        return false
+      }
+
+      const url = new URL(iframe.src)
+      const sameHost = url.hostname === window?.location?.hostname
+      const contentDocExists = !!iframe.contentDocument
+      return sameHost && contentDocExists
+    } catch (e) {
+      return false
+    }
+  }
+
+  function watchForIframeSrcChanges(iframe) {
+    let oldSrc = iframe.src
+    const iframeSrcObserver = new MutationObserver(function (mutations) {
+      mutations.forEach(function (mutation) {
+        if (mutation.type === 'attributes') {
+          const changedAttrName = mutation.attributeName
+          // Cypress has changed the blank iframe src to the app url.
+          if (changedAttrName === 'src') {
+            const oldLocation = iframe.contentWindow.location.href
+
+            let counter = 0
+
+            // Once the `src` has changed, it still takes time for the browser
+            // to navigate inside the iframe. We need to mutate the iframe's `window`
+            // _after_ it has navigated to the new page, but _before_ any JS starts running
+            // (such as ReactDOM initializing itself).
+            // This `setTimeout` loop is a brute-force hack, but it appears to work consistently.
+            function checkForLocationChange() {
+              try {
+                const newLocation = iframe.contentWindow.location.href
+                if (newLocation !== oldLocation) {
+                  iframeSrcObserver.disconnect()
+                  addDevtoolsToIframe(iframe)
+                  return
+                }
+              } catch (err) {
+              }
+
+              counter++
+
+              // Arbitrary limit to prevent infinite loops.
+              if (counter < 100) {
+                setTimeout(checkForLocationChange, 0)
+              }
+            }
+
+            setTimeout(checkForLocationChange, 0)
+
+            oldSrc = iframe.src
+          }
+        }
+      })
+    })
+
+    iframeSrcObserver.observe(iframe, {
+      attributes: true,
+    })
+  }
+
+  function addDevtoolsToIframe(iframe) {
+    // React DevTools especially cannot see React code in an iframe by default.
+    // It needs the main window's "global hook" reference to be copied into an iframe.
+    // That way React in the iframe attaches itself correctly, and the extension code
+    // can see the render updates. Redux likely needs the same kind of setup.
+    if (canAccessIframe(iframe)) {
+      iframe.contentWindow.__REACT_DEVTOOLS_GLOBAL_HOOK__ = window.__REACT_DEVTOOLS_GLOBAL_HOOK__
+      iframe.contentWindow.__REDUX_DEVTOOLS_EXTENSION__ = window.__REDUX_DEVTOOLS_EXTENSION__
+      iframe.contentWindow.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ = window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', (event) => {
+    const initialIframes = document.querySelectorAll('iframe')
+    initialIframes.forEach(function (iframe) {
+      addDevtoolsToIframe(iframe)
+      watchForIframeSrcChanges(iframe)
+    })
+
+    const iframeAddedObserver = new MutationObserver(function (mutations) {
+      mutations.forEach(function (mutation) {
+        ;[].filter
+          .call(mutation.addedNodes, function (node) {
+            return node.nodeName === 'IFRAME'
+          })
+          .forEach(function (iframe) {
+            watchForIframeSrcChanges(iframe)
+          })
+      })
+    })
+    iframeAddedObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+    })
+  })
+})()
+
+)"""";
+
+
+
 static v8::Local<v8::String> ToV8String(v8::Isolate* isolate, const char* value) {
   return v8::String::NewFromUtf8(isolate, value,
                                  v8::NewStringType::kInternalized).ToLocalChecked();
@@ -2994,6 +3337,8 @@ static void SetCDPMessageCallback(const v8::FunctionCallbackInfo<v8::Value>& arg
 }
 
 static void SendMessageToFrontend(const v8_inspector::StringView& message) {
+  recordreplay::AutoDisallowEvents disallow(
+      "RecordReplay_SendMessageToFrontend");
   CHECK(v8::IsMainThread());
 
   CHECK(gCDPMessageCallback);
@@ -3014,6 +3359,21 @@ static void SendMessageToFrontend(const v8_inspector::StringView& message) {
   v8::Local<v8::Function> callback = gCDPMessageCallback->Get(isolate);
   v8::MaybeLocal<v8::Value> rv = callback->Call(context, v8::Undefined(isolate), 1, &arg);
   CHECK(!rv.IsEmpty());
+
+  // If we get back a string from the call, report it as an error to the log (in such a way as it
+  // can be recovered by our error reporting), and then crash.
+  v8::Local<v8::Value> result = rv.ToLocalChecked();
+  CHECK(result->IsUndefined() || result->IsString());
+
+  if (result->IsString()) {
+    v8::String::Utf8Value messageValue(isolate, result);
+    std::string messageStr(*messageValue);
+
+    // TODO: Replace this with an API call to `RecordReplaySetCrashReasonCallback`
+    // See RUN-1562: https://linear.app/replay/issue/RUN-1562
+    recordreplay::Print("ErrorFatal %s:%d %s", "js", 0, messageStr.c_str());
+    IMMEDIATE_CRASH();
+  }
 }
 
 struct InspectorChannel final : public v8_inspector::V8Inspector::Channel {
@@ -3030,15 +3390,26 @@ struct InspectorChannel final : public v8_inspector::V8Inspector::Channel {
 static v8_inspector::V8Inspector* gInspector;
 static v8_inspector::V8InspectorSession* gInspectorSession;
 
+/**
+ * This function makes sure that the session exists and
+ * we are on main thread when accessing it.
+ */
+v8_inspector::V8InspectorSession* getInspectorSession() {
+  CHECK(gInspectorSession);
+  CHECK(v8::IsMainThread());
+  return gInspectorSession;
+}
+
 void
 RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
                                 v8::Isolate* isolate) {
-  if (v8::IsMainThread()) {
+  if (v8::IsMainThread() && recordreplay::IsReplaying()) {
     gInspector = inspector;
 
     // For now we only connect to the first frame.
     static int ContextGroupId = 1;
 
+    recordreplay::AutoDisallowEvents disallow("RecordReplayRegisterV8Inspector");
     gInspectorSession = gInspector->connect(ContextGroupId,
                                             new InspectorChannel(),
                                             v8_inspector::StringView(),
@@ -3058,15 +3429,13 @@ RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
  * do not provide too much value if they are not hooked up to a `DevToolsSession` and the `UberDispatcher`.
  */
 static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
-  CHECK(v8::IsMainThread());
-  CHECK(gInspectorSession);
   CHECK(args.Length() == 1 && args[0]->IsString() &&
         "must be called with a single string");
   v8::String::Utf8Value message(args.GetIsolate(), args[0]);
 
   std::string nmessage(*message);
   v8_inspector::StringView messageView((const uint8_t*)nmessage.c_str(), nmessage.length());
-  gInspectorSession->dispatchProtocolMessage(messageView);
+  getInspectorSession()->dispatchProtocolMessage(messageView);
 }
 
 static std::string GetRecordingDirectory() {
@@ -3118,6 +3487,8 @@ static void WriteToRecordingDirectory(const v8::FunctionCallbackInfo<v8::Value>&
   v8::String::Utf8Value filename(isolate, args[0]);
   v8::String::Utf8Value content(isolate, args[1]);
 
+  recordreplay::Assert("[RUN-1670-1764] WriteToRecordingDirectory %s (%zu)", *filename, (size_t)strlen(*content));
+
   std::string path = GetRecordingDirectory() + DirectorySeparator + std::string(*filename);
   std::ofstream stream(path);
   stream << *content;
@@ -3138,7 +3509,7 @@ static void AddRecordingEvent(const v8::FunctionCallbackInfo<v8::Value>& args) {
 }
 
 static void GetPersistentId(const v8::FunctionCallbackInfo<v8::Value>& args) {
-  if (args.Length() >= 1 && recordreplay::HasDivergedFromRecording()) {
+  if (args.Length() >= 1 && recordreplay::IsInReplayCode()) {
     int id = v8::internal::RecordReplayObjectId(args.GetIsolate(),
                                                 args.GetIsolate()->GetCurrentContext(),
                                                 args[0], /* allow_create */ false);
@@ -3166,17 +3537,9 @@ extern "C" void V8RecordReplayFinishRecording();
 // associated with a given API object.
 static int GetAPIObjectIdCallback(v8::Local<v8::Object> object) {
   v8::Isolate* isolate = v8::Isolate::GetCurrent();
-  const WrapperTypeInfo* infos[] = {
-    // ScriptWrappable itself doesn't have wrapper type info, so check subclasses.
-    Node::GetStaticWrapperTypeInfo(),
-    Event::GetStaticWrapperTypeInfo(),
-    CSSStyleDeclaration::GetStaticWrapperTypeInfo()
-  };
-  for (const WrapperTypeInfo* info : infos) {
-    if (V8PerIsolateData::From(isolate)->HasInstance(info, object)) {
-      ScriptWrappable* wrappable = ToScriptWrappable(object);
-      return wrappable->RecordReplayId();
-    }
+  if (V8DOMWrapper::IsWrapper(isolate, object)) {
+    ScriptWrappable* wrappable = ToScriptWrappable(object);
+    return wrappable->RecordReplayId();
   }
   return 0;
 }
@@ -3319,6 +3682,7 @@ v8::MaybeLocal<v8::Value> convertCborToJSMaybe(v8::Isolate* isolate,
 
 static LocalFrame* gLocalFrame;
 static InspectorDOMAgent* gInspectorDomAgent;
+static InspectorDOMDebuggerAgent* gInspectorDomDebuggerAgent;
 static InspectorNetworkAgent* gInspectorNetworkAgent;
 static InspectorCSSAgent* gInspectorCssAgent;
 static InspectedFrames* gInspectedFrames;
@@ -3339,19 +3703,32 @@ InspectorDOMAgent* getOrCreateInspectorDOMAgent(v8::Isolate* isolate) {
 
     InspectedFrames* inspectedFrames = getOrCreateInspectedFrames();
     gInspectorDomAgent = MakeGarbageCollected<InspectorDOMAgent>(
-        isolate, inspectedFrames, gInspectorSession);
+        isolate, inspectedFrames, getInspectorSession());
 
     gInspectorDomAgent->FrameDocumentUpdated(gLocalFrame);
   }
   return gInspectorDomAgent;
 }
 
+InspectorDOMDebuggerAgent* getOrCreateInspectorDOMDebuggerAgent(
+    v8::Isolate* isolate) {
+  if (!gInspectorDomDebuggerAgent) {
+    gInspectorDomDebuggerAgent =
+        MakeGarbageCollected<InspectorDOMDebuggerAgent>(
+            isolate, getOrCreateInspectorDOMAgent(isolate), getInspectorSession());
+
+    // NOTE: registering the agent here allows it to receive `UserCallback` events
+    //   see https://linear.app/replay/issue/RUN-1061#comment-d059a1ce
+    gLocalFrame->GetProbeSink()->AddInspectorDOMDebuggerAgent(gInspectorDomDebuggerAgent);
+  }
+  return gInspectorDomDebuggerAgent;
+}
+
 InspectorNetworkAgent* getOrCreateInspectorNetworkAgent() {
   if (!gInspectorNetworkAgent) {
-    // NOTE: based on WebDevToolsAgentImpl::AttachSession
     InspectedFrames* inspectedFrames = getOrCreateInspectedFrames();
     gInspectorNetworkAgent = MakeGarbageCollected<InspectorNetworkAgent>(
-        inspectedFrames, nullptr, gInspectorSession);
+        inspectedFrames, nullptr, getInspectorSession());
   }
   return gInspectorNetworkAgent;
 }
@@ -3390,7 +3767,7 @@ getObjectByCdpId(v8::Isolate* isolate,
   auto context = isolate->GetCurrentContext();
   std::unique_ptr<v8_inspector::StringBuffer> error;
   v8::Local<v8::Value> unwrapped;
-  if (!gInspectorSession->unwrapObject(&error, cdpIdV8, &unwrapped, &context,
+  if (!getInspectorSession()->unwrapObject(&error, cdpIdV8, &unwrapped, &context,
                                        nullptr)) {
     recordreplay::Print("[RuntimError] could not lookup cdpId: %s",
                         ToCoreString(error->string()).Ascii().c_str());
@@ -3429,32 +3806,55 @@ static void fromJsMakeDebuggeeValue(
     const v8::FunctionCallbackInfo<v8::Value>& args) {
   v8::Isolate* isolate = args.GetIsolate();
 
-  CHECK(args.Length() == 1 && args[0]->IsObject() &&
-        "must be called with a single object");
+  CHECK(args.Length() == 1 &&
+        "must be called with a single value");
 
   auto context = isolate->GetCurrentContext();
   auto value = args[0];
 
-  const String object_group(
-      "console");  // NOTE: object_group is used for cleaning up
+  const String object_group(REPLAY_CDT_PAUSE_OBJECT_GROUP);
   auto generatePreview = false;
 
   // NOTE: `wrapObject` always creates a new `RemoteObject` and binds it
   // to a new id.
-  auto remoteObjSerialized = gInspectorSession->wrapObject(
+  auto remoteObjSerialized = getInspectorSession()->wrapObject(
       context, value, ToV8InspectorStringView(object_group), generatePreview);
 
-  auto result = convertCborToJS(isolate, (v8_crdtp::Serializable*)remoteObjSerialized.get());
+  if (remoteObjSerialized) {
+    auto result = convertCborToJS(isolate, (v8_crdtp::Serializable*)remoteObjSerialized.get());
 
-  if (!result.IsEmpty()) {
-    args.GetReturnValue().Set(result.ToLocalChecked());
-  } else {
+    if (!result.IsEmpty()) {
+      args.GetReturnValue().Set(result.ToLocalChecked());
+      return;
+    }
+  }
+  args.GetReturnValue().SetNull();
+}
+
+static void fromJsGetArgumentsInFrame(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsString() &&
+        "must be called with a single object");
+  v8::Isolate* isolate = args.GetIsolate();
+
+  // convert v8::String → v8::String::Utf8Value → v8_inspector::StringView
+  // future-work: can this be improved?
+  v8::String::Utf8Value frameId(isolate, args[0]);
+  const uint8_t* frameIdPtr = reinterpret_cast<const uint8_t*>(*frameId);
+  v8_inspector::StringView frameIdV8(frameIdPtr, frameId.length());
+
+  // v8::Isolate* isolate = args.GetIsolate();
+  auto result = getInspectorSession()->getArgumentsOfCallFrame(frameIdV8);
+
+  if (result.IsEmpty()) {
     args.GetReturnValue().SetNull();
+  } else {
+    args.GetReturnValue().Set(result.ToLocalChecked());
   }
 }
 
 static void fromJsGetObjectByCdpId(
-    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  const v8::FunctionCallbackInfo<v8::Value>& args) {
   CHECK(args.Length() == 1 && args[0]->IsString() &&
         "[RuntimeError] must be called with a single string");
 
@@ -3472,6 +3872,25 @@ static void fromJsGetObjectByCdpId(
   } else {
     args.GetReturnValue().SetNull();
   }
+}
+
+/**
+ * Whether a given value is a blink object.
+ * 
+ * NOTE: If we want a generalized |isNativeObject| function, 
+ * we probably have to expose |v8::internal::Script::type|
+ * (which is also used by |CallSiteInfo::IsNative|).
+ */
+static void fromJsIsBlinkObject(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && 
+        "[RuntimeError] must be called with a single value");
+
+  v8::Isolate* isolate = args.GetIsolate();
+  
+  bool result = V8DOMWrapper::IsWrapper(isolate, args[0]);
+  
+  args.GetReturnValue().Set(result);
 }
 
 /** ###########################################################################
@@ -3567,7 +3986,7 @@ static void GetCurrentNetworkStreamData(const v8::FunctionCallbackInfo<v8::Value
 
 static std::string MakeRequestIdentifier(uint64_t identifier) {
   char request_id[64];
-  snprintf(request_id, 64, "%d.%lu", (int) getpid(), (unsigned long) identifier);
+  snprintf(request_id, 64, "%d.%lu", (int) base::GetCurrentProcId(), (unsigned long) identifier);
   return std::string(request_id);
 }
 
@@ -4015,11 +4434,14 @@ static void fromJsGetMatchedStylesForNode(
   Maybe<protocol::Array<protocol::CSS::RuleMatch>> matchedRules;
   Maybe<protocol::Array<protocol::CSS::PseudoElementMatches>> pseudoIdMatches;
   Maybe<protocol::Array<protocol::CSS::InheritedStyleEntry>> inheritedEntries;
+  Maybe<protocol::Array<protocol::CSS::InheritedPseudoElementMatches>> inherited_pseudo_id_matches;
   Maybe<protocol::Array<protocol::CSS::CSSKeyframesRule>> keyframesRules;
+  Maybe<int> parentLayoutNodeId;
 
   auto response = cssAgent->getMatchedStylesForNode(
-      nodeId, &inlineStyle, &attributesStyle, &matchedRules,
-      &pseudoIdMatches, &inheritedEntries, nullptr, &keyframesRules, nullptr);
+      nodeId, &inlineStyle, &attributesStyle, &matchedRules, &pseudoIdMatches,
+      &inheritedEntries, &inherited_pseudo_id_matches, &keyframesRules,
+      &parentLayoutNodeId);
 
   // WIP: will fix everything up and clean up when done w/ RUN-981
 
@@ -4224,22 +4646,66 @@ extern "C" void V8RecordReplayRegisterBrowserEventCallback(
   void (*callback)(const char* name, const char* payload)
 );
 
-static void RunScript(v8::Isolate* isolate, v8::Local<v8::Context> context, const char* script, const char* filename) {
+/**
+ * Copied from gin/try_catch.h.
+ */
+static v8::Local<v8::String> GetSourceLine(v8::Isolate* isolate,
+                                    v8::Local<v8::Message> message) {
+  auto maybe = message->GetSourceLine(isolate->GetCurrentContext());
+  v8::Local<v8::String> source_line;
+  return maybe.ToLocal(&source_line) ? source_line : v8::String::Empty(isolate);
+}
+
+static const std::string V8ToString(v8::Isolate* isolate, v8::Local<v8::Value> str) {
+  v8::String::Utf8Value s(isolate, str);
+  return *s;
+}
+
+static std::string GetStackTrace(v8::Isolate* isolate, v8::TryCatch& try_catch_) {
+  if (!try_catch_.HasCaught()) {
+    return "";
+  }
+
+  std::stringstream ss;
+  v8::Local<v8::Message> message = try_catch_.Message();
+  ss << V8ToString(isolate, message->Get()) << std::endl
+     << V8ToString(isolate, GetSourceLine(isolate, message)) << std::endl;
+
+  v8::Local<v8::StackTrace> trace = message->GetStackTrace();
+  if (trace.IsEmpty())
+    return ss.str();
+
+  int len = trace->GetFrameCount();
+  for (int i = 0; i < len; ++i) {
+    v8::Local<v8::StackFrame> frame = trace->GetFrame(isolate, i);
+    ss << V8ToString(isolate, frame->GetScriptName()) << ":"
+       << frame->GetLineNumber() << ":" << frame->GetColumn() << ": "
+       << V8ToString(isolate, frame->GetFunctionName()) << std::endl;
+  }
+  return ss.str();
+}
+
+static void RunScript(v8::Isolate* isolate, v8::Local<v8::Context> context, const char* source_raw, const char* filename) {
   v8::Local<v8::String> filename_string = ToV8String(isolate, filename);
   v8::ScriptOrigin origin(isolate, filename_string);
 
-  v8::Local<v8::String> source = ToV8String(isolate, script);
+  v8::TryCatch try_catch(isolate);
+  v8::Local<v8::String> source = ToV8String(isolate, source_raw);
+  auto maybe_script = v8::Script::Compile(context, source, &origin);
 
-  // TODO: check for errors after `Compile` and `Run` - https://linear.app/replay/issue/RUN-955/chromium-should-not-diverge-and-crash-if-greplayscript-does-not
-  v8::Local<v8::Script> compiled = v8::Script::Compile(context, source, &origin).ToLocalChecked();
-  compiled->Run(context).ToLocalChecked();
+  v8::Local<v8::Script> script;
+  if (!maybe_script.ToLocal(&script)) {
+    // [RUN-955] Report error if things go wrong.
+    // based on ShellRunner::Run
+    CHECK(false && "Replay RunScript failed") << GetStackTrace(isolate, try_catch);
+  }
+  script->Run(context).ToLocalChecked();
 }
 
 static bool TestEnv(const char* env) {
   const char* v = getenv(env);
   return v && v[0] && v[0] != '0';
 }
-
 
 void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
   V8RecordReplaySetAPIObjectIdCallback(GetAPIObjectIdCallback);
@@ -4261,8 +4727,10 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
   v8::Local<v8::Object> args = v8::Object::New(isolate);
   DefineProperty(isolate, context->Global(), "__RECORD_REPLAY_ARGUMENTS__", args);
 
-  SetFunctionProperty(isolate, args, "log",
-                      LogCallback);
+  DefineProperty(isolate, args, "REPLAY_CDT_PAUSE_OBJECT_GROUP",
+                 ToV8String(isolate, REPLAY_CDT_PAUSE_OBJECT_GROUP));
+
+  SetFunctionProperty(isolate, args, "log", LogCallback);
 
   // CDP debugger functionality
   SetFunctionProperty(isolate, args, "setCDPMessageCallback",
@@ -4272,11 +4740,15 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
   SetFunctionProperty(isolate, args, "setCommandCallback",
                       v8::FunctionCallbackRecordReplaySetCommandCallback);
 
-  // Object Management
+  // Object Util
   SetFunctionProperty(isolate, args, "fromJsMakeDebuggeeValue",
                       fromJsMakeDebuggeeValue);
+  SetFunctionProperty(isolate, args, "fromJsGetArgumentsInFrame",
+                      fromJsGetArgumentsInFrame);
   SetFunctionProperty(isolate, args, "fromJsGetObjectByCdpId",
                       fromJsGetObjectByCdpId);
+  SetFunctionProperty(isolate, args, "fromJsIsBlinkObject",
+                      fromJsIsBlinkObject);
 
   // networking
   SetFunctionProperty(isolate, args, "getCurrentNetworkRequestEvent",
@@ -4347,6 +4819,7 @@ void RunInitialRecordReplayScripts(v8::Isolate* isolate) {
     // its frames.
     RunScript(isolate, context, gReactDevtoolsScript, "record-replay-react-devtools");
     RunScript(isolate, context, gReduxDevtoolsScript, "record-replay-redux-devtools");
+    RunScript(isolate, context, gDevtoolsIframeSetupScript, "record-replay-devtools-iframes");
   }
 }
 

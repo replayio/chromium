@@ -134,7 +134,10 @@ class ImageLoader::Task {
   void Run() {
     if (!loader_)
       return;
-    ExecutionContext* context = loader_->GetElement()->GetExecutionContext();
+    Element* element = loader_->GetElement();
+    recordreplay::Assert("[Run-1333] ImageLoader::Run %d",
+                         element->RecordReplayId());
+    ExecutionContext* context = element->GetExecutionContext();
     probe::AsyncTask async_task(context, &async_task_context_);
     loader_->DoUpdateFromElement(world_, update_behavior_, referrer_policy_);
   }
@@ -422,6 +425,9 @@ inline void ImageLoader::EnqueueImageLoadingMicroTask(
     network::mojom::ReferrerPolicy referrer_policy) {
   auto task = std::make_unique<Task>(this, update_behavior, referrer_policy);
   pending_task_ = task->GetWeakPtr();
+  recordreplay::Assert(
+      "[RUN-1333] ImageLoader::EnqueueImageLoadingMicroTask %d",
+      element_->RecordReplayId());
   element_->GetDocument().GetAgent()->event_loop()->EnqueueMicrotask(
       WTF::BindOnce(&Task::Run, std::move(task)));
   delay_until_do_update_from_element_ =
@@ -566,6 +572,11 @@ void ImageLoader::DoUpdateFromElement(
       params.SetLazyImageNonBlocking();
     }
 
+    recordreplay::Assert(
+        "[RUN-658-1381] ImageLoader::DoUpdateFromElement %d %s",
+        element_->RecordReplayId(),
+        image_source_url.IsNull() ? "(null)" : image_source_url.Utf8().c_str());
+
     new_image_content = ImageResourceContent::Fetch(params, document.Fetcher());
 
     // If this load is starting while navigating away, treat it as an auditing
@@ -675,6 +686,8 @@ void ImageLoader::UpdateFromElement(
   }
 
   if (ShouldLoadImmediately(ImageSourceToKURL(image_source_url))) {
+    recordreplay::Assert("[Run-1333] ImageLoader::UpdateFromElement %d",
+                         element_->RecordReplayId());
     DoUpdateFromElement(element_->GetExecutionContext()->GetCurrentWorld(),
                         update_behavior, referrer_policy, UpdateType::kSync,
                         force_blocking);

@@ -118,16 +118,21 @@ NamedPropertySetterResult StorageArea::setItem(
     const String& key,
     const String& value,
     ExceptionState& exception_state) {
+  recordreplay::Assert("[RUN-1307-1773] StorageArea::setItem A %s", key.Utf8().c_str());
   if (!CanAccessStorage()) {
     exception_state.ThrowSecurityError("access is denied for this document.");
     return NamedPropertySetterResult::kIntercepted;
   }
   if (!cached_area_->SetItem(key, value, this)) {
+    recordreplay::Assert("[RUN-1307-1773] StorageArea::setItem B %s",
+                         key.Utf8().c_str());
     exception_state.ThrowDOMException(
         DOMExceptionCode::kQuotaExceededError,
         "Setting the value of '" + key + "' exceeded the quota.");
     return NamedPropertySetterResult::kIntercepted;
   }
+  recordreplay::Assert("[RUN-1307-1773] StorageArea::setItem C %s",
+                       key.Utf8().c_str());
   RecordModificationInMetrics();
   return NamedPropertySetterResult::kIntercepted;
 }
@@ -164,6 +169,17 @@ bool StorageArea::Contains(const String& key,
 
 void StorageArea::NamedPropertyEnumerator(Vector<String>& names,
                                           ExceptionState& exception_state) {
+  if (!cached_area_->memory_used() &&  // This means either empty or not loaded
+      v8::recordreplay::IsReplaying() &&
+      v8::recordreplay::AreEventsDisallowed()) {
+    // TODO: Use `IsReplayCode` instead -
+    // https://linear.app/replay/issue/RUN-1502
+
+    // This ignores crash-inducing side effects observed during interceptor key collection
+    // when handling commands.
+    // See: https://linear.app/replay/issue/RUN-1315#comment-26f96699
+    return;
+  }
   unsigned length = this->length(exception_state);
   if (exception_state.HadException())
     return;

@@ -107,7 +107,7 @@ bool TaskQueueImpl::GuardedTaskPoster::PostTask(PostedTask task) {
   // has to do this) as it can lead to a deadlock and defer it instead.
   ScopedDeferTaskPosting disallow_task_posting;
 
-  if (recordreplay::AreEventsDisallowed()) {
+  if (recordreplay::AreEventsDisallowed() || recordreplay::AreEventsPassedThrough()) {
     auto token = record_replay_unordered_operations_controller_.value().TryBeginOperation();
     if (!token)
       return false;
@@ -153,9 +153,8 @@ TaskQueueImpl::TaskRunner::~TaskRunner() {}
 bool TaskQueueImpl::TaskRunner::PostDelayedTask(const Location& location,
                                                 OnceClosure callback,
                                                 TimeDelta delay) {
-  // https://linear.app/replay/issue/RUN-597
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("TaskQueueImpl::TaskRunner::PostDelayedTask %lu", recordreplay::PointerId(this));
+  if (!recordreplay::AreEventsDisallowed() && !recordreplay::AreEventsPassedThrough())
+    recordreplay::Assert("TaskQueueImpl::TaskRunner::PostDelayedTask %d", recordreplay::PointerId(this));
 
   return task_poster_->PostTask(PostedTask(this, std::move(callback), location,
                                            delay, Nestable::kNestable,
@@ -440,7 +439,9 @@ void TaskQueueImpl::PostImmediateTaskImpl(PostedTask task,
 
   bool should_schedule_work = false;
   {
-    bool events_disallowed = recordreplay::AreEventsDisallowed();
+    bool events_disallowed =
+      recordreplay::AreEventsDisallowed() ||
+      recordreplay::AreEventsPassedThrough();
     if (events_disallowed)
       recordreplay::BeginPassThroughEvents();
 
@@ -453,12 +454,15 @@ void TaskQueueImpl::PostImmediateTaskImpl(PostedTask task,
 
     bool add_queue_time_to_tasks = sequence_manager_->GetAddQueueTimeToTasks();
     TimeTicks queue_time;
-    if (add_queue_time_to_tasks || delayed_fence_allowed_) {
-      // https://linear.app/replay/issue/RUN-1145
-      if (!events_disallowed)
-        recordreplay::Assert("[RUN-1145] TaskQueueImpl::PostImmediateTaskImpl #1");
-      queue_time = sequence_manager_->any_thread_clock_maybe_events_disallowed()->NowTicks();
+
+    if (!events_disallowed) {
+      recordreplay::Assert(
+          "[RUN-1126] TaskQueueImpl::PostImmediateTaskImpl 1 %d",
+          add_queue_time_to_tasks || delayed_fence_allowed_);
     }
+    
+    if (add_queue_time_to_tasks || delayed_fence_allowed_)
+      queue_time = sequence_manager_->any_thread_clock_maybe_events_disallowed()->NowTicks();
 
     // The sequence number must be incremented atomically with pushing onto the
     // incoming queue. Otherwise if there are several threads posting task we
@@ -1037,7 +1041,7 @@ void TaskQueueImpl::RemoveFence() {
   front_task_unblocked |= main_thread_only().delayed_work_queue->RemoveFence();
 
   {
-    base::internal::CheckedAutoLock lock(any_thread_lock_);
+    recordreplay::AutoLockMaybeEventsDisallowed lock(any_thread_lock_);
     if (!front_task_unblocked && previous_fence) {
       if (!any_thread_.immediate_incoming_queue.empty() &&
           any_thread_.immediate_incoming_queue.front().task_order() >

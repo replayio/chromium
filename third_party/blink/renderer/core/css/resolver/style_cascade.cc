@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/core/css/resolver/style_cascade.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/animation/css/css_animations.h"
 #include "third_party/blink/renderer/core/animation/css_interpolation_environment.h"
 #include "third_party/blink/renderer/core/animation/css_interpolation_types_map.h"
@@ -245,6 +246,7 @@ void StyleCascade::Apply(CascadeFilter filter) {
   //
   if (!state_.GetElement().HasTagName(html_names::kH1Tag))
     return;
+
   if (CascadePriority* priority =
           map_.Find(GetCSSPropertyFontSize().GetCSSPropertyName())) {
     if (priority->GetOrigin() != CascadeOrigin::kUserAgent)

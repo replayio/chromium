@@ -10,8 +10,13 @@ const { REPLAY_LOCAL_DRIVER_DIR } = process.env;
 
 if (REPLAY_LOCAL_DRIVER_DIR && process.env.DRIVER_REVISION) {
   // local driver should generally be latest
-  throw new Error("Conflicting build settings: environment variables DRIVER_REVISION and REPLAY_LOCAL_DRIVER_DIR cannot coexist.");
+  throw new Error(
+    "Conflicting build settings: environment variables DRIVER_REVISION and REPLAY_LOCAL_DRIVER_DIR cannot coexist."
+  );
 }
+
+const buildArm = !!process.env.REPLAY_BUILD_ARM;
+const outdir = buildArm ? "out/Release-ARM" : "out/Release";
 
 // Ensure that the git repository is "trusted", otherwise we'll get errors like:
 // fatal: unsafe repository ('/chromium/src' is owned by someone else)
@@ -28,16 +33,18 @@ if (currentPlatform() == "macOS") {
   spawnChecked("touch", [`${__dirname}/chrome/app/chrome_exe_main_mac.cc`]);
 }
 
+const archSuffix = buildArm ? "-arm" : "";
+
 if (!REPLAY_LOCAL_DRIVER_DIR) {
   // Download the record/replay driver archive, using the latest version unless
   // it was overridden via the environment.
   console.log(`Downloading driver...`);
-  let driverArchive = `${currentPlatform()}-recordreplay.tgz`;
+  let driverArchive = `${currentPlatform()}-recordreplay${archSuffix}.tgz`;
   let downloadArchive = driverArchive;
   if (process.env.DRIVER_REVISION) {
     downloadArchive = `${currentPlatform()}-recordreplay-${
       process.env.DRIVER_REVISION
-    }.tgz`;
+    }${archSuffix}.tgz`;
   }
   spawnChecked(
     "curl",
@@ -52,16 +59,17 @@ if (!REPLAY_LOCAL_DRIVER_DIR) {
   fs.unlinkSync(driverArchive);
 }
 
-
-let driverFile = `${currentPlatform()}-recordreplay.${driverExtension()}`;
-let driverJSON = `${currentPlatform()}-recordreplay.json`;
+let driverFile = `${currentPlatform()}-recordreplay${archSuffix}.${driverExtension()}`;
+let driverJSON = `${currentPlatform()}-recordreplay${archSuffix}.json`;
 if (REPLAY_LOCAL_DRIVER_DIR) {
   driverFile = path.resolve(REPLAY_LOCAL_DRIVER_DIR, driverFile);
   driverJSON = path.resolve(REPLAY_LOCAL_DRIVER_DIR, driverJSON);
 }
 
 // Embed the driver in the source.
-console.log(`Embedding ${REPLAY_LOCAL_DRIVER_DIR ? 'LOCAL' : 'DOWNLOADED'} driver...`);
+console.log(
+  `Embedding ${REPLAY_LOCAL_DRIVER_DIR ? "LOCAL" : "DOWNLOADED"} driver...`
+);
 const driverContents = fs.readFileSync(driverFile);
 const { revision: driverRevision, date: driverDate } = JSON.parse(
   fs.readFileSync(driverJSON, "utf8")
@@ -77,34 +85,40 @@ let driverString = "";
 for (let i = 0; i < driverContents.length; i++) {
   driverString += `\\${driverContents[i].toString(8)}`;
 }
+
+const buildkiteSuffix = process.env["BUILDKITE"] ? "-buildkite" : "";
+const buildId = `${computeBuildId(driverDate, driverRevision)}${buildkiteSuffix}`;
+
 fs.writeFileSync(
   `${__dirname}/base/record_replay_driver.cc`,
   `
 namespace recordreplay {
   char gRecordReplayDriver[] = "${driverString}";
   int gRecordReplayDriverSize = ${driverContents.length};
-  char gBuildId[] = "${computeBuildId()}";
+  char gBuildId[] = "${buildId}";
 }
 `
 );
 
-console.log(`Preparing...`);
 const useGoma = !process.env.NO_GOMA;
+const goma_ctl = currentPlatform() == "windows" ? "goma_ctl.bat" : "goma_ctl";
 if (useGoma) {
   // ensure goma is started for cloud builds with engflow
-  spawnChecked("goma_ctl", ["restart"]);
+  spawnChecked(goma_ctl, ["ensure_start"]);
 }
 
 // ensure that build configuration is written with correct paths
-spawnChecked("gn", ["gen", "out/Release"]);
+const gn = currentPlatform() == "windows" ? "gn.bat" : "gn";
+spawnChecked(gn, ["gen", outdir]);
 
 console.log(`Building...`);
-spawnChecked("autoninja", ["-C", "out/Release", "chrome"], {
+const autoninja =
+  currentPlatform() == "windows" ? "autoninja.bat" : "autoninja";
+spawnChecked(autoninja, ["-C", outdir, "chrome"], {
   stdio: "inherit",
 });
 
 console.log(`Build finished.`);
-
 
 function spawnChecked(cmd, args, options) {
   const prettyCmd = [cmd].concat(args).join(" ");
@@ -113,9 +127,9 @@ function spawnChecked(cmd, args, options) {
   const rv = spawnSync(cmd, args, options);
 
   if (rv.status != 0 || rv.error) {
-    console.error('Process failed:', rv.error || '');
-    console.log(rv.stdout.toString() || '');
-    console.error(rv.stderr.toString() || '');
+    console.error("Process failed:", rv.error || "");
+    console.log(rv.stdout.toString() || "");
+    console.error(rv.stderr.toString() || "");
     throw new Error(`Spawned process failed with exit code ${rv.status}`);
   }
 
@@ -128,6 +142,8 @@ function currentPlatform() {
       return "macOS";
     case "linux":
       return "linux";
+    case "win32":
+      return "windows";
     default:
       throw new Error(`Platform ${process.platform} not supported`);
   }
@@ -137,7 +153,28 @@ function driverExtension() {
   return currentPlatform() == "windows" ? "dll" : "so";
 }
 
-function computeBuildId() {
+/**
+ * @returns {string} "YYYYMMDD" format of UTC timestamp of given revision.
+ */
+function getRevisionDate(revision = "HEAD", spawnOptions) {
+  const dateString = spawnChecked(
+    "git",
+    ["show", revision, "--pretty=%cd", "--date=iso-strict", "--no-patch"],
+    spawnOptions
+  )
+    .stdout.toString()
+    .trim();
+
+  // convert to UTC -> then get the date only
+  // explanations: https://github.com/replayio/backend/pull/7115#issue-1587869475
+  return new Date(dateString).toISOString().substring(0, 10).replace(/-/g, "");
+}
+
+/**
+ * WARNING: We have copy-and-pasted `computeBuildId` into all our runtimes and `backend`.
+ * When changing this: always keep all versions of this in sync, or else, builds will break.
+ */
+function computeBuildId(driverDate, driverRevision) {
   // Note: this build ID doesn't include revision etc. information for v8 or other inner git
   // repositories. It would be good to either fix this or enforce that the chromium revision
   // gets bumped whenever an inner repository changes.
@@ -148,19 +185,11 @@ function computeBuildId() {
   ])
     .stdout.toString()
     .trim();
-  const chromiumDate = spawnChecked("git", [
-    "show",
-    "HEAD",
-    "--pretty=%cd",
-    "--date=short",
-    "--no-patch",
-  ])
-    .stdout.toString()
-    .trim()
-    .replace(/-/g, "");
+
+  const runtimeDate = getRevisionDate();
 
   // Use the later of the two dates in the build ID.
-  const date = +chromiumDate >= +driverDate ? chromiumDate : driverDate;
+  const date = +runtimeDate >= +driverDate ? runtimeDate : driverDate;
 
   return `${currentPlatform()}-chromium-${date}-${chromiumRevision}-${driverRevision}`;
 }

@@ -293,12 +293,20 @@ class MultiplexRouter::MessageWrapper {
   // handles.
   Message DeserializeEndpointHandlesAndTake() {
     if (!value_.DeserializeAssociatedEndpointHandles(router_)) {
+      // https://linear.app/replay/issue/RUN-1228
+      // Not asserting here because the location where false is returned
+      // in the call above is asserted instead.
+
       // The previous call may have deserialized part of the associated
       // interface endpoint handles. They must be destroyed outside of the
       // router's lock, so we cannot wait until destruction of MessageWrapper.
       value_.Reset();
       return Message();
     }
+
+    // https://linear.app/replay/issue/RUN-1228
+    recordreplay::Assert("[RUN-1228] MessageWrapper::DeserializeEndpointHandlesAndTake #2 isNull=%d",
+      value_.IsNull());
     return std::move(value_);
   }
 
@@ -404,11 +412,6 @@ MultiplexRouter::MultiplexRouter(
 }
 
 void MultiplexRouter::StartReceiving() {
-  // https://linear.app/replay/issue/RUN-999
-  recordreplay::Diagnostic("[RUN-999] MultiplexRouter::StartReceiving %d %d",
-                           recordreplay::AreEventsDisallowed(),
-                           recordreplay::AreEventsPassedThrough());
-
   connector_.set_connection_error_handler(
       base::BindOnce(&MultiplexRouter::OnPipeConnectionError,
                      base::Unretained(this), false /* force_async_dispatch */));
@@ -511,6 +514,11 @@ ScopedInterfaceEndpointHandle MultiplexRouter::CreateLocalEndpointHandle(
 void MultiplexRouter::CloseEndpointHandle(
     InterfaceId id,
     const absl::optional<DisconnectReason>& reason) {
+  recordreplay::Assert(
+      "[RUN-1209-1784] MultiplexRouter::CloseEndpointHandle %u %d %d %u %s", id,
+      IsValidInterfaceId(id), IsPrimaryInterfaceId(id), 
+      reason.has_value() ? reason->custom_reason : (uint32_t)-1,
+      reason.has_value() ? reason->description.c_str() : "");
   if (!IsValidInterfaceId(id))
     return;
 

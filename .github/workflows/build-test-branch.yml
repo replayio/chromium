@@ -2,6 +2,21 @@ name: Build/Test Branch
 on:
   workflow_dispatch:
     inputs:
+      linux_build:
+        description: "Build and run tests on linux"
+        type: boolean
+        required: false
+        default: "true"
+      mac_build:
+        description: "Build and run tests on macOS"
+        type: boolean
+        required: false
+        default: "false"
+      windows_build:
+        description: "Build and run tests on windows"
+        type: boolean
+        required: false
+        default: "false"
       driver_revision:
         description: "Driver revision to use, if not the latest"
         required: false
@@ -12,13 +27,9 @@ on:
       slot:
         description: "Checked out repository slot to use"
         required: false
-      run_static_tests:
-        description: "Run static tests"
-        type: boolean
-        required: false
-        default: "true"
       num_static_tests:
         description: "Number of static tests to run"
+        default: "30"
         required: false
       run_test_suites:
         description: "Run test suites"
@@ -39,21 +50,27 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Connect to Tailscale
-        uses: tailscale/github-action@e870a1112fcc1faeeeeea3c1b0ce544e5ad01844
+        uses: tailscale/github-action@v1
         with:
           authkey: ${{ secrets.TAILSCALE_API_KEY }}
-          version: 1.28.0
-      - uses: actions/checkout@v2
+          version: 1.38.4
+          args: "--accept-dns=true"
+      - uses: Bhacaz/checkout-files@v2
+        with:
+          files: .github
+          branch: ${{ github.head_ref || github.ref_name }}
       - uses: ./.github/actions/build-test-branch
         env:
           BUILD_TEST_AUTHORIZATION: ${{ secrets.BUILD_TEST_AUTHORIZATION }}
           BUILD_TEST_HOSTNAME: a49855c191a944333918aea7ad31bc76-6a8a830d89921d8a.elb.us-east-2.amazonaws.com
           BUILD_TEST_PORT: ${{ secrets.BUILD_TEST_PORT }}
           BUILD_TEST_INSECURE: ${{ secrets.BUILD_TEST_INSECURE }}
+          INPUT_LINUX_BUILD: ${{ github.event.inputs.linux_build }}
+          INPUT_MAC_BUILD: ${{ github.event.inputs.mac_build }}
+          INPUT_WINDOWS_BUILD: ${{ github.event.inputs.windows_build }}
           INPUT_DRIVER_REVISION: ${{ github.event.inputs.driver_revision }}
           INPUT_CLOBBER: ${{ github.event.inputs.clobber }}
           INPUT_SLOT: ${{ github.event.inputs.slot }}
-          INPUT_RUN_STATIC_TESTS: ${{ github.event.inputs.run_static_tests }}
           INPUT_NUM_STATIC_TESTS: ${{ github.event.inputs.num_static_tests }}
           INPUT_RUN_TEST_SUITES: ${{ github.event.inputs.run_test_suites }}
           INPUT_TEST_SUITES_FILTER: ${{ github.event.inputs.test_suites_filter }}

@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/core/css/style_recalc_change.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/dom/pseudo_element.h"
@@ -28,15 +29,19 @@ bool StyleRecalcChange::TraverseChild(const Node& node) const {
 }
 
 bool StyleRecalcChange::ShouldRecalcStyleFor(const Node& node) const {
-  if (flags_ & kSuppressRecalc)
+  if (flags_ & kSuppressRecalc) {
     return false;
-  if (RecalcChildren())
+  }
+  if (RecalcChildren()) {
     return true;
-  if (node.NeedsStyleRecalc())
+  }
+  if (node.NeedsStyleRecalc()) {
     return true;
+  }
   // Early exit before getting the computed style.
-  if (!RecalcContainerQueryDependent())
+  if (!RecalcContainerQueryDependent()) {
     return false;
+  }
   const ComputedStyle* old_style = node.GetComputedStyle();
   // Container queries may affect display:none elements, and we since we store
   // that dependency on ComputedStyle we need to recalc style for display:none

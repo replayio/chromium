@@ -305,7 +305,8 @@ class CORE_EXPORT LocalFrameView final
   void SetMediaType(const AtomicString&);
   void AdjustMediaTypeForPrinting(bool printing);
 
-  typedef HeapHashSet<Member<LayoutObject>> ObjectSet;
+  typedef HeapHashSet<Member<LayoutObject>,
+                      WTF::MemberHashRecordReplayId<LayoutObject>> ObjectSet;
   void AddFixedPositionObject(LayoutObject&);
   void RemoveFixedPositionObject(LayoutObject&);
   const ObjectSet* FixedPositionObjects() const {
@@ -452,7 +453,7 @@ class CORE_EXPORT LocalFrameView final
     return is_tracking_raster_invalidations_;
   }
 
-  using ScrollableAreaSet = HeapHashSet<Member<PaintLayerScrollableArea>>;
+  using ScrollableAreaSet = HeapHashSet<Member<PaintLayerScrollableArea>, WTF::MemberHashRecordReplayId<PaintLayerScrollableArea>>;
   void AddScrollAnchoringScrollableArea(PaintLayerScrollableArea*);
   void RemoveScrollAnchoringScrollableArea(PaintLayerScrollableArea*);
   const ScrollableAreaSet* ScrollAnchoringScrollableAreas() const {
@@ -1018,7 +1019,8 @@ class CORE_EXPORT LocalFrameView final
 
   LayoutSize size_;
 
-  typedef HeapHashSet<Member<LayoutEmbeddedObject>> EmbeddedObjectSet;
+  typedef HeapHashSet<Member<LayoutEmbeddedObject>,
+                      WTF::MemberHashRecordReplayId<LayoutEmbeddedObject>> EmbeddedObjectSet;
   EmbeddedObjectSet part_update_set_;
 
   Member<LocalFrame> frame_;

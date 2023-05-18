@@ -29,6 +29,7 @@
 #include "third_party/blink/renderer/platform/fonts/font_fallback_list.h"
 
 #include "base/timer/elapsed_timer.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/platform/font_family_names.h"
 #include "third_party/blink/renderer/platform/fonts/alternate_font_family.h"
 #include "third_party/blink/renderer/platform/fonts/font_cache.h"
@@ -49,7 +50,8 @@ FontFallbackList::FontFallbackList(FontFallbackMap& font_fallback_map)
       has_custom_font_(false),
       can_shape_word_by_word_(false),
       can_shape_word_by_word_computed_(false),
-      is_invalid_(false) {}
+      is_invalid_(false),
+      record_replay_id_(recordreplay::NewIdAnyThread("FontFallbackList")) {}
 
 FontFallbackList::~FontFallbackList() {
   ReleaseFontData();
@@ -109,8 +111,9 @@ const SimpleFontData* FontFallbackList::DeterminePrimarySimpleFontDataCore(
     if (!font_data) {
       // All fonts are custom fonts and are loading. Return the first FontData.
       font_data = FontDataAt(font_description, 0);
-      if (font_data)
+      if (font_data) {
         return font_data->FontDataForCharacter(kSpaceCharacter);
+      }
 
       FontCache& font_cache = FontCache::Get();
       SimpleFontData* last_resort_fallback =
@@ -130,15 +133,17 @@ const SimpleFontData* FontFallbackList::DeterminePrimarySimpleFontDataCore(
     // When a custom font is loading, we should use the correct fallback font to
     // layout the text.  Here skip the temporary font for the loading custom
     // font which may not act as the correct fallback font.
-    if (!font_data_for_space->IsLoadingFallback())
+    if (!font_data_for_space->IsLoadingFallback()) {
       return font_data_for_space;
+    }
 
     if (segmented) {
       for (unsigned i = 0; i < segmented->NumFaces(); i++) {
         const SimpleFontData* range_font_data =
             segmented->FaceAt(i)->FontData();
-        if (!range_font_data->IsLoadingFallback())
+        if (!range_font_data->IsLoadingFallback()) {
           return range_font_data;
+        }
       }
       if (font_data->IsLoading())
         should_load_custom_font = false;

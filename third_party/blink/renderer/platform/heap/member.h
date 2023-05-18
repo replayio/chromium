@@ -5,6 +5,9 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_HEAP_MEMBER_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_HEAP_MEMBER_H_
 
+#include "base/check_op.h"
+#include "base/record_replay.h"
+#include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/heap/thread_state_storage.h"
 #include "third_party/blink/renderer/platform/heap/write_barrier.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
@@ -91,22 +94,151 @@ struct MemberHash
   }
 };
 
+// Replay's hashing function with Member<>-wrapped objects, using the registered
+// pointer id.
+template <typename T>
+struct MemberHashRecordReplayRegisteredPointerId
+    : IntHash<cppgc::internal::MemberBase::RawStorage::IntegralType> {
+  using Base = IntHash<cppgc::internal::MemberBase::RawStorage::IntegralType>;
+  STATIC_ONLY(MemberHashRecordReplayRegisteredPointerId);
+  // Heap hash containers allow to operate with raw pointers, e.g.
+  //   HeapHashSet<Member<GCed>> set;
+  //   set.find(raw_ptr);
+  // Therefore, provide two hashing functions, one for raw pointers, another for
+  // Member. Prefer compressing raw pointers instead of decompressing Members,
+  // assuming the former is cheaper.
+  static unsigned GetHash(const T* key) {
+    if (recordreplay::IsRecordingOrReplaying("pointer-ids")) {
+      int ptr = recordreplay::PointerId(key);
+      if (ptr) {
+        return Base::GetHash(ptr);
+      }
+    }
+    cppgc::internal::MemberBase::RawStorage st(key);
+    return Base::GetHash(st.GetAsInteger());
+  }
+
+  template <typename Member,
+            std::enable_if_t<WTF::IsAnyMemberType<Member>::value>* = nullptr>
+  static unsigned GetHash(const Member& m) {
+    if (recordreplay::IsRecordingOrReplaying("pointer-ids")) {
+      int ptr = recordreplay::PointerId(m.Get());
+      if (ptr) {
+        return Base::GetHash(ptr);
+      }
+    }
+    return Base::GetHash(m.GetRawStorage().GetAsInteger());
+  }
+
+  template <typename U, typename V>
+  static bool Equal(const U& a, const V& b) {
+    return a == b;
+  }
+
+  static constexpr bool kIsRecordReplayDeterministicHash = true;
+};
+
+// Replay's hashing function with Member<>-wrapped objects, using the function
+// RecordReplayId for the hashing key.
+template <typename T>
+struct MemberHashRecordReplayId
+    : IntHash<cppgc::internal::MemberBase::RawStorage::IntegralType> {
+  using Base = IntHash<cppgc::internal::MemberBase::RawStorage::IntegralType>;
+  STATIC_ONLY(MemberHashRecordReplayId);
+  // Heap hash containers allow to operate with raw pointers, e.g.
+  //   HeapHashSet<Member<GCed>> set;
+  //   set.find(raw_ptr);
+  // Therefore, provide two hashing functions, one for raw pointers, another for
+  // Member. Prefer compressing raw pointers instead of decompressing Members,
+  // assuming the former is cheaper.
+  static unsigned GetHash(const T* key) {
+    if (recordreplay::IsRecordingOrReplaying()) {
+      int id = key->RecordReplayId();
+      // Ids are allowed to be zero if we've diverged from the recording.
+      if (recordreplay::HasDivergedFromRecording()) {
+        if (id > 0) {
+          return Base::GetHash(id);
+        } else {
+          cppgc::internal::MemberBase::RawStorage st(key);
+          return Base::GetHash(st.GetAsInteger());
+        }
+      } else {
+        CHECK(id > 0); // Should have been registered.
+        return Base::GetHash(id);
+      }
+    } else {
+      cppgc::internal::MemberBase::RawStorage st(key);
+      return Base::GetHash(st.GetAsInteger());
+    }
+  }
+
+  template <typename Member,
+            std::enable_if_t<WTF::IsAnyMemberType<Member>::value>* = nullptr>
+  static unsigned GetHash(const Member& m) {
+    if (recordreplay::IsRecordingOrReplaying()) {
+      int id = m.Get()->RecordReplayId();
+      // Ids are allowed to be zero if we've diverged from the recording.
+      if (recordreplay::HasDivergedFromRecording()) {
+        if (id > 0) {
+          return Base::GetHash(id);
+        } else {
+          return Base::GetHash(m.GetRawStorage().GetAsInteger());
+        }
+      } else {
+        CHECK(id > 0); // Should have been registered.
+        return Base::GetHash(id);
+      }
+    } else {
+      return Base::GetHash(m.GetRawStorage().GetAsInteger());
+    }
+  }
+
+  template <typename U, typename V>
+  static bool Equal(const U& a, const V& b) {
+    return a == b;
+  }
+
+  static constexpr bool kIsRecordReplayDeterministicHash = true;
+};
+
+template <typename T>
+class HasRecordReplayId {
+  template <typename U>
+  static auto Check(U* u) -> decltype(u->RecordReplayId(), std::true_type());
+  template <typename>
+  static std::false_type Check(...);
+
+ public:
+  static constexpr bool value = decltype(Check<T>(nullptr))::value;
+};
+
+template <typename T>
+constexpr bool has_record_replay_id = HasRecordReplayId<T>::value;
+
+// TODO: Consider making the default hash configurable at compile time so we
+//       can compare the behavior and performance across different combinations
+//       of configuration options.
+template <typename T>
+using DefaultHashTypeForMember = std::conditional_t<has_record_replay_id<T>,
+                                                    MemberHashRecordReplayId<T>,
+                                                    MemberHash<T>>;
+
 template <typename T>
 struct DefaultHash<blink::Member<T>> {
   STATIC_ONLY(DefaultHash);
-  using Hash = MemberHash<T>;
+  using Hash = DefaultHashTypeForMember<T>;
 };
 
 template <typename T>
 struct DefaultHash<blink::WeakMember<T>> {
   STATIC_ONLY(DefaultHash);
-  using Hash = MemberHash<T>;
+  using Hash = DefaultHashTypeForMember<T>;
 };
 
 template <typename T>
 struct DefaultHash<blink::UntracedMember<T>> {
   STATIC_ONLY(DefaultHash);
-  using Hash = MemberHash<T>;
+  using Hash = DefaultHashTypeForMember<T>;
 };
 
 template <typename T>
@@ -223,6 +355,12 @@ class ConstructTraits<blink::Member<T>, Traits, Allocator> final
 template <typename T, typename Traits, typename Allocator>
 class ConstructTraits<blink::WeakMember<T>, Traits, Allocator> final
     : public MemberConstructTraits<blink::WeakMember<T>> {};
+
+template <typename T>
+struct IsPointerType<blink::WeakMember<T>> : std::true_type {};
+
+template <typename T>
+struct IsPointerType<blink::Member<T>> : std::true_type {};
 
 }  // namespace WTF
 

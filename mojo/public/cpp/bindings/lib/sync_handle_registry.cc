@@ -20,9 +20,13 @@
 
 #include "base/record_replay.h"
 
+namespace recordreplay {
+
 // Used to make sure we finish recordings on the main thread, even if we're
 // blocked in a sync event.
-extern "C" void V8RecordReplayMaybeTerminate(void (*callback)(void*), void* data);
+void MaybeTerminate(void (*callback)(void*), void* data);
+
+} // namespace recordreplay
 
 namespace mojo {
 
@@ -136,11 +140,21 @@ bool SyncHandleRegistry::Wait(const bool* should_stop[], size_t count) {
   MojoResult ready_handle_result;
 
   scoped_refptr<SyncHandleRegistry> preserver(this);
-  while (true) {
-    V8RecordReplayMaybeTerminate(nullptr, nullptr);
+  
+  // Add a quit event that the recorder can use to signal this thread to
+  // wake up and terminate.
+  base::WaitableEvent quitEvent;
+  wait_set_.AddEvent(&quitEvent);
+  recordreplay::MaybeTerminate([](void* data){
+    ((base::WaitableEvent*)data)->Signal();
+  }, (void*)&quitEvent);
 
+  while (true) {
     for (size_t i = 0; i < count; ++i) {
       if (*should_stop[i]) {
+        wait_set_.RemoveEvent(&quitEvent);
+        // Don't forget to clear the wait handler.
+        recordreplay::MaybeTerminate(nullptr, nullptr);
         return true;
       }
     }
@@ -151,6 +165,12 @@ bool SyncHandleRegistry::Wait(const bool* should_stop[], size_t count) {
     num_ready_handles = 1;
     wait_set_.Wait(&ready_event, &num_ready_handles, &ready_handle,
                    &ready_handle_result);
+
+    // We've just woken up, so maybe we have to terminate.
+    if (quitEvent.IsSignaled()) {
+      recordreplay::MaybeTerminate(nullptr, nullptr);
+    }
+
     if (num_ready_handles) {
       DCHECK_EQ(1u, num_ready_handles);
       const auto iter = handles_.find(ready_handle);

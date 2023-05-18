@@ -1269,8 +1269,7 @@ void ResourceLoader::DidStartLoadingResponseBody(
 void ResourceLoader::DidReceiveData(const char* data, int length) {
   CHECK_GE(length, 0);
 
-  // https://linear.app/replay/issue/RUN-966
-  recordreplay::Assert("ResourceLoader::DidReceiveData %d", length);
+  recordreplay::Assert("[RUN-1436] ResourceLoader::DidReceiveData %d", length);
 
   if (PermitRecordReplayBrowserEvents()) {
     base::DictionaryValue dict;
@@ -1569,6 +1568,18 @@ void ResourceLoader::RequestAsynchronously(const ResourceRequestHead& request) {
   scoped_refptr<EncodedFormData> form_body = request_body_.FormBody();
   PopulateResourceRequest(request, std::move(request_body_),
                           network_resource_request.get());
+
+  recordreplay::Assert(
+      "[RUN-1725-1852] ResourceLoader::RequestAsynchronously %zu %zu %zu %zu",
+      network_resource_request->method.size(),
+      network_resource_request->fetch_integrity.size(),
+      network_resource_request->devtools_request_id
+          ? network_resource_request->devtools_request_id->size()
+          : 0,
+      network_resource_request->devtools_stack_id
+          ? network_resource_request->devtools_stack_id->size()
+          : 0);
+
   if (form_body)
     request_body_ = ResourceRequestBody(std::move(form_body));
   loader_->LoadAsynchronously(

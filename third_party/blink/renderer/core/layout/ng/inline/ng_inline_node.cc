@@ -1257,6 +1257,7 @@ void NGInlineNode::ShapeText(NGInlineItemsData* data,
                              const String* previous_text,
                              const HeapVector<NGInlineItem>* previous_items,
                              const Font* override_font) const {
+
   TRACE_EVENT0("fonts", "NGInlineNode::ShapeText");
   const String& text_content = data->text_content;
   HeapVector<NGInlineItem>* items = &data->items;
@@ -1503,6 +1504,7 @@ void NGInlineNode::ShapeTextIncludingFirstLine(
     NGInlineNodeData* data,
     const String* previous_text,
     const HeapVector<NGInlineItem>* previous_items) const {
+
   DCHECK_NE(new_state, NGInlineNodeData::kShapingNone);
   data->shaping_state_ = new_state;
 #if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID)
@@ -1513,6 +1515,7 @@ void NGInlineNode::ShapeTextIncludingFirstLine(
 #endif
 
   ShapeText(data, previous_text, previous_items);
+
   if (new_state == NGInlineNodeData::kShapingDone)
     ShapeTextForFirstLineIfNeeded(data);
 }
@@ -1905,6 +1908,7 @@ MinMaxSizesResult NGInlineNode::ComputeMinMaxSizes(
     WritingMode container_writing_mode,
     const NGConstraintSpace& space,
     const MinMaxSizesFloatInput& float_input) const {
+
   PrepareLayoutIfNeeded();
   ShapeTextOrDefer(space);
 

@@ -11,10 +11,14 @@ sendBuildTestRequest({
   name: `Chromium Build/Test ${revision}`,
   tasks: [
     ...platformTasks("linux"),
+    ...platformTasks("macOS"),
+    //...platformTasks("windows"),
   ],
 });
 
 function platformTasks(platform) {
+  const tasks = [];
+
   const buildTask = newTask(
     `Build Chromium ${platform}`,
     {
@@ -23,7 +27,22 @@ function platformTasks(platform) {
       revision,
     },
     platform
-  )
+  );
+  tasks.push(buildTask);
+
+  if (platform == "macOS") {
+    const buildARMTask = newTask(
+      `Build Chromium ${platform} ARM`,
+      {
+        kind: "BuildRuntime",
+        runtime: "chromium",
+        revision,
+        useARM: true,
+      },
+      platform
+    );
+    tasks.push(buildARMTask);
+  }
 
   const testStaticTask = newTask(
     `Chromium Static Tests ${platform}`,
@@ -35,17 +54,22 @@ function platformTasks(platform) {
     platform,
     [buildTask]
   );
+  tasks.push(testStaticTask);
 
-  const testPlaywrightTask = newTask(
-    `Chromium Playwright Tests ${platform}`,
-    {
-      kind: "PlaywrightLiveTests",
-      runtime: "chromium",
-      revision,
-    },
-    platform,
-    [buildTask]
-  );
+  // Playwright tests are currently only supported on linux.
+  if (process.platform == "linux") {
+    const testPlaywrightTask = newTask(
+      `Chromium Playwright Tests ${platform}`,
+      {
+        kind: "PlaywrightLiveTests",
+        runtime: "chromium",
+        revision,
+      },
+      platform,
+      [buildTask]
+    );
+    tasks.push(testPlaywrightTask);
+  }
 
-  return [buildTask, testStaticTask, testPlaywrightTask];
+  return tasks;
 }

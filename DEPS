@@ -307,11 +307,11 @@ vars = {
   # Three lines of non-changing comments so that
   # the commit queue can handle CLs rolling Skia
   # and whatever else without interference from each other.
-  'skia_revision': 'f60790fa97bce2547cdcb83815957f564b3d793b',
+  'skia_revision': '07263efcac426532e54328429704291cd1be7f9d',
   # Three lines of non-changing comments so that
   # the commit queue can handle CLs rolling V8
   # and whatever else without interference from each other.
-  'v8_revision': '993ce4f2437a8a6382750d02f463aafe10c98876',
+  'v8_revision': 'f63b17d58b3586e2ab2a0d1131df597ae611b7a3',
   # Three lines of non-changing comments so that
   # the commit queue can handle CLs rolling swarming_client
   # and whatever else without interference from each other.
@@ -334,7 +334,7 @@ vars = {
   #
   # Note this revision should be updated with
   # third_party/boringssl/roll_boringssl.py, not roll-dep.
-  'boringssl_revision': '1ee71185a2322dc354bee5e5a0abfb1810a27dc6',
+  'boringssl_revision': '40ba057785b3e6dcb4266e7df99eb43f04eaebe9',
   # Three lines of non-changing comments so that
   # the commit queue can handle CLs rolling Fuchsia sdk
   # and whatever else without interference from each other.
@@ -1164,7 +1164,7 @@ deps = {
   },
 
   'src/third_party/boringssl/src':
-    Var('boringssl_git') + '/boringssl.git' + '@' +  Var('boringssl_revision'),
+    'https://github.com/replayio/boringssl' + '@' +  Var('boringssl_revision'),
 
   'src/third_party/breakpad/breakpad':
     Var('chromium_git') + '/breakpad/breakpad.git' + '@' + 'e085b3b50bde862d0cf3ce4594e3f391bcf5faec',
@@ -1855,7 +1855,7 @@ deps = {
     Var('chromium_git') + '/external/github.com/gpuweb/cts.git' + '@' + 'eba1a78f3d741241b0dbee728561b61e9587a686',
 
   'src/third_party/webrtc':
-    'https://github.com/replayio/chromium-webrtc.git' + '@' + '87b1d6a77fe14d4b58254d5ec9dbfeec3c4c3a69',
+    'https://github.com/replayio/chromium-webrtc.git' + '@' + '09158f12eaedb115c8cb2da37e4e09a2b35fa86a',
 
   # Wuffs' canonical repository is at github.com/google/wuffs, but we use
   # Skia's mirror of Wuffs, the same as in upstream Skia's DEPS file.

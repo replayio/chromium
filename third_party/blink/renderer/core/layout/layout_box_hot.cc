@@ -99,6 +99,10 @@ const NGLayoutResult* LayoutBox::CachedLayoutResult(
     const NGColumnSpannerPath* column_spanner_path,
     absl::optional<NGFragmentGeometry>* initial_fragment_geometry,
     NGLayoutCacheStatus* out_cache_status) {
+  recordreplay::Assert("[RUN-1855-1862] LayoutBox::CachedLayoutResult %d new(%s)",
+    RecordReplayId(),
+    new_space.ToString().Ascii().c_str()
+  );
   NOT_DESTROYED();
   *out_cache_status = NGLayoutCacheStatus::kNeedsLayout;
 
@@ -140,7 +144,9 @@ const NGLayoutResult* LayoutBox::CachedLayoutResult(
       NeedsSimplifiedNormalFlowLayout() ||
       (NeedsPositionedMovementLayout() &&
        !NeedsPositionedMovementLayoutOnly())) {
+
     if (!ChildrenInline()) {
+
       // Check if we only need "simplified" layout. We don't abort yet, as we
       // need to check if other things (like floats) will require us to perform
       // a full layout.
@@ -150,6 +156,7 @@ const NGLayoutResult* LayoutBox::CachedLayoutResult(
       cache_status = NGLayoutCacheStatus::kNeedsSimplifiedLayout;
     } else if (!NeedsSimplifiedLayoutOnly() ||
                NeedsSimplifiedNormalFlowLayout()) {
+
       // We don't regenerate any lineboxes during our "simplified" layout pass.
       // If something needs "simplified" layout within a linebox, (e.g. an
       // atomic-inline) we miss the cache.
@@ -179,6 +186,7 @@ const NGLayoutResult* LayoutBox::CachedLayoutResult(
 
       cache_status = NGLayoutCacheStatus::kCanReuseLines;
     } else {
+
       cache_status = NGLayoutCacheStatus::kNeedsSimplifiedLayout;
     }
   }
@@ -262,6 +270,7 @@ const NGLayoutResult* LayoutBox::CachedLayoutResult(
     if (!is_new_formatting_context &&
         (!are_bfc_offsets_equal || !is_exclusion_space_equal ||
          !is_margin_strut_equal || !is_clearance_offset_equal)) {
+
       DCHECK(!CreatesNewFormattingContext());
 
       // If we have a different BFC offset, or exclusion space we can't perform
@@ -284,6 +293,7 @@ const NGLayoutResult* LayoutBox::CachedLayoutResult(
     }
 
     if (UNLIKELY(new_space.HasBlockFragmentation())) {
+
       DCHECK(old_space.HasBlockFragmentation());
 
       // Sometimes we perform simplified layout on a block-flow which is just
@@ -319,6 +329,7 @@ const NGLayoutResult* LayoutBox::CachedLayoutResult(
       // be sure that this is the case, we need to miss the cache.
       if (new_space.IsInitialColumnBalancingPass()) {
         if (!old_space.IsInitialColumnBalancingPass()) {
+
           // If the previous result was generated with a known fragmentainer
           // size (i.e. not in the initial column balancing pass),
           // TallestUnbreakableBlockSize() won't be stored in the layout result,
@@ -343,6 +354,7 @@ const NGLayoutResult* LayoutBox::CachedLayoutResult(
                      old_space.FragmentainerBlockSize() ||
                  new_space.FragmentainerOffset() !=
                      old_space.FragmentainerOffset()) {
+
         // The fragment block-offset will either change, or the fragmentainer
         // block-size has changed. If the node is fragmented, we're going to
         // have to refragment, since the fragmentation line has moved,
@@ -400,6 +412,7 @@ const NGLayoutResult* LayoutBox::CachedLayoutResult(
         };
 
         if (!bfc_block_offset && cached_layout_result->IsSelfCollapsing()) {
+
           // Self-collapsing blocks may have floats and OOF descendants.
           // Checking if floats cross the fragmentation line is easy enough
           // (check the exclusion space), but we currently have no way of
@@ -418,6 +431,7 @@ const NGLayoutResult* LayoutBox::CachedLayoutResult(
           // fragmentation calculation above, unlike block formatting contexts).
           if (physical_fragment.IsInlineFormattingContext() &&
               !is_new_formatting_context) {
+
             if (DoFloatsCrossFragmentationLine())
               return nullptr;
           }
@@ -454,6 +468,7 @@ const NGLayoutResult* LayoutBox::CachedLayoutResult(
       }
     }
   }
+
 
   // Simplified layout doesn't support fragmented nodes.
   if (is_fragmented &&
@@ -525,6 +540,7 @@ const NGLayoutResult* LayoutBox::CachedLayoutResult(
   // were equal.
   if (are_bfc_offsets_equal && is_exclusion_space_equal &&
       is_margin_strut_equal && !needs_cached_result_update) {
+
     // In order not to rebuild the internal derived-geometry "cache" of float
     // data, we need to move this to the new "output" exclusion space.
     cached_layout_result->ExclusionSpace().MoveAndUpdateDerivedGeometry(

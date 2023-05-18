@@ -211,10 +211,14 @@ class CORE_EXPORT WorkerThread : public Thread::TaskObserver {
     unsigned called_worker_count = 0;
 
     std::vector<WorkerThread*> threads;
-    for (WorkerThread* thread : WorkerThreads())
+    for (WorkerThread* thread : WorkerThreads()) {
       threads.push_back(thread);
+    }
     std::sort(threads.begin(), threads.end(),
               recordreplay::CompareByPointerId());
+
+    recordreplay::Assert("[RUN-1537-1689] CallOnAllWorkerThreads %zu",
+                         threads.size());
 
     for (WorkerThread* thread : threads) {
       PostCrossThreadTask(

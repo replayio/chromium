@@ -873,6 +873,13 @@ void NodeChannel::OfferChannelUpgrade() {
 #endif
 }
 
+void NodeChannel::Release() {
+  recordreplay::Assert("[RUN-1307-1830] NodeChannel::Release %d %d",
+                       HasOneRef(),
+                       owning_task_runner()->RunsTasksInCurrentSequence());
+  base::RefCountedDeleteOnSequence<NodeChannel>::Release();
+}
+
 uint64_t NodeChannel::RemoteCapabilities() const {
   return remote_capabilities_;
 }

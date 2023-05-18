@@ -629,6 +629,8 @@ bool InterfaceEndpointClient::SendMessageWithResponder(
     SyncSendMode sync_send_mode,
     std::unique_ptr<MessageReceiver> responder) {
   RecordReplayEnsureConsistentMessageSize(message);
+  recordreplay::Assert(
+      "[RUN-1307-1773] InterfaceEndpointClient::SendMessageWithResponder");
 
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(message->has_flag(Message::kFlagExpectsResponse));
@@ -946,6 +948,10 @@ bool InterfaceEndpointClient::HandleValidatedMessage(Message* message) {
 
                 perfetto::Flow::Global(message->GetTraceId())(ctx);
               });
+
+  recordreplay::Assert("[RUN-1489-1494] HandleValidatedMessage %lu %lu %lu %lu",
+                       handle_.id(), message->interface_id(),
+                       message->header()->flags, message->header()->name);
 
   DCHECK_EQ(handle_.id(), message->interface_id());
 

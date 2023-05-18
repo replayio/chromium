@@ -41,6 +41,7 @@
 #include "base/logging.h"
 #include "base/numerics/clamped_math.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
@@ -245,6 +246,10 @@ class LayoutUnit {
 
   LayoutUnit AddEpsilon() const {
     LayoutUnit return_value;
+
+    // https://linear.app/replay/issue/RUN-1239#comment-df307091
+    recordreplay::Assert("[RUN-1239-1435] LayoutUnit::AddEpsilon %d", value_);
+
     return_value.SetRawValue(
         value_ < std::numeric_limits<int>::max() ? value_ + 1 : value_);
     return return_value;

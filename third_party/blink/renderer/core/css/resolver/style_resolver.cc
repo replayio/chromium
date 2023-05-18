@@ -2137,6 +2137,7 @@ void StyleResolver::CascadeAndApplyMatchedProperties(StyleResolverState& state,
         ComputedStyle::Clone(state.StyleRef());
     // Re-apply all overlapping properties (both legacy and non-legacy).
     apply(CascadeFilter(CSSProperty::kOverlapping, false));
+
     UseCountLegacyOverlapping(GetDocument(), *non_legacy_style,
                               state.StyleRef());
   }

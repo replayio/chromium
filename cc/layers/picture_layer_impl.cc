@@ -427,6 +427,7 @@ void PictureLayerImpl::AppendQuads(viz::CompositorRenderPass* render_pass,
 
   // Keep track of the tilings that were used so that tilings that are
   // unused can be considered for removal.
+  recordreplay::Assert("[RUN-550-1536] PictureLayerImpl::AppendQuads A");
   last_append_quads_tilings_.clear();
 
   // Ignore missing tiles outside of viewport for tile priority. This is
@@ -570,10 +571,13 @@ void PictureLayerImpl::AppendQuads(viz::CompositorRenderPass* render_pass,
       only_used_low_res_last_append_quads_ = false;
 
     if (last_append_quads_tilings_.empty() ||
-        last_append_quads_tilings_.back() != iter.CurrentTiling()) {
-      last_append_quads_tilings_.push_back(iter.CurrentTiling());
+        last_append_quads_tilings_.back() != iter.CurrentTiling()->tile_id) {
+      recordreplay::Assert("[RUN-550-1536] PictureLayerImpl::AppendQuads B %d",
+                           iter.CurrentTiling()->record_replay_id_);
+      last_append_quads_tilings_.push_back(iter.CurrentTiling()->tile_id);
     }
   }
+  recordreplay::Assert("[RUN-550-1536] PictureLayerImpl::AppendQuads C");
 
   // Adjust shared_quad_state with the quad_offset, since we've adjusted each
   // quad we've appended by it.
@@ -601,11 +605,11 @@ void PictureLayerImpl::AppendQuads(viz::CompositorRenderPass* render_pass,
 
 bool PictureLayerImpl::UpdateTiles() {
   // https://linear.app/replay/issue/RUN-550
-  recordreplay::Assert("PictureLayerImpl::UpdateTiles Start %d", id());
+  recordreplay::Assert("[RUN-550] PictureLayerImpl::UpdateTiles Start %d", id());
 
   if (!CanHaveTilings()) {
     // https://linear.app/replay/issue/RUN-550
-    recordreplay::Assert("PictureLayerImpl::UpdateTiles #1");
+    recordreplay::Assert("[RUN-550] PictureLayerImpl::UpdateTiles #1");
 
     ideal_page_scale_ = 0.f;
     ideal_device_scale_ = 0.f;
@@ -620,12 +624,18 @@ bool PictureLayerImpl::UpdateTiles() {
   // only have one or two tilings (high and low res), so only clean up the
   // active layer. This cleans it up here in case AppendQuads didn't run.
   // If it did run, this would not remove any additional tilings.
+
+  // https://linear.app/replay/issue/RUN-550
+  recordreplay::Assert("[RUN-550-1409] PictureLayerImpl::UpdateTiles #2 %d",
+    (int) layer_tree_impl()->IsActiveTree());
   if (layer_tree_impl()->IsActiveTree())
     CleanUpTilingsOnActiveLayer(last_append_quads_tilings_);
 
   UpdateIdealScales();
 
   const bool should_adjust_raster_scale = ShouldAdjustRasterScale();
+  recordreplay::Assert("[RUN-550-1409] PictureLayerImpl::UpdateTiles #3 %d",
+    (int) should_adjust_raster_scale);
   if (should_adjust_raster_scale)
     RecalculateRasterScales();
   UpdateTilingsForRasterScaleAndTranslation(should_adjust_raster_scale);
@@ -686,7 +696,7 @@ bool PictureLayerImpl::UpdateTiles() {
   SanityCheckTilingState();
 
   // https://linear.app/replay/issue/RUN-550
-  recordreplay::Assert("PictureLayerImpl::UpdateTiles Done %d", updated);
+  recordreplay::Assert("[RUN-550] PictureLayerImpl::UpdateTiles Done %d", updated);
 
   return updated;
 }
@@ -1289,9 +1299,9 @@ void PictureLayerImpl::UpdateTilingsForRasterScaleAndTranslation(
   PictureLayerTiling* high_res =
       tilings_->FindTilingWithScaleKey(raster_contents_scale_key());
 
-  // https://linear.app/replay/issue/RUN-550
-  recordreplay::Assert("PictureLayerImpl::UpdateTilingsForRasterScaleAndTranslation Start %d",
-                       !!high_res);
+  recordreplay::Assert("[RUN-550] PictureLayerImpl::UpdateTilingsForRasterScaleAndTranslation Start %d %d %.2f %.2f",
+                       recordreplay::PointerId(this), !!high_res,
+                       raster_contents_scale_.x(), raster_contents_scale_.y());
 
   gfx::Vector2dF raster_translation;
   bool raster_translation_aligns_pixels =
@@ -1691,7 +1701,8 @@ void PictureLayerImpl::AdjustRasterScaleForTransformAnimation(
 }
 
 void PictureLayerImpl::CleanUpTilingsOnActiveLayer(
-    const std::vector<PictureLayerTiling*>& used_tilings) {
+    const std::vector<int>& used_tilings) {
+
   DCHECK(layer_tree_impl()->IsActiveTree());
   if (tilings_->num_tilings() == 0)
     return;

@@ -416,6 +416,17 @@ LayoutObject::~LayoutObject() {
   DCHECK(is_destroyed_);
 #endif
   InstanceCounters::DecrementCounter(InstanceCounters::kLayoutObjectCounter);
+
+  // If recording/replaying and in a nondeterministic execution, allow
+  // style_ to leak, since it may otherwise get destroyed in a
+  // non-desterministic fashion and remove itself from font-fallback-maps
+  // that are accessed deterministically.
+  // See https://linear.app/replay/issue/RUN-1758/fontfallbackmap-items-getting-removed-non-deterministically
+  if (recordreplay::IsRecordingOrReplaying("leak-references") &&
+      recordreplay::AreEventsDisallowed())
+  {
+    (void) style_.release();
+  }
 }
 
 bool LayoutObject::IsDescendantOf(const LayoutObject* obj) const {
@@ -2504,8 +2515,7 @@ void LayoutObject::SetPseudoElementStyle(
 DISABLE_CFI_PERF
 void LayoutObject::SetStyle(scoped_refptr<const ComputedStyle> style,
                             ApplyStyleChanges apply_changes) {
-  // https://linear.app/replay/issue/RUN-966
-  recordreplay::Assert("[RUN-966] LayoutObject::SetStyle %d %d %d",
+  recordreplay::Assert("[RUN-1688] LayoutObject::SetStyle %d %d %d",
                        RecordReplayId(), style_ == style, (int)apply_changes);
 
   NOT_DESTROYED();
@@ -2671,13 +2681,17 @@ void LayoutObject::SetStyle(scoped_refptr<const ComputedStyle> style,
 #endif
   }
 
+  recordreplay::Assert("[RUN-1688] LayoutObject::SetStyle #9 %d %d %d",
+                       diff.NeedsPaintInvalidation(),
+                       updated_diff.NeedsPaintInvalidation(),
+                       IsSVGRoot());
+
   if (diff.NeedsPaintInvalidation() || updated_diff.NeedsPaintInvalidation()) {
     if (IsSVGRoot()) {
       // LayoutSVGRoot::LocalVisualRect() depends on some styles.
       SetShouldDoFullPaintInvalidation();
     } else {
-      // https://linear.app/replay/issue/RUN-966
-      recordreplay::Assert("[RUN-966] LayoutObject::SetStyle #10");
+      recordreplay::Assert("[RUN-1688] LayoutObject::SetStyle #10");
 
       // We'll set needing geometry change later if the style change does cause
       // possible layout change or visual overflow change.
@@ -2709,14 +2723,12 @@ void LayoutObject::SetStyle(scoped_refptr<const ComputedStyle> style,
   }
 
   if (!IsText() && diff.CompositablePaintEffectChanged()) {
-    // https://linear.app/replay/issue/RUN-966
-    recordreplay::Assert("[RUN-966] LayoutObject::SetStyle #15");
+    recordreplay::Assert("[RUN-1688] LayoutObject::SetStyle #15");
 
     SetShouldDoFullPaintInvalidationWithoutGeometryChange();
   }
 
-  // https://linear.app/replay/issue/RUN-966
-  recordreplay::Assert("[RUN-966] LayoutObject::SetStyle Done");
+  recordreplay::Assert("[RUN-1688] LayoutObject::SetStyle Done");
 }
 
 void LayoutObject::UpdateFirstLineImageObservers(
@@ -4553,8 +4565,7 @@ void LayoutObject::
     return;
   }
 
-  // https://linear.app/replay/issue/RUN-966
-  recordreplay::Assert("[RUN-966] LayoutObject::SetShouldDoFullPaintInvalidationWithoutGeometryChangeInternal #1");
+  recordreplay::Assert("[RUN-1688] LayoutObject::SetShouldDoFullPaintInvalidationWithoutGeometryChangeInternal #1");
 
   SetShouldCheckForPaintInvalidationWithoutGeometryChange();
   if (reason == PaintInvalidationReason::kFull) {
@@ -4587,16 +4598,14 @@ void LayoutObject::SetShouldCheckForPaintInvalidation() {
 }
 
 void LayoutObject::SetShouldCheckForPaintInvalidationWithoutGeometryChange() {
-  // https://linear.app/replay/issue/RUN-966
-  recordreplay::Assert("[RUN-966] LayoutObject::SetShouldCheckForPaintInvalidationWithoutGeometryChange %d",
+  recordreplay::Assert("[RUN-1688] LayoutObject::SetShouldCheckForPaintInvalidationWithoutGeometryChange %d",
                        RecordReplayId());
 
   NOT_DESTROYED();
   if (ShouldCheckForPaintInvalidation())
     return;
 
-  // https://linear.app/replay/issue/RUN-966
-  recordreplay::Assert("[RUN-966] LayoutObject::SetShouldCheckForPaintInvalidationWithoutGeometryChange #1 %d",
+  recordreplay::Assert("[RUN-1688] LayoutObject::SetShouldCheckForPaintInvalidationWithoutGeometryChange #1 %d",
                        RecordReplayId());
 
   GetFrameView()->ScheduleVisualUpdateForPaintInvalidationIfNeeded();
@@ -4624,8 +4633,7 @@ void LayoutObject::SetMayNeedPaintInvalidationAnimatedBackgroundImage() {
   if (MayNeedPaintInvalidationAnimatedBackgroundImage())
     return;
 
-  // https://linear.app/replay/issue/RUN-966
-  recordreplay::Assert("[RUN-966] LayoutObject::SetMayNeedPaintInvalidationAnimatedBackgroundImage #1");
+  recordreplay::Assert("[RUN-1641] LayoutObject::SetMayNeedPaintInvalidationAnimatedBackgroundImage #1");
 
   bitfields_.SetMayNeedPaintInvalidationAnimatedBackgroundImage(true);
   SetShouldCheckForPaintInvalidationWithoutGeometryChange();
@@ -4638,8 +4646,7 @@ void LayoutObject::SetShouldDelayFullPaintInvalidation() {
 
   bitfields_.SetShouldDelayFullPaintInvalidation(true);
   if (!ShouldCheckForPaintInvalidation()) {
-    // https://linear.app/replay/issue/RUN-966
-    recordreplay::Assert("[RUN-966] LayoutObject::SetShouldDelayFullPaintInvalidation #1");
+    recordreplay::Assert("[RUN-1688] LayoutObject::SetShouldDelayFullPaintInvalidation #1");
 
     // This will also schedule a visual update.
     SetShouldCheckForPaintInvalidationWithoutGeometryChange();
