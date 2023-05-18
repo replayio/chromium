@@ -29,6 +29,8 @@
 #error Platform not supported.
 #endif
 
+#include "base/record_replay.h"
+
 namespace partition_alloc {
 
 namespace {
