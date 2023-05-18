@@ -260,6 +260,7 @@ String CSSNumericLiteralValue::CustomCSSText() const {
           std::string textStr = text.Ascii();
           size_t recordedLength = recordreplay::RecordReplayValue(
               "CSSNumericLiteralValue::CustomCSSText", textStr.length());
+          textStr.resize(recordedLength, ' ');
           recordreplay::RecordReplayBytes(
               "CSSNumericLiteralValue::CustomCSSText", &textStr[0],
               recordedLength);
