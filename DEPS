@@ -307,11 +307,11 @@ vars = {
   # Three lines of non-changing comments so that
   # the commit queue can handle CLs rolling Skia
   # and whatever else without interference from each other.
-  'skia_revision': '00e26c11319d792f529c41ab1f5ba48c4ec36d3b',
+  'skia_revision': '07263efcac426532e54328429704291cd1be7f9d',
   # Three lines of non-changing comments so that
   # the commit queue can handle CLs rolling V8
   # and whatever else without interference from each other.
-  'v8_revision': 'd4015b0bc48dc695ff5995d1d02e9c8fa19d9b0a',
+  'v8_revision': 'bc3ca2ba1a186836f208c1f68d9de6c82b94925f',
   # Three lines of non-changing comments so that
   # the commit queue can handle CLs rolling swarming_client
   # and whatever else without interference from each other.
@@ -334,7 +334,7 @@ vars = {
   #
   # Note this revision should be updated with
   # third_party/boringssl/roll_boringssl.py, not roll-dep.
-  'boringssl_revision': '0d6ed35b5a1b9ce5485bd284102ba62f26e8da79',
+  'boringssl_revision': '9892225c7970166e20cfded40b21a86f9820bd4c',
   # Three lines of non-changing comments so that
   # the commit queue can handle CLs rolling Fuchsia sdk
   # and whatever else without interference from each other.
