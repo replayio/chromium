@@ -89,6 +89,16 @@ uintptr_t TrimMapping(uintptr_t base_address,
   PA_DCHECK(base_length == trim_length || pre_slack || post_slack);
   PA_DCHECK(pre_slack < base_length);
   PA_DCHECK(post_slack < base_length);
+
+  recordreplay::Diagnostic("[RUN-1989] TrimMapping base_address=%zu base_length=%zu trim_length=%zu alignment=%zu alignment_offset=%zu pre_slack=%zu post_slack=%zu",
+                           (size_t)base_address,
+                           base_length,
+                           trim_length,
+                           (size_t)alignment,
+                           (size_t)alignment_offset,
+                           pre_slack,
+                           post_slack);
+
   return internal::TrimMappingInternal(base_address, base_length, trim_length,
                                        accessibility, pre_slack, post_slack);
 }
