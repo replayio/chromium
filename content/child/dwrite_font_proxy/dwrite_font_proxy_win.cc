@@ -438,6 +438,9 @@ HRESULT DWriteFontCollectionProxy::CreateStreamFromKey(
   recordreplay::Diagnostic("[RUN-1912] DWriteFontCollectionProxy::CreateStreamFromKey %d %d",
                            recordreplay::AreEventsDisallowed(),
                            recordreplay::AreEventsPassedThrough());
+
+  CHECK(!recordreplay::AreEventsPassedThrough());
+
   recordreplay::Assert("[RUN-1912] DWriteFontCollectionProxy::CreateStreamFromKey");
 
   if (font_file_reference_key_size != sizeof(HANDLE)) {

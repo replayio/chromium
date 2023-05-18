@@ -47,6 +47,10 @@ void WakeUpQueue::SetNextWakeUpForQueue(internal::TaskQueueImpl* queue,
   DCHECK_EQ(queue->wake_up_queue(), this);
   DCHECK(queue->IsQueueEnabled() || !wake_up);
 
+  recordreplay::Assert("[RUN-548] WakeUpQueue::SetNextWakeUpForQueue %ld %ld",
+                       wake_up.has_value() ? wake_up->time.ToInternalValue() : 0,
+                       wake_up.has_value() ? wake_up->leeway.ToInternalValue() : 0);
+
   absl::optional<WakeUp> previous_wake_up = GetNextDelayedWakeUp();
   absl::optional<WakeUpResolution> previous_queue_resolution;
   if (queue->heap_handle().IsValid()) {

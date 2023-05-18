@@ -554,6 +554,10 @@ void SequenceManagerImpl::ScheduleWork() {
 
 void SequenceManagerImpl::SetNextWakeUp(LazyNow* lazy_now,
                                         absl::optional<WakeUp> wake_up) {
+  recordreplay::Assert("[RUN-548] SequenceManagerImpl::SetNextWakeUp %ld %ld",
+                       wake_up.has_value() ? wake_up->time.ToInternalValue() : 0,
+                       wake_up.has_value() ? wake_up->leeway.ToInternalValue() : 0);
+
   auto next_wake_up = AdjustWakeUp(wake_up, lazy_now);
   if (next_wake_up && next_wake_up->is_immediate()) {
     ScheduleWork();
@@ -823,23 +827,28 @@ absl::optional<WakeUp> SequenceManagerImpl::GetNextDelayedWakeUpWithOption(
 absl::optional<WakeUp> SequenceManagerImpl::AdjustWakeUp(
     absl::optional<WakeUp> wake_up,
     LazyNow* lazy_now) const {
-  DCHECK_CALLED_ON_VALID_THREAD(associated_thread_->thread_checker);
-  if (!wake_up)
-    return absl::nullopt;
+  recordreplay::Assert("[RUN-548] SequenceManagerImpl::AdjustWakeUp");
 
-  // https://linear.app/replay/issue/RUN-1150
-  recordreplay::Assert("[RUN-1150] SequenceManagerImpl::AdjustWakeUp #1 %d",
-                       lazy_now->has_value());
+  DCHECK_CALLED_ON_VALID_THREAD(associated_thread_->thread_checker);
+  if (!wake_up) {
+    recordreplay::Assert("[RUN-548] SequenceManagerImpl::AdjustWakeUp #1");
+    return absl::nullopt;
+  }
 
   // Overdue work needs to be run immediately.
-  if (lazy_now->Now() >= wake_up->earliest_time())
+  if (lazy_now->Now() >= wake_up->earliest_time()) {
+    recordreplay::Assert("[RUN-548] SequenceManagerImpl::AdjustWakeUp #2");
     return WakeUp{};
+  }
   // If |time_domain| is present, we don't want an actual OS level delayed wake
   // up scheduled, so pretend we have no more work. This will result in
   // appearing idle and |time_domain| will decide what to do in
   // MaybeFastForwardToWakeUp().
-  if (main_thread_only().time_domain)
+  if (main_thread_only().time_domain) {
+    recordreplay::Assert("[RUN-548] SequenceManagerImpl::AdjustWakeUp #3");
     return absl::nullopt;
+  }
+  recordreplay::Assert("[RUN-548] SequenceManagerImpl::AdjustWakeUp Done");
   return *wake_up;
 }
 
