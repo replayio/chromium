@@ -302,7 +302,7 @@ PaintResult PaintLayerPainter::PaintChildren(
     GraphicsContext& context,
     PaintFlags paint_flags) {
   PaintResult result = kFullyPainted;
-  recordreplay::Assert("[RUN-1974-2008] PaintLayerPainter::PaintChildren C");
+  recordreplay::Assert("[RUN-1974-2008] PaintLayerPainter::PaintChildren A");
   if (!paint_layer_.HasSelfPaintingLayerDescendant())
     return result;
 
