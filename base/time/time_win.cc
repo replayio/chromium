@@ -610,7 +610,7 @@ namespace subtle {
 TimeTicks TimeTicksNowIgnoringOverride() {
   if (!recordreplay::AreEventsDisallowed()) {
     recordreplay::Assert("[RUN-1916] TimeTicksNowIgnoringOverride %d",
-    g_time_ticks_now_ignoring_override_function == &QPCNow);
+                         g_time_ticks_now_ignoring_override_function == &QPCNow);
   }
 
   return g_time_ticks_now_ignoring_override_function.load(

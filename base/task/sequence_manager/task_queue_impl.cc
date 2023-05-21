@@ -1373,10 +1373,6 @@ void TaskQueueImpl::UpdateWakeUp(LazyNow* lazy_now) {
     // nullopt, e.g. to throttle immediate tasks.
     wake_up = main_thread_only().throttler->GetNextAllowedWakeUp(
         lazy_now, wake_up, HasTaskToRunImmediatelyOrReadyDelayedTask());
-
-    recordreplay::Assert("[RUN-548] TaskQueueImpl::UpdateWakeUp #1 %ld %ld",
-                         wake_up.has_value() ? wake_up->time.ToInternalValue() : 0,
-                         wake_up.has_value() ? wake_up->leeway.ToInternalValue() : 0);
   }
   SetNextWakeUp(lazy_now, wake_up);
 }

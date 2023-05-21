@@ -445,15 +445,12 @@ static scoped_refptr<HarfBuzzFontData> CreateHarfBuzzFontData(
 
 scoped_refptr<HarfBuzzFontData> HarfBuzzFontCache::GetOrCreateFontData(
     FontPlatformData* platform_data) {
-  recordreplay::Assert("[RUN-1981] HarfBuzzFontCache::GetOrCreateFontData");
   const auto& result = font_map_.insert(platform_data->UniqueID(), nullptr);
   if (result.is_new_entry) {
-    recordreplay::Assert("[RUN-1981] HarfBuzzFontCache::GetOrCreateFontData #1");
     hb::unique_ptr<hb_face_t> face = CreateFace(platform_data);
     result.stored_value->value =
         CreateHarfBuzzFontData(face.get(), platform_data->Typeface());
   }
-  recordreplay::Assert("[RUN-1981] HarfBuzzFontCache::GetOrCreateFontData Done");
   return result.stored_value->value;
 }
 
