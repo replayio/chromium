@@ -429,8 +429,6 @@ HRESULT DWriteFontCollectionProxy::CreateStreamFromKey(
     const void* font_file_reference_key,
     UINT32 font_file_reference_key_size,
     IDWriteFontFileStream** font_file_stream) {
-  CHECK(!recordreplay::AreEventsPassedThrough());
-
   if (font_file_reference_key_size != sizeof(HANDLE)) {
     return E_FAIL;
   }
@@ -493,6 +491,7 @@ bool DWriteFontCollectionProxy::LoadFamily(
   HRESULT hr = factory_->CreateCustomFontCollection(
       this /*collectionLoader*/, reinterpret_cast<const void*>(&index),
       sizeof(index), containing_collection);
+
   return SUCCEEDED(hr);
 }
 

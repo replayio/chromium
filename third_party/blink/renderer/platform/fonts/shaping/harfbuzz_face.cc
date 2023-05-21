@@ -59,8 +59,6 @@
 #include "third_party/skia/include/core/SkRect.h"
 #include "third_party/skia/include/core/SkTypeface.h"
 
-#include "base/record_replay.h"
-
 namespace blink {
 
 std::unique_ptr<HarfBuzzFace> HarfBuzzFace::Create(

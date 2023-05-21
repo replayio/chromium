@@ -774,7 +774,7 @@ absl::optional<WakeUp> SequenceManagerImpl::GetPendingWakeUp(
     // If the selector has non-empty queues we trivially know there is immediate
     // work to be done. However we may want to yield to native work if it is
     // more important.
-    if (UNLIKELY(!ShouldRunTaskOfPriority(*priority))) {
+    if (UNLIKELY(!ShouldRunTaskOfPriority(*priority)))
       return AdjustWakeUp(GetNextDelayedWakeUpWithOption(option), lazy_now);
     return WakeUp{};
   }
