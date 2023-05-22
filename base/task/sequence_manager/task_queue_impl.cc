@@ -1141,22 +1141,34 @@ Value::Dict TaskQueueImpl::TaskAsValue(const Task& task, TimeTicks now) {
 
 Task TaskQueueImpl::MakeDelayedTask(PostedTask delayed_task,
                                     LazyNow* lazy_now) const {
+  if (absl::holds_alternative<base::TimeDelta>(delayed_task.delay_or_delayed_run_time)) {
+    base::TimeDelta delay = absl::get<base::TimeDelta>(delayed_task.delay_or_delayed_run_time);
+    recordreplay::Assert("TaskQueueImpl::MakeDelayedTask #0 %ld", delay.ToInternalValue());
+  } else {
+    base::TimeTicks ticks = absl::get<base::TimeTicks>(delayed_task.delay_or_delayed_run_time);
+    recordreplay::Assert("TaskQueueImpl::MakeDelayedTask #0.1 %ld", ticks.ToInternalValue());
+  }
   EnqueueOrder sequence_number = sequence_manager_->GetNextSequenceNumber();
   base::TimeDelta delay;
   WakeUpResolution resolution = WakeUpResolution::kLow;
 #if BUILDFLAG(IS_WIN)
   const bool explicit_high_resolution_timer_win =
       g_explicit_high_resolution_timer_win.load(std::memory_order_relaxed);
+  recordreplay::Assert("[RUN-548] TaskQueueImpl::MakeDelayedTask #1 %d", explicit_high_resolution_timer_win);
 #endif  // BUILDFLAG(IS_WIN)
   if (absl::holds_alternative<base::TimeDelta>(
           delayed_task.delay_or_delayed_run_time)) {
     delay = absl::get<base::TimeDelta>(delayed_task.delay_or_delayed_run_time);
     delayed_task.delay_or_delayed_run_time = lazy_now->Now() + delay;
+    recordreplay::Assert("[RUN-548] TaskQueueImpl::MakeDelayedTask #2 %ld %ld",
+                         delay.ToInternalValue(), lazy_now->Now());
   }
 #if BUILDFLAG(IS_WIN)
   else if (!explicit_high_resolution_timer_win) {
     delay = absl::get<base::TimeTicks>(delayed_task.delay_or_delayed_run_time) -
             lazy_now->Now();
+    recordreplay::Assert("[RUN-548] TaskQueueImpl::MakeDelayedTask #3 %ld %ld",
+                         delay.ToInternalValue(), lazy_now->Now());
   }
   if (explicit_high_resolution_timer_win) {
     resolution =
