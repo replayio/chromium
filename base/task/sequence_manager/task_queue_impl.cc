@@ -1143,10 +1143,10 @@ Task TaskQueueImpl::MakeDelayedTask(PostedTask delayed_task,
                                     LazyNow* lazy_now) const {
   if (absl::holds_alternative<base::TimeDelta>(delayed_task.delay_or_delayed_run_time)) {
     base::TimeDelta delay = absl::get<base::TimeDelta>(delayed_task.delay_or_delayed_run_time);
-    recordreplay::Assert("TaskQueueImpl::MakeDelayedTask #0 %ld", delay.ToInternalValue());
+    recordreplay::Assert("[RUN-548] TaskQueueImpl::MakeDelayedTask #0 %ld", delay.ToInternalValue());
   } else {
     base::TimeTicks ticks = absl::get<base::TimeTicks>(delayed_task.delay_or_delayed_run_time);
-    recordreplay::Assert("TaskQueueImpl::MakeDelayedTask #0.1 %ld", ticks.ToInternalValue());
+    recordreplay::Assert("[RUN-548] TaskQueueImpl::MakeDelayedTask #0.1 %ld", ticks.ToInternalValue());
   }
   EnqueueOrder sequence_number = sequence_manager_->GetNextSequenceNumber();
   base::TimeDelta delay;
