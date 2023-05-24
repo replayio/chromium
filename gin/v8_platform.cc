@@ -360,8 +360,9 @@ class V8Platform::TracingControllerImpl : public v8::TracingController {
 V8Platform* V8Platform::Get() { return g_v8_platform.Pointer(); }
 
 V8Platform::V8Platform() : tracing_controller_(new TracingControllerImpl) {
-  // [RUN-1348] Allocate the time clamper non-divergently.
-  g_time_clamper.Get();
+  if (recordreplay::IsRecordingOrReplaying("eager-initialization"))
+    // [RUN-1348] Eagerly allocate g_time_clamper.
+    g_time_clamper.Get();
 }
 
 V8Platform::~V8Platform() = default;
