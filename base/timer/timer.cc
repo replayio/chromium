@@ -167,6 +167,7 @@ void DelayTimerBase::Reset() {
     // If there's no pending task, start one up and return.
     if (!delayed_task_handle_.IsValid()) {
       ScheduleNewTask(delay_);
+      recordreplay::Assert("[RUN-548] DelayTimerBase::Reset #1");
       return;
     }
 
@@ -176,10 +177,14 @@ void DelayTimerBase::Reset() {
     else
       desired_run_time_ = TimeTicks();
 
+    recordreplay::Assert("[RUN-548] DelayTimerBase::Reset #2 %ld",
+                         desired_run_time_.ToInternalValue());
+
     // We can use the existing scheduled task if it arrives before the new
     // |desired_run_time_|.
     if (desired_run_time_ >= scheduled_run_time_) {
       is_running_ = true;
+      recordreplay::Assert("[RUN-548] DelayTimerBase::Reset #3");
       return;
     }
   }
@@ -187,6 +192,8 @@ void DelayTimerBase::Reset() {
   // We can't reuse the |scheduled_task_|, so abandon it and post a new one.
   AbandonScheduledTask();
   ScheduleNewTask(delay_);
+
+  recordreplay::Assert("[RUN-548] DelayTimerBase::Reset Done");
 }
 
 // TODO(1262205): Merge with TimerBase::Stop() once the "always abandon
