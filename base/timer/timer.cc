@@ -110,14 +110,21 @@ void TimerBase::AbandonScheduledTask() {
 }
 
 DelayTimerBase::DelayTimerBase(const TickClock* tick_clock)
-    : tick_clock_(tick_clock) {}
+    : tick_clock_(tick_clock) {
+  recordreplay::RegisterPointer("[RUN-548] DelayTimerBase", this);
+}
 
 DelayTimerBase::DelayTimerBase(const Location& posted_from,
                                TimeDelta delay,
                                const TickClock* tick_clock)
-    : TimerBase(posted_from), delay_(delay), tick_clock_(tick_clock) {}
+    : TimerBase(posted_from), delay_(delay), tick_clock_(tick_clock) {
+  recordreplay::RegisterPointer("[RUN-548] DelayTimerBase", this);
+  recordreplay::Assert("[RUN-548] DelayTimerBase %ld", delay.ToInternalValue());
+}
 
-DelayTimerBase::~DelayTimerBase() = default;
+DelayTimerBase::~DelayTimerBase() {
+  recordreplay::UnregisterPointer(this);
+}
 
 TimeDelta DelayTimerBase::GetCurrentDelay() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -150,6 +157,9 @@ void DelayTimerBase::AbandonAndStop() {
 
 void DelayTimerBase::Reset() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  recordreplay::Assert("[RUN-548] DelayTimerBase::Reset %d %ld",
+                       recordreplay::PointerId(this), delay_.ToInternalValue());
 
   EnsureNonNullUserTask();
 
@@ -220,6 +230,12 @@ TimeTicks DelayTimerBase::Now() const {
 void DelayTimerBase::OnScheduledTaskInvoked() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!delayed_task_handle_.IsValid()) << posted_from_.ToString();
+
+  recordreplay::Assert("[RUN-548] DelayTimerBase::OnScheduledTaskInvoked %d %d %ld %ld",
+                       recordreplay::PointerId(this),
+                       (bool)is_running_,
+                       desired_run_time_.ToInternalValue(),
+                       scheduled_run_time_.ToInternalValue());
 
   // The timer may have been stopped.
   if (!is_running_)
