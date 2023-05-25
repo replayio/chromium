@@ -517,6 +517,19 @@ function buildRrpObjectResult(cdpReturnValue) {
   return { result: rrpResult };
 }
 
+/**
+ * Drastically (temporarily) reduce the amount of crashes this is causing, since its overwhelming
+ * the triage system.
+ * We can remove this once RUN-2042 is fixed.
+ * @see https://linear.app/replay/issue/RUN-2042#comment-facc16ef
+ */
+const EvaluateErrorSampleRate = 0.01;
+function sampleEvaluateException(err) {
+  if (Math.random() < EvaluateErrorSampleRate) {
+    throw err;
+  }
+  log(`[RuntimeError] evaluate failed: ${err?.stack || err}`);
+}
 
 function Pause_evaluateInFrame({ frameId, expression }) {
   const frames = getStackFrames();
@@ -537,8 +550,13 @@ function Pause_evaluateInFrame({ frameId, expression }) {
     return buildRrpObjectResult({ result: argsCdp });
   }
 
-  const rv = doEvaluation();
+  try {
+    const rv = doEvaluation();
   return buildRrpObjectResult(rv);
+  } catch (err) {
+    sampleEvaluateException(err);
+    return buildRrpObjectResult(null);
+  }
 
   function doEvaluation() {
     // In order to do the evaluation in the right frame, the same number of
@@ -558,11 +576,16 @@ function Pause_evaluateInFrame({ frameId, expression }) {
 }
 
 function Pause_evaluateInGlobal({ expression }) {
-  const rv = sendMessage("Runtime.evaluate", {
-    expression,
-    objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
-  });
-  return buildRrpObjectResult(rv);
+  try {
+    const rv = sendMessage("Runtime.evaluate", {
+      expression,
+      objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
+    });
+    return buildRrpObjectResult(rv);
+  } catch (err) {
+    sampleEvaluateException(err);
+    return buildRrpObjectResult(null);
+  }
 }
 
 function Pause_getAllFrames() {
