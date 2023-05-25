@@ -52,6 +52,10 @@ TimerBase::TimerBase(const Location& posted_from) : posted_from_(posted_from) {
   // checker's CalledOnValidSequence() method will re-bind the checker, and
   // later calls will verify that the same task runner is used.
   DETACH_FROM_SEQUENCE(sequence_checker_);
+
+#if BUILDFLAG(IS_WIN)
+  ordered_lock_id_ = recordreplay::CreateOrderedLock("TimerBase");
+#endif
 }
 
 TimerBase::~TimerBase() {
@@ -171,6 +175,11 @@ void DelayTimerBase::Reset() {
       return;
     }
 
+#if BUILDFLAG(IS_WIN)
+    // Order updates to the desired run time.
+    recordreplay::AutoOrderedLock ordered(ordered_lock_id_);
+#endif
+
     // Set the new |desired_run_time_|.
     if (delay_ > Microseconds(0))
       desired_run_time_ = Now() + delay_;
@@ -238,6 +247,12 @@ void DelayTimerBase::OnScheduledTaskInvoked() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!delayed_task_handle_.IsValid()) << posted_from_.ToString();
 
+#if BUILDFLAG(IS_WIN)
+  // Order reads of the desired run time and other timer state.
+  absl::optional<recordreplay::AutoOrderedLock> ordered;
+  ordered.emplace(ordered_lock_id_);
+#endif
+
   recordreplay::Assert("[RUN-548] DelayTimerBase::OnScheduledTaskInvoked %d %d %ld %ld",
                        recordreplay::PointerId(this),
                        (bool)is_running_,
@@ -261,6 +276,10 @@ void DelayTimerBase::OnScheduledTaskInvoked() {
       return;
     }
   }
+
+#if BUILDFLAG(IS_WIN)
+  ordered.reset();
+#endif
 
   RunUserTask();
   // No more member accesses here: |this| could be deleted at this point.
