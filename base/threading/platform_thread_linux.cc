@@ -359,8 +359,8 @@ bool SetCurrentThreadTypeForPlatform(ThreadType thread_type,
 
   return thread_type == ThreadType::kRealtimeAudio &&
          recordreplay::RecordReplayValue(
-           "[RUN-1967] pthread_setschedparam",
-           pthread_setschedparam(pthread_self(), SCHED_RR, &kRealTimePrio)
+             "[RUN-1967] pthread_setschedparam",
+             (uintptr_t)pthread_setschedparam(pthread_self(), SCHED_RR, &kRealTimePrio)
          ) == 0;
 #else
   return false;
