@@ -91,7 +91,8 @@ const Verbose = false;
 const VerboseCommands = Verbose;
 
 const {
-  log,
+  log: _log,
+  trace: _trace,
   setCDPMessageCallback,
   sendCDPMessage,
   setCommandCallback,
@@ -142,6 +143,14 @@ const JSON_parse = JSON.parse;
 
 // Some of these are duplicated in gSourceMapScript, so watch out when making
 // modifications to update both versions...
+
+function log(...args) {
+  _log(args.join(' '));
+}
+
+function trace(...args) {
+  _trace(args.join(' '));
+}
 
 function assert(v, msg = "") {
   if (!v) {
@@ -275,12 +284,14 @@ const gContextChangeCallbacks = new Set();
 initMessages();
 addEventListener("Runtime.consoleAPICalled", onConsoleAPICall);
 addEventListener("Runtime.executionContextCreated", ({ context }) => {
+  trace(`Runtime.executionContextCreated ${context.id}`);
   gExecutionContexts.set(context.id, context);
   for (const callback of gContextChangeCallbacks) {
     callback(context, "add");
   }
 });
 addEventListener("Runtime.executionContextDestroyed", ({ executionContextId }) => {
+  trace(`Runtime.executionContextDestroyed ${executionContextId}`);
   const context = gExecutionContexts.get(executionContextId);
   for (const callback of gContextChangeCallbacks) {
     callback(context, "remove");
@@ -288,6 +299,7 @@ addEventListener("Runtime.executionContextDestroyed", ({ executionContextId }) =
   gExecutionContexts.delete(executionContextId);
 });
 addEventListener("Runtime.executionContextsCleared", () => {
+  trace(`Runtime.executionContextsCleared ${Array.from(gExecutionContexts.values()).map(c => c.id)}`);
   for (const context of gExecutionContexts.values()) {
     for (const callback of gContextChangeCallbacks) {
       callback(context, "remove");
@@ -3325,6 +3337,14 @@ static void LogCallback(const v8::FunctionCallbackInfo<v8::Value>& args) {
   recordreplay::Print("%s", *text);
 }
 
+static void TraceCallback(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsString() &&
+        "must be called with a single string");
+  v8::String::Utf8Value text(args.GetIsolate(), args[0]);
+  recordreplay::Print("DDBG TRACE %s", *text);
+  recordreplay::Trace("%s", *text);
+}
+
 // Function to invoke on CDP responses and events.
 static v8::Eternal<v8::Function>* gCDPMessageCallback;
 
@@ -4767,6 +4787,7 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
                  ToV8String(isolate, REPLAY_CDT_PAUSE_OBJECT_GROUP));
 
   SetFunctionProperty(isolate, args, "log", LogCallback);
+  SetFunctionProperty(isolate, args, "trace", TraceCallback);
 
   // CDP debugger functionality
   SetFunctionProperty(isolate, args, "setCDPMessageCallback",
