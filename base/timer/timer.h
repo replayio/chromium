@@ -140,14 +140,6 @@ class BASE_EXPORT TimerBase {
   // or restarted on another sequence.
   SEQUENCE_CHECKER(sequence_checker_);
 
-#if BUILDFLAG(IS_WIN)
-  // When recording/replaying this ordered lock can be used to force operations
-  // on data protected by sequence_checker_ to happen in a consistent order.
-  // We use this on windows to workaround synchronization issues that happen
-  // for an unknown reason. See https://linear.app/replay/issue/RUN-548
-  int ordered_lock_id_ = 0;
-#endif
-
   // Location in user code.
   Location posted_from_ GUARDED_BY_CONTEXT(sequence_checker_);
 

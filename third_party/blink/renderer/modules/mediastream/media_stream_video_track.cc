@@ -27,6 +27,8 @@
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 namespace {
 
@@ -1025,9 +1027,13 @@ void MediaStreamVideoTrack::RequestRefreshFrame() {
 }
 
 void MediaStreamVideoTrack::ResetRefreshTimer() {
+  recordreplay::Assert("[RUN-548] MediaStreamVideoTrack::ResetRefreshTimer");
+
   DCHECK_CALLED_ON_VALID_THREAD(main_render_thread_checker_);
   if (refresh_timer_.IsRunning())
     refresh_timer_.Reset();
+
+  recordreplay::Assert("[RUN-548] MediaStreamVideoTrack::ResetRefreshTimer Done");
 }
 
 }  // namespace blink

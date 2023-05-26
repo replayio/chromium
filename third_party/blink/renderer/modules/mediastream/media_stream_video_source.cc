@@ -29,6 +29,8 @@
 #include "third_party/blink/renderer/platform/wtf/cross_thread_copier_media.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 // static
@@ -61,6 +63,8 @@ void MediaStreamVideoSource::AddTrack(
     const VideoTrackSettingsCallback& settings_callback,
     const VideoTrackFormatCallback& format_callback,
     ConstraintsOnceCallback callback) {
+  recordreplay::Assert("[RUN-548] MediaStreamVideoSource::AddTrack");
+
   DCHECK(GetTaskRunner()->BelongsToCurrentThread());
   DCHECK(!base::Contains(tracks_, track));
   tracks_.push_back(track);
