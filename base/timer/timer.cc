@@ -20,6 +20,8 @@
 
 #include "base/record_replay.h"
 
+#include <windows.h>
+
 static void* LookupRecordReplaySymbol(const char* name) {
   HMODULE module = GetModuleHandleA("windows-recordreplay.dll");
   void* fnptr = module ? (void*)GetProcAddress(module, name) : nullptr;
