@@ -83,6 +83,13 @@ void RemoteModuleWatcher::HandleModuleEvent(
 void RemoteModuleWatcher::OnTimerFired() {
   DCHECK(task_runner_->RunsTasksInCurrentSequence());
 
+  // Because module events can happen non-deterministically the number of events
+  // can vary when replaying. Ensure we report the same module events over IPC.
+  size_t num_module_events =
+    recordreplay::RecordReplayValue("RemoteModuleWatcher::OnTimerFired num_module_events",
+                                    module_load_addresses_.size());
+  module_load_addresses_.resize(num_module_events, 0);
+
   module_event_sink_->OnModuleEvents(module_load_addresses_);
   module_load_addresses_.clear();
 }
