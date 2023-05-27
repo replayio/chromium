@@ -72,8 +72,12 @@ void RemoteModuleWatcher::HandleModuleEvent(
   module_load_addresses_.push_back(
       reinterpret_cast<uintptr_t>(event.module_load_address.get()));
 
-  // Ensure the timer is running.
-  delay_timer_.Reset();
+  // Ensure the timer is running. Skip this when recording events are disallowed
+  // as timers must be reset deterministically. Because of the five second delay
+  // it doesn't seem like the browser process needs these events other than for
+  // observability.
+  if (!recordreplay::AreEventsDisallowed())
+    delay_timer_.Reset();
 }
 
 void RemoteModuleWatcher::OnTimerFired() {
