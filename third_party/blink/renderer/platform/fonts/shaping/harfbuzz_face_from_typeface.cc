@@ -7,6 +7,8 @@
 #include "base/numerics/safe_conversions.h"
 #include "third_party/skia/include/core/SkStream.h"
 
+#include "base/record_replay.h"
+
 namespace {
 static void DeleteTypefaceStream(void* stream_asset_ptr) {
   SkStreamAsset* stream_asset =
@@ -17,6 +19,8 @@ static void DeleteTypefaceStream(void* stream_asset_ptr) {
 
 namespace blink {
 hb::unique_ptr<hb_face_t> HbFaceFromSkTypeface(sk_sp<SkTypeface> typeface) {
+  recordreplay::Assert("[RUN-2058] HbFaceFromSkTypeface");
+
   hb::unique_ptr<hb_face_t> return_face(nullptr);
   int ttc_index = 0;
 
@@ -41,6 +45,9 @@ hb::unique_ptr<hb_face_t> HbFaceFromSkTypeface(sk_sp<SkTypeface> typeface) {
           hb::unique_ptr<hb_face_t>(hb_face_create(face_blob.get(), ttc_index));
     }
   }
+
+  recordreplay::Assert("[RUN-2058] HbFaceFromSkTypeface Done");
+
   return return_face;
 }
 }  // namespace blink
