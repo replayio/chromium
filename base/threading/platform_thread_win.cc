@@ -35,6 +35,8 @@
 #include "base/allocator/partition_allocator/starscan/stack/stack.h"
 #endif
 
+#include "base/record_replay.h"
+
 namespace base {
 
 BASE_FEATURE(kUseThreadPriorityLowest,
