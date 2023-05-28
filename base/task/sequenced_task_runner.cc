@@ -39,9 +39,6 @@ DelayedTaskHandle SequencedTaskRunner::PostCancelableDelayedTask(
     const Location& from_here,
     OnceClosure task,
     TimeDelta delay) {
-  recordreplay::Assert("[RUN-548] SequencedTaskRunner::PostCancelableDelayedTask %ld",
-                       delay.ToInternalValue());
-
   auto delayed_task_handle_delegate =
       std::make_unique<DefaultDelayedTaskHandleDelegate>();
 
@@ -64,9 +61,6 @@ DelayedTaskHandle SequencedTaskRunner::PostCancelableDelayedTaskAt(
     OnceClosure task,
     TimeTicks delayed_run_time,
     subtle::DelayPolicy deadline_policy) {
-  recordreplay::Assert("[RUN-548] SequencedTaskRunner::PostCancelableDelayedTaskAt %ld",
-                       delayed_run_time.ToInternalValue());
-
   auto delayed_task_handle_delegate =
       std::make_unique<DefaultDelayedTaskHandleDelegate>();
 

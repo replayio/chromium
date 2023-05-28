@@ -88,6 +88,9 @@ void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
     return;
   }
 
+  // FIXME
+  Print("SUBMIT_COMPOSITOR_FRAME %s", GetRecordingId());
+
   viz::AggregatedRenderPassList render_passes;
   for (const auto& pass : frame.render_pass_list) {
     render_passes.push_back(pass->DeepCopyAggregated());

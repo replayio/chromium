@@ -556,8 +556,6 @@ void VideoTrackAdapter::VideoFrameResolutionAdapter::MaybeUpdateTrackSettings(
 }
 void VideoTrackAdapter::VideoFrameResolutionAdapter::MaybeUpdateTracksFormat(
     const media::VideoFrame& frame) {
-  recordreplay::Assert("[RUN-548] VideoTrackAdapter::VideoFrameResolutionAdapter::MaybeUpdateTracksFormat");
-
   DCHECK_CALLED_ON_VALID_THREAD(io_thread_checker_);
   if (MaybeUpdateFrameRate(&source_format_settings_) ||
       frame.natural_size() != track_settings_.frame_size) {
@@ -568,8 +566,6 @@ void VideoTrackAdapter::VideoFrameResolutionAdapter::MaybeUpdateTracksFormat(
     for (const auto& callback : callbacks_)
       callback.second.format_callback.Run(source_format);
   }
-
-  recordreplay::Assert("[RUN-548] VideoTrackAdapter::VideoFrameResolutionAdapter::MaybeUpdateTracksFormat Done");
 }
 
 void VideoTrackAdapter::VideoFrameResolutionAdapter::ResetFrameRate() {
@@ -617,8 +613,6 @@ void VideoTrackAdapter::AddTrack(
     const VideoTrackAdapterSettings& settings) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
-  recordreplay::Assert("[RUN-548] VideoTrackAdapter::AddTrack");
-
   PostCrossThreadTask(
       *io_task_runner_, FROM_HERE,
       CrossThreadBindOnce(
@@ -642,8 +636,6 @@ void VideoTrackAdapter::AddTrackOnIO(
     VideoTrackSettingsInternalCallback settings_callback,
     VideoTrackFormatInternalCallback format_callback,
     const VideoTrackAdapterSettings& settings) {
-  recordreplay::Assert("[RUN-548] VideoTrackAdapter::AddTrackOnIO");
-
   DCHECK(io_task_runner_->BelongsToCurrentThread());
   scoped_refptr<VideoFrameResolutionAdapter> adapter;
   for (const auto& frame_adapter : adapters_) {

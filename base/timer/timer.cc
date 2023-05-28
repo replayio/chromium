@@ -135,21 +135,14 @@ void TimerBase::AbandonScheduledTask() {
 }
 
 DelayTimerBase::DelayTimerBase(const TickClock* tick_clock)
-    : tick_clock_(tick_clock) {
-  recordreplay::RegisterPointer("[RUN-548] DelayTimerBase", this);
-}
+    : tick_clock_(tick_clock) {}
 
 DelayTimerBase::DelayTimerBase(const Location& posted_from,
                                TimeDelta delay,
                                const TickClock* tick_clock)
-    : TimerBase(posted_from), delay_(delay), tick_clock_(tick_clock) {
-  recordreplay::RegisterPointer("[RUN-548] DelayTimerBase", this);
-  recordreplay::Assert("[RUN-548] DelayTimerBase %ld", delay.ToInternalValue());
-}
+    : TimerBase(posted_from), delay_(delay), tick_clock_(tick_clock) {}
 
-DelayTimerBase::~DelayTimerBase() {
-  recordreplay::UnregisterPointer(this);
-}
+DelayTimerBase::~DelayTimerBase() = default;
 
 TimeDelta DelayTimerBase::GetCurrentDelay() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -189,16 +182,12 @@ void DelayTimerBase::Reset() {
     CHECK(0);
   }
 
-  recordreplay::Assert("[RUN-548] DelayTimerBase::Reset %d %ld",
-                       recordreplay::PointerId(this), delay_.ToInternalValue());
-
   EnsureNonNullUserTask();
 
   if (!g_is_always_abandon_scheduled_task_enabled) {
     // If there's no pending task, start one up and return.
     if (!delayed_task_handle_.IsValid()) {
       ScheduleNewTask(delay_);
-      recordreplay::Assert("[RUN-548] DelayTimerBase::Reset #1");
       return;
     }
 
@@ -208,14 +197,10 @@ void DelayTimerBase::Reset() {
     else
       desired_run_time_ = TimeTicks();
 
-    recordreplay::Assert("[RUN-548] DelayTimerBase::Reset #2 %ld",
-                         desired_run_time_.ToInternalValue());
-
     // We can use the existing scheduled task if it arrives before the new
     // |desired_run_time_|.
     if (desired_run_time_ >= scheduled_run_time_) {
       is_running_ = true;
-      recordreplay::Assert("[RUN-548] DelayTimerBase::Reset #3");
       return;
     }
   }
@@ -223,8 +208,6 @@ void DelayTimerBase::Reset() {
   // We can't reuse the |scheduled_task_|, so abandon it and post a new one.
   AbandonScheduledTask();
   ScheduleNewTask(delay_);
-
-  recordreplay::Assert("[RUN-548] DelayTimerBase::Reset Done");
 }
 
 // TODO(1262205): Merge with TimerBase::Stop() once the "always abandon
@@ -268,12 +251,6 @@ TimeTicks DelayTimerBase::Now() const {
 void DelayTimerBase::OnScheduledTaskInvoked() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!delayed_task_handle_.IsValid()) << posted_from_.ToString();
-
-  recordreplay::Assert("[RUN-548] DelayTimerBase::OnScheduledTaskInvoked %d %d %ld %ld",
-                       recordreplay::PointerId(this),
-                       (bool)is_running_,
-                       desired_run_time_.ToInternalValue(),
-                       scheduled_run_time_.ToInternalValue());
 
   // The timer may have been stopped.
   if (!is_running_)
