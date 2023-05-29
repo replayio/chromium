@@ -291,25 +291,29 @@ void PlatformThread::Sleep(TimeDelta duration) {
 
 // static
 void PlatformThread::SetName(const std::string& name) {
-  recordreplay::Assert("[RUN-2059] PlatformThread::SetName");
+  if (!recordreplay::AreEventsDisallowed())
+    recordreplay::Assert("[RUN-2059] PlatformThread::SetName");
 
   ThreadIdNameManager::GetInstance()->SetName(name);
 
-  recordreplay::Assert("[RUN-2059] PlatformThread::SetName #1");
+  if (!recordreplay::AreEventsDisallowed())
+    recordreplay::Assert("[RUN-2059] PlatformThread::SetName #1");
 
   // The SetThreadDescription API works even if no debugger is attached.
   static auto set_thread_description_func =
       reinterpret_cast<SetThreadDescription>(::GetProcAddress(
           ::GetModuleHandle(L"Kernel32.dll"), "SetThreadDescription"));
 
-  recordreplay::Assert("[RUN-2059] PlatformThread::SetName #2");
+  if (!recordreplay::AreEventsDisallowed())
+    recordreplay::Assert("[RUN-2059] PlatformThread::SetName #2");
 
   if (set_thread_description_func) {
     set_thread_description_func(::GetCurrentThread(),
                                 base::UTF8ToWide(name).c_str());
   }
 
-  recordreplay::Assert("[RUN-2059] PlatformThread::SetName #3");
+  if (!recordreplay::AreEventsDisallowed())
+    recordreplay::Assert("[RUN-2059] PlatformThread::SetName #3");
 
   // The debugger needs to be around to catch the name in the exception.  If
   // there isn't a debugger, we are just needlessly throwing an exception.
@@ -318,11 +322,13 @@ void PlatformThread::SetName(const std::string& name) {
     return;
   }
 
-  recordreplay::Assert("[RUN-2059] PlatformThread::SetName #5");
+  if (!recordreplay::AreEventsDisallowed())
+    recordreplay::Assert("[RUN-2059] PlatformThread::SetName #5");
 
   SetNameInternal(CurrentId(), name.c_str());
 
-  recordreplay::Assert("[RUN-2059] PlatformThread::SetName Done");
+  if (!recordreplay::AreEventsDisallowed())
+    recordreplay::Assert("[RUN-2059] PlatformThread::SetName Done");
 }
 
 // static
