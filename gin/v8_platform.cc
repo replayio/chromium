@@ -359,7 +359,11 @@ class V8Platform::TracingControllerImpl : public v8::TracingController {
 // static
 V8Platform* V8Platform::Get() { return g_v8_platform.Pointer(); }
 
-V8Platform::V8Platform() : tracing_controller_(new TracingControllerImpl) {}
+V8Platform::V8Platform() : tracing_controller_(new TracingControllerImpl) {
+  if (recordreplay::IsRecordingOrReplaying("eager-initialization"))
+    // [RUN-1348] Eagerly allocate g_time_clamper.
+    g_time_clamper.Get();
+}
 
 V8Platform::~V8Platform() = default;
 
@@ -477,8 +481,11 @@ double V8Platform::MonotonicallyIncreasingTime() {
       static_cast<double>(base::Time::kMicrosecondsPerSecond);
 }
 
+extern "C" void V8RecordReplayAssert(const char* format, ...);
+
 double V8Platform::CurrentClockTimeMillis() {
   double now_seconds = base::Time::Now().ToJsTime() / 1000;
+  V8RecordReplayAssert("[RUN-1348-2017] V8Platform::CurrentClockTimeMillis %d", g_time_clamper.IsCreated());
   return g_time_clamper.Get().ClampTimeResolution(now_seconds) * 1000;
 }
 
