@@ -35,6 +35,14 @@
 
 #include "base/record_replay.h"
 
+static void GraphicsDiagnostic(const char* str) {
+  FILE* f = fopen("record_replay_graphics.txt", "a");
+  if (f) {
+    fprintf(f, "%u: %s\n", GetCurrentProcessId(), str);
+    fclose(f);
+  }
+}
+
 namespace cc {
 
 ProxyMain::ProxyMain(LayerTreeHost* layer_tree_host,
@@ -141,6 +149,8 @@ void ProxyMain::DidCompletePageScaleAnimation() {
 void ProxyMain::BeginMainFrame(
     std::unique_ptr<BeginMainFrameAndCommitState> begin_main_frame_state) {
   recordreplay::SetCompositorProxy(this);
+
+  GraphicsDiagnostic("ProxyMain::BeginMainFrame");
 
   DCHECK(IsMainThread());
   DCHECK_EQ(NO_PIPELINE_STAGE, current_pipeline_stage_);

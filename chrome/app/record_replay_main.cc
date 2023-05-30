@@ -22,6 +22,14 @@
 
 #endif // !BUILDFLAG(IS_WIN)
 
+static void GraphicsDiagnostic(const char* str) {
+  FILE* f = fopen("record_replay_graphics.txt", "a");
+  if (f) {
+    fprintf(f, "%u: %s\n", GetCurrentProcessId(), str);
+    fclose(f);
+  }
+}
+
 static void ReportFailure(const char* format, ...) {
   {
     va_list args;
@@ -380,6 +388,8 @@ static void* RecordReplayAttach(int* pargc, const char*** pargv) {
 #endif
 
   MaybeStartProfiling();
+
+  GraphicsDiagnostic("RecordReplayAttached");
 
   return handle;
 }

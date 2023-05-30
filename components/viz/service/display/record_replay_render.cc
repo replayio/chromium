@@ -15,6 +15,14 @@
 #include "components/viz/service/display_embedder/software_output_surface.h"
 #include "ui/gfx/codec/jpeg_codec.h"
 
+static void GraphicsDiagnostic(const char* str) {
+  FILE* f = fopen("record_replay_graphics.txt", "a");
+  if (f) {
+    fprintf(f, "%u: %s\n", GetCurrentProcessId(), str);
+    fclose(f);
+  }
+}
+
 namespace blink {
 extern bool RecordReplayStateEnsureInitialized();
 }
@@ -87,6 +95,8 @@ void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
           SurfaceIdString(*gSurfaceId).c_str());
     return;
   }
+
+  GraphicsDiagnostic("SubmitCompositorFrame");
 
   viz::AggregatedRenderPassList render_passes;
   for (const auto& pass : frame.render_pass_list) {
@@ -201,6 +211,8 @@ static std::atomic<size_t> gCurrentPaintBookmark;
 static size_t gLastCommitBookmark;
 
 void OnCommitPaint() {
+  GraphicsDiagnostic("OnCommitPaint");
+
   // Record/replay state has to be initialized before the first paint
   // starts, as a checkpoint must have been taken.
   if (blink::RecordReplayStateEnsureInitialized()) {
@@ -225,6 +237,8 @@ static std::atomic<base::WaitableEvent*> gRepaintEvent;
 static std::atomic<char*> gRepaintResult;
 
 void OnPaintFinished(const SkPixmap& pixmap) {
+  GraphicsDiagnostic("OnPaintFinished");
+
   static bool hasPaints = false;
   if (!hasPaints) {
     hasPaints = true;
