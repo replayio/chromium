@@ -46,7 +46,7 @@
 static void GraphicsDiagnostic(const char* str) {
   FILE* f = fopen("record_replay_graphics.txt", "a");
   if (f) {
-    fprintf(f, "%u: %s\n", GetCurrentProcessId(), str);
+    fprintf(f, "%lu: %s\n", GetCurrentProcessId(), str);
     fclose(f);
   }
 }
