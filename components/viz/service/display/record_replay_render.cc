@@ -89,7 +89,7 @@ void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
   }
 
   // FIXME
-  Print("SUBMIT_COMPOSITOR_FRAME %s", GetRecordingId());
+  Print("RECORD_REPLAY_RENDER SubmitCompositorFrame");
 
   viz::AggregatedRenderPassList render_passes;
   for (const auto& pass : frame.render_pass_list) {
@@ -204,6 +204,9 @@ static std::atomic<size_t> gCurrentPaintBookmark;
 static size_t gLastCommitBookmark;
 
 void OnCommitPaint() {
+  // FIXME
+  Print("RECORD_REPLAY_RENDER OnCommitPaint");
+
   // Record/replay state has to be initialized before the first paint
   // starts, as a checkpoint must have been taken.
   if (blink::RecordReplayStateEnsureInitialized()) {
@@ -228,6 +231,9 @@ static std::atomic<base::WaitableEvent*> gRepaintEvent;
 static std::atomic<char*> gRepaintResult;
 
 void OnPaintFinished(const SkPixmap& pixmap) {
+  // FIXME
+  Print("RECORD_REPLAY_RENDER OnPaintFinished");
+
   static bool hasPaints = false;
   if (!hasPaints) {
     hasPaints = true;

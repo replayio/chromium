@@ -318,7 +318,8 @@ void PlatformThread::SetName(const std::string& name) {
   // The debugger needs to be around to catch the name in the exception.  If
   // there isn't a debugger, we are just needlessly throwing an exception.
   if (!::IsDebuggerPresent()) {
-    recordreplay::Assert("[RUN-2059] PlatformThread::SetName #4");
+    if (!recordreplay::AreEventsDisallowed())
+      recordreplay::Assert("[RUN-2059] PlatformThread::SetName #4");
     return;
   }
 

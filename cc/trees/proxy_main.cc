@@ -142,6 +142,8 @@ void ProxyMain::BeginMainFrame(
     std::unique_ptr<BeginMainFrameAndCommitState> begin_main_frame_state) {
   recordreplay::SetCompositorProxy(this);
 
+  recordreplay::Print("RECORD_REPLAY_RENDER ProxyMain::BeginMainFrame");
+
   DCHECK(IsMainThread());
   DCHECK_EQ(NO_PIPELINE_STAGE, current_pipeline_stage_);
 
