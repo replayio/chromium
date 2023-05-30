@@ -20,27 +20,6 @@
 
 #include "base/record_replay.h"
 
-#include <windows.h>
-
-static void* LookupRecordReplaySymbol(const char* name) {
-  HMODULE module = GetModuleHandleA("windows-recordreplay.dll");
-  void* fnptr = module ? (void*)GetProcAddress(module, name) : nullptr;
-  return fnptr ? fnptr : reinterpret_cast<void*>(1);
-}
-
-static std::string RecordReplayGetStack() {
-  static void* fnptr;
-  if (!fnptr) {
-    fnptr = LookupRecordReplaySymbol("RecordReplayGetStack");
-  }
-  if (fnptr != reinterpret_cast<void*>(1)) {
-    char buf[2000];
-    reinterpret_cast<bool(*)(char*, size_t)>(fnptr)(buf, sizeof(buf));
-    return std::string(buf);
-  }
-  return std::string();
-}
-
 namespace base {
 namespace internal {
 
@@ -73,10 +52,6 @@ TimerBase::TimerBase(const Location& posted_from) : posted_from_(posted_from) {
   // checker's CalledOnValidSequence() method will re-bind the checker, and
   // later calls will verify that the same task runner is used.
   DETACH_FROM_SEQUENCE(sequence_checker_);
-
-  if (recordreplay::IsRecordingOrReplaying()) {
-    create_stack_ = RecordReplayGetStack();
-  }
 }
 
 TimerBase::~TimerBase() {
@@ -175,12 +150,6 @@ void DelayTimerBase::AbandonAndStop() {
 
 void DelayTimerBase::Reset() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  // FIXME
-  if (recordreplay::AreEventsDisallowed()) {
-    recordreplay::Diagnostic("DelayTimerBase::Reset DISALLOWED %s", create_stack_.c_str());
-    CHECK(0);
-  }
 
   EnsureNonNullUserTask();
 

@@ -12,8 +12,6 @@
 #include "base/threading/thread_local.h"
 #include "base/time/time.h"
 
-#include "base/record_replay.h"
-
 namespace base {
 
 namespace {

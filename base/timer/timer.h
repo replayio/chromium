@@ -154,9 +154,6 @@ class BASE_EXPORT TimerBase {
   // avoid rebinding every time the Timer fires. Lazy initialized the first time
   // the Timer is started.
   RepeatingClosure timer_callback_;
-
-  // FIXME
-  std::string create_stack_;
 };
 
 //-----------------------------------------------------------------------------

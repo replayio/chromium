@@ -27,8 +27,6 @@
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
-#include "base/record_replay.h"
-
 namespace blink {
 namespace {
 

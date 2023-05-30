@@ -31,8 +31,6 @@
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/thread_safe_ref_counted.h"
 
-#include "base/record_replay.h"
-
 namespace WTF {
 
 // Template specializations of [1], needed to be able to pass WTF callbacks

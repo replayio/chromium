@@ -29,8 +29,6 @@
 #include "third_party/blink/renderer/platform/wtf/cross_thread_copier_media.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 
-#include "base/record_replay.h"
-
 namespace blink {
 
 // static
