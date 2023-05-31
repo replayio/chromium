@@ -2633,6 +2633,23 @@ const {
   getRecordingFilePath,
 } = __RECORD_REPLAY_ARGUMENTS__;
 
+const cache = {};
+
+// Provide a cache for urls, salted with the supplied hash.  Practically, this
+// means if the script content changes at the url, we will re-download the resource. 
+async function getCachedResource(url, hash) {
+  const key = `${url}:${hash}`;
+  if (cache[key]) {
+    return cache[key];
+  }
+
+  log(`fetching sourcemap resource ${key}`);
+
+  const res = await fetchText(key);
+  cache[key] = res;
+  return res;
+}
+
 addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   if (!relativeSourceMapURL || relativeSourceMapURL.startsWith("data:"))
     return;
@@ -2647,21 +2664,20 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   if (!urls)
     return;
 
+  const scriptSource = getScriptSource(scriptId);
+  const hash = sha256DigestHex(scriptSource);
+
   const { sourceMapURL, sourceMapBaseURL } = urls;
 
   let sourceMap;
   try {
-    sourceMap = await fetchText(sourceMapURL);
+    sourceMap = await getCachedResource(sourceMapURL, hash);
   } catch (err) {
     log(`Failed to read sourcemap ${sourceMapURL}: ${err.message}`);
   }
   if (!sourceMap) {
     return;
   }
-
-  const scriptSource = getScriptSource(scriptId);
-
-  const hash = sha256DigestHex(scriptSource);
 
   const id = hash;
   const name = `sourcemap-${id}.map`;
@@ -2692,7 +2708,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   for (const { offset, url } of sources) {
     let sourceContent;
     try {
-      sourceContent = await fetchText(url);
+      sourceContent = await getCachedResource(url, hash);
     } catch (err) {
       log(`Failed to read original source ${url}: ${err.message}`);
       continue;
