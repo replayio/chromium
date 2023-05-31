@@ -185,7 +185,7 @@ function computeBuildId(driverDate, driverRevision) {
     // For local builds, we just generate a random hash, in order to ensure s3 freshness.
     const LOOKUP = "0123456789abcdef";
     for (let i = 0; i < 12; i++) {
-      chromiumRevision += LOOKUP[Math.floor(Math.random() * 15.999)];
+      chromiumRevision += LOOKUP[Math.floor(Math.random() * 16)];
     }
   } else {
     // Note: this build ID doesn't include revision etc. information for v8 or other inner git
