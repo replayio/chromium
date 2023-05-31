@@ -91,7 +91,8 @@ const Verbose = false;
 const VerboseCommands = Verbose;
 
 const {
-  log,
+  log: log_,
+  logTrace: logTrace_,
   setCDPMessageCallback,
   sendCDPMessage,
   setCommandCallback,
@@ -142,6 +143,14 @@ const JSON_parse = JSON.parse;
 
 // Some of these are duplicated in gSourceMapScript, so watch out when making
 // modifications to update both versions...
+
+function log(...args) {
+  log_(args.join(' '));
+}
+
+function logTrace(...args) {
+  logTrace_(args.join(' '));
+}
 
 function assert(v, msg = "") {
   if (!v) {
@@ -3325,6 +3334,13 @@ static void LogCallback(const v8::FunctionCallbackInfo<v8::Value>& args) {
   recordreplay::Print("%s", *text);
 }
 
+static void LogTraceCallback(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsString() &&
+        "must be called with a single string");
+  v8::String::Utf8Value text(args.GetIsolate(), args[0]);
+  recordreplay::Trace("%s", *text);
+}
+
 // Function to invoke on CDP responses and events.
 static v8::Eternal<v8::Function>* gCDPMessageCallback;
 
@@ -4767,6 +4783,7 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
                  ToV8String(isolate, REPLAY_CDT_PAUSE_OBJECT_GROUP));
 
   SetFunctionProperty(isolate, args, "log", LogCallback);
+  SetFunctionProperty(isolate, args, "logTrace", LogTraceCallback);
 
   // CDP debugger functionality
   SetFunctionProperty(isolate, args, "setCDPMessageCallback",
