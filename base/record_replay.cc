@@ -35,7 +35,8 @@ namespace recordreplay {
   Macro(V8RecordReplayPointerId, (const void* ptr), (ptr), int, 0)      \
   Macro(V8RecordReplayIdPointer, (int id), (id), void*, nullptr)        \
   Macro(V8RecordReplayFeatureEnabled,                                   \
-        (const char* feature), (feature), bool, false)                  \
+        (const char* feature, const char* subfeature),                  \
+        (feature, subfeature), bool, false)                             \
   Macro(V8IsMainThread, (), (), bool, false)                            \
   Macro(V8RecordReplayHadMismatch, (), (), bool, false)
 
