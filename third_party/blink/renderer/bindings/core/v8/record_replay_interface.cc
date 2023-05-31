@@ -2631,6 +2631,7 @@ const {
   recordingDirectoryFileExists,
   readFromRecordingDirectory,
   getRecordingFilePath,
+  RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE,
 } = __RECORD_REPLAY_ARGUMENTS__;
 
 const cache = {};
@@ -2639,7 +2640,7 @@ const cache = {};
 // means if the script content changes at the url, we will re-download the resource. 
 async function getCachedResource(url, hash) {
   const key = `${url}:${hash}`;
-  if (cache[key]) {
+  if (cache[key] && !RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE) {
     return cache[key];
   }
 
@@ -4781,6 +4782,9 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
 
   DefineProperty(isolate, args, "REPLAY_CDT_PAUSE_OBJECT_GROUP",
                  ToV8String(isolate, REPLAY_CDT_PAUSE_OBJECT_GROUP));
+
+  DefineProperty(isolate, args, "RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE",
+                 v8::Boolean::New(isolate, TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE")));
 
   SetFunctionProperty(isolate, args, "log", LogCallback);
 
