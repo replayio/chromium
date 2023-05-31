@@ -288,12 +288,14 @@ addEventListener("Runtime.executionContextCreated", ({ context }) => {
   for (const callback of gContextChangeCallbacks) {
     callback(context, "add");
   }
+  logTrace(`[RUN-2042-2068] Runtime.executionContextCreated ${context.id}`);
 });
 addEventListener("Runtime.executionContextDestroyed", ({ executionContextId }) => {
   const context = gExecutionContexts.get(executionContextId);
   for (const callback of gContextChangeCallbacks) {
     callback(context, "remove");
   }
+  logTrace(`[RUN-2042-2068] Runtime.executionContextDestroyed ${context.id}`);
   gExecutionContexts.delete(executionContextId);
 });
 addEventListener("Runtime.executionContextsCleared", () => {
@@ -302,6 +304,7 @@ addEventListener("Runtime.executionContextsCleared", () => {
       callback(context, "remove");
     }
   }
+  logTrace(`[RUN-2042-2068] Runtime.executionContextsCleared`);
   gExecutionContexts.clear();
 });
 sendMessage("Runtime.enable");
