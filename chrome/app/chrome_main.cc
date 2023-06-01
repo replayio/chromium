@@ -91,6 +91,9 @@ int ChromeMain(int argc, const char** argv) {
 #error Unknown platform.
 #endif
 
+  // FIXME
+  setenv("RECORD_REPLAY_JS_PROGRESS_ASSERTS", "1", 1);
+
 #if BUILDFLAG(IS_LINUX)
   // On linux ChromeMain is the process entry point, and we need to start
   // recording/replaying.
