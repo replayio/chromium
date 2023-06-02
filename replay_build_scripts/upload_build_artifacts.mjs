@@ -448,7 +448,7 @@ function computeBuildId(
       ? runtimeDate
       : driverDate;
 
-  return `${currentPlatform()}-${runtimeName}-${date}-${runtimeRevision}-${driverRevision}${buildIdExtension}`;
+  return `${currentPlatform()}-${outputArchitecture()}-${runtimeName}-${date}-${runtimeRevision}-${driverRevision}${buildIdExtension}`;
 }
 
 async function buildSymbolsArchive(
