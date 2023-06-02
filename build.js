@@ -5,6 +5,7 @@
 const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
+const { outputArchitecture } = require("./replay_build_scripts/common.mjs");
 
 // If this env var is set, we then we (also) use this as our cue that
 // we're building on a developer's machine, and will run some different
@@ -204,5 +205,5 @@ function computeBuildId(driverDate, driverRevision) {
   // Use the later of the two dates in the build ID.
   const date = +runtimeDate >= +driverDate ? runtimeDate : driverDate;
 
-  return `${currentPlatform()}-chromium-${date}-${chromiumRevision}-${driverRevision}`;
+  return `${currentPlatform()}-${outputArchitecture()}-chromium-${date}-${chromiumRevision}-${driverRevision}`;
 }
