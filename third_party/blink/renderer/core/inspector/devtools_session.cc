@@ -321,6 +321,11 @@ void DevToolsSession::SendProtocolNotification(
     std::unique_ptr<protocol::Serializable> notification) {
   if (IsDetached())
     return;
+
+  recordreplay::Assert(
+      "[RUN-TODO] DevToolsSession::SendProtocolNotification %d",
+      (int)notification_queue_.size());
+
   notification_queue_.push_back(WTF::BindOnce(
       [](std::unique_ptr<protocol::Serializable> notification) {
         return notification->Serialize();
@@ -332,6 +337,10 @@ void DevToolsSession::sendNotification(
     std::unique_ptr<v8_inspector::StringBuffer> notification) {
   if (IsDetached())
     return;
+
+  recordreplay::Assert("[RUN-TODO] DevToolsSession::sendNotification %d",
+                       (int)notification_queue_.size());
+
   notification_queue_.push_back(WTF::BindOnce(
       [](std::unique_ptr<v8_inspector::StringBuffer> notification) {
         return Get8BitStringFrom(notification.get());
