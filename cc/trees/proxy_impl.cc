@@ -43,6 +43,14 @@
 
 #include "base/record_replay.h"
 
+static void GraphicsDiagnostic(const char* str) {
+  FILE* f = fopen("record_replay_graphics.txt", "a");
+  if (f) {
+    fprintf(f, "%lu: %s\n", GetCurrentProcessId(), str);
+    fclose(f);
+  }
+}
+
 namespace cc {
 
 namespace {
@@ -892,6 +900,8 @@ void ProxyImpl::ScheduledActionBeginMainFrameNotExpectedUntil(
 DrawResult ProxyImpl::DrawInternal(bool forced_draw) {
   DCHECK(IsImplThread());
   DCHECK(host_impl_.get());
+
+  GraphicsDiagnostic("ProxyImpl::DrawInternal");
 
   TRACE_EVENT_WITH_FLOW0("viz,benchmark", "MainFrame.Draw",
                          TRACE_ID_LOCAL(host_impl_->active_tree()->trace_id()),
