@@ -418,5 +418,6 @@ static void* RecordReplayAttach(int* pargc, const char*** pargv) {
 
   LoadMessage("RecordReplayAttachFinished: pid=%d time=%.3f", getpid(), CurrentTimeMs());
 
-  return handle;
+  // FIXME
+  return nullptr;
 }
