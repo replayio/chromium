@@ -22,6 +22,29 @@
 
 #endif // !BUILDFLAG(IS_WIN)
 
+static const double MsPerNs = 1000000.0;
+
+static double CurrentTimeMs() {
+  timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  return ts.tv_sec * 1000 + (double)ts.tv_nsec / MsPerNs;
+}
+
+static void LoadMessage(const char* format, ...) {
+  const char* home = getenv("HOME");
+  char buf[1024];
+  snprintf(buf, sizeof(buf), "%s/record_replay_initialization.txt", home);
+  FILE* f = fopen(buf, "a");
+  if (f) {
+    va_list args;
+    va_start(args, format);
+    vfprintf(f, format, args);
+    fprintf(f, "\n");
+    va_end(args);
+    fclose(f);
+  }
+}
+
 static void ReportFailure(const char* format, ...) {
   {
     va_list args;
@@ -355,10 +378,14 @@ static void* RecordReplayAttach(int* pargc, const char*** pargv) {
 #endif
   }
 
+  LoadMessage("OpenDriverHandleStart: pid=%d time=%.3f", getpid(), CurrentTimeMs());
+
   void* handle = OpenDriverHandle();
   if (!handle) {
     return nullptr;
   }
+
+  LoadMessage("OpenDriverHandleFinished: pid=%d time=%.3f", getpid(), CurrentTimeMs());
 
   // FIXME
   return nullptr;
