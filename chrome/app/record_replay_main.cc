@@ -360,6 +360,9 @@ static void* RecordReplayAttach(int* pargc, const char*** pargv) {
     return nullptr;
   }
 
+  // FIXME
+  return nullptr;
+
   RecordReplayLoadSymbol(handle, "RecordReplayAttach", gRecordReplayAttach);
   RecordReplayLoadSymbol(handle, "RecordReplaySetApiKey", gRecordReplaySetApiKey);
   RecordReplayLoadSymbol(handle, "RecordReplayProfileExecution", gRecordReplayProfileExecution);
