@@ -31,10 +31,7 @@ static double CurrentTimeMs() {
 }
 
 static void LoadMessage(const char* format, ...) {
-  const char* home = getenv("HOME");
-  char buf[1024];
-  snprintf(buf, sizeof(buf), "%s/record_replay_initialization.txt", home);
-  FILE* f = fopen(buf, "a");
+  FILE* f = fopen("/github/home/record_replay_initialization", "a");
   if (f) {
     va_list args;
     va_start(args, format);
