@@ -384,9 +384,6 @@ static void* RecordReplayAttach(int* pargc, const char*** pargv) {
 
   LoadMessage("OpenDriverHandleFinished: pid=%d time=%.3f", getpid(), CurrentTimeMs());
 
-  // FIXME
-  return nullptr;
-
   RecordReplayLoadSymbol(handle, "RecordReplayAttach", gRecordReplayAttach);
   RecordReplayLoadSymbol(handle, "RecordReplaySetApiKey", gRecordReplaySetApiKey);
   RecordReplayLoadSymbol(handle, "RecordReplayProfileExecution", gRecordReplayProfileExecution);
@@ -418,6 +415,8 @@ static void* RecordReplayAttach(int* pargc, const char*** pargv) {
 #endif
 
   MaybeStartProfiling();
+
+  LoadMessage("RecordReplayAttachFinished: pid=%d time=%.3f", getpid(), CurrentTimeMs());
 
   return handle;
 }
