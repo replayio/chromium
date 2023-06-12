@@ -87,6 +87,26 @@ TEST(HashMapTest, Iteration) {
   EXPECT_EQ((1 << 10) - 1, encountered_keys);
 }
 
+TEST(HashMapTest, OrderedIteration) {
+  IntHashMap map;
+  for (int i = 0; i < 10; ++i)
+    map.insert(1 << i, i);
+
+  int i = 0;
+  for (auto it = map.begin(); it != map.end(); ++it) {
+    EXPECT_EQ(it->key, 1<<i);
+    EXPECT_EQ(it->value, i);
+    i++;
+  }
+  i = 10;
+  for (auto it = map.end(); it != map.begin();) {
+    --it;
+    --i;
+    EXPECT_EQ(it->key, 1<<i);
+    EXPECT_EQ(it->value, i);
+  }
+}
+
 struct TestDoubleHashTraits : HashTraits<double> {
   static const unsigned kMinimumTableSize = 8;
 };
