@@ -212,7 +212,7 @@ let gNextMessageId = 1;
 let gCurrentMessageId;
 let gCurrentMessageResult;
 
-function sendMessage(method, params) {
+function sendMessage(method, params, throwOnApiError = true) {
   const id = gNextMessageId++;
   gCurrentMessageId = id;
   gCurrentMessageResult = undefined;
@@ -235,11 +235,34 @@ function sendMessage(method, params) {
     }
   }
   gCurrentMessageId = undefined;
-  if (gCurrentMessageResult?.result) {
-    return gCurrentMessageResult.result;
+  
+  /**
+   * `gCurrentMessageResult` can be of 3 possible types:
+   * 
+   * 1. ProtocolError (id?, error: (code, message), data?)
+   * @see https://github.com/replayio/chromium-v8/blob/c5e451943a6d87b44374e7a08d44fa92b9a2c93b/third_party/inspector_protocol/crdtp/dispatch.cc#L275
+   * 
+   * 2. Response (id, result) - The response contains the return values defined by CDP.
+   *                            We are primarily interested in `result.result`.
+   * @see https://github.com/replayio/chromium-v8/blob/c5e451943a6d87b44374e7a08d44fa92b9a2c93b/third_party/inspector_protocol/crdtp/dispatch.cc#L348
+   * 
+   * 3. Notification (method, params) - TODO: we are not handling this yet.
+   * @see https://github.com/replayio/chromium-v8/blob/c5e451943a6d87b44374e7a08d44fa92b9a2c93b/third_party/inspector_protocol/crdtp/dispatch.cc#L370
+   */
+  if (throwOnApiError) {
+    if (gCurrentMessageResult?.result) {
+      return gCurrentMessageResult.result;
+    }
+    if (gCurrentMessageResult?.error) {
+      throw new Error(`${gCurrentMessageResult.error.message} (${gCurrentMessageResult.error.code})`);
+    }
   }
-  if (gCurrentMessageResult?.error) {
-    throw new Error(`${gCurrentMessageResult.error.message} (${gCurrentMessageResult.error.code})`);
+  else {
+    const { result, error } = gCurrentMessageResult;
+    return {
+      ...result,
+      commandFailedReason: error
+    };
   }
   return undefined;
 }
@@ -513,12 +536,22 @@ function getStackFrames() {
 function buildRrpObjectResult(cdpReturnValue) {
   const rrpResult = { data: {} };
   if (cdpReturnValue) {
-    const { result: cdpResult, exceptionDetails } = cdpReturnValue;
-    const rrpId = buildRrpObjectFromCdpObject(cdpResult);
-
+    const { result: cdpResult, exceptionDetails, commandFailedReason } = cdpReturnValue;
     if (exceptionDetails) {
+      // exceptionDetails encapsulate a JS exception thrown while handling the command.
+      const rrpId = buildRrpObjectFromCdpObject(exceptionDetails);
       rrpResult.exception = rrpId;
-    } else {
+    }
+    else if (commandFailedReason) {
+      // commandFailedReason is a plain object, containing `code` and `message`, indicating 
+      // why the V8 debugger failed to handle the command.
+      const rrpId = registerPlainObject(commandFailedReason);
+      rrpResult.exception = rrpId;
+      rrpResult.failed = true;
+    }
+    if (cdpResult) {
+      // cdpResult is the actual result RemoteObject.
+      const rrpId = buildRrpObjectFromCdpObject(cdpResult);
       rrpResult.returned = rrpId;
     }
   }
@@ -566,16 +599,21 @@ function Pause_evaluateInFrame({ frameId, expression }) {
         callFrameId: frame.callFrameId,
         expression,
         objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
-      }
+      },
+      false
     );
   }
 }
 
 function Pause_evaluateInGlobal({ expression }) {
-  const rv = sendMessage("Runtime.evaluate", {
-    expression,
-    objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
-  });
+  const rv = sendMessage(
+    "Runtime.evaluate", 
+    {
+      expression,
+      objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
+    },
+    false
+  );
   return buildRrpObjectResult(rv);
 }
 
@@ -3456,7 +3494,7 @@ v8_inspector::V8InspectorSession* getInspectorSession() {
 void
 RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
                                 v8::Isolate* isolate) {
-  if (v8::IsMainThread() && recordreplay::IsReplaying()) {
+  if (v8::IsMainThread()) {
     gInspector = inspector;
 
     // For now we only connect to the first frame.
