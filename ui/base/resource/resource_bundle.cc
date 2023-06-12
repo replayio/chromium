@@ -68,6 +68,8 @@
 #undef LoadBitmap
 #endif
 
+#include "base/record_replay.h"
+
 namespace ui {
 
 namespace {
