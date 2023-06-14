@@ -3494,7 +3494,6 @@ v8_inspector::V8InspectorSession* getInspectorSession() {
 void
 RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
                                 v8::Isolate* isolate) {
-  // TODO: allow running this when recording, as well
   if (v8::IsMainThread() && recordreplay::IsReplaying()) {
     gInspector = inspector;
 
