@@ -243,7 +243,6 @@ function sendMessage(method, params, throwOnApiError = true) {
    * @see https://github.com/replayio/chromium-v8/blob/c5e451943a6d87b44374e7a08d44fa92b9a2c93b/third_party/inspector_protocol/crdtp/dispatch.cc#L275
    * 
    * 2. Response (id, result) - The response contains the return values defined by CDP.
-   *                            We are primarily interested in `result.result`.
    * @see https://github.com/replayio/chromium-v8/blob/c5e451943a6d87b44374e7a08d44fa92b9a2c93b/third_party/inspector_protocol/crdtp/dispatch.cc#L348
    * 
    * 3. Notification (method, params) - TODO: we are not handling this yet.
