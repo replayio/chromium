@@ -599,7 +599,7 @@ function Pause_evaluateInFrame({ frameId, expression }) {
         expression,
         objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
       },
-      false
+      /* throwOnApiError */ false
     );
   }
 }
@@ -611,7 +611,7 @@ function Pause_evaluateInGlobal({ expression }) {
       expression,
       objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
     },
-    false
+    /* throwOnApiError */ false
   );
   return buildRrpObjectResult(rv);
 }
