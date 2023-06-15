@@ -23,6 +23,8 @@
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
 
+#include "base/record_replay.h"
+
 class SkBitmap;
 class SkColorSpace;
 struct SkISize;
