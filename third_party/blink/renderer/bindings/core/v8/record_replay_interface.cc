@@ -2688,13 +2688,13 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     return;
 
   const scriptSource = getScriptSource(scriptId);
-  const hash = sha256DigestHex(scriptSource);
+  const scriptHash = sha256DigestHex(scriptSource);
 
   const { sourceMapURL, sourceMapBaseURL } = urls;
 
   let sourceMap;
   try {
-    sourceMap = await getCachedResource(sourceMapURL, hash);
+    sourceMap = await getCachedResource(sourceMapURL, scriptHash);
   } catch (err) {
     log(`Failed to read sourcemap ${sourceMapURL}: ${err.message}`);
   }
@@ -2702,7 +2702,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     return;
   }
 
-  const id = hash;
+  const id = scriptHash;
   const name = `sourcemap-${id}.map`;
   const lookupName = `sourcemap-${id}.lookup`;
 
@@ -2723,7 +2723,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     id,
     url: sourceMapURL,
     baseURL: sourceMapBaseURL,
-    targetContentHash: `sha256:${hash}`,
+    targetContentHash: `sha256:${scriptHash}`,
     targetURLHash: sourceURL ? makeAPIHash(sourceURL) : undefined,
     targetMapURLHash: makeAPIHash(sourceMapURL),
   }));
@@ -2731,7 +2731,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   for (const { offset, url } of sources) {
     let sourceContent;
     try {
-      sourceContent = await getCachedResource(url, hash);
+      sourceContent = await getCachedResource(url, scriptHash);
     } catch (err) {
       log(`Failed to read original source ${url}: ${err.message}`);
       continue;
