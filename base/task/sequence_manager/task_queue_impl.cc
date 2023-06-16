@@ -330,10 +330,10 @@ void TaskQueueImpl::UnregisterTaskQueue() {
 
   {
     // Make sure we take the ordered lock first--if it's not our turn to do so, we won't deadlock
-    // any unordered threads from taking the unordered lock.
-    base::internal::CheckedAutoLock lock(any_thread_lock_);
-    base::internal::CheckedAutoLock lock2(unordered_immediate_queue_lock_);
-    base::internal::CheckedAutoLock lock3(unordered_handler_lock_);
+    // any unordered threads from taking the unordered locks.
+    base::internal::CheckedAutoLock o_lock(any_thread_lock_);
+    base::internal::CheckedAutoLock u_lock1(unordered_immediate_queue_lock_);
+    base::internal::CheckedAutoLock u_lock2(unordered_handler_lock_);
 
     any_thread_.unregistered = true;
     immediate_incoming_queue.swap(any_thread_.immediate_incoming_queue);
@@ -436,8 +436,6 @@ TimeDelta TaskQueueImpl::GetTaskDelayAdjustment(CurrentThread current_thread) {
   return TimeDelta();
 #endif  // DCHECK_IS_ON()
 }
-
-#pragma clang optimize off
 
 void TaskQueueImpl::PostImmediateTaskImplOrdered(PostedTask task,
                                           CurrentThread current_thread) {
@@ -569,7 +567,6 @@ void TaskQueueImpl::PostImmediateTaskImpl(PostedTask task,
   }
   TraceQueueSize();
 }
-#pragma clang optimize on
 
 void TaskQueueImpl::PostDelayedTaskImpl(PostedTask posted_task,
                                         CurrentThread current_thread) {
@@ -698,8 +695,8 @@ void TaskQueueImpl::TakeImmediateIncomingQueueTasks(TaskDeque* queue, TaskDeque*
   // wasting memory, before we make it the `immediate_incoming_queue`.
   queue->MaybeShrinkQueue();
 
-  base::internal::CheckedAutoLock lock(any_thread_lock_);
-  base::internal::CheckedAutoLock lock2(unordered_immediate_queue_lock_);
+  base::internal::CheckedAutoLock o_lock(any_thread_lock_);
+  base::internal::CheckedAutoLock u_lock(unordered_immediate_queue_lock_);
   queue->swap(any_thread_.immediate_incoming_queue);
   record_replay_unordered_queue->swap(record_replay_unordered_immediate_incoming_queue);
 
@@ -1490,8 +1487,8 @@ TaskQueueImpl::AddOnTaskPostedHandler(OnTaskPostedHandler handler) {
       std::make_unique<OnTaskPostedCallbackHandleImpl>(this,
                                                        associated_thread_);
   // Ensure we grab the ordered lock first.
-  base::internal::CheckedAutoLock lock(any_thread_lock_);
-  base::internal::CheckedAutoLock lock2(unordered_handler_lock_);
+  base::internal::CheckedAutoLock o_lock(any_thread_lock_);
+  base::internal::CheckedAutoLock u_lock(unordered_handler_lock_);
 
   on_task_posted_handlers.insert(
       {handle.get(), std::move(handler)});
@@ -1502,8 +1499,8 @@ void TaskQueueImpl::RemoveOnTaskPostedHandler(
     TaskQueueImpl::OnTaskPostedCallbackHandleImpl*
         on_task_posted_callback_handle) {
   // Ensure we grab the ordered lock first.
-  base::internal::CheckedAutoLock lock(any_thread_lock_);
-  base::internal::CheckedAutoLock lock2(unordered_handler_lock_);
+  base::internal::CheckedAutoLock o_lock(any_thread_lock_);
+  base::internal::CheckedAutoLock u_lock(unordered_handler_lock_);
   on_task_posted_handlers.erase(on_task_posted_callback_handle);
 }
 
