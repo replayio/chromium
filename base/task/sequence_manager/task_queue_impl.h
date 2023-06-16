@@ -570,11 +570,14 @@ class BASE_EXPORT TaskQueueImpl {
   const scoped_refptr<GuardedTaskPoster> task_poster_;
 
   mutable base::internal::CheckedLock any_thread_lock_;
-  mutable base::internal::CheckedLock unordered_immediate_queue_lock_;
-  mutable base::internal::CheckedLock unordered_handler_lock_;
 
-  TaskDeque record_replay_unordered_immediate_incoming_queue GUARDED_BY(unordered_immediate_queue_lock_);
-  base::flat_map<raw_ptr<OnTaskPostedCallbackHandleImpl>, OnTaskPostedHandler> on_task_posted_handlers GUARDED_BY(unordered_handler_lock_);
+
+  // This lock protects access to the handler callbacks, and is used in both ordered and unordered
+  // contexts.  In particular, this lock must only be used around the handler
+  mutable base::internal::CheckedLock unordered_lock_;
+
+  TaskDeque record_replay_unordered_immediate_incoming_queue GUARDED_BY(unordered_lock_);
+  base::flat_map<raw_ptr<OnTaskPostedCallbackHandleImpl>, OnTaskPostedHandler> on_task_posted_handlers GUARDED_BY(unordered_lock_);
   struct AnyThread {
     // Mirrored from MainThreadOnly. These are only used for tracing.
     struct TracingOnly {
