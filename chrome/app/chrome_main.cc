@@ -80,6 +80,9 @@ extern "C" void V8InitializeNotRecordingOrReplaying();
 namespace recordreplay { extern void InitBindings(); }
 #endif
 
+#include "base/power_monitor/power_monitor.h"
+#include "base/record_replay.h"
+
 #if BUILDFLAG(IS_WIN)
 DLLEXPORT int __cdecl ChromeMain(HINSTANCE instance,
                                  sandbox::SandboxInterfaceInfo* sandbox_info,
@@ -126,6 +129,11 @@ int ChromeMain(int argc, const char** argv) {
 #else // !BUILDFLAG(IS_WIN)
 #error Unknown platform
 #endif // !BUILDFLAG(IS_WIN)
+
+  if (recordreplay::IsRecordingOrReplaying("eager-initialization", "ChromeMain")) {
+    // Force initialization that can otherwise happen at non-deterministic points.
+    base::PowerMonitor::GetInstance();
+  }
 
 #if BUILDFLAG(IS_WIN)
 #if BUILDFLAG(USE_ALLOCATOR_SHIM) && BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
