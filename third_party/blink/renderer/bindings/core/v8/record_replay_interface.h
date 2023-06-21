@@ -18,7 +18,7 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame);
 
 // Run any special record/replay scripts that need to happen after the first
 // checkpoint is created, so that they can be registered with the recorder.
-void RunInitialRecordReplayScripts(v8::Isolate* isolate);
+void InitializeDevToolsScripts(v8::Isolate* isolate);
 
 // Notify the driver that we're adding an error to the console.
 void RecordReplayOnErrorEvent(ErrorEvent* error_event);

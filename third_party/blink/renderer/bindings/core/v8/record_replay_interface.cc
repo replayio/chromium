@@ -4950,7 +4950,7 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
   }
 }
 
-void RunInitialRecordReplayScripts(v8::Isolate* isolate) {
+void InitializeDevToolsScripts(v8::Isolate* isolate) {
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
 
   if (recordreplay::FeatureEnabled("react-devtools-backend") &&

@@ -217,19 +217,33 @@ void LocalWindowProxy::Initialize() {
     SetSecurityToken(origin.get());
   }
 
-  // After creating the first context that is associated with a non-empty
-  // origin, we are ready to set up the state used to process driver commands
-  // when recording/replaying, and to create checkpoints. Create the first
-  // checkpoint at which execution can pause.
+  recordreplay::Print("[RUN-TODO] LocalWindowProxy::Initialize %d %s",
+                      !!gRecordReplayStateInitialized,
+                      GetFrame()->DomWindow()->Url().GetString().Utf8().c_str());
+
   if (recordreplay::IsRecordingOrReplaying("checkpoints") &&
       origin &&
-      !origin->Host().empty() &&
-      !gRecordReplayStateInitialized) {
-    gRecordReplayStateInitialized = true;
-    SetupRecordReplayCommands(GetIsolate(), GetFrame());
-    V8RecordReplaySetDefaultContext(GetIsolate(), context);
-    recordreplay::NewCheckpoint();
-    RunInitialRecordReplayScripts(GetIsolate());
+      !origin->Host().empty()) {
+    if (!gRecordReplayStateInitialized) {
+      // After creating the first context that is associated with a non-empty
+      // origin, we are ready to set up the state used to process driver
+      // commands when recording/replaying, and to create checkpoints. Create
+      // the first checkpoint at which execution can pause.
+      gRecordReplayStateInitialized = true;
+      SetupRecordReplayCommands(GetIsolate(), GetFrame());
+      V8RecordReplaySetDefaultContext(GetIsolate(), context);
+      recordreplay::NewCheckpoint();
+    }
+
+    if (GetFrame()->IsOutermostMainFrame() || GetFrame()->IsFencedFrameRoot()) {
+      // Whenver a new isolated global root is created, initialize our devtools
+      // scripts within it.
+      // Note that we handle iframes in `gDevtoolsIframeSetupScript`.
+      recordreplay::Print(
+          "[RUN-TODO] InitializeDevToolsScripts %s",
+          GetFrame()->DomWindow()->Url().GetString().Utf8().c_str());
+      InitializeDevToolsScripts(GetIsolate());
+    }
   }
 
   {
