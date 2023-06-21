@@ -230,7 +230,7 @@ void LocalWindowProxy::Initialize() {
       // commands when recording/replaying, and to create checkpoints. Create
       // the first checkpoint at which execution can pause.
       gRecordReplayStateInitialized = true;
-      SetupRecordReplayCommands(GetIsolate(), GetFrame());
+      // SetupRecordReplayCommands(GetIsolate(), GetFrame());
       V8RecordReplaySetDefaultContext(GetIsolate(), context);
       recordreplay::NewCheckpoint();
     }
@@ -242,6 +242,9 @@ void LocalWindowProxy::Initialize() {
       recordreplay::Print(
           "[RUN-TODO] InitializeDevToolsScripts %s",
           GetFrame()->DomWindow()->Url().GetString().Utf8().c_str());
+      // [ryanjduffy] - i'm sure we shouldn't do this here but i want to test
+      // the annotation hook so i'm trying something
+      SetupRecordReplayCommands(GetIsolate(), GetFrame());
       InitializeDevToolsScripts(GetIsolate());
     }
   }
