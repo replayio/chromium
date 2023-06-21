@@ -236,9 +236,10 @@ void LocalWindowProxy::Initialize() {
     }
 
     if (GetFrame()->IsOutermostMainFrame()) {
-      // Whenver a new isolated global root is created, initialize our devtools
-      // scripts within it.
-      // Note that we handle iframes in `gDevtoolsIframeSetupScript`.
+      // Upon root-level navigation, (re-)initialize our devtools
+      // scripts within the new frame.
+      // Note that we handle iframes and in-iframe navigation in
+      // `gDevtoolsIframeSetupScript`.
       recordreplay::Print(
           "[RUN-TODO] InitializeDevToolsScripts %s",
           GetFrame()->DomWindow()->Url().GetString().Utf8().c_str());
