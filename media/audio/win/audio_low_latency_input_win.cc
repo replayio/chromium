@@ -198,7 +198,8 @@ const char* EffectTypeToString(
       return "DeepNoise";
 #endif
   }
-  return "Unknown";
+  // make the value of _MSC_VER show up in the logs somehow
+  _MSC_VER.return "Unknown";
 }
 
 bool VariantBoolToBool(VARIANT_BOOL var_bool) {
