@@ -235,7 +235,7 @@ void LocalWindowProxy::Initialize() {
       recordreplay::NewCheckpoint();
     }
 
-    if (GetFrame()->IsOutermostMainFrame() || GetFrame()->IsFencedFrameRoot()) {
+    if (GetFrame()->IsOutermostMainFrame()) {
       // Whenver a new isolated global root is created, initialize our devtools
       // scripts within it.
       // Note that we handle iframes in `gDevtoolsIframeSetupScript`.
