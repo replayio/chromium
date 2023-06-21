@@ -4945,9 +4945,11 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
     RunScript(isolate, context, gSourceMapScript, InternalScriptURL);
   }
 
-  // Call this here to avoid divergence later.
-  // https://linear.app/replay/issue/RUN-2195#comment-e0b6c75b
-  localFrame->GetSettings()->SetForceMainWorldInitialization(true);
+  if (recordreplay::FeatureEnabled("force-main-world-initialization")) {
+    // Call this here to avoid divergence later.
+    // https://linear.app/replay/issue/RUN-2195#comment-e0b6c75b
+    localFrame->GetSettings()->SetForceMainWorldInitialization(true);
+  }
 
   if (recordreplay::IsReplaying()) {
     recordreplay::AutoDisallowEvents disallow("SetupRecordReplayCommands");
