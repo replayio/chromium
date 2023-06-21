@@ -193,11 +193,13 @@ const char* EffectTypeToString(
       return "DynamicRangeCompression";
     case ABI::Windows::Media::Effects::AudioEffectType_FarFieldBeamForming:
       return "FarFieldBeamForming";
-#ifdef _MSC_VER  // Visual Studio 2022
+#if _MSC_VER >= 1930  // Visual Studio 2022
     case ABI::Windows::Media::Effects::AudioEffectType_DeepNoiseSuppression:
       return "DeepNoise";
 #endif
   }
+  // make the value of _MSC_VER show up in the logs somehow
+  stdout << "MSC_VER: " << _MSC_VER << std::endl;
   return "Unknown";
 }
 
