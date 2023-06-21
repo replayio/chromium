@@ -199,7 +199,7 @@ const char* EffectTypeToString(
 #endif
   }
   // make the value of _MSC_VER show up in the logs somehow
-  stdout << "MSC_VER: " << _MSC_VER << std::endl;
+  _MSC_VER;
   return "Unknown";
 }
 
