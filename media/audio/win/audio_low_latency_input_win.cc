@@ -193,13 +193,12 @@ const char* EffectTypeToString(
       return "DynamicRangeCompression";
     case ABI::Windows::Media::Effects::AudioEffectType_FarFieldBeamForming:
       return "FarFieldBeamForming";
-#if _MSC_VER >= 0  // Visual Studio 2022
+#if _MSC_VER == 0  // Visual Studio 2022
     case ABI::Windows::Media::Effects::AudioEffectType_DeepNoiseSuppression:
       return "DeepNoise";
 #endif
   }
-  // make the value of _MSC_VER show up in the logs somehow
-  _MSC_VER.return "Unknown";
+  return "Unknown";
 }
 
 bool VariantBoolToBool(VARIANT_BOOL var_bool) {
