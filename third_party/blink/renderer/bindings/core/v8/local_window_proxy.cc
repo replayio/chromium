@@ -217,10 +217,6 @@ void LocalWindowProxy::Initialize() {
     SetSecurityToken(origin.get());
   }
 
-  recordreplay::Print("[RUN-TODO] LocalWindowProxy::Initialize %d %s",
-                      !!gRecordReplayStateInitialized,
-                      GetFrame()->DomWindow()->Url().GetString().Utf8().c_str());
-
   if (recordreplay::IsRecordingOrReplaying("checkpoints") &&
       origin &&
       !origin->Host().empty()) {
@@ -240,9 +236,6 @@ void LocalWindowProxy::Initialize() {
       // scripts within the new frame.
       // Note that we handle iframes and in-iframe navigation in
       // `gDevtoolsIframeSetupScript`.
-      recordreplay::Print(
-          "[RUN-TODO] InitializeDevToolsScripts %s",
-          GetFrame()->DomWindow()->Url().GetString().Utf8().c_str());
       InitializeDevToolsScripts(GetIsolate());
     }
   }
