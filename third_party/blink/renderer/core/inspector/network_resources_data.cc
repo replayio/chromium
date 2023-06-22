@@ -84,6 +84,7 @@ void NetworkResourcesData::ResourceData::Trace(Visitor* visitor) const {
   visitor->template RegisterWeakCallbackMethod<
       NetworkResourcesData::ResourceData,
       &NetworkResourcesData::ResourceData::ProcessCustomWeakness>(this);
+  visitor->Trace(replay_cached_resource_strong_);
 }
 
 void NetworkResourcesData::ResourceData::SetContent(const String& content,
