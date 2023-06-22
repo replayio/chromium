@@ -193,7 +193,7 @@ const char* EffectTypeToString(
       return "DynamicRangeCompression";
     case ABI::Windows::Media::Effects::AudioEffectType_FarFieldBeamForming:
       return "FarFieldBeamForming";
-#if _MSC_VER >= 1930 // Visual Studio 2022
+#if (WDK_NTDDI_VERSION >= NTDDI_WIN10)  // Windows 10 SDK or greater
     case ABI::Windows::Media::Effects::AudioEffectType_DeepNoiseSuppression:
       return "DeepNoise";
 #endif
