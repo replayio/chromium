@@ -4848,11 +4848,6 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
 
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
 
-  // Add the "__RECORD_REPLAY_ANNOTATION_HOOK__" hook function to
-  // the page window global.
-  SetFunctionProperty(isolate, context->Global(), AnnotationHookJSName,
-                      InvokeOnAnnotation);
-
   v8::Local<v8::Object> args = v8::Object::New(isolate);
   DefineProperty(isolate, context->Global(), "__RECORD_REPLAY_ARGUMENTS__", args);
 
@@ -4952,6 +4947,11 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
 
 void InitializeDevToolsScripts(v8::Isolate* isolate) {
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
+
+  // Add the "__RECORD_REPLAY_ANNOTATION_HOOK__" hook function to
+  // the page window global.
+  SetFunctionProperty(isolate, context->Global(), AnnotationHookJSName,
+                      InvokeOnAnnotation);
 
   if (recordreplay::FeatureEnabled("react-devtools-backend") &&
       !TestEnv("RECORD_REPLAY_DISABLE_REACT_DEVTOOLS")) {
