@@ -137,9 +137,9 @@ function spawnChecked(cmd, args, options) {
   const rv = spawnSync(cmd, args, options);
 
   if (rv.status != 0 || rv.error || rv.signal) {
-    console.error(`PROCESS FAILED: signal=${rv.signal} error=${rv.error.stack || rv.error}`);
-    console.log(rv.stdout?.toString() || "");
-    console.error(rv.stderr?.toString() || "");
+    console.error(`PROCESS FAILED: signal=${rv.signal} error=${rv.error && rv.error.stack || rv.error}`);
+    console.log(rv.stdout && rv.stdout.toString() || "");
+    console.error(rv.stderr && rv.stderr.toString() || "");
     throw new Error(`Spawned process failed with exit code ${rv.status}`);
   }
 
