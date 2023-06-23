@@ -4958,7 +4958,7 @@ void OnNewRootFrame(v8::Isolate* isolate, LocalFrame* localFrame) {
   SetFunctionProperty(isolate, context->Global(), AnnotationHookJSName,
                       InvokeOnAnnotation);
 
-  // 3. Initialize React and Redux Devtools scripts.
+  // 3. Initialize React and Redux Devtools stubs.
   if (recordreplay::FeatureEnabled("react-devtools-backend") &&
       !TestEnv("RECORD_REPLAY_DISABLE_REACT_DEVTOOLS")) {
     // Note: We use a special URL for the react devtools as this script needs
