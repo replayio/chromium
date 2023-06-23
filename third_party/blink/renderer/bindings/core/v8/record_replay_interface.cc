@@ -4948,7 +4948,7 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
 void OnNewWindow(v8::Isolate* isolate, LocalFrame* localFrame) {
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
 
-  // Add the __RECORD_REPLAY_ANNOTATION_HOOK__ as a global.
+  // Add __RECORD_REPLAY_ANNOTATION_HOOK__ as a global.
   SetFunctionProperty(isolate, context->Global(), AnnotationHookJSName,
                       InvokeOnAnnotation);
 }
