@@ -220,6 +220,15 @@ void LocalWindowProxy::Initialize() {
   if (recordreplay::IsRecordingOrReplaying("checkpoints") &&
       origin &&
       !origin->Host().empty()) {
+    if (GetFrame()->IsOutermostMainFrame()) {
+      // Root-level navigation event:
+      // 1. Record the event.
+      // 2. (re-)initialize our devtools scripts within the new frame.
+      // Note that we handle iframes and in-iframe navigation in
+      // `gDevtoolsIframeSetupScript`.
+      OnNewRootFrame(GetIsolate(), GetFrame());
+    }
+
     if (!gRecordReplayStateInitialized) {
       // After creating the first context that is associated with a non-empty
       // origin, we are ready to set up the state used to process driver
@@ -229,14 +238,6 @@ void LocalWindowProxy::Initialize() {
       SetupRecordReplayCommands(GetIsolate(), GetFrame());
       V8RecordReplaySetDefaultContext(GetIsolate(), context);
       recordreplay::NewCheckpoint();
-    }
-
-    if (GetFrame()->IsOutermostMainFrame()) {
-      // Upon root-level navigation, (re-)initialize our devtools
-      // scripts within the new frame.
-      // Note that we handle iframes and in-iframe navigation in
-      // `gDevtoolsIframeSetupScript`.
-      InitializeDevToolsScripts(GetIsolate());
     }
   }
 
