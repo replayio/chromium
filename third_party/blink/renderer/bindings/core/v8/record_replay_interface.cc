@@ -4945,6 +4945,14 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
   }
 }
 
+void OnNewWindow(v8::Isolate* isolate, LocalFrame* localFrame) {
+  v8::Local<v8::Context> context = isolate->GetCurrentContext();
+
+  // Add the __RECORD_REPLAY_ANNOTATION_HOOK__ as a global.
+  SetFunctionProperty(isolate, context->Global(), AnnotationHookJSName,
+                      InvokeOnAnnotation);
+}
+
 void OnNewRootFrame(v8::Isolate* isolate, LocalFrame* localFrame) {
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
   
@@ -4954,11 +4962,7 @@ void OnNewRootFrame(v8::Isolate* isolate, LocalFrame* localFrame) {
         nullptr, localFrame->GetDocument()->Url().GetString().Utf8().c_str());
   }
 
-  // 2. Add the __RECORD_REPLAY_ANNOTATION_HOOK__ as a global.
-  SetFunctionProperty(isolate, context->Global(), AnnotationHookJSName,
-                      InvokeOnAnnotation);
-
-  // 3. Initialize React and Redux Devtools stubs.
+  // 2. Initialize React and Redux Devtools stubs.
   if (recordreplay::FeatureEnabled("react-devtools-backend") &&
       !TestEnv("RECORD_REPLAY_DISABLE_REACT_DEVTOOLS")) {
     // Note: We use a special URL for the react devtools as this script needs

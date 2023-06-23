@@ -220,12 +220,12 @@ void LocalWindowProxy::Initialize() {
   if (recordreplay::IsRecordingOrReplaying("checkpoints") &&
       origin &&
       !origin->Host().empty()) {
+
+    // New Window (proxy) init event.
+    OnNewWindow(GetIsolate(), GetFrame());
+
     if (GetFrame()->IsOutermostMainFrame()) {
-      // Root-level navigation event:
-      // 1. Record the event.
-      // 2. (re-)initialize our devtools scripts within the new frame.
-      // Note that we handle iframes and in-iframe navigation in
-      // `gDevtoolsIframeSetupScript`.
+      // Root-level navigation event.
       OnNewRootFrame(GetIsolate(), GetFrame());
     }
 
