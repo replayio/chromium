@@ -65,10 +65,11 @@ export async function readSymbols(file, pdbFile) {
 // Symbol addresses are relative to the start of this section.
 function getTextSectionAddress(pdbFile) {
   const oneGigabyte = 1024 * 1024 * 1024;
+  const sixteenGigabytes = 16 * oneGigabyte;
   const lines = spawnSync(
     `${__dirname}\\..\\..\\..\\backend\\lib\\llvm-pdbutil.exe`,
     ["dump", "-section-headers", pdbFile],
-    { maxBuffer: oneGigabyte }
+    { maxBuffer: sixteenGigabytes }
   )
     .stdout.toString()
     .split("\n");
