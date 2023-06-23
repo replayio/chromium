@@ -63,6 +63,9 @@ export async function readSymbols(file, pdbFile) {
 
 // Get the start virtual address of the text section from a PDB file.
 // Symbol addresses are relative to the start of this section.
+const { spawn } = require("child_process");
+const readline = require("readline");
+
 async function getTextSectionAddress(pdbFile) {
   const command = `${__dirname}\\..\\..\\..\\backend\\lib\\llvm-pdbutil.exe`;
   const args = ["dump", "-section-headers", pdbFile];
@@ -71,34 +74,25 @@ async function getTextSectionAddress(pdbFile) {
   let inTextSection = false;
   let textSectionAddress = null;
 
-  const readLineByLine = (stream) => {
-    let remaining = "";
-    stream.on("data", (data) => {
-      remaining += data;
-      let index = remaining.indexOf("\n");
-      while (index > -1) {
-        const line = remaining.substring(0, index);
-        remaining = remaining.substring(index + 1);
-        processLine(line);
-        index = remaining.indexOf("\n");
-      }
-    });
+  const rl = readline.createInterface({
+    input: subprocess.stdout,
+    output: process.stdout,
+    terminal: false,
+  });
 
-    const processLine = (line) => {
-      if (line.includes(".text name")) {
-        inTextSection = true;
+  rl.on("line", (line) => {
+    if (line.includes(".text name")) {
+      inTextSection = true;
+    }
+    const match = /([0-9A-F]+) virtual address/.exec(line);
+    if (match) {
+      if (!inTextSection) {
+        throw new Error("Expected first section to be text section");
       }
-      const match = /([0-9A-F]+) virtual address/.exec(line);
-      if (match) {
-        if (!inTextSection) {
-          throw new Error("Expected first section to be text section");
-        }
-        textSectionAddress = parseInt(`0x${match[1]}`);
-      }
-    };
-  };
-
-  readLineByLine(subprocess.stdout);
+      textSectionAddress = parseInt(`0x${match[1]}`);
+      rl.close(); // We've found what we needed, so we can stop reading the output
+    }
+  });
 
   return new Promise((resolve, reject) => {
     subprocess.on("error", reject);
