@@ -1,12 +1,9 @@
 import readline from "readline";
 import { fileURLToPath } from "url";
 import path from "path";
-import * as child_process from "child_process";
-import * as util from "util";
 
 import { toNumber, spawnChecked } from "./common.mjs";
-
-const spawn = util.promisify(child_process.spawn);
+import { spawnSync } from "child_process";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -64,49 +61,29 @@ export async function readSymbols(file, pdbFile) {
   return symbols;
 }
 
-async function getTextSectionAddress(pdbFile) {
-  const command = `${__dirname}\\..\\..\\..\\backend\\lib\\llvm-pdbutil.exe`;
-  const args = ["dump", "-section-headers", pdbFile];
-  const subprocess = spawn(command, args, { encoding: "utf8", shell: true });
+// Get the start virtual address of the text section from a PDB file.
+// Symbol addresses are relative to the start of this section.
+function getTextSectionAddress(pdbFile) {
+  const lines = spawnSync(
+    `${__dirname}\\..\\..\\..\\backend\\lib\\llvm-pdbutil.exe`,
+    ["dump", "-section-headers", pdbFile],
+    { maxBuffer: 1e100 }
+  )
+    .stdout.toString()
+    .split("\n");
 
-  try {
-    const result = await new Promise((resolve, reject) => {
-      let stdout = "";
-      subprocess.stdout.on("data", (data) => {
-        stdout += data;
-      });
-
-      subprocess.on("error", reject);
-
-      subprocess.on("close", (code) => {
-        if (code !== 0) {
-          reject(new Error(`Process exited with status code ${code}`));
-        } else if (!stdout) {
-          reject(
-            new Error("Empty output, could not find start of text section")
-          );
-        } else {
-          resolve(stdout);
-        }
-      });
-    });
-
-    const lines = result.split("\n");
-    let inTextSection = false;
-    for (const line of lines) {
-      if (line.includes(".text name")) {
-        inTextSection = true;
-      }
-      const match = /([0-9A-F]+) virtual address/.exec(line);
-      if (match) {
-        if (!inTextSection) {
-          throw new Error("Expected first section to be text section");
-        }
-        return parseInt(`0x${match[1]}`);
-      }
+  let inTextSection = false;
+  for (const line of lines) {
+    if (line.includes(".text name")) {
+      inTextSection = true;
     }
-    throw new Error("Could not find start of text section");
-  } catch (err) {
-    console.error(`Error: ${err.message}`);
+    const match = /([0-9A-F]+) virtual address/.exec(line);
+    if (match) {
+      if (!inTextSection) {
+        throw new Error("Expected first section to be text section");
+      }
+      return parseInt(`0x${match[1]}`);
+    }
   }
+  throw new Error("Could not find start of text section");
 }
