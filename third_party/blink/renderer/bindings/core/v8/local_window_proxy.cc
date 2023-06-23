@@ -217,8 +217,7 @@ void LocalWindowProxy::Initialize() {
     SetSecurityToken(origin.get());
   }
 
-  if (recordreplay::IsRecordingOrReplaying("checkpoints") &&
-      origin &&
+  if (origin &&
       !origin->Host().empty()) {
 
     // New Window (proxy) init event.
@@ -229,7 +228,8 @@ void LocalWindowProxy::Initialize() {
       OnNewRootFrame(GetIsolate(), GetFrame());
     }
 
-    if (!gRecordReplayStateInitialized) {
+    if (recordreplay::IsRecordingOrReplaying("checkpoints") &&
+        !gRecordReplayStateInitialized) {
       // After creating the first context that is associated with a non-empty
       // origin, we are ready to set up the state used to process driver
       // commands when recording/replaying, and to create checkpoints. Create
