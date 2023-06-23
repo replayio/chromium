@@ -1,7 +1,7 @@
 import readline from "readline";
 import { fileURLToPath } from "url";
 import path from "path";
-import { spawn } from "child_process";
+import * as child_process from "child_process";
 
 import { toNumber, spawnChecked } from "./common.mjs";
 
