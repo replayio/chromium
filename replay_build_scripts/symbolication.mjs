@@ -3,6 +3,7 @@ import { fileURLToPath } from "url";
 import path from "path";
 
 import { toNumber, spawnChecked } from "./common.mjs";
+import { spawnSync } from "child_process";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -63,13 +64,25 @@ export async function readSymbols(file, pdbFile) {
 // Get the start virtual address of the text section from a PDB file.
 // Symbol addresses are relative to the start of this section.
 function getTextSectionAddress(pdbFile) {
-  const lines = spawnChecked(
+  const spawnResult = spawnSync(
     `${__dirname}\\..\\..\\..\\backend\\lib\\llvm-pdbutil.exe`,
     ["dump", "-section-headers", pdbFile]
-  )
-    .stdout.toString()
-    .split("\n");
+  );
 
+  if (spawnResult.error) {
+    throw new Error(`SpawnSync error: ${spawnResult.error.message}`);
+  }
+
+  if (spawnResult.status !== 0) {
+    throw new Error(`Process exited with status code ${spawnResult.status}`);
+  }
+
+  const stdout = spawnResult.stdout.toString();
+  if (!stdout) {
+    throw new Error("Empty output, could not find start of text section");
+  }
+
+  const lines = stdout.split("\n");
   let inTextSection = false;
   for (const line of lines) {
     if (line.includes(".text name")) {
