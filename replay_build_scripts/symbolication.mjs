@@ -63,9 +63,6 @@ export async function readSymbols(file, pdbFile) {
 
 // Get the start virtual address of the text section from a PDB file.
 // Symbol addresses are relative to the start of this section.
-const { spawn } = require("child_process");
-const readline = require("readline");
-
 async function getTextSectionAddress(pdbFile) {
   const command = `${__dirname}\\..\\..\\..\\backend\\lib\\llvm-pdbutil.exe`;
   const args = ["dump", "-section-headers", pdbFile];
