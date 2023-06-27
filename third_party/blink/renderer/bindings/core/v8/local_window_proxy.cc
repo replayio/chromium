@@ -223,10 +223,6 @@ void LocalWindowProxy::Initialize() {
     // New Window (proxy) init event.
     OnNewWindow(GetIsolate(), GetFrame());
 
-    if (GetFrame()->IsOutermostMainFrame()) {
-      // Root-level navigation event.
-      OnNewRootFrame(GetIsolate(), GetFrame());
-    }
 
     if (recordreplay::IsRecordingOrReplaying("checkpoints") &&
         !gRecordReplayStateInitialized) {
@@ -238,6 +234,11 @@ void LocalWindowProxy::Initialize() {
       SetupRecordReplayCommands(GetIsolate(), GetFrame());
       V8RecordReplaySetDefaultContext(GetIsolate(), context);
       recordreplay::NewCheckpoint();
+    }
+
+    if (GetFrame()->IsOutermostMainFrame()) {
+      // Root-level navigation event.
+      OnNewRootFrame(GetIsolate(), GetFrame());
     }
   }
 
