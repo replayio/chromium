@@ -1481,7 +1481,7 @@ function previewArray(cdpProperties) {
   const desc = this.cdpObj.description || "";
   const lengthStr = desc.match(/\d+/)?.[0];
   if (!lengthStr) {
-    warning(`[RUN-2223] JS previewArray - could not extract length from CDP description: ${desc}`);
+    warning(`[RUN-2223] JS previewArray - could not extract length from CDP description: ${JSON_stringify(this.cdpObj)}`);
   }
   const length = parseInt(lengthStr || "0");
   this.setGetterValue(length);
