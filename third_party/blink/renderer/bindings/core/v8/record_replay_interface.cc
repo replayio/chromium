@@ -1183,7 +1183,7 @@ ProtocolObjectPreview.prototype = {
       return;
     }
 
-    const rrpValue = evalPropRrp(this.raw, propKey);
+    const rrpValue = evalPropRrpNotNull(this.raw, propKey);
     if (rrpValue) {
       this.setGetterValue(propKey, rrpValue, force);
     }
@@ -1474,7 +1474,7 @@ function previewBlinkRule(rule) {
 }
 
 function previewArray(cdpProperties) {
-  // TODO: [RUN-2223] Just invoking Array.length does not always return a value.
+  // TODO: [RUN-2223] Find out why Array.length does not always return a value.
   // this.addGetterValue('length', this.cdpObj, /* force */ true);
 
   // Workaround: Get length from CDP description.
@@ -1484,7 +1484,7 @@ function previewArray(cdpProperties) {
     warning(`[RUN-2223] JS previewArray - could not extract length from CDP description: ${JSON_stringify(this.cdpObj)}`);
   }
   const length = parseInt(lengthStr || "0");
-  this.setGetterValue(length);
+  this.setGetterValue("length", createRrpValueRaw(length));
 }
 
 function previewTypedArray() {
@@ -1633,19 +1633,17 @@ const CustomPreviewers = {
  * Since we only use this for a small set of well defined
  * props, we emit a warning if the result is undefined or null.
  */
-function evalPropRrp(owner, propKey) {
+function evalPropRrpNotNull(owner, propKey) {
   try {
     const plainValue = owner[propKey];
     if (plainValue === undefined || plainValue === null) {
       // [RUN-2223] This should not happen.
       const e = new Error("");
-      const stack = e?.stack?.split?.("\n") || e?.stack || [];
-      warning(`[RUN-2223] JS evalPropRrp got ${plainValue} when evaluating ${propKey} on ${typeof owner}, stack=${JSON.stringify(stack)}`);
+      warning(`[RUN-2223] JS evalPropRrpNotNull got ${plainValue} when evaluating ${propKey} on ${typeof owner}, stack=${e.stack}`);
     }
-    const rv = createRrpValueRaw(plainValue);
-    return rv;
+    return createRrpValueRaw(plainValue);
   } catch (err) {
-    warning(`JS evalPropRrp exception - calling ${propKey.toString()} on ${typeof owner}: ${err.stack}`);
+    warning(`JS evalPropRrpNotNull exception - calling ${propKey?.toString?.()} on ${typeof owner} - ${err?.stack || err}`);
     return null;
   }
 }
