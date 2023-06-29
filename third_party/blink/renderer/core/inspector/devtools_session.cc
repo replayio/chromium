@@ -338,6 +338,12 @@ void DevToolsSession::sendNotification(
   if (IsDetached())
     return;
 
+  if (recordreplay::AreEventsDisallowed() &&
+      recordreplay::IsRecordingOrReplaying(
+          "leak-references", "DevToolsSession::sendNotification")) {
+    return;
+  }
+
   recordreplay::Assert("[RUN-1515] DevToolsSession::sendNotification");
 
   notification_queue_.push_back(WTF::BindOnce(
