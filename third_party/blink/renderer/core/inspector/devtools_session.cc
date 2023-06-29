@@ -353,8 +353,8 @@ void DevToolsSession::flushProtocolNotifications() {
 
 void DevToolsSession::FlushProtocolNotifications() {
   recordreplay::Assert(
-      "[RUN-1515-1924] DevToolsSession::FlushProtocolNotifications A %d %d",
-      (int)agents_.size(), (int)notification_queue_.size());
+      "[RUN-1515-2157] DevToolsSession::FlushProtocolNotifications A %d %s %d %d",
+      record_replay_id_, session_id_.Utf8().c_str(), (int)agents_.size(), (int)notification_queue_.size());
 
   if (IsDetached())
     return;
