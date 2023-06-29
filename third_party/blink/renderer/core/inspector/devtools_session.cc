@@ -341,6 +341,7 @@ void DevToolsSession::sendNotification(
   if (recordreplay::AreEventsDisallowed() &&
       recordreplay::IsRecordingOrReplaying(
           "leak-references", "DevToolsSession::sendNotification")) {
+    // RUN-1515: Don't send notifications during GC.
     return;
   }
 
