@@ -41,6 +41,9 @@ class IdTargetObserver : public GarbageCollected<IdTargetObserver> {
   virtual void IdTargetChanged() = 0;
   virtual void Unregister();
 
+  // Avoid pointer-based hash by computing hash based on id_ instead.
+  unsigned GetHash() const;
+
  protected:
   IdTargetObserver(IdTargetObserverRegistry&, const AtomicString& id);
 
