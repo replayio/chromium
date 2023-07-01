@@ -40,6 +40,8 @@ class PictureLayerTilingClient;
 
 class CC_EXPORT RasterSource : public base::RefCountedThreadSafe<RasterSource> {
  public:
+  REPLAY_ASSERT_LIFECYCLE("RasterSource", "RUN-2104-2296", false);
+
   struct CC_EXPORT PlaybackSettings {
     PlaybackSettings();
     PlaybackSettings(const PlaybackSettings&);

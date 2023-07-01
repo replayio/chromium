@@ -23,6 +23,8 @@
 #include "build/build_config.h"
 #include "third_party/abseil-cpp/absl/utility/utility.h"
 
+#include "base/record_replay.h"
+
 namespace base {
 namespace subtle {
 
@@ -190,6 +192,11 @@ class BASE_EXPORT RefCountedThreadSafeBase {
   void AddRef() const;
   void AddRefWithCheck() const;
 #endif
+
+  // Expose this to sub classes for diagnostics.
+  int SubtleRefCountForDebug() const {
+    return ref_count_.SubtleRefCountForDebug();
+  }
 
  private:
   template <typename U>
@@ -381,6 +388,22 @@ struct DefaultRefCountedThreadSafeTraits {
   }
 };
 
+// NOTE: We use this messy macro magic so we only compile Replay diagnostics
+// for types that explicitely request it. This should be better for 
+// performance, and also avoids build errors in places where Replay is not
+// available.
+#define REPLAY_ON_(functionName, className, label, assertWhenEventsDisallowed) \
+  void replay_on_##functionName() const {                                      \
+    if (recordreplay::IsRecordingOrReplaying() && label != 0) {                \
+      if (assertWhenEventsDisallowed || !recordreplay::AreEventsDisallowed())  \
+        recordreplay::Assert("[%s] %s::%s %d", label, className, functionName, \
+                             SubtleRefCountForDebug());                        \
+    }                                                                          \
+  }
+#define REPLAY_ASSERT_LIFECYCLE(className, label, assertWhenEventsDisallowed) \
+  REPLAY_ON_("AddRef", className, label, assertWhenEventsDisallowed)          \
+  REPLAY_ON_("Release", className, label, assertWhenEventsDisallowed)
+
 //
 // A thread-safe variant of RefCounted<T>
 //
@@ -402,15 +425,22 @@ class RefCountedThreadSafe : public subtle::RefCountedThreadSafeBase {
   static constexpr subtle::StartRefCountFromZeroTag kRefCountPreference =
       subtle::kStartRefCountFromZeroTag;
 
+  ALWAYS_INLINE void replay_on_AddRef() const {}
+  ALWAYS_INLINE void replay_on_Release() const {}
+
   explicit RefCountedThreadSafe()
       : subtle::RefCountedThreadSafeBase(T::kRefCountPreference) {}
 
   RefCountedThreadSafe(const RefCountedThreadSafe&) = delete;
   RefCountedThreadSafe& operator=(const RefCountedThreadSafe&) = delete;
 
-  void AddRef() const { AddRefImpl(T::kRefCountPreference); }
+  void AddRef() const {
+    T::replay_on_AddRef();
+    AddRefImpl(T::kRefCountPreference);
+  }
 
   void Release() const {
+    T::replay_on_Release();
     if (subtle::RefCountedThreadSafeBase::Release()) {
       ANALYZER_SKIP_THIS_PATH();
       Traits::Destruct(static_cast<const T*>(this));

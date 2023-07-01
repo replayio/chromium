@@ -755,9 +755,10 @@ void PictureLayerImpl::UpdateRasterSource(
     Region* new_invalidation,
     const PictureLayerTilingSet* pending_set,
     const PaintWorkletRecordMap* pending_paint_worklet_records) {
-  // https://linear.app/replay/issue/RUN-885
-  recordreplay::Assert("PictureLayerImpl::UpdateRasterSource %d %d",
-                       raster_source->GetSize().width(), raster_source->GetSize().height());
+  recordreplay::Assert(
+      "[RUN-2104-TODO] PictureLayerImpl::UpdateRasterSource A %d %d %d",
+      !!raster_source_, raster_source->HasOneRef(),
+      raster_source == raster_source_);
 
   // The bounds and the pile size may differ if the pile wasn't updated (ie.
   // PictureLayer::Update didn't happen). In that case the pile will be empty.
@@ -793,6 +794,10 @@ void PictureLayerImpl::UpdateRasterSource(
       }
     }
 
+    recordreplay::Assert(
+        "[RUN-2104-TODO] PictureLayerImpl::UpdateRasterSource B %d %d",
+        !!raster_source_, raster_source->HasOneRef());
+
     // If the MSAA sample count has changed, we need to re-raster the complete
     // layer.
     if (raster_source_) {
@@ -826,10 +831,6 @@ void PictureLayerImpl::UpdateRasterSource(
 
   raster_source_->set_debug_name(DebugName());
 
-  // https://linear.app/replay/issue/RUN-885
-  recordreplay::Assert("PictureLayerImpl::UpdateRasterSource #5 %d %d",
-                       raster_source_->GetSize().width(), raster_source_->GetSize().height());
-
   // Register images from the new raster source, if the recording was updated.
   // TODO(khushalsagar): UMA the number of animated images in layer?
   if (recording_updated)
@@ -861,9 +862,15 @@ void PictureLayerImpl::UpdateRasterSource(
   // this ends up running with the old LayerTreeFrameSink, or possibly with a
   // null LayerTreeFrameSink, which can give incorrect results or maybe crash.
   if (pending_set) {
+    recordreplay::Assert(
+        "[RUN-2104-TODO] PictureLayerImpl::UpdateRasterSource C %d",
+        raster_source_->HasOneRef());
     tilings_->UpdateTilingsToCurrentRasterSourceForActivation(
         raster_source_, pending_set, invalidation_, MinimumContentsScale(),
         MaximumContentsScale());
+    recordreplay::Assert(
+        "[RUN-2104-TODO] PictureLayerImpl::UpdateRasterSource D %d",
+        raster_source_->HasOneRef());
   } else {
     tilings_->UpdateTilingsToCurrentRasterSourceForCommit(
         raster_source_, invalidation_, MinimumContentsScale(),
@@ -873,6 +880,10 @@ void PictureLayerImpl::UpdateRasterSource(
     layer_tree_impl()->UpdateImageDecodingHints(
         raster_source_->TakeDecodingModeMap());
   }
+
+  recordreplay::Assert(
+      "[RUN-2104-TODO] PictureLayerImpl::UpdateRasterSource E %d",
+      raster_source_->HasOneRef());
 }
 
 void PictureLayerImpl::UpdateCanUseLCDText(
