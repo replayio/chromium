@@ -1453,6 +1453,8 @@ class CC_PAINT_EXPORT PaintOpBuffer : public SkRefCnt {
     float current_alpha_ = 1.0f;
   };
 
+  int RecordReplayId() const { return record_replay_id_; }
+
  private:
   friend class DisplayItemList;
   friend class PaintOpBufferOffsetsTest;
@@ -1491,6 +1493,8 @@ class CC_PAINT_EXPORT PaintOpBuffer : public SkRefCnt {
   bool has_save_layer_alpha_ops_ : 1;
   bool has_effects_preventing_lcd_text_for_save_layer_alpha_ : 1;
   bool are_ops_destroyed_ : 1;
+
+  int record_replay_id_ = 0;
 };
 
 }  // namespace cc

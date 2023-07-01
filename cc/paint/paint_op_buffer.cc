@@ -2914,7 +2914,8 @@ PaintOpBuffer::PaintOpBuffer()
       has_save_layer_ops_(false),
       has_save_layer_alpha_ops_(false),
       has_effects_preventing_lcd_text_for_save_layer_alpha_(false),
-      are_ops_destroyed_(false) {}
+      are_ops_destroyed_(false),
+      record_replay_id_(recordreplay::NewIdAnyThread("PaintOpBuffer")) {}
 
 PaintOpBuffer::PaintOpBuffer(PaintOpBuffer&& other) {
   *this = std::move(other);
@@ -2954,13 +2955,23 @@ PaintOpBuffer& PaintOpBuffer::operator=(PaintOpBuffer&& other) {
 }
 
 void PaintOpBuffer::Reset() {
+  if (!recordreplay::AreEventsDisallowed())
+    recordreplay::Assert("[RUN-2104-2296] PaintOpBuffer::Reset A %d %d",
+                        RecordReplayId(), are_ops_destroyed_);
   if (!are_ops_destroyed_) {
     for (PaintOp& op : Iterator(this)) {
-      recordreplay::Assert("[RUN-2104-2266] PaintOpBuffer::Reset A %d", (int)op.GetType());
+      if (!recordreplay::AreEventsDisallowed())
+        recordreplay::Assert("[RUN-2104-2296] PaintOpBuffer::Reset B %d %d",
+                             RecordReplayId(), (int)op.GetType());
       op.DestroyThis();
+      if (!recordreplay::AreEventsDisallowed())
+        recordreplay::Assert("[RUN-2104-2296] PaintOpBuffer::Reset C %d",
+                             RecordReplayId());
     }
   }
-  recordreplay::Assert("[RUN-2104-2266] PaintOpBuffer::Reset B");
+  if (!recordreplay::AreEventsDisallowed())
+    recordreplay::Assert("[RUN-2104-2296] PaintOpBuffer::Reset D %d",
+                         RecordReplayId());
 
   // Leave data_ allocated, reserved_ unchanged. ShrinkToFit will take care of
   // that if called.
@@ -3261,6 +3272,7 @@ void PaintOpBuffer::ReallocBuffer(size_t new_size) {
 
 void* PaintOpBuffer::AllocatePaintOp(size_t skip) {
   DCHECK_LT(skip, PaintOp::kMaxSkip);
+  recordreplay::Assert("[RUN-2104-2296] PaintOpBuffer::AllocatePaintOp %d %zu", RecordReplayId(), skip);
   if (used_ + skip > reserved_) {
     // Start reserved_ at kInitialBufferSize and then double.
     // ShrinkToFit can make this smaller afterwards.

@@ -79,7 +79,7 @@ void PictureLayer::PushPropertiesTo(
   CHECK(this);
   if (!recording_source_.Read(*this)) {
     recordreplay::Assert(
-        "[RUN-2104-TODO] PictureLayer::PushPropertiesTo A");
+        "[RUN-2104-2296] PictureLayer::PushPropertiesTo A");
     bool valid_host = layer_tree_host();
     bool has_parent = parent();
     bool parent_has_host = parent() && parent()->layer_tree_host();
@@ -92,11 +92,11 @@ void PictureLayer::PushPropertiesTo(
     base::debug::DumpWithoutCrashing();
   }
 
-  recordreplay::Assert("[RUN-2104-TODO] PictureLayer::PushPropertiesTo B");
+  recordreplay::Assert("[RUN-2104-2296] PictureLayer::PushPropertiesTo B");
   layer_impl->UpdateRasterSource(
       recording_source_.Read(*this)->CreateRasterSource(),
       &last_updated_invalidation_.Write(*this), nullptr, nullptr);
-  recordreplay::Assert("[RUN-2104-TODO] PictureLayer::PushPropertiesTo C");
+  recordreplay::Assert("[RUN-2104-2296] PictureLayer::PushPropertiesTo C");
 
   DCHECK(last_updated_invalidation_.Read(*this).IsEmpty());
 }

@@ -113,8 +113,9 @@ PictureLayerImpl::PictureLayerImpl(LayerTreeImpl* tree_impl, int id)
 
 PictureLayerImpl::~PictureLayerImpl() {
   if (!recordreplay::AreEventsDisallowed()) {
-    recordreplay::Assert("[RUN-2104-2266] ~PictureLayerImpl %d %d %llu",
+    recordreplay::Assert("[RUN-2104-2296] ~PictureLayerImpl %d %d %d %llu",
                          id(), recordreplay::PointerId(this),
+                         raster_source_ ? raster_source_->RecordReplayId() : -1,
                          element_id().GetStableId());
   }
   if (twin_layer_)
@@ -756,9 +757,9 @@ void PictureLayerImpl::UpdateRasterSource(
     const PictureLayerTilingSet* pending_set,
     const PaintWorkletRecordMap* pending_paint_worklet_records) {
   recordreplay::Assert(
-      "[RUN-2104-TODO] PictureLayerImpl::UpdateRasterSource A %d %d %d",
-      !!raster_source_, raster_source->HasOneRef(),
-      raster_source == raster_source_);
+      "[RUN-2104-2296] PictureLayerImpl::UpdateRasterSource A %d %d %d",
+      raster_source_ ? raster_source_->RecordReplayId() : -1,
+      raster_source->HasOneRef(), raster_source == raster_source_);
 
   // The bounds and the pile size may differ if the pile wasn't updated (ie.
   // PictureLayer::Update didn't happen). In that case the pile will be empty.
@@ -795,8 +796,9 @@ void PictureLayerImpl::UpdateRasterSource(
     }
 
     recordreplay::Assert(
-        "[RUN-2104-TODO] PictureLayerImpl::UpdateRasterSource B %d %d",
-        !!raster_source_, raster_source->HasOneRef());
+        "[RUN-2104-2296] PictureLayerImpl::UpdateRasterSource B %d %d",
+        raster_source_ ? raster_source_->RecordReplayId() : -1,
+        raster_source_ && raster_source->HasOneRef());
 
     // If the MSAA sample count has changed, we need to re-raster the complete
     // layer.
@@ -863,13 +865,13 @@ void PictureLayerImpl::UpdateRasterSource(
   // null LayerTreeFrameSink, which can give incorrect results or maybe crash.
   if (pending_set) {
     recordreplay::Assert(
-        "[RUN-2104-TODO] PictureLayerImpl::UpdateRasterSource C %d",
+        "[RUN-2104-2296] PictureLayerImpl::UpdateRasterSource C %d",
         raster_source_->HasOneRef());
     tilings_->UpdateTilingsToCurrentRasterSourceForActivation(
         raster_source_, pending_set, invalidation_, MinimumContentsScale(),
         MaximumContentsScale());
     recordreplay::Assert(
-        "[RUN-2104-TODO] PictureLayerImpl::UpdateRasterSource D %d",
+        "[RUN-2104-2296] PictureLayerImpl::UpdateRasterSource D %d",
         raster_source_->HasOneRef());
   } else {
     tilings_->UpdateTilingsToCurrentRasterSourceForCommit(
@@ -882,7 +884,7 @@ void PictureLayerImpl::UpdateRasterSource(
   }
 
   recordreplay::Assert(
-      "[RUN-2104-TODO] PictureLayerImpl::UpdateRasterSource E %d",
+      "[RUN-2104-2296] PictureLayerImpl::UpdateRasterSource E %d",
       raster_source_->HasOneRef());
 }
 

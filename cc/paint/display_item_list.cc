@@ -80,7 +80,8 @@ DisplayItemList::DisplayItemList(UsageHint usage_hint)
 
 DisplayItemList::~DisplayItemList() {
   if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-2104-2266] ~DisplayItemList %d",
+    recordreplay::Assert("[RUN-2104-2296] ~DisplayItemList %d %d %d",
+                         record_replay_id_, paint_op_buffer_.RecordReplayId(),
                          paint_op_buffer_.unique());
 }
 
