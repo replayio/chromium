@@ -99,10 +99,10 @@ bool WaitableEvent::IsSignaled() {
 // -----------------------------------------------------------------------------
 class SyncWaiter : public WaitableEvent::Waiter {
  public:
-  SyncWaiter()
+  SyncWaiter(bool record_replay_unordered)
      : fired_(false),
        signaling_event_(nullptr),
-       lock_(recordreplay::AreEventsDisallowed() ? nullptr : "SyncWaiter.lock_"),
+       lock_(record_replay_unordered ? nullptr : "SyncWaiter.lock_"),
        cv_(&lock_) {}
 
   ~SyncWaiter() override {}
@@ -203,7 +203,7 @@ bool WaitableEvent::TimedWait(const TimeDelta& wait_delta) {
     return true;
   }
 
-  SyncWaiter sw;
+  SyncWaiter sw(kernel_->record_replay_unordered_);
   if (!waiting_is_blocking_)
     sw.cv()->declare_only_used_while_idle();
   sw.lock()->Acquire();
