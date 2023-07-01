@@ -23,8 +23,6 @@
 #include "build/build_config.h"
 #include "third_party/abseil-cpp/absl/utility/utility.h"
 
-#include "base/record_replay.h"
-
 namespace base {
 namespace subtle {
 
@@ -389,44 +387,64 @@ struct DefaultRefCountedThreadSafeTraits {
 };
 
 // NOTE: We use this messy macro magic so we only compile Replay diagnostics
-// for types that explicitely request it. This should be better for 
-// performance, and also avoids build errors in places where Replay is not
-// available.
-#define REPLAY_ON_(functionName, className, label, assertWhenEventsDisallowed) \
-  void replay_on_##functionName() const {                                      \
+// for types that explicitely request it. This is better for performance,
+// for uninstrumented types and also avoids build errors in places where Replay
+// is not available.
+#define REPLAY_REF_COUNT_ASSERT_LIFECYCLE(className, label,                    \
+                                          assertWhenEventsDisallowed)          \
+  int record_replay_id_ = 0;                                                   \
+  ALWAYS_INLINE int RecordReplayId() {                                         \
+    return record_replay_id_;                                                  \
+  }                                                                            \
+  ALWAYS_INLINE int RecordReplayId() const {                                   \
+    return record_replay_id_;                                                  \
+  }                                                                            \
+  static void replay_event_count_event(const char* functionName, int refCount, \
+                                       int&& record_replay_id) {               \
     if (recordreplay::IsRecordingOrReplaying() && label != 0) {                \
+      if (!record_replay_id) {                                                 \
+        record_replay_id = recordreplay::NewIdAnyThread(className);            \
+      }                                                                        \
       if (assertWhenEventsDisallowed || !recordreplay::AreEventsDisallowed())  \
-        recordreplay::Assert("[%s] %s::%s %d", label, className, functionName, \
-                             SubtleRefCountForDebug());                        \
+        recordreplay::Assert("[%s] %s::%s %d %d", label, className,            \
+                             functionName, record_replay_id, refCount);        \
     }                                                                          \
   }
-#define REPLAY_ASSERT_LIFECYCLE(className, label, assertWhenEventsDisallowed) \
-  REPLAY_ON_("AddRef", className, label, assertWhenEventsDisallowed)          \
-  REPLAY_ON_("Release", className, label, assertWhenEventsDisallowed)
+#define REPLAY_REF_COUNT_DECLARE_STUB()                                \
+  ALWAYS_INLINE static void replay_event_count_event(const char*, int, \
+                                                     int&&) {}         \
+  ALWAYS_INLINE int RecordReplayId() {                                 \
+    return 0;                                                          \
+  }                                                                    \
+  ALWAYS_INLINE int RecordReplayId() const {                           \
+    return 0;                                                          \
+  }
+#define REPLAY_REF_COUNT_EVENT(functionName, refCount) \
+  T::replay_event_count_event(#functionName, refCount, RecordReplayId())
 
-//
-// A thread-safe variant of RefCounted<T>
-//
-//   class MyFoo : public base::RefCountedThreadSafe<MyFoo> {
-//    ...
-//   };
-//
-// If you're using the default trait, then you should add compile time
-// asserts that no one else is deleting your object.  i.e.
-//    private:
-//     friend class base::RefCountedThreadSafe<MyFoo>;
-//     ~MyFoo();
-//
-// We can use REQUIRE_ADOPTION_FOR_REFCOUNTED_TYPE() with RefCountedThreadSafe
-// too. See the comment above the RefCounted definition for details.
-template <class T, typename Traits = DefaultRefCountedThreadSafeTraits<T> >
-class RefCountedThreadSafe : public subtle::RefCountedThreadSafeBase {
+      //
+      // A thread-safe variant of RefCounted<T>
+      //
+      //   class MyFoo : public base::RefCountedThreadSafe<MyFoo> {
+      //    ...
+      //   };
+      //
+      // If you're using the default trait, then you should add compile time
+      // asserts that no one else is deleting your object.  i.e.
+      //    private:
+      //     friend class base::RefCountedThreadSafe<MyFoo>;
+      //     ~MyFoo();
+      //
+      // We can use REQUIRE_ADOPTION_FOR_REFCOUNTED_TYPE() with
+      // RefCountedThreadSafe too. See the comment above the RefCounted
+      // definition for details.
+      template <class T, typename Traits = DefaultRefCountedThreadSafeTraits<T>>
+      class RefCountedThreadSafe : public subtle::RefCountedThreadSafeBase {
  public:
   static constexpr subtle::StartRefCountFromZeroTag kRefCountPreference =
       subtle::kStartRefCountFromZeroTag;
 
-  ALWAYS_INLINE void replay_on_AddRef() const {}
-  ALWAYS_INLINE void replay_on_Release() const {}
+  REPLAY_REF_COUNT_DECLARE_STUB()
 
   explicit RefCountedThreadSafe()
       : subtle::RefCountedThreadSafeBase(T::kRefCountPreference) {}
@@ -435,12 +453,12 @@ class RefCountedThreadSafe : public subtle::RefCountedThreadSafeBase {
   RefCountedThreadSafe& operator=(const RefCountedThreadSafe&) = delete;
 
   void AddRef() const {
-    T::replay_on_AddRef();
+    REPLAY_REF_COUNT_EVENT(AddRef, SubtleRefCountForDebug());
     AddRefImpl(T::kRefCountPreference);
   }
 
   void Release() const {
-    T::replay_on_Release();
+    REPLAY_REF_COUNT_EVENT(Release, SubtleRefCountForDebug());
     if (subtle::RefCountedThreadSafeBase::Release()) {
       ANALYZER_SKIP_THIS_PATH();
       Traits::Destruct(static_cast<const T*>(this));
@@ -464,7 +482,7 @@ class RefCountedThreadSafe : public subtle::RefCountedThreadSafeBase {
   void AddRefImpl(subtle::StartRefCountFromOneTag) const {
     subtle::RefCountedThreadSafeBase::AddRefWithCheck();
   }
-};
+  };
 
 //
 // A thread-safe wrapper for some piece of data so we can place other

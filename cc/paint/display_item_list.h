@@ -49,7 +49,7 @@ namespace cc {
 class CC_PAINT_EXPORT DisplayItemList
     : public base::RefCountedThreadSafe<DisplayItemList> {
  public:
-  // REPLAY_ASSERT_LIFECYCLE("DisplayItemList", "RUN-2104-2296", false);
+  // REPLAY_REF_COUNT_ASSERT_LIFECYCLE("DisplayItemList", "RUN-2104-2296", false);
 
   // TODO(vmpstr): It would be cool if we didn't need this, and instead used
   // PaintOpBuffer directly when we needed to release this as a paint op buffer.
