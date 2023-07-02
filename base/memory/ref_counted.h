@@ -34,6 +34,11 @@ class BASE_EXPORT RefCountedBase {
   bool HasOneRef() const { return ref_count_ == 1; }
   bool HasAtLeastOneRef() const { return ref_count_ >= 1; }
 
+  // Expose this for Replay diagnostics.
+  int SubtleRefCountForDebug() const {
+    return (int)ref_count_;
+  }
+
  protected:
   explicit RefCountedBase(StartRefCountFromZeroTag) {
 #if DCHECK_IS_ON()
@@ -155,6 +160,11 @@ class BASE_EXPORT RefCountedThreadSafeBase {
   bool HasOneRef() const;
   bool HasAtLeastOneRef() const;
 
+  // Expose this for Replay diagnostics.
+  int SubtleRefCountForDebug() const {
+    return ref_count_.SubtleRefCountForDebug();
+  }
+
  protected:
   explicit constexpr RefCountedThreadSafeBase(StartRefCountFromZeroTag) {}
   explicit constexpr RefCountedThreadSafeBase(StartRefCountFromOneTag)
@@ -190,11 +200,6 @@ class BASE_EXPORT RefCountedThreadSafeBase {
   void AddRef() const;
   void AddRefWithCheck() const;
 #endif
-
-  // Expose this to sub classes for diagnostics.
-  int SubtleRefCountForDebug() const {
-    return ref_count_.SubtleRefCountForDebug();
-  }
 
  private:
   template <typename U>
@@ -323,6 +328,36 @@ class BASE_EXPORT ScopedAllowCrossThreadRefCountAccess final {
   static constexpr ::base::subtle::StartRefCountFromOneTag \
       kRefCountPreference = ::base::subtle::kStartRefCountFromOneTag
 
+// Use this macro to Assert ref count events of a ref counted class.
+// When using this macro, best also make sure it has a RecordReplayId().
+// NOTE: We use this messy macro magic so we only compile Replay diagnostics
+// for types that explicitely request it. This is better for performance
+// for uninstrumented types and avoids build errors in places where Replay is
+// not available.
+#define REPLAY_ASSERT_REF_COUNTS(className, label, assertWhenEventsDisallowed) \
+  static void replay_assert_ref_count_event(                                   \
+      const char* functionName, int refCount, int record_replay_id) {          \
+    if (recordreplay::IsRecordingOrReplaying() && label != 0) {                \
+      if (assertWhenEventsDisallowed || !recordreplay::AreEventsDisallowed())  \
+        recordreplay::Assert("[%s] %s::%s %d %d", label, className,            \
+                             functionName, record_replay_id, refCount);        \
+    }                                                                          \
+  }                                                                            \
+  static_assert(true, "require semicolon")
+
+// This macro is used internally to create no-op stub declarations.
+#define REPLAY_REF_COUNT_DECLARE_STUB()                                     \
+  ALWAYS_INLINE int RecordReplayId() const {                                \
+    return 0;                                                               \
+  }                                                                         \
+  ALWAYS_INLINE static void replay_assert_ref_count_event(const char*, int, \
+                                                          int) {}           \
+  static_assert(true, "require semicolon")
+
+// This macro is used internally to call the Assert event function.
+#define REPLAY_ASSERT_REF_COUNT_EVENT(functionName, refCount) \
+  T::replay_assert_ref_count_event(#functionName, refCount, RecordReplayId())
+
 template <class T, typename Traits>
 class RefCounted;
 
@@ -339,16 +374,20 @@ class RefCounted : public subtle::RefCountedBase {
   static constexpr subtle::StartRefCountFromZeroTag kRefCountPreference =
       subtle::kStartRefCountFromZeroTag;
 
+  REPLAY_REF_COUNT_DECLARE_STUB();
+
   RefCounted() : subtle::RefCountedBase(T::kRefCountPreference) {}
 
   RefCounted(const RefCounted&) = delete;
   RefCounted& operator=(const RefCounted&) = delete;
 
   void AddRef() const {
+    REPLAY_ASSERT_REF_COUNT_EVENT(AddRef, SubtleRefCountForDebug());
     subtle::RefCountedBase::AddRef();
   }
 
   void Release() const {
+    REPLAY_ASSERT_REF_COUNT_EVENT(Release, SubtleRefCountForDebug());
     if (subtle::RefCountedBase::Release()) {
       // Prune the code paths which the static analyzer may take to simulate
       // object destruction. Use-after-free errors aren't possible given the
@@ -386,65 +425,29 @@ struct DefaultRefCountedThreadSafeTraits {
   }
 };
 
-// NOTE: We use this messy macro magic so we only compile Replay diagnostics
-// for types that explicitely request it. This is better for performance,
-// for uninstrumented types and also avoids build errors in places where Replay
-// is not available.
-#define REPLAY_REF_COUNT_ASSERT_LIFECYCLE(className, label,                    \
-                                          assertWhenEventsDisallowed)          \
-  int record_replay_id_ = 0;                                                   \
-  ALWAYS_INLINE int RecordReplayId() {                                         \
-    return record_replay_id_;                                                  \
-  }                                                                            \
-  ALWAYS_INLINE int RecordReplayId() const {                                   \
-    return record_replay_id_;                                                  \
-  }                                                                            \
-  static void replay_event_count_event(const char* functionName, int refCount, \
-                                       int&& record_replay_id) {               \
-    if (recordreplay::IsRecordingOrReplaying() && label != 0) {                \
-      if (!record_replay_id) {                                                 \
-        record_replay_id = recordreplay::NewIdAnyThread(className);            \
-      }                                                                        \
-      if (assertWhenEventsDisallowed || !recordreplay::AreEventsDisallowed())  \
-        recordreplay::Assert("[%s] %s::%s %d %d", label, className,            \
-                             functionName, record_replay_id, refCount);        \
-    }                                                                          \
-  }
-#define REPLAY_REF_COUNT_DECLARE_STUB()                                \
-  ALWAYS_INLINE static void replay_event_count_event(const char*, int, \
-                                                     int&&) {}         \
-  ALWAYS_INLINE int RecordReplayId() {                                 \
-    return 0;                                                          \
-  }                                                                    \
-  ALWAYS_INLINE int RecordReplayId() const {                           \
-    return 0;                                                          \
-  }
-#define REPLAY_REF_COUNT_EVENT(functionName, refCount) \
-  T::replay_event_count_event(#functionName, refCount, RecordReplayId())
-
-      //
-      // A thread-safe variant of RefCounted<T>
-      //
-      //   class MyFoo : public base::RefCountedThreadSafe<MyFoo> {
-      //    ...
-      //   };
-      //
-      // If you're using the default trait, then you should add compile time
-      // asserts that no one else is deleting your object.  i.e.
-      //    private:
-      //     friend class base::RefCountedThreadSafe<MyFoo>;
-      //     ~MyFoo();
-      //
-      // We can use REQUIRE_ADOPTION_FOR_REFCOUNTED_TYPE() with
-      // RefCountedThreadSafe too. See the comment above the RefCounted
-      // definition for details.
-      template <class T, typename Traits = DefaultRefCountedThreadSafeTraits<T>>
-      class RefCountedThreadSafe : public subtle::RefCountedThreadSafeBase {
+//
+// A thread-safe variant of RefCounted<T>
+//
+//   class MyFoo : public base::RefCountedThreadSafe<MyFoo> {
+//    ...
+//   };
+//
+// If you're using the default trait, then you should add compile time
+// asserts that no one else is deleting your object.  i.e.
+//    private:
+//     friend class base::RefCountedThreadSafe<MyFoo>;
+//     ~MyFoo();
+//
+// We can use REQUIRE_ADOPTION_FOR_REFCOUNTED_TYPE() with
+// RefCountedThreadSafe too. See the comment above the RefCounted
+// definition for details.
+template <class T, typename Traits = DefaultRefCountedThreadSafeTraits<T>>
+class RefCountedThreadSafe : public subtle::RefCountedThreadSafeBase {
  public:
   static constexpr subtle::StartRefCountFromZeroTag kRefCountPreference =
       subtle::kStartRefCountFromZeroTag;
 
-  REPLAY_REF_COUNT_DECLARE_STUB()
+  REPLAY_REF_COUNT_DECLARE_STUB();
 
   explicit RefCountedThreadSafe()
       : subtle::RefCountedThreadSafeBase(T::kRefCountPreference) {}
@@ -453,12 +456,12 @@ struct DefaultRefCountedThreadSafeTraits {
   RefCountedThreadSafe& operator=(const RefCountedThreadSafe&) = delete;
 
   void AddRef() const {
-    REPLAY_REF_COUNT_EVENT(AddRef, SubtleRefCountForDebug());
+    REPLAY_ASSERT_REF_COUNT_EVENT(AddRef, SubtleRefCountForDebug());
     AddRefImpl(T::kRefCountPreference);
   }
 
   void Release() const {
-    REPLAY_REF_COUNT_EVENT(Release, SubtleRefCountForDebug());
+    REPLAY_ASSERT_REF_COUNT_EVENT(Release, SubtleRefCountForDebug());
     if (subtle::RefCountedThreadSafeBase::Release()) {
       ANALYZER_SKIP_THIS_PATH();
       Traits::Destruct(static_cast<const T*>(this));
@@ -482,7 +485,7 @@ struct DefaultRefCountedThreadSafeTraits {
   void AddRefImpl(subtle::StartRefCountFromOneTag) const {
     subtle::RefCountedThreadSafeBase::AddRefWithCheck();
   }
-  };
+};
 
 //
 // A thread-safe wrapper for some piece of data so we can place other

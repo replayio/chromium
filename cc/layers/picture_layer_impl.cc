@@ -757,9 +757,10 @@ void PictureLayerImpl::UpdateRasterSource(
     const PictureLayerTilingSet* pending_set,
     const PaintWorkletRecordMap* pending_paint_worklet_records) {
   recordreplay::Assert(
-      "[RUN-2104-2296] PictureLayerImpl::UpdateRasterSource A %d %d %d",
+      "[RUN-2104-2296] PictureLayerImpl::UpdateRasterSource A %d %d %d %d",
       raster_source_ ? raster_source_->RecordReplayId() : -1,
-      raster_source->HasOneRef(), raster_source == raster_source_);
+      raster_source_ && raster_source_->HasOneRef(),
+      raster_source->RecordReplayId(), raster_source->HasOneRef());
 
   // The bounds and the pile size may differ if the pile wasn't updated (ie.
   // PictureLayer::Update didn't happen). In that case the pile will be empty.

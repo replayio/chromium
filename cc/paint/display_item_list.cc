@@ -71,6 +71,7 @@ void IterateTextContentByOffsets(const PaintOpBuffer& buffer,
 
 DisplayItemList::DisplayItemList(UsageHint usage_hint)
     : usage_hint_(usage_hint) {
+  INIT_RECORD_REPLAY_ID(DisplayItemList);
   if (usage_hint_ == kTopLevelDisplayItemList) {
     visual_rects_.reserve(1024);
     offsets_.reserve(1024);
