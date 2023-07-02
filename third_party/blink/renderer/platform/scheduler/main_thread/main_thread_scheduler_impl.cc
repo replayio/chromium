@@ -972,6 +972,10 @@ void MainThreadSchedulerImpl::SetAllRenderWidgetsHidden(bool hidden) {
 void MainThreadSchedulerImpl::SetHasVisibleRenderWidgetWithTouchHandler(
     bool has_visible_render_widget_with_touch_handler) {
   helper_.CheckOnValidThread();
+  recordreplay::Assert(
+      "[RUN-2300] "
+      "MainThreadSchedulerImpl::SetHasVisibleRenderWidgetWithTouchHandler %d",
+      has_visible_render_widget_with_touch_handler);
   if (has_visible_render_widget_with_touch_handler ==
       main_thread_only().has_visible_render_widget_with_touch_handler)
     return;
