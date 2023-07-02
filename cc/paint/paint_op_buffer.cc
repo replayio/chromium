@@ -2914,8 +2914,9 @@ PaintOpBuffer::PaintOpBuffer()
       has_save_layer_ops_(false),
       has_save_layer_alpha_ops_(false),
       has_effects_preventing_lcd_text_for_save_layer_alpha_(false),
-      are_ops_destroyed_(false),
-      record_replay_id_(recordreplay::NewIdAnyThread("PaintOpBuffer")) {}
+      are_ops_destroyed_(false) {
+        INIT_RECORD_REPLAY_ID(PaintOpBuffer);
+}
 
 PaintOpBuffer::PaintOpBuffer(PaintOpBuffer&& other) {
   *this = std::move(other);
