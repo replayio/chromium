@@ -101,6 +101,13 @@ BaseAudioContext::BaseAudioContext(Document* document,
       periodic_wave_triangle_(nullptr) {}
 
 BaseAudioContext::~BaseAudioContext() {
+  if (recordreplay::AreEventsDisallowed() &&
+      recordreplay::IsRecordingOrReplaying("leak-references",
+                                           "~BaseAudioContext")) {
+    // This is called during GC. → Don't take the lock.
+    return;
+  }
+
   {
     // We may need to destroy summing junctions, which must happen while this
     // object is still valid and with the graph lock held.
