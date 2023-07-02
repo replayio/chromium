@@ -324,6 +324,9 @@ sk_sp<PaintRecord> DisplayItemList::ReleaseAsRecord() {
   sk_sp<PaintRecord> record =
       sk_make_sp<PaintOpBuffer>(std::move(paint_op_buffer_));
 
+  recordreplay::Assert("[RUN-2104-2296] DisplayItemList::ReleaseAsRecord %d %d",
+                       RecordReplayId(), HasOneRef());
+
   Reset();
   return record;
 }

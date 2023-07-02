@@ -2930,6 +2930,12 @@ PaintOpBuffer::~PaintOpBuffer() {
 }
 
 PaintOpBuffer& PaintOpBuffer::operator=(PaintOpBuffer&& other) {
+
+  if (!recordreplay::AreEventsDisallowed())
+    recordreplay::Assert(
+        "[RUN-2104-2296] PaintOpBuffer::operator= %d %d",
+        RecordReplayId(), other.RecordReplayId());
+
   data_ = std::move(other.data_);
   used_ = other.used_;
   reserved_ = other.reserved_;
