@@ -438,10 +438,9 @@ struct DefaultRefCountedThreadSafeTraits {
 //     friend class base::RefCountedThreadSafe<MyFoo>;
 //     ~MyFoo();
 //
-// We can use REQUIRE_ADOPTION_FOR_REFCOUNTED_TYPE() with
-// RefCountedThreadSafe too. See the comment above the RefCounted
-// definition for details.
-template <class T, typename Traits = DefaultRefCountedThreadSafeTraits<T>>
+// We can use REQUIRE_ADOPTION_FOR_REFCOUNTED_TYPE() with RefCountedThreadSafe
+// too. See the comment above the RefCounted definition for details.
+template <class T, typename Traits = DefaultRefCountedThreadSafeTraits<T> >
 class RefCountedThreadSafe : public subtle::RefCountedThreadSafeBase {
  public:
   static constexpr subtle::StartRefCountFromZeroTag kRefCountPreference =
