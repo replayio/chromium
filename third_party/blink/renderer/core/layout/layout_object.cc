@@ -3674,9 +3674,9 @@ void LayoutObject::WillBeDestroyed() {
   if (HasCounterNodeMap())
     LayoutCounter::DestroyCounterNodes(*this);
 
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-2300] LayoutObject::WillBeDestroyed A %d %d",
-                        RecordReplayId(), GetNode() ? GetNode()->RecordReplayId() : -1);
+  recordreplay::AssertMaybeEventsDisallowed(
+      "[RUN-2300] LayoutObject::WillBeDestroyed A %d %d", RecordReplayId(),
+      GetNode() ? GetNode()->RecordReplayId() : -1);
 
   // Remove the handler if node had touch-action set. Handlers are not added
   // for text nodes so don't try removing for one too. Need to check if
@@ -3684,23 +3684,22 @@ void LayoutObject::WillBeDestroyed() {
   // previously may have already been removed by the Document independently.
   if (GetNode() && !GetNode()->IsTextNode() && style_ &&
       style_->GetTouchAction() != TouchAction::kAuto) {
-    if (!recordreplay::AreEventsDisallowed())
-      recordreplay::Assert("[RUN-2300] LayoutObject::WillBeDestroyed B %d",
-                           RecordReplayId());
+    recordreplay::AssertMaybeEventsDisallowed(
+        "[RUN-2300] LayoutObject::WillBeDestroyed B %d", RecordReplayId());
     EventHandlerRegistry& registry =
         GetDocument().GetFrame()->GetEventHandlerRegistry();
     if (registry.EventHandlerTargets(EventHandlerRegistry::kTouchAction)
             ->Contains(GetNode())) {
-      if (!recordreplay::AreEventsDisallowed())
-        recordreplay::Assert("[RUN-2300] LayoutObject::WillBeDestroyed C %d %d",
-                             RecordReplayId(), GetNode()->RecordReplayId());
+      recordreplay::AssertMaybeEventsDisallowed(
+          "[RUN-2300] LayoutObject::WillBeDestroyed C %d %d", RecordReplayId(),
+          GetNode()->RecordReplayId());
       registry.DidRemoveEventHandler(*GetNode(),
                                      EventHandlerRegistry::kTouchAction);
     }
   }
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-2300] LayoutObject::WillBeDestroyed D",
-                         RecordReplayId());
+
+  recordreplay::AssertMaybeEventsDisallowed(
+      "[RUN-2300] LayoutObject::WillBeDestroyed D", RecordReplayId());
 
   SetAncestorLineBoxDirty(false);
 

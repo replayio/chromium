@@ -1368,18 +1368,19 @@ bool MainThreadSchedulerImpl::IsHighPriorityWorkAnticipated() {
 
 bool MainThreadSchedulerImpl::ShouldYieldForHighPriorityWork() {
   helper_.CheckOnValidThread();
-  
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert(
-      "[RUN-1335-1336] MainThreadSchedulerImpl::ShouldYieldForHighPriorityWork A %d",
+
+  recordreplay::AssertMaybeEventsDisallowed(
+      "[RUN-1335-1336] MainThreadSchedulerImpl::ShouldYieldForHighPriorityWork "
+      "A %d",
       helper_.IsShutdown());
 
   if (helper_.IsShutdown()) {
     return false;
   }
 
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-1335-1336] MainThreadSchedulerImpl::ShouldYieldForHighPriorityWork B");
+  recordreplay::AssertMaybeEventsDisallowed(
+      "[RUN-1335-1336] MainThreadSchedulerImpl::ShouldYieldForHighPriorityWork "
+      "B");
 
   MaybeUpdatePolicy();
 

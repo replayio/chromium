@@ -135,8 +135,7 @@ bool EventHandlerRegistry::UpdateEventHandlerInternal(
 
   bool handlers_changed = old_num_handlers != new_num_handlers;
 
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert(
+  recordreplay::AssertMaybeEventsDisallowed(
         "[RUN-2300] EventHandlerRegistry::UpdateEventHandlerInternal %d %d %d",
         target->RecordReplayId(), (int)op, handlers_changed);
   if (op != kRemoveAll && handlers_changed)
