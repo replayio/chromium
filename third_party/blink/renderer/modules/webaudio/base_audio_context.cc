@@ -101,9 +101,8 @@ BaseAudioContext::BaseAudioContext(Document* document,
       periodic_wave_triangle_(nullptr) {}
 
 BaseAudioContext::~BaseAudioContext() {
-  if (recordreplay::AreEventsDisallowed() &&
-      recordreplay::IsRecordingOrReplaying("leak-references",
-                                           "~BaseAudioContext")) {
+  // [replay-leak]
+  if (recordreplay::AreEventsDisallowed("~BaseAudioContext")) {
     // This is called during GC. → Don't take the lock.
     return;
   }
