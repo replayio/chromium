@@ -38,12 +38,7 @@ RasterSource::RasterSource(const RecordingSource* other)
         INIT_RECORD_REPLAY_ID(RasterSource);
 }
 
-RasterSource::~RasterSource() {
-  recordreplay::AssertMaybeEventsDisallowed(
-      "[RUN-2104-2266] ~RasterSource %d %d %d",
-      !!display_list_, display_list_ && display_list_->HasOneRef(),
-      display_list_ && display_list_->HasAtLeastOneRef());
-}
+RasterSource::~RasterSource() = default;
 
 void RasterSource::ClearForOpaqueRaster(
     SkCanvas* raster_canvas,

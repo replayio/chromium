@@ -34,11 +34,6 @@ class BASE_EXPORT RefCountedBase {
   bool HasOneRef() const { return ref_count_ == 1; }
   bool HasAtLeastOneRef() const { return ref_count_ >= 1; }
 
-  // Expose this for Replay diagnostics.
-  int SubtleRefCountForDebug() const {
-    return (int)ref_count_;
-  }
-
  protected:
   explicit RefCountedBase(StartRefCountFromZeroTag) {
 #if DCHECK_IS_ON()
@@ -159,11 +154,6 @@ class BASE_EXPORT RefCountedThreadSafeBase {
 
   bool HasOneRef() const;
   bool HasAtLeastOneRef() const;
-
-  // Expose this for Replay diagnostics.
-  int SubtleRefCountForDebug() const {
-    return ref_count_.SubtleRefCountForDebug();
-  }
 
  protected:
   explicit constexpr RefCountedThreadSafeBase(StartRefCountFromZeroTag) {}
@@ -328,36 +318,6 @@ class BASE_EXPORT ScopedAllowCrossThreadRefCountAccess final {
   static constexpr ::base::subtle::StartRefCountFromOneTag \
       kRefCountPreference = ::base::subtle::kStartRefCountFromOneTag
 
-// Use this macro to Assert ref count events of a ref counted class.
-// When using this macro, best also make sure it has a RecordReplayId().
-// NOTE: We use this messy macro magic so we only compile Replay diagnostics
-// for types that explicitely request it. This is better for performance
-// for uninstrumented types and avoids build errors in places where Replay is
-// not available.
-#define REPLAY_ASSERT_REF_COUNTS(className, label, assertWhenEventsDisallowed) \
-  static void replay_assert_ref_count_event(                                   \
-      const char* functionName, int refCount, int record_replay_id) {          \
-    if (recordreplay::IsRecordingOrReplaying() && label != 0) {                \
-      if (assertWhenEventsDisallowed || !recordreplay::AreEventsDisallowed())  \
-        recordreplay::Assert("[%s] %s::%s %d %d", label, className,            \
-                             functionName, record_replay_id, refCount);        \
-    }                                                                          \
-  }                                                                            \
-  static_assert(true, "require semicolon")
-
-// This macro is used internally to create no-op stub declarations.
-#define REPLAY_REF_COUNT_DECLARE_STUB()                                     \
-  ALWAYS_INLINE int RecordReplayId() const {                                \
-    return 0;                                                               \
-  }                                                                         \
-  ALWAYS_INLINE static void replay_assert_ref_count_event(const char*, int, \
-                                                          int) {}           \
-  static_assert(true, "require semicolon")
-
-// This macro is used internally to call the Assert event function.
-#define REPLAY_ASSERT_REF_COUNT_EVENT(functionName, refCount) \
-  T::replay_assert_ref_count_event(#functionName, refCount, RecordReplayId())
-
 template <class T, typename Traits>
 class RefCounted;
 
@@ -374,20 +334,16 @@ class RefCounted : public subtle::RefCountedBase {
   static constexpr subtle::StartRefCountFromZeroTag kRefCountPreference =
       subtle::kStartRefCountFromZeroTag;
 
-  REPLAY_REF_COUNT_DECLARE_STUB();
-
   RefCounted() : subtle::RefCountedBase(T::kRefCountPreference) {}
 
   RefCounted(const RefCounted&) = delete;
   RefCounted& operator=(const RefCounted&) = delete;
 
   void AddRef() const {
-    REPLAY_ASSERT_REF_COUNT_EVENT(AddRef, SubtleRefCountForDebug());
     subtle::RefCountedBase::AddRef();
   }
 
   void Release() const {
-    REPLAY_ASSERT_REF_COUNT_EVENT(Release, SubtleRefCountForDebug());
     if (subtle::RefCountedBase::Release()) {
       // Prune the code paths which the static analyzer may take to simulate
       // object destruction. Use-after-free errors aren't possible given the
@@ -446,21 +402,15 @@ class RefCountedThreadSafe : public subtle::RefCountedThreadSafeBase {
   static constexpr subtle::StartRefCountFromZeroTag kRefCountPreference =
       subtle::kStartRefCountFromZeroTag;
 
-  REPLAY_REF_COUNT_DECLARE_STUB();
-
   explicit RefCountedThreadSafe()
       : subtle::RefCountedThreadSafeBase(T::kRefCountPreference) {}
 
   RefCountedThreadSafe(const RefCountedThreadSafe&) = delete;
   RefCountedThreadSafe& operator=(const RefCountedThreadSafe&) = delete;
 
-  void AddRef() const {
-    REPLAY_ASSERT_REF_COUNT_EVENT(AddRef, SubtleRefCountForDebug());
-    AddRefImpl(T::kRefCountPreference);
-  }
+  void AddRef() const { AddRefImpl(T::kRefCountPreference); }
 
   void Release() const {
-    REPLAY_ASSERT_REF_COUNT_EVENT(Release, SubtleRefCountForDebug());
     if (subtle::RefCountedThreadSafeBase::Release()) {
       ANALYZER_SKIP_THIS_PATH();
       Traits::Destruct(static_cast<const T*>(this));

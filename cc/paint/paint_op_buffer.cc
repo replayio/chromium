@@ -2923,20 +2923,11 @@ PaintOpBuffer::PaintOpBuffer(PaintOpBuffer&& other) {
 }
 
 PaintOpBuffer::~PaintOpBuffer() {
-  if (!recordreplay::AreEventsDisallowed()) {
-    recordreplay::Assert("[RUN-2104-2228] ~PaintOpBuffer %d",
-                         are_ops_destroyed_);
-  }
+  recordreplay::AutoDisallowEvents disallow("~PaintOpBuffer");
   Reset();
 }
 
 PaintOpBuffer& PaintOpBuffer::operator=(PaintOpBuffer&& other) {
-
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert(
-        "[RUN-2104-2296] PaintOpBuffer::operator= %d %d",
-        RecordReplayId(), other.RecordReplayId());
-
   data_ = std::move(other.data_);
   used_ = other.used_;
   reserved_ = other.reserved_;
@@ -2962,24 +2953,11 @@ PaintOpBuffer& PaintOpBuffer::operator=(PaintOpBuffer&& other) {
 }
 
 void PaintOpBuffer::Reset() {
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-2104-2296] PaintOpBuffer::Reset A %d %d",
-                        RecordReplayId(), are_ops_destroyed_);
   if (!are_ops_destroyed_) {
     for (PaintOp& op : Iterator(this)) {
-      if (!recordreplay::AreEventsDisallowed())
-        recordreplay::Assert("[RUN-2104-2296] PaintOpBuffer::Reset B %d %d",
-                             RecordReplayId(), (int)op.GetType());
       op.DestroyThis();
-      if (!recordreplay::AreEventsDisallowed())
-        recordreplay::Assert("[RUN-2104-2296] PaintOpBuffer::Reset C %d",
-                             RecordReplayId());
     }
   }
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-2104-2296] PaintOpBuffer::Reset D %d",
-                         RecordReplayId());
-
   // Leave data_ allocated, reserved_ unchanged. ShrinkToFit will take care of
   // that if called.
   used_ = 0;
