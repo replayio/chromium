@@ -6,7 +6,7 @@ index 23372ebe4e4bf..95a7a69201875 100644
        return "DynamicRangeCompression";
      case ABI::Windows::Media::Effects::AudioEffectType_FarFieldBeamForming:
        return "FarFieldBeamForming";
-+    case ABI::Windows::Media::Effects::AudioEffectType_DeepNoiseSuppression
++    case ABI::Windows::Media::Effects::AudioEffectType_DeepNoiseSuppression:
 +      return "DeepNoise";
    }
    return "Unknown";
