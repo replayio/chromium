@@ -972,6 +972,10 @@ void MainThreadSchedulerImpl::SetAllRenderWidgetsHidden(bool hidden) {
 void MainThreadSchedulerImpl::SetHasVisibleRenderWidgetWithTouchHandler(
     bool has_visible_render_widget_with_touch_handler) {
   helper_.CheckOnValidThread();
+  recordreplay::Assert(
+      "[RUN-2300] "
+      "MainThreadSchedulerImpl::SetHasVisibleRenderWidgetWithTouchHandler %d",
+      has_visible_render_widget_with_touch_handler);
   if (has_visible_render_widget_with_touch_handler ==
       main_thread_only().has_visible_render_widget_with_touch_handler)
     return;
@@ -1118,7 +1122,9 @@ void MainThreadSchedulerImpl::PerformMicrotaskCheckpoint() {
   // This will fallback to execute the microtask checkpoint for the
   // default EventLoop for the isolate.
   recordreplay::Assert(
-      "[RUN-1593-1876] MainThreadSchedulerImpl::PerformMicrotaskCheckpoint %d", !!isolate());
+      "[RUN-2056-2298] MainThreadSchedulerImpl::PerformMicrotaskCheckpoint %d %d %u",
+      recordreplay::PointerId(this), !!isolate(),
+      main_thread_only().agent_group_schedulers.size());
   if (isolate())
     EventLoop::PerformIsolateGlobalMicrotasksCheckpoint(isolate());
   // Perform a microtask checkpoint for each AgentSchedulingGroup. This
@@ -1362,18 +1368,19 @@ bool MainThreadSchedulerImpl::IsHighPriorityWorkAnticipated() {
 
 bool MainThreadSchedulerImpl::ShouldYieldForHighPriorityWork() {
   helper_.CheckOnValidThread();
-  
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert(
-      "[RUN-1335-1336] MainThreadSchedulerImpl::ShouldYieldForHighPriorityWork A %d",
+
+  recordreplay::AssertMaybeEventsDisallowed(
+      "[RUN-1335-1336] MainThreadSchedulerImpl::ShouldYieldForHighPriorityWork "
+      "A %d",
       helper_.IsShutdown());
 
   if (helper_.IsShutdown()) {
     return false;
   }
 
-  if (!recordreplay::AreEventsDisallowed())
-    recordreplay::Assert("[RUN-1335-1336] MainThreadSchedulerImpl::ShouldYieldForHighPriorityWork B");
+  recordreplay::AssertMaybeEventsDisallowed(
+      "[RUN-1335-1336] MainThreadSchedulerImpl::ShouldYieldForHighPriorityWork "
+      "B");
 
   MaybeUpdatePolicy();
 
