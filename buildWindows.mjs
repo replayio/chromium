@@ -4,10 +4,7 @@ import { spawnChecked, updateRepo } from "./replay_build_scripts/common.mjs";
 updateRepo();
 
 // TODO(dmiller): remove this hack when we switch to the new ci system
-spawnChecked("C:\\Program Files\\Git\\usr\\bin\\patch.exe", [
-  "-p1",
-  "replay_build_scripts/windows.patch",
-]);
+spawnChecked("git", ["apply", "replay_build_scripts/windows.patch"]);
 spawnChecked("git", ["diff", "media/audio/win/audio_low_latency_input_win.cc"]);
 
 try {
