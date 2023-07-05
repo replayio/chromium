@@ -5,7 +5,6 @@ updateRepo();
 
 // TODO(dmiller): remove this hack when we switch to the new ci system
 spawnChecked("git", ["apply", "replay_build_scripts/windows.patch"]);
-spawnChecked("git", ["diff", "media/audio/win/audio_low_latency_input_win.cc"]);
 
 try {
   spawnChecked("node", ["build.js"], { stdio: "inherit" });
