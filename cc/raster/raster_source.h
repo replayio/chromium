@@ -40,8 +40,6 @@ class PictureLayerTilingClient;
 
 class CC_EXPORT RasterSource : public base::RefCountedThreadSafe<RasterSource> {
  public:
-  HAS_RECORD_REPLAY_ID();
-
   struct CC_EXPORT PlaybackSettings {
     PlaybackSettings();
     PlaybackSettings(const PlaybackSettings&);

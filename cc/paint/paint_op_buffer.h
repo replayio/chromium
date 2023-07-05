@@ -1085,8 +1085,6 @@ static constexpr int kMinNumberOfSlowPathsForMSAA = 6;
 
 class CC_PAINT_EXPORT PaintOpBuffer : public SkRefCnt {
  public:
-  HAS_RECORD_REPLAY_ID();
-
   enum { kInitialBufferSize = 4096 };
   static constexpr size_t PaintOpAlign = 8;
   static inline size_t ComputeOpSkip(size_t sizeof_op) {

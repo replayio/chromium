@@ -34,9 +34,7 @@ RasterSource::RasterSource(const RecordingSource* other)
       size_(other->size_),
       slow_down_raster_scale_factor_for_debug_(
           other->slow_down_raster_scale_factor_for_debug_),
-      recording_scale_factor_(other->recording_scale_factor_) {
-        INIT_RECORD_REPLAY_ID(RasterSource);
-}
+      recording_scale_factor_(other->recording_scale_factor_) {}
 
 RasterSource::~RasterSource() = default;
 

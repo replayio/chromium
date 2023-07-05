@@ -2914,9 +2914,7 @@ PaintOpBuffer::PaintOpBuffer()
       has_save_layer_ops_(false),
       has_save_layer_alpha_ops_(false),
       has_effects_preventing_lcd_text_for_save_layer_alpha_(false),
-      are_ops_destroyed_(false) {
-        INIT_RECORD_REPLAY_ID(PaintOpBuffer);
-}
+      are_ops_destroyed_(false) {}
 
 PaintOpBuffer::PaintOpBuffer(PaintOpBuffer&& other) {
   *this = std::move(other);
@@ -2958,6 +2956,7 @@ void PaintOpBuffer::Reset() {
       op.DestroyThis();
     }
   }
+
   // Leave data_ allocated, reserved_ unchanged. ShrinkToFit will take care of
   // that if called.
   used_ = 0;
@@ -3257,7 +3256,6 @@ void PaintOpBuffer::ReallocBuffer(size_t new_size) {
 
 void* PaintOpBuffer::AllocatePaintOp(size_t skip) {
   DCHECK_LT(skip, PaintOp::kMaxSkip);
-  recordreplay::Assert("[RUN-2104-2296] PaintOpBuffer::AllocatePaintOp %d %zu", RecordReplayId(), skip);
   if (used_ + skip > reserved_) {
     // Start reserved_ at kInitialBufferSize and then double.
     // ShrinkToFit can make this smaller afterwards.

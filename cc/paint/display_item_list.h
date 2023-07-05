@@ -49,8 +49,6 @@ namespace cc {
 class CC_PAINT_EXPORT DisplayItemList
     : public base::RefCountedThreadSafe<DisplayItemList> {
  public:
-  HAS_RECORD_REPLAY_ID();
-
   // TODO(vmpstr): It would be cool if we didn't need this, and instead used
   // PaintOpBuffer directly when we needed to release this as a paint op buffer.
   enum UsageHint { kTopLevelDisplayItemList, kToBeReleasedAsPaintOpBuffer };
