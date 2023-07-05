@@ -750,12 +750,6 @@ void PictureLayerImpl::UpdateRasterSource(
     Region* new_invalidation,
     const PictureLayerTilingSet* pending_set,
     const PaintWorkletRecordMap* pending_paint_worklet_records) {
-  recordreplay::Assert(
-      "[RUN-2104-2296] PictureLayerImpl::UpdateRasterSource A %d %d %d %d",
-      raster_source_ ? raster_source_->RecordReplayId() : -1,
-      raster_source_ && raster_source_->HasOneRef(),
-      raster_source->RecordReplayId(), raster_source->HasOneRef());
-
   // The bounds and the pile size may differ if the pile wasn't updated (ie.
   // PictureLayer::Update didn't happen). In that case the pile will be empty.
   DCHECK(raster_source->GetSize().IsEmpty() ||
@@ -789,11 +783,6 @@ void PictureLayerImpl::UpdateRasterSource(
         SetPaintWorkletInputs({});
       }
     }
-
-    recordreplay::Assert(
-        "[RUN-2104-2296] PictureLayerImpl::UpdateRasterSource B %d %d",
-        raster_source_ ? raster_source_->RecordReplayId() : -1,
-        raster_source_ && raster_source->HasOneRef());
 
     // If the MSAA sample count has changed, we need to re-raster the complete
     // layer.
