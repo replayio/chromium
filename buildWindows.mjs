@@ -3,7 +3,11 @@ import { spawnChecked, updateRepo } from "./replay_build_scripts/common.mjs";
 
 updateRepo();
 
-spawnChecked("patch", ["-p1", "replay_build_scripts/windows.patch"]);
+// TODO(dmiller): remove this hack when we switch to the new ci system
+spawnChecked("C:\\Program Files\\Git\\usr\\bin\\patch.exe", [
+  "-p1",
+  "replay_build_scripts/windows.patch",
+]);
 
 try {
   spawnChecked("node", ["build.js"], { stdio: "inherit" });
