@@ -1,5 +1,12 @@
 import readline from "readline";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+
 import { toNumber, spawnChecked } from "./common.mjs";
+
+// NOTE(dmiller): see https://stackoverflow.com/a/62892482 for explanation
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 export async function readSymbols(file, pdbFile) {
   const symbols = {};
