@@ -1,6 +1,6 @@
 import readline from "readline";
-
 import { spawn } from "child_process";
+import * as path from "path";
 
 import { toNumber, getBackendDir } from "./common.mjs";
 
