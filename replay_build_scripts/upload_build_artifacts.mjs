@@ -7,6 +7,7 @@ import {
   spawnChecked,
   Platform,
   outputArchitecture,
+  getBackendDir,
 } from "./common.mjs";
 import { readSymbols } from "./symbolication.mjs";
 
