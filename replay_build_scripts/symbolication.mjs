@@ -18,7 +18,8 @@ export async function readSymbols(file, pdbFile) {
 
     const process = spawnChecked(
       `${__dirname}\\..\\..\\lib\\llvm-pdbutil.exe`,
-      ["dump", "-symbols", pdbFile]
+      ["dump", "-symbols", pdbFile],
+      { maxBuffer: 1e100 }
     );
     // We use readline here instead of streamToLineIterator so that we can
     // keep the dependencies of this file to a minimum since this is also
