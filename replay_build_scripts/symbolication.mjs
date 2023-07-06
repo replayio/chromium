@@ -1,8 +1,9 @@
 import readline from "readline";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
+import { spawn } from "child_process";
 
-import { toNumber, spawnChecked } from "./common.mjs";
+import { toNumber } from "./common.mjs";
 
 // NOTE(dmiller): see https://stackoverflow.com/a/62892482 for explanation
 const __filename = fileURLToPath(import.meta.url);
@@ -16,14 +17,15 @@ export async function readSymbols(file, pdbFile) {
     }
     const textStart = getTextSectionAddress(pdbFile);
 
-    const process = spawnChecked(
-      `${__dirname}\\..\\..\\lib\\llvm-pdbutil.exe`,
-      ["dump", "-symbols", pdbFile]
-    );
-    // We use readline here instead of streamToLineIterator so that we can
-    // keep the dependencies of this file to a minimum since this is also
-    // used to build the linker and rebuilding the linker every time anything
-    // in shared/ changes would be really slow.
+    const process = spawn(`${__dirname}\\..\\..\\lib\\llvm-pdbutil.exe`, [
+      "dump",
+      "-symbols",
+      pdbFile,
+    ]);
+    process.on("error", (error) => {
+      console.error(`spawn error: ${error}`);
+    });
+
     const lines = readline.createInterface({
       input: process.stdout,
       crlfDelay: Infinity,
@@ -45,9 +47,23 @@ export async function readSymbols(file, pdbFile) {
       }
     }
   } else {
-    const lines = spawnChecked("/usr/bin/nm", [file], { maxBuffer: 1e100 })
-      .stdout.toString()
-      .split("\n");
+    const nmProcess = spawn("/usr/bin/nm", [file], { maxBuffer: 1e100 });
+
+    nmProcess.on("error", (error) => {
+      console.error(`spawn error: ${error}`);
+    });
+
+    let stdout = "";
+    nmProcess.stdout.on("data", (data) => {
+      stdout += data;
+    });
+
+    await new Promise((resolve, reject) => {
+      nmProcess.on("exit", resolve);
+      nmProcess.on("error", reject);
+    });
+
+    const lines = stdout.split("\n");
     for (const line of lines) {
       const arr = /^(.*?) [t|T|W] (.*)/.exec(line);
       if (arr) {
