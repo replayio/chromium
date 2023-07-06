@@ -80,14 +80,28 @@ export async function readSymbols(file, pdbFile) {
 
 // Get the start virtual address of the text section from a PDB file.
 // Symbol addresses are relative to the start of this section.
-function getTextSectionAddress(pdbFile) {
-  const lines = spawnChecked(`${__dirname}\\..\\..\\lib\\llvm-pdbutil.exe`, [
+async function getTextSectionAddress(pdbFile) {
+  const pdbProcess = spawn(`${__dirname}\\..\\..\\lib\\llvm-pdbutil.exe`, [
     "dump",
     "-section-headers",
     pdbFile,
-  ])
-    .stdout.toString()
-    .split("\n");
+  ]);
+
+  pdbProcess.on("error", (error) => {
+    console.error(`spawn error: ${error}`);
+  });
+
+  let stdout = "";
+  pdbProcess.stdout.on("data", (data) => {
+    stdout += data;
+  });
+
+  await new Promise((resolve, reject) => {
+    pdbProcess.on("exit", resolve);
+    pdbProcess.on("error", reject);
+  });
+
+  const lines = stdout.toString().split("\n");
 
   let inTextSection = false;
   for (const line of lines) {
