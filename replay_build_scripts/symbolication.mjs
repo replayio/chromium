@@ -10,7 +10,7 @@ const __dirname = dirname(__filename);
 
 export async function readSymbols(file, pdbFile) {
   const symbols = {};
-  if (process.platform === "win32") {
+  if (process.platform == "win32") {
     if (!pdbFile) {
       throw new Error("Need PDB file to read symbols on windows");
     }
@@ -21,26 +21,27 @@ export async function readSymbols(file, pdbFile) {
       ["dump", "-symbols", pdbFile],
       { maxBuffer: 1e100 }
     );
-
+    // We use readline here instead of streamToLineIterator so that we can
+    // keep the dependencies of this file to a minimum since this is also
+    // used to build the linker and rebuilding the linker every time anything
+    // in shared/ changes would be really slow.
     const lines = readline.createInterface({
       input: process.stdout,
       crlfDelay: Infinity,
     });
     let currentFunction;
-    const addrRegex = /addr = 0001:(\d+)/;
-    const functionRegex = /(S_GPROC32|S_LPROC32).*`(.*)`/;
     for await (const line of lines) {
       if (currentFunction) {
-        const match = addrRegex.exec(line);
+        const match = /addr = 0001:(\d+),/.exec(line);
         if (match) {
           const addr = textStart + +match[1];
           symbols[addr] = currentFunction;
         }
         currentFunction = undefined;
-      } else {
-        const match = functionRegex.exec(line);
-        if (match) {
-          currentFunction = match[2];
+      } else if (line.includes("S_GPROC32") || line.includes("S_LPROC32")) {
+        const backtick = line.indexOf("`");
+        if (backtick != -1) {
+          currentFunction = line.substring(backtick + 1, line.length - 1);
         }
       }
     }
