@@ -1,13 +1,8 @@
 import readline from "readline";
-import { fileURLToPath } from "url";
-import { dirname } from "path";
+
 import { spawn } from "child_process";
 
-import { toNumber } from "./common.mjs";
-
-// NOTE(dmiller): see https://stackoverflow.com/a/62892482 for explanation
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import { toNumber, getBackendDir } from "./common.mjs";
 
 export async function readSymbols(file, pdbFile) {
   const symbols = {};
@@ -17,11 +12,8 @@ export async function readSymbols(file, pdbFile) {
     }
     const textStart = getTextSectionAddress(pdbFile);
 
-    const process = spawn(`${__dirname}\\..\\..\\lib\\llvm-pdbutil.exe`, [
-      "dump",
-      "-symbols",
-      pdbFile,
-    ]);
+    const pdbPath = path.join(getBackendDir(), "lib", "llvm-pdbutil.exe");
+    const process = spawn(pdbPath, ["dump", "-symbols", pdbFile]);
     process.on("error", (error) => {
       console.error(`spawn error: ${error}`);
     });
@@ -81,11 +73,8 @@ export async function readSymbols(file, pdbFile) {
 // Get the start virtual address of the text section from a PDB file.
 // Symbol addresses are relative to the start of this section.
 async function getTextSectionAddress(pdbFile) {
-  const pdbProcess = spawn(`${__dirname}\\..\\..\\lib\\llvm-pdbutil.exe`, [
-    "dump",
-    "-section-headers",
-    pdbFile,
-  ]);
+  pdbPath = path.join(getBackendDir(), "lib", "llvm-pdbutil.exe");
+  const pdbProcess = spawn(pdbPath, ["dump", "-section-headers", pdbFile]);
 
   pdbProcess.on("error", (error) => {
     console.error(`spawn error: ${error}`);

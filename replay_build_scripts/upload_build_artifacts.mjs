@@ -137,7 +137,7 @@ function prepareWindowsBinaries(buildId) {
   // This needs to be fixed, see https://github.com/RecordReplay/backend/issues/2847
   for (const dll of ["libssl-1_1-x64.dll", "libcrypto-1_1-x64.dll"]) {
     fs.copyFileSync(
-      path.join(backend, "lib", dll),
+      path.join(getBackendDir(), "lib", dll),
       path.join("replay-chromium", dll)
     );
   }
