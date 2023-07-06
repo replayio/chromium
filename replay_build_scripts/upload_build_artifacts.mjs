@@ -130,11 +130,9 @@ function prepareWindowsBinaries(buildId) {
   const buildArchive = `${buildId}.zip`;
   fs.rmSync("replay-chromium", { force: true, recursive: true });
   fs.mkdirSync("replay-chromium");
-  spawnChecked(
-    "node",
-    [copyBuild, "out\\Release", path.join(process.cwd(), "replay-chromium")],
-    { cwd: chromium, stdio: "inherit" }
-  );
+
+  copyBuildFiles("out\\Release", "replay-chromium");
+
   // On windows we need to add a couple OpenSSL DLLs to the archive so that the driver will run.
   // This needs to be fixed, see https://github.com/RecordReplay/backend/issues/2847
   for (const dll of ["libssl-1_1-x64.dll", "libcrypto-1_1-x64.dll"]) {
