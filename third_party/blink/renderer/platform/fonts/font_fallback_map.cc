@@ -69,6 +69,13 @@ void FontFallbackMap::InvalidateInternal(Predicate predicate) {
 
 void FontFallbackMap::FontsNeedUpdate(FontSelector*,
                                       FontInvalidationReason reason) {
+  if (recordreplay::AreEventsDisallowed(
+          "FontFallbackMap::FontCacheInvalidated")) {
+    // Leak fallback_list_for_description_ contents to avoid divergence down the
+    // road.
+    return;
+  }
+
   AutoLockForParallelTextShaping guard(lock_);
   switch (reason) {
     case FontInvalidationReason::kFontFaceLoaded:
@@ -87,6 +94,13 @@ void FontFallbackMap::FontsNeedUpdate(FontSelector*,
 }
 
 void FontFallbackMap::FontCacheInvalidated() {
+  if (recordreplay::AreEventsDisallowed(
+          "FontFallbackMap::FontCacheInvalidated")) {
+    // Leak fallback_list_for_description_ contents to avoid divergence down the
+    // road.
+    return;
+  }
+
   AutoLockForParallelTextShaping guard(lock_);
   InvalidateAll();
 }
