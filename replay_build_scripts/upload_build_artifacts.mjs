@@ -132,7 +132,6 @@ function prepareWindowsBinaries(buildId) {
   fs.rmSync("replay-chromium", { force: true, recursive: true });
   fs.mkdirSync("replay-chromium");
 
-  copyBuildFiles("out\\Release", "replay-chromium");
   copyBuildFiles(path.join("out", "Release"), "replay-chromium");
 
   // On windows we need to add a couple OpenSSL DLLs to the archive so that the driver will run.
