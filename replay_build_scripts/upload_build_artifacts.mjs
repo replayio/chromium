@@ -133,6 +133,7 @@ function prepareWindowsBinaries(buildId) {
   fs.mkdirSync("replay-chromium");
 
   copyBuildFiles("out\\Release", "replay-chromium");
+  copyBuildFiles(path.join("out", "Release"), "replay-chromium");
 
   // On windows we need to add a couple OpenSSL DLLs to the archive so that the driver will run.
   // This needs to be fixed, see https://github.com/RecordReplay/backend/issues/2847
@@ -143,6 +144,7 @@ function prepareWindowsBinaries(buildId) {
     );
   }
   spawnChecked(
+    // TODO(dmiller): this is gross, we should control this build dependency
     "C:\\mozilla-build\\bin\\zip.exe",
     ["-r", buildArchive, "replay-chromium"],
     {
