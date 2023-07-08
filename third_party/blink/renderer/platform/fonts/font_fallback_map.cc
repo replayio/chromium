@@ -69,8 +69,7 @@ void FontFallbackMap::InvalidateInternal(Predicate predicate) {
 
 void FontFallbackMap::FontsNeedUpdate(FontSelector*,
                                       FontInvalidationReason reason) {
-  if (recordreplay::AreEventsDisallowed(
-          "FontFallbackMap::FontCacheInvalidated")) {
+  if (recordreplay::AreEventsDisallowed("FontFallbackMap::FontsNeedUpdate")) {
     // Leak fallback_list_for_description_ contents to avoid divergence down the
     // road.
     return;
