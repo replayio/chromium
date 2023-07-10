@@ -11,7 +11,7 @@
 
 namespace recordreplay {
 
-// This is a deterministic version of atomic_sequency_num.h.
+// This is a deterministic version of atomic_sequence_num.h.
 class AtomicSequenceNumber {
  public:
   constexpr AtomicSequenceNumber() = default;
