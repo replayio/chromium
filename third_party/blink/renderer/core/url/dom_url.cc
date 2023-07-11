@@ -95,7 +95,7 @@ String DOMURL::CreatePublicURL(ExecutionContext* execution_context,
 
 URLSearchParams* DOMURL::searchParams() {
   if (!search_params_) {
-    if (!recordreplay::AreAssertsDisabled()) {
+    if (recordreplay::IsRecordingOrReplaying() && !recordreplay::AreAssertsDisabled()) {
       std::string stack;
       recordreplay::GetCurrentJSStack(&stack);
       recordreplay::Assert("[RUN-2324-2325] DOMURL::searchParams %s stack=%s",
