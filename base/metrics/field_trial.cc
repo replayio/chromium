@@ -737,8 +737,12 @@ void FieldTrialList::CreateTrialsFromCommandLine(const CommandLine& cmd_line,
     return;
   }
 
+  recordreplay::Assert(
+      "[RUN-2350-2356] FieldTrialList::CreateTrialsFromCommandLine %d %d",
+      recordreplay::IsRecordingOrReplaying(), recordreplay::FeatureEnabled("no-field-trials"));
+
 #if !BUILDFLAG(IS_NACL) && !BUILDFLAG(IS_IOS)
-  if (cmd_line.HasSwitch(switches::kFieldTrialHandle)) {
+      if (cmd_line.HasSwitch(switches::kFieldTrialHandle)) {
     std::string switch_value =
         cmd_line.GetSwitchValueASCII(switches::kFieldTrialHandle);
     bool result = CreateTrialsFromSwitchValue(switch_value, fd_key);
