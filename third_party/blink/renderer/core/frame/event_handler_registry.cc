@@ -130,7 +130,7 @@ void EventHandlerRegistry::UpdateEventHandlerTargets(
       targets->RemoveAll(target);
       if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
                                                "EventHandlerRegistry")) {
-        replay_strong_targets_.erase(target);
+        replay_strong_targets_.RemoveAll(target);
       }
       return;
   }

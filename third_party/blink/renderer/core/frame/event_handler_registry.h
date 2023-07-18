@@ -15,6 +15,9 @@
 #include "third_party/blink/renderer/platform/heap/forward.h"
 #include "third_party/blink/renderer/platform/wtf/hash_counted_set.h"
 
+// Used for replay_strong_targets_.
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_counted_set.h"
+
 namespace blink {
 
 class AddEventListenerOptions;
@@ -135,7 +138,7 @@ class CORE_EXPORT EventHandlerRegistry final
 
   Member<LocalFrame> frame_;
   EventTargetSet targets_[kEventHandlerClassCount];
-  HeapHashSet<Member<EventTarget>> replay_strong_targets_;
+  HeapHashCountedSet<Member<EventTarget>> replay_strong_targets_;
 };
 
 }  // namespace blink
