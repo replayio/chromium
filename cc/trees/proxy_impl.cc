@@ -646,6 +646,9 @@ void ProxyImpl::DidPresentCompositorFrameOnImplThread(
   host_impl_->NotifyDidPresentCompositorFrameOnImplThread(
       frame_token, std::move(activated.compositor_thread_callbacks), details);
 
+  recordreplay::Assert(
+      "[RUN-2317-2366] ProxyImpl::DidPresentCompositorFrameOnImplThread");
+
   MainThreadTaskRunner()->PostTask(
       FROM_HERE, base::BindOnce(&ProxyMain::DidPresentCompositorFrame,
                                 proxy_main_weak_ptr_, frame_token,
