@@ -491,7 +491,7 @@ void ProxyMain::DidPresentCompositorFrame(
     const gfx::PresentationFeedback& feedback) {
 
   recordreplay::Assert(
-      "[RUN-2317-2366] ProxyMain::DidPresentCompositorFrame");
+      "[RUN-2317-2366] ProxyMain::DidPresentCompositorFrame %u", frame_token);
 
   layer_tree_host_->DidPresentCompositorFrame(frame_token, std::move(callbacks),
                                               feedback);
