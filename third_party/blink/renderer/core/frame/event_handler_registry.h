@@ -135,6 +135,7 @@ class CORE_EXPORT EventHandlerRegistry final
 
   Member<LocalFrame> frame_;
   EventTargetSet targets_[kEventHandlerClassCount];
+  HeapHashSet<Member<EventTarget>> replay_strong_targets_;
 };
 
 }  // namespace blink
