@@ -502,6 +502,7 @@ void FrameFetchContext::PrepareRequest(
       WTF::String data = form_body->FlattenToString();
       base::DictionaryValue requestDataDict;
       requestDataDict.SetString("requestId", request_id.Utf8());
+      requestDataDict.SetString("requestUrl", url_string);
       std::string dataStr = data.Utf8();
       requestDataDict.SetString("data", dataStr);
       requestDataDict.SetInteger("dataLength", (int)dataStr.size());

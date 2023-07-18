@@ -4050,14 +4050,16 @@ struct NetworkRequestStatus {
   size_t response_data_received;
   size_t request_data_sent;
   std::string method;
+  std::string url;
   uint64_t bookmark;
-  NetworkRequestStatus(std::string& method, uint64_t bookmark = 0)
+  NetworkRequestStatus(const std::string& method, uint64_t bookmark = 0)
   : response_data_received(0),
     request_data_sent(0),
     method(method),
     bookmark(bookmark)
   {}
 };
+
 // Map of active network requests.
 std::unordered_map<std::string, NetworkRequestStatus>*
   gActiveNetworkRequests = nullptr;
@@ -4136,15 +4138,37 @@ static std::string MakeRequestIdentifier(uint64_t identifier) {
   return std::string(request_id);
 }
 
+static std::string MakeReplayRequestidentifier(
+  const std::string& request_id,
+  const base::DictionaryValue& info)
+{
+  // Construct a replay request id that includes both the request_id as
+  // well as as hash of the URL.  This is to distinguish different requests
+  // on the same redirect chain.
+  CHECK(info.FindPath("request_url")->is_string());
+  std::string request_url = *info.FindPath("request_url")->GetIfString();
+  uint64_t url_hash = base::Hash(request_url);
+  std::string replay_request_id = request_id;
+  replay_request_id += ":";
+  replay_request_id += std::to_string(url_hash);
+  return replay_request_id;
+}
+
 static void HandleNetworkPrepareRequestEvent(const base::DictionaryValue& info) {
   CHECK(gActiveNetworkRequests);
   std::string request_id = *info.FindPath("requestId")->GetIfString();
   if (gActiveNetworkRequests->find(request_id) != gActiveNetworkRequests->end()) {
     // If the request already exists, this is a redirect.
     // Chromium will send a "Network.ResourceRedirect" event which will
-    // be handled by `HandleNetworkPrepareRequestEvent` below.
+    // be handled by `HandleNetworkPrepareResourceRedirect` below.
     return;
   }
+
+  // Construct a replay request id that includes both the request_id as
+  // well as as hash of the URL.  This is to distinguish different requests
+  // on the same redirect chain.
+  std::string url = *info.FindPath("requestUrl")->GetIfString();
+  std::string replay_request_id = MakeReplayRequestidentifier(request_id, info);
 
   // Save request info in a global table.
   // Associate with it the following info which may be needed later if
@@ -4158,7 +4182,7 @@ static void HandleNetworkPrepareRequestEvent(const base::DictionaryValue& info) 
   );
 
   // Register the request.
-  recordreplay::OnNetworkRequest(request_id.c_str(), "http", bookmark);
+  recordreplay::OnNetworkRequest(replay_request_id.c_str(), "http", bookmark);
 
   // Package and emit a network request event with the appropriate info.
   base::DictionaryValue event;
@@ -4172,7 +4196,7 @@ static void HandleNetworkPrepareRequestEvent(const base::DictionaryValue& info) 
   }
 
   gCurrentNetworkRequestEvent = &event;
-  recordreplay::OnNetworkRequestEvent(request_id.c_str());
+  recordreplay::OnNetworkRequestEvent(replay_request_id.c_str());
   gCurrentNetworkRequestEvent = nullptr;
 }
 
@@ -4191,9 +4215,18 @@ static void HandleNetworkResourceRedirectEvent(const base::DictionaryValue& info
     return;
   }
 
+  // KVKV TODO: End the old request here, providing it with the headers from the
+  // redirect response.
+
+  std::string replay_request_id = MakeReplayRequestidentifier(request_id, info);
+
   // Register a new network request with the same request id as the original
   // for this redirect.
-  recordreplay::OnNetworkRequest(request_id.c_str(), "http", request_info->second.bookmark);
+  recordreplay::OnNetworkRequest(
+    replay_request_id.c_str(),
+    "http",
+    request_info->second.bookmark
+  );
 
   // Package and emit a network request event.
   // The request_method is obtained from the saved request info.
@@ -4208,7 +4241,7 @@ static void HandleNetworkResourceRedirectEvent(const base::DictionaryValue& info
   }
 
   gCurrentNetworkRequestEvent = &event;
-  recordreplay::OnNetworkRequestEvent(request_id.c_str());
+  recordreplay::OnNetworkRequestEvent(replay_request_id.c_str());
   gCurrentNetworkRequestEvent = nullptr;
 }
 
@@ -4226,12 +4259,15 @@ static void HandleNetworkNavigationEvent(const base::DictionaryValue& info) {
     recordreplay::Print("Duplicate request id: %s", request_id.c_str());
     return;
   }
+
+  std::string replay_request_id = MakeReplayRequestidentifier(request_id, info);
+
   std::string request_method = *info.FindPath("requestMethod")->GetIfString();
   gActiveNetworkRequests->insert({ request_id, NetworkRequestStatus(request_method) });
 
   // A navigation event is a new network request, so call the `OnNetworkRequest` hook.
   // Navigation events have no bookmarks associated with them.
-  recordreplay::OnNetworkRequest(request_id.c_str(), "http", /* bookmark = */ 0);
+  recordreplay::OnNetworkRequest(replay_request_id.c_str(), "http", /* bookmark = */ 0);
 
   // Package and emit a network request event.
   base::DictionaryValue event;
@@ -4242,7 +4278,7 @@ static void HandleNetworkNavigationEvent(const base::DictionaryValue& info) {
   event.SetString("requestCause", "document");
 
   gCurrentNetworkRequestEvent = &event;
-  recordreplay::OnNetworkRequestEvent(request_id.c_str());
+  recordreplay::OnNetworkRequestEvent(replay_request_id.c_str());
   gCurrentNetworkRequestEvent = nullptr;
 }
 
@@ -4263,8 +4299,13 @@ static void HandleNetworkNavigationRedirectEvent(const base::DictionaryValue& in
     return;
   }
 
+  // KVKV TODO: End the old request here, providing it with the headers from the
+  // redirect response.
+
+  std::string replay_request_id = MakeReplayRequestidentifier(request_id, info);
+
   // A navigation redirect event is a new network request.
-  recordreplay::OnNetworkRequest(request_id.c_str(), "http", request_info->second.bookmark);
+  recordreplay::OnNetworkRequest(replay_request_id.c_str(), "http", request_info->second.bookmark);
 
   // Package and emit a network request event.
   // The request method is obtained from the saved request info.
@@ -4276,7 +4317,7 @@ static void HandleNetworkNavigationRedirectEvent(const base::DictionaryValue& in
   event.SetString("requestCause", "document");
 
   gCurrentNetworkRequestEvent = &event;
-  recordreplay::OnNetworkRequestEvent(request_id.c_str());
+  recordreplay::OnNetworkRequestEvent(replay_request_id.c_str());
   gCurrentNetworkRequestEvent = nullptr;
 }
 
@@ -4290,6 +4331,8 @@ static void HandleNetworkRequestDataFormEvent(const base::DictionaryValue& info)
     return;
   }
 
+  std::string replay_request_id = MakeReplayRequestidentifier(request_id, info);
+
   // If we're receiving a RequestData.Form event, all the
   // request data is present and none should have been already received.
   CHECK(request_info->second.request_data_sent == 0);
@@ -4299,15 +4342,15 @@ static void HandleNetworkRequestDataFormEvent(const base::DictionaryValue& info)
     requestBodyEvent.SetString("kind", "request-body");
 
     gCurrentNetworkRequestEvent = &requestBodyEvent;
-    recordreplay::OnNetworkRequestEvent(request_id.c_str());
+    recordreplay::OnNetworkRequestEvent(replay_request_id.c_str());
     gCurrentNetworkRequestEvent = nullptr;
   }
 
-  std::string stream_id = "request-" + request_id;
+  std::string stream_id = "request-" + replay_request_id;
 
   // Call StreamStart API.
   recordreplay::OnNetworkStreamStart(
-    stream_id.c_str(), "request-data", request_id.c_str()
+    stream_id.c_str(), "request-data", replay_request_id.c_str()
   );
 
   // Call StreamData API.
@@ -4345,6 +4388,8 @@ static void HandleNetworkDidReceiveResponseEvent(const base::DictionaryValue& in
     return;
   }
 
+  std::string replay_request_id = MakeReplayRequestidentifier(request_id, info);
+
   base::DictionaryValue event;
   event.SetString("kind", "response");
   event.Set("responseHeaders", std::unique_ptr<base::Value>(
@@ -4364,7 +4409,7 @@ static void HandleNetworkDidReceiveResponseEvent(const base::DictionaryValue& in
   ));
 
   gCurrentNetworkRequestEvent = &event;
-  recordreplay::OnNetworkRequestEvent(request_id.c_str());
+  recordreplay::OnNetworkRequestEvent(replay_request_id.c_str());
   gCurrentNetworkRequestEvent = nullptr;
 }
 
@@ -4380,6 +4425,8 @@ static void HandleNetworkDidFinishLoadingEvent(const base::DictionaryValue& info
     return;
   }
 
+  std::string replay_request_id = MakeReplayRequestidentifier(request_id, info);
+
   base::DictionaryValue event;
   event.SetString("kind", "request-done");
   event.Set("encodedBodySize", std::unique_ptr<base::Value>(
@@ -4390,7 +4437,7 @@ static void HandleNetworkDidFinishLoadingEvent(const base::DictionaryValue& info
   ));
 
   gCurrentNetworkRequestEvent = &event;
-  recordreplay::OnNetworkRequestEvent(request_id.c_str());
+  recordreplay::OnNetworkRequestEvent(replay_request_id.c_str());
   gCurrentNetworkRequestEvent = nullptr;
 }
 
@@ -4406,6 +4453,8 @@ static void HandleNetworkDidFailLoadingEvent(const base::DictionaryValue& info) 
     return;
   }
 
+  std::string replay_request_id = MakeReplayRequestidentifier(request_id, info);
+
   base::DictionaryValue event;
   event.SetString("kind", "request-failed");
   event.Set("requestFailedReason", std::unique_ptr<base::Value>(
@@ -4413,7 +4462,7 @@ static void HandleNetworkDidFailLoadingEvent(const base::DictionaryValue& info) 
   ));
 
   gCurrentNetworkRequestEvent = &event;
-  recordreplay::OnNetworkRequestEvent(request_id.c_str());
+  recordreplay::OnNetworkRequestEvent(replay_request_id.c_str());
   gCurrentNetworkRequestEvent = nullptr;
 }
 
@@ -4431,7 +4480,9 @@ static void HandleNetworkDidReceiveDataEvent(const base::DictionaryValue& info) 
     return;
   }
 
-  std::string stream_id = "response-" + request_id;
+  std::string replay_request_id = MakeReplayRequestidentifier(request_id, info);
+
+  std::string stream_id = "response-" + replay_request_id;
 
   // The first byte of data received triggers a "response-body" event.
   if (request_info->second.response_data_received == 0) {
@@ -4439,11 +4490,11 @@ static void HandleNetworkDidReceiveDataEvent(const base::DictionaryValue& info) 
     event.SetString("kind", "response-body");
 
     gCurrentNetworkRequestEvent = &event;
-    recordreplay::OnNetworkRequestEvent(request_id.c_str());
+    recordreplay::OnNetworkRequestEvent(replay_request_id.c_str());
     gCurrentNetworkRequestEvent = nullptr;
 
     recordreplay::OnNetworkStreamStart(
-      stream_id.c_str(), "response-data", request_id.c_str()
+      stream_id.c_str(), "response-data", replay_request_id.c_str()
     );
   }
 
@@ -4732,6 +4783,7 @@ static void fromJsCollectEventListeners(const v8::FunctionCallbackInfo<v8::Value
 
 // Handle incoming browser events.
 static void HandleBrowserEvent(const char* name, const char* payload) {
+  recordreplay::Print("KVKV HandleBrowserEvent %s -- %s", name, payload);
   base::Value val = base::JSONReader::Read(payload).value_or(base::Value());
   assert(!val.is_none() && "Browser event JSON failed");
   assert(!val.is_dict() && "Browser event JSON is not a dictionary");
