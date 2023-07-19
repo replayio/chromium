@@ -1,4 +1,3 @@
-
 const {
   getLatestRevision,
   sendBuildTestRequest,
@@ -6,6 +5,7 @@ const {
 } = require("../utils");
 
 const revision = process.env.BUILD_TEST_REVISION || getLatestRevision();
+const driverRevision = process.env.BUILD_TEST_DRIVER_REVISION || undefined;
 
 if (!revision || revision.length !== 12) {
   throw new Error("Revision must be the first 12 characters of the SHA");
@@ -27,6 +27,7 @@ function platformTasks(platform) {
       kind: "ReleaseRuntime",
       runtime: "chromium",
       revision,
+      driverRevision,
     },
     platform
   );
@@ -39,6 +40,7 @@ function platformTasks(platform) {
         kind: "ReleaseRuntime",
         runtime: "chromium",
         revision,
+        driverRevision,
         useARM: true,
       },
       platform
