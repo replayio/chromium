@@ -69,3 +69,5 @@ steps:
   - trigger: "testing-runtime-e2e"
     label: ":hammer: Trigger Runtime Tests (Linux)"
     depends_on: "build-chromium-linux-x86_64"
+    build:
+      branch: "dmiller/runtime-tests-macos"
