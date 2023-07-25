@@ -29,6 +29,8 @@ const BUILDKITE_ARTIFACT_DIRECTORY = path.join(
 // logic.
 const IS_LOCAL_BUILD = !!process.env["LOCAL_DEVELOPER_BUILD_EXTENSION"];
 
+const buildArm = !!process.env.REPLAY_BUILD_ARM;
+
 function uploadToAllBuckets(localPath, s3Path) {
   const buckets = [S3DevBucket];
   // If we're on a local machine, don't include the prod S3 bucket.
@@ -155,9 +157,9 @@ function prepareWindowsBinaries(buildId) {
   return [buildArchive];
 }
 
-function prepareMacOSBinaries(buildId) {
-  const dmgArchive = `${buildId}.dmg`;
-  const outdir = path.join("out", "Release");
+function prepareMacOSBinaries(buildId, buildArm) {
+  const dmgArchive = buildArm ? `${buildId}-arm.dmg` : `${buildId}.dmg`;
+  const outdir = buildArm ? "out/Release-ARM" : "out/Release";
   fs.rmSync(path.join(outdir, "Replay-Chromium.app"), {
     recursive: true,
     force: true,
@@ -181,7 +183,7 @@ function prepareMacOSBinaries(buildId) {
     ],
     { cwd: outdir, stdio: "inherit" }
   );
-  const tarArchive = `${buildId}.tar.xz`;
+  const tarArchive = buildArm ? `${buildId}-arm.tar.xz` : `${buildId}.tar.xz`;
 
   spawnChecked(
     "tar",
