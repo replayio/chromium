@@ -235,11 +235,16 @@ async function main(options) {
 
   // Perform all buildkite-specific stuff
   if (process.env["BUILDKITE"]) {
-    buildkiteStuff(downloadUris, platform, buildId);
+    buildkiteStuff(
+      downloadUris,
+      platform,
+      buildId,
+      buildArm ? "arm64" : "x86_64"
+    );
   }
 }
 
-function buildkiteStuff(downloadUris, platform, buildId) {
+function buildkiteStuff(downloadUris, platform, buildId, arch) {
   const markdownDownloadList = downloadUris
     .map((uri) =>
       uri.replace("s3://recordreplay-website", "https://static.replay.io")
@@ -247,7 +252,7 @@ function buildkiteStuff(downloadUris, platform, buildId) {
     .map((uri) => `* [${path.basename(uri)}](${uri})`)
     .join("\n");
 
-  const markdownMessage = `# ${platform} links\n\n${markdownDownloadList}\n`;
+  const markdownMessage = `# ${platform} (${arch}) links\n\n${markdownDownloadList}\n`;
 
   spawnChecked(
     "buildkite-agent",
