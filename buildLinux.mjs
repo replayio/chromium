@@ -15,6 +15,7 @@ const dockerArgs = [
   "BUILDKITE_PIPELINE_DEFAULT_BRANCH",
   "-e",
   "LOCAL_DEVELOPER_BUILD_EXTENSION",
+  "-e",
   "GOMA_SERVER_HOST=simpsonite.goma.engflow.com",
   "-e",
   "GOMACTL_USE_PROXY=false",
