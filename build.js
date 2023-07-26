@@ -99,7 +99,6 @@ const buildSuffix =
   process.env["BUILDKITE_PIPELINE_DEFAULT_BRANCH"]
     ? "-dev"
     : process.env["LOCAL_DEVELOPER_BUILD_EXTENSION"] || "";
-console.log("DERP buildSuffix", buildSuffix, "ENV", process.env);
 const buildId = `${computeBuildId(driverDate, driverRevision)}${buildSuffix}`;
 
 fs.writeFileSync(
