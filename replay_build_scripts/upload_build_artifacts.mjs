@@ -157,7 +157,7 @@ function prepareWindowsBinaries(buildId) {
   return [buildArchive];
 }
 
-function prepareMacOSBinaries(buildId, buildArm) {
+function prepareMacOSBinaries(buildId) {
   const dmgArchive = buildArm ? `${buildId}-arm.dmg` : `${buildId}.dmg`;
   const outdir = buildArm ? "out/Release-ARM" : "out/Release";
   fs.rmSync(path.join(outdir, "Replay-Chromium.app"), {
