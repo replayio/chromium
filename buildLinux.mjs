@@ -9,7 +9,6 @@ const dockerArgs = [
   "-e",
   "BUILDKITE",
   "-e",
-  "-e",
   "BUILDKITE_BRANCH",
   "-e",
   "BUILDKITE_PIPELINE_DEFAULT_BRANCH",
