@@ -70,3 +70,6 @@ steps:
     depends_on:
       - "build-chromium-linux-x86_64"
       - "build-chromium-mac-x86_64"
+      - "build-chromium-mac-arm64"
+    build:
+      branch: "dmiller/runtime-e2e-macos-arm64"
