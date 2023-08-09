@@ -72,5 +72,6 @@ steps:
       - "build-chromium-mac-x86_64"
       - "build-chromium-mac-arm64"
     build:
+      branch: "cklochek/runtime-e2e-macos-arm64"
       env:
         TRIGGERING_CHROMIUM_BRANCH: "${BUILDKITE_BRANCH}"
