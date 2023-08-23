@@ -2257,7 +2257,7 @@ function CSS_getAppliedRules({ node: nodeRrpId }) {
   }
   else {
     // The target is not a node.
-    log(`[RuntimeWarning] CSS_getAppliedRules called with non-node: ${nodeRrpId} ${isBlinkObject(nodeObj)} ${nodeObj?.constructor?.name} ${nodeObj?.constructor}.`);
+    log(`[RuntimeWarning] CSS.getAppliedRules called with non-node: ${nodeRrpId} ${isBlinkObject(nodeObj)} ${nodeObj?.constructor?.name} ${nodeObj?.constructor}.`);
     rules = [];
   }
 
