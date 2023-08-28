@@ -998,7 +998,7 @@ Response InspectorCSSAgent::getMatchedStylesForNode(
     return response;
 
   Element* element = nullptr;
-  auto response = dom_agent_->AssertElement(node_id, element);
+  response = dom_agent_->AssertElement(node_id, element);
   if (!response.IsSuccess())
     return response;
 
