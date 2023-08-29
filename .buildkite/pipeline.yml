@@ -3,55 +3,55 @@ env:
   GIT_TERMINAL_PROMPT: 0
 
 steps:
-  - label: "Build chromium - Linux"
-    key: "build-chromium-linux-x86_64"
-    timeout_in_minutes: 60
-    plugins:
-      - thedyrt/skip-checkout#v0.1.1:
-          cd: /home/ubuntu/chromium/src
-    command: "docker build -t chromium-build-new - < Dockerfile.build && git status && node buildLinux.mjs && node replay_build_scripts/upload_build_artifacts.mjs"
-    env:
-      GOMA_SERVER_HOST: simpsonite.goma.engflow.com
-      GOMACTL_USE_PROXY: false
-    agents:
-      - "runtimeType=chromiumbuild"
-      - "os=linux"
-      - "queue=runtime"
-    artifact_paths:
-      - "build_id/linux/x86_64/**"
-  - label: "Build chromium - Mac (x86)"
-    key: "build-chromium-mac-x86_64"
-    timeout_in_minutes: 60
-    plugins:
-      - thedyrt/skip-checkout#v0.1.1:
-          cd: /Users/administrator/chromium/src
-    command: "node buildMac.mjs &&  node replay_build_scripts/upload_build_artifacts.mjs"
-    env:
-      GOMA_SERVER_HOST: simpsonite.goma.engflow.com
-      GOMACTL_USE_PROXY: false
-    agents:
-      - "runtimeType=chromiumbuild"
-      - "os=macos"
-      - "queue=runtime"
-    artifact_paths:
-      - "build_id/macOS/x86_64/**"
-  - label: "Build chromium - Mac (arm64)"
-    key: "build-chromium-mac-arm64"
-    timeout_in_minutes: 60
-    plugins:
-      - thedyrt/skip-checkout#v0.1.1:
-          cd: /Users/administrator/chromium/src
-    command: "node buildMac.mjs &&  node replay_build_scripts/upload_build_artifacts.mjs"
-    env:
-      GOMA_SERVER_HOST: simpsonite.goma.engflow.com
-      GOMACTL_USE_PROXY: false
-      REPLAY_BUILD_ARM: true
-    agents:
-      - "runtimeType=chromiumbuild"
-      - "os=macos"
-      - "queue=runtime"
-    artifact_paths:
-      - "build_id/macOS/arm64/**"
+  #- label: "Build chromium - Linux"
+  #  key: "build-chromium-linux-x86_64"
+  #  timeout_in_minutes: 60
+  #  plugins:
+  #    - thedyrt/skip-checkout#v0.1.1:
+  #        cd: /home/ubuntu/chromium/src
+  #  command: "docker build -t chromium-build-new - < Dockerfile.build && git status && node buildLinux.mjs && node replay_build_scripts/upload_build_artifacts.mjs"
+  #  env:
+  #    GOMA_SERVER_HOST: simpsonite.goma.engflow.com
+  #    GOMACTL_USE_PROXY: false
+  #  agents:
+  #    - "runtimeType=chromiumbuild"
+  #    - "os=linux"
+  #    - "queue=runtime"
+  #  artifact_paths:
+  #    - "build_id/linux/x86_64/**"
+  #- label: "Build chromium - Mac (x86)"
+  #  key: "build-chromium-mac-x86_64"
+  #  timeout_in_minutes: 60
+  #  plugins:
+  #    - thedyrt/skip-checkout#v0.1.1:
+  #        cd: /Users/administrator/chromium/src
+  #  command: "node buildMac.mjs &&  node replay_build_scripts/upload_build_artifacts.mjs"
+  #  env:
+  #    GOMA_SERVER_HOST: simpsonite.goma.engflow.com
+  #    GOMACTL_USE_PROXY: false
+  #  agents:
+  #    - "runtimeType=chromiumbuild"
+  #    - "os=macos"
+  #    - "queue=runtime"
+  #  artifact_paths:
+  #    - "build_id/macOS/x86_64/**"
+  #- label: "Build chromium - Mac (arm64)"
+  #  key: "build-chromium-mac-arm64"
+  #  timeout_in_minutes: 60
+  #  plugins:
+  #    - thedyrt/skip-checkout#v0.1.1:
+  #        cd: /Users/administrator/chromium/src
+  #  command: "node buildMac.mjs &&  node replay_build_scripts/upload_build_artifacts.mjs"
+  #  env:
+  #    GOMA_SERVER_HOST: simpsonite.goma.engflow.com
+  #    GOMACTL_USE_PROXY: false
+  #    REPLAY_BUILD_ARM: true
+  #  agents:
+  #    - "runtimeType=chromiumbuild"
+  #    - "os=macos"
+  #    - "queue=runtime"
+  #  artifact_paths:
+  #    - "build_id/macOS/arm64/**"
   - label: "Build chromium - Windows"
     key: "build-chromium-windows"
     timeout_in_minutes: 60
@@ -71,9 +71,10 @@ steps:
   - trigger: "testing-runtime-e2e"
     label: ":hammer: Trigger Runtime Tests"
     depends_on:
-      - "build-chromium-linux-x86_64"
-      - "build-chromium-mac-x86_64"
-      - "build-chromium-mac-arm64"
+      #- "build-chromium-linux-x86_64"
+      #- "build-chromium-mac-x86_64"
+      #- "build-chromium-mac-arm64"
+      - "build-chromium-windows"
   - label: "Metabase Test Suite"
     depends_on: "build-chromium-linux-x86_64"
     if: build.branch == "master"
