@@ -1787,7 +1787,7 @@ function DOM_getAllBoundingClientRects() {
     .map((elem, i) => {
       const id = registerPlainObject(elem.raw) || i;
       // TODO: handle scaleX/Y/Z
-      const scale = elem.context?.transform?.scale || 1;
+      const scale = elem.context.transform.scale;
 
       // Use the bounding client rect as a fallback.
       let { left, top, right, bottom } =
@@ -2449,7 +2449,7 @@ function StackingContext(window, options) {
 
   // Transform scale - accumulation of all transform scaling factors
   // applied to this or parent stacking contexts.
-  this.transform = transform;
+  this.transform = transform || { scale: 1 };
 
   // The arrays below are filled in tree order (preorder depth first traversal).
 
@@ -2536,22 +2536,18 @@ StackingContext.prototype = {
       const opacity = elem.style.getPropertyValue("opacity");
       const opacityVal = opacity.length > 0 ? +opacity : 1;
       contextAttrs.opacity = opacityVal;
-
-      // Elements with a nonempty transform get their own stacking context.
-      const transformStr = elem.style.getPropertyValue("transform");
-      const transform = parseCssTransform(transformStr);
-      contextAttrs.transform = transform;
     }
 
-    // If the element does not have transform.scale, skip it and its children.
-    // TODO: handle scaleX/Y/Z
-    if (!this.transform || !("scale" in this.transform) || this.transform.scale === 1) {
-      return;
-    }
+    // Elements with a nonempty transform get their own stacking context.
+    const transformStr = elem.style?.getPropertyValue("transform");
+    const transform = parseCssTransform(transformStr);
+    contextAttrs.transform = transform;
 
     // Create a new stacking context for any iframes.
     if (elem.raw.tagName == "IFRAME" && elem.raw.contentWindow?.document) {
       const { left, top } = elem.raw.getBoundingClientRect();
+      // TODO: handle scaleX/Y/Z
+      // TODO: computation of derived dependencies of `contextAttrs` should be moved to addContext.
       contextAttrs.left = left * this.transform.scale;
       contextAttrs.top = top * this.transform.scale;
       this.addContext(elem, undefined, contextAttrs);
@@ -2630,11 +2626,11 @@ StackingContext.prototype = {
     left = left || 0;
     top = top || 0;
     opacity = opacity || 1;
-    transform = transform || {};
+    transform = transform || { scale: 1 };
+
     // TODO: handle scaleX/Y/Z
-    if (this.transform.scale !== undefined) {
-      transform.scale = (transform.scale || 1) * this.transform.scale;
-    }
+    transform.scale = (transform.scale === undefined ? 1 : transform.scale) * 
+      (this.transform?.scale === undefined ? 1 : this.transform.scale);
 
     if (elem.context) {
       assert(!left && !top);
@@ -2772,7 +2768,7 @@ function parseCssTransform(transform) {
 
   // TODO: handle scaleX/Y/Z
   return { 
-    scale: cssScale?.x?.value || 1
+    scale: cssScale?.x?.value !== undefined ? cssScale?.x?.value : 1
   };
 }
 
