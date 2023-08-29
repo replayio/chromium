@@ -2637,7 +2637,9 @@ StackingContext.prototype = {
     transform = transform || DefaultTransform;
 
     // TODO: handle scaleX/Y/Z
-    transform.scale = getContextTransformScale(transform) * getContextTransformScale(this.transform);
+    transform = {
+      scale: getContextTransformScale(transform) * getContextTransformScale(this.transform)
+    };
 
     if (elem.context) {
       assert(!left && !top);
