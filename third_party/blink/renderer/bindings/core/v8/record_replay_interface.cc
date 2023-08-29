@@ -2569,7 +2569,7 @@ StackingContext.prototype = {
     }
 
     if ((contextAttrs.opacity !== undefined && contextAttrs.opacity < 1) ||
-        (contextAttrs.transform !== undefined)
+        (contextAttrs.transform !== DefaultTransform)
     ) {
       // Elements with opacity < 1, or non-empty transforms, get their own
       // stacking context.
@@ -2637,9 +2637,11 @@ StackingContext.prototype = {
     transform = transform || DefaultTransform;
 
     // TODO: handle scaleX/Y/Z
-    transform = {
-      scale: getContextTransformScale(transform) * getContextTransformScale(this.transform)
-    };
+    if (transform !== DefaultTransform || this.transform !== DefaultTransform) {
+      transform = {
+        scale: getContextTransformScale(transform) * getContextTransformScale(this.transform)
+      };
+    }
 
     if (elem.context) {
       assert(!left && !top);
@@ -2776,7 +2778,7 @@ function parseCssTransform(transform) {
   }
 
   // TODO: handle scaleX/Y/Z
-  return { 
+  return {
     scale: cssScale?.x?.value !== undefined ? cssScale?.x?.value : DefaultTransform.scale
   };
 }
