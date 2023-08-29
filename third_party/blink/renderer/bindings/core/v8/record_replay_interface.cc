@@ -1768,6 +1768,14 @@ function DOM_getDocument() {
  * {@link DOM_getAllBoundingClientRects}
  * ##########################################################################*/
 
+const DefaultTransform = { scale: 1 };
+
+function getContextTransformScale(transform) {
+  transform ||= DefaultTransform;
+  return transform.scale === undefined ? 1 : transform.scale;
+}
+
+
 function getLastBoundingClientRect(nodeRrpId) {
   return gLastBoundingClientRectsByNodeRrpId.get(nodeRrpId);
 }
@@ -1787,7 +1795,7 @@ function DOM_getAllBoundingClientRects() {
     .map((elem, i) => {
       const id = registerPlainObject(elem.raw) || i;
       // TODO: handle scaleX/Y/Z
-      const scale = elem.context.transform.scale;
+      const scale = getContextTransformScale(elem?.context?.transform);
 
       // Use the bounding client rect as a fallback.
       let { left, top, right, bottom } =
@@ -2449,7 +2457,7 @@ function StackingContext(window, options) {
 
   // Transform scale - accumulation of all transform scaling factors
   // applied to this or parent stacking contexts.
-  this.transform = transform || { scale: 1 };
+  this.transform = transform || DefaultTransform;
 
   // The arrays below are filled in tree order (preorder depth first traversal).
 
@@ -2548,8 +2556,8 @@ StackingContext.prototype = {
       const { left, top } = elem.raw.getBoundingClientRect();
       // TODO: handle scaleX/Y/Z
       // TODO: computation of derived dependencies of `contextAttrs` should be moved to addContext.
-      contextAttrs.left = left * this.transform.scale;
-      contextAttrs.top = top * this.transform.scale;
+      contextAttrs.left = left * getContextTransformScale(this.transform);
+      contextAttrs.top = top * getContextTransformScale(this.transform);
       this.addContext(elem, undefined, contextAttrs);
       elem.context.addChildren(elem.raw.contentWindow.document);
     }
@@ -2626,11 +2634,10 @@ StackingContext.prototype = {
     left = left || 0;
     top = top || 0;
     opacity = opacity || 1;
-    transform = transform || { scale: 1 };
+    transform = transform || DefaultTransform;
 
     // TODO: handle scaleX/Y/Z
-    transform.scale = (transform.scale === undefined ? 1 : transform.scale) * 
-      (this.transform?.scale === undefined ? 1 : this.transform.scale);
+    transform.scale = getContextTransformScale(transform) * getContextTransformScale(this.transform);
 
     if (elem.context) {
       assert(!left && !top);
@@ -2768,7 +2775,7 @@ function parseCssTransform(transform) {
 
   // TODO: handle scaleX/Y/Z
   return { 
-    scale: cssScale?.x?.value !== undefined ? cssScale?.x?.value : 1
+    scale: cssScale?.x?.value !== undefined ? cssScale?.x?.value : DefaultTransform.scale
   };
 }
 
