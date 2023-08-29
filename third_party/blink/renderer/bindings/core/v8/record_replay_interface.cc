@@ -2542,16 +2542,17 @@ StackingContext.prototype = {
       contextAttrs.transform = transform;
     }
 
-    // If scale=0, skip the element and its children.
-    if (this.transform?.scale === 0) {
+    // If the element does not have transform.scale, skip it and its children.
+    // TODO: add support for scaleX/Y/Z
+    if (!this.transform || !("scale" in this.transform) || this.transform.scale === 1) {
       return;
     }
 
     // Create a new stacking context for any iframes.
     if (elem.raw.tagName == "IFRAME" && elem.raw.contentWindow?.document) {
       const { left, top } = elem.raw.getBoundingClientRect();
-      contextAttrs.left = left * (this.transform.scale || 1);
-      contextAttrs.top = top * (this.transform.scale || 1);
+      contextAttrs.left = left * this.transform.scale;
+      contextAttrs.top = top * this.transform.scale;
       this.addContext(elem, undefined, contextAttrs);
       elem.context.addChildren(elem.raw.contentWindow.document);
     }
