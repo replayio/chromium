@@ -2758,6 +2758,7 @@ function parseCssTransform(transform) {
   let cssScale;
   if (transform) {
     try {
+      // see https://developer.mozilla.org/en-US/docs/Web/API/CSSStyleValue/parse_static
       const css = CSSStyleValue.parse(
         "transform",
         transform,
