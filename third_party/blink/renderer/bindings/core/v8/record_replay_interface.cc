@@ -1786,6 +1786,7 @@ function DOM_getAllBoundingClientRects() {
   const elements = entries
     .map((elem, i) => {
       const id = registerPlainObject(elem.raw) || i;
+      // TODO: handle scaleX/Y/Z
       const scale = elem.context?.transform?.scale || 1;
 
       // Use the bounding client rect as a fallback.
@@ -2543,7 +2544,7 @@ StackingContext.prototype = {
     }
 
     // If the element does not have transform.scale, skip it and its children.
-    // TODO: add support for scaleX/Y/Z
+    // TODO: handle scaleX/Y/Z
     if (!this.transform || !("scale" in this.transform) || this.transform.scale === 1) {
       return;
     }
@@ -2630,6 +2631,7 @@ StackingContext.prototype = {
     top = top || 0;
     opacity = opacity || 1;
     transform = transform || {};
+    // TODO: handle scaleX/Y/Z
     if (this.transform.scale !== undefined) {
       transform.scale = (transform.scale || 1) * this.transform.scale;
     }
@@ -2753,18 +2755,24 @@ function shiftRect(rect, offset, scale) {
  * ```
  * ##########################################################################*/
 function parseCssTransform(transform) {
-  // Parse a string of the form "scale(1.2)"
-  if (!transform || !transform.startsWith("scale(")) {
-    if (transform.length > 0) {
-      // TODO: if we have command error reporting, we might want to attach
-      // this warning there.
-      log(`[RuntimeWarning] parseCssTransform: unsupported transform: ${transform}`);
+  let cssScale;
+  if (transform) {
+    try {
+      const css = CSSStyleValue.parse(
+        "transform",
+        transform,
+      );
+
+      cssScale = Array.from(css).find(entry => entry instanceof CSSScale);
+    } catch (err) {
+      // could not parse CSS transform
     }
-    return;
   }
 
-  const scale = +transform.substring(6, transform.length - 1);
-  return { scale };
+  // TODO: handle scaleX/Y/Z
+  return { 
+    scale: cssScale?.x?.value || 1
+  };
 }
 
 /** ###########################################################################
