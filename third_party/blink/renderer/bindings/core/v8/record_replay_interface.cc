@@ -4425,7 +4425,7 @@ static void HandleNetworkDidReceiveDataEvent(const base::DictionaryValue& info) 
 }
 
 /** ###########################################################################
- * blink (DOM, CSS queries etc.)
+ * blink (DOM, CSS etc.) queries
  * @see https://static.replay.io/protocol/tot/DOM/
  * @see https://chromedevtools.github.io/devtools-protocol/tot/DOM/
  * ##########################################################################*/

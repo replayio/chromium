@@ -612,7 +612,7 @@ InspectorCSSAgent::InspectorCSSAgent(
   DCHECK(network_agent);
 
   if (recordreplay::IsInReplayCode()) {
-    // RUN-2521: Make sure documents (and fonts) are registered.
+    // RUN-2521: Make sure documents are registered.
     // This is partial copy-and-paste from |CompleteEnabled|
     dom_agent_->AddDOMListener(this);
     HeapVector<Member<Document>> documents = dom_agent_->Documents();
