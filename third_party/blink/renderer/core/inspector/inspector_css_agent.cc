@@ -613,7 +613,13 @@ InspectorCSSAgent::InspectorCSSAgent(
 
   if (recordreplay::IsInReplayCode()) {
     // RUN-2521: Make sure documents (and fonts) are registered.
-    CompleteEnabled();
+    // This is partial copy-and-paste from |CompleteEnabled|
+    dom_agent_->AddDOMListener(this);
+    HeapVector<Member<Document>> documents = dom_agent_->Documents();
+    for (Document* document : documents) {
+      UpdateActiveStyleSheets(document);
+    }
+    enable_completed_ = true;
   }
 }
 
@@ -670,9 +676,7 @@ void InspectorCSSAgent::ResourceContentLoaded(
 }
 
 void InspectorCSSAgent::CompleteEnabled() {
-  if (!recordreplay::IsInReplayCode() || instrumenting_agents_) {
-    instrumenting_agents_->AddInspectorCSSAgent(this);
-  }
+  instrumenting_agents_->AddInspectorCSSAgent(this);
   dom_agent_->AddDOMListener(this);
   HeapVector<Member<Document>> documents = dom_agent_->Documents();
   for (Document* document : documents) {
