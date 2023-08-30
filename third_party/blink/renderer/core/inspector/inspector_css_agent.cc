@@ -670,7 +670,9 @@ void InspectorCSSAgent::ResourceContentLoaded(
 }
 
 void InspectorCSSAgent::CompleteEnabled() {
-  instrumenting_agents_->AddInspectorCSSAgent(this);
+  if (!recordreplay::IsInReplayCode() || instrumenting_agents_) {
+    instrumenting_agents_->AddInspectorCSSAgent(this);
+  }
   dom_agent_->AddDOMListener(this);
   HeapVector<Member<Document>> documents = dom_agent_->Documents();
   for (Document* document : documents) {
