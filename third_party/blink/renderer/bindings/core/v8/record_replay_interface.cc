@@ -1865,10 +1865,7 @@ function DOM_getBoxModel({ node: nodeRrpId }) {
     node: nodeRrpId
   };
 
-  if (!isBlinkInstanceOf(nodeObj, Element)) {
-    // Handle invalid input (this is how we do this in Gecko)
-    model.content = [];
-  } else {
+  if (isBlinkInstanceOf(nodeObj, Element)) {
     const nodeId = getBlinkNodeIdByRrpId(nodeRrpId);
     /**
      * @see https://chromedevtools.github.io/devtools-protocol/tot/DOM/#type-BoxModel
@@ -1890,6 +1887,19 @@ function DOM_getBoxModel({ node: nodeRrpId }) {
         }
       );
     }
+  }
+
+  if (!model.content) {
+    // The given node does not have a box model.
+    // -> Produce a "correct" output to prevent triggering of a session command
+    // failure.
+    // We do this because this is not technically a failure state. It makes
+    // sense for the client to want to get a box model of a node no matter if it
+    // has one or not.
+    model.content = [];
+    model.padding = [];
+    model.border = [];
+    model.margin = [];
   }
 
   return { model };
@@ -2694,6 +2704,11 @@ __RECORD_REPLAY_ARGUMENTS__.internal = {
   getCdpObjectByRrpId,
   getBlinkNodeIdByCdpId,
   getPlainObjectByRrpId,
+  registerPlainObject,
+  gLastBoundingClientRectsByNodeRrpId,
+  getNextStackingContextId: () => gNextStackingContextId,
+  setNextStackingContextId: (id) => { gNextStackingContextId = id; },
+  updateNextStackingContextId: (f) => { gNextStackingContextId = f(gNextStackingContextId); },
 };
 
 } catch (e) {
@@ -4479,7 +4494,8 @@ static void fromJsGetBoxModel(
       domAgent->getBoxModel(nodeId, backend_node_id, object_id, &boxModel);
 
   if (!response.IsSuccess()) {
-    recordreplay::Warning(
+    // This can happen when querying nodes that don't have a box model.
+    recordreplay::CommandDiagnostic(
         "CDP InspectorDOMAgent.getBoxModel failed (nodeId: %d, Code: "
         "%d): %s",
         nodeId, response.Code(), response.Message().c_str());
