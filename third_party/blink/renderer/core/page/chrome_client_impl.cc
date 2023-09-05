@@ -397,24 +397,16 @@ void ChromeClientImpl::AddMessageToConsole(LocalFrame* local_frame,
                                            const String& stack_trace) {
   // [RUN-2387] Make sure that stack_trace has consistent length, despite being
   // slightly divergent in content.
-  unsigned stack_trace_length = (unsigned)recordreplay::RecordReplayValue(
-      "ChromeClientImpl::AddMessageToConsole stack_trace.length",
-      (uintptr_t)stack_trace.length());
-  const String* new_stack_trace_ptr;
-  String new_stack_trace;
-  if (stack_trace_length != stack_trace.length()) {
-    std::string stack_trace_str = stack_trace.Ascii();
-    stack_trace_str.resize(stack_trace_length, ' ');
-    new_stack_trace_ptr = &(new_stack_trace = String::FromUTF8(
-                                &stack_trace_str[0], stack_trace_length));
-  } else {
-    new_stack_trace_ptr = &stack_trace;
-  }
+  std::string stack_trace_str = stack_trace.Ascii();
+  recordreplay::RecordReplayString(
+      "ChromeClientImpl::AddMessageToConsole stack_trace", stack_trace_str);
+  const String new_stack_trace =
+      String::FromUTF8(&stack_trace_str[0], stack_trace_str.length());
 
   if (!message.IsNull()) {
     local_frame->GetLocalFrameHostRemote().DidAddMessageToConsole(
         level, message, static_cast<int32_t>(line_number), source_id,
-        *new_stack_trace_ptr);
+        new_stack_trace);
   }
 
   WebLocalFrameImpl* frame = WebLocalFrameImpl::FromFrame(local_frame);
@@ -422,7 +414,7 @@ void ChromeClientImpl::AddMessageToConsole(LocalFrame* local_frame,
     frame->Client()->DidAddMessageToConsole(
         WebConsoleMessage(static_cast<mojom::ConsoleMessageLevel>(level),
                           message),
-        source_id, line_number, stack_trace);
+        source_id, line_number, new_stack_trace);
   }
 }
 
