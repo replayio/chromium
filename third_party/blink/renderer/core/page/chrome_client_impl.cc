@@ -395,8 +395,8 @@ void ChromeClientImpl::AddMessageToConsole(LocalFrame* local_frame,
                                            unsigned line_number,
                                            const String& source_id,
                                            const String& stack_trace) {
-  // [RUN-2387] Make sure that stack_trace has consistent length, despite being
-  // slightly divergent in content.
+  // [RUN-2387] Make sure that stack_trace is consistent, despite some
+  // "negligible" frames diverging.
   std::string stack_trace_str = stack_trace.Ascii();
   recordreplay::RecordReplayString(
       "ChromeClientImpl::AddMessageToConsole stack_trace", stack_trace_str);
