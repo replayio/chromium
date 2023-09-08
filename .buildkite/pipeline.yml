@@ -73,7 +73,9 @@ steps:
       - "build-chromium-mac-arm64"
   - label: "Metabase Test Suite"
     depends_on: "build-chromium-linux-x86_64"
+    # if: build.branch = master
     plugins:
+      - thedyrt/skip-checkout#v0.1.1: ~
       - seek-oss/aws-sm#v2.3.1:
           region: us-east-2
           env:
