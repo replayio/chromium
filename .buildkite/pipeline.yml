@@ -75,9 +75,8 @@ steps:
     depends_on: "build-chromium-linux-x86_64"
     # if: build.branch = master
     agents:
-      - "runtimeType=chromiumbuild"
-      - "os=linux"
-      - "queue=runtime"
+      - "earthly=true"
+      - "queue=default"
     plugins:
       - thedyrt/skip-checkout#v0.1.1: ~
       - seek-oss/aws-sm#v2.3.1:
