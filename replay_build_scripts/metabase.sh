@@ -1,4 +1,6 @@
-BUILD_ID=$(buildkite-agent artifact download build_id/linux/x86_64/build_id && cat build_id/linux/x86_64/build_id)
+buildkite-agent artifact download build_id/linux/x86_64/build_id ./
+BUILD_ID=$(cat build_id/linux/x86_64/build_id)
+
 echo 'Running metabase tests on GitHub with inputs: {"ref":"master","inputs":{"chromium-build-id":"'${BUILD_ID}'"}}'
 
 curl -L -s \
