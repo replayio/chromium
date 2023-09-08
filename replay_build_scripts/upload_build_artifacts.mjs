@@ -105,6 +105,21 @@ function copyBuildFiles(srcDir, dstDir) {
   fs.cpSync(path.join(srcDir, "locales"), path.join(dstDir, "locales"), {
     recursive: true,
   });
+  fs.mkdirSync(path.join(dstDir, "replay-extra"));
+
+  // These are extra files that need to be copied into the release distribution.
+  const extraFiles = [
+    {
+      from: "obj/third_party/blink/renderer/bindings/core/v8/gReplayScript.js",
+      to: "gReplayScript.js",
+    }
+  ];
+  for (const extra of extraFiles) {
+    fs.cpSync(
+      path.join(srcDir, extra.from),
+      path.join(dstDir, "replay-extra", extra.to)
+    );
+  }
 }
 
 function prepareLinuxBinaries(buildId) {
