@@ -16,4 +16,4 @@ curl -L -s \
     -H "Accept: application/vnd.github+json" \
     -H "Authorization: Bearer ${GITHUB_AUTH_SECRET}" \
     -H "X-GitHub-Api-Version: 2022-11-28" \
-    https://api.github.com/repos/replayio-public/metabase/actions/runs\?event\=workflow_dispatch | jq -r '.workflow_runs[0].html_url' buildkite-agent annotate
+    https://api.github.com/repos/replayio-public/metabase/actions/runs\?event\=workflow_dispatch | jq -r '"Metabase Test Run: " + (.workflow_runs[0].html_url // "Not Found")'
