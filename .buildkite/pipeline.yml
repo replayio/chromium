@@ -73,7 +73,7 @@ steps:
       - "build-chromium-mac-arm64"
   - label: "Metabase Test Suite"
     depends_on: "build-chromium-linux-x86_64"
-    if: build.branch = master
+    if: build.branch == "master"
     agents:
       - "runtimeType=chromiumbuild"
       - "os=linux"
