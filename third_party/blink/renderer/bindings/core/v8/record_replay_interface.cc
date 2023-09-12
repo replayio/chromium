@@ -2308,24 +2308,28 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
     localFrame->GetSettings()->SetForceMainWorldInitialization(true);
   }
 
-  // Read the replay script from gReplayScript.js in the same
-  // directory as this file.
-  //
-  // Read the contents for `gReplayScript.js` during both recording and
-  // replay time.  If we do it just at replay time, we run into issues
-  // with disallow events.
-  size_t replayScriptLength = 0;
-  char* replayScript = V8RecordReplayReadSystemFileContents(
-    true, // relative to application dir
-    "replay-extra/gReplayScript.js",
-    &replayScriptLength
-  );
-  CHECK(replayScript && replayScriptLength > 0);
-
 
   if (recordreplay::IsReplaying()) {
     recordreplay::AutoMarkReplayCode amrc;
     recordreplay::AutoDisallowEvents disallow("SetupRecordReplayCommands");
+
+    char* replayScript = nullptr;
+
+    {
+      // Pass through events when reading the script file contents.
+      recordreplay::AutoPassThroughEvents passThrough;
+
+      // Read the replay script from gReplayScript.js in the same
+      // directory as this file.
+      size_t replayScriptLength = 0;
+      replayScript = V8RecordReplayReadSystemFileContents(
+        true, // relative to application dir
+        "replay-extra/gReplayScript.js",
+        &replayScriptLength
+      );
+      CHECK(replayScript && replayScriptLength > 0);
+    }
+
     RunScript(isolate, context, replayScript, InternalScriptURL);
   }
 }
