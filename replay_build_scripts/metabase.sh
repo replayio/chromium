@@ -1,3 +1,5 @@
+set -x
+
 if [ -n "${BUILDKITE}" ]; then
     buildkite-agent artifact download build_id/linux/x86_64/build_id ./
     BUILD_ID=$(cat build_id/linux/x86_64/build_id)
@@ -50,8 +52,7 @@ GH_URL=$(curl -L -s \
     -H "X-GitHub-Api-Version: 2022-11-28" \
     https://api.github.com/repos/replayio-public/metabase/actions/runs\?event\=workflow_dispatch | jq -r '"Metabase Test Run: " + (.workflow_runs[0].html_url // "Not Found")')
 
+echo "\n${GH_URL}"
 if [ -n "${BUILDKITE}" ]; then
     buildkite-agent annotate --context tests $GH_URL
-else
-    echo $GH_URL
 fi
