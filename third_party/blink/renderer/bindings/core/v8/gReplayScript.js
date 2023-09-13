@@ -1,3 +1,4 @@
+//js
 (() => {
 
 const EmptyArray = Object.freeze([]); // reduce unnecessary mem churn
@@ -2807,3 +2808,4 @@ __RECORD_REPLAY_ARGUMENTS__.internal = {
 }
 
 })();
+
