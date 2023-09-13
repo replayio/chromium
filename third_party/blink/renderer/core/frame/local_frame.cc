@@ -386,7 +386,9 @@ LocalFrame::~LocalFrame() {
   if (!IsA<LocalFrame>(Tree().Parent())) {
     recordreplay::CommandDiagnostic(
         "[RUN-2486-2577] ~LocalFrame %d",
-        WeakIdentifierMap<LocalFrame>::ExistingIdentifier(this));
+        WeakIdentifierMap<LocalFrame>::HasIdentifier(this)
+            ? WeakIdentifierMap<LocalFrame>::ExistingIdentifier(this)
+            : -1);
   }
   if (IsAdFrame())
     InstanceCounters::DecrementCounter(InstanceCounters::kAdSubframeCounter);
@@ -620,7 +622,9 @@ bool LocalFrame::DetachImpl(FrameDetachType type) {
   if (!IsA<LocalFrame>(Tree().Parent())) {
     recordreplay::CommandDiagnosticTrace(
         "[RUN-2486-2577] LocalFrame::DetachImpl %d",
-        WeakIdentifierMap<LocalFrame>::ExistingIdentifier(this));
+        WeakIdentifierMap<LocalFrame>::HasIdentifier(this)
+            ? WeakIdentifierMap<LocalFrame>::ExistingIdentifier(this)
+            : -1);
   }
   WeakIdentifierMap<LocalFrame>::NotifyObjectDestroyed(this);
 
