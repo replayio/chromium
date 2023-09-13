@@ -217,7 +217,7 @@ int MainThreadDebugger::ContextGroupId(LocalFrame* frame) {
   LocalFrame& local_frame_root = frame->LocalFrameRoot();
 
   bool existed =
-      WeakIdentifierMap<LocalFrame>::ExistingIdentifier(&local_frame_root);
+      WeakIdentifierMap<LocalFrame>::HasIdentifier(&local_frame_root);
   int newId = WeakIdentifierMap<LocalFrame>::Identifier(&local_frame_root);
   if (!existed) {
     recordreplay::CommandDiagnosticTrace(
