@@ -1,5 +1,3 @@
-set -x
-
 if [ -n "${BUILDKITE}" ]; then
     buildkite-agent artifact download build_id/linux/x86_64/build_id ./
     BUILD_ID=$(cat build_id/linux/x86_64/build_id)
@@ -54,5 +52,5 @@ GH_URL=$(curl -L -s \
 
 echo "\n${GH_URL}"
 if [ -n "${BUILDKITE}" ]; then
-    buildkite-agent annotate --context tests $GH_URL
+    buildkite-agent annotate --context tests "${GH_URL}"
 fi
