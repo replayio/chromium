@@ -1805,6 +1805,9 @@ def _make_empty_callback_def(cg_context, function_name):
         bind_blink_api_arguments(body, cg_context)
         bind_return_value(body, cg_context)
 
+    # Assert on all IDL calls to preempt JS divergences.
+    body.append(TextNode(_format("v8::recordreplay::Assert(\"[RUN-2609] IDL {}\");", function_name)))
+
     return func_def
 
 
