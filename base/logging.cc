@@ -910,6 +910,10 @@ LogMessage::~LogMessage() {
 #endif  // BUILDFLAG(IS_FUCHSIA)
   }
 
+  // We first handled this in RUN-2054, but this is a generic divergence
+  // that can keep getting triggered due to a variety of reasons.
+  recordreplay::Assert("[Generic] ~LogMessage %s", str_newline.c_str());
+
   if (ShouldLogToStderr(severity_)) {
     // Not using fwrite() here, as there are crashes on Windows when CRT calls
     // malloc() internally, triggering an OOM crash. This likely means that the
