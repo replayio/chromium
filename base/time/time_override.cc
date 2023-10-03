@@ -6,6 +6,8 @@
 
 #include "base/check.h"
 
+#include "base/record_replay.h"
+
 namespace base {
 namespace subtle {
 
@@ -23,6 +25,9 @@ ScopedTimeClockOverrides::ScopedTimeClockOverrides(
                                         std::memory_order_relaxed);
     internal::g_time_now_from_system_time_function.store(
         time_override, std::memory_order_relaxed);
+
+    recordreplay::Assert("[RUN-2634-2635] ScopedTimeClockOverrides %lld",
+                         base::TimeTicks::Now());
   }
   if (time_ticks_override) {
     internal::g_time_ticks_now_function.store(time_ticks_override,

@@ -1090,6 +1090,9 @@ int NO_STACK_PROTECTOR ContentMainRunnerImpl::Run() {
   main_params.autorelease_pool = content_main_params_->autorelease_pool;
 #endif
 
+  recordreplay::Assert("[RUN-2634-2635] ContentMainRunnerImpl::Run %lld",
+                       base::TimeTicks::Now());
+
   const bool start_minimal_browser = content_main_params_->minimal_browser_mode;
 
   // ContentMainParams cannot be wholesaled moved into MainFunctionParams

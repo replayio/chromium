@@ -502,6 +502,12 @@ void InitializeNowFunctionPointer() {
       initial_time_ticks_now_function, now_function, std::memory_order_relaxed);
   g_time_ticks_now_ignoring_override_function.store(now_function,
                                                     std::memory_order_relaxed);
+
+  recordreplay::AssertMaybeEventsDisallowed(
+      "[RUN-2634-2635] InitializeNowFunctionPointer %d %lld",
+      g_time_ticks_now_ignoring_override_function.load(
+          std::memory_order_relaxed) == QPCNow,
+      base::TimeTicks::Now());
 }
 
 TimeTicks InitialNowFunction() {
