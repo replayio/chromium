@@ -70,7 +70,8 @@ steps:
       - "build_id/windows/x86_64/**"
   - trigger: "testing-runtime-e2e"
     label: ":hammer: Trigger Runtime Tests"
-    branch: dmiller/runtime-e2e-windows
+    build:
+      branch: dmiller/runtime-e2e-windows
     depends_on:
       #- "build-chromium-linux-x86_64"
       #- "build-chromium-mac-x86_64"
