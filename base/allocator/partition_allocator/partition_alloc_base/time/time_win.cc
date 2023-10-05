@@ -49,6 +49,8 @@
 #include "base/allocator/partition_allocator/partition_lock.h"
 #include "build/build_config.h"
 
+#include "base/record_replay.h"
+
 namespace partition_alloc::internal::base {
 
 namespace {
