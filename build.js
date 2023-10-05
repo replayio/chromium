@@ -140,8 +140,8 @@ function spawnChecked(cmd, args, options) {
 
   if (rv.status != 0 || rv.error) {
     console.error("Process failed:", rv.error || "");
-    console.log(rv.stdout.toString() || "");
-    console.error(rv.stderr.toString() || "");
+    console.log(rv.stdout?.toString() || "");
+    console.error(rv.stderr?.toString() || "");
     throw new Error(`Spawned process failed with exit code ${rv.status}`);
   }
 

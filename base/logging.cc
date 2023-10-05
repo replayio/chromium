@@ -150,6 +150,19 @@ static void RecordReplayPrint(const char* aFormat, ...) {
   }
 }
 
+static void V8RecordReplayAssert(const char* aFormat, ...) {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("V8RecordReplayAssertVA");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    va_list ap;
+    va_start(ap, aFormat);
+    reinterpret_cast<void (*)(const char*, va_list)>(fnptr)(aFormat, ap);
+    va_end(ap);
+  }
+}
+
 namespace logging {
 
 namespace {
@@ -912,7 +925,7 @@ LogMessage::~LogMessage() {
 
   // We first handled this in RUN-2054, but this is a generic divergence
   // that can keep getting triggered due to a variety of reasons.
-  recordreplay::Assert("[Generic] ~LogMessage %s", str_newline.c_str());
+  V8RecordReplayAssert("[Generic] ~LogMessage %s", str_newline.c_str());
 
   if (ShouldLogToStderr(severity_)) {
     // Not using fwrite() here, as there are crashes on Windows when CRT calls
