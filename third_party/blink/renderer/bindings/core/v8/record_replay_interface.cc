@@ -1632,10 +1632,8 @@ function previewFunction(cdpProperties) {
   const locationProperty = getInternalFunctionLocationProp(cdpProperties);
 
   if (nameProperty) {
+    // RUN-1991: nameProperty.value might not always exist, for some reason.
     this.extra.functionName = nameProperty?.value?.value || "";
-    if (!this.extra.functionName) {
-      log(`[RUN-1991] previewFunction missing name: ${JSON_stringify(nameProperty)}, ${JSON_stringify(locationProperty)}`);
-    }
   }
 
   if (locationProperty) {
