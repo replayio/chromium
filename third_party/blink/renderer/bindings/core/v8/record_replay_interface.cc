@@ -85,6 +85,22 @@ using RemoteObjectIdType = WTF::String;
 static const char REPLAY_CDT_PAUSE_OBJECT_GROUP[] =
     "REPLAY_CDT_PAUSE_OBJECT_GROUP";
 
+
+LocalFrame* gInitialLocalFrame = nullptr;
+
+static LocalFrame* GetLocalFrameRoot(v8::Isolate* isolate) {
+  LocalFrame* frame;
+  if (!CurrentDOMWindow(isolate)) {
+    frame = gInitialLocalFrame;
+  } else { 
+    frame = CurrentDOMWindow(isolate)->GetFrame();
+    if (!frame) {
+      frame = gInitialLocalFrame;
+    }
+  }
+  return &frame->LocalFrameRoot();
+}
+
 class InspectorData {
 public:
   // These are untraced, because they are rooted in a global variable which
@@ -112,12 +128,7 @@ public:
     inspectorSession = nullptr;
   }
 
-  LocalFrame* GetLocalFrame() const {
-    if (CurrentDOMWindow(isolate) == nullptr) {
-      return nullptr;
-    }
-    return CurrentDOMWindow(isolate)->GetFrame();
-  }
+  LocalFrame* GetLocalFrameRoot() const { return blink::GetLocalFrameRoot(isolate); }
 };
 
 typedef std::unordered_map<int, InspectorData*> ContextGroupIdInspectorMap;
@@ -1623,7 +1634,7 @@ function previewFunction(cdpProperties) {
   if (nameProperty) {
     this.extra.functionName = nameProperty?.value?.value || "";
     if (!this.extra.functionName) {
-      warning(`[RUN-1991] previewFunction missing name: ${JSON_stringify(nameProperty)}, ${JSON_stringify(locationProperty)}`);
+      log(`[RUN-1991] previewFunction missing name: ${JSON_stringify(nameProperty)}, ${JSON_stringify(locationProperty)}`);
     }
   }
 
@@ -3682,12 +3693,7 @@ struct InspectorChannel final : public v8_inspector::V8Inspector::Channel {
 };
 
 int GetCurrentContextGroupIdForIsolate(v8::Isolate* isolate) {
-  LocalDOMWindow* window = CurrentDOMWindow(isolate);
-
-  if (window == nullptr || window->GetFrame() == nullptr) {
-    return 1;
-  }
-  LocalFrame& local_frame_root = window->GetFrame()->LocalFrameRoot();
+  LocalFrame& local_frame_root = *GetLocalFrameRoot(isolate);
   return WeakIdentifierMap<LocalFrame>::Identifier(&local_frame_root);
 }
 
@@ -4060,7 +4066,7 @@ static InspectedFrames* getOrCreateInspectedFrames(v8::Isolate* isolate, int con
   InspectorData *data = getInspectorFor(isolate, contextGroupId);
 
   if (!data->inspectedFrames) {
-    data->inspectedFrames = MakeGarbageCollected<InspectedFrames>(data->GetLocalFrame());
+    data->inspectedFrames = MakeGarbageCollected<InspectedFrames>(data->GetLocalFrameRoot());
   }
   return data->inspectedFrames;
 }
@@ -4077,8 +4083,7 @@ InspectorDOMAgent* getOrCreateInspectorDOMAgent(v8::Isolate* isolate) {
     InspectedFrames* inspectedFrames = getOrCreateInspectedFrames(isolate, contextGroupId);
     data->inspectorDomAgent = MakeGarbageCollected<InspectorDOMAgent>(
         isolate, inspectedFrames, getInspectorSession(isolate, contextGroupId));
-
-    data->inspectorDomAgent->FrameDocumentUpdated(data->GetLocalFrame());
+    data->inspectorDomAgent->FrameDocumentUpdated(data->GetLocalFrameRoot());
   }
   return data->inspectorDomAgent;
 }
@@ -4093,11 +4098,9 @@ InspectorDOMDebuggerAgent* getOrCreateInspectorDOMDebuggerAgent(
         MakeGarbageCollected<InspectorDOMDebuggerAgent>(
             isolate, getOrCreateInspectorDOMAgent(isolate), getInspectorSession(isolate, contextGroupId));
 
-    // NOTE: registering the agent here allows it to receive `UserCallback` events
-    //   see https://linear.app/replay/issue/RUN-1061#comment-d059a1ce
-    if (data->GetLocalFrame() != nullptr) {
-      data->GetLocalFrame()->GetProbeSink()->AddInspectorDOMDebuggerAgent(data->inspectorDomDebuggerAgent);
-    }
+    // RUN-1061: registering the agent here allows it to receive `UserCallback`
+    // events.
+    data->GetLocalFrameRoot()->GetProbeSink()->AddInspectorDOMDebuggerAgent(data->inspectorDomDebuggerAgent);
   }
   return data->inspectorDomDebuggerAgent;
 }
@@ -4121,8 +4124,9 @@ InspectorCSSAgent* getOrCreateInspectorCSSAgent(v8::Isolate* isolate) {
   if (!data->inspectorCssAgent) {
     // NOTE: based on WebDevToolsAgentImpl::AttachSession
     InspectedFrames* inspectedFrames = getOrCreateInspectedFrames(isolate, contextGroupId);
+
     auto* resource_content_loader =
-        MakeGarbageCollected<InspectorResourceContentLoader>(data->GetLocalFrame());
+        MakeGarbageCollected<InspectorResourceContentLoader>(data->GetLocalFrameRoot());
     auto* resource_container =
         MakeGarbageCollected<InspectorResourceContainer>(inspectedFrames);
     auto* domAgent = getOrCreateInspectorDOMAgent(isolate);
@@ -5211,6 +5215,7 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
   V8RecordReplaySetAPIObjectIdCallback(GetAPIObjectIdCallback);
   V8RecordReplayRegisterBrowserEventCallback(HandleBrowserEvent);
 
+  gInitialLocalFrame = localFrame;
   gActiveNetworkRequests =
       new std::unordered_map<std::string, NetworkRequestStatus>();
   gCurrentNetworkStreamData = new std::vector<uint8_t>();
