@@ -482,9 +482,13 @@ async function buildSymbolsArchive(
     json[name] = symbols;
   }
 
+  jsonData = JSON.stringify(json);
+
+  log(`Writing and compressing symbols json blob of length ${jsonData.length}`)
+
   const jsonFile = `${buildId}.symbols.json`;
   const archiveFile = `${buildId}.symbols.tgz`;
-  fs.writeFileSync(jsonFile, JSON.stringify(json));
+  fs.writeFileSync(jsonFile, jsonData);
   spawnChecked("tar", ["-czf", archiveFile, jsonFile]);
   fs.unlinkSync(jsonFile);
 }
