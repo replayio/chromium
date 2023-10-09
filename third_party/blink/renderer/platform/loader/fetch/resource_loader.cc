@@ -1192,6 +1192,7 @@ void ResourceLoader::DidReceiveResponseInternal(
       header_obj.SetString("value", header.value.Utf8());
       headers.Append(std::move(header_obj));
     }
+    dict.SetString("requestUrl", request.Url().GetString().Utf8());
     dict.SetKey("responseHeaders", std::move(headers));
     dict.SetString("responseProtocolVersion", http_version);
     dict.SetDoubleKey("responseStatus", response.HttpStatusCode());
@@ -1276,6 +1277,7 @@ void ResourceLoader::DidReceiveData(const char* data, int length) {
     dict.SetDoubleKey("identifier",
                       (double) RecordReplayNetworkRequestId(resource_->InspectorId()));
     dict.SetDoubleKey("dataLength", (double) length);
+    dict.SetString("requestUrl", resource_->Url().GetString().Utf8());
     if (data) {
       std::string data_base64 = base::Base64Encode(
         base::span<const uint8_t>(
@@ -1327,6 +1329,7 @@ void ResourceLoader::DidFinishLoading(
 
   if (PermitRecordReplayBrowserEvents()) {
     base::DictionaryValue dict;
+    dict.SetString("requestUrl", resource_->Url().GetString().Utf8());
     dict.SetDoubleKey("identifier",
                       (double) RecordReplayNetworkRequestId(resource_->InspectorId()));
     dict.SetDoubleKey("encodedBodySize", (double) encoded_body_length);
@@ -1392,6 +1395,7 @@ void ResourceLoader::DidFail(const WebURLError& error,
     base::DictionaryValue dict;
     dict.SetDoubleKey("identifier",
                       (double) RecordReplayNetworkRequestId(resource_->InspectorId()));
+    dict.SetString("requestUrl", resource_->Url().GetString().Utf8());
     dict.SetString("requestFailedReason", std::move(reason));
     recordreplay::BrowserEvent("Network.DidFailLoading", dict);
   }
