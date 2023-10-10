@@ -5,6 +5,7 @@
 const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
+import { spawnChecked } from "./replay_build_scripts/common.mjs";
 
 // If this env var is set, we then we (also) use this as our cue that
 // we're building on a developer's machine, and will run some different
@@ -133,21 +134,6 @@ spawnChecked(autoninja, ["-C", outdir, "chrome"], {
 
 console.log(`Build finished after ${(new Date().getTime() - start.getTime()) / 1000} seconds.`);
 
-function spawnChecked(cmd, args, options) {
-  const prettyCmd = [cmd].concat(args).join(" ");
-  console.error(prettyCmd);
-
-  const rv = spawnSync(cmd, args, options);
-
-  if (rv.status != 0 || rv.error) {
-    console.error("Process failed:", rv.error || "");
-    console.log(rv.stdout.toString() || "");
-    console.error(rv.stderr.toString() || "");
-    throw new Error(`Spawned process failed with exit code ${rv.status}`);
-  }
-
-  return rv;
-}
 
 function currentPlatform() {
   switch (process.platform) {
