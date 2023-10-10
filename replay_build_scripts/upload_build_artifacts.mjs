@@ -205,7 +205,7 @@ async function main(options) {
   const platform = currentPlatform();
 
   switch (platform) {
-    case "linux":
+    case Platform.linux:
       buildArchives = prepareLinuxBinaries(buildId);
       break;
 
@@ -464,6 +464,7 @@ async function buildSymbolsArchive(
   libraries,
   pdbs = []
 ) {
+  log(`Building symbols archive with ${libraries.length} libraries.`);
   const json = {};
   for (let i = 0; i < libraries.length; i++) {
     const lib = libraries[i];
@@ -482,8 +483,9 @@ async function buildSymbolsArchive(
     json[name] = symbols;
   }
 
-  jsonData = JSON.stringify(json);
-
+  let start = new Date();
+  let jsonData = JSON.stringify(json);
+  log(`Stringify took ${(new Date().getTime() - start.getTime()) / 1000} seconds.`);
   log(`Writing and compressing symbols json blob of length ${jsonData.length}`)
 
   const jsonFile = `${buildId}.symbols.json`;
