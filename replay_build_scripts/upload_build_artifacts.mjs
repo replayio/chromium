@@ -125,7 +125,7 @@ function prepareLinuxBinaries(buildId) {
     }
   );
 
-  spawnChecked("sudo", ["rm", "-rf", "replay-chromium"], { stdio: "inherit" });
+  spawnChecked("rm", ["-rf", "replay-chromium"], { stdio: "inherit" });
   return [buildArchive];
 }
 
