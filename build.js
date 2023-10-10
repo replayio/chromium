@@ -123,6 +123,7 @@ if (useGoma) {
 const gn = currentPlatform() == "windows" ? "gn.bat" : "gn";
 spawnChecked(gn, ["gen", outdir]);
 
+let start = new Date();
 console.log(`Building...`);
 const autoninja =
   currentPlatform() == "windows" ? "autoninja.bat" : "autoninja";
@@ -130,7 +131,7 @@ spawnChecked(autoninja, ["-C", outdir, "chrome"], {
   stdio: "inherit",
 });
 
-console.log(`Build finished.`);
+console.log(`Build finished after ${(new Date().getTime() - start.getTime()) / 1000} seconds.`);
 
 function spawnChecked(cmd, args, options) {
   const prettyCmd = [cmd].concat(args).join(" ");
