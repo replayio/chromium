@@ -72,7 +72,7 @@ export function assert(v, why = "") {
 }
 
 export function log(s) {
-  console.log(s);
+  console.error(s);
 }
 
 export function toNumber(str) {
