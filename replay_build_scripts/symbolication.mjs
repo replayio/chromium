@@ -7,6 +7,8 @@ import { toNumber, getBackendDir } from "./common.mjs";
 export async function readSymbols(file, pdbFile) {
   const symbols = {};
   if (process.platform == "win32") {
+    let start = new Date();
+    const addrMatch = /addr = 0001:(\d+),/;
     if (!pdbFile) {
       throw new Error("Need PDB file to read symbols on windows");
     }
@@ -22,22 +24,25 @@ export async function readSymbols(file, pdbFile) {
       input: process.stdout,
       crlfDelay: Infinity,
     });
+    console.log(`Read symbols in ${(new Date().getTime() - start.getTime()) / 1000} s.`);
+    start = new Date();
     let currentFunction;
     for await (const line of lines) {
       if (currentFunction) {
-        const match = /addr = 0001:(\d+),/.exec(line);
+        const match = addrMatch.exec(line);
         if (match) {
           const addr = textStart + +match[1];
           symbols[addr] = currentFunction;
         }
         currentFunction = undefined;
-      } else if (line.includes("S_GPROC32") || line.includes("S_LPROC32")) {
+      } else if (line.includes("PROC32") && (line.includes("S_GPROC32") || line.includes("S_LPROC32"))) {
         const backtick = line.indexOf("`");
         if (backtick != -1) {
           currentFunction = line.substring(backtick + 1, line.length - 1);
         }
       }
     }
+    console.log(`Parsed symbols in ${(new Date().getTime() - start.getTime()) / 1000} s.`);
   } else {
     const nmProcess = spawn("/usr/bin/nm", [file], { maxBuffer: 1e100 });
 
