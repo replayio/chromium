@@ -1,6 +1,7 @@
 env:
   FORCE_COLOR: 1
   GIT_TERMINAL_PROMPT: 0
+  CUSTOM_TEST_BRANCH: "${BUILDKITE_BRANCH}"
 
 steps:
   - label: "Build chromium - Linux"
@@ -72,6 +73,8 @@ steps:
     artifact_paths:
       - "build_id/windows/x86_64/**"
   - trigger: "testing-runtime-e2e"
+    build:
+      branch: "${CUSTOM_TEST_BRANCH}"
     label: ":hammer: Trigger Runtime Tests"
     depends_on:
       - "build-chromium-linux-x86_64"
