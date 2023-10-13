@@ -276,7 +276,7 @@ void RendererResourceCoordinatorImpl::DispatchOnV8ContextCreated(
             WTF::CrossThreadUnretained(this), std::move(v8_desc),
             std::move(iframe_attribution_data)));
   } else {
-    if (recordreplay::IsInReplayCode()) {
+    if (recordreplay::IsInReplayCode("OnV8ContextCreated")) {
       // RUN-2621: Don't try to track this context when in Replay-only code.
       return;
     }
