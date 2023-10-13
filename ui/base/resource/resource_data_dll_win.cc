@@ -37,7 +37,7 @@ bool ResourceDataDLL::GetStringPiece(uint16_t resource_id,
   size_t data_size;
 
   // RUN-2620
-  if (recordreplay::IsInReplayCode())
+  if (recordreplay::IsInReplayCode("ResourceDataDLL::GetStringPiece"))
     return false;
 
   if (base::win::GetDataResourceFromModule(module_,
