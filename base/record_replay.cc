@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Record Replay Inc.
+// Copyright (c) 2023 Record Replay Inc.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 

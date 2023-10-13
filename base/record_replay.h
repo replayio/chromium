@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Record Replay Inc.
+// Copyright (c) 2023 Record Replay Inc.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #define BASE_RECORD_REPLAY_H_
 
 #include "base/check.h"
+#include "base/record_replay_base.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/synchronization/lock.h"
 #include "base/thread_annotations.h"
