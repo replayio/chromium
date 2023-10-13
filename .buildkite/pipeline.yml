@@ -1,7 +1,7 @@
 env:
   FORCE_COLOR: 1
   GIT_TERMINAL_PROMPT: 0
-  CUSTOM_TEST_BRANCH: "${BUILDKITE_BRANCH}"
+  CUSTOM_TEST_BRANCH: "master"
 
 steps:
   - label: "Build chromium - Linux"
