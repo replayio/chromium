@@ -88,6 +88,7 @@ PLATFORM_EXPORT v8::Local<v8::Object> CreatePropertyDescriptorObject(
 template <typename CallbackInfo>
 void V8SetReturnValue(const CallbackInfo& info,
                       const v8::PropertyDescriptor& value) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   info.GetReturnValue().Set(
       CreatePropertyDescriptorObject(info.GetIsolate(), value));
 }
@@ -96,6 +97,7 @@ void V8SetReturnValue(const CallbackInfo& info,
 PLATFORM_EXPORT inline void V8SetReturnValue(
     const v8::FunctionCallbackInfo<v8::Value>& info,
     IndexedPropertySetterResult value) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   // If an operation implementing indexed property setter is invoked as a
   // regular operation, and the return type is not type void (V8SetReturnValue
   // won't be called in case of type void), then return the given value as is.
@@ -105,6 +107,7 @@ PLATFORM_EXPORT inline void V8SetReturnValue(
 PLATFORM_EXPORT inline void V8SetReturnValue(
     const v8::PropertyCallbackInfo<v8::Value>& info,
     IndexedPropertySetterResult value) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   if (value == IndexedPropertySetterResult::kDidNotIntercept) {
     // Do not set the return value to indicate that the request was not
     // intercepted.
@@ -116,6 +119,7 @@ PLATFORM_EXPORT inline void V8SetReturnValue(
 PLATFORM_EXPORT inline void V8SetReturnValue(
     const v8::FunctionCallbackInfo<v8::Value>& info,
     NamedPropertySetterResult value) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   // If an operation implementing named property setter is invoked as a
   // regular operation, and the return type is not type void (V8SetReturnValue
   // won't be called in case of type void), then return the given value as is.
@@ -125,6 +129,7 @@ PLATFORM_EXPORT inline void V8SetReturnValue(
 PLATFORM_EXPORT inline void V8SetReturnValue(
     const v8::PropertyCallbackInfo<v8::Value>& info,
     NamedPropertySetterResult value) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   if (value == NamedPropertySetterResult::kDidNotIntercept) {
     // Do not set the return value to indicate that the request was not
     // intercepted.
@@ -136,6 +141,7 @@ PLATFORM_EXPORT inline void V8SetReturnValue(
 PLATFORM_EXPORT inline void V8SetReturnValue(
     const v8::PropertyCallbackInfo<v8::Boolean>& info,
     NamedPropertyDeleterResult value) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   if (value == NamedPropertyDeleterResult::kDidNotIntercept) {
     // Do not set the return value to indicate that the request was not
     // intercepted.
@@ -147,39 +153,46 @@ PLATFORM_EXPORT inline void V8SetReturnValue(
 // nullptr
 template <typename CallbackInfo>
 void V8SetReturnValue(const CallbackInfo& info, std::nullptr_t) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue (null)");
   info.GetReturnValue().SetNull();
 }
 
 // Primitive types
 template <typename CallbackInfo>
 void V8SetReturnValue(const CallbackInfo& info, bool value) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   info.GetReturnValue().Set(value);
 }
 
 template <typename CallbackInfo>
 void V8SetReturnValue(const CallbackInfo& info, int32_t value) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   info.GetReturnValue().Set(value);
 }
 
 template <typename CallbackInfo>
 void V8SetReturnValue(const CallbackInfo& info, uint32_t value) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   info.GetReturnValue().Set(value);
 }
 
 template <typename CallbackInfo>
 void V8SetReturnValue(const CallbackInfo& info, int64_t value) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   // ECMAScript doesn't support 64-bit integer in Number type.
   info.GetReturnValue().Set(static_cast<double>(value));
 }
 
 template <typename CallbackInfo>
 void V8SetReturnValue(const CallbackInfo& info, uint64_t value) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   // ECMAScript doesn't support 64-bit integer in Number type.
   info.GetReturnValue().Set(static_cast<double>(value));
 }
 
 template <typename CallbackInfo>
 void V8SetReturnValue(const CallbackInfo& info, double value) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   info.GetReturnValue().Set(value);
 }
 
@@ -202,6 +215,7 @@ template <typename CallbackInfo, typename BlinkType>
 inline void V8SetReturnValue(const CallbackInfo& info,
                              BlinkType* value,
                              V8ReturnValue::PrimitiveType<bool>) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   V8SetReturnValue(info, bool(value));
 }
 
@@ -211,6 +225,7 @@ void V8SetReturnValue(const CallbackInfo& info,
                       const AtomicString& string,
                       v8::Isolate* isolate,
                       V8ReturnValue::NonNullable) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   if (string.IsNull())
     return info.GetReturnValue().SetEmptyString();
   V8PerIsolateData::From(isolate)->GetStringCache()->SetReturnValueFromString(
@@ -222,6 +237,7 @@ void V8SetReturnValue(const CallbackInfo& info,
                       const String& string,
                       v8::Isolate* isolate,
                       V8ReturnValue::NonNullable) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   if (string.IsNull())
     return info.GetReturnValue().SetEmptyString();
   V8PerIsolateData::From(isolate)->GetStringCache()->SetReturnValueFromString(
@@ -233,6 +249,7 @@ void V8SetReturnValue(const CallbackInfo& info,
                       const WebString& string,
                       v8::Isolate* isolate,
                       V8ReturnValue::NonNullable) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   if (string.IsNull())
     return info.GetReturnValue().SetEmptyString();
   V8PerIsolateData::From(isolate)->GetStringCache()->SetReturnValueFromString(
@@ -244,6 +261,7 @@ void V8SetReturnValue(const CallbackInfo& info,
                       const AtomicString& string,
                       v8::Isolate* isolate,
                       V8ReturnValue::Nullable) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   if (string.IsNull())
     return info.GetReturnValue().SetNull();
   V8PerIsolateData::From(isolate)->GetStringCache()->SetReturnValueFromString(
@@ -255,6 +273,7 @@ void V8SetReturnValue(const CallbackInfo& info,
                       const String& string,
                       v8::Isolate* isolate,
                       V8ReturnValue::Nullable) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   if (string.IsNull())
     return info.GetReturnValue().SetNull();
   V8PerIsolateData::From(isolate)->GetStringCache()->SetReturnValueFromString(
@@ -266,6 +285,7 @@ void V8SetReturnValue(const CallbackInfo& info,
                       const WebString& string,
                       v8::Isolate* isolate,
                       V8ReturnValue::Nullable) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   if (string.IsNull())
     return info.GetReturnValue().SetNull();
   V8PerIsolateData::From(isolate)->GetStringCache()->SetReturnValueFromString(
@@ -278,6 +298,7 @@ void V8SetReturnValue(const CallbackInfo& info,
                       const ScriptWrappable* value,
                       V8ReturnValue::MainWorld) {
   DCHECK(DOMWrapperWorld::Current(info.GetIsolate()).IsMainWorld());
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   if (UNLIKELY(!value))
     return info.GetReturnValue().SetNull();
   ScriptWrappable* wrappable = const_cast<ScriptWrappable*>(value);
@@ -294,6 +315,7 @@ void V8SetReturnValue(const CallbackInfo& info,
                       const ScriptWrappable& value,
                       V8ReturnValue::MainWorld) {
   DCHECK(DOMWrapperWorld::Current(info.GetIsolate()).IsMainWorld());
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   ScriptWrappable* wrappable = const_cast<ScriptWrappable*>(&value);
   if (DOMDataStore::SetReturnValueForMainWorld(info.GetReturnValue(),
                                                wrappable))
@@ -307,6 +329,7 @@ template <typename CallbackInfo>
 void V8SetReturnValue(const CallbackInfo& info,
                       const ScriptWrappable* value,
                       const ScriptWrappable* receiver) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   if (UNLIKELY(!value))
     return info.GetReturnValue().SetNull();
   ScriptWrappable* wrappable = const_cast<ScriptWrappable*>(value);
@@ -324,6 +347,7 @@ template <typename CallbackInfo>
 void V8SetReturnValue(const CallbackInfo& info,
                       const ScriptWrappable& value,
                       const ScriptWrappable* receiver) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   ScriptWrappable* wrappable = const_cast<ScriptWrappable*>(&value);
   if (DOMDataStore::SetReturnValueFast(info.GetReturnValue(), wrappable,
                                        V8ReturnValue::CreationContext(info),
@@ -340,6 +364,7 @@ void V8SetReturnValue(const CallbackInfo& info,
                       const ScriptWrappable* value,
                       const ScriptWrappable* receiver,
                       V8ReturnValue::MaybeCrossOriginWindow) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   if (UNLIKELY(!value))
     return info.GetReturnValue().SetNull();
   ScriptWrappable* wrappable = const_cast<ScriptWrappable*>(value);
@@ -368,6 +393,7 @@ void V8SetReturnValue(const CallbackInfo& info,
                       const ScriptWrappable& value,
                       const ScriptWrappable* receiver,
                       V8ReturnValue::MaybeCrossOriginWindow) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   ScriptWrappable* wrappable = const_cast<ScriptWrappable*>(&value);
   if (DOMDataStore::SetReturnValueFast(info.GetReturnValue(), wrappable,
                                        V8ReturnValue::CreationContext(info),
@@ -393,6 +419,7 @@ template <typename CallbackInfo>
 void V8SetReturnValue(const CallbackInfo& info,
                       const ScriptWrappable* value,
                       v8::Local<v8::Context> creation_context) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   if (UNLIKELY(!value))
     return info.GetReturnValue().SetNull();
   ScriptWrappable* wrappable = const_cast<ScriptWrappable*>(value);
@@ -405,6 +432,7 @@ template <typename CallbackInfo>
 void V8SetReturnValue(const CallbackInfo& info,
                       ScriptWrappable& value,
                       v8::Local<v8::Context> creation_context) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   ScriptWrappable* wrappable = const_cast<ScriptWrappable*>(&value);
   if (DOMDataStore::SetReturnValue(info.GetReturnValue(), wrappable))
     return;
@@ -417,6 +445,7 @@ void V8SetReturnValue(const CallbackInfo& info,
                       const bindings::EnumerationBase& value,
                       v8::Isolate* isolate,
                       ExtraArgs... extra_args) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   V8PerIsolateData::From(isolate)->GetStringCache()->SetReturnValueFromString(
       info.GetReturnValue(), value.AsString().Impl());
 }
@@ -426,6 +455,7 @@ template <typename CallbackInfo, typename T, typename... ExtraArgs>
 void V8SetReturnValue(const CallbackInfo& info,
                       absl::optional<T> value,
                       ExtraArgs... extra_args) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   if (value.has_value()) {
     V8SetReturnValue(info, value.value(),
                      std::forward<ExtraArgs>(extra_args)...);
@@ -448,6 +478,7 @@ PLATFORM_EXPORT v8::Local<v8::Value> GetExposedNamespaceObject(
 inline void V8SetReturnValue(const v8::PropertyCallbackInfo<v8::Value>& info,
                              const WrapperTypeInfo* wrapper_type_info,
                              V8ReturnValue::InterfaceObject) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   info.GetReturnValue().Set(GetExposedInterfaceObject(
       info.GetIsolate(), info.Holder(), wrapper_type_info));
 }
@@ -455,6 +486,7 @@ inline void V8SetReturnValue(const v8::PropertyCallbackInfo<v8::Value>& info,
 inline void V8SetReturnValue(const v8::PropertyCallbackInfo<v8::Value>& info,
                              const WrapperTypeInfo* wrapper_type_info,
                              V8ReturnValue::NamespaceObject) {
+  v8::recordreplay::Assert("[RUN-2609] V8SetReturnValue");
   info.GetReturnValue().Set(GetExposedNamespaceObject(
       info.GetIsolate(), info.Holder(), wrapper_type_info));
 }
