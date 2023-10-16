@@ -85,6 +85,22 @@ using RemoteObjectIdType = WTF::String;
 static const char REPLAY_CDT_PAUSE_OBJECT_GROUP[] =
     "REPLAY_CDT_PAUSE_OBJECT_GROUP";
 
+
+LocalFrame* gInitialLocalFrame = nullptr;
+
+static LocalFrame* GetLocalFrameRoot(v8::Isolate* isolate) {
+  LocalFrame* frame;
+  if (!CurrentDOMWindow(isolate)) {
+    frame = gInitialLocalFrame;
+  } else { 
+    frame = CurrentDOMWindow(isolate)->GetFrame();
+    if (!frame) {
+      frame = gInitialLocalFrame;
+    }
+  }
+  return &frame->LocalFrameRoot();
+}
+
 class InspectorData {
 public:
   // These are untraced, because they are rooted in a global variable which
@@ -112,12 +128,7 @@ public:
     inspectorSession = nullptr;
   }
 
-  LocalFrame* GetLocalFrame() const {
-    if (CurrentDOMWindow(isolate) == nullptr) {
-      return nullptr;
-    }
-    return CurrentDOMWindow(isolate)->GetFrame();
-  }
+  LocalFrame* GetLocalFrameRoot() const { return blink::GetLocalFrameRoot(isolate); }
 };
 
 typedef std::unordered_map<int, InspectorData*> ContextGroupIdInspectorMap;
@@ -151,7 +162,7 @@ const {
   fromJsGetArgumentsInFrame,
   fromJsGetObjectByCdpId,
   fromJsIsBlinkObject,
-  fromJsGetNodeId,
+  fromJsGetNodeIdByCpdId,
   fromJsGetBoxModel,
   fromJsGetMatchedStylesForElement,
   fromJsCssGetStylesheetByCpdId,
@@ -195,8 +206,9 @@ function warning(...args) {
 
 function assert(v, msg = "") {
   if (!v) {
-    log(`[RuntimeError] Assertion failed ${msg} ${Error().stack}`);
-    throw new Error("Assertion failed!");
+    const m = `Command handler Assertion failed (${msg})`;
+    log(`[RuntimeError] ${m} - ${Error().stack}`);
+    throw new Error(m);
   }
 }
 
@@ -1065,21 +1077,12 @@ function getCdpScopeByRrpId(rrpScopeId) {
   return scope;
 }
 
-
-/**
- * Get blink's `nodeId` by `cdpId`.
- *
- * @param {*} cdpId
- */
-function getBlinkNodeIdByCdpId(cdpId) {
-  const nodeId = fromJsGetNodeId(cdpId);
-  assert(nodeId);
-  return nodeId;
-}
-
 function getBlinkNodeIdByRrpId(nodeRrpId) {
   const cdpObject = getCdpObjectByRrpId(nodeRrpId);
-  return getBlinkNodeIdByCdpId(cdpObject.objectId);
+  const nodeId = fromJsGetNodeIdByCpdId(cdpObject.objectId);
+  // Note: Don't generate assert message if assert did not fail.
+  assert(nodeId, !nodeId && `${nodeRrpId}: ${JSON.stringify(cdpObject)}`);
+  return nodeId;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1621,10 +1624,8 @@ function previewFunction(cdpProperties) {
   const locationProperty = getInternalFunctionLocationProp(cdpProperties);
 
   if (nameProperty) {
+    // RUN-1991: nameProperty.value might not always exist, for some reason.
     this.extra.functionName = nameProperty?.value?.value || "";
-    if (!this.extra.functionName) {
-      warning(`[RUN-1991] previewFunction missing name: ${JSON_stringify(nameProperty)}, ${JSON_stringify(locationProperty)}`);
-    }
   }
 
   if (locationProperty) {
@@ -2924,7 +2925,7 @@ function adjustCoordinateByTransformMatrix(coord, m) {
 __RECORD_REPLAY_ARGUMENTS__.internal = {
   getBlinkNodeIdByRrpId,
   getCdpObjectByRrpId,
-  getBlinkNodeIdByCdpId,
+  fromJsGetNodeIdByCpdId,
   getPlainObjectByRrpId,
   registerPlainObject,
   gLastBoundingClientRectsByNodeRrpId,
@@ -3682,12 +3683,7 @@ struct InspectorChannel final : public v8_inspector::V8Inspector::Channel {
 };
 
 int GetCurrentContextGroupIdForIsolate(v8::Isolate* isolate) {
-  LocalDOMWindow* window = CurrentDOMWindow(isolate);
-
-  if (window == nullptr || window->GetFrame() == nullptr) {
-    return 1;
-  }
-  LocalFrame& local_frame_root = window->GetFrame()->LocalFrameRoot();
+  LocalFrame& local_frame_root = *GetLocalFrameRoot(isolate);
   return WeakIdentifierMap<LocalFrame>::Identifier(&local_frame_root);
 }
 
@@ -4060,7 +4056,7 @@ static InspectedFrames* getOrCreateInspectedFrames(v8::Isolate* isolate, int con
   InspectorData *data = getInspectorFor(isolate, contextGroupId);
 
   if (!data->inspectedFrames) {
-    data->inspectedFrames = MakeGarbageCollected<InspectedFrames>(data->GetLocalFrame());
+    data->inspectedFrames = MakeGarbageCollected<InspectedFrames>(data->GetLocalFrameRoot());
   }
   return data->inspectedFrames;
 }
@@ -4077,8 +4073,7 @@ InspectorDOMAgent* getOrCreateInspectorDOMAgent(v8::Isolate* isolate) {
     InspectedFrames* inspectedFrames = getOrCreateInspectedFrames(isolate, contextGroupId);
     data->inspectorDomAgent = MakeGarbageCollected<InspectorDOMAgent>(
         isolate, inspectedFrames, getInspectorSession(isolate, contextGroupId));
-
-    data->inspectorDomAgent->FrameDocumentUpdated(data->GetLocalFrame());
+    data->inspectorDomAgent->FrameDocumentUpdated(data->GetLocalFrameRoot());
   }
   return data->inspectorDomAgent;
 }
@@ -4093,11 +4088,9 @@ InspectorDOMDebuggerAgent* getOrCreateInspectorDOMDebuggerAgent(
         MakeGarbageCollected<InspectorDOMDebuggerAgent>(
             isolate, getOrCreateInspectorDOMAgent(isolate), getInspectorSession(isolate, contextGroupId));
 
-    // NOTE: registering the agent here allows it to receive `UserCallback` events
-    //   see https://linear.app/replay/issue/RUN-1061#comment-d059a1ce
-    if (data->GetLocalFrame() != nullptr) {
-      data->GetLocalFrame()->GetProbeSink()->AddInspectorDOMDebuggerAgent(data->inspectorDomDebuggerAgent);
-    }
+    // RUN-1061: registering the agent here allows it to receive `UserCallback`
+    // events.
+    data->GetLocalFrameRoot()->GetProbeSink()->AddInspectorDOMDebuggerAgent(data->inspectorDomDebuggerAgent);
   }
   return data->inspectorDomDebuggerAgent;
 }
@@ -4121,8 +4114,9 @@ InspectorCSSAgent* getOrCreateInspectorCSSAgent(v8::Isolate* isolate) {
   if (!data->inspectorCssAgent) {
     // NOTE: based on WebDevToolsAgentImpl::AttachSession
     InspectedFrames* inspectedFrames = getOrCreateInspectedFrames(isolate, contextGroupId);
+
     auto* resource_content_loader =
-        MakeGarbageCollected<InspectorResourceContentLoader>(data->GetLocalFrame());
+        MakeGarbageCollected<InspectorResourceContentLoader>(data->GetLocalFrameRoot());
     auto* resource_container =
         MakeGarbageCollected<InspectorResourceContainer>(inspectedFrames);
     auto* domAgent = getOrCreateInspectorDOMAgent(isolate);
@@ -4740,7 +4734,7 @@ static bool checkCDPResponse(const char* label,
   return true;
 }
 
-static void fromJsGetNodeId(const v8::FunctionCallbackInfo<v8::Value>& args) {
+static void fromJsGetNodeIdByCpdId(const v8::FunctionCallbackInfo<v8::Value>& args) {
   CHECK(args.Length() == 1 && args[0]->IsString() &&
         "[RuntimeError] must be called with a single string");
 
@@ -4753,7 +4747,7 @@ static void fromJsGetNodeId(const v8::FunctionCallbackInfo<v8::Value>& args) {
 
   v8::Local<v8::Object> nodeObj;
   if (getObjectByCdpId(isolate, cdpIdV8, nodeObj)) {
-    Node* node = V8Node::ToImpl(nodeObj);
+    Node* node = V8Node::ToImplWithTypeCheck(isolate, nodeObj);
     if (node) {
       // Bind node and get nodeId.
       auto* domAgent = getOrCreateInspectorDOMAgent(isolate);
@@ -4761,10 +4755,10 @@ static void fromJsGetNodeId(const v8::FunctionCallbackInfo<v8::Value>& args) {
       args.GetReturnValue().Set(v8::Number::New(isolate, nodeId));
       return;
     } else {
-      recordreplay::Print("[RuntimeError] fromJsGetNodeId failed for cdpId: \"%s\"", *cdpId);
+      // This should be reported by the caller, where we have more relevant
+      // context info.
     }
-  } else { /* already reported */
-  }
+  } else { /* already reported by getObjectByCdpId */ }
 
   args.GetReturnValue().SetNull();
 }
@@ -4941,11 +4935,11 @@ static void fromJsCollectEventListeners(const v8::FunctionCallbackInfo<v8::Value
   v8::Isolate* isolate = args.GetIsolate();
   auto context = isolate->GetCurrentContext();
   auto nodeObject = args[0].As<v8::Object>();
-  auto* node = V8Node::ToImpl(nodeObject);
+  auto* node = V8Node::ToImplWithTypeCheck(isolate, nodeObject);
 
   v8::Local<v8::Array> result = v8::Array::New(isolate);
   if (!node) {
-    recordreplay::Warning("JS fromJsCollectEventListeners invalid argument is not blink Node");
+    recordreplay::Warning("JS fromJsCollectEventListeners: invalid argument is not blink Node");
   } else {
     auto report_for_all_contexts = true;
     V8EventListenerInfoList eventListenerInfos;
@@ -5169,7 +5163,7 @@ void OnNewWindow1(v8::Isolate* isolate, LocalFrame* localFrame) {
   //                     jsGetObjectIdForAnyObject);
   // SetFunctionProperty(isolate, args, "jsPreviewBlinkObjectForObjectId",
   // jsPreviewBlinkObjectForObjectId);
-  SetFunctionProperty(isolate, args, "fromJsGetNodeId", fromJsGetNodeId);
+  SetFunctionProperty(isolate, args, "fromJsGetNodeIdByCpdId", fromJsGetNodeIdByCpdId);
   SetFunctionProperty(isolate, args, "fromJsGetBoxModel", fromJsGetBoxModel);
   SetFunctionProperty(isolate, args, "fromJsGetMatchedStylesForElement",
                       fromJsGetMatchedStylesForElement);
@@ -5211,6 +5205,7 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
   V8RecordReplaySetAPIObjectIdCallback(GetAPIObjectIdCallback);
   V8RecordReplayRegisterBrowserEventCallback(HandleBrowserEvent);
 
+  gInitialLocalFrame = localFrame;
   gActiveNetworkRequests =
       new std::unordered_map<std::string, NetworkRequestStatus>();
   gCurrentNetworkStreamData = new std::vector<uint8_t>();
