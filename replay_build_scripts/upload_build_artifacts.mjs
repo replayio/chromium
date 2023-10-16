@@ -360,7 +360,7 @@ async function buildChromiumSymbols(options) {
   );
 
   log(`ChromiumSymbols Done`);
-  return { buildId, symbolsArchiveFile: archiveFile }};
+  return { buildId, symbolsArchiveFile: archiveFile };
 }
 
 function readShortRevision(branch = "HEAD") {
