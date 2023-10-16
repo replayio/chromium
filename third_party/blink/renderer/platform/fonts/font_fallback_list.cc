@@ -259,7 +259,9 @@ const FontData* FontFallbackList::FontDataAt(
     return nullptr;
 
   // RUN-2625: We cannot (yet) make up font data if its not loaded already.
-  if (recordreplay::IsInReplayCode()) {
+  if (recordreplay::IsInReplayCode() &&
+      recordreplay::FeatureEnabled("replay-code",
+                                   "FontFallbackList::FontDataAt")) {
     return nullptr;
   }
 

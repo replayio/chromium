@@ -504,7 +504,9 @@ bool DWriteFontCollectionProxy::LoadFamily(
   TRACE_EVENT0("dwrite,fonts", "FontProxy::LoadFamily");
 
   // RUN-2625: We cannot load fonts without accessing the recording stream.
-  if (recordreplay::IsInReplayCode()) {
+  if (recordreplay::IsInReplayCode() &&
+      recordreplay::FeatureEnabled("replay-code",
+                                   "DWriteFontCollectionProxy::LoadFamily")) {
     return false;
   }
 
