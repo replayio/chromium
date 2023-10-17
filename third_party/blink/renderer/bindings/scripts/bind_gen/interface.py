@@ -885,6 +885,15 @@ def make_bindings_trace_event(cg_context):
 
     return TextNode("BLINK_BINDINGS_TRACE_EVENT(\"{}\");".format(event_name))
 
+def recordreplay_assert(body, cg_context):
+    assert isinstance(cg_context, CodeGenContext)
+
+    event_name = "{}.{}".format(cg_context.class_like.identifier,
+                                cg_context.property_.identifier)
+
+    body.extend([
+        TextNode("v8::recordreplay::Assert(\"[RUN-2609] IDL {}\");".format(event_name)),
+    ])
 
 def make_check_argument_length(cg_context):
     assert isinstance(cg_context, CodeGenContext)
@@ -1806,7 +1815,7 @@ def _make_empty_callback_def(cg_context, function_name):
         bind_return_value(body, cg_context)
 
     # Assert on all IDL calls to preempt JS divergences.
-    body.append(TextNode(_format("v8::recordreplay::Assert(\"[RUN-2609] IDL {}\");", function_name)))
+    recordreplay_assert(body, cg_context)
 
     return func_def
 
