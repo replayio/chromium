@@ -273,7 +273,6 @@ Process Process::OpenWithExtraPrivileges(ProcessId pid) {
 
 // static
 void Process::TerminateCurrentProcessImmediately(int exit_code) {
-  recordreplay::Warning("TerminateCurrentProcessImmediately");
 #if BUILDFLAG(CLANG_PROFILING)
   WriteClangProfilingProfile();
 #endif

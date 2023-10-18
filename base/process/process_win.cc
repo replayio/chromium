@@ -84,6 +84,7 @@ void Process::TerminateCurrentProcessImmediately(int exit_code) {
 #if BUILDFLAG(CLANG_PROFILING)
   WriteClangProfilingProfile();
 #endif
+  recordreplay::Warning("TerminateCurrentProcessImmediately");  
   recordreplay::FinishRecording();
   ::TerminateProcess(GetCurrentProcess(), static_cast<UINT>(exit_code));
   // There is some ambiguity over whether the call above can return. Rather than
