@@ -220,24 +220,29 @@ void LocalWindowProxy::Initialize() {
   if (origin &&
       !origin->Host().empty()) {
 
-    // Initialize Replay basics.
+    if (GetFrame()->IsOutermostMainFrame()) {
+      // Root-level navigation event.
+      // Note: We are assuming that each tab can only have one root frame for now.
+      V8RecordReplaySetDefaultContext(GetIsolate(), context);
+      OnNewRootFrame(GetIsolate(), GetFrame());
+    }
+
+    // Initialize Replay globals.
     OnNewWindow1(GetIsolate(), GetFrame());
 
     if (recordreplay::IsRecordingOrReplaying("checkpoints") &&
         !gRecordReplayStateInitialized) {
+      // Assume that we did outer-most frame initialization already.
+      // Else we will likely run into other undecipherable crashes.
+      CHECK(GetFrame()->IsOutermostMainFrame());
+
       // After creating the first context that is associated with a non-empty
       // origin, we are ready to set up the state used to process driver
       // commands when recording/replaying, and to create checkpoints. Create
       // the first checkpoint at which execution can pause.
       gRecordReplayStateInitialized = true;
       SetupRecordReplayCommands(GetIsolate(), GetFrame());
-      V8RecordReplaySetDefaultContext(GetIsolate(), context);
       recordreplay::NewCheckpoint();
-    }
-
-    if (GetFrame()->IsOutermostMainFrame()) {
-      // Root-level navigation event.
-      OnNewRootFrame(GetIsolate(), GetFrame());
     }
 
     // Initialize Replay things that depend on previous Replay initialization 
