@@ -237,7 +237,7 @@ void LocalWindowProxy::Initialize() {
 
     if (GetFrame()->IsOutermostMainFrame()) {
       // Root-level navigation event.
-      // Note: We are assuming that each tab can only have one root frame for now.
+      // Note: We are assuming that each tab has its own process, for now (although that might not hold true for tabs of the same domain - not sure!).
       // Note2: This must happen after our first checkpoint, or we'll crash with "Progress counter updated before first checkpoint".
       V8RecordReplaySetDefaultContext(GetIsolate(), context);
       OnNewRootFrame(GetIsolate(), GetFrame());
