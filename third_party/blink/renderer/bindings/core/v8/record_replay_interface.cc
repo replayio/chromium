@@ -5216,7 +5216,10 @@ void OnNewWindow1(v8::Isolate* isolate, LocalFrame* localFrame) {
 
 static void RecordReplaySetDefaultContext(v8::Isolate* isolate, LocalFrame* localFrame) {
   V8RecordReplaySetDefaultContext(isolate, isolate->GetCurrentContext());
+
+  // TODO: gCurrentRootFrame should not be necessary anymore. Verify and get rid of it.
   gCurrentRootFrame = localFrame;
+
   LocalFrame* parentFrame = DynamicTo<LocalFrame>(localFrame->Parent());
   recordreplay::Print("[RUN-2739] RecordReplaySetDefaultContext %d %d %d", 
                       localFrame ? localFrame->RecordReplayId() : 0,
@@ -5230,7 +5233,6 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
   V8RecordReplaySetAPIObjectIdCallback(GetAPIObjectIdCallback);
   V8RecordReplayRegisterBrowserEventCallback(HandleBrowserEvent);
 
-  gCurrentRootFrame = localFrame;
   gActiveNetworkRequests =
       new std::unordered_map<std::string, NetworkRequestStatus>();
   gCurrentNetworkStreamData = new std::vector<uint8_t>();
