@@ -106,9 +106,10 @@ static LocalFrame* GetLocalFrameRoot(v8::Isolate* isolate) {
       // This should not happen if we call RecordReplaySetDefaultContext correctly.
       std::string stack;
       recordreplay::GetCurrentJSStack(&stack);
-      recordreplay::Warning("[RUN-2739] GetLocalFrameRoot B CurrentDOMWindow has no valid frame %d %d %s",
+      recordreplay::Warning("[RUN-2739] GetLocalFrameRoot B CurrentDOMWindow has no valid frame %d %d %s %s",
                             frame ? frame->RecordReplayId() : 0,
                             isolate->GetCurrentContext().IsEmpty(),
+                            frame ? frame->GetDocument()->Url().GetString().Utf8().c_str() : "",
                             stack.c_str());
       frame = gCurrentRootFrame;
     }
@@ -5221,9 +5222,10 @@ static void RecordReplaySetDefaultContext(v8::Isolate* isolate, LocalFrame* loca
   gCurrentRootFrame = localFrame;
 
   LocalFrame* parentFrame = DynamicTo<LocalFrame>(localFrame->Parent());
-  recordreplay::Print("[RUN-2739] RecordReplaySetDefaultContext %d %d %d", 
+  recordreplay::CommandDiagnostic("[RUN-2739] RecordReplaySetDefaultContext %d %d %s %d", 
                       localFrame ? localFrame->RecordReplayId() : 0,
                       localFrame ? localFrame->IsCrossOriginToParentOrOuterDocument() : 0,
+                      localFrame ? localFrame->GetDocument()->Url().GetString().Utf8().c_str() : "",
                       parentFrame ? parentFrame->RecordReplayId() : 0);
 }
 
