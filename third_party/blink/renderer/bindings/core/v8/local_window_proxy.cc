@@ -215,32 +215,32 @@ void LocalWindowProxy::Initialize() {
     SetSecurityToken(origin.get());
   }
 
-  if (origin &&
+  if (recordreplay::IsRecordingOrReplaying("commands") &&
+      origin &&
       !origin->Host().empty()) {
 
     // Initialize Replay globals.
     OnNewWindow1(GetIsolate(), GetFrame());
 
-    if (recordreplay::IsRecordingOrReplaying("checkpoints") &&
-        !gRecordReplayStateInitialized) {
+    if (!gRecordReplayStateInitialized) {
       // After creating the first context that is associated with a non-empty
       // origin, we are ready to set up the state used to process driver
       // commands when recording/replaying, and to create checkpoints. Create
       // the first checkpoint at which execution can pause.
       gRecordReplayStateInitialized = true;
-      SetupRecordReplayCommands(GetIsolate(), GetFrame());
+      SetupRecordReplayCommands(GetIsolate(), GetFrame(), context);
       recordreplay::NewCheckpoint();
     }
 
     if (GetFrame()->IsOutermostMainFrame()) {
       // Root-level navigation event.
       // Note: This must happen after our first checkpoint, or we'll crash with "Progress counter updated before first checkpoint".
-      OnNewRootFrame(GetIsolate(), GetFrame());
+      OnNewRootFrame(GetIsolate(), GetFrame(), context);
     }
 
     // Initialize Replay things that depend on previous Replay initialization 
     // steps.
-    OnNewWindow2(GetIsolate(), GetFrame());
+    OnNewWindow2(GetIsolate(), GetFrame(), context);
   }
 
   {
@@ -636,7 +636,7 @@ LocalWindowProxy::LocalWindowProxy(v8::Isolate* isolate,
 }
 
 bool RecordReplayStateEnsureInitialized() {
-  if (recordreplay::IsRecordingOrReplaying("checkpoints") &&
+  if (recordreplay::IsRecordingOrReplaying("commands") &&
       !gRecordReplayStateInitialized &&
       gLatestLocalWindowProxy) {
     gLatestLocalWindowProxy->InitializeIfNeeded();
