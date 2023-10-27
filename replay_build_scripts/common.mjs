@@ -111,16 +111,33 @@ function runGnGen() {
   spawnChecked(gn(), ["gen", "out/Release"], { stdio: "inherit" });
 }
 
-export function updateRepo() {
-  const chromium = process.cwd();
+function updateRepo(repo) {
   // delete git lock file if it exists on Windows
   if (currentPlatform() == Platform.windows) {
-    maybeDeleteGitLockFile(chromium);
+    maybeDeleteGitLockFile(repo);
   }
 
   const branch = process.env["BUILDKITE_BRANCH"];
 
-  syncRepo(chromium, `origin/${branch}`);
+  // if branch exists in repo then sync to it, otherwise use master
+  const rv = spawnSync("git", ["branch", "--list", branch], { cwd: repo });
+  if (rv.status != 0) {
+    console.log(`Branch ${branch} not found in ${repo}, using master`);
+    syncRepo(repo, "origin/master");
+    return;
+  }
+
+  syncRepo(repo, `origin/${branch}`);
+}
+
+export function updateBackendRepo() {
+  const backend = getBackendDir();
+  updateRepo(backend);
+}
+
+export function updateChromiumRepo() {
+  const chromium = process.cwd();
+  updateRepo(chromium);
 
   const deps = getChromiumDeps();
 
