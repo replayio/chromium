@@ -1,5 +1,4 @@
-// This file exists so that it can be easily invoked as a script
+import { updateChromiumRepo, updateBackendRepo } from "./common.mjs";
 
-import { updateChromiumRepo } from "./common.mjs";
-
+updateBackendRepo();
 updateChromiumRepo();
