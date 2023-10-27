@@ -532,7 +532,7 @@ int NewIdAnyThread(const char* name) {
   return (int)RecordReplayValue("NewId", (uintptr_t)gNextAnyThreadId++);
 }
 
-void recordreplay::Crash(const char* format, ...) {
+void Crash(const char* format, ...) {
   if (IsRecordingOrReplaying()) {
     va_list args;
     va_start(args, format);

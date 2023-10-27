@@ -119,7 +119,7 @@ static LocalFrame* GetLocalFrameRoot(v8::Isolate* isolate) {
             "",
           frame ? frame->RecordReplayId() : 0,
           frame ? frame->IsDetached() : -1,
-          (frame && frame->IsDetached()) ? frame->IsProvisional() : -1,
+          (frame && !frame->IsDetached()) ? frame->IsProvisional() : -1,
           frame ? frame->IsCrossOriginToParentOrOuterDocument() : -1,
           frame ? frame->GetDocument()->Url().GetString().Utf8().c_str() : ""
       );
@@ -138,7 +138,7 @@ static LocalFrame* GetLocalFrameRoot(v8::Isolate* isolate) {
           "",
         frame ? frame->RecordReplayId() : 0,
         frame ? frame->IsDetached() : -1,
-        (frame && frame->IsDetached()) ? frame->IsProvisional() : -1,
+        (frame && !frame->IsDetached()) ? frame->IsProvisional() : -1,
         frame ? frame->IsCrossOriginToParentOrOuterDocument() : -1,
         frame ? frame->GetDocument()->Url().GetString().Utf8().c_str() : "");
   }
@@ -5243,15 +5243,16 @@ void OnNewWindow1(v8::Isolate* isolate, LocalFrame* localFrame) {
   SetFunctionProperty(isolate, args, "checkPersistentId", CheckPersistentId);
 }
 
-static void RecordReplaySetDefaultContext(v8::Isolate* isolate, LocalFrame* rootFrame, v8::Local<v8::Context> context) {
+static void RecordReplaySetDefaultContext(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
   V8RecordReplaySetDefaultContext(isolate, context);
 
   // TODO: gCurrentRootFrame should not be necessary anymore. Verify and get rid of it.
-  gCurrentRootFrame = rootFrame;
+  gCurrentRootFrame = &localFrame->LocalFrameRoot();
 }
 
 void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
   // Register context and callbacks.
+  RecordReplaySetDefaultContext(isolate, localFrame, context);
   V8RecordReplaySetAPIObjectIdCallback(GetAPIObjectIdCallback);
   V8RecordReplayRegisterBrowserEventCallback(HandleBrowserEvent);
 
@@ -5327,13 +5328,15 @@ void OnNewWindow2(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Co
             "record-replay-devtools-OnNewWindow");
 
   LocalFrame* parentFrame = DynamicTo<LocalFrame>(localFrame->Parent());
-  recordreplay::CommandDiagnostic("[RUN-2739] OnNewWindow2 %d win=%d frame=%d %d \"%s\" parent=%d",
-                      newContext == context,
-                      localFrame->DomWindow()->RecordReplayId(),
-                      localFrame->RecordReplayId(),
-                      localFrame->IsCrossOriginToParentOrOuterDocument(),
-                      localFrame->GetDocument()->Url().GetString().Utf8().c_str(),
-                      parentFrame ? parentFrame->RecordReplayId() : 0);
+  recordreplay::CommandDiagnostic(
+    "[RUN-2739] OnNewWindow2 %d win=%d frame=%d %d \"%s\" parent=%d",
+    newContext == context,
+    localFrame->DomWindow()->RecordReplayId(),
+    localFrame->RecordReplayId(),
+    localFrame->IsCrossOriginToParentOrOuterDocument(),
+    localFrame->GetDocument()->Url().GetString().Utf8().c_str(),
+    parentFrame ? parentFrame->RecordReplayId() : 0
+  );
 }
 
 extern "C" void V8RecordReplayOnConsoleMessage(size_t bookmark);
