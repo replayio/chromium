@@ -112,23 +112,11 @@ function runGnGen() {
   spawnChecked(gn(), ["gen", "out/Release"], { stdio: "inherit" });
 }
 
-function updateRepo(repo, fallBackToMaster = false) {
-  log(`Updating ${repo}`);
+function updateRepo(repo, branch) {
+  log(`Updating ${repo} to branch ${branch}`);
   // delete git lock file if it exists on Windows
   if (currentPlatform() == Platform.windows) {
     maybeDeleteGitLockFile(repo);
-  }
-
-  const branch = process.env["BUILDKITE_BRANCH"];
-
-  // if branch exists in repo then sync to it, otherwise use master
-  if (branch !== "master" && fallBackToMaster) {
-    const rv = spawnSync("git", ["branch", "--list", branch], { cwd: repo });
-    if (rv.status != 0) {
-      log(`Branch ${branch} not found in ${repo}, using master`);
-      syncRepo(repo, "origin/master");
-      return;
-    }
   }
 
   syncRepo(repo, `origin/${branch}`);
@@ -136,13 +124,13 @@ function updateRepo(repo, fallBackToMaster = false) {
 
 export function updateBackendRepo() {
   const backend = getBackendDir();
-  const fallBackToMaster = true;
-  updateRepo(backend, fallBackToMaster);
+  updateRepo(backend, "master");
 }
 
 export function updateChromiumRepo() {
   const chromium = process.cwd();
-  updateRepo(chromium);
+  const branch = process.env["BUILDKITE_BRANCH"];
+  updateRepo(chromium, branch);
 
   const deps = getChromiumDeps();
 
