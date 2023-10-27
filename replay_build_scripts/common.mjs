@@ -123,11 +123,12 @@ function updateRepo(repo, fallBackToMaster = false) {
 
   // if branch exists in repo then sync to it, otherwise use master
   if (branch !== "master" && fallBackToMaster) {
-  const rv = spawnSync("git", ["branch", "--list", branch], { cwd: repo });
-  if (rv.status != 0) {
-    log(`Branch ${branch} not found in ${repo}, using master`);
-    syncRepo(repo, "origin/master");
-    return;
+    const rv = spawnSync("git", ["branch", "--list", branch], { cwd: repo });
+    if (rv.status != 0) {
+      log(`Branch ${branch} not found in ${repo}, using master`);
+      syncRepo(repo, "origin/master");
+      return;
+    }
   }
 
   syncRepo(repo, `origin/${branch}`);
