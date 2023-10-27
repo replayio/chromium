@@ -84,6 +84,7 @@ export function toNumber(str) {
 }
 
 export function syncRepo(dir, treeish) {
+  log(`Syncing ${dir} to ${treeish}`);
   try {
     spawnChecked("git", ["fetch", "--all"], { cwd: dir, stdio: "inherit" });
   } catch (e) {
@@ -111,7 +112,8 @@ function runGnGen() {
   spawnChecked(gn(), ["gen", "out/Release"], { stdio: "inherit" });
 }
 
-function updateRepo(repo) {
+function updateRepo(repo, fallBackToMaster = false) {
+  log(`Updating ${repo}`);
   // delete git lock file if it exists on Windows
   if (currentPlatform() == Platform.windows) {
     maybeDeleteGitLockFile(repo);
@@ -120,9 +122,10 @@ function updateRepo(repo) {
   const branch = process.env["BUILDKITE_BRANCH"];
 
   // if branch exists in repo then sync to it, otherwise use master
+  if (branch !== "master" && fallBackToMaster) {
   const rv = spawnSync("git", ["branch", "--list", branch], { cwd: repo });
   if (rv.status != 0) {
-    console.log(`Branch ${branch} not found in ${repo}, using master`);
+    log(`Branch ${branch} not found in ${repo}, using master`);
     syncRepo(repo, "origin/master");
     return;
   }
@@ -132,7 +135,8 @@ function updateRepo(repo) {
 
 export function updateBackendRepo() {
   const backend = getBackendDir();
-  updateRepo(backend);
+  const fallBackToMaster = true;
+  updateRepo(backend, fallBackToMaster);
 }
 
 export function updateChromiumRepo() {
