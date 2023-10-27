@@ -1,3 +1,4 @@
-import { updateChromiumRepo } from "./common.mjs";
+import { updateChromiumRepo, updateBackendRepo } from "./common.mjs";
 
+updateBackendRepo();
 updateChromiumRepo();
