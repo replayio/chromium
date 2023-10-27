@@ -127,7 +127,7 @@ static LocalFrame* GetLocalFrameRoot(v8::Isolate* isolate) {
     }
   }
   frame = frame ? &frame->LocalFrameRoot() : nullptr;
-  if (frame && !frame->IsDetached() && !frame->IsProvisional()) {
+  if (!frame || frame->IsDetached() || frame->IsProvisional()) {
     recordreplay::Crash(
       "[RUN-2739] GetLocalFrameRoot: Invalid frame %d win=%d \"%s\" \"%s\" frame=%d %d %d %d \"%s\" ",
         isolate->GetCurrentContext().IsEmpty(),
