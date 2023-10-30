@@ -5323,14 +5323,13 @@ void OnNewRootFrame(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::
 
 void OnNewWindow2(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> newContext) {
   recordreplay::AutoMarkReplayCode amrc;
-  v8::Local<v8::Context> context = isolate->GetCurrentContext();
-  RunScript(isolate, context, gOnNewWindowScript,
+  RunScript(isolate, newContext, gOnNewWindowScript,
             "record-replay-devtools-OnNewWindow");
 
   LocalFrame* parentFrame = DynamicTo<LocalFrame>(localFrame->Parent());
   recordreplay::CommandDiagnostic(
     "[RUN-2739] OnNewWindow2 %d win=%d frame=%d %d \"%s\" parent=%d",
-    newContext == context,
+    newContext == isolate->GetCurrentContext(),
     localFrame->DomWindow()->RecordReplayId(),
     localFrame->RecordReplayId(),
     localFrame->IsCrossOriginToParentOrOuterDocument(),
