@@ -138,7 +138,7 @@ console.log(`Build finished.`);
 
 function spawnChecked(cmd, args, options) {
   const prettyCmd = [cmd].concat(args).join(" ");
-  console.error(prettyCmd);
+  console.error("$" + prettyCmd);
 
   const rv = spawnSync(cmd, args, options);
 
