@@ -112,6 +112,8 @@ class BASE_EXPORT MemoryMappedFile {
   // Is file_ a valid file handle that points to an open, memory mapped file?
   bool IsValid() const;
 
+  void FakeFromData(const uint8_t* data, size_t length);
+
  private:
   // Given the arbitrarily aligned memory region [start, size], returns the
   // boundaries of the region aligned to the granularity specified by the OS,

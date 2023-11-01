@@ -42,7 +42,10 @@ namespace recordreplay {
   Macro(V8IsMainThread, (), (), bool, false)                            \
   Macro(V8RecordReplayIsInReplayCode,                                   \
         (const char* why), (why), bool, false)                          \
-  Macro(V8RecordReplayHadMismatch, (), (), bool, false)
+  Macro(V8RecordReplayHadMismatch, (), (), bool, false) \
+  Macro(V8RecordReplayReadSystemFileContents,                           \
+        (bool aRelativeToApplication, const char* aPath, size_t* aLength), \
+        (aRelativeToApplication, aPath, aLength), char*, nullptr)
 
 #define ForEachV8APIVoid(Macro)                                         \
   Macro(V8RecordReplayAssertVA,                                         \

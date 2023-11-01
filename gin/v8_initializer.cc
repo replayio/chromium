@@ -137,6 +137,20 @@ void GetV8FilePath(const char* file_name, base::FilePath* path_out) {
 #endif
 }
 
+#if BUILDFLAG(IS_MAC)
+bool FakeMapV8File(const char* aPath, base::MemoryMappedFile** mmapped_file_out) {
+  std::unique_ptr<base::MemoryMappedFile> mmapped_file(
+      new base::MemoryMappedFile());
+  size_t length;
+  uint8_t* data = reinterpret_cast<uint8_t*>(recordreplay::ReadSystemFileContents(false, aPath, &length));
+  if (data) {
+    mmapped_file->FakeFromData(data, length);
+    *mmapped_file_out = mmapped_file.release();
+    return true;
+  }
+  return false;
+}
+#else
 bool MapV8File(base::File file,
                base::MemoryMappedFile::Region region,
                base::MemoryMappedFile** mmapped_file_out) {
@@ -203,6 +217,7 @@ base::File OpenV8File(const char* file_name,
                             OpenV8FileResult::MAX_VALUE);
   return file;
 }
+#endif
 
 #endif  // defined(V8_USE_EXTERNAL_STARTUP_DATA)
 
@@ -504,12 +519,23 @@ void V8Initializer::LoadV8Snapshot(V8SnapshotFileType snapshot_file_type) {
     return;
   }
 
+#if BUILDFLAG(IS_MAC)
+  if (g_mapped_snapshot) {
+    return;
+  }
+  g_snapshot_file_type = snapshot_file_type;
+  if (!FakeMapV8File(GetSnapshotFileName(snapshot_file_type), &g_mapped_snapshot)) {
+    LOG(FATAL) << "Error loading V8 startup snapshot file";
+  }
+#else
   base::MemoryMappedFile::Region file_region;
   base::File file =
       OpenV8File(GetSnapshotFileName(snapshot_file_type), &file_region);
   LoadV8SnapshotFromFile(std::move(file), &file_region, snapshot_file_type);
+#endif
 }
 
+#if !BUILDFLAG(IS_MAC)
 // static
 void V8Initializer::LoadV8SnapshotFromFile(
     base::File snapshot_file,
@@ -537,6 +563,7 @@ void V8Initializer::LoadV8SnapshotFromFile(
     return;
   }
 }
+#endif
 
 #if BUILDFLAG(IS_ANDROID)
 // static

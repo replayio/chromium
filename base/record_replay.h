@@ -45,6 +45,8 @@ uintptr_t RecordReplayValue(const char* why, uintptr_t v);
 void RecordReplayBytes(const char* why, void* buf, size_t size);
 void RecordReplayString(const char* why, std::string& text);
 
+char* ReadSystemFileContents(bool aRelativeToApplication, const char* aPath, size_t* aLength);
+
 int CreateOrderedLock(const char* name);
 void OrderedLock(int lock);
 void OrderedUnlock(int lock);
