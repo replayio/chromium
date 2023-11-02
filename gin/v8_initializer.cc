@@ -137,7 +137,7 @@ void GetV8FilePath(const char* file_name, base::FilePath* path_out) {
 #endif
 }
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_MAC) && !defined(GENERATE_V8_CONTEXT_SNAPSHOT)
 bool FakeMapV8File(const char* aPath, base::MemoryMappedFile** mmapped_file_out) {
   std::unique_ptr<base::MemoryMappedFile> mmapped_file(
       new base::MemoryMappedFile());
@@ -519,7 +519,7 @@ void V8Initializer::LoadV8Snapshot(V8SnapshotFileType snapshot_file_type) {
     return;
   }
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_MAC) && !defined(GENERATE_V8_CONTEXT_SNAPSHOT)
   if (g_mapped_snapshot) {
     return;
   }
@@ -537,7 +537,7 @@ void V8Initializer::LoadV8Snapshot(V8SnapshotFileType snapshot_file_type) {
 #endif
 }
 
-#if !BUILDFLAG(IS_MAC)
+#if !BUILDFLAG(IS_MAC) || defined(GENERATE_V8_CONTEXT_SNAPSHOT)
 // static
 void V8Initializer::LoadV8SnapshotFromFile(
     base::File snapshot_file,

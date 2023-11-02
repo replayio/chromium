@@ -111,6 +111,7 @@ if (use_v8_context_snapshot) {
         "//v8",
       ]
 
+      defines = ["GENERATE_V8_CONTEXT_SNAPSHOT"]
       configs += [
         "//v8:external_startup_data",
         ":disable_icf",
