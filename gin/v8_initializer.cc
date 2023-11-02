@@ -523,8 +523,10 @@ void V8Initializer::LoadV8Snapshot(V8SnapshotFileType snapshot_file_type) {
   if (g_mapped_snapshot) {
     return;
   }
+  base::FilePath file_path;
+  GetV8FilePath(GetSnapshotFileName(snapshot_file_type), &file_path);
   g_snapshot_file_type = snapshot_file_type;
-  if (!FakeMapV8File(GetSnapshotFileName(snapshot_file_type), &g_mapped_snapshot)) {
+  if (!FakeMapV8File(file_path.value().c_str(), &g_mapped_snapshot)) {
     LOG(FATAL) << "Error loading V8 startup snapshot file";
   }
 #else
