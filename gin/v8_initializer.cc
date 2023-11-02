@@ -138,13 +138,13 @@ void GetV8FilePath(const char* file_name, base::FilePath* path_out) {
 }
 
 #if BUILDFLAG(IS_MAC) && !defined(GENERATE_V8_CONTEXT_SNAPSHOT)
-bool FakeMapV8File(const char* aPath, base::MemoryMappedFile** mmapped_file_out) {
+bool RecordReplayFakeMapV8File(const char* aPath, base::MemoryMappedFile** mmapped_file_out) {
   std::unique_ptr<base::MemoryMappedFile> mmapped_file(
       new base::MemoryMappedFile());
   size_t length;
   uint8_t* data = reinterpret_cast<uint8_t*>(recordreplay::ReadSystemFileContents(false, aPath, &length));
   if (data) {
-    mmapped_file->FakeFromData(data, length);
+    mmapped_file->RecordReplayFakeFromData(data, length);
     *mmapped_file_out = mmapped_file.release();
     return true;
   }
@@ -520,13 +520,14 @@ void V8Initializer::LoadV8Snapshot(V8SnapshotFileType snapshot_file_type) {
   }
 
 #if BUILDFLAG(IS_MAC) && !defined(GENERATE_V8_CONTEXT_SNAPSHOT)
+  // for mac let's fake the mmap to force it to get the data on the replay-side.
   if (g_mapped_snapshot) {
     return;
   }
   base::FilePath file_path;
   GetV8FilePath(GetSnapshotFileName(snapshot_file_type), &file_path);
   g_snapshot_file_type = snapshot_file_type;
-  if (!FakeMapV8File(file_path.value().c_str(), &g_mapped_snapshot)) {
+  if (!RecordReplayFakeMapV8File(file_path.value().c_str(), &g_mapped_snapshot)) {
     LOG(FATAL) << "Error loading V8 startup snapshot file";
   }
 #else

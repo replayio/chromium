@@ -127,7 +127,7 @@ bool MemoryMappedFile::IsValid() const {
   return data_ != nullptr;
 }
 
-void MemoryMappedFile::FakeFromData(const uint8_t* data, size_t length) {
+void MemoryMappedFile::RecordReplayFakeFromData(const uint8_t* data, size_t length) {
   DCHECK(!IsValid());
   data_ = const_cast<uint8_t*>(data);
   length_ = length;
