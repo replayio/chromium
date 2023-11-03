@@ -1110,7 +1110,11 @@ function createPauseObject(rrpId, level) {
   const className = isCdpObjectProxy(cdpObj) ? "Proxy" : (cdpObj.className || "Function");
 
   // NOTE: `persistentId` is added in V8 → `injected-script.cc`
-  const { persistentId } = cdpObj;
+  let { persistentId } = cdpObj;
+  if (!persistentId) {
+    // TODO: [RUN-2812] Better integrate the different object tracking mechanics.
+    persistentId = Get ;
+  }
 
   let preview;
   if (level != "none") {
@@ -3731,10 +3735,7 @@ v8_inspector::V8InspectorSession* getInspectorSession(v8::Isolate* isolate, int 
                                             v8_inspector::V8Inspector::kFullyTrusted).release();
   }
   return data->inspectorSession;
-}
-
-
-                                
+}                                
 
 void
 RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
@@ -3747,6 +3748,19 @@ RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
 
     gV8Inspectors->insert(std::make_pair(isolate, inspector));
   }
+}
+
+// When JS assertions are enabled, this callback is used to get any persistentId
+// associated with a given API object.
+static int GetPersistentId(v8::Local<v8::Object> object) {
+  v8::Isolate* isolate = v8::Isolate::GetCurrent();
+  if (V8DOMWrapper::IsWrapper(isolate, object)) {
+    ScriptWrappable* wrappable = ToScriptWrappable(object);
+    return wrappable->RecordReplayId();
+  }
+  // TODO: [RUN-2812] Get plain object id as well,
+  // e.g. by calling RecordReplayObjectId.
+  return 0;
 }
 
 /**
@@ -3880,7 +3894,15 @@ static void AddRecordingEvent(const v8::FunctionCallbackInfo<v8::Value>& args) {
   stream.close();
 }
 
-static void GetPersistentId(const v8::FunctionCallbackInfo<v8::Value>& args) {
+static void fromJsGetPersistentId(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsObject() &&
+        "[RuntimeError] must be called with a single object value");
+  int persistentId = GetPersistentId(args[0].As<v8::Object>());
+  args.GetReturnValue().Set(persistentId);
+}
+
+// TODO: [RUN-2812] Get rid of this.
+static void fromJsGetRecordReplayObjectId(const v8::FunctionCallbackInfo<v8::Value>& args) {
   if (args.Length() >= 1 && recordreplay::IsInReplayCode()) {
     int id = v8::internal::RecordReplayObjectId(args.GetIsolate(),
                                                 args.GetIsolate()->GetCurrentContext(),
@@ -3891,7 +3913,7 @@ static void GetPersistentId(const v8::FunctionCallbackInfo<v8::Value>& args) {
   }
 }
 
-static void CheckPersistentId(const v8::FunctionCallbackInfo<v8::Value>& args) {
+static void CheckRecordReplayObjectId(const v8::FunctionCallbackInfo<v8::Value>& args) {
   if (args.Length() >= 1) {
     v8::internal::RecordReplayConfirmObjectHasId(args.GetIsolate(),
                                                  args.GetIsolate()->GetCurrentContext(),
@@ -3903,18 +3925,6 @@ static void GetCurrentError(const v8::FunctionCallbackInfo<v8::Value>& args);
 
 extern "C" void V8RecordReplayFinishRecording();
 
-
-
-// When JS assertions are enabled, this callback is used to get any pointer ID
-// associated with a given API object.
-static int GetAPIObjectIdCallback(v8::Local<v8::Object> object) {
-  v8::Isolate* isolate = v8::Isolate::GetCurrent();
-  if (V8DOMWrapper::IsWrapper(isolate, object)) {
-    ScriptWrappable* wrappable = ToScriptWrappable(object);
-    return wrappable->RecordReplayId();
-  }
-  return 0;
-}
 
 static void SetDataProperty(v8::Isolate* isolate,
                             v8::Local<v8::Object> obj,
@@ -4259,7 +4269,7 @@ static void fromJsGetObjectByCdpId(
  * Whether a given value is a blink object.
  *
  * NOTE: If we want a generalized |isNativeObject| function,
- * we probably have to expose |v8::internal::Script::type|
+ * we probably have to look at |v8::internal::Script::type|
  * (which is also used by |CallSiteInfo::IsNative|).
  */
 static void fromJsIsBlinkObject(
@@ -5197,12 +5207,13 @@ void OnNewWindow1(v8::Isolate* isolate, LocalFrame* localFrame) {
                       ReadFromRecordingDirectory);
   SetFunctionProperty(isolate, args, "getRecordingFilePath",
                       GetRecordingFilePath);
-  SetFunctionProperty(isolate, args, "getPersistentId", GetPersistentId);
-  SetFunctionProperty(isolate, args, "checkPersistentId", CheckPersistentId);
+  SetFunctionProperty(isolate, args, "getPersistentId", fromJsGetPersistentId);
+  SetFunctionProperty(isolate, args, "getRecordReplayObjectId", fromJsGetRecordReplayObjectId);
+  SetFunctionProperty(isolate, args, "checkRecordReplayObjectId", CheckRecordReplayObjectId);
 }
 
 void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
-  V8RecordReplaySetAPIObjectIdCallback(GetAPIObjectIdCallback);
+  V8RecordReplaySetAPIObjectIdCallback(GetPersistentId);
   V8RecordReplayRegisterBrowserEventCallback(HandleBrowserEvent);
 
   gInitialLocalFrame = localFrame;
