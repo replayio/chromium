@@ -1111,11 +1111,6 @@ function createPauseObject(rrpId, level) {
 
   // NOTE: `persistentId` is added in V8 → `injected-script.cc`
   let { persistentId } = cdpObj;
-  if (!persistentId) {
-    // TODO: [RUN-2812] Better integrate the different object tracking mechanics.
-    persistentId = Get ;
-  }
-
   let preview;
   if (level != "none") {
     preview = new ProtocolObjectPreview(rrpId, cdpObj, level).fill();
@@ -3750,17 +3745,34 @@ RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
   }
 }
 
-// When JS assertions are enabled, this callback is used to get any persistentId
-// associated with a given API object.
-static int GetPersistentId(v8::Local<v8::Object> object) {
+static int GetBlinkPersistentId(v8::Local<v8::Object> object) {
   v8::Isolate* isolate = v8::Isolate::GetCurrent();
+
+  // Blink Objects.
   if (V8DOMWrapper::IsWrapper(isolate, object)) {
     ScriptWrappable* wrappable = ToScriptWrappable(object);
     return wrappable->RecordReplayId();
   }
-  // TODO: [RUN-2812] Get plain object id as well,
-  // e.g. by calling RecordReplayObjectId.
+
   return 0;
+}
+
+// Get persistent id of objects that we are currently tracking.
+static int GetPersistentId(v8::Local<v8::Object> object) {
+  // TODO: [RUN-2812] Clean this up.
+  v8::Isolate* isolate = v8::Isolate::GetCurrent();
+
+  // Blink Objects.
+  if (V8DOMWrapper::IsWrapper(isolate, object)) {
+    ScriptWrappable* wrappable = ToScriptWrappable(object);
+    return wrappable->RecordReplayId();
+  }
+
+  // Plain objects that *might* be tracked by modifications we made in V8.
+  return v8::internal::RecordReplayObjectId(isolate,
+                                            isolate->GetCurrentContext(),
+                                            object,
+                                            /* allow_create */ false);
 }
 
 /**
@@ -3895,22 +3907,12 @@ static void AddRecordingEvent(const v8::FunctionCallbackInfo<v8::Value>& args) {
 }
 
 static void fromJsGetPersistentId(const v8::FunctionCallbackInfo<v8::Value>& args) {
-  CHECK(args.Length() == 1 && args[0]->IsObject() &&
-        "[RuntimeError] must be called with a single object value");
-  int persistentId = GetPersistentId(args[0].As<v8::Object>());
-  args.GetReturnValue().Set(persistentId);
-}
-
-// TODO: [RUN-2812] Get rid of this.
-static void fromJsGetRecordReplayObjectId(const v8::FunctionCallbackInfo<v8::Value>& args) {
-  if (args.Length() >= 1 && recordreplay::IsInReplayCode()) {
-    int id = v8::internal::RecordReplayObjectId(args.GetIsolate(),
-                                                args.GetIsolate()->GetCurrentContext(),
-                                                args[0], /* allow_create */ false);
-    if (id) {
-      args.GetReturnValue().Set(v8::Number::New(args.GetIsolate(), id));
-    }
+  int persistentId = 0;
+  v8::Isolate* isolate = args.GetIsolate();
+  if (args.Length() != 1 || !args[0]->IsObject()) {
+    persistentId = GetPersistentId(args[0].As<v8::Object>());
   }
+  args.GetReturnValue().Set(v8::Number::New(isolate, persistentId));
 }
 
 static void CheckRecordReplayObjectId(const v8::FunctionCallbackInfo<v8::Value>& args) {
@@ -5208,12 +5210,14 @@ void OnNewWindow1(v8::Isolate* isolate, LocalFrame* localFrame) {
   SetFunctionProperty(isolate, args, "getRecordingFilePath",
                       GetRecordingFilePath);
   SetFunctionProperty(isolate, args, "getPersistentId", fromJsGetPersistentId);
-  SetFunctionProperty(isolate, args, "getRecordReplayObjectId", fromJsGetRecordReplayObjectId);
   SetFunctionProperty(isolate, args, "checkRecordReplayObjectId", CheckRecordReplayObjectId);
 }
 
 void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
-  V8RecordReplaySetAPIObjectIdCallback(GetPersistentId);
+  // TODO: [RUN-2812] Fix this.
+  // There is some logic in our assertion code that depends on this not
+  // to return ids of plain objects.
+  V8RecordReplaySetAPIObjectIdCallback(GetBlinkPersistentId);
   V8RecordReplayRegisterBrowserEventCallback(HandleBrowserEvent);
 
   gInitialLocalFrame = localFrame;
