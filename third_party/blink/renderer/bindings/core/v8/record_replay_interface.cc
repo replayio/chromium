@@ -1110,7 +1110,7 @@ function createPauseObject(rrpId, level) {
   const className = isCdpObjectProxy(cdpObj) ? "Proxy" : (cdpObj.className || "Function");
 
   // NOTE: `persistentId` is added in V8 → `injected-script.cc`
-  let { persistentId } = cdpObj;
+  const { persistentId } = cdpObj;
   let preview;
   if (level != "none") {
     preview = new ProtocolObjectPreview(rrpId, cdpObj, level).fill();
@@ -3748,7 +3748,7 @@ RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
 static int GetBlinkPersistentId(v8::Local<v8::Object> object) {
   v8::Isolate* isolate = v8::Isolate::GetCurrent();
 
-  // Blink Objects.
+  // Provide a unique id for Blink Objects.
   if (V8DOMWrapper::IsWrapper(isolate, object)) {
     ScriptWrappable* wrappable = ToScriptWrappable(object);
     return wrappable->RecordReplayId();
@@ -3759,16 +3759,7 @@ static int GetBlinkPersistentId(v8::Local<v8::Object> object) {
 
 // Get persistent id of objects that we are currently tracking.
 static int GetPersistentId(v8::Local<v8::Object> object) {
-  // TODO: [RUN-2812] Clean this up.
   v8::Isolate* isolate = v8::Isolate::GetCurrent();
-
-  // Blink Objects.
-  if (V8DOMWrapper::IsWrapper(isolate, object)) {
-    ScriptWrappable* wrappable = ToScriptWrappable(object);
-    return wrappable->RecordReplayId();
-  }
-
-  // Plain objects that *might* be tracked by modifications we made in V8.
   return v8::internal::RecordReplayObjectId(isolate,
                                             isolate->GetCurrentContext(),
                                             object,
@@ -3909,13 +3900,13 @@ static void AddRecordingEvent(const v8::FunctionCallbackInfo<v8::Value>& args) {
 static void fromJsGetPersistentId(const v8::FunctionCallbackInfo<v8::Value>& args) {
   int persistentId = 0;
   v8::Isolate* isolate = args.GetIsolate();
-  if (args.Length() != 1 || !args[0]->IsObject()) {
+  if (args.Length() == 1 && args[0]->IsObject()) {
     persistentId = GetPersistentId(args[0].As<v8::Object>());
   }
   args.GetReturnValue().Set(v8::Number::New(isolate, persistentId));
 }
 
-static void CheckRecordReplayObjectId(const v8::FunctionCallbackInfo<v8::Value>& args) {
+static void fromJsCheckPersistentId(const v8::FunctionCallbackInfo<v8::Value>& args) {
   if (args.Length() >= 1) {
     v8::internal::RecordReplayConfirmObjectHasId(args.GetIsolate(),
                                                  args.GetIsolate()->GetCurrentContext(),
@@ -5210,13 +5201,10 @@ void OnNewWindow1(v8::Isolate* isolate, LocalFrame* localFrame) {
   SetFunctionProperty(isolate, args, "getRecordingFilePath",
                       GetRecordingFilePath);
   SetFunctionProperty(isolate, args, "getPersistentId", fromJsGetPersistentId);
-  SetFunctionProperty(isolate, args, "checkRecordReplayObjectId", CheckRecordReplayObjectId);
+  SetFunctionProperty(isolate, args, "checkPersistentId", fromJsCheckPersistentId);
 }
 
 void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame) {
-  // TODO: [RUN-2812] Fix this.
-  // There is some logic in our assertion code that depends on this not
-  // to return ids of plain objects.
   V8RecordReplaySetAPIObjectIdCallback(GetBlinkPersistentId);
   V8RecordReplayRegisterBrowserEventCallback(HandleBrowserEvent);
 
