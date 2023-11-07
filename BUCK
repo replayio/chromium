@@ -4,7 +4,7 @@ genrule(
   enable_sandbox = False,
   remote = False,
   # cmd = 'pwd && ls > $OUT',
-  cmd = 'docker build -t chromium-build-new - < Dockerfile.build && node buildLinux.mjs',
+  cmd = 'docker build -t chromium-build-new - < Dockerfile.build && node buildLinux.mjs && cp -r out/Release $OUT',
   out = 'out/Release/',
   labels = [
     # 'uses_undeclared_inputs',
