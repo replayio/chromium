@@ -447,6 +447,9 @@ bool PageSchedulerImpl::OptedOutFromAggressiveThrottling() const {
 bool PageSchedulerImpl::RequestBeginMainFrameNotExpected(bool new_state) {
   if (!delegate_)
     return false;
+  if (recordreplay::IsRecording()) {
+    recordreplay::Diagnostic("PageSchedulerImpl::RequestBeginMainFrameNotExpected %p", delegate_);
+  }
   return delegate_->RequestBeginMainFrameNotExpected(new_state);
 }
 
