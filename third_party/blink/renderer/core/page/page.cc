@@ -230,6 +230,9 @@ Page::Page(base::PassKey<Page>,
   DCHECK(!AllPages().Contains(this));
   AllPages().insert(this);
 
+  if (recordreplay::IsRecording()) {
+    recordreplay::Diagnostic("[RUN-2733-2826] Page::Page %p", this);
+  }
   page_scheduler_ =
       agent_group_scheduler.AsAgentGroupScheduler().CreatePageScheduler(this);
   // The scheduler should be set before the main frame.

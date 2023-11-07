@@ -69,6 +69,12 @@ AgentGroupSchedulerImpl::~AgentGroupSchedulerImpl() {
 std::unique_ptr<PageScheduler> AgentGroupSchedulerImpl::CreatePageScheduler(
     PageScheduler::Delegate* delegate) {
   auto page_scheduler = std::make_unique<PageSchedulerImpl>(delegate, *this);
+  if (recordreplay::IsRecording()) {
+    recordreplay::Diagnostic(
+      "[RUN-2733-2826] AgentGroupSchedulerImpl::CreatePageScheduler %p %p %p",
+      this, page_scheduler.get(), delegate
+    );
+  }
   main_thread_scheduler_.AddPageScheduler(page_scheduler.get());
   return page_scheduler;
 }

@@ -196,14 +196,14 @@ PageSchedulerImpl::PageSchedulerImpl(
 }
 
 PageSchedulerImpl::~PageSchedulerImpl() {
-  recordreplay::UnregisterPointer(this);
-
   // TODO(alexclarke): Find out why we can't rely on the web view outliving the
   // frame.
   for (FrameSchedulerImpl* frame_scheduler : frame_schedulers_) {
     frame_scheduler->DetachFromPageScheduler();
   }
   main_thread_scheduler_->RemovePageScheduler(this);
+
+  recordreplay::UnregisterPointer(this);
 }
 
 // static
@@ -353,6 +353,11 @@ bool PageSchedulerImpl::IsLoading() const {
 bool PageSchedulerImpl::IsOrdinary() const {
   if (!delegate_)
     return true;
+  if (recordreplay::IsRecording()) {
+    recordreplay::Diagnostic(
+      "PageSchedulerImpl::IsOrdinary %d %p %p",
+      recordreplay::PointerId(this), this, delegate_);
+  }
   return delegate_->IsOrdinary();
 }
 
@@ -448,7 +453,10 @@ bool PageSchedulerImpl::RequestBeginMainFrameNotExpected(bool new_state) {
   if (!delegate_)
     return false;
   if (recordreplay::IsRecording()) {
-    recordreplay::Diagnostic("PageSchedulerImpl::RequestBeginMainFrameNotExpected %p", delegate_);
+    recordreplay::Diagnostic(
+      "PageSchedulerImpl::RequestBeginMainFrameNotExpected %d %p %p",
+      recordreplay::PointerId(this), this, delegate_
+    );
   }
   return delegate_->RequestBeginMainFrameNotExpected(new_state);
 }
