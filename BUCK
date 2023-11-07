@@ -8,7 +8,7 @@ genrule(
     'no_srcs_environment',
   ],
   env = {
-    "SYMEXTRACT_PATH": "$(location //symextract)",
+    "SYMEXTRACT_PATH": "$(location //symextract:symextract)",
   }
 )
 
