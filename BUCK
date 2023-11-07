@@ -7,9 +7,9 @@ genrule(
   cmd = 'docker build -t chromium-build-new - < Dockerfile.build && node buildLinux.mjs',
   out = 'out/Release/',
   labels = [
-    'uses_undeclared_inputs',
+    # 'uses_undeclared_inputs',
     'no_srcs_environment',
-    'clang-module',
+    # 'clang-module', # run in build root (//)
   ]
 )
 
