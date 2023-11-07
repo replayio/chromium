@@ -7,6 +7,9 @@ genrule(
   labels = [
     'no_srcs_environment',
   ],
+  env = {
+    "SYMEXTRACT_PATH": "$(location //symextract)",
+  }
 )
 
 genrule(
