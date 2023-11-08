@@ -7,13 +7,4 @@ genrule(
   labels = [
     'no_srcs_environment',
   ],
-  env = {
-    "SYMEXTRACT_PATH": "$(location //symextract:symextract)",
-  }
-)
-
-genrule(
-  name = "esbuild-version",
-  out = "version.txt",
-  cmd = "$(exe //:esbuild-bin) --version > $OUT",
 )
