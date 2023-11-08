@@ -193,7 +193,6 @@ PageSchedulerImpl::PageSchedulerImpl(
       &PageSchedulerImpl::OnAudioSilent, base::Unretained(this)));
   do_freeze_page_callback_.Reset(base::BindRepeating(
       &PageSchedulerImpl::DoFreezePage, base::Unretained(this)));
-
 }
 
 PageSchedulerImpl::~PageSchedulerImpl() {
