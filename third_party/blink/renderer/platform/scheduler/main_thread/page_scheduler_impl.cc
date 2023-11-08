@@ -193,6 +193,7 @@ PageSchedulerImpl::PageSchedulerImpl(
       &PageSchedulerImpl::OnAudioSilent, base::Unretained(this)));
   do_freeze_page_callback_.Reset(base::BindRepeating(
       &PageSchedulerImpl::DoFreezePage, base::Unretained(this)));
+
 }
 
 PageSchedulerImpl::~PageSchedulerImpl() {
@@ -204,6 +205,11 @@ PageSchedulerImpl::~PageSchedulerImpl() {
     frame_scheduler->DetachFromPageScheduler();
   }
   main_thread_scheduler_->RemovePageScheduler(this);
+}
+
+void
+PageSchedulerImpl::BreakLinkages() {
+  delegate_ = nullptr;
 }
 
 // static
