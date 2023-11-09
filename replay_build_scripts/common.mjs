@@ -139,7 +139,9 @@ export function updateChromiumRepo() {
   syncRepo(path.join(chromium, "third_party", "skia"), deps.skia);
 
   syncRepo(path.join(chromium, "third_party", "webrtc"), deps.webrtc);
-
+  
+  syncRepo(path.join(chromium, "third_party", "dav1d", "libdav1d"), deps.dav1d);
+  
   syncRepo(
     path.join(chromium, "third_party", "boringssl", "src"),
     deps.boringssl
@@ -171,6 +173,13 @@ function getChromiumDeps() {
     );
   assert(match, "Could not find webrtc revision");
   results.webrtc = match[1];
+
+  match =
+  /'https:\/\/github.com\/replayio\/dav1d.git' \+ '@' \+ '(.*?)'/.exec(
+    text
+  );
+  assert(match, "Could not find dav1d revision");
+  results.dav1d = match[1];
 
   match = /'boringssl_revision': '(.*?)'/.exec(text);
   assert(match, "Could not find boringssl revision");
