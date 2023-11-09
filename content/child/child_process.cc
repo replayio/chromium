@@ -113,9 +113,6 @@ ChildProcess::ChildProcess(base::ThreadType io_thread_type,
   // ThreadPool was started, Start() will correctly DCHECK as it's called on the
   // wrong thread. (The result never flips from true to false so a stale read
   // should never return true.)
-
-  *((int*)0x1) = 42;
-
   auto* thread_pool = base::ThreadPoolInstance::Get();
   DCHECK(thread_pool);
   if (!thread_pool->WasStartedUnsafe()) {
