@@ -74,7 +74,7 @@ steps:
       - "build_id/windows/x86_64/**"
   - trigger: "testing-runtime-e2e"
     build:
-      branch: "${CUSTOM_TEST_BRANCH}"
+      branch: "cklochek/win_crash_debug"
     label: ":hammer: Trigger Runtime Tests"
     depends_on:
       - "build-chromium-linux-x86_64"
