@@ -124,7 +124,8 @@ function updateRepo(repo, branch) {
 
 export function updateBackendRepo() {
   const backend = getBackendDir();
-  updateRepo(backend, "master");
+  const rev = fs.readFileSync("REPLAY_BACKEND_REV", "utf8").trim();
+  updateRepo(backend, rev);
 }
 
 export function updateChromiumRepo() {
