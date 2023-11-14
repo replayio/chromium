@@ -112,14 +112,14 @@ function runGnGen() {
   spawnChecked(gn(), ["gen", "out/Release"], { stdio: "inherit" });
 }
 
-function updateRepo(repo, branch) {
-  log(`Updating ${repo} to branch ${branch}`);
+function updateRepo(repo, treeish) {
+  log(`Updating ${repo} to ${treeish}`);
   // delete git lock file if it exists on Windows
   if (currentPlatform() == Platform.windows) {
     maybeDeleteGitLockFile(repo);
   }
 
-  syncRepo(repo, `origin/${branch}`);
+  syncRepo(repo, treeish);
 }
 
 export function updateBackendRepo() {
