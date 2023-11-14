@@ -126,6 +126,13 @@ export function updateBackendRepo() {
   const backend = getBackendDir();
   const rev = fs.readFileSync("REPLAY_BACKEND_REV", "utf8").trim();
   updateRepo(backend, rev);
+  // create a symlink to chromium in the backend checkout
+  const chromiumRepoPath = process.cwd();
+  const chromiumPathInBackend = path.join(backend, "chromium");
+  if (fs.existsSync(chromiumPathInBackend)) {
+    fs.unlinkSync(chromiumPathInBackend);
+  }
+  fs.symlinkSync(chromiumRepoPath, chromiumPathInBackend);
 }
 
 export function updateChromiumRepo() {
