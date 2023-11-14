@@ -563,6 +563,25 @@ Browser::Browser(const CreateParams& params)
   }
 
   BrowserList::AddBrowser(this);
+  // recordreplay
+  content::WebContents::CreateParams recordreplay_params(
+    profile_,
+    SiteInstance::CreateForURL(
+      profile_,
+      GURL(base::StringPiece(chrome::kChromeUIRecordReplayPageURL))
+    )
+  );
+  recordreplay_params.is_never_visible = true;
+
+  recordreplay_contents_ = content::WebContents::Create(recordreplay_params);
+  recordreplay_contents_->SetDelegate(this);
+  recordreplay_contents_->GetController().LoadURL(
+    GURL(base::StringPiece(chrome::kChromeUIRecordReplayPageURL)),
+    content::Referrer(),
+    ui::PAGE_TRANSITION_TYPED, // wrong.  the user didn't type this
+    std::string()
+  );
+  // /recordreplay
 }
 
 Browser::~Browser() {
