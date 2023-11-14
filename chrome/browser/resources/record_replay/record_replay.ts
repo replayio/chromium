@@ -1,12 +1,18 @@
-type RecordReplayArguments = {
-    log: (message: string) => void;
-    // ...
-};
+// normal browser code should work, such as:
+//
+// const opened_window = window.open("");
+// 
+// function log(msg: string) {
+//     console.log(msg);
+//     if (opened_window) {
+//         opened_window.document.body.textContent += msg;
+//     }
+// }
+// 
+// setInterval(() => log("hello again\n"), 1000);
 
-type RecordReplayWindow = Window & typeof globalThis & {
-    __RECORD_REPLAY_ARGUMENTS__: RecordReplayArguments;
-};
+// we should also be able to add mojo bindings or use `chrome.send()`
+// and other things mentioned in webui_explainer.md.
 
-(window as RecordReplayWindow).__RECORD_REPLAY_ARGUMENTS__.log("HELLOOOOOOOOO FROM THE JS FILE");
-
-window.open("https://www.google.com/");
+// just so we can verify that we aren't broken:
+window.open("https://www.replay.io");
