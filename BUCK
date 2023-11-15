@@ -15,6 +15,6 @@ genrule(
     'no_srcs_environment',
   ],
   extra_env_vars = {
-    REPLAY_CHROMIUM_DOCKER_IMAGE: "$(location :chromium-build-image)",
+    "REPLAY_CHROMIUM_DOCKER_IMAGE": "$(location :chromium-build-image)",
   }
 )
