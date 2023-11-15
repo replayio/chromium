@@ -575,6 +575,7 @@ ThreadGroup* ThreadPoolImpl::GetThreadGroupForTraits(const TaskTraits& traits) {
 }
 
 void ThreadPoolImpl::UpdateCanRunPolicy() {
+  recordreplay::Assert("UpdateCanRunPolicy");
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   CanRunPolicy can_run_policy;
@@ -591,10 +592,14 @@ void ThreadPoolImpl::UpdateCanRunPolicy() {
 
   task_tracker_->SetCanRunPolicy(can_run_policy);
   foreground_thread_group_->DidUpdateCanRunPolicy();
-  if (background_thread_group_)
+  if (background_thread_group_) {
+    recordreplay::Assert("UpdateCanRunPolicy 1");
     background_thread_group_->DidUpdateCanRunPolicy();
-  if (record_replay_unordered_thread_group_)
+  }
+  if (record_replay_unordered_thread_group_) {
+    recordreplay::Assert("UpdateCanRunPolicy 2");
     record_replay_unordered_thread_group_->DidUpdateCanRunPolicy();
+  }
   single_thread_task_runner_manager_.DidUpdateCanRunPolicy();
 }
 
