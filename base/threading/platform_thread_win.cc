@@ -181,6 +181,7 @@ bool CreateThreadInternal(size_t stack_size,
                           PlatformThreadHandle* out_thread_handle,
                           ThreadType thread_type,
                           MessagePumpType message_pump_type) {
+  recordreplay::Assert("CreateThreadInternal");
   // Make sure we instantiate this now so we don't race to create it later.
   GetRecordReplayThreadJoinOrderedLockId();
 

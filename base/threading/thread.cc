@@ -168,6 +168,7 @@ bool Thread::Start() {
 }
 
 bool Thread::StartWithOptions(Options options) {
+  recordreplay::Assert("StartWithOptions");
   DCHECK(options.IsValid());
   DCHECK(owning_sequence_checker_.CalledOnValidSequence());
   DCHECK(!delegate_);
@@ -207,6 +208,9 @@ bool Thread::StartWithOptions(Options options) {
   // fixed).
   {
     AutoLock lock(thread_lock_);
+
+    recordreplay::Assert("Start with options %d", (int)options.joinable);
+
     bool success = options.joinable
                        ? PlatformThread::CreateWithType(
                              options.stack_size, this, &thread_,
