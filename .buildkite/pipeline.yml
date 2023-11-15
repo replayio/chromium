@@ -9,7 +9,7 @@ steps:
     plugins:
       - thedyrt/skip-checkout#v0.1.1:
           cd: /home/ubuntu/chromium/src
-    command: "git fetch --all && git reset --hard origin/$BUILDKITE_BRANCH && node replay_build_scripts/update-all-repos.mjs && pushd ../backend && buck2 kill && buck2 build //chromium:chromium && popd && node replay_build_scripts/upload_build_artifacts.mjs"
+    command: "git fetch --all && git reset --hard origin/$BUILDKITE_BRANCH && node replay_build_scripts/update-all-repos.mjs && pushd ../backend && buck2 kill && buck2 build --console simple //chromium:chromium && popd && node replay_build_scripts/upload_build_artifacts.mjs"
     env:
       GOMA_SERVER_HOST: simpsonite.goma.engflow.com
       GOMACTL_USE_PROXY: false
