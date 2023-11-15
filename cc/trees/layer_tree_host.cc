@@ -252,6 +252,9 @@ LayerTreeHost::~LayerTreeHost() {
   CHECK(!inside_main_frame_);
   DCHECK(!in_commit());
   TRACE_EVENT0("cc", "LayerTreeHost::~LayerTreeHost");
+  
+  recordreplay::CommandDiagnostic(
+    "[RUN-2110-2864] ~LayerTreeHost %p %d", commit_completion_event_.get(), in_commit());
 
   // Clear any references into the LayerTreeHost.
   mutator_host()->SetMutatorHostClient(nullptr);
@@ -404,6 +407,8 @@ std::unique_ptr<CommitState> LayerTreeHost::WillCommit(
     bool has_updates) {
   DCHECK(IsMainThread());
   DCHECK(!commit_completion_event_);
+  recordreplay::CommandDiagnostic(
+    "[RUN-2110-2864] LayerTreeHost::WillCommit %p %p", commit_completion_event_.get(), completion.get());
   std::unique_ptr<CommitState> result;
   if (has_updates)
     result = ActivateCommitState();
@@ -453,13 +458,11 @@ void LayerTreeHost::WaitForCommitCompletion(bool for_protected_sequence) const {
 
   if (commit_completion_event_) {
     recordreplay::CommandDiagnosticTrace(
-      "[RUN-2110-2761] LayerTreeHost::WaitForCommitCompletion %d",
-      !!commit_completion_event_);
+      "[RUN-2110-2864] LayerTreeHost::WaitForCommitCompletion %p %d",
+      commit_completion_event_.get(),
+      commit_completion_event_->IsSignaled());
 
     TRACE_EVENT0("cc", "LayerTreeHost::WaitForCommitCompletion");
-
-    recordreplay::CommandDiagnostic(
-      "[RUN-2110-2761] LayerTreeHost::WaitForCommitCompletion 1");
 
     base::ElapsedTimer timer;
     commit_completion_event_->Wait();

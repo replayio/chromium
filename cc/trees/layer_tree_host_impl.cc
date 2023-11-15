@@ -505,9 +505,8 @@ LayerTreeHostImpl::LayerTreeHostImpl(
 }
 
 LayerTreeHostImpl::~LayerTreeHostImpl() {
-  
   recordreplay::CommandDiagnostic(
-    "[RUN-2110-2761] ~LayerTreeHostImpl %d", id());
+    "[RUN-2110-2864] ~LayerTreeHostImpl %d", id());
 
   DCHECK(task_runner_provider_->IsImplThread());
   TRACE_EVENT0("cc", "LayerTreeHostImpl::~LayerTreeHostImpl()");

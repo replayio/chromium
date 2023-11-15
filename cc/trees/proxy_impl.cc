@@ -69,7 +69,7 @@ class ScopedCommitCompletionEvent {
   ~ScopedCommitCompletionEvent() {
 
     recordreplay::CommandDiagnostic(
-      "[RUN-2110-2761] ~ScopedCommitCompletionEvent");
+      "[RUN-2110-2864] ~ScopedCommitCompletionEvent %p", event_.get());
 
     event_.ExtractAsDangling()->Signal();
     main_thread_task_runner_->PostTask(
@@ -345,6 +345,11 @@ void ProxyImpl::NotifyReadyToCommitOnImpl(
   if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
     recordreplay::OnReadyToCommit();
   }
+
+  recordreplay::CommandDiagnostic(
+    "[RUN-2110-2864] ProxyImpl::NotifyReadyToCommitOnImpl %p %d %d", 
+    completion_event, base::FeatureList::IsEnabled(features::kNonBlockingCommit),
+    !!host_impl_);
 
   {
     TRACE_EVENT_WITH_FLOW0(
@@ -813,8 +818,9 @@ void ProxyImpl::ScheduledActionCommit() {
   data_for_commit_->commit_completion_event->SetFinishTime(finish_time);
 
   if (commit_state->commit_waits_for_activation) {
-    recordreplay::CommandDiagnosticTrace(
-      "[RUN-2110-2761] ProxyImpl::ScheduledActionCommit 1");
+    recordreplay::CommandDiagnostic(
+      "[RUN-2110-2864] ProxyImpl::ScheduledActionCommit 1 %p",
+      data_for_commit_->commit_completion_event.get());
 
     // For some layer types in impl-side painting, the commit is held until the
     // sync tree is activated.  It's also possible that the sync tree has

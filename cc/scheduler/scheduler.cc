@@ -731,6 +731,10 @@ void Scheduler::ScheduleBeginImplFrameDeadline() {
   using DeadlineMode = SchedulerStateMachine::BeginImplFrameDeadlineMode;
   deadline_mode_ = state_machine_.CurrentBeginImplFrameDeadlineMode();
 
+  recordreplay::CommandDiagnostic(
+    "[RUN-2110-2864] Scheduler::ScheduleBeginImplFrameDeadline %d",
+    (int)deadline_mode_);
+
   base::TimeTicks new_deadline;
   switch (deadline_mode_) {
     case DeadlineMode::NONE:
@@ -927,6 +931,11 @@ void Scheduler::ProcessScheduledActions() {
                 });
     base::AutoReset<SchedulerStateMachine::Action> mark_inside_action(
         &inside_action_, action);
+    
+    recordreplay::CommandDiagnostic(
+      "[RUN-2110-2864] Scheduler::ProcessScheduledActions %d",
+      (int)action);
+
     switch (action) {
       case SchedulerStateMachine::Action::NONE:
         break;
