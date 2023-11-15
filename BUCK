@@ -14,7 +14,7 @@ genrule(
   labels = [
     'no_srcs_environment',
   ],
-  extra_env_vars = {
+  env = {
     "REPLAY_CHROMIUM_DOCKER_IMAGE": "$(location :chromium-build-image)",
   }
 )
