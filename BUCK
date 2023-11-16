@@ -16,7 +16,7 @@ genrule(
   out = 'Release',
   labels = [
     'uses_undeclared_inputs',
-    'clang-module',
+    'clang-module', # NOTE(dmiller): this forces buck2 to run this in build root. is necessary so that we can avoid re-symlinking in all of chromium which takes many minutes
   ],
   env = {
     "REPLAY_CHROMIUM_DOCKER_IMAGE": "$(location :chromium-build-image)",
