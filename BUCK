@@ -12,14 +12,14 @@ genrule(
 genrule(
   name = "chromium",
   remote = False,
-  cmd = 'pwd && cd chromium && node buildLinux.mjs && cp -r out/Release $OUT',
-  out = 'out/Release/',
+  cmd = "pushd chromium && node buildLinux.mjs && popd && ./chromium/replay_build_scripts/copy-artifacts.sh",
+  out = 'Release',
   labels = [
-    'no_srcs_environment',
     'uses_undeclared_inputs',
     'clang-module',
   ],
   env = {
     "REPLAY_CHROMIUM_DOCKER_IMAGE": "$(location :chromium-build-image)",
+    "RELEASE_DIR": "chromium/out/Release",
   }
 )
