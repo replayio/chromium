@@ -153,12 +153,16 @@ void ThreadPoolImpl::Start(const ThreadPoolInstance::InitParams& init_params,
       MessagePumpType::DEFAULT;
 #endif
   service_thread_options.timer_slack = TIMER_SLACK_MAXIMUM;
+  recordreplay::Assert("Start 1");
   CHECK(service_thread_.StartWithOptions(std::move(service_thread_options)));
+  recordreplay::Assert("Start 2");
   if (g_synchronous_thread_start_for_testing)
     service_thread_.WaitUntilThreadStarted();
+  recordreplay::Assert("Start 3");
 
 #if HAS_NATIVE_THREAD_POOL()
   if (FeatureList::IsEnabled(kUseNativeThreadPool)) {
+    recordreplay::Assert("Start 4");
     std::unique_ptr<ThreadGroup> old_group =
         std::move(foreground_thread_group_);
     foreground_thread_group_ = std::make_unique<ThreadGroupNativeImpl>(
@@ -170,8 +174,11 @@ void ThreadPoolImpl::Start(const ThreadPoolInstance::InitParams& init_params,
     old_group->InvalidateAndHandoffAllTaskSourcesToOtherThreadGroup(
         foreground_thread_group_.get());
   }
+  recordreplay::Assert("Start 5");
 
   if (FeatureList::IsEnabled(kUseBackgroundNativeThreadPool)) {
+    recordreplay::Assert("Start 6");
+
     std::unique_ptr<ThreadGroup> old_group =
         std::move(background_thread_group_);
     background_thread_group_ = std::make_unique<ThreadGroupNativeImpl>(
