@@ -12,7 +12,7 @@ genrule(
 genrule(
   name = "chromium",
   remote = False,
-  srcs = ["chromium"]
+  srcs = ["chromium"],
   cmd = "node buildLinux.mjs && ./replay_build_scripts/copy-artifacts.sh",
   out = 'Release',
   env = {
