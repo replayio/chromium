@@ -7,5 +7,5 @@ genrule(
   env = {
     "REPLAY_CHROMIUM_DOCKER_IMAGE_NAME": "chromium-build-new",
   },
-  VISIBILITY = ["PUBLIC"],
+  visibility = ["PUBLIC"],
 )
