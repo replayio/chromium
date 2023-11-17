@@ -125,7 +125,7 @@ function prepareLinuxBinaries(buildId) {
       stdio: "inherit",
     }
   );
-  spawnChecked("cp", buildIdArchive, buildArchive, { stdio: "inherit" });
+  spawnChecked("cp", [buildIdArchive, buildArchive], { stdio: "inherit" });
 
   spawnChecked("rm", ["-rf", "replay-chromium"], { stdio: "inherit" });
   return [buildIdArchive];
