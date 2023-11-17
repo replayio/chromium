@@ -1,3 +1,0 @@
-#!/bin/bash
-
-find $RELEASE_DIR \( -type f -o -type d \) \( -name 'icudtl.dat' -o -name 'v8_context_snapshot.bin' -o -name 'vk_swiftshader_icd.json' -o -name 'chrome' -o -name 'chrome_crashpad_handler' -o -name 'chrome.exe' -o -name 'chrome.dll' -o -name 'chrome_elf.dll' -o -name '*.pak' -o -name '*.pak.info' -o -name '*.so' -o -name '*.so.1' -o -name '*.manifest' \) -exec cp -r {} $OUT/ \; && cp -r $RELEASE_DIR/locales $OUT/
