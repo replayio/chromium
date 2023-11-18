@@ -25,8 +25,6 @@ steps:
       - build_id/macOS/x86_64/**
     depends_on:
       - build-driver-linker
-      - build-driver-linker
-      - build-driver-linker
   - label: Build chromium - Mac (arm64)
     key: build-chromium-mac-arm64
     timeout_in_minutes: 60
@@ -51,8 +49,6 @@ steps:
       - build_id/macOS/arm64/**
     depends_on:
       - build-driver-linker
-      - build-driver-linker
-      - build-driver-linker
   - trigger: testing-runtime-e2e
     label: ':hammer: Trigger Runtime Tests'
     depends_on:
@@ -62,8 +58,6 @@ steps:
     build:
       branch: >-
         dominik/run-2814-buildkite-hackfix-to-run-custom-scripts-on-a-single-target
-    env:
-      DRIVER_REVISION: e74c574835f3
   - trigger: build-driver-linker
     key: build-driver-linker
     label: Build Driver/Linker
