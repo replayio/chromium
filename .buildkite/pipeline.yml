@@ -16,7 +16,7 @@ steps:
       GOMA_SERVER_HOST: simpsonite.goma.engflow.com
       GOMACTL_USE_PROXY: false
       RECORD_REPLAY_BACKEND_DIR: /Users/administrator/chromium/backend
-      DRIVER_REVISION: df31bbaa8db6
+      DRIVER_REVISION: e8945a215bfd
     agents:
       - runtimeType=chromiumbuild
       - os=macos
@@ -40,7 +40,7 @@ steps:
       GOMACTL_USE_PROXY: false
       REPLAY_BUILD_ARM: true
       RECORD_REPLAY_BACKEND_DIR: /Users/administrator/chromium/backend
-      DRIVER_REVISION: df31bbaa8db6
+      DRIVER_REVISION: e8945a215bfd
     agents:
       - runtimeType=chromiumbuild
       - os=macos
@@ -55,9 +55,10 @@ steps:
       - build-chromium-mac-x86_64
       - build-chromium-mac-arm64
       - build-driver-linker
-    build:
+    build: &ref_0
       branch: >-
         dominik/run-2814-buildkite-hackfix-to-run-custom-scripts-on-a-single-target
   - trigger: build-driver-linker
     key: build-driver-linker
     label: Build Driver/Linker
+    build: *ref_0
