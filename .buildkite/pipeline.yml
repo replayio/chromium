@@ -55,10 +55,12 @@ steps:
       - build-chromium-mac-x86_64
       - build-chromium-mac-arm64
       - build-driver-linker
-    build: &ref_0
+    build:
       branch: >-
         dominik/run-2814-buildkite-hackfix-to-run-custom-scripts-on-a-single-target
   - trigger: build-driver-linker
     key: build-driver-linker
     label: Build Driver/Linker
-    build: *ref_0
+    build:
+      branch: >-
+        dominik/run-2814-buildkite-hackfix-to-run-custom-scripts-on-a-single-target
