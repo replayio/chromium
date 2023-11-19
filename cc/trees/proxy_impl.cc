@@ -929,6 +929,8 @@ DrawResult ProxyImpl::DrawInternal(bool forced_draw) {
     result = DRAW_ABORTED_CANT_DRAW;
   }
 
+  recordreplay::AssertMaybeEventsDisallowed(
+    "[RUN-2847] ProxyImpl::DrawInternal %d", draw_frame);
   if (draw_frame) {
     if (absl::optional<LayerTreeHostImpl::SubmitInfo> submit_info =
             host_impl_->DrawLayers(&frame)) {
@@ -942,6 +944,9 @@ DrawResult ProxyImpl::DrawInternal(bool forced_draw) {
   } else {
     DCHECK_NE(DRAW_SUCCESS, result);
   }
+  recordreplay::CommandDiagnostic(
+    "[RUN-2110] ProxyImpl::DrawInternal %d %d %d", draw_frame,
+    next_frame_is_newly_committed_frame_, (int)result);
 
   host_impl_->DidDrawAllLayers(frame);
 
