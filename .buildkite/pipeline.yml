@@ -16,7 +16,7 @@ steps:
       GOMA_SERVER_HOST: simpsonite.goma.engflow.com
       GOMACTL_USE_PROXY: false
       RECORD_REPLAY_BACKEND_DIR: /Users/administrator/chromium/backend
-      DRIVER_REVISION: b39229fb28c1
+      DRIVER_REVISION: 8a51dbd588d9
     agents:
       - runtimeType=chromiumbuild
       - os=macos
@@ -40,7 +40,7 @@ steps:
       GOMACTL_USE_PROXY: false
       REPLAY_BUILD_ARM: true
       RECORD_REPLAY_BACKEND_DIR: /Users/administrator/chromium/backend
-      DRIVER_REVISION: b39229fb28c1
+      DRIVER_REVISION: 8a51dbd588d9
     agents:
       - runtimeType=chromiumbuild
       - os=macos
