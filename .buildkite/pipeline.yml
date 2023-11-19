@@ -16,7 +16,7 @@ steps:
       GOMA_SERVER_HOST: simpsonite.goma.engflow.com
       GOMACTL_USE_PROXY: false
       RECORD_REPLAY_BACKEND_DIR: /Users/administrator/chromium/backend
-      DRIVER_REVISION: 8d6246786511
+      DRIVER_REVISION: f8ead5f18510
     agents:
       - runtimeType=chromiumbuild
       - os=macos
@@ -40,7 +40,7 @@ steps:
       GOMACTL_USE_PROXY: false
       REPLAY_BUILD_ARM: true
       RECORD_REPLAY_BACKEND_DIR: /Users/administrator/chromium/backend
-      DRIVER_REVISION: 8d6246786511
+      DRIVER_REVISION: f8ead5f18510
     agents:
       - runtimeType=chromiumbuild
       - os=macos
@@ -56,9 +56,9 @@ steps:
       - build-chromium-mac-arm64
       - build-driver-linker
     build:
-      branch: dominik/run-2868-unknown-font-objc_msgsendconvertfonttohavetrait
+      branch: dominik/run-2865-objc_msgsend-unknown-message-objectenumerator
   - trigger: build-driver-linker
     key: build-driver-linker
     label: Build Driver/Linker
     build:
-      branch: dominik/run-2868-unknown-font-objc_msgsendconvertfonttohavetrait
+      branch: dominik/run-2865-objc_msgsend-unknown-message-objectenumerator
