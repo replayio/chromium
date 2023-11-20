@@ -6,6 +6,7 @@
 non_web_component_files =
     [
       "record_replay.ts",
+      "auth.ts",
     ]
 
 ts_files = non_web_component_files
