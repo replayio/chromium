@@ -1300,8 +1300,6 @@ class Browser : public TabStripModelObserver,
 
   const base::ElapsedTimer creation_timer_;
 
-  std::unique_ptr<content::WebContents> recordreplay_contents_;
-
   // The following factory is used for chrome update coalescing.
   base::WeakPtrFactory<Browser> chrome_updater_factory_{this};
 

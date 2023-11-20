@@ -14,5 +14,8 @@
 // we should also be able to add mojo bindings or use `chrome.send()`
 // and other things mentioned in webui_explainer.md.
 
-// just so we can verify that we aren't broken:
-window.open("https://www.replay.io");
+console.log("from console.log");
+console.debug("from console.debug");
+console.warn("from console.warn");
+console.error("from console.error");
+throw new Error("hello");
