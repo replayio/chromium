@@ -109,7 +109,7 @@ function copyBuildFiles(srcDir, dstDir) {
 
 function prepareLinuxBinaries(buildId) {
   const buildIdArchive = `${buildId}.tar.xz`;
-  const buildArchive = "linux-chromium.tar.xz";
+  const buildArchive = "chromium.tar.xz";
 
   spawnChecked("rm", ["-rf", "replay-chromium"], { stdio: "inherit" });
 
