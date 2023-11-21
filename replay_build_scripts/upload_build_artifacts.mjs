@@ -132,7 +132,8 @@ function prepareLinuxBinaries(buildId) {
 }
 
 function prepareWindowsBinaries(buildId) {
-  const buildArchive = `${buildId}.zip`;
+  const buildIdArchive = `${buildId}.zip`;
+  const buildArchive = "windows-chromium.zip";
   fs.rmSync("replay-chromium", { force: true, recursive: true });
   fs.mkdirSync("replay-chromium");
 
@@ -149,14 +150,15 @@ function prepareWindowsBinaries(buildId) {
   spawnChecked(
     // TODO(dmiller): this is gross, we should control this build dependency
     "C:\\mozilla-build\\bin\\zip.exe",
-    ["-r", buildArchive, "replay-chromium"],
+    ["-r", buildIdArchive, "replay-chromium"],
     {
       stdio: "inherit",
     }
   );
   fs.rmSync("replay-chromium", { force: true, recursive: true });
+  fs.cpSync(buildIdArchive, buildArchive);
 
-  return [buildArchive];
+  return [buildIdArchive];
 }
 
 function prepareMacOSBinaries(buildId) {
