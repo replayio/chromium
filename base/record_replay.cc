@@ -131,7 +131,7 @@ namespace recordreplay {
   Macro(V8RecordReplayExitReplayCode, (), ())                           \
   Macro(V8RecordReplayPerformanceEvent,                                 \
         (uint32_t kind, const void* buf, uint32_t size),                \
-        (kind, buf, size)
+        (kind, buf, size))
 
 #if BUILDFLAG(IS_WIN)
 
