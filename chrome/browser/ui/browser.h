@@ -22,7 +22,6 @@
 #include "base/timer/elapsed_timer.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/background/background_contents.h"
 #include "chrome/browser/themes/theme_service_observer.h"
 #include "chrome/browser/ui/bookmarks/bookmark_bar.h"
 #include "chrome/browser/ui/bookmarks/bookmark_tab_helper_observer.h"
@@ -52,6 +51,7 @@
 #error This file should only be included on desktop.
 #endif
 
+class BackgroundContents;
 class BreadcrumbManagerBrowserAgent;
 class BrowserContentSettingBubbleModelDelegate;
 class BrowserInstantController;
