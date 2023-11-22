@@ -1,19 +1,19 @@
 ---
 queues:
-  - &linux_agent_queue
-    agents:
+  - &chromium_queue
       runtimeType: chromiumbuild
       queue: runtime
+  - &linux_agent_queue
+    agents:
+      <<: *chromium_queue
       os: linux
   - &windows_agent_queue
     agents:
-      runtimeType: chromiumbuild
-      queue: runtime
+      <<: *chromium_queue
       os: windows
   - &mac_agent_queue
     agents:
-      runtimeType: chromiumbuild
-      queue: runtime
+      <<: *chromium_queue
       os: macos
 
 plugins:
