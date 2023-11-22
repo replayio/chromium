@@ -4,15 +4,12 @@ queues:
       runtimeType: chromiumbuild
       queue: runtime
   - &linux_agent_queue
-    agents:
       <<: *chromium_queue
       os: linux
   - &windows_agent_queue
-    agents:
       <<: *chromium_queue
       os: windows
   - &mac_agent_queue
-    agents:
       <<: *chromium_queue
       os: macos
 
@@ -85,41 +82,41 @@ steps:
   - label: "Build chromium - Linux"
     key: "build-chromium-linux-x86_64"
     timeout_in_minutes: 60
-    <<: *linux_agent_queue
+    agents: *linux_agent_queue
+    env: *linux_env
     <<: *linux_plugins
     <<: *buck2_build
-    env: *linux_env
     artifact_paths:
       - "build_id/linux/x86_64/**"
 
   - label: "Build chromium - Mac (x86)"
     key: "build-chromium-mac-x86_64"
     timeout_in_minutes: 60
-    <<: *mac_agent_queue
+    agents: *mac_agent_queue
+    env: *mac_env
     <<: *mac_plugins
     <<: *buckle_build
-    env: *mac_env
     artifact_paths:
       - "build_id/macOS/x86_64/**"
 
   - label: "Build chromium - Mac (arm64)"
     key: "build-chromium-mac-arm64"
     timeout_in_minutes: 60
-    <<: *mac_agent_queue
-    <<: *mac_plugins
-    <<: *buckle_build
+    agents: *mac_agent_queue
     env: 
       <<: *mac_env
       REPLAY_BUILD_ARM: true
+    <<: *mac_plugins
+    <<: *buckle_build
     artifact_paths:
       - "build_id/macOS/arm64/**"
 
   - label: "Build chromium - Windows"
     key: "build-chromium-windows"
     timeout_in_minutes: 60
-    <<: *windows_agent_queue
-    <<: *windows_plugins
+    agents: *windows_agent_queue
     env: *windows_env
+    <<: *windows_plugins
     command: "cd C:\\Users\\Administrator\\chromium\\src && git fetch --all && git reset --hard origin/$BUILDKITE_BRANCH && node replay_build_scripts/update-all-repos.mjs && node buildWindows.mjs &&  node replay_build_scripts/upload_build_artifacts.mjs"
     artifact_paths:
       - "build_id/windows/x86_64/**"
@@ -133,7 +130,7 @@ steps:
 
   - label: "Metabase Test Suite"
     key: "metabase-test-suite"
-    <<: *linux_agent_queue
+    agents: *linux_agent_queue
     <<: *linux_plugins
     depends_on: "build-chromium-linux-x86_64"
     if: build.branch == "master"
@@ -145,6 +142,6 @@ steps:
 
   - label: "Buildevents Watch"
     key: "buildevents-watch"
-    <<: *linux_agent_queue
+    agents: *linux_agent_queue
     <<: *linux_plugins
     command: "be_watch"
