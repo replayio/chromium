@@ -1,4 +1,3 @@
----
 queues:
   - &chromium_queue
       runtimeType: chromiumbuild
