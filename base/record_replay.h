@@ -47,10 +47,10 @@ void PerformanceEvent(uint32_t kind, const void* buf, uint32_t size);
 struct AutoPerformanceActivity {
   AutoPerformanceActivity(const std::string& activity) {
     PerformanceEvent(/* BeginActivity */ 1,
-                     activity.c_str(), activity.length() + 1);
+                     activity.c_str(), (uint32_t)activity.length() + 1);
   }
   ~AutoPerformanceActivity() {
-    PerformanceEvent(/* EndActivity */ 2);
+    PerformanceEvent(/* EndActivity */ 2, nullptr, 0);
   }
 };
 
