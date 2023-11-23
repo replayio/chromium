@@ -265,8 +265,6 @@ function isValidBaseURL(url) {
 // message.js
 ///////////////////////////////////////////////////////////////////////////////
 
-const CDPERROR_MISSINGCONTEXT = 1001;
-
 function initMessages() {
   setCDPMessageCallback(messageCallback);
   setCommandCallback(commandCallback);
