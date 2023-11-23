@@ -189,6 +189,7 @@ const {
   getCurrentNetworkStreamData,
 
   // constants
+  CDPERROR_MISSINGCONTEXT,
   REPLAY_CDT_PAUSE_OBJECT_GROUP
 } = __RECORD_REPLAY_ARGUMENTS__;
 
@@ -264,7 +265,7 @@ function isValidBaseURL(url) {
 // message.js
 ///////////////////////////////////////////////////////////////////////////////
 
-const CDPError_MissingContext = 1001;
+const CDPERROR_MISSINGCONTEXT = 1001;
 
 function initMessages() {
   setCDPMessageCallback(messageCallback);
@@ -579,7 +580,7 @@ function Target_topFrameLocation() {
   } catch (e) {
     if (e instanceof CDPMessageError) {
       // No available context group; this can happen, so just return nothing.
-      if (e.code == CDPError_MissingContext) {
+      if (e.code == CDPERROR_MISSINGCONTEXT) {
         warning(`JS Target_topFrameLocation has no context.`);
         return {};
       }
@@ -607,7 +608,7 @@ function getStackFrames() {
   } catch (e) {
     if (e instanceof CDPMessageError) {
       // No available context group; this can happen, so just return nothing.
-      if (e.code == CDPError_MissingContext) {
+      if (e.code == CDPERROR_MISSINGCONTEXT) {
         warning(`JS getStackFrames has no context.`);
         return [];
       }
@@ -1331,7 +1332,7 @@ ProtocolObjectPreview.prototype = {
         });
       } catch (e) {
         // No available context group; this can happen, so just return nothing.
-        if (e.code == CDPError_MissingContext) {
+        if (e.code == CDPERROR_MISSINGCONTEXT) {
           warning(`JS ProtocolObjectPreview.fill has no context.`);
           cdpProperties = { result: [] };
         } else {
@@ -5282,6 +5283,10 @@ void OnNewWindow1(v8::Isolate* isolate, LocalFrame* localFrame) {
       isolate, args, "RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE",
       v8::Boolean::New(isolate,
                        TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE")));
+
+
+  DefineProperty(isolate, args, "CDPERROR_MISSINGCONTEXT", 
+                 v8::Integer::New(isolate, CDPERROR_MISSINGCONTEXT));
 
   SetFunctionProperty(isolate, args, "log", LogCallback);
   SetFunctionProperty(isolate, args, "logTrace", LogTraceCallback);
