@@ -1320,21 +1320,31 @@ ProtocolObjectPreview.prototype = {
       // WARNING: we manage possible divergences caused by `Runtime.getProperties` evaluating native getter
       //    in V8's |doesAttributeHaveObservableSideEffectOnGet|.
       //    see: https://github.com/replayio/chromium-v8/pull/115/files#diff-72ee0a91d32565577bd78ed94b034ae3b4bf51676c5d42165e9363cad18dccf9R1328
-      cdpProperties = sendMessage("Runtime.getProperties", {
-        objectId: this.cdpObj.objectId,
-        ownProperties: false,
-        generatePreview: false,
-        pageIndex: this.pageIndex,
-        pageSize: this.pageSize,
-        objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
-      });
+      try {
+        cdpProperties = sendMessage("Runtime.getProperties", {
+          objectId: this.cdpObj.objectId,
+          ownProperties: false,
+          generatePreview: false,
+          pageIndex: this.pageIndex,
+          pageSize: this.pageSize,
+          objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
+        });
+      } catch (e) {
+        // No available context group; this can happen, so just return nothing.
+        if (e.code == CDPError_MissingContext) {
+          warning(`JS ProtocolObjectPreview.fill has no context.`);
+          cdpProperties = { result: [] };
+        } else {
+          throw e;
+        }
+      }
     } else {
       cdpProperties = { result: [] };
     }
 
     if (!cdpProperties.result) {
       return {
-        prototypeId: prototypeRrpId
+        prototypeId: undefined
       };
     }
 
