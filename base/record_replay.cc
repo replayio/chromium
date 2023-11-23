@@ -317,6 +317,15 @@ void PerformanceEvent(uint32_t kind, const void* buf, uint32_t size) {
   V8RecordReplayPerformanceEvent(kind, buf, size);
 }
 
+AutoPerformanceActivity::AutoPerformanceActivity(const std::string& activity) {
+  PerformanceEvent(/* BeginActivity */ 1,
+                   activity.c_str(), (uint32_t)activity.length() + 1);
+}
+
+AutoPerformanceActivity::~AutoPerformanceActivity() {
+  PerformanceEvent(/* EndActivity */ 2, nullptr, 0);
+}
+
 void Print(const char* format, ...) {
 #ifndef NACL_TC_REV
   va_list ap;

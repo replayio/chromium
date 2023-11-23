@@ -45,13 +45,8 @@ bool ShouldReportPerformanceEvent(uint32_t kind);
 void PerformanceEvent(uint32_t kind, const void* buf, uint32_t size);
 
 struct AutoPerformanceActivity {
-  AutoPerformanceActivity(const std::string& activity) {
-    PerformanceEvent(/* BeginActivity */ 1,
-                     activity.c_str(), (uint32_t)activity.length() + 1);
-  }
-  ~AutoPerformanceActivity() {
-    PerformanceEvent(/* EndActivity */ 2, nullptr, 0);
-  }
+  AutoPerformanceActivity(const std::string& activity);
+  ~AutoPerformanceActivity();
 };
 
 uintptr_t RecordReplayValue(const char* why, uintptr_t v);
