@@ -377,6 +377,11 @@ v8::MaybeLocal<v8::Value> V8ScriptRunner::RunCompiledScript(
       script->GetUnboundScript()->GetScriptName();
   TRACE_EVENT1("v8", "v8.run", "fileName",
                TRACE_STR_COPY(*v8::String::Utf8Value(isolate, script_name)));
+
+  recordreplay::AutoPerformanceActivity apa(
+    base::StringPrintf("V8ScriptRunner::RunCompiledScript:%s",
+                       *v8::String::Utf8Value(isolate, script_name)));
+
   RuntimeCallStatsScopedTracer rcs_scoped_tracer(isolate);
   RUNTIME_CALL_TIMER_SCOPE(isolate, RuntimeCallStats::CounterId::kV8);
 
