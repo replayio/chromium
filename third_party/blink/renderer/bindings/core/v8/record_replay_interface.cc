@@ -107,7 +107,7 @@ static LocalFrame* GetLocalFrameRoot(v8::Isolate* isolate) {
 
   LocalFrame& root = f->LocalFrameRoot();
 
-  if (&root == nullptr || root.IsDetached() || root.IsProvisional()) {
+  if (root.IsDetached() || root.IsProvisional()) {
     recordreplay::Print("GetLocalFrameRoot has no root frame.");
     return nullptr;
   }
