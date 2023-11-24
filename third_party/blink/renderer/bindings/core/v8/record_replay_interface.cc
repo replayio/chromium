@@ -5283,8 +5283,8 @@ void OnNewWindow1(v8::Isolate* isolate, LocalFrame* localFrame) {
                        TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE")));
 
 
-  DefineProperty(isolate, args, "CDPERROR_MISSINGCONTEXT", 
-                 v8::Integer::New(isolate, CDPERROR_MISSINGCONTEXT));
+  DefineProperty(isolate, args, "CDPERROR_MISSINGCONTEXT",
+                 v8::Number::New(isolate, (double)CDPERROR_MISSINGCONTEXT));
 
   SetFunctionProperty(isolate, args, "log", LogCallback);
   SetFunctionProperty(isolate, args, "logTrace", LogTraceCallback);
