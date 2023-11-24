@@ -1,13 +1,46 @@
 // external (c++-side) interface
-declare function getEnv(key: string): string | null;
-declare function getBuildId(): string;
-declare function getReplayUserToken(): string | null;
-declare function setReplayUserToken(token: string | null): void;
-declare function getReplayRefreshToken(): string | null;
-declare function setReplayRefreshToken(token: string | null): void;
-declare function showAuthenticationError(message: string): void;
-declare function openExternalBrowser(url: string): Promise<void>;
-declare function onSignInButtonClicked(callback: () => void): void;
+// declare function getEnv(key: string): string | null;
+// declare function getBuildId(): string;
+// declare function getReplayUserToken(): string | null;
+// declare function setReplayUserToken(token: string | null): void;
+// declare function getReplayRefreshToken(): string | null;
+// declare function setReplayRefreshToken(token: string | null): void;
+// declare function showAuthenticationError(message: string): void;
+// declare function openExternalBrowser(url: string): Promise<void>;
+// declare function onSignInButtonClicked(callback: () => void): void;
+function getEnv(key: string): string | null {
+  console.log(`getEnv: ${key}`);
+  return null;
+}
+function getBuildId(): string {
+  return "";
+}
+let _userToken: string | null = null;
+function getReplayUserToken(): string | null {
+  return _userToken;
+}
+function setReplayUserToken(token: string | null): void {
+  console.error(`setReplayUserToken: ${token}`);
+  _userToken = token;
+}
+let _refreshToken: string | null = null;
+function getReplayRefreshToken(): string | null {
+  return _refreshToken;
+}
+function setReplayRefreshToken(token: string | null): void {
+  console.error(`setReplayRefreshToken: ${token}`);
+  _refreshToken = token;
+}
+function showAuthenticationError(message: string): void {
+  console.error(`Authentication error: ${message}`);
+}
+function openExternalBrowser(url: string): Promise<void> {
+  console.error(`openExternalBrowser: ${url}`);
+  return Promise.resolve();
+}
+function onSignInButtonClicked(callback: () => void): void {
+  callback();
+}
 
 function getAuthHost() {
   return getEnv("RECORD_REPLAY_AUTH_HOST") || "webreplay.us.auth0.com";
@@ -28,7 +61,7 @@ function getTelemetryUrl() {
   return "https://telemetry.replay.io";
 }
 function isTelemetryEnabled() {
-  return true;
+  return false;
 }
 
 // https://developer.mozilla.org/en-US/docs/Glossary/Base64#the_unicode_problem
