@@ -185,7 +185,7 @@ void DOMTimer::Fired() {
   probe::AsyncTask async_task(context, &async_task_context_,
                               is_interval ? "fired" : nullptr);
 
-  recordreplay::AutoPerformanceActivity apa(std::string("DOMTimer::Fired"));
+  recordreplay::AutoPerformanceActivity apa("DOMTimer::Fired");
 
   recordreplay::UserEventProbe replayEvent(is_interval ? "setInterval" : "setTimeout", g_null_atom);
 

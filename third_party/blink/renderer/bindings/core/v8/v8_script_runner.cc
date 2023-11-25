@@ -451,6 +451,10 @@ ScriptEvaluationResult V8ScriptRunner::CompileAndRunScript(
   if (!script_state)
     return ScriptEvaluationResult::FromClassicNotRun();
 
+  recordreplay::AutoPerformanceActivity apa(
+    base::StringPrintf("V8ScriptRunner::CompileAndRunScript:%s",
+                       classic_script->SourceUrl().GetString().Utf8().c_str()));
+
   // |script_state->GetContext()| must be initialized here already, typically
   // due to a WindowProxy() call inside ToScriptState*() that is used to get the
   // ScriptState.

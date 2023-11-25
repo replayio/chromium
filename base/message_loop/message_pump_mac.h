@@ -288,6 +288,9 @@ class BASE_EXPORT MessagePumpCFRunLoopBase : public MessagePump {
   // as a stand-in during delegateless operation.
   base::stack<absl::optional<base::MessagePump::Delegate::ScopedDoWorkItem>>
       stack_;
+
+  // Keeps track of time spent idling.
+  absl::optional<recordreplay::AutoPerformanceActivity> apa_;
 };
 
 class BASE_EXPORT MessagePumpCFRunLoop : public MessagePumpCFRunLoopBase {

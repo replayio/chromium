@@ -679,6 +679,8 @@ bool LocalFrameView::LayoutFromRootObject(LayoutObject& root) {
 void LocalFrameView::PerformLayout() {
   ScriptForbiddenScope forbid_script;
 
+  recordreplay::AutoPerformanceActivity apa("LocalFrameView::PerformLayout");
+
   has_pending_layout_ = false;
 
   // TODO(crbug.com/460956): The notion of a single root for layout is no

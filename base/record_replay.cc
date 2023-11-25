@@ -319,7 +319,7 @@ void PerformanceEvent(uint32_t kind, const void* buf, uint32_t size) {
 
 AutoPerformanceActivity::AutoPerformanceActivity(const std::string& activity) {
   PerformanceEvent(/* BeginActivity */ 1,
-                   activity.c_str(), (uint32_t)activity.length() + 1);
+                   activity.c_str(), (uint32_t)activity.length());
 }
 
 AutoPerformanceActivity::~AutoPerformanceActivity() {

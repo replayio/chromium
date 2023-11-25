@@ -67,7 +67,7 @@ void FrameRequestCallbackCollection::ExecuteFrameCallbacks(
       context_);
 
   recordreplay::AutoPerformanceActivity apa(
-    std::string("FrameRequestCallbackCollection::ExecuteFrameCallbacks"));
+    "FrameRequestCallbackCollection::ExecuteFrameCallbacks");
 
   // First, generate a list of callbacks to consider.  Callbacks registered from
   // this point on are considered only for the "next" frame, not this one.
