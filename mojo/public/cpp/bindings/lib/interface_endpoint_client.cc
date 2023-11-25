@@ -35,6 +35,7 @@
 #include "third_party/perfetto/protos/perfetto/trace/track_event/chrome_mojo_event_info.pbzero.h"
 
 #include "base/record_replay.h"
+#include "base/strings/stringprintf.h"
 
 namespace mojo {
 
