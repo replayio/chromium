@@ -158,6 +158,9 @@ class BASE_EXPORT MessagePumpCFRunLoopBase : public MessagePump {
   // Get the current mode mask from |enabled_modes_|.
   int GetModeMask() const;
 
+  // Keeps track of time spent idling.
+  absl::optional<recordreplay::AutoPerformanceActivity> idle_apa_;
+
  private:
   class ScopedModeEnabler;
 
@@ -290,9 +293,6 @@ class BASE_EXPORT MessagePumpCFRunLoopBase : public MessagePump {
   // as a stand-in during delegateless operation.
   base::stack<absl::optional<base::MessagePump::Delegate::ScopedDoWorkItem>>
       stack_;
-
-  // Keeps track of time spent idling.
-  absl::optional<recordreplay::AutoPerformanceActivity> apa_;
 };
 
 class BASE_EXPORT MessagePumpCFRunLoop : public MessagePumpCFRunLoopBase {
