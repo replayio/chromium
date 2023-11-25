@@ -42,6 +42,8 @@
 #include "build/build_config.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
+#include "base/record_replay.h"
+
 #if defined(__OBJC__)
 #if BUILDFLAG(IS_IOS)
 #import <Foundation/Foundation.h>
