@@ -679,8 +679,6 @@ bool LocalFrameView::LayoutFromRootObject(LayoutObject& root) {
 void LocalFrameView::PerformLayout() {
   ScriptForbiddenScope forbid_script;
 
-  recordreplay::AutoPerformanceActivity apa("LocalFrameView::PerformLayout");
-
   has_pending_layout_ = false;
 
   // TODO(crbug.com/460956): The notion of a single root for layout is no
@@ -3244,6 +3242,8 @@ void LocalFrameView::UpdateStyleAndLayout() {
       Lifecycle().LifecyclePostponed()) {
     return;
   }
+
+  recordreplay::AutoPerformanceActivity apa("LocalFrameView::UpdateStyleAndLayout");
 
   VisualViewport& visual_viewport = frame_->GetPage()->GetVisualViewport();
   gfx::SizeF visual_viewport_size(visual_viewport.VisibleWidthCSSPx(),
