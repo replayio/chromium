@@ -718,6 +718,10 @@ bool InterfaceEndpointClient::HandleIncomingMessage(Message* message) {
   const char* interface_name = interface_name_;
   uint32_t name = message->name();
 
+  recordreplay::AutoPerformanceActivity apa(
+    base::StringPrintf("InterfaceEndpointClient::HandleIncomingMessage:%s",
+                       interface_name));
+
   recordreplay::Assert(
       "[RUN-2229-2231] InterfaceEndpointClient::HandleIncomingMessage A %u",
       name);
