@@ -11,7 +11,9 @@ export async function readSymbols(file, pdbFile) {
       throw new Error("Need PDB file to read symbols on windows");
     }
 
-    const pdbPath = path.join(getBackendDir(), "lib", "symextract.exe");
+    const pdbPath =
+      process.env["REPLAY_SYMEXTRACT_PATH"] ||
+      path.join(getBackendDir(), "lib", "symextract.exe");
     const process = spawn(pdbPath, ["read_symbols", pdbFile]);
     process.on("error", (error) => {
       console.error(`spawn error: ${error}`);
@@ -28,7 +30,7 @@ export async function readSymbols(file, pdbFile) {
 
     // TODO: this just converts a string to an object, and then
     // immediately converts it back (in the caller.)  Fix this.
-    symbols = JSON.parse(allLines.join(''));
+    symbols = JSON.parse(allLines.join(""));
   } else {
     const nmProcess = spawn("/usr/bin/nm", [file], { maxBuffer: 1e100 });
 
