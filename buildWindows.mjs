@@ -1,4 +1,5 @@
 // Script used by buildkite to build Chromium for Windows in CI
+import fs from "fs";
 import { spawnChecked } from "./replay_build_scripts/common.mjs";
 
 // make the current working directory the realpath of the current working directory
