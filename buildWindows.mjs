@@ -1,6 +1,11 @@
 // Script used by buildkite to build Chromium for Windows in CI
 import { spawnChecked } from "./replay_build_scripts/common.mjs";
 
+// make the current working directory the realpath of the current working directory
+// this is necessary on Windows if you are building chromium from outside of the
+// directory using a symlink
+process.chdir(fs.realpathSync(process.cwd()));
+
 // TODO(dmiller): remove this hack when we switch to the new ci system
 spawnChecked("git", ["apply", "replay_build_scripts/windows.patch"]);
 
