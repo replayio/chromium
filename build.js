@@ -25,11 +25,13 @@ const outdir = buildArm ? "out/Release-ARM" : "out/Release";
 
 // Ensure that the git repository is "trusted", otherwise we'll get errors like:
 // fatal: unsafe repository ('/chromium/src' is owned by someone else)
-spawnChecked(
-  "git",
-  ["config", "--global", "--add", "safe.directory", __dirname],
-  { stdio: "inherit" }
-);
+spawnChecked("git", [
+  "config",
+  "--global",
+  "--add",
+  "safe.directory",
+  __dirname,
+], { stdio: "inherit" });
 
 if (currentPlatform() == "macOS") {
   // Make sure the main executable gets rebuilt with the new build ID.
@@ -52,7 +54,9 @@ if (!REPLAY_LOCAL_DRIVER_DIR) {
       );
     }
     driverRevisionOverride = driverRevisionOverride.substring(0, 12);
-    downloadArchive = `${currentPlatform()}-recordreplay-${driverRevisionOverride}${archSuffix}.tgz`;
+    downloadArchive = `${currentPlatform()}-recordreplay-${
+      driverRevisionOverride
+    }${archSuffix}.tgz`;
   }
   spawnChecked(
     "curl",
@@ -63,13 +67,7 @@ if (!REPLAY_LOCAL_DRIVER_DIR) {
     ],
     { stdio: "inherit" }
   );
-  // realpath of cwd
-  const realCwd = fs.realpathSync(process.cwd());
-  spawnChecked("tar", ["xf", driverArchive], {
-    stdio: "inherit",
-    // NOTE(dmiller): workaround for libarchive on Windows not being able to handle extracting inside of a symlink
-    cwd: realCwd,
-  });
+  spawnChecked("tar", ["xf", driverArchive], { stdio: "inherit" });
   fs.unlinkSync(driverArchive);
 }
 
@@ -146,9 +144,7 @@ function spawnChecked(cmd, args, options) {
   const rv = spawnSync(cmd, args, options);
 
   if (rv.status != 0 || rv.error) {
-    console.error(
-      `Process failed: err=${rv.error || ""}, signal=${rv.signal || ""}`
-    );
+    console.error(`Process failed: err=${rv.error || ""}, signal=${rv.signal || ""}`);
     throw new Error(`Spawned process failed with exit code ${rv.status}`);
   }
 
