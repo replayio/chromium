@@ -1,0 +1,43 @@
+// Copyright 2022 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+#ifndef COMPONENTS_XXX_H_
+#define COMPONENTS_XXX_H_
+
+#include "base/no_destructor.h"
+#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "components/record_replay/services/auth_token/public/cpp/auth_token_service.h"
+
+namespace content {
+class BrowserContext;
+}
+
+namespace auth_token {
+
+class AuthTokenService;
+
+// Factory to get or create an instance of AuthTokenService for a
+// BrowserContext.
+class AuthTokenServiceFactory : public BrowserContextKeyedServiceFactory {
+ public:
+  static AuthTokenService* GetForBrowserContext(
+      content::BrowserContext* context);
+
+ private:
+  friend class base::NoDestructor<AuthTokenServiceFactory>;
+  static AuthTokenServiceFactory* GetInstance();
+
+  AuthTokenServiceFactory();
+  ~AuthTokenServiceFactory() override;
+
+  // BrowserContextKeyedServiceFactory:
+  KeyedService* BuildServiceInstanceFor(
+      content::BrowserContext* context) const override;
+  content::BrowserContext* GetBrowserContextToUse(
+      content::BrowserContext* context) const override;
+};
+
+}  // namespace screen_ai
+
+#endif  // COMPONENTS_XXX_H_

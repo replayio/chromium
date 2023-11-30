@@ -3318,4 +3318,8 @@ bool LocalFrame::HasBlockingReasonsHelper(
   return false;
 }
 
+void LocalFrame::RegisterAuthTokenObserver() {
+  mojo_handler_->RegisterAuthTokenObserver();
+}
+
 }  // namespace blink

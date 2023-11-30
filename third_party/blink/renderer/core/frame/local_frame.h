@@ -805,6 +805,8 @@ class CORE_EXPORT LocalFrame final
 
   absl::optional<SkColor> GetFrameOverlayColorForTesting() const;
 
+  void RegisterAuthTokenObserver();
+  
  private:
   friend class FrameNavigationDisabler;
   // LocalFrameMojoHandler is a part of LocalFrame.
