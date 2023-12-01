@@ -235,7 +235,6 @@ void LocalWindowProxy::Initialize() {
       recordreplay::NewCheckpoint();
     }
 
-
     if (GetFrame()->IsOutermostMainFrame()) {
       // Root-level navigation event.
       // Note: This must happen after our first checkpoint, or we'll crash with "Progress counter updated before first checkpoint".
