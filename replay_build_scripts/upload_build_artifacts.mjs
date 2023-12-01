@@ -111,12 +111,6 @@ function prepareLinuxBinaries(buildId) {
   const buildIdArchive = `${buildId}.tar.xz`;
   const buildArchive = "linux-chromium.tar.xz";
 
-  spawnChecked("rm", ["-rf", "replay-chromium"], { stdio: "inherit" });
-
-  fs.mkdirSync("replay-chromium");
-
-  copyBuildFiles("out/Release", "replay-chromium");
-
   // Parallel build (requires xz), unlimited cores, w/ reasonable compression.
   spawnChecked(
     "tar",
