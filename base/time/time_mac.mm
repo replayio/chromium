@@ -28,6 +28,8 @@
 #include "base/ios/ios_util.h"
 #endif
 
+#include "base/record_replay.h"
+
 namespace {
 
 #if BUILDFLAG(IS_MAC)
@@ -117,6 +119,7 @@ int64_t ComputeCurrentTicks() {
   // mach_absolute_time is it when it comes to ticks on the Mac.  Other calls
   // with less precision (such as TickCount) just call through to
   // mach_absolute_time.
+  recordreplay::Assert("[RUN-2860-2933] ComputeCurrentTicks");
   return MachTimeToMicroseconds(mach_absolute_time());
 #endif  // BUILDFLAG(IS_IOS)
 }
@@ -175,6 +178,7 @@ namespace base {
 
 namespace subtle {
 Time TimeNowIgnoringOverride() {
+  recordreplay::Assert("[RUN-2860-2933] TimeNowIgnoringOverride");
   return Time::FromCFAbsoluteTime(CFAbsoluteTimeGetCurrent());
 }
 
