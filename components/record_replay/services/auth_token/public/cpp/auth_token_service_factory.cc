@@ -41,4 +41,4 @@ content::BrowserContext* AuthTokenServiceFactory::GetBrowserContextToUse(
   return context;
 }
 
-}  // namespace screen_ai
+}  // namespace auth_token

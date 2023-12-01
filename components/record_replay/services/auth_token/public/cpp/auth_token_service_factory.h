@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#ifndef COMPONENTS_XXX_H_
-#define COMPONENTS_XXX_H_
+#ifndef COMPONENTS_RECORD_REPLAY_SERVICES_AUTH_TOKEN_PUBLIC_CPP_AUTH_TOKEN_SERVICE_FACTORY_H_
+#define COMPONENTS_RECORD_REPLAY_SERVICES_AUTH_TOKEN_PUBLIC_CPP_AUTH_TOKEN_SERVICE_FACTORY_H_
 
 #include "base/no_destructor.h"
 #include "components/keyed_service/content/browser_context_keyed_service_factory.h"
@@ -38,6 +38,6 @@ class AuthTokenServiceFactory : public BrowserContextKeyedServiceFactory {
       content::BrowserContext* context) const override;
 };
 
-}  // namespace screen_ai
+}  // namespace auth_token
 
-#endif  // COMPONENTS_XXX_H_
+#endif  // COMPONENTS_RECORD_REPLAY_SERVICES_AUTH_TOKEN_PUBLIC_CPP_AUTH_TOKEN_SERVICE_FACTORY_H_

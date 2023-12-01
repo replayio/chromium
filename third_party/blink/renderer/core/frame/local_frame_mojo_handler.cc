@@ -509,7 +509,6 @@ LocalFrameMojoHandler::GetDevicePosture() {
 
 void LocalFrameMojoHandler::RegisterAuthTokenObserver() {
   if (auth_token_store_.is_bound()) {
-    fprintf(stderr, "LocalFrameMojoHandler::RegisterAuthTokenObserver early out\n");
     return;
   }
 
@@ -517,7 +516,6 @@ void LocalFrameMojoHandler::RegisterAuthTokenObserver() {
   frame_->GetBrowserInterfaceBroker().GetInterface(
       auth_token_store_.BindNewPipeAndPassReceiver(task_runner));
 
-  fprintf(stderr, "Calling auth_token_store_->AddObserver\n");
   auth_token_store_->AddObserver(
       auth_token_store_observer_receiver_.BindNewPipeAndPassRemote(task_runner));
 }

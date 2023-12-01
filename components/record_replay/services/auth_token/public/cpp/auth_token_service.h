@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#ifndef COMPONENTS_XXXX_H_
-#define COMPONENTS_XXXX_H_
+#ifndef COMPONENTS_RECORD_REPLAY_SERVICES_AUTH_TOKEN_PUBLIC_CPP_AUTH_TOKEN_SERVICE_H_
+#define COMPONENTS_RECORD_REPLAY_SERVICES_AUTH_TOKEN_PUBLIC_CPP_AUTH_TOKEN_SERVICE_H_
 
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/record_replay/services/auth_token/public/mojom/auth_token.mojom.h"
@@ -41,4 +41,4 @@ private:
 
 }  // namespace auth_token
 
-#endif  // COMPONENTS_XXXX_H_
+#endif  // COMPONENTS_RECORD_REPLAY_SERVICES_AUTH_TOKEN_PUBLIC_CPP_AUTH_TOKEN_SERVICE_H_
