@@ -163,29 +163,6 @@ function prepareMacOSBinaries(buildId) {
   const buildIdDmgArchive = buildArm ? `${buildId}-arm.dmg` : `${buildId}.dmg`;
   const dmgArchive = buildArm ? "macos-chromium-arm.dmg" : "macos-chromium.dmg";
   const outdir = buildArm ? "out/Release-ARM" : "out/Release";
-  fs.rmSync(path.join(outdir, "Replay-Chromium.app"), {
-    recursive: true,
-    force: true,
-  });
-  fs.renameSync(
-    path.join(outdir, "Chromium.app"),
-    path.join(outdir, "Replay-Chromium.app")
-  );
-  spawnChecked(
-    "hdiutil",
-    [
-      "create",
-      path.join(process.cwd(), buildIdDmgArchive),
-      "-ov",
-      "-volname",
-      "Replay-Chromium",
-      "-fs",
-      "HFS+",
-      "-srcfolder",
-      "Replay-Chromium.app",
-    ],
-    { cwd: outdir, stdio: "inherit" }
-  );
   const buildIdTarArchive = buildArm
     ? `${buildId}-arm.tar.xz`
     : `${buildId}.tar.xz`;
@@ -197,10 +174,6 @@ function prepareMacOSBinaries(buildId) {
     "tar",
     ["cfJ", path.join(process.cwd(), buildIdTarArchive), "Replay-Chromium.app"],
     { cwd: outdir }
-  );
-  fs.renameSync(
-    path.join(outdir, "Replay-Chromium.app"),
-    path.join(outdir, "Chromium.app")
   );
 
   fs.cpSync(buildIdDmgArchive, dmgArchive);
