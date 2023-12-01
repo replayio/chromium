@@ -569,10 +569,7 @@ void LocalFrameMojoHandler::BindToHighPriorityReceiver(
 void LocalFrameMojoHandler::BindAuthTokenStoreObserver(
       mojo::PendingReceiver<
           auth_token::mojom::blink::AuthTokenStoreObserver> receiver) {
-
-  fprintf(stderr, "BindAuthTokenStoreObserver\n");
-  // I think we don't need this?
-  if (frame_->IsDetached())
+ if (frame_->IsDetached())
     return;
 
   auth_token_store_observer_receiver_.Bind(
