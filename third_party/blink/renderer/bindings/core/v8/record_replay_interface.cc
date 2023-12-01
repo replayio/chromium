@@ -62,7 +62,8 @@ extern void FunctionCallbackRecordReplayGetScriptSource(const FunctionCallbackIn
 namespace internal {
 
 extern int RecordReplayObjectId(v8::Isolate* isolate, v8::Local<v8::Context> cx,
-                                v8::Local<v8::Value> object, bool allow_create);
+                                v8::Local<v8::Value> object, bool allow_create,
+                                bool should_assert = true);
 extern void RecordReplayConfirmObjectHasId(v8::Isolate* isolate,
                                            v8::Local<v8::Context> cx,
                                            v8::Local<v8::Value> object);
@@ -3605,6 +3606,13 @@ window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ = reduxDevtoolsExtensionCompose;
 const char* gOnNewWindowScript = R""""(
 //js
 (() => {
+
+  console.log(window.top.__REACT_DEVTOOLS_GLOBAL_HOOK__);
+
+
+  console.log(window.__REACT_DEVTOOLS_GLOBAL_HOOK__);
+
+
   try {
     window.__REACT_DEVTOOLS_GLOBAL_HOOK__ = window.top.__REACT_DEVTOOLS_GLOBAL_HOOK__;
     window.__REDUX_DEVTOOLS_EXTENSION__ = window.top.__REDUX_DEVTOOLS_EXTENSION__;
@@ -5375,8 +5383,8 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame, v8:
 
   if (recordreplay::FeatureEnabled("collect-source-maps") &&
       !TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_COLLECTION")) {
-    recordreplay::AutoMarkReplayCode amrc;
-    RunScript(isolate, context, gSourceMapScript, InternalScriptURL);
+    // recordreplay::AutoMarkReplayCode amrc;
+    // RunScript(isolate, context, gSourceMapScript, InternalScriptURL);
   }
 
   if (recordreplay::FeatureEnabled("force-main-world-initialization")) {
