@@ -39,7 +39,7 @@ void RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
 class RecordReplayEventListener : public NativeEventListener {
  public:
   RecordReplayEventListener(v8::Isolate* isolate, LocalFrame* localFrame)
-      : isolate_(isolate), local_frame_(localFrame) {}
+      : local_frame_(localFrame) {}
 
   void Invoke(ExecutionContext*, Event*) override;
 
@@ -51,7 +51,6 @@ class RecordReplayEventListener : public NativeEventListener {
   }
 
  private:
-  v8::Isolate* isolate_;
   Member<LocalFrame> local_frame_;
 };
 
