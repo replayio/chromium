@@ -90,7 +90,7 @@ class LocalFrameMojoHandler
   void BindFullscreenVideoElementReceiver(
       mojo::PendingAssociatedReceiver<
           mojom::blink::FullscreenVideoElementHandler> receiver);
-  void BindRecordReplayhAuthTokenStoreObserver(
+  void BindRecordReplayAuthTokenStoreObserver(
       mojo::PendingReceiver<
           auth_token::mojom::blink::RecordReplayAuthTokenStoreObserver> receiver);
 
