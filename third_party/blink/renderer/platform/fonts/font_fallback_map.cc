@@ -45,6 +45,11 @@ void FontFallbackMap::Remove(const FontDescription& font_description) {
 }
 
 void FontFallbackMap::InvalidateAll() {
+    if (recordreplay::AreEventsDisallowed("FontFallbackMap::InvalidateAll")) {
+    // Leak fallback_list_for_description_ contents to avoid divergence down the
+    // road.
+    return;
+  }
   lock_.AssertAcquired();
   for (auto& entry : fallback_list_for_description_)
     entry.value->MarkInvalid();
