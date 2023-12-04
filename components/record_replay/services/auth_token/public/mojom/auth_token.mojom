@@ -9,5 +9,5 @@ interface RecordReplayAuthTokenStore {
 };
 
 interface RecordReplayAuthTokenStoreObserver {
-  OnTokenChanged(string token);
+  OnRecordReplayAuthTokenChanged(string token);
 };

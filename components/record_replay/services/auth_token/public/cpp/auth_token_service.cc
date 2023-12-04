@@ -28,7 +28,7 @@ void RecordReplayAuthTokenService::AddObserver(mojo::PendingRemote<mojom::Record
 
 void RecordReplayAuthTokenService::NotifyObservers() {
   for (auto& observer : observers_) {
-    observer->OnTokenChanged(token_);
+    observer->OnRecordReplayAuthTokenChanged(token_);
   }
 }
 

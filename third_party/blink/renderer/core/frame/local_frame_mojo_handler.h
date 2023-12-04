@@ -90,7 +90,7 @@ class LocalFrameMojoHandler
   void BindFullscreenVideoElementReceiver(
       mojo::PendingAssociatedReceiver<
           mojom::blink::FullscreenVideoElementHandler> receiver);
-  void BindAuthTokenStoreObserver(
+  void BindRecordReplayhAuthTokenStoreObserver(
       mojo::PendingReceiver<
           auth_token::mojom::blink::RecordReplayAuthTokenStoreObserver> receiver);
 
@@ -249,8 +249,8 @@ class LocalFrameMojoHandler
   // DevicePostureServiceClient implementation:
   void OnPostureChanged(device::mojom::blink::DevicePostureType posture) final;
 
-  // AuthTokenStoreObserver implementation:
-  void OnTokenChanged(const WTF::String& token) final;
+  // RecordReplayAuthTokenStoreObserver implementation:
+  void OnRecordReplayAuthTokenChanged(const WTF::String& token) final;
 
   Member<blink::LocalFrame> frame_;
 

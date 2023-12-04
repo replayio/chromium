@@ -419,7 +419,7 @@ LocalFrameMojoHandler::LocalFrameMojoHandler(blink::LocalFrame& frame)
       &LocalFrameMojoHandler::BindFullscreenVideoElementReceiver,
       WrapWeakPersistent(this)));
   registry->AddInterface(WTF::BindRepeating(
-      &LocalFrameMojoHandler::BindAuthTokenStoreObserver,
+      &LocalFrameMojoHandler::BindRecordReplayAuthTokenStoreObserver,
       WrapWeakPersistent(this)));
 }
 
@@ -566,7 +566,7 @@ void LocalFrameMojoHandler::BindToHighPriorityReceiver(
       std::make_unique<ActiveURLMessageFilter>(frame_));
 }
 
-void LocalFrameMojoHandler::BindAuthTokenStoreObserver(
+void LocalFrameMojoHandler::BindRecordReplayAuthTokenStoreObserver(
       mojo::PendingReceiver<
           auth_token::mojom::blink::RecordReplayAuthTokenStoreObserver> receiver) {
  if (frame_->IsDetached())
@@ -1475,7 +1475,7 @@ void LocalFrameMojoHandler::RequestFullscreenVideoElement() {
   }
 }
 
-void LocalFrameMojoHandler::OnTokenChanged(const WTF::String& token) {
+void LocalFrameMojoHandler::OnRecordReplayAuthTokenChanged(const WTF::String& token) {
   v8::Isolate* isolate = ToIsolate(frame_);
   v8::HandleScope handle_scope(isolate);
 
