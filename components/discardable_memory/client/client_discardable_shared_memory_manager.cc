@@ -110,8 +110,8 @@ bool ClientDiscardableSharedMemoryManager::DiscardableMemoryImpl::Lock() {
   DCHECK(!is_locked());
 
   recordreplay::Assert(
-    "[RUN-2947-2951] ClientDiscardableSharedMemoryManager::DiscardableMemoryImpl::Lock %d %d",
-    !!span_, span_ ? recordreplay::PointerId(span_->shared_memory()) : -1);
+    "[RUN-2947-2951] ClientDiscardableSharedMemoryManager::DiscardableMemoryImpl::Lock %d",
+    span_ ? recordreplay::PointerId(span_->shared_memory()) : -1);
   if (span_ && manager_->LockSpan(span_.get()))
     last_locked_ = base::TimeTicks();
 
