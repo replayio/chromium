@@ -120,12 +120,27 @@ steps:
     artifact_paths:
       - "build_id/windows/x86_64/**"
 
-  - trigger: "testing-runtime-e2e"
-    label: ":hammer: Trigger Runtime Tests"
+  - trigger: "testing-runtime-e2e-linux"
+    label: ":hammer: Trigger Linux Runtime Tests"
     depends_on:
       - "build-chromium-linux-x86_64"
-      - "build-chromium-mac-x86_64"
-      - "build-chromium-mac-arm64"
+    build:
+      branch: "toshok/split-up-runtime-e2e"
+
+  # - trigger: "testing-runtime-e2e-mac-x86_64"
+  #   label: ":hammer: Trigger Mac (x86) Runtime Tests"
+  #   depends_on:
+  #     - "build-chromium-mac-x86_64"
+
+  # - trigger: "testing-runtime-e2e-mac-arm64"
+  #   label: ":hammer: Trigger Mac (arm64) Runtime Tests"
+  #   depends_on:
+  #     - "build-chromium-mac-arm64"
+
+  # - trigger: "testing-runtime-e2e-windows"
+  #   label: ":hammer: Trigger Windows Runtime Tests"
+  #   depends_on:
+  #     - "build-chromium-windows"
 
   - label: "Metabase Test Suite"
     key: "metabase-test-suite"
