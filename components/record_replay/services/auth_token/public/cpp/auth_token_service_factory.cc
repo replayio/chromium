@@ -10,33 +10,33 @@
 namespace auth_token {
 
 // static
-auth_token::AuthTokenService*
-AuthTokenServiceFactory::GetForBrowserContext(
+auth_token::RecordReplayAuthTokenService*
+RecordReplayAuthTokenServiceFactory::GetForBrowserContext(
     content::BrowserContext* context) {
-  return static_cast<auth_token::AuthTokenService*>(
+  return static_cast<auth_token::RecordReplayAuthTokenService*>(
       GetInstance()->GetServiceForBrowserContext(context, /*create=*/true));
 }
 
 // static
-AuthTokenServiceFactory* AuthTokenServiceFactory::GetInstance() {
-  static base::NoDestructor<AuthTokenServiceFactory> instance;
+RecordReplayAuthTokenServiceFactory* RecordReplayAuthTokenServiceFactory::GetInstance() {
+  static base::NoDestructor<RecordReplayAuthTokenServiceFactory> instance;
   return instance.get();
 }
 
-AuthTokenServiceFactory::AuthTokenServiceFactory()
+RecordReplayAuthTokenServiceFactory::RecordReplayAuthTokenServiceFactory()
     : BrowserContextKeyedServiceFactory(
-          "AuthTokenService",
+          "RecordReplayAuthTokenService",
           BrowserContextDependencyManager::GetInstance()) {}
 
-AuthTokenServiceFactory::~AuthTokenServiceFactory() = default;
+RecordReplayAuthTokenServiceFactory::~RecordReplayAuthTokenServiceFactory() = default;
 
-KeyedService* AuthTokenServiceFactory::BuildServiceInstanceFor(
+KeyedService* RecordReplayAuthTokenServiceFactory::BuildServiceInstanceFor(
     content::BrowserContext* /*context*/) const {
-  return new auth_token::AuthTokenService();
+  return new auth_token::RecordReplayAuthTokenService();
 }
 
 // Incognito profiles should use their own instance.
-content::BrowserContext* AuthTokenServiceFactory::GetBrowserContextToUse(
+content::BrowserContext* RecordReplayAuthTokenServiceFactory::GetBrowserContextToUse(
     content::BrowserContext* context) const {
   return context;
 }

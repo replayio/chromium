@@ -15,28 +15,28 @@
 
 namespace auth_token {
 
-class AuthTokenService : public KeyedService, public mojom::AuthTokenStore {
+class RecordReplayAuthTokenService : public KeyedService, public mojom::RecordReplayAuthTokenStore {
  public:
-  AuthTokenService();
-  AuthTokenService(const AuthTokenService&) = delete;
-  AuthTokenService& operator=(const AuthTokenService&) = delete;
-  ~AuthTokenService() override;
+  RecordReplayAuthTokenService();
+  RecordReplayAuthTokenService(const RecordReplayAuthTokenService&) = delete;
+  RecordReplayAuthTokenService& operator=(const RecordReplayAuthTokenService&) = delete;
+  ~RecordReplayAuthTokenService() override;
 
   void BindAuthTokenStore(
-      mojo::PendingReceiver<mojom::AuthTokenStore> store);
+      mojo::PendingReceiver<mojom::RecordReplayAuthTokenStore> store);
 
-  // mojom::AuthTokenStore:
+  // mojom::RecordReplayAuthTokenStore:
   void SetToken(const std::string& token) override;
-  void AddObserver(mojo::PendingRemote<mojom::AuthTokenStoreObserver> observer) override;
+  void AddObserver(mojo::PendingRemote<mojom::RecordReplayAuthTokenStoreObserver> observer) override;
 
 private:
-  mojo::ReceiverSet<mojom::AuthTokenStore> auth_token_stores_;
+  mojo::ReceiverSet<mojom::RecordReplayAuthTokenStore> auth_token_stores_;
 
   std::string token_;
 
   void NotifyObservers();
 
-  mojo::RemoteSet<mojom::AuthTokenStoreObserver> observers_;
+  mojo::RemoteSet<mojom::RecordReplayAuthTokenStoreObserver> observers_;
 };
 
 }  // namespace auth_token

@@ -374,9 +374,9 @@ namespace internal {
 
 using content::RegisterWebUIControllerInterfaceBinder;
 
-void BindAuthTokenStore(
+void BindRecordReplayAuthTokenStore(
     content::RenderFrameHost* frame_host,
-    mojo::PendingReceiver<auth_token::mojom::AuthTokenStore> receiver) {
+    mojo::PendingReceiver<auth_token::mojom::RecordReplayAuthTokenStore> receiver) {
 
   // we only bind the receiver if the frame's origin is app.replay.io
   if (frame_host->GetLastCommittedOrigin().host() != "app.replay.io") {
@@ -386,7 +386,7 @@ void BindAuthTokenStore(
   content::BrowserContext* browser_context =
       frame_host->GetProcess()->GetBrowserContext();
 
-  auth_token::AuthTokenServiceFactory::GetForBrowserContext(browser_context)
+  auth_token::RecordReplayAuthTokenServiceFactory::GetForBrowserContext(browser_context)
       ->BindAuthTokenStore(std::move(receiver));
 }
 
@@ -696,8 +696,8 @@ void PopulateChromeFrameBinders(
     mojo::BinderMapWithContext<content::RenderFrameHost*>* map,
     content::RenderFrameHost* render_frame_host) {
 
-  map->Add<auth_token::mojom::AuthTokenStore>(
-      base::BindRepeating(&BindAuthTokenStore));
+  map->Add<auth_token::mojom::RecordReplayAuthTokenStore>(
+      base::BindRepeating(&BindRecordReplayAuthTokenStore));
 
   map->Add<image_annotation::mojom::Annotator>(
       base::BindRepeating(&BindImageAnnotator));

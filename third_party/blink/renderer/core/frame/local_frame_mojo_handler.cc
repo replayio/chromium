@@ -507,7 +507,7 @@ LocalFrameMojoHandler::GetDevicePosture() {
   return current_device_posture_;
 }
 
-void LocalFrameMojoHandler::RegisterAuthTokenObserver() {
+void LocalFrameMojoHandler::RegisterRecordReplayAuthTokenObserver() {
   if (auth_token_store_.is_bound()) {
     return;
   }
@@ -568,7 +568,7 @@ void LocalFrameMojoHandler::BindToHighPriorityReceiver(
 
 void LocalFrameMojoHandler::BindAuthTokenStoreObserver(
       mojo::PendingReceiver<
-          auth_token::mojom::blink::AuthTokenStoreObserver> receiver) {
+          auth_token::mojom::blink::RecordReplayAuthTokenStoreObserver> receiver) {
  if (frame_->IsDetached())
     return;
 

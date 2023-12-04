@@ -15,21 +15,21 @@ class BrowserContext;
 
 namespace auth_token {
 
-class AuthTokenService;
+class RecordReplayAuthTokenService;
 
-// Factory to get or create an instance of AuthTokenService for a
+// Factory to get or create an instance of RecordReplayAuthTokenService for a
 // BrowserContext.
-class AuthTokenServiceFactory : public BrowserContextKeyedServiceFactory {
+class RecordReplayAuthTokenServiceFactory : public BrowserContextKeyedServiceFactory {
  public:
-  static AuthTokenService* GetForBrowserContext(
+  static RecordReplayAuthTokenService* GetForBrowserContext(
       content::BrowserContext* context);
 
  private:
-  friend class base::NoDestructor<AuthTokenServiceFactory>;
-  static AuthTokenServiceFactory* GetInstance();
+  friend class base::NoDestructor<RecordReplayAuthTokenServiceFactory>;
+  static RecordReplayAuthTokenServiceFactory* GetInstance();
 
-  AuthTokenServiceFactory();
-  ~AuthTokenServiceFactory() override;
+  RecordReplayAuthTokenServiceFactory();
+  ~RecordReplayAuthTokenServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory:
   KeyedService* BuildServiceInstanceFor(

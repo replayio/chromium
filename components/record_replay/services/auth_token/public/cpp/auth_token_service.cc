@@ -7,26 +7,26 @@
 
 namespace auth_token {
 
-AuthTokenService::AuthTokenService() = default;
-AuthTokenService::~AuthTokenService() = default;
+RecordReplayAuthTokenService::RecordReplayAuthTokenService() = default;
+RecordReplayAuthTokenService::~RecordReplayAuthTokenService() = default;
 
-void AuthTokenService::BindAuthTokenStore(
-    mojo::PendingReceiver<mojom::AuthTokenStore> store) {
+void RecordReplayAuthTokenService::BindAuthTokenStore(
+    mojo::PendingReceiver<mojom::RecordReplayAuthTokenStore> store) {
 
   auth_token_stores_.Add(this, std::move(store));
 }
 
-void AuthTokenService::SetToken(const std::string& token) {
+void RecordReplayAuthTokenService::SetToken(const std::string& token) {
   token_ = token;
   NotifyObservers();
 }
 
-void AuthTokenService::AddObserver(mojo::PendingRemote<mojom::AuthTokenStoreObserver> observer) {
+void RecordReplayAuthTokenService::AddObserver(mojo::PendingRemote<mojom::RecordReplayAuthTokenStoreObserver> observer) {
   observers_.Add(std::move(observer));
   NotifyObservers();
 }
 
-void AuthTokenService::NotifyObservers() {
+void RecordReplayAuthTokenService::NotifyObservers() {
   for (auto& observer : observers_) {
     observer->OnTokenChanged(token_);
   }

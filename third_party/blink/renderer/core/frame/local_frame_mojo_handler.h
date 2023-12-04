@@ -49,7 +49,7 @@ class LocalFrameMojoHandler
       public mojom::blink::HighPriorityLocalFrame,
       public mojom::blink::FullscreenVideoElementHandler,
       public device::mojom::blink::DevicePostureProviderClient,
-      public auth_token::mojom::blink::AuthTokenStoreObserver {
+      public auth_token::mojom::blink::RecordReplayAuthTokenStoreObserver {
  public:
   explicit LocalFrameMojoHandler(blink::LocalFrame& frame);
   void Trace(Visitor* visitor) const;
@@ -75,7 +75,7 @@ class LocalFrameMojoHandler
 
   device::mojom::blink::DevicePostureType GetDevicePosture();
 
-  void RegisterAuthTokenObserver();
+  void RegisterRecordReplayAuthTokenObserver();
  private:
   Page* GetPage() const;
   LocalDOMWindow* DomWindow() const;
@@ -92,7 +92,7 @@ class LocalFrameMojoHandler
           mojom::blink::FullscreenVideoElementHandler> receiver);
   void BindAuthTokenStoreObserver(
       mojo::PendingReceiver<
-          auth_token::mojom::blink::AuthTokenStoreObserver> receiver);
+          auth_token::mojom::blink::RecordReplayAuthTokenStoreObserver> receiver);
 
   // blink::mojom::LocalFrame overrides:
   void GetTextSurroundingSelection(
@@ -270,7 +270,7 @@ class LocalFrameMojoHandler
   HeapMojoAssociatedRemote<mojom::blink::LocalFrameHost>
       local_frame_host_remote_{nullptr};
 
-  HeapMojoRemote<auth_token::mojom::blink::AuthTokenStore>
+  HeapMojoRemote<auth_token::mojom::blink::RecordReplayAuthTokenStore>
       auth_token_store_{nullptr};
 
   // LocalFrameMojoHandler can be reused by multiple ExecutionContext.
@@ -288,7 +288,7 @@ class LocalFrameMojoHandler
                              LocalFrameMojoHandler>
       fullscreen_video_receiver_{this, nullptr};
   // LocalFrameMojoHandler can be reused by multiple ExecutionContext.
-  HeapMojoReceiver<auth_token::mojom::blink::AuthTokenStoreObserver,
+  HeapMojoReceiver<auth_token::mojom::blink::RecordReplayAuthTokenStoreObserver,
                    LocalFrameMojoHandler>
       auth_token_store_observer_receiver_{this, nullptr};
 

@@ -5495,7 +5495,7 @@ void RecordReplayEventListener::Invoke(ExecutionContext* context, Event* event) 
   //   message: { type: "connect" },
   // }
 
-  local_frame_->RegisterAuthTokenObserver();
+  local_frame_->RegisterRecordReplayAuthTokenObserver();
 }
 
 void RecordReplayEventListener::Trace(Visitor* visitor) const {

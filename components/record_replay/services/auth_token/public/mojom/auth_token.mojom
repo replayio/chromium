@@ -1,13 +1,13 @@
 module auth_token.mojom;
 
 // Interface to passing updated token around
-interface AuthTokenStore {
+interface RecordReplayAuthTokenStore {
   SetToken(string token);
 
-  AddObserver(pending_remote<AuthTokenStoreObserver> observer);
+  AddObserver(pending_remote<RecordReplayAuthTokenStoreObserver> observer);
   // how do we remove?
 };
 
-interface AuthTokenStoreObserver {
+interface RecordReplayAuthTokenStoreObserver {
   OnTokenChanged(string token);
 };

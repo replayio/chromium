@@ -26,7 +26,7 @@ void RecordReplayManagerHandler::SetManager(
 
 void RecordReplayManagerHandler::ApiKeyReceived(const std::string& api_key) {
   printf("RecordReplay [RUN-2866] ManagerHandler(%p)::ApiKeyReceived(%s)\n", this, api_key.c_str());
-  // Ideally this would use a mojo interface, but since both this code and the AuthTokenStore
+  // Ideally this would use a mojo interface, but since both this code and the RecordReplayAuthTokenStore
   // are in the browser process, we can just call it directly.
-  auth_token::AuthTokenServiceFactory::GetForBrowserContext(profile_)->SetToken(api_key);
+  auth_token::RecordReplayAuthTokenServiceFactory::GetForBrowserContext(profile_)->SetToken(api_key);
 }

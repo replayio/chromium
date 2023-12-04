@@ -114,7 +114,7 @@ class LocalWindowProxy final : public WindowProxy {
     return To<LocalFrame>(WindowProxy::GetFrame());
   }
 
-  mojo::Remote<auth_token::mojom::AuthTokenStore> auth_token_store_;
+  mojo::Remote<auth_token::mojom::RecordReplayAuthTokenStore> auth_token_store_;
   
   Member<RecordReplayEventListener> record_replay_listener_;
   Member<ScriptState> script_state_;
