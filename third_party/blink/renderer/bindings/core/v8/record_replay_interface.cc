@@ -5556,9 +5556,6 @@ void RecordReplayEventListener::Invoke(ExecutionContext* context, Event* event) 
     return;
   }
 
-  ExceptionState exception_state(isolate, ExceptionState::kExecutionContext,
-                                 "RecordReplayEventListener", "Invoke");
-
   v8::Local<v8::Value> detail = customEvent->detail(scriptState).V8Value();
   v8::Local<v8::String> detail_json;
   if (!detail->ToString(v8_context).ToLocal(&detail_json)) {
