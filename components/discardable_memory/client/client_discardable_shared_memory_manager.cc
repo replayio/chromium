@@ -98,13 +98,14 @@ ClientDiscardableSharedMemoryManager::DiscardableMemoryImpl::
 ClientDiscardableSharedMemoryManager::DiscardableMemoryImpl::
     ~DiscardableMemoryImpl() {
   base::AutoLock lock(manager_->lock_);
-  recordreplay::UnregisterPointer(this);
   if (!span_) {
     DCHECK(!is_locked());
+    recordreplay::UnregisterPointer(this);
     return;
   }
 
   manager_->UnlockAndReleaseMemory(this, std::move(span_));
+  recordreplay::UnregisterPointer(this);
 }
 
 bool ClientDiscardableSharedMemoryManager::DiscardableMemoryImpl::Lock() {
