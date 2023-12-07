@@ -90,7 +90,7 @@ function copyBuildFiles(srcDir, dstDir) {
       return true;
     }
 
-    if (extensions.some((extension) => file.endsWith(extension))) {
+    if (extensions.some(extension => file.endsWith(extension))) {
       return true;
     }
 
@@ -160,17 +160,32 @@ function prepareWindowsBinaries(buildId) {
 }
 
 function prepareMacOSBinaries(buildId) {
+  const buildArm = process.env.BUILD_ARM === "true";
   const buildIdDmgArchive = buildArm ? `${buildId}-arm.dmg` : `${buildId}.dmg`;
   const dmgArchive = buildArm ? "macos-chromium-arm.dmg" : "macos-chromium.dmg";
   const outdir = buildArm ? "out/Release-ARM" : "out/Release";
+  const chromiumAppPathOverride = !!process.env.REPLAY_CHROMIUM_APP;
+  const chromiumAppPath = chromiumAppPathOverride
+    ? process.env.REPLAY_CHROMIUM_APP
+    : path.join(outdir, "Chromium.app");
+
+  // Remove existing Replay-Chromium.app
   fs.rmSync(path.join(outdir, "Replay-Chromium.app"), {
     recursive: true,
     force: true,
   });
-  fs.renameSync(
-    path.join(outdir, "Chromium.app"),
-    path.join(outdir, "Replay-Chromium.app")
-  );
+
+  // Rename Chromium.app to Replay-Chromium.app
+  if (chromiumAppPathOverride) {
+    fs.mkdirSync(outdir, { recursive: true });
+    fs.cpSync(chromiumAppPath, path.join(outdir, "Replay-Chromium.app"), {
+      recursive: true,
+    });
+  } else {
+    fs.renameSync(chromiumAppPath, path.join(outdir, "Replay-Chromium.app"));
+  }
+
+  // Create DMG archive
   spawnChecked(
     "hdiutil",
     [
@@ -186,23 +201,22 @@ function prepareMacOSBinaries(buildId) {
     ],
     { cwd: outdir, stdio: "inherit" }
   );
-  const buildIdTarArchive = buildArm
-    ? `${buildId}-arm.tar.xz`
-    : `${buildId}.tar.xz`;
-  const tarArchive = buildArm
-    ? "macos-chromium-arm.tar.xz"
-    : "macos-chromium.tar.xz";
 
+  // Create TAR XZ archive
+  const buildIdTarArchive = buildArm ? `${buildId}-arm.tar.xz` : `${buildId}.tar.xz`;
+  const tarArchive = buildArm ? "macos-chromium-arm.tar.xz" : "macos-chromium.tar.xz";
   spawnChecked(
     "tar",
     ["cfJ", path.join(process.cwd(), buildIdTarArchive), "Replay-Chromium.app"],
     { cwd: outdir }
   );
-  fs.renameSync(
-    path.join(outdir, "Replay-Chromium.app"),
-    path.join(outdir, "Chromium.app")
-  );
 
+  if (!chromiumAppPathOverride) {
+    // Rename back to Chromium.app
+    fs.renameSync(path.join(outdir, "Replay-Chromium.app"), chromiumAppPath);
+  }
+
+  // Copy archives to final location
   fs.cpSync(buildIdDmgArchive, dmgArchive);
   fs.cpSync(buildIdTarArchive, tarArchive);
 
@@ -245,21 +259,14 @@ async function main(options) {
 
   // Perform all buildkite-specific stuff
   if (process.env["BUILDKITE"]) {
-    buildkiteStuff(
-      downloadUris,
-      platform,
-      buildId,
-      buildArm ? "arm64" : "x86_64"
-    );
+    buildkiteStuff(downloadUris, platform, buildId, buildArm ? "arm64" : "x86_64");
   }
 }
 
 function buildkiteStuff(downloadUris, platform, buildId, arch) {
   const markdownDownloadList = downloadUris
-    .map((uri) =>
-      uri.replace("s3://recordreplay-website", "https://static.replay.io")
-    )
-    .map((uri) => `* [${path.basename(uri)}](${uri})`)
+    .map(uri => uri.replace("s3://recordreplay-website", "https://static.replay.io"))
+    .map(uri => `* [${path.basename(uri)}](${uri})`)
     .join("\n");
 
   let markdownMessage = `# ${platform} (${arch}) links\n\n${markdownDownloadList}\n`;
@@ -292,9 +299,7 @@ function buildkiteStuff(downloadUris, platform, buildId, arch) {
     buildId
   );
 
-  log(
-    `Wrote build_id to ${BUILDKITE_ARTIFACT_DIRECTORY}/${BUILDKITE_BUILD_ID_ARTIFACT}`
-  );
+  log(`Wrote build_id to ${BUILDKITE_ARTIFACT_DIRECTORY}/${BUILDKITE_BUILD_ID_ARTIFACT}`);
 }
 
 function uploadArchives(buildArchives) {
@@ -329,10 +334,9 @@ function uploadArchives(buildArchives) {
 async function buildChromiumSymbols(options) {
   log(`ChromiumSymbols Start`);
 
-  const buildIdContents = fs.readFileSync(
-    `base/record_replay_driver.cc`,
-    "utf8"
-  );
+  const driverPath =
+    process.env.RECORD_REPLAY_DRIVER_PATH || "base/record_replay_driver.cc";
+  const buildIdContents = fs.readFileSync(driverPath, "utf8");
   const match = /gBuildId\[\] = "(.*?)"/.exec(buildIdContents);
 
   assert(match);
@@ -358,12 +362,20 @@ async function buildChromiumSymbols(options) {
   const pdbs = [];
   switch (currentPlatform()) {
     case Platform.macOS:
-      libraries.push(
-        `Chromium Framework.framework/Versions/Current/Chromium Framework`
-      );
+      if (process.env.REPLAY_CHROMIUM_LIBRARY) {
+        libraries.push(process.env.REPLAY_CHROMIUM_LIBRARY);
+      } else {
+        libraries.push(
+          `Chromium Framework.framework/Versions/Current/Chromium Framework`
+        );
+      }
       break;
     case Platform.linux:
-      libraries.push("chrome");
+      if (process.env.REPLAY_CHROMIUM_LIBRARY) {
+        libraries.push(process.env.REPLAY_CHROMIUM_LIBRARY);
+      } else {
+        libraries.push("chrome");
+      }
       break;
     case Platform.windows:
       libraries.push("chrome.dll", "chrome.exe");
@@ -373,9 +385,10 @@ async function buildChromiumSymbols(options) {
       throw new Error("NYI");
   }
 
+  const isRunningInBuck = !!process.env.BUCK2;
   const archiveFile = await buildSymbolsArchive(
     `${buildId}`,
-    path.join("out", "Release"),
+    isRunningInBuck ? "." : path.join("out", "Release"),
     libraries,
     options.useARM,
     pdbs
@@ -386,6 +399,10 @@ async function buildChromiumSymbols(options) {
 }
 
 function readShortRevision(branch = "HEAD") {
+  if (process.env.GIT_REVISION) {
+    return process.env.GIT_REVISION.trim().substring(0, 12);
+  }
+
   return spawnChecked("git", ["rev-parse", "--short=12", branch])
     .stdout.toString()
     .trim();
@@ -404,6 +421,9 @@ function buildDateStringToDate(buildDate) {
 }
 
 function getLinkerRevisionDate(revision = "HEAD", spawnOptions) {
+  if (process.env.REPLAY_LINKER_REVISION_DATE) {
+    return process.env.REPLAY_LINKER_REVISION_DATE;
+  }
   const dateString = spawnChecked(
     "git",
     ["show", revision, "--pretty=%cd", "--date=iso-strict", "--no-patch"],
@@ -417,12 +437,7 @@ function getLinkerRevisionDate(revision = "HEAD", spawnOptions) {
   return new Date(dateString).toISOString().substring(0, 10).replace(/-/g, "");
 }
 
-function computeBuildId(
-  runtimeName,
-  runtimeRevision,
-  driverRevision,
-  buildIdExtension
-) {
+function computeBuildId(runtimeName, runtimeRevision, driverRevision, buildIdExtension) {
   // Download the archive for this driver revision, using the latest version
   // if no revision was specified.
   let driverJSONStr = "";
@@ -444,11 +459,7 @@ function computeBuildId(
     }
     spawnChecked(
       "curl",
-      [
-        `https://static.replay.io/downloads/${downloadArchive}`,
-        "-o",
-        driverArchive,
-      ],
+      [`https://static.replay.io/downloads/${downloadArchive}`, "-o", driverArchive],
       { stdio: "inherit" }
     );
 
@@ -459,8 +470,7 @@ function computeBuildId(
     fs.unlinkSync(driverFile);
     fs.unlinkSync(driverJSONFile);
   }
-  const { revision: archiveDriverRevision, date: driverDate } =
-    JSON.parse(driverJSONStr);
+  const { revision: archiveDriverRevision, date: driverDate } = JSON.parse(driverJSONStr);
 
   if (driverRevision) {
     assert(driverRevision == archiveDriverRevision);
@@ -491,16 +501,28 @@ async function buildSymbolsArchive(
   for (let i = 0; i < libraries.length; i++) {
     const lib = libraries[i];
     const name = path.basename(lib);
-    const file = path.join(objectDirectory, lib);
-    assert(fs.existsSync(file), `Missing binary for symbols archive ${file}`);
+    let file;
+
+    if (process.env.REPLAY_CHROMIUM_APP) {
+      file = process.env.REPLAY_CHROMIUM_APP;
+    } else {
+      // Use default location in out directory
+      file = path.join(objectDirectory, lib);
+    }
+
+    console.log(`Reading symbols from ${file}`);
+
+    assert(
+      fs.existsSync(file),
+      `Missing binary for symbols archive ${file} in ${process.cwd()}`
+    );
+
     let pdbFile;
     if (pdbs[i]) {
       pdbFile = path.join(objectDirectory, pdbs[i]);
-      assert(
-        fs.existsSync(pdbFile),
-        `Missing PDB for symbols archive ${pdbFile}`
-      );
+      assert(fs.existsSync(pdbFile), `Missing PDB for symbols archive ${pdbFile}`);
     }
+
     const symbols = await readSymbols(file, pdbFile);
     json[name] = symbols;
   }
@@ -517,8 +539,7 @@ async function buildSymbolsArchive(
 }
 
 const buildIdExtension =
-  process.env["BUILDKITE_BRANCH"] !==
-  process.env["BUILDKITE_PIPELINE_DEFAULT_BRANCH"]
+  process.env["BUILDKITE_BRANCH"] !== process.env["BUILDKITE_PIPELINE_DEFAULT_BRANCH"]
     ? "-dev"
     : process.env["LOCAL_DEVELOPER_BUILD_EXTENSION"] || "";
 const useARM = !!process.env.REPLAY_BUILD_ARM;
