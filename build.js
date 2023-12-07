@@ -119,6 +119,20 @@ namespace recordreplay {
 `
 );
 
+fs.writeFileSync(
+  `${__dirname}/base/record_replay_driver.h`,
+  `
+#ifndef BASE_RECORD_REPLAY_DRIVER_H_
+#define BASE_RECORD_REPLAY_DRIVER_H_
+
+namespace recordreplay {
+  extern char gBuildId[];
+}
+
+#endif // BASE_RECORD_REPLAY_DRIVER_H_
+`
+);
+
 const useGoma = !process.env.NO_GOMA;
 const goma_ctl = currentPlatform() == "windows" ? "goma_ctl.bat" : "goma_ctl";
 if (useGoma) {
