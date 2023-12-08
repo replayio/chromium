@@ -890,8 +890,6 @@ function clearPauseDataCallback() {
  * @see https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#type-RemoteObject
  */
 function makeDebuggeeValue(plainValue) {
-  assert(plainValue && typeof plainValue === "object",
-    `value is not an object: ${!plainValue ? plainValue : typeof plainValue}`);
   const remoteObject = fromJsMakeDebuggeeValue(plainValue);
   return remoteObject;
 }
@@ -906,6 +904,8 @@ function createRrpValueRaw(plainValue) {
  * @return {number}
  */
 function registerPlainObject(plainObject) {
+  assert(plainObject && typeof plainObject === "object",
+    `value is not an object: ${!plainObject ? plainObject : typeof plainObject}`);
   let rrpId = gRrpIdByPlainObject.get(plainObject);
   if (!rrpId) {
     // → ask V8InspectorSession to wrap plainObject (gets CDP.Runtime.RemoteObject)
