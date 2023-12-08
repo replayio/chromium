@@ -52,7 +52,9 @@ class BrowserProxy {
   }
 }
 
+/*
 document.addEventListener("DOMContentLoaded", () => {
   console.error("[RUN-2886] DOMContentLoaded");
   browserProxy = new BrowserProxy();
 });
+*/

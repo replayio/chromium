@@ -884,8 +884,9 @@ void PopulateChromeWebUIFrameBinders(
   RegisterWebUIControllerInterfaceBinder<::mojom::OmniboxPageHandler,
                                          OmniboxUI>(map);
 
-  RegisterWebUIControllerInterfaceBinder<::mojom::RecordReplayManagerHandler,
-                                         RecordReplayUI>(map);
+  // DISABLE TO TEST AGAINST RUN-2938
+  // RegisterWebUIControllerInterfaceBinder<::mojom::RecordReplayManagerHandler,
+  //                                        RecordReplayUI>(map);
 
   RegisterWebUIControllerInterfaceBinder<
       site_engagement::mojom::SiteEngagementDetailsProvider, SiteEngagementUI>(

@@ -13,7 +13,7 @@
 
 RecordReplayUI::RecordReplayUI(
     content::WebUI* web_ui)
-    : ui::MojoWebUIController(web_ui, /*enable_chrome_send=*/true) {
+    : ui::MojoWebUIController(web_ui) {
   content::WebUIDataSource* data_source =
       content::WebUIDataSource::CreateAndAdd(
           web_ui->GetWebContents()->GetBrowserContext(),
