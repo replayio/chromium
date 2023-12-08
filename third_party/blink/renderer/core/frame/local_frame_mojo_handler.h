@@ -75,7 +75,14 @@ class LocalFrameMojoHandler
 
   device::mojom::blink::DevicePostureType GetDevicePosture();
 
-  void RegisterRecordReplayAuthTokenObserver();
+  void RecordReplayEnsureAuthTokenStore();
+  void RecordReplayRegisterAuthTokenObserver();
+  void RecordReplayLogin();
+  void RecordReplaySetToken(const WTF::String& token);
+  void RecordReplayClearToken();
+  void RecordReplaySetUser(const WTF::String& user);
+  void RecordReplayClearUser();
+
  private:
   Page* GetPage() const;
   LocalDOMWindow* DomWindow() const;
