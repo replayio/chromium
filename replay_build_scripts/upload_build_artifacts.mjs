@@ -421,8 +421,8 @@ function buildDateStringToDate(buildDate) {
 }
 
 function getLinkerRevisionDate(revision = "HEAD", spawnOptions) {
-  if (process.env.REPLAY_LINKER_REVISION_DATE) {
-    return process.env.REPLAY_LINKER_REVISION_DATE;
+  if (process.env.REPLAY_LINKER_REVISION_DATE_PATH) {
+    return fs.readFileSync(process.env.REPLAY_LINKER_REVISION_DATE_PATH, "utf8").trim();
   }
   const dateString = spawnChecked(
     "git",
