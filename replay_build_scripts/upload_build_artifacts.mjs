@@ -160,7 +160,7 @@ function prepareWindowsBinaries(buildId) {
 }
 
 function prepareMacOSBinaries(buildId) {
-  const buildArm = process.env.BUILD_ARM === "true";
+  const buildArm = process.env.REPLAY_BUILD_ARM === "true";
   const buildIdDmgArchive = buildArm ? `${buildId}-arm.dmg` : `${buildId}.dmg`;
   const dmgArchive = buildArm ? "macos-chromium-arm.dmg" : "macos-chromium.dmg";
   const outdir = buildArm ? "out/Release-ARM" : "out/Release";
