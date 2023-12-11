@@ -381,10 +381,6 @@ void DedicatedWorkerGlobalScope::postMessage(ScriptState* script_state,
   transferable_message.sender_origin =
       GetExecutionContext()->GetSecurityOrigin()->IsolatedCopy();
 
-  recordreplay::Assert("[RUN-2037-3011] DedicatedWorkerGlobalScope::postMessage %zu %u",
-    serialized_message->DataLengthInBytes(),
-    transferable_message.sender_origin->ToString().length());
-
   // Disentangle the port in preparation for sending it to the remote context.
   transferable_message.ports = MessagePort::DisentanglePorts(
       ExecutionContext::From(script_state), transferables.message_ports,
