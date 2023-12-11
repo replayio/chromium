@@ -15,6 +15,7 @@ source_set("lib") {
   deps = [
     "//base",
     "//mojo/public/cpp/bindings",
+    "//content/public/browser:browser",
   ]
 
   public_deps = [
