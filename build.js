@@ -125,9 +125,7 @@ fs.writeFileSync(
 #ifndef BASE_RECORD_REPLAY_DRIVER_H_
 #define BASE_RECORD_REPLAY_DRIVER_H_
 
-namespace recordreplay {
-  extern char gBuildId[];
-}
+#define RECORD_REPLAY_BUILD_ID "${buildId}"
 
 #endif // BASE_RECORD_REPLAY_DRIVER_H_
 `
