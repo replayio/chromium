@@ -1,6 +1,8 @@
 #!/bin/bash
 
-if [ -n "${BUILDKITE}" ]; then
+set -eu
+
+if [ -n "${BUILDKITE-}" ]; then
     buildkite-agent artifact download build_id/linux/x86_64/build_id ./
     BUILD_ID=$(cat build_id/linux/x86_64/build_id)
 
