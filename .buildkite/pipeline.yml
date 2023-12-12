@@ -148,7 +148,7 @@ steps:
       - seek-oss/aws-sm#v2.3.1:
           region: us-east-2
           env:
-            GITHUB_AUTH_SECRET: "prod/metabase-github-secret"
+            GITHUB_AUTH_SECRET: "prod/devtools-github-secret"
             BUILDEVENT_APIKEY: honeycomb-api-key
             BUILDEVENT_BUILDKITE_API_TOKEN: buildkite-api-token-honeycomb-build-events
       - replayio/buildevents#adb8a05: ~
