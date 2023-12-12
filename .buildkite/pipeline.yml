@@ -136,7 +136,7 @@ steps:
     command: "be_cmd metabase-tests -- /home/ubuntu/chromium/src/replay_build_scripts/metabase.sh"
 
   - label: "Trigger Devtools E2E Tests"
-    key: "metabase-test-suite"
+    key: "devtools-test-suite"
     soft_fail: true
     depends_on: "build-chromium-linux-x86_64"
     plugins:
