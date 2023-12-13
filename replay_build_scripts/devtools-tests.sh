@@ -91,3 +91,7 @@ while [[ $iter -le $ITER_COUNT ]]; do
     echo "Run '${EXPECTED_RUN_NAME}' not present in workflow run list"
   fi
 done
+
+echo "GH workflow run didn't complete in time.  failing this step."
+echo "If builds need to take longer, increase the iteration count or sleep time per iteration"
+exit -1
