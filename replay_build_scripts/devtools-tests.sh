@@ -72,7 +72,7 @@ while [[ $iter -le $ITER_COUNT ]]; do
       url_annotation_done="yes"
       echo "Github workflow run url: ${RUN_URL}"
       if [ -n "${BUILDKITE}" ]; then
-        buildkite-agent annotate --context tests "${GH_URL}"
+        buildkite-agent annotate --context tests "${RUN_URL}"
       fi
     fi
 
