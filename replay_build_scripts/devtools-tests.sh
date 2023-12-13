@@ -10,7 +10,7 @@ if [ -n "${BUILDKITE-}" ]; then
         echo "Unable to retrieve build id from buildkite agent"
         exit 1
     fi
-    RUN_ID="$BUILDKITE_PIPELINE_SLUG/$BUILDKITE_BUILD_NUM"
+    RUN_ID="$BUILDKITE_PIPELINE_SLUG/$BUILDKITE_BUILD_NUMBER"
 else
     BUILD_ID=$1
     if [ -z "${BUILD_ID}" ]; then
