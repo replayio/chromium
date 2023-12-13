@@ -661,22 +661,39 @@ function handleEvalError(err) {
   };
 }
 
-function getCurrentFrameByIndex(frameIndex) {
+let gCurrentEvaluateFrame;
+
+/**
+ * This queries all frames and returns the frame of given index.
+ * @param {number} frameIndex
+ */
+function getFrameByIndex(frameIndex) {
   const frames = getStackFrames();
   assert(frameIndex >= 0 && frameIndex < frames.length, `Invalid frame index: ${frameIndex}`);
   return frames[frameIndex];
 }
 
+/**
+ * Returns the frame that `Pause.evaluateInFrame` was called on or undefined,
+ * if not in the context of a `Pause.evaluateInFrame` call.
+ */
+function getCurrentEvaluateFrame() {
+  return gCurrentEvaluateFrame;
+}
+
 function Pause_evaluateInFrame({ frameId: frameIndexStr, expression }) {
   const frameIndex = +frameIndexStr;
-  const frame = getCurrentFrameByIndex(frameIndex);
+  const frame = getFrameByIndex(frameIndex);
+  gCurrentEvaluateFrame = frame;
   let rv;
   try {
     rv = doEvaluation();
+    return buildRrpObjectResult(rv);
   } catch (err) {
     return handleEvalError(err);
+  } finally {
+    gCurrentEvaluateFrame = undefined;
   }
-  return buildRrpObjectResult(rv);
 
   function doEvaluation() {
     // In order to do the evaluation in the right frame, the same number of
@@ -1053,16 +1070,31 @@ function registerRrpCpdId(rrpId, cdpId, cdpObject = null) {
   }
 }
 
-/** "Universal `arguments`" for any frame:
+/**
+ * "Universal `arguments`" for any frame:
  * `arguments` are available by default in many function frames. However,
  * arrow functions do not have `arguments` available.
  * This function provides `arguments` for any type of frame.
+ * @param {number | object | undefined} [frameOrFrameIndex] Optional frame argument. If none provided, pick the frame that the current Pause.evaluateInFrame call was requested for.
  * @see https://linear.app/replay/issue/RUN-1061#comment-fc1c3ee4
  * @see https://linear.app/replay/issue/RUN-2969/arrow-functions-the-arguments-keyword-and-chromium-vs-gecko#comment-989283b0
  */
-function getFrameArgumentsArray(frameIndex) {
-  const frame = getCurrentFrameByIndex(frameIndex);
-  const args = fromJsGetArgumentsInFrame(frame.callFrameId);
+function getFrameArgumentsArray(frameOrFrameIndex) {
+  let frame;
+  if (typeof frameOrFrameIndex === "number") {
+    frame = getFrameByIndex(frameIndex);
+  } else if (isObject(frameOrFrameIndex) && frameOrFrameIndex.callFrameId) {
+    frame = frameOrFrameIndex;
+  } else if (!frameOrFrameIndex) {
+    frame = gCurrentEvaluateFrame;
+    if (!frame) {
+      throw new Error(`getFrameArgumentsArray must be called with a frame` +
+        `object, frameIndex, or, if none provided, must be called from within ` +
+        `the context of a Pause.evaluateInFrame call.`);
+    }
+  }
+  const frameId = frame.callFrameId;
+  const args = fromJsGetArgumentsInFrame(frameId);
   return args && [...args] || [];
 }
 
@@ -3018,9 +3050,8 @@ Object.assign(__RECORD_REPLAY__, {
   getObjectFromProtocolId(rrpId) {
     return getPlainObjectByRrpId(rrpId);
   },
-  getFrameArgumentsArray(frameIndex) {
-    return getFrameArgumentsArray(frameIndex);
-  }
+  getFrameByIndex,
+  getCurrentEvaluateFrame
 });
 
 } catch (e) {
