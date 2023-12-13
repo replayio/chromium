@@ -661,19 +661,15 @@ function handleEvalError(err) {
   };
 }
 
-function Pause_evaluateInFrame({ frameId, expression }) {
+function getCurrentFrameByIndex(frameIndex) {
   const frames = getStackFrames();
-  const index = +frameId;
-  assert(index < frames.length);
-  const frame = frames[index];
+  assert(frameIndex >= 0 && frameIndex < frames.length, `Invalid frame index: ${frameIndex}`);
+  return frames[frameIndex];
+}
 
-  if (expression === '[...arguments]') {
-    // Short-circuit hackfix: Get array of arguments, no matter where we are.
-    const argsArray = getFrameArgumentsArray(frameId);
-    const argsCdp = makeDebuggeeValue(argsArray);
-    return buildRrpObjectResult({ result: argsCdp });
-  }
-
+function Pause_evaluateInFrame({ frameId: frameIndexStr, expression }) {
+  const frameIndex = +frameIndexStr;
+  const frame = getCurrentFrameByIndex(frameIndex);
   let rv;
   try {
     rv = doEvaluation();
@@ -1057,14 +1053,15 @@ function registerRrpCpdId(rrpId, cdpId, cdpObject = null) {
   }
 }
 
-function getFrameArgumentsArray(frameId) {
-  // "Universal `arguments`" for any frame: This
-  // serves to allow the `MAPPER` used by the `devtools` event analysis
-  // to get all arguments for any JS event callback. `arguments` are available
-  // by default in many function frames. However, arrow functions do not
-  // support them. This "solution" makes sure, `[...arguments]` are
-  // always available.
-  // See: https://linear.app/replay/issue/RUN-1061#comment-fc1c3ee4
+/** "Universal `arguments`" for any frame:
+ * `arguments` are available by default in many function frames. However,
+ * arrow functions do not have `arguments` available.
+ * This function provides `arguments` for any type of frame.
+ * @see https://linear.app/replay/issue/RUN-1061#comment-fc1c3ee4
+ * @see https://linear.app/replay/issue/RUN-2969/arrow-functions-the-arguments-keyword-and-chromium-vs-gecko#comment-989283b0
+ */
+function getFrameArgumentsArray(frameIndex) {
+  const frame = getCurrentFrameByIndex(frameIndex);
   const args = fromJsGetArgumentsInFrame(frame.callFrameId);
   return args && [...args] || [];
 }
@@ -3021,8 +3018,8 @@ Object.assign(__RECORD_REPLAY__, {
   getObjectFromProtocolId(rrpId) {
     return getPlainObjectByRrpId(rrpId);
   },
-  getFrameArgumentsArray(frameId) {
-    return getFrameArgumentsArray(frameId);
+  getFrameArgumentsArray(frameIndex) {
+    return getFrameArgumentsArray(frameIndex);
   }
 });
 
