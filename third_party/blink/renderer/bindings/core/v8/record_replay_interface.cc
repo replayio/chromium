@@ -458,6 +458,7 @@ function commandCallback(method, params) {
     };
   }
 }
+const executeCommand = commandCallback;
 
 function Target_evaluatePrivileged({ expression }) {
   const result = eval(expression);
@@ -596,7 +597,7 @@ function Target_topFrameLocation() {
     throw e;
   }
 
-  return { location: createProtocolLocation(location)[0] };
+  return { location: createProtocolLocation(location) };
 }
 
 /**
@@ -633,13 +634,12 @@ function buildRrpObjectResult(cdpReturnValue) {
     const { result: cdpResult, exceptionDetails } = cdpReturnValue;
     if (exceptionDetails) {
       // exceptionDetails encapsulate a JS exception thrown while handling the command.
-      const rrpId = buildRrpObjectFromCdpObject(exceptionDetails);
-      rrpResult.exception = rrpId;
-    }
-    if (cdpResult) {
+      const objectResult = buildRrpObjectFromCdpObject(exceptionDetails);
+      rrpResult.exception = objectResult;
+    } else if (cdpResult) {
       // cdpResult is the actual result RemoteObject.
-      const rrpId = buildRrpObjectFromCdpObject(cdpResult);
-      rrpResult.returned = rrpId;
+      const objectResult = buildRrpObjectFromCdpObject(cdpResult);
+      rrpResult.returned = objectResult;
     }
   } else {
     // Sometimes things go wrong.
@@ -726,6 +726,13 @@ function Pause_evaluateInGlobal({ expression }) {
     return handleEvalError(err);
   }
   return buildRrpObjectResult(rv);
+}
+
+function evaluateInCurrentFrame(expression) {
+  return executeCommand("Pause.evaluateInFrame", {
+    frameId: 0,
+    expression
+  });
 }
 
 function Pause_getAllFrames() {
@@ -1006,7 +1013,7 @@ function registerCdpObject(cdpObject) {
 function getCdpObjectByRrpId(rrpId) {
   const cdpObject = gCdpObjectsByRrpId.get(rrpId);
   if (!cdpObject) {
-    throw new Error(`getCdpObjectByRrpId failed - rrpId not found: "${rrpId}"`);
+    throw new Error(`getCdpObjectByRrpId failed - rrpId not found: JSON.stringify(${rrpId})`);
   }
   return cdpObject;
 }
@@ -1152,6 +1159,7 @@ function buildRrpObjectFromCdpObject(cdpObject) {
     case "symbol":
       return { symbol: cdpObject.description };
     default:
+      log(`[RuntimeError] invalid CDP type: ${JSON_stringify(cdpObject)}`);
       return { unavailable: true };
   }
 }
@@ -1196,6 +1204,7 @@ function isCdpObjectProxy(cdpObj) {
  * @see https://static.replay.io/protocol/tot/Pause/#type-Object
  */
 function createPauseObject(rrpId, level) {
+  rrpId = rrpId + ""; // Must be a string.
   const existingPreview = gObjectPreviewByRrpId.get(rrpId);
   if (existingPreview) {
     return existingPreview;
@@ -3050,9 +3059,39 @@ Object.assign(__RECORD_REPLAY__, {
   getObjectFromProtocolId(rrpId) {
     return getPlainObjectByRrpId(rrpId);
   },
+  executeCommand,
+  evaluateInCurrentFrame,
   getFrameByIndex,
-  getCurrentEvaluateFrame
+  getFrameArgumentsArray,
+  getCurrentEvaluateFrame,
+  replayEval
 });
+
+/**
+ * Execute a function but only when replaying and with events disallowed.
+ */
+function replayEval(fn) {
+  const {
+    beginDisallowEvents,
+    endDisallowEvents
+  } = __RECORD_REPLAY_ARGUMENTS__;
+  beginDisallowEvents("replayEval");
+  try {
+    // We cannot currently avoid a user-supplied function from getting
+    // instrumented. Stringifying and evaling it with events disallowed
+    // fixes that problem.
+    let fnExpr = fn.toString().trim();
+    eval(`(${fnExpr})()`);
+  } catch (err) {
+    // Note: We MUST NOT let this error escape, or it will cause a mismatch in
+    // `Runtime_UnwindAndFindExceptionHandler`.
+    // TODO: We should just crash here, since its the responsibility of the
+    // caller of replayEval to make sure the cb won't throw.
+    warning(`replayEval ERROR: ${err?.stack || err}`);
+  } finally {
+    endDisallowEvents();
+  }
+}
 
 } catch (e) {
   log(`Error: Initialization exception ${e}`);
@@ -5190,6 +5229,20 @@ static void fromJsGetFunctionBytecode(
   args.GetReturnValue().Set(rv);
 }
 
+static void fromJsBeginDisallowEvents(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsString() &&
+        "[RuntimeError] must be called with a single string");
+
+  v8::String::Utf8Value label(args.GetIsolate(), args[0]);
+  recordreplay::BeginDisallowEventsWithLabel(*label);
+}
+
+static void fromJsEndDisallowEvents(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  recordreplay::EndDisallowEvents();
+}
+
 /** ###########################################################################
  * misc
  * ##########################################################################*/
@@ -5396,7 +5449,15 @@ void OnNewWindow1(v8::Isolate* isolate, LocalFrame* localFrame) {
   SetFunctionProperty(isolate, args, "getFunctionBytecode",
                       fromJsGetFunctionBytecode);
 
-  // unsorted RR stuff
+  // Replay meta.
+  DefineProperty(isolate, args, "IsReplaying",
+                 v8::Boolean::New(isolate, recordreplay::IsReplaying()));
+  SetFunctionProperty(isolate, args, "beginDisallowEvents",
+                      fromJsBeginDisallowEvents);
+  SetFunctionProperty(isolate, args, "endDisallowEvents",
+                      fromJsEndDisallowEvents);
+
+  // unsorted Replay stuff
   SetFunctionProperty(
       isolate, args, "setClearPauseDataCallback",
       v8::FunctionCallbackRecordReplaySetClearPauseDataCallback);
