@@ -437,8 +437,8 @@ void LocalFrameMojoHandler::Trace(Visitor* visitor) const {
   visitor->Trace(high_priority_frame_receiver_);
   visitor->Trace(fullscreen_video_receiver_);
   visitor->Trace(device_posture_receiver_);
-  visitor->Trace(auth_token_store_);
-  visitor->Trace(auth_token_store_observer_receiver_);
+  visitor->Trace(record_replay_auth_token_store_);
+  visitor->Trace(record_replay_observer_receiver_);
 }
 
 void LocalFrameMojoHandler::WasAttachedAsLocalMainFrame() {
@@ -508,51 +508,49 @@ LocalFrameMojoHandler::GetDevicePosture() {
 }
 
 void LocalFrameMojoHandler::RecordReplayEnsureAuthTokenStore() {
-  if (auth_token_store_.is_bound()) {
+  if (record_replay_auth_token_store_.is_bound()) {
     return;
   }
 
   auto task_runner = frame_->GetTaskRunner(TaskType::kInternalDefault);
   frame_->GetBrowserInterfaceBroker().GetInterface(
-      auth_token_store_.BindNewPipeAndPassReceiver(task_runner));
+      record_replay_auth_token_store_.BindNewPipeAndPassReceiver(task_runner));
 }
 
 void LocalFrameMojoHandler::RecordReplayRegisterAuthTokenObserver() {
-  // include this extra is_bound() check to make sure we only register the
-  // observer once.
-  if (auth_token_store_.is_bound()) {
+  if (record_replay_observer_receiver_.is_bound()) {
     return;
   }
 
   RecordReplayEnsureAuthTokenStore();
   auto task_runner = frame_->GetTaskRunner(TaskType::kInternalDefault);
-  auth_token_store_->AddObserver(
-      auth_token_store_observer_receiver_.BindNewPipeAndPassRemote(task_runner));
+  record_replay_auth_token_store_->AddObserver(
+      record_replay_observer_receiver_.BindNewPipeAndPassRemote(task_runner));
 }
 
 void LocalFrameMojoHandler::RecordReplayLogin() {
   RecordReplayEnsureAuthTokenStore();
-  auth_token_store_->Login();
+  record_replay_auth_token_store_->Login();
 }
 
 void LocalFrameMojoHandler::RecordReplaySetToken(const WTF::String& token) {
   RecordReplayEnsureAuthTokenStore();
-  auth_token_store_->SetToken(token);
+  record_replay_auth_token_store_->SetToken(token);
 }
 
 void LocalFrameMojoHandler::RecordReplayClearToken() {
   RecordReplayEnsureAuthTokenStore();
-  auth_token_store_->ClearToken();
+  record_replay_auth_token_store_->ClearToken();
 }
 
 void LocalFrameMojoHandler::RecordReplaySetUser(const WTF::String& token) {
   RecordReplayEnsureAuthTokenStore();
-  auth_token_store_->SetUser(token);
+  record_replay_auth_token_store_->SetUser(token);
 }
 
 void LocalFrameMojoHandler::RecordReplayClearUser() {
   RecordReplayEnsureAuthTokenStore();
-  auth_token_store_->ClearUser();
+  record_replay_auth_token_store_->ClearUser();
 }
 
 Page* LocalFrameMojoHandler::GetPage() const {
@@ -607,7 +605,7 @@ void LocalFrameMojoHandler::BindRecordReplayAuthTokenStoreObserver(
  if (frame_->IsDetached())
     return;
 
-  auth_token_store_observer_receiver_.Bind(
+  record_replay_observer_receiver_.Bind(
       std::move(receiver), frame_->GetTaskRunner(TaskType::kInternalDefault));
 }
 
