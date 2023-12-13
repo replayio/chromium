@@ -27,7 +27,7 @@ fi
 
 
 # TODO(toshok) when/if the devtools PR (https://github.com/replayio/devtools/pull/10001) lands, change the ref here to `main`
-INPUTS='{"ref":"toshok/accept-run-id","inputs":{"runId":"'${RUN_ID}'","linuxBuildFile":"'${BUILD_ID}'.tar.xz"}}'
+INPUTS='{"ref":"main","inputs":{"runId":"'${RUN_ID}'","linuxBuildFile":"'${BUILD_ID}'.tar.xz"}}'
 echo "Running devtools tests on GitHub with inputs: ${INPUTS}"
 
 curl -L -s \
