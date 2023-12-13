@@ -5,7 +5,7 @@
 import("//mojo/public/tools/bindings/mojom.gni")
 
 mojom("mojom") {
-  sources = [ "auth_token.mojom" ]
+  sources = [ "record_replay.mojom" ]
 
 #  public_deps = [ "//sandbox/policy/mojom" ]
 

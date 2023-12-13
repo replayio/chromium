@@ -6,10 +6,10 @@ assert(!is_android && !is_ios)
 
 source_set("lib") {
   sources = [
-    "public/cpp/auth_token_service.cc",
-    "public/cpp/auth_token_service.h",
-    "public/cpp/auth_token_service_factory.cc",
-    "public/cpp/auth_token_service_factory.h",
+    "public/cpp/record_replay_service.cc",
+    "public/cpp/record_replay_service.h",
+    "public/cpp/record_replay_service_factory.cc",
+    "public/cpp/record_replay_service_factory.h",
   ]
 
   deps = [
@@ -19,6 +19,6 @@ source_set("lib") {
   ]
 
   public_deps = [
-    "//components/record_replay/services/auth_token/public/mojom",
+    "//components/record_replay/services/record_replay/public/mojom",
   ]
 }
