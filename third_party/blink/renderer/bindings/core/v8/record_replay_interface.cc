@@ -92,6 +92,11 @@ static const char REPLAY_CDT_PAUSE_OBJECT_GROUP[] =
     "REPLAY_CDT_PAUSE_OBJECT_GROUP";
 
 
+static bool IsGReplayScriptEnabled() {
+  return recordreplay::IsReplaying() ||
+         !recordreplay::FeatureEnabled("replay-only-gReplayScript");
+}
+
 static LocalFrame* GetLocalFrameRoot(v8::Isolate* isolate) {
   LocalDOMWindow* currentWindow = CurrentDOMWindow(isolate);
 
@@ -350,9 +355,8 @@ function addEventListener(method, callback) {
 function messageCallback(message) {
   try {
     message = JSON_parse(message);
-
     if (message.id) {
-      assert(message.id == gCurrentMessageId);
+      assert(message.id == gCurrentMessageId, "Cannot execute commands recursively.");
       gCurrentMessageResult = message;
     } else {
       const listener = gEventListeners.get(message.method);
@@ -684,6 +688,7 @@ function getCurrentEvaluateFrame() {
 function Pause_evaluateInFrame({ frameId: frameIndexStr, expression }) {
   const frameIndex = +frameIndexStr;
   const frame = getFrameByIndex(frameIndex);
+  log(`DDBG Pause_evaluateInFrame(${frameIndex}): ${frame.callFrameId} ${JSON_stringify(frame.location)}`);
   gCurrentEvaluateFrame = frame;
   let rv;
   try {
@@ -731,7 +736,8 @@ function Pause_evaluateInGlobal({ expression }) {
 function evaluateInCurrentFrame(expression) {
   return executeCommand("Pause.evaluateInFrame", {
     frameId: 0,
-    expression
+    expression,
+        objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
   });
 }
 
@@ -1013,7 +1019,7 @@ function registerCdpObject(cdpObject) {
 function getCdpObjectByRrpId(rrpId) {
   const cdpObject = gCdpObjectsByRrpId.get(rrpId);
   if (!cdpObject) {
-    throw new Error(`getCdpObjectByRrpId failed - rrpId not found: JSON.stringify(${rrpId})`);
+    throw new Error(`getCdpObjectByRrpId failed - rrpId not found: ${JSON.stringify(rrpId)}`);
   }
   return cdpObject;
 }
@@ -3060,9 +3066,10 @@ Object.assign(__RECORD_REPLAY__, {
     return getPlainObjectByRrpId(rrpId);
   },
   executeCommand,
-  evaluateInCurrentFrame,
-  getFrameByIndex,
+  log,
+  warning,
   getFrameArgumentsArray,
+  evaluateInCurrentFrame,
   getCurrentEvaluateFrame,
   replayEval
 });
@@ -3878,7 +3885,7 @@ InspectorData* getInspectorFor(v8::Isolate* isolate, int contextGroupId) {
  */
 v8_inspector::V8InspectorSession* getInspectorSession(v8::Isolate* isolate, int currentContextId) {
   CHECK(v8::IsMainThread());
-  CHECK(recordreplay::IsReplaying());
+  CHECK(IsGReplayScriptEnabled());
   CHECK(gV8Inspectors);
 
   v8_inspector::V8Inspector* inspector = (*gV8Inspectors)[isolate];
@@ -3899,7 +3906,7 @@ v8_inspector::V8InspectorSession* getInspectorSession(v8::Isolate* isolate, int 
 void
 RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
                                 v8::Isolate* isolate) {
-  if (v8::IsMainThread() && recordreplay::IsReplaying()) {
+  if (v8::IsMainThread() && IsGReplayScriptEnabled()) {
     if (!gV8Inspectors) {
       gV8Inspectors = new std::unordered_map<v8::Isolate*,v8_inspector::V8Inspector*>();
       gInspectorData = new std::unordered_map<v8::Isolate*, ContextGroupIdInspectorMap*>();
@@ -4455,6 +4462,7 @@ static void fromJsGetArgumentsInFrame(
   const uint8_t* frameIdPtr = reinterpret_cast<const uint8_t*>(*frameId);
   v8_inspector::StringView frameIdV8(frameIdPtr, frameId.length());
 
+  recordreplay::Print("DDBG fromJsGetArgumentsInFrame HGELLOO %s", *frameId);
   auto result = getInspectorSession(isolate, *contextGroupId)->getArgumentsOfCallFrame(frameIdV8);
 
   if (result.IsEmpty()) {
@@ -5364,12 +5372,13 @@ static void RunScript(v8::Isolate* isolate, v8::Local<v8::Context> context, cons
 
   v8::Local<v8::Script> script;
   if (!maybe_script.ToLocal(&script)) {
-    CHECK(false && "Replay RunScript COMPILE failed") << GetStackTrace(isolate, try_catch);
+    recordreplay::Crash("Replay RunScript COMPILE failed: %s",
+      GetStackTrace(isolate, try_catch).c_str());
   }
   v8::Local<v8::Value> rv;
   if (!script->Run(context).ToLocal(&rv)) {
-    CHECK(false && "Replay RunScript INIT failed")
-        << GetStackTrace(isolate, try_catch);
+    recordreplay::Crash("Replay RunScript INIT failed: %s",
+      GetStackTrace(isolate, try_catch).c_str());
   }
 }
 
@@ -5510,8 +5519,7 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame, v8:
     // https://linear.app/replay/issue/RUN-2195#comment-e0b6c75b
     localFrame->GetSettings()->SetForceMainWorldInitialization(true);
   }
-
-  if (recordreplay::IsReplaying()) {
+  if (IsGReplayScriptEnabled()) {
     recordreplay::AutoMarkReplayCode amrc;
     recordreplay::AutoDisallowEvents disallow("SetupRecordReplayCommands");
     RunScript(isolate, context, gReplayScript, InternalScriptURL);
