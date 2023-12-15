@@ -707,7 +707,6 @@ function getCurrentEvaluateFrame() {
 function Pause_evaluateInFrame({ frameId: frameIndexStr, expression }) {
   const frameIndex = +frameIndexStr;
   const frame = getFrameByIndex(frameIndex);
-  log(`DDBG Pause_evaluateInFrame(${frameIndex}): ${frame.callFrameId} ${JSON_stringify(frame.location)}`);
   gCurrentEvaluateFrame = frame;
   let rv;
   try {
@@ -4488,7 +4487,6 @@ static void fromJsGetArgumentsInFrame(
   const uint8_t* frameIdPtr = reinterpret_cast<const uint8_t*>(*frameId);
   v8_inspector::StringView frameIdV8(frameIdPtr, frameId.length());
 
-  recordreplay::Print("DDBG fromJsGetArgumentsInFrame HGELLOO %s", *frameId);
   auto result = getInspectorSession(isolate, *contextGroupId)->getArgumentsOfCallFrame(frameIdV8);
 
   if (result.IsEmpty()) {
