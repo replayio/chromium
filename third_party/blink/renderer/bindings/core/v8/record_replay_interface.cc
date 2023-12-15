@@ -608,7 +608,7 @@ function Target_topFrameLocation() {
     throw e;
   }
 
-  return { location: createProtocolLocation(location) };
+  return { location: createProtocolLocation(location)[0] };
 }
 
 /**
@@ -1099,11 +1099,7 @@ function registerRrpCpdId(rrpId, cdpId, cdpObject = null) {
  */
 function getFrameArgumentsArray(frameOrFrameIndex) {
   let frame;
-  if (typeof frameOrFrameIndex === "number") {
-    frame = getFrameByIndex(frameIndex);
-  } else if (isObject(frameOrFrameIndex) && frameOrFrameIndex.callFrameId) {
-    frame = frameOrFrameIndex;
-  } else if (!frameOrFrameIndex) {
+  if (!frameOrFrameIndex) {
     if (!gCurrentEvaluateFrame) {
       throw new Error(`getFrameArgumentsArray must be called with a frame` +
         `object, frameIndex, or, if none provided, must be called from within ` +
@@ -1117,6 +1113,10 @@ function getFrameArgumentsArray(frameOrFrameIndex) {
         `getFrameArgumentsArray was called from within Pause.evaluateInFrame ` +
         `but the frame is not on stack anymore: ${JSON_stringify(frames.map(f => f.location))}`);
     }
+  } else if (typeof frameOrFrameIndex === "number") {
+    frame = getFrameByIndex(frameIndex);
+  } else if (isObject(frameOrFrameIndex) && frameOrFrameIndex.callFrameId) {
+    frame = frameOrFrameIndex;
   }
   const frameId = frame.callFrameId;
   const args = fromJsGetArgumentsInFrame(frameId);
@@ -3090,10 +3090,10 @@ Object.assign(__RECORD_REPLAY__, {
  */
 function replayEval(fn) {
   const {
-    beginDisallowEvents,
-    endDisallowEvents
+    beginReplayCode,
+    endReplayCode
   } = __RECORD_REPLAY_ARGUMENTS__;
-  beginDisallowEvents("replayEval");
+  beginReplayCode("replayEval");
   try {
     // We cannot currently avoid a user-supplied function from getting
     // instrumented. Stringifying and evaling it with events disallowed
@@ -3107,7 +3107,7 @@ function replayEval(fn) {
     // caller of replayEval to make sure the cb won't throw.
     warning(`replayEval ERROR: ${err?.stack || err}`);
   } finally {
-    endDisallowEvents();
+    endReplayCode();
   }
 }
 
@@ -5247,18 +5247,20 @@ static void fromJsGetFunctionBytecode(
   args.GetReturnValue().Set(rv);
 }
 
-static void fromJsBeginDisallowEvents(
+static void fromJsBeginReplayCode(
     const v8::FunctionCallbackInfo<v8::Value>& args) {
   CHECK(args.Length() == 1 && args[0]->IsString() &&
         "[RuntimeError] must be called with a single string");
 
   v8::String::Utf8Value label(args.GetIsolate(), args[0]);
   recordreplay::BeginDisallowEventsWithLabel(*label);
+  recordreplay::EnterReplayCode();
 }
 
-static void fromJsEndDisallowEvents(
+static void fromJsEndReplayCode(
     const v8::FunctionCallbackInfo<v8::Value>& args) {
   recordreplay::EndDisallowEvents();
+  recordreplay::ExitReplayCode();
 }
 
 /** ###########################################################################
@@ -5471,10 +5473,10 @@ void OnNewWindow1(v8::Isolate* isolate, LocalFrame* localFrame) {
   // Replay meta.
   DefineProperty(isolate, args, "IsReplaying",
                  v8::Boolean::New(isolate, recordreplay::IsReplaying()));
-  SetFunctionProperty(isolate, args, "beginDisallowEvents",
-                      fromJsBeginDisallowEvents);
-  SetFunctionProperty(isolate, args, "endDisallowEvents",
-                      fromJsEndDisallowEvents);
+  SetFunctionProperty(isolate, args, "beginReplayCode",
+                      fromJsBeginReplayCode);
+  SetFunctionProperty(isolate, args, "endReplayCode",
+                      fromJsEndReplayCode);
 
   // unsorted Replay stuff
   SetFunctionProperty(
