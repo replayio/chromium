@@ -304,7 +304,7 @@ class CdpRequest {
    * 3. Notification (method, params) - TODO: we are not handling this yet.
    * @see https://github.com/replayio/chromium-v8/blob/c5e451943a6d87b44374e7a08d44fa92b9a2c93b/third_party/inspector_protocol/crdtp/dispatch.cc#L370
    */
-  messageResult;
+  result;
 
   constructor(messageId) {
     this.messageId = messageId;
@@ -613,7 +613,7 @@ function Target_topFrameLocation() {
     throw e;
   }
 
-  return { location: createProtocolLocation(location) };
+  return { location: createProtocolLocation(location)[0] };
 }
 
 /**
@@ -650,12 +650,13 @@ function buildRrpObjectResult(cdpReturnValue) {
     const { result: cdpResult, exceptionDetails } = cdpReturnValue;
     if (exceptionDetails) {
       // exceptionDetails encapsulate a JS exception thrown while handling the command.
-      const objectResult = buildRrpObjectFromCdpObject(exceptionDetails);
-      rrpResult.exception = objectResult;
-    } else if (cdpResult) {
+      const rrpId = buildRrpObjectFromCdpObject(exceptionDetails);
+      rrpResult.exception = rrpId;
+    }
+    if (cdpResult) {
       // cdpResult is the actual result RemoteObject.
-      const objectResult = buildRrpObjectFromCdpObject(cdpResult);
-      rrpResult.returned = objectResult;
+      const rrpId = buildRrpObjectFromCdpObject(cdpResult);
+      rrpResult.returned = rrpId;
     }
   } else {
     // Sometimes things go wrong.
@@ -749,14 +750,6 @@ function Pause_evaluateInGlobal({ expression }) {
     return handleEvalError(err);
   }
   return buildRrpObjectResult(rv);
-}
-
-function evaluateInCurrentFrame(expression) {
-  return executeCommand("Pause.evaluateInFrame", {
-    frameId: 0,
-    expression,
-        objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
-  });
 }
 
 function Pause_getAllFrames() {
@@ -1112,11 +1105,7 @@ function registerRrpCpdId(rrpId, cdpId, cdpObject = null) {
  */
 function getFrameArgumentsArray(frameOrFrameIndex) {
   let frame;
-  if (typeof frameOrFrameIndex === "number") {
-    frame = getFrameByIndex(frameIndex);
-  } else if (isObject(frameOrFrameIndex) && frameOrFrameIndex.callFrameId) {
-    frame = frameOrFrameIndex;
-  } else if (!frameOrFrameIndex) {
+  if (!frameOrFrameIndex) {
     if (!gCurrentEvaluateFrame) {
       throw new Error(`getFrameArgumentsArray must be called with a frame` +
         `object, frameIndex, or, if none provided, must be called from within ` +
@@ -1130,6 +1119,10 @@ function getFrameArgumentsArray(frameOrFrameIndex) {
         `getFrameArgumentsArray was called from within Pause.evaluateInFrame ` +
         `but the frame is not on stack anymore: ${JSON_stringify(frames.map(f => f.location))}`);
     }
+  } else if (typeof frameOrFrameIndex === "number") {
+    frame = getFrameByIndex(frameIndex);
+  } else if (isObject(frameOrFrameIndex) && frameOrFrameIndex.callFrameId) {
+    frame = frameOrFrameIndex;
   }
   const frameId = frame.callFrameId;
   const args = fromJsGetArgumentsInFrame(frameId);
@@ -3080,24 +3073,8 @@ __RECORD_REPLAY_ARGUMENTS__.internal = {
 };
 
 /** ###########################################################################
- * Export JS API methods via `__RECORD_REPLAY__`.
- * This is officially available for scripts in `eval*` commands to use.
+ * {@link replayEval}
  * ##########################################################################*/
-Object.assign(__RECORD_REPLAY__, {
-  getProtocolIdForObject(obj) {
-    return registerPlainObject(obj);
-  },
-  getObjectFromProtocolId(rrpId) {
-    return getPlainObjectByRrpId(rrpId);
-  },
-  executeCommand,
-  log,
-  warning,
-  getFrameArgumentsArray,
-  evaluateInCurrentFrame,
-  getCurrentEvaluateFrame,
-  replayEval
-});
 
 /**
  * Execute a function but only when replaying and with events disallowed.
@@ -3124,6 +3101,25 @@ function replayEval(fn) {
     endReplayCode();
   }
 }
+
+/** ###########################################################################
+ * Export JS API methods via `__RECORD_REPLAY__`.
+ * This is officially available for scripts in `eval*` commands to use.
+ * ##########################################################################*/
+Object.assign(__RECORD_REPLAY__, {
+  getProtocolIdForObject(obj) {
+    return registerPlainObject(obj);
+  },
+  getObjectFromProtocolId(rrpId) {
+    return getPlainObjectByRrpId(rrpId);
+  },
+  executeCommand,
+  log,
+  warning,
+  getFrameArgumentsArray,
+  getCurrentEvaluateFrame,
+  replayEval
+});
 
 } catch (e) {
   log(`Error: Initialization exception ${e}`);
