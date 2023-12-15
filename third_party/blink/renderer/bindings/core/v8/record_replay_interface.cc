@@ -299,7 +299,7 @@ class CdpRequest {
    * 3. Notification (method, params) - TODO: we are not handling this yet.
    * @see https://github.com/replayio/chromium-v8/blob/c5e451943a6d87b44374e7a08d44fa92b9a2c93b/third_party/inspector_protocol/crdtp/dispatch.cc#L370
    */
-  messageResult;
+  result;
 
   constructor(messageId) {
     this.messageId = messageId;
