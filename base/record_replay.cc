@@ -550,14 +550,6 @@ bool IsInReplayCode(const char* why) {
   return V8RecordReplayIsInReplayCode(why);
 }
 
-void EnterReplayCode() {
-  V8RecordReplayEnterReplayCode();
-}
-
-void ExitReplayCode() {
-  V8RecordReplayExitReplayCode();
-}
-
 AutoMarkReplayCode::AutoMarkReplayCode() {
   V8RecordReplayEnterReplayCode();
 }
