@@ -645,12 +645,13 @@ function buildRrpObjectResult(cdpReturnValue) {
     const { result: cdpResult, exceptionDetails } = cdpReturnValue;
     if (exceptionDetails) {
       // exceptionDetails encapsulate a JS exception thrown while handling the command.
-      const objectResult = buildRrpObjectFromCdpObject(exceptionDetails);
-      rrpResult.exception = objectResult;
-    } else if (cdpResult) {
+      const rrpId = buildRrpObjectFromCdpObject(exceptionDetails);
+      rrpResult.exception = rrpId;
+    }
+    if (cdpResult) {
       // cdpResult is the actual result RemoteObject.
-      const objectResult = buildRrpObjectFromCdpObject(cdpResult);
-      rrpResult.returned = objectResult;
+      const rrpId = buildRrpObjectFromCdpObject(cdpResult);
+      rrpResult.returned = rrpId;
     }
   } else {
     // Sometimes things go wrong.
@@ -3077,39 +3078,9 @@ Object.assign(__RECORD_REPLAY__, {
   getObjectFromProtocolId(rrpId) {
     return getPlainObjectByRrpId(rrpId);
   },
-  executeCommand,
-  log,
-  warning,
   getFrameArgumentsArray,
-  getCurrentEvaluateFrame,
-  replayEval
+  getCurrentEvaluateFrame
 });
-
-/**
- * Execute a function but only when replaying and with events disallowed.
- */
-function replayEval(fn) {
-  const {
-    beginReplayCode,
-    endReplayCode
-  } = __RECORD_REPLAY_ARGUMENTS__;
-  beginReplayCode("replayEval");
-  try {
-    // We cannot currently avoid a user-supplied function from getting
-    // instrumented. Stringifying and evaling it with events disallowed
-    // fixes that problem.
-    let fnExpr = fn.toString().trim();
-    eval(`(${fnExpr})()`);
-  } catch (err) {
-    // Note: We MUST NOT let this error escape, or it will cause a mismatch in
-    // `Runtime_UnwindAndFindExceptionHandler`.
-    // TODO: We should just crash here, since its the responsibility of the
-    // caller of replayEval to make sure the cb won't throw.
-    warning(`replayEval ERROR: ${err?.stack || err}`);
-  } finally {
-    endReplayCode();
-  }
-}
 
 } catch (e) {
   log(`Error: Initialization exception ${e}`);
@@ -5247,22 +5218,6 @@ static void fromJsGetFunctionBytecode(
   args.GetReturnValue().Set(rv);
 }
 
-static void fromJsBeginReplayCode(
-    const v8::FunctionCallbackInfo<v8::Value>& args) {
-  CHECK(args.Length() == 1 && args[0]->IsString() &&
-        "[RuntimeError] must be called with a single string");
-
-  v8::String::Utf8Value label(args.GetIsolate(), args[0]);
-  recordreplay::BeginDisallowEventsWithLabel(*label);
-  recordreplay::EnterReplayCode();
-}
-
-static void fromJsEndReplayCode(
-    const v8::FunctionCallbackInfo<v8::Value>& args) {
-  recordreplay::EndDisallowEvents();
-  recordreplay::ExitReplayCode();
-}
-
 /** ###########################################################################
  * misc
  * ##########################################################################*/
@@ -5384,13 +5339,12 @@ static void RunScript(v8::Isolate* isolate, v8::Local<v8::Context> context, cons
 
   v8::Local<v8::Script> script;
   if (!maybe_script.ToLocal(&script)) {
-    recordreplay::Crash("Replay RunScript COMPILE failed: %s",
-      GetStackTrace(isolate, try_catch).c_str());
+    CHECK(false && "Replay RunScript COMPILE failed") << GetStackTrace(isolate, try_catch);
   }
   v8::Local<v8::Value> rv;
   if (!script->Run(context).ToLocal(&rv)) {
-    recordreplay::Crash("Replay RunScript INIT failed: %s",
-      GetStackTrace(isolate, try_catch).c_str());
+    CHECK(false && "Replay RunScript INIT failed")
+        << GetStackTrace(isolate, try_catch);
   }
 }
 
@@ -5470,15 +5424,7 @@ void OnNewWindow1(v8::Isolate* isolate, LocalFrame* localFrame) {
   SetFunctionProperty(isolate, args, "getFunctionBytecode",
                       fromJsGetFunctionBytecode);
 
-  // Replay meta.
-  DefineProperty(isolate, args, "IsReplaying",
-                 v8::Boolean::New(isolate, recordreplay::IsReplaying()));
-  SetFunctionProperty(isolate, args, "beginReplayCode",
-                      fromJsBeginReplayCode);
-  SetFunctionProperty(isolate, args, "endReplayCode",
-                      fromJsEndReplayCode);
-
-  // unsorted Replay stuff
+  // unsorted RR stuff
   SetFunctionProperty(
       isolate, args, "setClearPauseDataCallback",
       v8::FunctionCallbackRecordReplaySetClearPauseDataCallback);
