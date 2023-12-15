@@ -26,8 +26,7 @@ if [ -z "${GITHUB_AUTH_SECRET}" ]; then
 fi
 
 
-# TODO(toshok) when/if the devtools PR (https://github.com/replayio/devtools/pull/10001) lands, change the ref here to `main`
-INPUTS='{"ref":"main","inputs":{"runId":"'${RUN_ID}'","linuxBuildFile":"'${BUILD_ID}'.tar.xz"}}'
+INPUTS='{"ref":"toshok/full-e2e-for-chromium","inputs":{"runId":"'${RUN_ID}'","linuxBuildFile":"'${BUILD_ID}'.tar.xz","rerecord":"true"}}'
 echo "Running devtools tests on GitHub with inputs: ${INPUTS}"
 
 curl -L -s \
