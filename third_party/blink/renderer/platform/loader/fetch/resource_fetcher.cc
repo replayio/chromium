@@ -602,6 +602,9 @@ void ResourceFetcher::DidLoadResourceFromMemoryCache(
     const ResourceRequest& request,
     bool is_static_data,
     RenderBlockingBehavior render_blocking_behavior) {
+  fprintf(stderr, "[%d] ResourceFetcher::DidLoadResourceFromMemoryCache %zu %d %d",
+          getpid(), resource->InspectorId(), IsDetached(), !!resoure_load_observer_);
+
   if (IsDetached() || !resource_load_observer_)
     return;
 
@@ -1017,6 +1020,9 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
                                            const ResourceFactory& factory,
                                            ResourceClient* client) {
   base::AutoReset<bool> r(&is_in_request_resource_, true);
+
+  fprintf(stderr, "[%d] ResourceFetcher::RequestResource %s",
+          getpid(), params.Url().ElidedString().Utf8().c_str());
 
   // If detached, we do very early return here to skip all processing below.
   if (properties_->IsDetached()) {
