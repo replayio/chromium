@@ -1042,7 +1042,7 @@ void DocumentLoader::BodyDataReceivedImpl(BodyData& data) {
                           main_resource_identifier_, this, encoded_data.data(),
                           encoded_data.size());
     RecordReplayReportDidReceiveData(main_resource_identifier_,
-                                     encoded_data.data(), encoded_data.size());
+                                     encoded_data.data(), (int)encoded_data.size());
   }
 
   TRACE_EVENT1("loading", "DocumentLoader::HandleData", "length",

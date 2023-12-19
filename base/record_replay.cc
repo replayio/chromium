@@ -420,6 +420,9 @@ void GetCurrentJSStack(std::string* stackTrace) {
 void BrowserEvent(const char* name, const base::DictionaryValue& info) {
   std::string json;
   base::JSONWriter::Write(info, &json);
+
+  fprintf(stderr, "[%d] RecordReplayBrowserEvent %s %s\n", getpid(), name, json.c_str());
+
   V8RecordReplayBrowserEvent(name, json.c_str());
 }
 
