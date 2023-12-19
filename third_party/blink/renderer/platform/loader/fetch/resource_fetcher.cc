@@ -597,9 +597,9 @@ bool ResourceFetcher::ResourceNeedsLoad(Resource* resource,
   return policy != RevalidationPolicy::kUse || resource->StillNeedsLoad();
 }
 
-extern void RecordReplayReportDidReceiveResponse(Resource* resource,
+extern void RecordReplayReportDidReceiveResponse(uint64_t inspector_id,
                                                  const ResourceResponse& response);
-extern void RecordReplayReportDidFinishLoading(Resource* resource,
+extern void RecordReplayReportDidFinishLoading(uint64_t inspector_id,
                                                int64_t encoded_body_length,
                                                int64_t decoded_body_length);
 
@@ -608,8 +608,8 @@ void ResourceFetcher::DidLoadResourceFromMemoryCache(
     const ResourceRequest& request,
     bool is_static_data,
     RenderBlockingBehavior render_blocking_behavior) {
-  RecordReplayReportDidReceiveResponse(resource, resource->GetResponse());
-  RecordReplayReportDidFinishLoading(resource,
+  RecordReplayReportDidReceiveResponse(resource->InspectorId(), resource->GetResponse());
+  RecordReplayReportDidFinishLoading(resource->InspectorId(),
                                      resource->GetResponse().EncodedBodyLength(),
                                      resource->GetResponse().DecodedBodyLength());
 
@@ -1092,6 +1092,10 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
   if (blocked_reason) {
     auto* resource = ResourceForBlockedRequest(params, factory,
                                                blocked_reason.value(), client);
+
+    fprintf(stderr, "[%d] ResourceFetcher::RequestResource #1 %zu\n",
+            getpid(), resource ? (size_t)resource->InspectorId() : 0);
+
     StorePerformanceTimingInitiatorInformation(
         resource, params.GetRenderBlockingBehavior());
     if (auto info = resource_timing_info_map_.Take(resource)) {
@@ -1109,6 +1113,10 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
   bool is_stale_revalidation = params.IsStaleRevalidation();
   if (!is_stale_revalidation && is_static_data) {
     resource = CreateResourceForStaticData(params, factory);
+
+    fprintf(stderr, "[%d] ResourceFetcher::RequestResource #2 %zu\n",
+            getpid(), resource ? (size_t)resource->InspectorId() : 0);
+
     if (resource) {
       policy =
           DetermineRevalidationPolicy(resource_type, params, *resource, true);
@@ -1129,6 +1137,9 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
   if (!is_stale_revalidation && !resource) {
     resource = MatchPreload(params, resource_type);
 
+    fprintf(stderr, "[%d] ResourceFetcher::RequestResource #3 %zu\n",
+            getpid(), resource ? (size_t)resource->InspectorId() : 0);
+
     if (resource) {
       policy = RevalidationPolicy::kUse;
       // If |params| is for a blocking resource and a preloaded resource is
@@ -1141,6 +1152,9 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
       } else {
         resource = MemoryCache::Get()->ResourceForURL(
             params.Url(), GetCacheIdentifier(params.Url()));
+
+        fprintf(stderr, "[%d] ResourceFetcher::RequestResource #4 %zu\n",
+                getpid(), resource ? (size_t)resource->InspectorId() : 0);
 
         // Whether there is a resource can vary when replaying due to different memory
         // cache behavior. For now we deal with this by ignoring the resource if it
@@ -1175,6 +1189,8 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
       [[fallthrough]];
     case RevalidationPolicy::kLoad:
       resource = CreateResourceForLoading(params, factory);
+      fprintf(stderr, "[%d] ResourceFetcher::RequestResource #5 %zu\n",
+              getpid(), resource ? (size_t)resource->InspectorId() : 0);
       break;
     case RevalidationPolicy::kRevalidate:
       InitializeRevalidation(resource_request, resource);
@@ -1271,6 +1287,9 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
         TRACE_ID_WITH_SCOPE("BlinkResourceID", TRACE_ID_LOCAL(identifier)),
         "outcome", "Fail");
   }
+
+  fprintf(stderr, "[%d] ResourceFetcher::RequestResource DONE %zu\n",
+          getpid(), resource ? (size_t)resource->InspectorId() : 0);
 
   return resource;
 }
