@@ -613,8 +613,8 @@ void ResourceFetcher::DidLoadResourceFromMemoryCache(
                                      resource->GetResponse().EncodedBodyLength(),
                                      resource->GetResponse().DecodedBodyLength());
 
-  fprintf(stderr, "[%d] ResourceFetcher::DidLoadResourceFromMemoryCache %zu %d %d\n",
-          getpid(), (size_t)resource->InspectorId(), IsDetached(), !!resource_load_observer_);
+  fprintf(stderr, "[%d] ResourceFetcher::DidLoadResourceFromMemoryCache %zu %s\n",
+          getpid(), (size_t)resource->InspectorId(), resource->Url().ElidedString().Utf8().c_str());
 
   if (IsDetached() || !resource_load_observer_)
     return;
@@ -1032,9 +1032,6 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
                                            ResourceClient* client) {
   base::AutoReset<bool> r(&is_in_request_resource_, true);
 
-  fprintf(stderr, "[%d] ResourceFetcher::RequestResource %s\n",
-          getpid(), params.Url().ElidedString().Utf8().c_str());
-
   // If detached, we do very early return here to skip all processing below.
   if (properties_->IsDetached()) {
     return ResourceForBlockedRequest(
@@ -1054,6 +1051,9 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
   resource_request.SetInspectorId(identifier);
   resource_request.SetFromOriginDirtyStyleSheet(
       params.IsFromOriginDirtyStyleSheet());
+
+  fprintf(stderr, "[%d] ResourceFetcher::RequestResource %zu %s\n",
+          getpid(), (size_t)identifier, params.Url().ElidedString().Utf8().c_str());
 
   recordreplay::Assert("[RUN-658-1381] ResourceFetcher::RequestResource %s",
                        params.Url().ElidedString().Utf8().c_str());
@@ -1983,6 +1983,9 @@ void ResourceFetcher::HandleLoaderFinish(Resource* resource,
                                          bool should_report_corb_blocking) {
   DCHECK(resource);
 
+  fprintf(stderr, "[%d] ResourceFetcher::HandleLoaderFinish %zu %s\n",
+          getpid(), (size_t)resource->InspectorId(), resource->Url().ElidedString().Utf8().c_str());
+
   DCHECK_LE(inflight_keepalive_bytes, inflight_keepalive_bytes_);
   inflight_keepalive_bytes_ -= inflight_keepalive_bytes;
 
@@ -2050,6 +2053,9 @@ void ResourceFetcher::HandleLoaderError(Resource* resource,
                                         uint32_t inflight_keepalive_bytes) {
   DCHECK(resource);
 
+  fprintf(stderr, "[%d] ResourceFetcher::HandleLoaderError %zu %s\n",
+          getpid(), (size_t)resource->InspectorId(), resource->Url().ElidedString().Utf8().c_str());
+
   DCHECK_LE(inflight_keepalive_bytes, inflight_keepalive_bytes_);
   inflight_keepalive_bytes_ -= inflight_keepalive_bytes;
 
@@ -2103,6 +2109,9 @@ bool ResourceFetcher::StartLoad(
     RenderBlockingBehavior render_blocking_behavior) {
   DCHECK(resource);
   DCHECK(resource->StillNeedsLoad());
+
+  fprintf(stderr, "[%d] ResourceFetcher::StartLoad %zu %s\n",
+          getpid(), (size_t)resource->InspectorId(), resource->Url().ElidedString().Utf8().c_str());
 
   ResourceLoader* loader = nullptr;
 
@@ -2320,6 +2329,10 @@ void ResourceFetcher::EmulateLoadStartedForInspector(
   resource_request.SetReferrerString(Referrer::NoReferrer());
   resource_request.SetReferrerPolicy(network::mojom::ReferrerPolicy::kNever);
   resource_request.SetInspectorId(CreateUniqueIdentifier());
+
+  fprintf(stderr, "[%d] ResourceFetcher::EmulateLoadStartedForInspector %zu %s\n",
+          getpid(), (size_t)resource_request.InspectorId(),
+          url.ElidedString().Utf8().c_str());
 
   ResourceLoaderOptions options = resource->Options();
   options.initiator_info.name = initiator_name;

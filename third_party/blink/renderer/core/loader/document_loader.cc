@@ -1694,6 +1694,10 @@ void DocumentLoader::StartLoadingInternal() {
   // so we don't MarkFetchStart here.
   main_resource_identifier_ = CreateUniqueIdentifier();
 
+  fprintf(stderr, "[%d] DocumentLoader::StartLoadingInternal %zu %s\n",
+          getpid(), (size_t)main_resource_identifier_,
+          url_.ElidedString().Utf8().c_str());
+
   navigation_timing_info_ = ResourceTimingInfo::Create(
       fetch_initiator_type_names::kDocument, GetTiming().NavigationStart(),
       mojom::blink::RequestContextType::IFRAME,
