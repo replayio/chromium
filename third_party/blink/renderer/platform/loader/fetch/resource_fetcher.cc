@@ -603,7 +603,7 @@ void ResourceFetcher::DidLoadResourceFromMemoryCache(
     bool is_static_data,
     RenderBlockingBehavior render_blocking_behavior) {
   fprintf(stderr, "[%d] ResourceFetcher::DidLoadResourceFromMemoryCache %zu %d %d",
-          getpid(), resource->InspectorId(), IsDetached(), !!resource_load_observer_);
+          getpid(), (size_t)resource->InspectorId(), IsDetached(), !!resource_load_observer_);
 
   if (IsDetached() || !resource_load_observer_)
     return;
