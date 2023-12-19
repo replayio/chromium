@@ -727,6 +727,7 @@ class PLATFORM_EXPORT ResourceRequest final : public ResourceRequestHead {
   const scoped_refptr<EncodedFormData>& HttpBody() const;
   void SetHttpBody(scoped_refptr<EncodedFormData>);
 
+  const ResourceRequestBody& Body() const { return body_; }
   ResourceRequestBody& MutableBody() { return body_; }
 
  private:

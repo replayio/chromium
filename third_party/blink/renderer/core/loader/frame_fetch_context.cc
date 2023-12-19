@@ -328,7 +328,7 @@ uint64_t RecordReplayNetworkRequestId(uint64_t inspector_id) {
 }
 
 
-static const char* GetRequestCauseString(ResourceRequest& req) {
+static const char* GetRequestCauseString(const ResourceRequest& req) {
   switch (req.GetRequestContext()) {
     case mojom::blink::RequestContextType::SCRIPT:
       return "script";
@@ -448,7 +448,7 @@ void RecordReplayReportDidPrepareRequest(const ResourceRequest& request) {
 
   // Check the request body for request data or stream.
   const scoped_refptr<blink::EncodedFormData>& form_body =
-    request.MutableBody().FormBody();
+    request.Body().FormBody();
   if (form_body) {
     WTF::String data = form_body->FlattenToString();
     base::DictionaryValue requestDataDict;
