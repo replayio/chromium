@@ -597,12 +597,29 @@ bool ResourceFetcher::ResourceNeedsLoad(Resource* resource,
   return policy != RevalidationPolicy::kUse || resource->StillNeedsLoad();
 }
 
+static bool PermitRecordReplayBrowserEvents() {
+  return recordreplay::IsRecordingOrReplaying("notify-network") && v8::IsMainThread();
+}
+
+extern void RecordReplayReportDidReceiveResponse(Resource* resource,
+                                                 const ResourceResponse& response);
+extern void RecordReplayReportDidReceiveData(Resource* resource,
+                                             const char* data, int length);
+extern void RecordReplayReportDidFinishLoading(Resource* resource,
+                                               int64_t encoded_body_length,
+                                               int64_t decoded_body_length);
+
 void ResourceFetcher::DidLoadResourceFromMemoryCache(
     Resource* resource,
     const ResourceRequest& request,
     bool is_static_data,
     RenderBlockingBehavior render_blocking_behavior) {
-  fprintf(stderr, "[%d] ResourceFetcher::DidLoadResourceFromMemoryCache %zu %d %d",
+  RecordReplayReportDidReceiveResponse(resource, resource->GetResponse());
+  RecordReplayReportDidFinishLoading(resource,
+                                     resource->GetResponse().EncodedBodyLength(),
+                                     resource->GetResponse().DecodedBodyLength());
+
+  fprintf(stderr, "[%d] ResourceFetcher::DidLoadResourceFromMemoryCache %zu %d %d\n",
           getpid(), (size_t)resource->InspectorId(), IsDetached(), !!resource_load_observer_);
 
   if (IsDetached() || !resource_load_observer_)
@@ -1021,7 +1038,7 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
                                            ResourceClient* client) {
   base::AutoReset<bool> r(&is_in_request_resource_, true);
 
-  fprintf(stderr, "[%d] ResourceFetcher::RequestResource %s",
+  fprintf(stderr, "[%d] ResourceFetcher::RequestResource %s\n",
           getpid(), params.Url().ElidedString().Utf8().c_str());
 
   // If detached, we do very early return here to skip all processing below.

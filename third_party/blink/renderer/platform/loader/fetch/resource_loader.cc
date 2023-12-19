@@ -1024,6 +1024,31 @@ void ResourceLoader::DidReceiveResponse(const WebURLResponse& response) {
   DidReceiveResponseInternal(response.ToResourceResponse());
 }
 
+void RecordReplayReportDidReceiveResponse(Resource* resource,
+                                          const ResourceResponse& response) {
+  if (!PermitRecordReplayBrowserEvents()) {
+    return;
+  }
+
+  base::DictionaryValue dict;
+  dict.SetDoubleKey("identifier",
+                    (double) RecordReplayNetworkRequestId(resource->InspectorId()));
+  const char* http_version = HttpVersionToString(response.HttpVersion());
+  base::ListValue headers;
+  for (auto header : response.HttpHeaderFields()) {
+    base::DictionaryValue header_obj;
+    header_obj.SetString("name", header.key.Utf8());
+    header_obj.SetString("value", header.value.Utf8());
+    headers.Append(std::move(header_obj));
+  }
+  dict.SetKey("responseHeaders", std::move(headers));
+  dict.SetString("responseProtocolVersion", http_version);
+  dict.SetDoubleKey("responseStatus", response.HttpStatusCode());
+  dict.SetString("responseStatusText", response.HttpStatusText().Utf8());
+  dict.SetBoolean("responseFromCache", response.WasCached());
+  recordreplay::BrowserEvent("Network.DidReceiveResponse", dict);
+}
+
 void ResourceLoader::DidReceiveResponseInternal(
     const ResourceResponse& response) {
   const ResourceRequestHead& request = resource_->GetResourceRequest();
@@ -1180,25 +1205,7 @@ void ResourceLoader::DidReceiveResponseInternal(
 
   resource_->ResponseReceived(response);
 
-  if (PermitRecordReplayBrowserEvents()) {
-    base::DictionaryValue dict;
-    dict.SetDoubleKey("identifier",
-                      (double) RecordReplayNetworkRequestId(resource_->InspectorId()));
-    const char* http_version = HttpVersionToString(response.HttpVersion());
-    base::ListValue headers;
-    for (auto header : response.HttpHeaderFields()) {
-      base::DictionaryValue header_obj;
-      header_obj.SetString("name", header.key.Utf8());
-      header_obj.SetString("value", header.value.Utf8());
-      headers.Append(std::move(header_obj));
-    }
-    dict.SetKey("responseHeaders", std::move(headers));
-    dict.SetString("responseProtocolVersion", http_version);
-    dict.SetDoubleKey("responseStatus", response.HttpStatusCode());
-    dict.SetString("responseStatusText", response.HttpStatusText().Utf8());
-    dict.SetBoolean("responseFromCache", response.WasCached());
-    recordreplay::BrowserEvent("Network.DidReceiveResponse", dict);
-  }
+  RecordReplayReportDidReceiveResponse(resource_, response);
 
   if (resource_->Loader() && fetcher_->GetProperties().IsDetached()) {
     // If the fetch context is already detached, we don't need further signals,
@@ -1266,27 +1273,33 @@ void ResourceLoader::DidStartLoadingResponseBody(
   data_pipe_completion_notifier_ = completion_notifier;
 }
 
+void RecordReplayReportDidReceiveData(Resource* resource, const char* data, int length) {
+  if (!PermitRecordReplayBrowserEvents()) {
+    return;
+  }
+
+  base::DictionaryValue dict;
+  dict.SetDoubleKey("identifier",
+                    (double) RecordReplayNetworkRequestId(resource->InspectorId()));
+  dict.SetDoubleKey("dataLength", (double) length);
+  if (data) {
+    std::string data_base64 = base::Base64Encode(
+      base::span<const uint8_t>(
+        reinterpret_cast<const uint8_t*>(data),
+        length
+      )
+    );
+    dict.SetString("data", data_base64);
+  }
+  recordreplay::BrowserEvent("Network.DidReceiveData", dict);
+}
+
 void ResourceLoader::DidReceiveData(const char* data, int length) {
   CHECK_GE(length, 0);
 
   recordreplay::Assert("[RUN-1436] ResourceLoader::DidReceiveData %d", length);
 
-  if (PermitRecordReplayBrowserEvents()) {
-    base::DictionaryValue dict;
-    dict.SetDoubleKey("identifier",
-                      (double) RecordReplayNetworkRequestId(resource_->InspectorId()));
-    dict.SetDoubleKey("dataLength", (double) length);
-    if (data) {
-      std::string data_base64 = base::Base64Encode(
-        base::span<const uint8_t>(
-          reinterpret_cast<const uint8_t*>(data),
-          length
-        )
-      );
-      dict.SetString("data", data_base64);
-    }
-    recordreplay::BrowserEvent("Network.DidReceiveData", dict);
-  }
+  RecordReplayReportDidReceiveData(resource_, data, length);
 
   if (auto* observer = fetcher_->GetResourceLoadObserver()) {
     observer->DidReceiveData(resource_->InspectorId(),
@@ -1314,6 +1327,21 @@ void ResourceLoader::DidFinishLoadingFirstPartInMultipart() {
                                0, false);
 }
 
+void RecordReplayReportDidFinishLoading(Resource* resource,
+                                        int64_t encoded_body_length,
+                                        int64_t decoded_body_length) {
+  if (!PermitRecordReplayBrowserEvents()) {
+    return;
+  }
+
+  base::DictionaryValue dict;
+  dict.SetDoubleKey("identifier",
+                    (double) RecordReplayNetworkRequestId(resource->InspectorId()));
+  dict.SetDoubleKey("encodedBodySize", (double) encoded_body_length);
+  dict.SetDoubleKey("decodedBodySize", (double) decoded_body_length);
+  recordreplay::BrowserEvent("Network.DidFinishLoading", dict);
+}
+
 void ResourceLoader::DidFinishLoading(
     base::TimeTicks response_end_time,
     int64_t encoded_data_length,
@@ -1325,14 +1353,7 @@ void ResourceLoader::DidFinishLoading(
   resource_->SetEncodedBodyLength(encoded_body_length);
   resource_->SetDecodedBodyLength(decoded_body_length);
 
-  if (PermitRecordReplayBrowserEvents()) {
-    base::DictionaryValue dict;
-    dict.SetDoubleKey("identifier",
-                      (double) RecordReplayNetworkRequestId(resource_->InspectorId()));
-    dict.SetDoubleKey("encodedBodySize", (double) encoded_body_length);
-    dict.SetDoubleKey("decodedBodySize", (double) decoded_body_length);
-    recordreplay::BrowserEvent("Network.DidFinishLoading", dict);
-  }
+  RecordReplayReportDidDFinishLoading(resource, encoded_body_length, decoded_body_length);
 
   if (pervasive_payload_requested.has_value()) {
     ukm::SourceId ukm_source_id =
