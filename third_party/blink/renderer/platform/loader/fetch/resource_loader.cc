@@ -959,11 +959,16 @@ bool ResourceLoader::WillFollowRedirect(
     return false;
   }
 
+  int64_t start_id = resource_->InspectorId();
+
   if (!resource_->WillFollowRedirect(*new_request, redirect_response)) {
     CancelForRedirectAccessCheckError(new_request->Url(),
                                       ResourceRequestBlockedReason::kOther);
     return false;
   }
+
+  fprintf(stderr, "[%d] ResourceLoader::WillFollowRedirect %zu %zu\n",
+          getpid(), (size_t)start_id, (size_t)resource->InspectorId());
 
   if (PermitRecordReplayBrowserEvents()) {
     // The redirect has not been cancelled.  Notify RecordReplay netmonitor.
