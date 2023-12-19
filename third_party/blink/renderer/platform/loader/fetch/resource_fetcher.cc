@@ -597,14 +597,8 @@ bool ResourceFetcher::ResourceNeedsLoad(Resource* resource,
   return policy != RevalidationPolicy::kUse || resource->StillNeedsLoad();
 }
 
-static bool PermitRecordReplayBrowserEvents() {
-  return recordreplay::IsRecordingOrReplaying("notify-network") && v8::IsMainThread();
-}
-
 extern void RecordReplayReportDidReceiveResponse(Resource* resource,
                                                  const ResourceResponse& response);
-extern void RecordReplayReportDidReceiveData(Resource* resource,
-                                             const char* data, int length);
 extern void RecordReplayReportDidFinishLoading(Resource* resource,
                                                int64_t encoded_body_length,
                                                int64_t decoded_body_length);

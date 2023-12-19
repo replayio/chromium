@@ -1353,7 +1353,7 @@ void ResourceLoader::DidFinishLoading(
   resource_->SetEncodedBodyLength(encoded_body_length);
   resource_->SetDecodedBodyLength(decoded_body_length);
 
-  RecordReplayReportDidDFinishLoading(resource, encoded_body_length, decoded_body_length);
+  RecordReplayReportDidDFinishLoading(resource_, encoded_body_length, decoded_body_length);
 
   if (pervasive_payload_requested.has_value()) {
     ukm::SourceId ukm_source_id =
