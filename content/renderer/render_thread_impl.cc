@@ -1384,6 +1384,11 @@ void RenderThreadImpl::WriteClangProfilingProfile(
 }
 #endif
 
+void RenderThreadImpl::FinishRecording(FinishRecordingCallback callback) {
+  recordreplay::FinishRecording();
+  std::move(callback).Run();
+}
+
 void RenderThreadImpl::SetIsCrossOriginIsolated(bool value) {
   blink::SetIsCrossOriginIsolated(value);
 }
