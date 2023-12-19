@@ -820,7 +820,7 @@ void RecordReplayReportResourceRedirect(uint64_t inspector_id, const KURL& new_u
 
   base::DictionaryValue dict;
   dict.SetDoubleKey("identifier",
-                    (double) RecordReplayNetworkRequestId(resource_->InspectorId()));
+                    (double) RecordReplayNetworkRequestId(inspector_id));
   dict.SetString("requestUrl", new_url.GetString().Utf8());
 
   base::ListValue headers;
@@ -994,7 +994,8 @@ bool ResourceLoader::WillFollowRedirect(
           getpid(), (size_t)resource_->InspectorId(),
           resource_->Url().ElidedString().Utf8().c_str());
 
-  RecordReplayReportResourceRedirect(resource_->InspectorId(), new_request->Url(), new_request);
+  RecordReplayReportResourceRedirect(resource_->InspectorId(),
+                                     new_request->Url(), new_request.get());
 
   has_devtools_request_id = new_request->GetDevToolsId().has_value();
   return true;
