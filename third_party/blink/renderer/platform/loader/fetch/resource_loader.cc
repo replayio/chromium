@@ -968,7 +968,7 @@ bool ResourceLoader::WillFollowRedirect(
   }
 
   fprintf(stderr, "[%d] ResourceLoader::WillFollowRedirect %zu %zu\n",
-          getpid(), (size_t)start_id, (size_t)resource->InspectorId());
+          getpid(), (size_t)start_id, (size_t)resource_->InspectorId());
 
   if (PermitRecordReplayBrowserEvents()) {
     // The redirect has not been cancelled.  Notify RecordReplay netmonitor.
