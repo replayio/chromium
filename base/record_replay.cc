@@ -13,6 +13,8 @@
 #include <windows.h>
 #endif
 
+#include <unistd.h>
+
 namespace recordreplay {
 
 #define ForEachV8API(Macro)                                             \
