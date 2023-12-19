@@ -1691,6 +1691,7 @@ void DocumentLoader::StartLoading() {
   params_ = nullptr;
 }
 
+extern void RecordReplayReportDidPrepareRequest(const ResourceRequest& request);
 extern void RecordReplayReportDidReceiveResponse(uint64_t inspector_id,
                                                  const ResourceResponse& response);
 
@@ -1718,6 +1719,12 @@ void DocumentLoader::StartLoadingInternal() {
   fprintf(stderr, "[%d] DocumentLoader::StartLoadingInternal %zu %s\n",
           getpid(), (size_t)main_resource_identifier_,
           url_.ElidedString().Utf8().c_str());
+
+  if (recordreplay::IsRecordingOrReplaying("notify-network")) {
+    ResourceRequest request(url_);
+    request.SetInspectorId(main_resource_identifier_);
+    RecordReplayReportDidPrepareRequest(request);
+  }
 
   navigation_timing_info_ = ResourceTimingInfo::Create(
       fetch_initiator_type_names::kDocument, GetTiming().NavigationStart(),

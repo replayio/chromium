@@ -410,6 +410,57 @@ static const char* GetRequestCauseString(ResourceRequest& req) {
    */
 }
 
+void RecordReplayReportDidPrepareRequest(const ResourceRequest& request) {
+  if (!PermitRecordReplayBrowserEvents()) {
+    return;
+  }
+
+  // We must allow user agent scripts when taking a new bookmark.
+  ScriptForbiddenScope::AllowUserAgentScript allow_script;
+  std::string url_string = request.Url().GetString().Utf8().c_str();
+
+  // Capture the record replay bookmark for the network request here,
+  // where the devtools stack id is taken.
+  uint64_t bookmark = recordreplay::NewBookmark();
+
+  base::DictionaryValue dict;
+
+  dict.SetDoubleKey("bookmark", (double) bookmark);
+  dict.SetDoubleKey("identifier",
+                    (double) RecordReplayNetworkRequestId(request.InspectorId()));
+  dict.SetString("requestUrl", url_string);
+  dict.SetString("requestMethod", request.HttpMethod().Utf8());
+  const char* requestCause = GetRequestCauseString(request);
+  if (requestCause) {
+    dict.SetString("requestCause", requestCause);
+  }
+
+  base::ListValue headers;
+  for (auto header : request.HttpHeaderFields()) {
+    base::DictionaryValue header_obj;
+    header_obj.SetString("name", header.key.Utf8());
+    header_obj.SetString("value", header.value.Utf8());
+    headers.Append(std::move(header_obj));
+  }
+  dict.SetKey("requestHeaders", std::move(headers));
+
+  recordreplay::BrowserEvent("Network.PrepareRequest", dict);
+
+  // Check the request body for request data or stream.
+  const scoped_refptr<blink::EncodedFormData>& form_body =
+    request.MutableBody().FormBody();
+  if (form_body) {
+    WTF::String data = form_body->FlattenToString();
+    base::DictionaryValue requestDataDict;
+    requestDataDict.SetDoubleKey("identifier",
+                                 (double) RecordReplayNetworkRequestId(request.InspectorId()));
+    std::string dataStr = data.Utf8();
+    requestDataDict.SetString("data", dataStr);
+    requestDataDict.SetInteger("dataLength", (int)dataStr.size());
+    recordreplay::BrowserEvent("Network.RequestData.Form", requestDataDict);
+  }
+}
+
 void FrameFetchContext::PrepareRequest(
     ResourceRequest& request,
     ResourceLoaderOptions& options,
@@ -460,53 +511,6 @@ void FrameFetchContext::PrepareRequest(
     virtual_time_pauser = frame_scheduler->CreateWebScopedVirtualTimePauser(
         request.Url().GetString(),
         WebScopedVirtualTimePauser::VirtualTaskDuration::kNonInstant);
-  }
-
-  // Capture the record replay bookmark for the network request here,
-  // where the devtools stack id is taken.
-  if (PermitRecordReplayBrowserEvents()) {
-    // We must allow user agent scripts when taking a new bookmark.
-    ScriptForbiddenScope::AllowUserAgentScript allow_script;
-    std::string url_string = request.Url().GetString().Utf8().c_str();
-    uint64_t bookmark = recordreplay::NewBookmark();
-    request.SetRecordReplayBookmark(bookmark);
-    base::DictionaryValue dict;
-    String loader_id = IdentifiersFactory::LoaderId(document_loader_);
-    uint64_t identifier = RecordReplayNetworkRequestId(request.InspectorId());
-
-    String request_id = IdentifiersFactory::RequestId(document_loader_, identifier);
-    dict.SetDoubleKey("bookmark", (double) bookmark);
-    dict.SetString("requestUrl", url_string);
-    dict.SetString("requestMethod", request.HttpMethod().Utf8());
-    dict.SetString("requestId", request_id.Utf8());
-    const char* requestCause = GetRequestCauseString(request);
-    if (requestCause) {
-      dict.SetString("requestCause", requestCause);
-    }
-
-    base::ListValue headers;
-    for (auto header : request.HttpHeaderFields()) {
-      base::DictionaryValue header_obj;
-      header_obj.SetString("name", header.key.Utf8());
-      header_obj.SetString("value", header.value.Utf8());
-      headers.Append(std::move(header_obj));
-    }
-    dict.SetKey("requestHeaders", std::move(headers));
-
-    recordreplay::BrowserEvent("Network.PrepareRequest", dict);
-
-    // Check the request body for request data or stream.
-    const scoped_refptr<blink::EncodedFormData>& form_body =
-      request.MutableBody().FormBody();
-    if (form_body) {
-      WTF::String data = form_body->FlattenToString();
-      base::DictionaryValue requestDataDict;
-      requestDataDict.SetString("requestId", request_id.Utf8());
-      std::string dataStr = data.Utf8();
-      requestDataDict.SetString("data", dataStr);
-      requestDataDict.SetInteger("dataLength", (int)dataStr.size());
-      recordreplay::BrowserEvent("Network.RequestData.Form", requestDataDict);
-    }
   }
 
   probe::PrepareRequest(Probe(), document_loader_, request, options,

@@ -597,6 +597,7 @@ bool ResourceFetcher::ResourceNeedsLoad(Resource* resource,
   return policy != RevalidationPolicy::kUse || resource->StillNeedsLoad();
 }
 
+extern void RecordReplayReportDidPrepareRequest(const ResourceRequest& request);
 extern void RecordReplayReportDidReceiveResponse(uint64_t inspector_id,
                                                  const ResourceResponse& response);
 extern void RecordReplayReportDidFinishLoading(uint64_t inspector_id,
@@ -608,6 +609,7 @@ void ResourceFetcher::DidLoadResourceFromMemoryCache(
     const ResourceRequest& request,
     bool is_static_data,
     RenderBlockingBehavior render_blocking_behavior) {
+  RecordReplayReportDidPrepareRequest(request);
   RecordReplayReportDidReceiveResponse(resource->InspectorId(), resource->GetResponse());
   RecordReplayReportDidFinishLoading(resource->InspectorId(),
                                      resource->GetResponse().EncodedBodyLength(),
@@ -2148,14 +2150,17 @@ bool ResourceFetcher::StartLoad(
 
     const ResourceRequestHead& request_head = resource->GetResourceRequest();
 
-    if (resource_load_observer_) {
+    {
       DCHECK(!IsDetached());
       ResourceRequest request(request_head);
       request.SetHttpBody(request_body.FormBody());
-      ResourceResponse response;
-      resource_load_observer_->WillSendRequest(
-          request, response, resource->GetType(), resource->Options(),
-          render_blocking_behavior, resource);
+      RecordReplayReportDidPrepareRequest(request);
+      if (resource_load_observer_) {
+        ResourceResponse response;
+        resource_load_observer_->WillSendRequest(
+            request, response, resource->GetType(), resource->Options(),
+            render_blocking_behavior, resource);
+      }
     }
 
     using QuotaType = decltype(inflight_keepalive_bytes_);
