@@ -251,6 +251,7 @@ class LocalFrameMojoHandler
 
   // RecordReplayAuthTokenStoreObserver implementation:
   void OnRecordReplayAuthTokenChanged(const WTF::String& token) final;
+  void OnRecordReplayRefreshTokenChanged(const WTF::String& token) final;
 
   Member<blink::LocalFrame> frame_;
 

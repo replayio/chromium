@@ -4,6 +4,7 @@
 
 #include "components/record_replay/services/auth_token/public/cpp/auth_token_service_factory.h"
 
+#include "chrome/browser/profiles/profile.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "content/public/browser/browser_context.h"
 
@@ -31,8 +32,9 @@ RecordReplayAuthTokenServiceFactory::RecordReplayAuthTokenServiceFactory()
 RecordReplayAuthTokenServiceFactory::~RecordReplayAuthTokenServiceFactory() = default;
 
 KeyedService* RecordReplayAuthTokenServiceFactory::BuildServiceInstanceFor(
-    content::BrowserContext* /*context*/) const {
-  return new auth_token::RecordReplayAuthTokenService();
+    content::BrowserContext* context) const {
+  return new auth_token::RecordReplayAuthTokenService(
+      Profile::FromBrowserContext(context));
 }
 
 // Incognito profiles should use their own instance.

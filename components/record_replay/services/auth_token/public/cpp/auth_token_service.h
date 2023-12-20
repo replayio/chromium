@@ -13,11 +13,13 @@
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote_set.h"
 
+class Profile;
+
 namespace auth_token {
 
 class RecordReplayAuthTokenService : public KeyedService, public mojom::RecordReplayAuthTokenStore {
  public:
-  RecordReplayAuthTokenService();
+  RecordReplayAuthTokenService(Profile* profile);
   RecordReplayAuthTokenService(const RecordReplayAuthTokenService&) = delete;
   RecordReplayAuthTokenService& operator=(const RecordReplayAuthTokenService&) = delete;
   ~RecordReplayAuthTokenService() override;
@@ -26,15 +28,19 @@ class RecordReplayAuthTokenService : public KeyedService, public mojom::RecordRe
       mojo::PendingReceiver<mojom::RecordReplayAuthTokenStore> store);
 
   // mojom::RecordReplayAuthTokenStore:
-  void SetToken(const std::string& token) override;
+  void SetUserToken(const std::string& user_token) override;
+  void SetRefreshToken(const std::string& refresh_token) override;
   void AddObserver(mojo::PendingRemote<mojom::RecordReplayAuthTokenStoreObserver> observer) override;
 
 private:
+  raw_ptr<Profile> profile_;
   mojo::ReceiverSet<mojom::RecordReplayAuthTokenStore> auth_token_stores_;
 
-  std::string token_;
+  std::string user_token_;
+  std::string refresh_token_;
 
-  void NotifyObservers();
+  void NotifyObserversAboutUserToken();
+  void NotifyObserversAboutRefreshToken();
 
   mojo::RemoteSet<mojom::RecordReplayAuthTokenStoreObserver> observers_;
 };
