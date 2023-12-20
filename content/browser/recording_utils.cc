@@ -6,19 +6,12 @@
 #include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/memory/ref_counted.h"
-#include "base/path_service.h"
-#include "base/rand_util.h"
-#include "base/task/thread_pool.h"
-#include "build/build_config.h"
 #include "content/public/browser/browser_child_process_host_iterator.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
-// #include "content/public/browser/child_process_data.h"
-// #include "content/public/browser/gpu_utils.h"
+#include "content/public/browser/recording_utils.h"
 #include "content/public/browser/render_process_host.h"
-// #include "content/public/common/child_process_host.h"
 #include "content/public/common/content_switches.h"
-// #include "content/public/common/recording_utils.h"
 
 namespace content {
 
@@ -43,11 +36,11 @@ RefCountedScopedClosureRunner::RefCountedScopedClosureRunner(
 
 }  // namespace
 
-void RecordReplayAskAllRecordingChildrenToFinishRecording(base::OnceClosure callback) {
+void RecordReplayAskAllChildrenToFinishRecording(base::OnceClosure callback) {
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
           switches::kSingleProcess)) {
     // TODO(toshok) not sure - maybe we call recordreplay::FinishRecording directly?
-    LOG(ERROR) << "We're single threaded!";
+    // do we support single process mode at all?
     return;
   }
 
@@ -66,10 +59,17 @@ void RecordReplayAskAllRecordingChildrenToFinishRecording(base::OnceClosure call
 }
 
 void RecordReplayAskChildrenToFinishRecording(base::span<RenderProcessHost*> hosts, base::OnceClosure callback) {
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
+          switches::kSingleProcess)) {
+    // TODO(toshok) not sure - maybe we call recordreplay::FinishRecording directly?
+    // do we support single process mode at all?
+    return;
+  }
+
   auto closure_runner =
       base::MakeRefCounted<RefCountedScopedClosureRunner>(std::move(callback));
 
-  for (const auto& host : hosts) {
+  for (RenderProcessHost* host : hosts) {
         DCHECK(!host->GetProcess().is_current());
         if (!host->IsInitializedAndNotDead())
         continue;
@@ -77,3 +77,5 @@ void RecordReplayAskChildrenToFinishRecording(base::span<RenderProcessHost*> hos
             [](scoped_refptr<RefCountedScopedClosureRunner>) {}, closure_runner));
     }
 }
+
+}  // namespace content

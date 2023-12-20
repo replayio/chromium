@@ -59,7 +59,7 @@
 #include "components/tab_groups/tab_group_id.h"
 #include "components/tab_groups/tab_group_visual_data.h"
 #include "components/web_modal/web_contents_modal_dialog_manager.h"
-#include "content/public/common/recording_utils.h"
+#include "content/public/browser/recording_utils.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/render_widget_host.h"
 #include "content/public/browser/render_widget_host_observer.h"
@@ -1890,14 +1890,16 @@ bool TabStripModel::CloseWebContentses(
     // TODO(toshok) doing it here and this way is wrong since there might be an unload
     // handler that cancels the close, and we'll want to record that (and continue the
     // recording.)
-    std::vector<content::RenderProcessHost*> closing_renderers
+    std::vector<content::RenderProcessHost*> closing_renderers;
     for (const auto& pair : processes) {
       closing_renderers.push_back(pair.first);
     }
 
     base::RunLoop nested_run_loop(base::RunLoop::Type::kNestableTasksAllowed);
-    RecordReplayAskChildrenToFinishRecording(closing_renderers, nested_run_loop.QuitClosure());
+    content::RecordReplayAskChildrenToFinishRecording(closing_renderers, nested_run_loop.QuitClosure());
     nested_run_loop.Run();
+    // At this point, all renderers have stopped their recordings and we can continue
+    // shutting them down.
 
     // Try to fast shutdown the tabs that can close.
     for (const auto& pair : processes)

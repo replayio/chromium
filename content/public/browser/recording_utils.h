@@ -5,8 +5,8 @@
 #ifndef CONTENT_PUBLIC_BROWSER_RECORDING_UTILS_H_
 #define CONTENT_PUBLIC_BROWSER_RECORDING_UTILS_H_
 
-#include "base/span.h"
 #include "base/callback_forward.h"
+#include "base/containers/span.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/render_process_host.h"
 

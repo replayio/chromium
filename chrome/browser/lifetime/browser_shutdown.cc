@@ -205,7 +205,7 @@ void OnShutdownStarting(ShutdownType type) {
   // Wait for all recording child processes to finish their recording, so
   // we don't pollute it with actual process shutdown.
   base::RunLoop nested_run_loop(base::RunLoop::Type::kNestableTasksAllowed);
-  RecordReplayAskAllRecordingChildrenToFinishRecording(nested_run_loop.QuitClosure());
+  content::RecordReplayAskAllChildrenToFinishRecording(nested_run_loop.QuitClosure());
   nested_run_loop.Run();
 
   // Call FastShutdown on all of the RenderProcessHosts.  This will be
