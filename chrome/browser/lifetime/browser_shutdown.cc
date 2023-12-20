@@ -73,6 +73,8 @@
 #include "content/public/browser/profiling_utils.h"
 #endif
 
+#include "content/public/browser/recording_utils.h"
+
 namespace browser_shutdown {
 namespace {
 
@@ -174,46 +176,6 @@ void RegisterPrefs(PrefRegistrySimple* registry) {
   registry->RegisterBooleanPref(prefs::kRestartLastSessionOnShutdown, false);
 }
 
-class RefCountedScopedClosureRunner
-    : public base::RefCounted<RefCountedScopedClosureRunner> {
- public:
-  RefCountedScopedClosureRunner(base::OnceClosure callback);
-
- private:
-  friend class base::RefCounted<RefCountedScopedClosureRunner>;
-  ~RefCountedScopedClosureRunner() = default;
-
-  base::ScopedClosureRunner destruction_callback_;
-};
-
-RefCountedScopedClosureRunner::RefCountedScopedClosureRunner(
-    base::OnceClosure callback)
-    : destruction_callback_(std::move(callback)) {}
-
-
-void AskAllRecordingChildrenToFinishRecording(base::OnceClosure callback) {
-  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-          switches::kSingleProcess)) {
-    // TODO(toshok) not sure - maybe we call recordreplay::FinishRecording directly?
-    LOG(ERROR) << "We're single threaded!";
-    return;
-  }
-
-  auto closure_runner =
-      base::MakeRefCounted<RefCountedScopedClosureRunner>(std::move(callback));
-
-  // Ask all the renderer processes to finish their recordings.
-  for (content::RenderProcessHost::iterator i(content::RenderProcessHost::AllHostsIterator());
-       !i.IsAtEnd(); i.Advance()) {
-    LOG(ERROR) << "Calling Renderer::FinishRecording";
-    DCHECK(!i.GetCurrentValue()->GetProcess().is_current());
-    if (!i.GetCurrentValue()->IsInitializedAndNotDead())
-      continue;
-    i.GetCurrentValue()->FinishRecording(base::BindOnce(
-        [](scoped_refptr<RefCountedScopedClosureRunner>) {}, closure_runner));
-  }
-}
-
 void OnShutdownStarting(ShutdownType type) {
   CheckAccessedOnCorrectThread();
   if (g_shutdown_type != ShutdownType::kNotValid)
@@ -242,13 +204,9 @@ void OnShutdownStarting(ShutdownType type) {
 
   // Wait for all recording child processes to finish their recording, so
   // we don't pollute it with actual process shutdown.
-  LOG(ERROR) << "Before AskAllRecordingChildrenToFinishRecording";
   base::RunLoop nested_run_loop(base::RunLoop::Type::kNestableTasksAllowed);
-  AskAllRecordingChildrenToFinishRecording(nested_run_loop.QuitClosure());
-  LOG(ERROR) << "After AskAllRecordingChildrenToFinishRecording";
-  LOG(ERROR) << "Before nested_run_loop.Run()";
+  RecordReplayAskAllRecordingChildrenToFinishRecording(nested_run_loop.QuitClosure());
   nested_run_loop.Run();
-  LOG(ERROR) << "After nested_run_loop.Run()";
 
   // Call FastShutdown on all of the RenderProcessHosts.  This will be
   // a no-op in some cases, so we still need to go through the normal
