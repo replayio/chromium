@@ -1385,8 +1385,17 @@ void RenderThreadImpl::WriteClangProfilingProfile(
 #endif
 
 void RenderThreadImpl::FinishRecording(FinishRecordingCallback callback) {
-  recordreplay::FinishRecording();
-  std::move(callback).Run();
+  recordreplay::Print("RenderThreadImpl::FinishRecording");
+  if (recordreplay::IsRecordingOrReplaying()) {
+    LOG(ERROR) << "We're actually recording, whoopee";
+    recordreplay::FinishRecording();
+    // FinishRecording will cause the process to exit,
+    // though the _exit call may happen on another thread.
+    // either way we don't want to call the callback here.
+  } else {
+    LOG(ERROR) << "RenderThreadImpl::FinishRecording called when not recording.  invoking callback.";
+    std::move(callback).Run();
+  }
 }
 
 void RenderThreadImpl::SetIsCrossOriginIsolated(bool value) {

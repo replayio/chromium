@@ -205,6 +205,7 @@ void AskAllRecordingChildrenToFinishRecording(base::OnceClosure callback) {
   // Ask all the renderer processes to finish their recordings.
   for (content::RenderProcessHost::iterator i(content::RenderProcessHost::AllHostsIterator());
        !i.IsAtEnd(); i.Advance()) {
+    LOG(ERROR) << "Calling Renderer::FinishRecording";
     DCHECK(!i.GetCurrentValue()->GetProcess().is_current());
     if (!i.GetCurrentValue()->IsInitializedAndNotDead())
       continue;
@@ -244,8 +245,10 @@ void OnShutdownStarting(ShutdownType type) {
   LOG(ERROR) << "Before AskAllRecordingChildrenToFinishRecording";
   base::RunLoop nested_run_loop(base::RunLoop::Type::kNestableTasksAllowed);
   AskAllRecordingChildrenToFinishRecording(nested_run_loop.QuitClosure());
-  nested_run_loop.Run();
   LOG(ERROR) << "After AskAllRecordingChildrenToFinishRecording";
+  LOG(ERROR) << "Before nested_run_loop.Run()";
+  nested_run_loop.Run();
+  LOG(ERROR) << "After nested_run_loop.Run()";
 
   // Call FastShutdown on all of the RenderProcessHosts.  This will be
   // a no-op in some cases, so we still need to go through the normal
