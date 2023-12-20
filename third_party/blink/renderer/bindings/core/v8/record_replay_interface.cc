@@ -708,14 +708,14 @@ function getCurrentEvaluateFrame() {
   return gCurrentEvaluateFrame;
 }
 
-function Pause_evaluateInFrame({ frameId: frameIndexStr, expression }) {
+function Pause_evaluateInFrame({ internal, frameId: frameIndexStr, expression }) {
   const frameIndex = +frameIndexStr;
   const frame = getFrameByIndex(frameIndex);
   gCurrentEvaluateFrame = frame;
   let rv;
   try {
     rv = doEvaluation();
-    return buildRrpObjectResult(rv);
+    return buildEvalResult(internal, rv);
   } catch (err) {
     return handleEvalError(err);
   } finally {
@@ -739,7 +739,7 @@ function Pause_evaluateInFrame({ frameId: frameIndexStr, expression }) {
   }
 }
 
-function Pause_evaluateInGlobal({ expression }) {
+function Pause_evaluateInGlobal({ internal, expression }) {
   let rv;
   try {
     rv = sendMessage(
@@ -752,7 +752,15 @@ function Pause_evaluateInGlobal({ expression }) {
   } catch (err) {
     return handleEvalError(err);
   }
-  return buildRrpObjectResult(rv);
+  return buildEvalResult(internal, rv);
+}
+
+/**
+ * 
+ */
+function buildEvalResult(internal, cdpResult) {
+  // TODO
+  return buildRrpObjectResult(cdpResult);
 }
 
 function Pause_getAllFrames() {
