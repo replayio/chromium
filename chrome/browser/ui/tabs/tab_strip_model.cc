@@ -19,6 +19,7 @@
 #include "base/metrics/user_metrics.h"
 #include "base/observer_list.h"
 #include "base/ranges/algorithm.h"
+#include "base/run_loop.h"
 #include "base/scoped_observation.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -177,6 +178,23 @@ class RenderWidgetHostVisibilityTracker final
 };
 
 }  // namespace
+
+class RefCountedScopedClosureRunner
+    : public base::RefCounted<RefCountedScopedClosureRunner> {
+ public:
+  RefCountedScopedClosureRunner(base::OnceClosure callback);
+
+ private:
+  friend class base::RefCounted<RefCountedScopedClosureRunner>;
+  ~RefCountedScopedClosureRunner() = default;
+
+  base::ScopedClosureRunner destruction_callback_;
+};
+
+RefCountedScopedClosureRunner::RefCountedScopedClosureRunner(
+    base::OnceClosure callback)
+    : destruction_callback_(std::move(callback)) {}
+
 
 TabGroupModelFactory::TabGroupModelFactory() {
   DCHECK(!factory_instance);
@@ -1866,6 +1884,28 @@ bool TabStripModel::CloseWebContentses(
           contents->GetPrimaryMainFrame()->GetProcess();
       ++processes[process];
     }
+
+    // Synchronously stop recording the tabs we're closing.
+    // TODO(toshok) doing it here and this way is wrong since there might be an unload
+    // handler that cancels the close, and we'll want to record that (and continue the
+    // recording.)
+    base::RunLoop nested_run_loop(base::RunLoop::Type::kNestableTasksAllowed);
+    base::OnceClosure quit_closure = nested_run_loop.QuitClosure();
+
+    {
+      auto closure_runner =
+          base::MakeRefCounted<RefCountedScopedClosureRunner>(std::move(quit_closure));
+      LOG(ERROR) << "1";
+
+      for (const auto& pair : processes) {
+        LOG(ERROR) << "Calling Renderer::FinishRecording";
+        pair.first->FinishRecording(base::BindOnce(
+          [](scoped_refptr<RefCountedScopedClosureRunner>) {}, closure_runner));
+      }
+      LOG(ERROR) << "2";
+    }
+    nested_run_loop.Run();
+    LOG(ERROR) << "3";
 
     // Try to fast shutdown the tabs that can close.
     for (const auto& pair : processes)
