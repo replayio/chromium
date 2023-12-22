@@ -26,6 +26,8 @@
 #include "third_party/zlib/google/compression_utils.h"
 #include "ui/base/resource/scoped_file_writer.h"
 
+#include "base/record_replay.h"
+
 // For details of the file layout, see
 // http://dev.chromium.org/developers/design-documents/linuxresourcesandlocalizedstrings
 
@@ -276,6 +278,12 @@ bool DataPack::LoadFromBuffer(base::span<const uint8_t> buffer) {
 bool DataPack::SanityCheckFileAndRegisterResources(size_t margin_to_skip,
                                                    const uint8_t* data,
                                                    size_t data_length) {
+  recordreplay::Assert(
+    "[RUN-3051-3054] DataPack::SanityCheckFileAndRegisterResources A %zu %zu",
+    data_length,
+    resource_count_
+  );
+
   // 1) Check we have enough entries. There's an extra entry after the last item
   // which gives the length of the last item.
   size_t resource_table_size = (resource_count_ + 1) * sizeof(Entry);
@@ -299,6 +307,11 @@ bool DataPack::SanityCheckFileAndRegisterResources(size_t margin_to_skip,
   // 2) Verify the entries are within the appropriate bounds. There's an extra
   // entry after the last item which gives us the length of the last item.
   for (size_t i = 0; i < resource_count_ + 1; ++i) {
+    recordreplay::Assert(
+      "[RUN-3051-3054] DataPack::SanityCheckFileAndRegisterResources B %zu %u",
+      i,
+      resource_table_[i].file_offset
+    );
     if (resource_table_[i].file_offset > data_length) {
       LOG(ERROR) << "Data pack file corruption: "
                  << "Entry #" << i << " past end.";
