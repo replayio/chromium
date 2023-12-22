@@ -234,8 +234,12 @@ function assert(v, msg = "") {
   }
 }
 
+function isFunction(val) {
+  return typeof val === "function";
+}
+
 function isObject(val) {
-  return !!val && (typeof val === "object" || typeof val === "function")
+  return !!val && (typeof val === "object" || isFunction(val))
 }
 
 function typeofMaybeNull(value) {
@@ -388,7 +392,7 @@ function messageCallback(message) {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// main.js
+// Command Handlers
 ///////////////////////////////////////////////////////////////////////////////
 
 // Methods for interacting with the record/replay driver.
@@ -397,31 +401,6 @@ function messageCallback(message) {
 // inject via evaluatePrivilegd can know what contexts are available.
 const gExecutionContexts = new Map();
 const gContextChangeCallbacks = new Set();
-
-initMessages();
-addEventListener("Runtime.consoleAPICalled", onConsoleAPICall);
-addEventListener("Runtime.executionContextCreated", ({ context }) => {
-  gExecutionContexts.set(context.id, context);
-  for (const callback of gContextChangeCallbacks) {
-    callback(context, "add");
-  }
-});
-addEventListener("Runtime.executionContextDestroyed", ({ executionContextId }) => {
-  const context = gExecutionContexts.get(executionContextId);
-  for (const callback of gContextChangeCallbacks) {
-    callback(context, "remove");
-  }
-  gExecutionContexts.delete(executionContextId);
-});
-addEventListener("Runtime.executionContextsCleared", () => {
-  for (const context of gExecutionContexts.values()) {
-    for (const callback of gContextChangeCallbacks) {
-      callback(context, "remove");
-    }
-  }
-  gExecutionContexts.clear();
-});
-sendMessage("Runtime.enable");
 
 const CommandCallbacks = {
   "Graphics.getDevicePixelRatio": Graphics_getDevicePixelRatio,
@@ -457,6 +436,7 @@ function commandCallback(method, params) {
     return {};
   }
 
+  firstReplayApiError = null;
   try {
     VerboseCommands && log(`[Command ${method}] Handling command, params=${JSON_stringify(params)}...`);
     const result = CommandCallbacks[method](params);
@@ -472,6 +452,11 @@ function commandCallback(method, params) {
       message: e?.message || (e + ''),
       stack: e?.stack?.split?.("\n") || e?.stack || [],
     };
+  } finally {
+    // Note: This ignores the actually thrown error, which might not exist or
+    // be entirely different from the error that was thrown from within a
+    // Replay API call.
+    checkCommandHandlingErrors(method);
   }
 }
 const executeCommand = commandCallback;
@@ -708,14 +693,14 @@ function getCurrentEvaluateFrame() {
   return gCurrentEvaluateFrame;
 }
 
-function Pause_evaluateInFrame({ internal, frameId: frameIndexStr, expression }) {
+function Pause_evaluateInFrame({ frameId: frameIndexStr, expression }) {
   const frameIndex = +frameIndexStr;
   const frame = getFrameByIndex(frameIndex);
   gCurrentEvaluateFrame = frame;
   let rv;
   try {
     rv = doEvaluation();
-    return buildEvalResult(internal, rv);
+    return buildEvalResult(rv);
   } catch (err) {
     return handleEvalError(err);
   } finally {
@@ -739,7 +724,7 @@ function Pause_evaluateInFrame({ internal, frameId: frameIndexStr, expression })
   }
 }
 
-function Pause_evaluateInGlobal({ internal, expression }) {
+function Pause_evaluateInGlobal({ expression }) {
   let rv;
   try {
     rv = sendMessage(
@@ -752,14 +737,10 @@ function Pause_evaluateInGlobal({ internal, expression }) {
   } catch (err) {
     return handleEvalError(err);
   }
-  return buildEvalResult(internal, rv);
+  return buildEvalResult(rv);
 }
 
-/**
- * 
- */
-function buildEvalResult(internal, cdpResult) {
-  // TODO
+function buildEvalResult(cdpResult) {
   return buildRrpObjectResult(cdpResult);
 }
 
@@ -3077,6 +3058,9 @@ function adjustCoordinateByTransformMatrix(coord, m) {
  * Export internal methods via `__RECORD_REPLAY_ARGUMENTS__`.
  * This is to be used for internal debugging purposes.
  * ##########################################################################*/
+
+// TODO: Get rid of `internal`. There is no reason to have this in addition to
+//       __RECORD_REPLAY_ARGUMENTS__ and __RECORD_REPLAY__.
 __RECORD_REPLAY_ARGUMENTS__.internal = {
   getBlinkNodeIdByRrpId,
   getCdpObjectByRrpId,
@@ -3137,6 +3121,90 @@ Object.assign(__RECORD_REPLAY__, {
   getCurrentEvaluateFrame,
   replayEval
 });
+
+/** ###########################################################################
+ * {@link patchReplayApi} decorates our API objects/functions with extra
+ * diagnostics.
+ * ##########################################################################*/
+
+let firstReplayApiError = null;
+
+function patchReplayApi() {
+  patchReplayApiObject(__RECORD_REPLAY__);
+  patchReplayApiObject(__RECORD_REPLAY_ARGUMENTS__);
+  patchReplayApiObject(__RECORD_REPLAY_ARGUMENTS__.internal);
+}
+
+function patchReplayApiObject(obj) {
+  for (const key in obj) {
+    const value = obj[key];
+    if (isFunction(value)) {
+      obj[key] = wrapReplayApiFunction(value);
+    }
+  }
+}
+
+function wrapReplayApiFunction(fn) {
+  if (fn === commandCallback) {
+    // The command callback should not be patched to avoid infinite loops.
+    return commandCallback;
+  }
+  return (...args) => {
+    try {
+      log(`DDBG wrapReplayApiFunction ${fn.name}`);
+      return fn(...args);
+    } catch (err) {
+      // Remember internal errors for possible reporting later.
+      log(`DDBG firstReplayApiError ${err.stack}`);
+      firstReplayApiError ||= err;
+      throw err;
+    }
+  };
+}
+
+/**
+ * Check for potential internal errors and report them.
+ */
+function checkCommandHandlingErrors(method) {
+  if (firstReplayApiError) {
+    const msg = firstReplayApiError.stack ||
+      firstReplayApiError.toString?.() ||
+      firstReplayApiError;
+    warning(`INTERNAL_API_ERROR ${method} - ${msg}`);
+    firstReplayApiError = null;
+  }
+}
+
+
+///////////////////////////////////////////////////////////////////////////////
+// main.js
+///////////////////////////////////////////////////////////////////////////////
+
+patchReplayApi();
+initMessages();
+addEventListener("Runtime.consoleAPICalled", onConsoleAPICall);
+addEventListener("Runtime.executionContextCreated", ({ context }) => {
+  gExecutionContexts.set(context.id, context);
+  for (const callback of gContextChangeCallbacks) {
+    callback(context, "add");
+  }
+});
+addEventListener("Runtime.executionContextDestroyed", ({ executionContextId }) => {
+  const context = gExecutionContexts.get(executionContextId);
+  for (const callback of gContextChangeCallbacks) {
+    callback(context, "remove");
+  }
+  gExecutionContexts.delete(executionContextId);
+});
+addEventListener("Runtime.executionContextsCleared", () => {
+  for (const context of gExecutionContexts.values()) {
+    for (const callback of gContextChangeCallbacks) {
+      callback(context, "remove");
+    }
+  }
+  gExecutionContexts.clear();
+});
+sendMessage("Runtime.enable");
 
 } catch (e) {
   log(`Error: Initialization exception ${e}`);
