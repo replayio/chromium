@@ -126,11 +126,7 @@ namespace recordreplay {
   Macro(V8RecordReplayGetCurrentJSStack,                                \
         (std::string* stackTrace), (stackTrace))                        \
   Macro(V8RecordReplayEnterReplayCode, (), ())                          \
-  Macro(V8RecordReplayExitReplayCode, (), ())                           \
-  Macro(V8RecordReplayBeginAssertBufferAllocations,                     \
-    (const char* issueLabel), (issueLabel))                             \
-  Macro(V8RecordReplayEndAssertBufferAllocations, (), ())
-  
+  Macro(V8RecordReplayExitReplayCode, (), ())
 
 #if BUILDFLAG(IS_WIN)
 
@@ -564,13 +560,6 @@ AutoMarkReplayCode::AutoMarkReplayCode() {
 
 AutoMarkReplayCode::~AutoMarkReplayCode() {
   V8RecordReplayExitReplayCode();
-}
-
-AutoAssertBufferAllocations::AutoAssertBufferAllocations(const char* issueLabel) {
-  V8RecordReplayBeginAssertBufferAllocations(issueLabel);
-}
-AutoAssertBufferAllocations::~AutoAssertBufferAllocations() {
-  V8RecordReplayEndAssertBufferAllocations();
 }
 
 void AddOrderedSRWLock(const char* name, void* lock) {
