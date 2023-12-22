@@ -436,7 +436,6 @@ function commandCallback(method, params) {
     return {};
   }
 
-  firstReplayApiError = null;
   try {
     VerboseCommands && log(`[Command ${method}] Handling command, params=${JSON_stringify(params)}...`);
     const result = CommandCallbacks[method](params);
@@ -452,11 +451,6 @@ function commandCallback(method, params) {
       message: e?.message || (e + ''),
       stack: e?.stack?.split?.("\n") || e?.stack || [],
     };
-  } finally {
-    // Note: This ignores the actually thrown error, which might not exist or
-    // be entirely different from the error that was thrown from within a
-    // Replay API call.
-    checkCommandHandlingErrors(method);
   }
 }
 const executeCommand = commandCallback;
@@ -694,6 +688,7 @@ function getCurrentEvaluateFrame() {
 }
 
 function Pause_evaluateInFrame({ frameId: frameIndexStr, expression }) {
+  // TODO: I need to take one more pass at this, so we can, under some circumstances, catch all exceptions thrown by eval, rather than just our own API.
   const frameIndex = +frameIndexStr;
   const frame = getFrameByIndex(frameIndex);
   gCurrentEvaluateFrame = frame;
@@ -741,6 +736,13 @@ function Pause_evaluateInGlobal({ expression }) {
 }
 
 function buildEvalResult(cdpResult) {
+  if (usedReplayApi && cdpResult?.exceptionDetails) {
+    const cdpException = cdpResult.exceptionDetails.exception;
+    const exceptionObj = cdpException ?
+      getPlainObjectFromCdpObject(cdpException) : 
+      { message: cdpResult.exceptionDetails.text || "" };
+    warning(`REPLAY_API_EVAL_ERROR Exception: ${JSON_stringify(exceptionObj)}`);
+  }
   return buildRrpObjectResult(cdpResult);
 }
 
@@ -993,6 +995,12 @@ function getPlainObjectByRrpId(rrpId) {
     gPlainObjectByRrpId.set(rrpId, plainObject);
   }
   return plainObject;
+}
+
+function getPlainObjectFromCdpObject(cdpObject) {
+  const cdpId = cdpObject.objectId;
+  assert(cdpId);
+  return fromJsGetObjectByCdpId(cdpId);
 }
 
 /**
@@ -3127,7 +3135,7 @@ Object.assign(__RECORD_REPLAY__, {
  * diagnostics.
  * ##########################################################################*/
 
-let firstReplayApiError = null;
+let usedReplayApi = 0;
 
 function patchReplayApi() {
   patchReplayApiObject(__RECORD_REPLAY__);
@@ -3146,33 +3154,13 @@ function patchReplayApiObject(obj) {
 
 function wrapReplayApiFunction(fn) {
   if (fn === commandCallback) {
-    // The command callback should not be patched to avoid infinite loops.
+    // The command callback itself should not be patched.
     return commandCallback;
   }
   return (...args) => {
-    try {
-      log(`DDBG wrapReplayApiFunction ${fn.name}`);
-      return fn(...args);
-    } catch (err) {
-      // Remember internal errors for possible reporting later.
-      log(`DDBG firstReplayApiError ${err.stack}`);
-      firstReplayApiError ||= err;
-      throw err;
-    }
+    ++usedReplayApi;
+    return fn(...args);
   };
-}
-
-/**
- * Check for potential internal errors and report them.
- */
-function checkCommandHandlingErrors(method) {
-  if (firstReplayApiError) {
-    const msg = firstReplayApiError.stack ||
-      firstReplayApiError.toString?.() ||
-      firstReplayApiError;
-    warning(`INTERNAL_API_ERROR ${method} - ${msg}`);
-    firstReplayApiError = null;
-  }
 }
 
 
