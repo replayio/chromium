@@ -481,16 +481,10 @@ function Target_evaluatePrivileged({ expression }) {
   return { result };
 }
 
-const cdpToRrpConsoleLevels = new Map([
-  ["info", "info"],
-  ["warning", "warning"],
-  ["error", "error"],
-  ["timeEnd", "timeEnd"]
-]);
-
 // Contents of the last console API call. Runtime.consoleAPICalled will be
 // emitted before the driver gets the current message contents.
 let gLastConsoleAPICall;
+
 function onConsoleAPICall(params) {
   gLastConsoleAPICall = params;
 }
@@ -529,7 +523,15 @@ function Target_getCurrentMessageContents() {
     argumentValues.push(buildRrpObjectFromCdpObject(arg));
   }
 
-  const level = cdpToRrpConsoleLevels.get(gLastConsoleAPICall.type) || "info";
+  let level = "info";
+  switch (gLastConsoleAPICall.level) {
+    case "warning":
+      level = "warning";
+      break;
+    case "error":
+      level = "error";
+      break;
+  }
 
   let url, sourceId, line, column;
   if (gLastConsoleAPICall.stackTrace) {
