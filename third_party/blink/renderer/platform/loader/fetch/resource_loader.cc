@@ -777,9 +777,8 @@ void ResourceLoader::DidChangePriority(ResourceLoadPriority load_priority,
 }
 
 void ResourceLoader::ScheduleCancel() {
-  if (!cancel_timer_.IsActive()) {
+  if (!cancel_timer_.IsActive())
     cancel_timer_.StartOneShot(base::TimeDelta(), FROM_HERE);
-  }
 }
 
 void ResourceLoader::CancelTimerFired(TimerBase*) {
@@ -1269,8 +1268,6 @@ void ResourceLoader::DidStartLoadingResponseBody(
 void ResourceLoader::DidReceiveData(const char* data, int length) {
   CHECK_GE(length, 0);
 
-  recordreplay::Assert("[RUN-1436] ResourceLoader::DidReceiveData %d", length);
-
   if (PermitRecordReplayBrowserEvents()) {
     base::DictionaryValue dict;
     dict.SetDoubleKey("identifier",
@@ -1509,9 +1506,8 @@ void ResourceLoader::RequestSynchronously(const ResourceRequestHead& request) {
   }
   // A message dispatched while synchronously fetching the resource
   // can bring about the cancellation of this load.
-  if (!IsLoading()) {
+  if (!IsLoading())
     return;
-  }
   int64_t decoded_body_length = data_out.size();
   if (error_out) {
     DidFail(*error_out, base::TimeTicks::Now(), encoded_data_length,
@@ -1519,9 +1515,8 @@ void ResourceLoader::RequestSynchronously(const ResourceRequestHead& request) {
     return;
   }
   DidReceiveResponse(response_out);
-  if (!IsLoading()) {
+  if (!IsLoading())
     return;
-  }
   DCHECK_GE(response_out.ToResourceResponse().EncodedBodyLength(), 0);
 
   // Follow the async case convention of not calling DidReceiveData or
