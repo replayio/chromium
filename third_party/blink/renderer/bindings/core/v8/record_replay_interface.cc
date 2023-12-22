@@ -737,11 +737,8 @@ function Pause_evaluateInGlobal({ expression }) {
 
 function buildEvalResult(cdpResult) {
   if (usedReplayApi && cdpResult?.exceptionDetails) {
-    const cdpException = cdpResult.exceptionDetails.exception;
-    const exceptionObj = cdpException ?
-      getPlainObjectFromCdpObject(cdpException) : 
-      { message: cdpResult.exceptionDetails.text || "" };
-    warning(`REPLAY_API_EVAL_ERROR Exception: ${JSON_stringify(exceptionObj)}`);
+    const cdpException = cdpResult.exceptionDetails.exception?.description || cdpResult.exceptionDetails;
+    warning(`REPLAY_API_EVAL_ERROR ${JSON_stringify(cdpException)}`);
   }
   return buildRrpObjectResult(cdpResult);
 }
