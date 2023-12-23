@@ -8,7 +8,9 @@
 #include "base/values.h"
 #include "net/base/net_errors.h"
 #include "third_party/blink/public/platform/web_url_error.h"
+#include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
+#include "third_party/blink/renderer/platform/loader/fetch/fetch_initiator_info.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_request.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_response.h"
 #include "third_party/blink/renderer/platform/network/encoded_form_data.h"
@@ -136,10 +138,10 @@ static base::DictionaryValue BuildInitiatorObject(blink::Document* document,
   base::DictionaryValue rv;
 
   if (initiator_info.is_imported_module && !initiator_info.referrer.empty()) {
-    rv.Set("type", "script");
-    rv.Set("url", initiator_info.referrer.Utf8());
-    rv.Set("line", initiator_info.position.line_.OneBasedInt());
-    rv.Set("column", initiator_info.position.column_.ZeroBasedInt());
+    rv.SetString("type", "script");
+    rv.SetString("url", initiator_info.referrer.Utf8());
+    rv.SetInteger("line", initiator_info.position.line_.OneBasedInt());
+    rv.SetInteger("column", initiator_info.position.column_.ZeroBasedInt());
     return rv;
   }
 
@@ -147,8 +149,8 @@ static base::DictionaryValue BuildInitiatorObject(blink::Document* document,
       initiator_info.name == fetch_initiator_type_names::kCSS ||
       initiator_info.name == fetch_initiator_type_names::kUacss;
   if (was_requested_by_stylesheet && !initiator_info.referrer.empty()) {
-    rv.Set("type", "parser");
-    rv.Set("url", initiator_info.referrer.Utf8());
+    rv.SetString("type", "parser");
+    rv.SetString("url", initiator_info.referrer.Utf8());
     return rv;
   }
 
@@ -156,24 +158,24 @@ static base::DictionaryValue BuildInitiatorObject(blink::Document* document,
     document = document->LocalOwner() ? document->LocalOwner()->ownerDocument()
                                       : nullptr;
   if (document && document->GetScriptableDocumentParser()) {
-    rv.Set("type", "parser");
+    rv.SetString("type", "parser");
 
     blink::KURL url = document->Url();
     url.RemoveFragmentIdentifier();
-    rv.Set("url", url.GetString().Utf8());
+    rv.SetString("url", url.GetString().Utf8());
 
     if (TextPosition::BelowRangePosition() != initiator_info.position) {
-      rv.Set("line", initiator_info.position.line_.OneBasedInt());
-      rv.Set("column", initiator_info.position.column_.ZeroBasedInt());
+      rv.SetInteger("line", initiator_info.position.line_.OneBasedInt());
+      rv.SetInteger("column", initiator_info.position.column_.ZeroBasedInt());
     } else {
-      rv.Set("line", document->GetScriptableDocumentParser()->GetTextPosition().line_.OneBasedInt());
-      rv.Set("column", document->GetScriptableDocumentParser()->GetTextPosition().column_.ZeroBasedInt());
+      rv.SetInteger("line", document->GetScriptableDocumentParser()->GetTextPosition().line_.OneBasedInt());
+      rv.SetInteger("column", document->GetScriptableDocumentParser()->GetTextPosition().column_.ZeroBasedInt());
     }
 
     return rv;
   }
 
-  rv.Set("type", "script");
+  rv.SetString("type", "script");
   return rv;
 }
 
