@@ -4,10 +4,14 @@
 
 #include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
 
+#include "base/base64.h"
+#include "base/values.h"
 #include "net/base/net_errors.h"
+#include "third_party/blink/public/platform/web_url_error.h"
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_request.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_response.h"
+#include "third_party/blink/renderer/platform/network/encoded_form_data.h"
 #include "v8/include/v8.h"
 
 using namespace blink;
