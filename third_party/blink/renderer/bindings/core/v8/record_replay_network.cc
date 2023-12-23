@@ -5,12 +5,17 @@
 #include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
 
 #include "base/base64.h"
+#include "base/json/json_writer.h"
 #include "base/values.h"
 #include "net/base/net_errors.h"
 #include "third_party/blink/public/platform/web_url_error.h"
 #include "third_party/blink/renderer/core/dom/document.h"
+#include "third_party/blink/renderer/core/dom/scriptable_document_parser.h"
+#include "third_party/blink/renderer/core/html/html_frame_owner_element.h"
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/loader/fetch/fetch_initiator_info.h"
+#include "third_party/blink/renderer/platform/loader/fetch/fetch_initiator_type_names.h"
+#include "third_party/blink/renderer/platform/loader/fetch/resource.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_request.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_response.h"
 #include "third_party/blink/renderer/platform/network/encoded_form_data.h"
@@ -146,8 +151,8 @@ static base::DictionaryValue BuildInitiatorObject(blink::Document* document,
   }
 
   bool was_requested_by_stylesheet =
-      initiator_info.name == fetch_initiator_type_names::kCSS ||
-      initiator_info.name == fetch_initiator_type_names::kUacss;
+      initiator_info.name == blink::fetch_initiator_type_names::kCSS ||
+      initiator_info.name == blink::fetch_initiator_type_names::kUacss;
   if (was_requested_by_stylesheet && !initiator_info.referrer.empty()) {
     rv.SetString("type", "parser");
     rv.SetString("url", initiator_info.referrer.Utf8());
