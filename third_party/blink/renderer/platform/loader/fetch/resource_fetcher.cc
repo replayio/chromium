@@ -97,6 +97,8 @@
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
+
 namespace blink {
 
 constexpr uint32_t ResourceFetcher::kKeepaliveInflightBytesQuota;
@@ -597,23 +599,16 @@ bool ResourceFetcher::ResourceNeedsLoad(Resource* resource,
   return policy != RevalidationPolicy::kUse || resource->StillNeedsLoad();
 }
 
-extern void RecordReplayReportDidPrepareRequest(const ResourceRequest& request);
-extern void RecordReplayReportDidReceiveResponse(uint64_t inspector_id,
-                                                 const ResourceResponse& response);
-extern void RecordReplayReportDidFinishLoading(uint64_t inspector_id,
-                                               int64_t encoded_body_length,
-                                               int64_t decoded_body_length);
-
 void ResourceFetcher::DidLoadResourceFromMemoryCache(
     Resource* resource,
     const ResourceRequest& request,
     bool is_static_data,
     RenderBlockingBehavior render_blocking_behavior) {
-  RecordReplayReportDidPrepareRequest(request);
-  RecordReplayReportDidReceiveResponse(resource->InspectorId(), resource->GetResponse());
-  RecordReplayReportDidFinishLoading(resource->InspectorId(),
-                                     resource->GetResponse().EncodedBodyLength(),
-                                     resource->GetResponse().DecodedBodyLength());
+  recordreplay::OnNetworkPrepareRequest(request);
+  recordreplay::OnNetworkReceiveResponse(resource->InspectorId(), resource->GetResponse());
+  recordreplay::OnNetworkFinishLoading(resource->InspectorId(),
+                                       resource->GetResponse().EncodedBodyLength(),
+                                       resource->GetResponse().DecodedBodyLength());
 
   if (IsDetached() || !resource_load_observer_)
     return;
@@ -2120,7 +2115,7 @@ bool ResourceFetcher::StartLoad(
       DCHECK(!IsDetached());
       ResourceRequest request(request_head);
       request.SetHttpBody(request_body.FormBody());
-      RecordReplayReportDidPrepareRequest(request);
+      recordreplay::OnNetworkPrepareRequest(request);
       if (resource_load_observer_) {
         ResourceResponse response;
         resource_load_observer_->WillSendRequest(

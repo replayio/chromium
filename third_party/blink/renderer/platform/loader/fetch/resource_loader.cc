@@ -97,10 +97,9 @@
 #include "url/url_constants.h"
 
 #include "net/base/net_errors.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
 
 namespace blink {
-
-extern uint64_t RecordReplayNetworkRequestId(uint64_t inspector_id);
 
 namespace {
 
@@ -221,27 +220,6 @@ void LogCnameAliasMetrics(const CnameAliasMetricInfo& info) {
 }
 
 }  // namespace
-
-static bool PermitRecordReplayBrowserEvents() {
-  return recordreplay::IsRecordingOrReplaying("notify-network") && v8::IsMainThread();
-}
-
-static const char* HttpVersionToString(ResourceResponse::HTTPVersion version) {
-  switch (version) {
-    case ResourceResponse::HTTPVersion::kHTTPVersion_0_9:
-      return "http/0.9";
-    case ResourceResponse::HTTPVersion::kHTTPVersion_1_0:
-      return "http/1.0";
-    case ResourceResponse::HTTPVersion::kHTTPVersion_1_1:
-      return "http/1.1";
-    case ResourceResponse::HTTPVersion::kHTTPVersion_2_0:
-      return "http/2.0";
-    case ResourceResponse::HTTPVersion::kHTTPVersionUnknown:
-      return "http";
-    default:
-      return "http/unknown";
-  }
-}
 
 // CodeCacheRequest handles the requests to fetch data from code cache.
 // This owns WebCodeCacheLoader that actually loads the data from the
@@ -812,31 +790,6 @@ static bool IsManualRedirectFetchRequest(const ResourceRequestHead& request) {
          request.GetRequestContext() == mojom::blink::RequestContextType::FETCH;
 }
 
-void RecordReplayReportResourceRedirect(uint64_t inspector_id, const KURL& new_url,
-                                        ResourceRequest* new_request) {
-  if (!PermitRecordReplayBrowserEvents()) {
-    return;
-  }
-
-  base::DictionaryValue dict;
-  dict.SetDoubleKey("identifier",
-                    (double) RecordReplayNetworkRequestId(inspector_id));
-  dict.SetString("requestUrl", new_url.GetString().Utf8());
-
-  base::ListValue headers;
-  if (new_request) {
-    for (auto header : new_request->HttpHeaderFields()) {
-      base::DictionaryValue header_obj;
-      header_obj.SetString("name", header.key.Utf8());
-      header_obj.SetString("value", header.value.Utf8());
-      headers.Append(std::move(header_obj));
-    }
-  }
-  dict.SetKey("requestHeaders", std::move(headers));
-
-  recordreplay::BrowserEvent("Network.ResourceRedirect", dict);
-}
-
 bool ResourceLoader::WillFollowRedirect(
     const WebURL& new_url,
     const net::SiteForCookies& new_site_for_cookies,
@@ -990,8 +943,8 @@ bool ResourceLoader::WillFollowRedirect(
     return false;
   }
 
-  RecordReplayReportResourceRedirect(resource_->InspectorId(),
-                                     new_request->Url(), new_request.get());
+  recordreplay::OnNetworkResourceRedirect(resource_->InspectorId(),
+                                          new_request->Url(), new_request.get());
 
   has_devtools_request_id = new_request->GetDevToolsId().has_value();
   return true;
@@ -1031,31 +984,6 @@ FetchContext& ResourceLoader::Context() const {
 void ResourceLoader::DidReceiveResponse(const WebURLResponse& response) {
   DCHECK(!response.IsNull());
   DidReceiveResponseInternal(response.ToResourceResponse());
-}
-
-void RecordReplayReportDidReceiveResponse(uint64_t inspector_id,
-                                          const ResourceResponse& response) {
-  if (!PermitRecordReplayBrowserEvents()) {
-    return;
-  }
-
-  base::DictionaryValue dict;
-  dict.SetDoubleKey("identifier",
-                    (double) RecordReplayNetworkRequestId(inspector_id));
-  const char* http_version = HttpVersionToString(response.HttpVersion());
-  base::ListValue headers;
-  for (auto header : response.HttpHeaderFields()) {
-    base::DictionaryValue header_obj;
-    header_obj.SetString("name", header.key.Utf8());
-    header_obj.SetString("value", header.value.Utf8());
-    headers.Append(std::move(header_obj));
-  }
-  dict.SetKey("responseHeaders", std::move(headers));
-  dict.SetString("responseProtocolVersion", http_version);
-  dict.SetDoubleKey("responseStatus", response.HttpStatusCode());
-  dict.SetString("responseStatusText", response.HttpStatusText().Utf8());
-  dict.SetBoolean("responseFromCache", response.WasCached());
-  recordreplay::BrowserEvent("Network.DidReceiveResponse", dict);
 }
 
 void ResourceLoader::DidReceiveResponseInternal(
@@ -1214,7 +1142,7 @@ void ResourceLoader::DidReceiveResponseInternal(
 
   resource_->ResponseReceived(response);
 
-  RecordReplayReportDidReceiveResponse(resource_->InspectorId(), response);
+  recordreplay::OnNetworkReceiveResponse(resource_->InspectorId(), response);
 
   if (resource_->Loader() && fetcher_->GetProperties().IsDetached()) {
     // If the fetch context is already detached, we don't need further signals,
@@ -1282,33 +1210,12 @@ void ResourceLoader::DidStartLoadingResponseBody(
   data_pipe_completion_notifier_ = completion_notifier;
 }
 
-void RecordReplayReportDidReceiveData(uint64_t inspector_id, const char* data, int length) {
-  if (!PermitRecordReplayBrowserEvents()) {
-    return;
-  }
-
-  base::DictionaryValue dict;
-  dict.SetDoubleKey("identifier",
-                    (double) RecordReplayNetworkRequestId(inspector_id));
-  dict.SetDoubleKey("dataLength", (double) length);
-  if (data) {
-    std::string data_base64 = base::Base64Encode(
-      base::span<const uint8_t>(
-        reinterpret_cast<const uint8_t*>(data),
-        length
-      )
-    );
-    dict.SetString("data", data_base64);
-  }
-  recordreplay::BrowserEvent("Network.DidReceiveData", dict);
-}
-
 void ResourceLoader::DidReceiveData(const char* data, int length) {
   CHECK_GE(length, 0);
 
   recordreplay::Assert("[RUN-1436] ResourceLoader::DidReceiveData %d", length);
 
-  RecordReplayReportDidReceiveData(resource_->InspectorId(), data, length);
+  recordreplay::OnNetworkReceiveData(resource_->InspectorId(), data, length);
 
   if (auto* observer = fetcher_->GetResourceLoadObserver()) {
     observer->DidReceiveData(resource_->InspectorId(),
@@ -1336,21 +1243,6 @@ void ResourceLoader::DidFinishLoadingFirstPartInMultipart() {
                                0, false);
 }
 
-void RecordReplayReportDidFinishLoading(uint64_t inspector_id,
-                                        int64_t encoded_body_length,
-                                        int64_t decoded_body_length) {
-  if (!PermitRecordReplayBrowserEvents()) {
-    return;
-  }
-
-  base::DictionaryValue dict;
-  dict.SetDoubleKey("identifier",
-                    (double) RecordReplayNetworkRequestId(inspector_id));
-  dict.SetDoubleKey("encodedBodySize", (double) encoded_body_length);
-  dict.SetDoubleKey("decodedBodySize", (double) decoded_body_length);
-  recordreplay::BrowserEvent("Network.DidFinishLoading", dict);
-}
-
 void ResourceLoader::DidFinishLoading(
     base::TimeTicks response_end_time,
     int64_t encoded_data_length,
@@ -1362,7 +1254,7 @@ void ResourceLoader::DidFinishLoading(
   resource_->SetEncodedBodyLength(encoded_body_length);
   resource_->SetDecodedBodyLength(decoded_body_length);
 
-  RecordReplayReportDidFinishLoading(resource_->InspectorId(), encoded_body_length, decoded_body_length);
+  recordreplay::OnNetworkFinishLoading(resource_->InspectorId(), encoded_body_length, decoded_body_length);
 
   if (pervasive_payload_requested.has_value()) {
     ukm::SourceId ukm_source_id =
@@ -1409,19 +1301,6 @@ void ResourceLoader::DidFinishLoading(
       inflight_keepalive_bytes_, should_report_corb_blocking);
 }
 
-void RecordReplayReportDidFail(uint64_t inspector_id, const WebURLError& error) {
-  if (!PermitRecordReplayBrowserEvents()) {
-    return;
-  }
-
-  std::string reason = net::ErrorToShortString(error.reason());
-  base::DictionaryValue dict;
-  dict.SetDoubleKey("identifier",
-                    (double) RecordReplayNetworkRequestId(inspector_id));
-  dict.SetString("requestFailedReason", std::move(reason));
-  recordreplay::BrowserEvent("Network.DidFailLoading", dict);
-}
-
 void ResourceLoader::DidFail(const WebURLError& error,
                              base::TimeTicks response_end_time,
                              int64_t encoded_data_length,
@@ -1430,7 +1309,7 @@ void ResourceLoader::DidFail(const WebURLError& error,
   const ResourceRequestHead& request = resource_->GetResourceRequest();
   response_end_time_for_error_cases_ = response_end_time;
 
-  RecordReplayReportDidFail(resource_->InspectorId(), error);
+  recordreplay::OnNetworkFail(resource_->InspectorId(), error);
 
   if (request.IsAutomaticUpgrade()) {
     LogMixedAutoupgradeMetrics(MixedContentAutoupgradeStatus::kFailed,

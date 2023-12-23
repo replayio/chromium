@@ -153,6 +153,8 @@
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
+
 namespace blink {
 namespace {
 
@@ -1029,9 +1031,6 @@ void DocumentLoader::DecodedBodyDataReceived(
   BodyDataReceivedImpl(body_data);
 }
 
-extern void RecordReplayReportDidReceiveData(uint64_t inspector_id,
-                                             const char* data, int length);
-
 void DocumentLoader::BodyDataReceivedImpl(BodyData& data) {
   TRACE_EVENT0("loading", "DocumentLoader::BodyDataReceived");
   base::span<const char> encoded_data = data.EncodedData();
@@ -1041,8 +1040,8 @@ void DocumentLoader::BodyDataReceivedImpl(BodyData& data) {
     probe::DidReceiveData(probe::ToCoreProbeSink(GetFrame()),
                           main_resource_identifier_, this, encoded_data.data(),
                           encoded_data.size());
-    RecordReplayReportDidReceiveData(main_resource_identifier_,
-                                     encoded_data.data(), (int)encoded_data.size());
+    recordreplay::OnNetworkReceiveData(main_resource_identifier_,
+                                       encoded_data.data(), (int)encoded_data.size());
   }
 
   TRACE_EVENT1("loading", "DocumentLoader::HandleData", "length",
@@ -1063,11 +1062,6 @@ void DocumentLoader::BodyDataReceivedImpl(BodyData& data) {
   ProcessDataBuffer(&data);
 }
 
-extern void RecordReplayReportDidFinishLoading(uint64_t inspector_id,
-                                               int64_t encoded_body_length,
-                                               int64_t decoded_body_length);
-extern void RecordReplayReportDidFail(uint64_t inspector_id, const WebURLError& error);
-
 void DocumentLoader::BodyLoadingFinished(
     base::TimeTicks completion_time,
     int64_t total_encoded_data_length,
@@ -1086,9 +1080,9 @@ void DocumentLoader::BodyLoadingFinished(
         probe::ToCoreProbeSink(GetFrame()), main_resource_identifier_, this,
         completion_time, total_encoded_data_length, total_decoded_body_length,
         should_report_corb_blocking);
-    RecordReplayReportDidFinishLoading(main_resource_identifier_,
-                                       total_encoded_data_length,
-                                       total_decoded_body_length);
+    recordreplay::OnNetworkFinishLoading(main_resource_identifier_,
+                                         total_encoded_data_length,
+                                         total_decoded_body_length);
     if (response_.ShouldPopulateResourceTiming() ||
         is_error_page_for_failed_navigation_) {
       // The response is being copied here to pass the Encoded and Decoded
@@ -1121,7 +1115,7 @@ void DocumentLoader::BodyLoadingFinished(
   probe::DidFailLoading(probe::ToCoreProbeSink(GetFrame()),
                         main_resource_identifier_, this, resource_error,
                         frame_->GetDevToolsFrameToken());
-  RecordReplayReportDidFail(main_resource_identifier_, *error);
+  recordreplay::OnNetworkFail(main_resource_identifier_, *error);
   GetFrame()->Console().DidFailLoading(this, main_resource_identifier_,
                                        resource_error);
   LoadFailed(resource_error);
@@ -1202,9 +1196,6 @@ void DocumentLoader::FinishedLoading(base::TimeTicks finish_time) {
   }
 }
 
-extern void RecordReplayReportResourceRedirect(uint64_t inspector_id, const KURL& new_url,
-                                               ResourceRequest* new_request);
-
 void DocumentLoader::HandleRedirect(
     WebNavigationParams::RedirectInfo& redirect) {
   ResourceResponse redirect_response =
@@ -1238,7 +1229,7 @@ void DocumentLoader::HandleRedirect(
   probe::WillSendNavigationRequest(
       probe::ToCoreProbeSink(GetFrame()), main_resource_identifier_, this,
       url_after_redirect, http_method_, http_body_.get());
-  RecordReplayReportResourceRedirect(main_resource_identifier_, url_after_redirect, nullptr);
+  recordreplay::OnNetworkResourceRedirect(main_resource_identifier_, url_after_redirect, nullptr);
 
   navigation_timing_info_->AddRedirect(redirect_response, url_after_redirect);
 
@@ -1691,10 +1682,6 @@ void DocumentLoader::StartLoading() {
   params_ = nullptr;
 }
 
-extern void RecordReplayReportDidPrepareRequest(const ResourceRequest& request);
-extern void RecordReplayReportDidReceiveResponse(uint64_t inspector_id,
-                                                 const ResourceResponse& response);
-
 void DocumentLoader::StartLoadingInternal() {
   GetTiming().MarkNavigationStart();
   DCHECK_EQ(state_, kNotStarted);
@@ -1719,7 +1706,7 @@ void DocumentLoader::StartLoadingInternal() {
   if (recordreplay::IsRecordingOrReplaying("notify-network")) {
     ResourceRequest request(url_);
     request.SetInspectorId(main_resource_identifier_);
-    RecordReplayReportDidPrepareRequest(request);
+    recordreplay::OnNetworkPrepareRequest(request);
   }
 
   navigation_timing_info_ = ResourceTimingInfo::Create(
@@ -1761,7 +1748,7 @@ void DocumentLoader::StartLoadingInternal() {
   probe::DidReceiveResourceResponse(probe::ToCoreProbeSink(GetFrame()),
                                     main_resource_identifier_, this, response_,
                                     nullptr /* resource */);
-  RecordReplayReportDidReceiveResponse(main_resource_identifier_, response_);
+  recordreplay::OnNetworkReceiveResponse(main_resource_identifier_, response_);
 
   HandleResponse();
 
