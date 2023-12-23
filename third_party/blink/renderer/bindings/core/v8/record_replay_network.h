@@ -22,7 +22,8 @@ struct WebURLError;
 
 namespace recordreplay {
 
-void OnNetworkPrepareRequest(blink::Document* document, blink::Resource* resource,
+void OnNetworkPrepareRequest(const blink::Document* document,
+                             const blink::Resource* resource,
                              const blink::ResourceRequest& request);
 
 void OnNetworkResourceRedirect(uint64_t inspector_id, const blink::KURL& new_url,

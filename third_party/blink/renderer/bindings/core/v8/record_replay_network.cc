@@ -135,7 +135,7 @@ static const char* GetRequestCauseString(const ResourceRequest& req) {
    */
 }
 
-static base::DictionaryValue BuildInitiatorObject(blink::Document* document,
+static base::DictionaryValue BuildInitiatorObject(const blink::Document* document,
                                                   const blink::FetchInitiatorInfo& initiator_info) {
   // See InspectorNetworkAgent::BuildInitiatorObject for the basis of this
   // function. Note that it would be better if we listened to CDP Network events
@@ -184,7 +184,7 @@ static base::DictionaryValue BuildInitiatorObject(blink::Document* document,
   return rv;
 }
 
-void OnNetworkPrepareRequest(blink::Document* document, blink::Resource* resource,
+void OnNetworkPrepareRequest(const blink::Document* document, const blink::Resource* resource,
                              const blink::ResourceRequest& request) {
   if (!PermitRecordReplayBrowserEvents()) {
     return;
