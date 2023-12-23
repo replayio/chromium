@@ -54,7 +54,9 @@ class MojoDiscardableSharedMemoryManagerImpl
       int32_t client_id,
       base::WeakPtr<::discardable_memory::DiscardableSharedMemoryManager>
           manager)
-      : client_id_(client_id), manager_(manager) {}
+      : client_id_(client_id), manager_(manager) {
+    recordreplay::Assert("[RUN-3056-3057] MojoDiscardableSharedMemoryManagerImpl %d", client_id);
+  }
 
   MojoDiscardableSharedMemoryManagerImpl(
       const MojoDiscardableSharedMemoryManagerImpl&) = delete;

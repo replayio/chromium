@@ -20,7 +20,11 @@ class AtomicSequenceNumber {
 
   // Returns an increasing sequence number starts from 0 for each call.
   // This function can be called from any thread without data race.
-  inline int GetNext() { return seq_.fetch_add(1, std::memory_order_relaxed); }
+  inline int GetNext() {
+    int result = seq_.fetch_add(1, std::memory_order_relaxed);
+    result = recordreplay::RecordReplayValue("base::AtomicSequenceNumber", result);
+    return result;
+  }
 
  private:
   std::atomic_int seq_{0};
