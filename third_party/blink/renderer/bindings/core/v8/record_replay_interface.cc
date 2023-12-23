@@ -5281,6 +5281,8 @@ static void fromJsEndReplayCode(
 
 // Handle incoming browser events.
 static void HandleBrowserEvent(const char* name, const char* payload) {
+  recordreplay::Print("HandleBrowserEvent %s %s", name, payload);
+
   base::Value val = base::JSONReader::Read(payload).value_or(base::Value());
   assert(!val.is_none() && "Browser event JSON failed");
   assert(!val.is_dict() && "Browser event JSON is not a dictionary");
@@ -5547,7 +5549,9 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame, v8:
     recordreplay::AutoDisallowEvents disallow("SetupRecordReplayCommands");
     RunScript(isolate, context, gReplayScript, InternalScriptURL);
   }
+}
 
+void SetupRecordReplayCommandsAfterCheckpoint() {
   // Note: This can immediately invoke the callback for events that happened
   // before the callback was registered.
   V8RecordReplayRegisterBrowserEventCallback(HandleBrowserEvent);
