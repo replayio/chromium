@@ -1716,10 +1716,6 @@ void DocumentLoader::StartLoadingInternal() {
   // so we don't MarkFetchStart here.
   main_resource_identifier_ = CreateUniqueIdentifier();
 
-  fprintf(stderr, "[%d] DocumentLoader::StartLoadingInternal %zu %s\n",
-          getpid(), (size_t)main_resource_identifier_,
-          url_.ElidedString().Utf8().c_str());
-
   if (recordreplay::IsRecordingOrReplaying("notify-network")) {
     ResourceRequest request(url_);
     request.SetInspectorId(main_resource_identifier_);

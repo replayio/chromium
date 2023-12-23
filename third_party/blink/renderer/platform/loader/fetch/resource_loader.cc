@@ -990,10 +990,6 @@ bool ResourceLoader::WillFollowRedirect(
     return false;
   }
 
-  fprintf(stderr, "[%d] ResourceLoader::WillFollowRedirect %zu %s\n",
-          getpid(), (size_t)resource_->InspectorId(),
-          resource_->Url().ElidedString().Utf8().c_str());
-
   RecordReplayReportResourceRedirect(resource_->InspectorId(),
                                      new_request->Url(), new_request.get());
 
@@ -1065,10 +1061,6 @@ void RecordReplayReportDidReceiveResponse(uint64_t inspector_id,
 void ResourceLoader::DidReceiveResponseInternal(
     const ResourceResponse& response) {
   const ResourceRequestHead& request = resource_->GetResourceRequest();
-
-  fprintf(stderr, "[%d] ResourceLoader::DidReceiveResponseInternal %zu %s\n",
-          getpid(), (size_t)resource_->InspectorId(),
-          resource_->Url().ElidedString().Utf8().c_str());
 
   const auto response_arrival = response.ArrivalTimeAtRenderer();
   const auto code_cache_arrival = code_cache_arrival_time_;
@@ -1316,10 +1308,6 @@ void ResourceLoader::DidReceiveData(const char* data, int length) {
 
   recordreplay::Assert("[RUN-1436] ResourceLoader::DidReceiveData %d", length);
 
-  fprintf(stderr, "[%d] ResourceLoader::DidReceiveData %zu %s\n",
-          getpid(), (size_t)resource_->InspectorId(),
-          resource_->Url().ElidedString().Utf8().c_str());
-
   RecordReplayReportDidReceiveData(resource_->InspectorId(), data, length);
 
   if (auto* observer = fetcher_->GetResourceLoadObserver()) {
@@ -1330,10 +1318,6 @@ void ResourceLoader::DidReceiveData(const char* data, int length) {
 }
 
 void ResourceLoader::DidReceiveTransferSizeUpdate(int transfer_size_diff) {
-  fprintf(stderr, "[%d] ResourceLoader::DidReceiveTransferSizeUpdate %zu %s\n",
-          getpid(), (size_t)resource_->InspectorId(),
-          resource_->Url().ElidedString().Utf8().c_str());
-
   if (auto* observer = fetcher_->GetResourceLoadObserver()) {
     observer->DidReceiveTransferSizeUpdate(resource_->InspectorId(),
                                            transfer_size_diff);

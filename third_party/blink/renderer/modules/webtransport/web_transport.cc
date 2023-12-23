@@ -699,11 +699,7 @@ WebTransport::WebTransport(ScriptState* script_state,
       transport_remote_(context),
       handshake_client_receiver_(this, context),
       client_receiver_(this, context),
-      inspector_transport_id_(CreateUniqueIdentifier()) {
-  fprintf(stderr, "[%d] WebTransport::WebTransport %zu %s\n",
-          getpid(), (size_t)inspector_transport_id_,
-          url_.ElidedString().Utf8().c_str());
-}
+      inspector_transport_id_(CreateUniqueIdentifier()) {}
 
 ScriptPromise WebTransport::createUnidirectionalStream(
     ScriptState* script_state,

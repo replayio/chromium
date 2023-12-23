@@ -5281,8 +5281,6 @@ static void fromJsEndReplayCode(
 
 // Handle incoming browser events.
 static void HandleBrowserEvent(const char* name, const char* payload) {
-  recordreplay::Print("HandleBrowserEvent %s %s", name, payload);
-
   base::Value val = base::JSONReader::Read(payload).value_or(base::Value());
   assert(!val.is_none() && "Browser event JSON failed");
   assert(!val.is_dict() && "Browser event JSON is not a dictionary");

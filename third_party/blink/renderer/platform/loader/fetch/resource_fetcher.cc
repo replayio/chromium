@@ -615,9 +615,6 @@ void ResourceFetcher::DidLoadResourceFromMemoryCache(
                                      resource->GetResponse().EncodedBodyLength(),
                                      resource->GetResponse().DecodedBodyLength());
 
-  fprintf(stderr, "[%d] ResourceFetcher::DidLoadResourceFromMemoryCache %zu %s\n",
-          getpid(), (size_t)resource->InspectorId(), resource->Url().ElidedString().Utf8().c_str());
-
   if (IsDetached() || !resource_load_observer_)
     return;
 
@@ -1054,9 +1051,6 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
   resource_request.SetFromOriginDirtyStyleSheet(
       params.IsFromOriginDirtyStyleSheet());
 
-  fprintf(stderr, "[%d] ResourceFetcher::RequestResource %zu %s\n",
-          getpid(), (size_t)identifier, params.Url().ElidedString().Utf8().c_str());
-
   recordreplay::Assert("[RUN-658-1381] ResourceFetcher::RequestResource %s",
                        params.Url().ElidedString().Utf8().c_str());
 
@@ -1094,10 +1088,6 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
   if (blocked_reason) {
     auto* resource = ResourceForBlockedRequest(params, factory,
                                                blocked_reason.value(), client);
-
-    fprintf(stderr, "[%d] ResourceFetcher::RequestResource #1 %zu\n",
-            getpid(), resource ? (size_t)resource->InspectorId() : 0);
-
     StorePerformanceTimingInitiatorInformation(
         resource, params.GetRenderBlockingBehavior());
     if (auto info = resource_timing_info_map_.Take(resource)) {
@@ -1115,10 +1105,6 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
   bool is_stale_revalidation = params.IsStaleRevalidation();
   if (!is_stale_revalidation && is_static_data) {
     resource = CreateResourceForStaticData(params, factory);
-
-    fprintf(stderr, "[%d] ResourceFetcher::RequestResource #2 %zu\n",
-            getpid(), resource ? (size_t)resource->InspectorId() : 0);
-
     if (resource) {
       policy =
           DetermineRevalidationPolicy(resource_type, params, *resource, true);
@@ -1139,9 +1125,6 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
   if (!is_stale_revalidation && !resource) {
     resource = MatchPreload(params, resource_type);
 
-    fprintf(stderr, "[%d] ResourceFetcher::RequestResource #3 %zu\n",
-            getpid(), resource ? (size_t)resource->InspectorId() : 0);
-
     if (resource) {
       policy = RevalidationPolicy::kUse;
       // If |params| is for a blocking resource and a preloaded resource is
@@ -1154,9 +1137,6 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
       } else {
         resource = MemoryCache::Get()->ResourceForURL(
             params.Url(), GetCacheIdentifier(params.Url()));
-
-        fprintf(stderr, "[%d] ResourceFetcher::RequestResource #4 %zu\n",
-                getpid(), resource ? (size_t)resource->InspectorId() : 0);
 
         // Whether there is a resource can vary when replaying due to different memory
         // cache behavior. For now we deal with this by ignoring the resource if it
@@ -1191,8 +1171,6 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
       [[fallthrough]];
     case RevalidationPolicy::kLoad:
       resource = CreateResourceForLoading(params, factory);
-      fprintf(stderr, "[%d] ResourceFetcher::RequestResource #5 %zu\n",
-              getpid(), resource ? (size_t)resource->InspectorId() : 0);
       break;
     case RevalidationPolicy::kRevalidate:
       InitializeRevalidation(resource_request, resource);
@@ -1289,9 +1267,6 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
         TRACE_ID_WITH_SCOPE("BlinkResourceID", TRACE_ID_LOCAL(identifier)),
         "outcome", "Fail");
   }
-
-  fprintf(stderr, "[%d] ResourceFetcher::RequestResource DONE %zu\n",
-          getpid(), resource ? (size_t)resource->InspectorId() : 0);
 
   return resource;
 }
@@ -2004,9 +1979,6 @@ void ResourceFetcher::HandleLoaderFinish(Resource* resource,
                                          bool should_report_corb_blocking) {
   DCHECK(resource);
 
-  fprintf(stderr, "[%d] ResourceFetcher::HandleLoaderFinish %zu %s\n",
-          getpid(), (size_t)resource->InspectorId(), resource->Url().ElidedString().Utf8().c_str());
-
   DCHECK_LE(inflight_keepalive_bytes, inflight_keepalive_bytes_);
   inflight_keepalive_bytes_ -= inflight_keepalive_bytes;
 
@@ -2074,9 +2046,6 @@ void ResourceFetcher::HandleLoaderError(Resource* resource,
                                         uint32_t inflight_keepalive_bytes) {
   DCHECK(resource);
 
-  fprintf(stderr, "[%d] ResourceFetcher::HandleLoaderError %zu %s\n",
-          getpid(), (size_t)resource->InspectorId(), resource->Url().ElidedString().Utf8().c_str());
-
   DCHECK_LE(inflight_keepalive_bytes, inflight_keepalive_bytes_);
   inflight_keepalive_bytes_ -= inflight_keepalive_bytes;
 
@@ -2130,9 +2099,6 @@ bool ResourceFetcher::StartLoad(
     RenderBlockingBehavior render_blocking_behavior) {
   DCHECK(resource);
   DCHECK(resource->StillNeedsLoad());
-
-  fprintf(stderr, "[%d] ResourceFetcher::StartLoad %zu %s\n",
-          getpid(), (size_t)resource->InspectorId(), resource->Url().ElidedString().Utf8().c_str());
 
   ResourceLoader* loader = nullptr;
 
@@ -2353,10 +2319,6 @@ void ResourceFetcher::EmulateLoadStartedForInspector(
   resource_request.SetReferrerString(Referrer::NoReferrer());
   resource_request.SetReferrerPolicy(network::mojom::ReferrerPolicy::kNever);
   resource_request.SetInspectorId(CreateUniqueIdentifier());
-
-  fprintf(stderr, "[%d] ResourceFetcher::EmulateLoadStartedForInspector %zu %s\n",
-          getpid(), (size_t)resource_request.InspectorId(),
-          url.ElidedString().Utf8().c_str());
 
   ResourceLoaderOptions options = resource->Options();
   options.initiator_info.name = initiator_name;
