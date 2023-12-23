@@ -737,6 +737,7 @@ function Pause_evaluateInGlobal({ expression }) {
 
 function buildEvalResult(cdpResult) {
   if (usedReplayApi && cdpResult?.exceptionDetails) {
+    // Emit warning if an eval that used the Replay API throws.
     const cdpException = cdpResult.exceptionDetails.exception?.description || cdpResult.exceptionDetails;
     warning(`REPLAY_API_EVAL_ERROR ${JSON_stringify(cdpException)}`);
   }
@@ -3150,10 +3151,6 @@ function patchReplayApiObject(obj) {
 }
 
 function wrapReplayApiFunction(fn) {
-  if (fn === commandCallback) {
-    // The command callback itself should not be patched.
-    return commandCallback;
-  }
   return (...args) => {
     ++usedReplayApi;
     return fn(...args);
