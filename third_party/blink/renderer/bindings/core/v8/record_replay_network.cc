@@ -135,14 +135,15 @@ static const char* GetRequestCauseString(const ResourceRequest& req) {
    */
 }
 
-static base::DictionaryValue BuildInitiatorObject(const blink::Document* document,
-                                                  const blink::FetchInitiatorInfo& initiator_info) {
+static absl::optional<base::DictionaryValue>
+BuildInitiatorObject(const blink::Document* document,
+                     const blink::FetchInitiatorInfo& initiator_info) {
   // See InspectorNetworkAgent::BuildInitiatorObject for the basis of this
   // function. Note that it would be better if we listened to CDP Network events
   // while replaying so we don't need this logic duplication.
-  base::DictionaryValue rv;
 
   if (initiator_info.is_imported_module && !initiator_info.referrer.empty()) {
+    base::DictionaryValue rv;
     rv.SetString("url", initiator_info.referrer.Utf8());
     rv.SetInteger("line", initiator_info.position.line_.OneBasedInt());
     rv.SetInteger("column", initiator_info.position.column_.ZeroBasedInt());
@@ -153,6 +154,7 @@ static base::DictionaryValue BuildInitiatorObject(const blink::Document* documen
       initiator_info.name == blink::fetch_initiator_type_names::kCSS ||
       initiator_info.name == blink::fetch_initiator_type_names::kUacss;
   if (was_requested_by_stylesheet && !initiator_info.referrer.empty()) {
+    base::DictionaryValue rv;
     rv.SetString("url", initiator_info.referrer.Utf8());
     return rv;
   }
@@ -161,6 +163,8 @@ static base::DictionaryValue BuildInitiatorObject(const blink::Document* documen
     document = document->LocalOwner() ? document->LocalOwner()->ownerDocument()
                                       : nullptr;
   if (document && document->GetScriptableDocumentParser()) {
+    base::DictionaryValue rv;
+
     blink::KURL url = document->Url();
     url.RemoveFragmentIdentifier();
     rv.SetString("url", url.GetString().Utf8());
@@ -176,7 +180,7 @@ static base::DictionaryValue BuildInitiatorObject(const blink::Document* documen
     return rv;
   }
 
-  return rv;
+  return absl::optional<base::DictionaryValue>();
 }
 
 void OnNetworkPrepareRequest(const blink::Document* document, const blink::Resource* resource,
@@ -216,8 +220,10 @@ void OnNetworkPrepareRequest(const blink::Document* document, const blink::Resou
 
   if (resource) {
     const blink::FetchInitiatorInfo& initiator_info = resource->Options().initiator_info;
-    base::DictionaryValue initiator_obj = BuildInitiatorObject(document, initiator_info);
-    dict.SetKey("initiator", std::move(initiator_obj));
+    absl::optional<base::DictionaryValue> initiator_obj = BuildInitiatorObject(document, initiator_info);
+    if (initiator_obj) {
+      dict.SetKey("initiator", *std::move(initiator_obj));
+    }
   }
 
   BrowserEvent("Network.PrepareRequest", dict);
