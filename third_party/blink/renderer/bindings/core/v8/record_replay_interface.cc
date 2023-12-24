@@ -4555,7 +4555,7 @@ struct NetworkRequestStatus {
   NetworkRequestStatus(const base::DictionaryValue& info_arg)
   : response_data_received(0),
     request_data_sent(0),
-    info(std::move(info_arg.Clone()))
+    info(info_arg.Clone())
   {}
 };
 // Map of active network requests.
