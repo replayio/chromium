@@ -4551,15 +4551,12 @@ static void fromJsIsBlinkObject(
 struct NetworkRequestStatus {
   size_t response_data_received;
   size_t request_data_sent;
-  base::DictionaryValue info;
+  base::Value info;
   NetworkRequestStatus(const base::DictionaryValue& info_arg)
   : response_data_received(0),
-    request_data_sent(0)
-  {
-    if (!info_arg.GetAsDictionary(&info)) {
-      CHECK(0);
-    }
-  }
+    request_data_sent(0),
+    info(std::move(info_arg.Clone()))
+  {}
 };
 // Map of active network requests.
 std::unordered_map<std::string, NetworkRequestStatus>*
@@ -4701,7 +4698,8 @@ static void HandleNetworkResourceRedirectEvent(const base::DictionaryValue& info
       request_id.c_str());
     return;
   }
-  const base::DictionaryValue& original_info = request_info->second.info;
+  const base::DictionaryValue& original_info =
+    base::Value::AsDictionaryValue(request_info->second.info);
 
   // Register a new network request with the same request id as the original
   // for this redirect.
@@ -4772,7 +4770,8 @@ static void HandleNetworkNavigationRedirectEvent(const base::DictionaryValue& in
       request_id.c_str());
     return;
   }
-  const base::DictionaryValue& original_info = request_info->second.info;
+  const base::DictionaryValue& original_info =
+    base::Value::AsDictionaryValue(request_info->second.info);
 
   // A navigation redirect event is a new network request. There is no bookmark.
   recordreplay::OnNetworkRequest(request_id.c_str(), "http", 0);
