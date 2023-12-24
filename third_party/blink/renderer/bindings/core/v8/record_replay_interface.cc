@@ -4552,11 +4552,14 @@ struct NetworkRequestStatus {
   size_t response_data_received;
   size_t request_data_sent;
   base::DictionaryValue info;
-  NetworkRequestStatus(const base::DictionaryValue& info)
+  NetworkRequestStatus(const base::DictionaryValue& info_arg)
   : response_data_received(0),
-    request_data_sent(0),
-    info(std::move(info.Clone()))
-  {}
+    request_data_sent(0)
+  {
+    if (!info_arg.GetAsDictionary(&info)) {
+      CHECK(0);
+    }
+  }
 };
 // Map of active network requests.
 std::unordered_map<std::string, NetworkRequestStatus>*
@@ -4647,7 +4650,7 @@ static void CopyDictionaryProperty(base::DictionaryValue& dst,
                                    const char* property) {
   const base::Value* value = src.FindPath(property);
   if (value) {
-    dst.Set(property, std::move(value->Clone()));
+    dst.Set(property, std::unique_ptr<base::Value>(value->CreateDeepCopy()));
   }
 }
 
