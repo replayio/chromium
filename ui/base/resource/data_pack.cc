@@ -26,6 +26,8 @@
 #include "third_party/zlib/google/compression_utils.h"
 #include "ui/base/resource/scoped_file_writer.h"
 
+#include "base/record_replay.h"
+
 // For details of the file layout, see
 // http://dev.chromium.org/developers/design-documents/linuxresourcesandlocalizedstrings
 
@@ -217,6 +219,14 @@ std::unique_ptr<DataPack::DataSource> DataPack::LoadFromPathInternal(
   base::File data_file(path, base::File::FLAG_OPEN | base::File::FLAG_READ |
                                  base::File::FLAG_WIN_EXCLUSIVE_WRITE |
                                  base::File::FLAG_WIN_SHARE_DELETE);
+  
+  recordreplay::Assert("[RUN-3051] DataPack::LoadFromPathInternal %lld %s",
+    path.LossyDisplayName().c_str(),
+    data_file.GetLength());
+  recordreplay::Print("DDBG DataPack::LoadFromPathInternal %lld %s",
+    path.LossyDisplayName().c_str(),
+    data_file.GetLength());
+
   if (!data_file.IsValid()) {
     DLOG(ERROR) << "Failed to open datapack with base::File::Error "
                 << data_file.error_details();
