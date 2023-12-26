@@ -688,7 +688,6 @@ function getCurrentEvaluateFrame() {
 }
 
 function Pause_evaluateInFrame({ frameId: frameIndexStr, expression }) {
-  // TODO: I need to take one more pass at this, so we can, under some circumstances, catch all exceptions thrown by eval, rather than just our own API.
   const frameIndex = +frameIndexStr;
   const frame = getFrameByIndex(frameIndex);
   gCurrentEvaluateFrame = frame;
@@ -2113,7 +2112,6 @@ function DOM_getEventListeners({ node }) {
 
   if (nodeObject.nodeName && nodeObject.nodeName == "HTML") {
     // Add event listeners for the document and window as well.
-    // TODO: figure out ownerGlobal for chromium - https://linear.app/replay/issue/RUN-1041
     listenerInfos.push(
       ...fromJsCollectEventListeners(nodeObject.parentNode)   // document
       // ...fromJsCollectEventListeners(nodeObject.ownerGlobal)  // window
@@ -3916,11 +3914,7 @@ static void SendMessageToFrontend(const v8_inspector::StringView& message) {
   if (result->IsString()) {
     v8::String::Utf8Value messageValue(isolate, result);
     std::string messageStr(*messageValue);
-
-    // TODO: Replace this with an API call to `RecordReplaySetCrashReasonCallback`
-    // See RUN-1562: https://linear.app/replay/issue/RUN-1562
-    recordreplay::Print("ErrorFatal %s:%d %s", "js", 0, messageStr.c_str());
-    IMMEDIATE_CRASH();
+    recordreplay::Crash("CDPMessageCallback FAILED %s:%d %s", "js", 0, messageStr.c_str());
   }
 }
 
