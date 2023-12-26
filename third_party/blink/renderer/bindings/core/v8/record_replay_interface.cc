@@ -4696,9 +4696,15 @@ static std::string MakeRequestIdentifier(uint64_t identifier) {
   return std::string(request_id);
 }
 
+static std::string GetRequestIdentifierProperty(const base::DictionaryValue& info) {
+  uint64_t identifier =
+    *info.FindPath("identifier")->GetIfDouble();
+  return MakeRequestIdentifier(identifier);
+}
+
 static void HandleNetworkPrepareRequestEvent(const base::DictionaryValue& info) {
   CHECK(gActiveNetworkRequests);
-  std::string request_id = *info.FindPath("requestId")->GetIfString();
+  std::string request_id = GetRequestIdentifierProperty(info);
   if (gActiveNetworkRequests->find(request_id) != gActiveNetworkRequests->end()) {
     // If the request already exists, this is a redirect.
     // Chromium will send a "Network.ResourceRedirect" event which will
@@ -4739,11 +4745,9 @@ static void HandleNetworkPrepareRequestEvent(const base::DictionaryValue& info) 
 static void HandleNetworkResourceRedirectEvent(const base::DictionaryValue& info) {
   CHECK(gActiveNetworkRequests);
 
-  // Retreive the existing request data which should already have been
+  // Retrieve the existing request data which should already have been
   // registered by `HandleNetworkPrepareRequestEvent`.
-  uint64_t identifier =
-    *info.FindPath("identifier")->GetIfDouble();
-  std::string request_id = MakeRequestIdentifier(identifier);
+  std::string request_id = GetRequestIdentifierProperty(info);
   auto request_info = gActiveNetworkRequests->find(request_id);
   if (request_info == gActiveNetworkRequests->end()) {
     recordreplay::Print("No original request for navigation redirect: %s",
@@ -4842,7 +4846,7 @@ static void HandleNetworkNavigationRedirectEvent(const base::DictionaryValue& in
 
 static void HandleNetworkRequestDataFormEvent(const base::DictionaryValue& info) {
   CHECK(gActiveNetworkRequests);
-  std::string request_id = *info.FindPath("requestId")->GetIfString();
+  std::string request_id = GetRequestIdentifierProperty(info);
   auto request_info = gActiveNetworkRequests->find(request_id);
   if (request_info == gActiveNetworkRequests->end()) {
     recordreplay::Print("Unknown request for request data: %s",
@@ -4895,9 +4899,7 @@ static void HandleNetworkRequestDataFormEvent(const base::DictionaryValue& info)
 
 static void HandleNetworkDidReceiveResponseEvent(const base::DictionaryValue& info) {
   CHECK(gActiveNetworkRequests);
-  uint64_t identifier =
-    *info.FindPath("identifier")->GetIfDouble();
-  std::string request_id = MakeRequestIdentifier(identifier);
+  std::string request_id = GetRequestIdentifierProperty(info);
   auto request_info = gActiveNetworkRequests->find(request_id);
   if (request_info == gActiveNetworkRequests->end()) {
     recordreplay::Print("Unknown request received response: %s",
@@ -4930,9 +4932,7 @@ static void HandleNetworkDidReceiveResponseEvent(const base::DictionaryValue& in
 
 static void HandleNetworkDidFinishLoadingEvent(const base::DictionaryValue& info) {
   CHECK(gActiveNetworkRequests);
-  uint64_t identifier =
-    *info.FindPath("identifier")->GetIfDouble();
-  std::string request_id = MakeRequestIdentifier(identifier);
+  std::string request_id = GetRequestIdentifierProperty(info);
   auto request_info = gActiveNetworkRequests->find(request_id);
   if (request_info == gActiveNetworkRequests->end()) {
     recordreplay::Print("Unknown request finished loading: %s",
@@ -4956,9 +4956,7 @@ static void HandleNetworkDidFinishLoadingEvent(const base::DictionaryValue& info
 
 static void HandleNetworkDidFailLoadingEvent(const base::DictionaryValue& info) {
   CHECK(gActiveNetworkRequests);
-  uint64_t identifier =
-    *info.FindPath("identifier")->GetIfDouble();
-  std::string request_id = MakeRequestIdentifier(identifier);
+  std::string request_id = GetRequestIdentifierProperty(info);
   auto request_info = gActiveNetworkRequests->find(request_id);
   if (request_info == gActiveNetworkRequests->end()) {
     recordreplay::Print("Unknown request failed loading: %s",
@@ -4981,9 +4979,7 @@ static void HandleNetworkDidReceiveDataEvent(const base::DictionaryValue& info) 
   CHECK(gActiveNetworkRequests);
   CHECK(gCurrentNetworkStreamData);
   // Get request info.
-  uint64_t identifier =
-    *info.FindPath("identifier")->GetIfDouble();
-  std::string request_id = MakeRequestIdentifier(identifier);
+  std::string request_id = GetRequestIdentifierProperty(info);
   auto request_info = gActiveNetworkRequests->find(request_id);
   if (request_info == gActiveNetworkRequests->end()) {
     recordreplay::Print("Unknown request received data: %s",
@@ -5588,7 +5584,6 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame, v8:
   // Register context and callbacks.
   RecordReplaySetDefaultContext(isolate, localFrame, context);
   V8RecordReplaySetAPIObjectIdCallback(GetBlinkPersistentId);
-  V8RecordReplayRegisterBrowserEventCallback(HandleBrowserEvent);
 
   gActiveNetworkRequests =
       new std::unordered_map<std::string, NetworkRequestStatus>();
@@ -5613,6 +5608,12 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame, v8:
     recordreplay::AutoDisallowEvents disallow("SetupRecordReplayCommands");
     RunScript(isolate, context, gReplayScript, InternalScriptURL);
   }
+}
+
+void SetupRecordReplayCommandsAfterCheckpoint() {
+  // Note: This can immediately invoke the callback for events that happened
+  // before the callback was registered.
+  V8RecordReplayRegisterBrowserEventCallback(HandleBrowserEvent);
 }
 
 void OnNewRootFrame(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
