@@ -26,6 +26,8 @@
 #include "build/build_config.h"
 #include "components/crash/core/common/crash_key.h"
 
+#include "base/record_replay_atomic_sequence_num.h"
+
 namespace discardable_memory {
 namespace {
 
@@ -34,7 +36,7 @@ BASE_FEATURE(kShorterPeriodicPurge,
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Global atomic to generate unique discardable shared memory IDs.
-base::AtomicSequenceNumber g_next_discardable_shared_memory_id;
+::recordreplay::AtomicSequenceNumber g_next_discardable_shared_memory_id;
 
 size_t GetDefaultAllocationSize() {
   const size_t kOneMegabyteInBytes = 1024 * 1024;

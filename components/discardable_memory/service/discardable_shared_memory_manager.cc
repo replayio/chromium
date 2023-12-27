@@ -38,6 +38,8 @@
 #include "base/metrics/histogram_macros.h"
 #endif
 
+#include "base/record_replay_atomic_sequence_num.h"
+
 namespace discardable_memory {
 namespace {
 
@@ -216,7 +218,7 @@ uint64_t GetDefaultMemoryLimit() {
 const int kEnforceMemoryPolicyDelayMs = 1000;
 
 // Global atomic to generate unique discardable shared memory IDs.
-base::AtomicSequenceNumber g_next_discardable_shared_memory_id;
+::recordreplay::AtomicSequenceNumber g_next_discardable_shared_memory_id;
 
 DiscardableSharedMemoryManager* g_instance = nullptr;
 
