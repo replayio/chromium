@@ -97,6 +97,8 @@
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
+
 namespace blink {
 
 constexpr uint32_t ResourceFetcher::kKeepaliveInflightBytesQuota;
@@ -611,6 +613,12 @@ void ResourceFetcher::DidLoadResourceFromMemoryCache(
   resource_load_observer_->DidReceiveResponse(
       request.InspectorId(), request, resource->GetResponse(), resource,
       ResourceLoadObserver::ResponseSource::kFromMemoryCache);
+
+  recordreplay::OnNetworkReceiveResponse(resource->InspectorId(), resource->GetResponse());
+  recordreplay::OnNetworkFinishLoading(resource->InspectorId(),
+                                       resource->GetResponse().EncodedBodyLength(),
+                                       resource->GetResponse().DecodedBodyLength());
+
   if (resource->EncodedSize() > 0) {
     resource_load_observer_->DidReceiveData(
         request.InspectorId(),
