@@ -693,6 +693,7 @@ function Pause_evaluateInFrame({ frameId: frameIndexStr, expression }) {
   gCurrentEvaluateFrame = frame;
   let rv;
   try {
+    onBeforeEval();
     rv = doEvaluation();
     return buildEvalResult(rv);
   } catch (err) {
@@ -721,6 +722,7 @@ function Pause_evaluateInFrame({ frameId: frameIndexStr, expression }) {
 function Pause_evaluateInGlobal({ expression }) {
   let rv;
   try {
+    onBeforeEval();
     rv = sendMessage(
       "Runtime.evaluate",
       {
@@ -732,6 +734,10 @@ function Pause_evaluateInGlobal({ expression }) {
     return handleEvalError(err);
   }
   return buildEvalResult(rv);
+}
+
+function onBeforeEval() {
+  onReplayApiReset();
 }
 
 function buildEvalResult(cdpResult) {
@@ -3128,10 +3134,18 @@ Object.assign(__RECORD_REPLAY__, {
 
 /** ###########################################################################
  * {@link patchReplayApi} decorates our API objects/functions with extra
- * diagnostics.
+ * diagnostics, e.g. whether the Replay API was called at all.
  * ##########################################################################*/
 
 let usedReplayApi = 0;
+
+function onReplayApiUsed() {
+  ++usedReplayApi;
+}
+
+function onReplayApiReset() {
+  usedReplayApi = 0;
+}
 
 function patchReplayApi() {
   patchReplayApiObject(__RECORD_REPLAY__);
@@ -3150,7 +3164,7 @@ function patchReplayApiObject(obj) {
 
 function wrapReplayApiFunction(fn) {
   return (...args) => {
-    ++usedReplayApi;
+    onReplayApiUsed();
     return fn(...args);
   };
 }
