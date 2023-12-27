@@ -379,6 +379,17 @@ ClientDiscardableSharedMemoryManager::AllocateLockedDiscardableMemory(
           base::Unretained(this), new_id)));
   new_span->set_is_locked(true);
 
+  recordreplay::Assert(
+    "[RUN-3056-3057] ClientDiscardableSharedMemoryManager::AllocateLockedDiscardableMemory B "
+    "%d %d  %zu %zu %zu %zu",
+    new_id,
+    recordreplay::PointerId(new_span->shared_memory()),
+
+    pages,
+    allocation_size_in_bytes,
+    new_span->start(),
+    new_span->length());
+
   // Unlock and insert any left over memory into free lists.
   if (pages < pages_to_allocate) {
     std::unique_ptr<DiscardableSharedMemoryHeap::Span> leftover =
