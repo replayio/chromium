@@ -225,8 +225,8 @@ void DiscardableSharedMemoryHeap::MergeIntoFreeListsClean(
   num_free_blocks_ += span->length_;
 
   recordreplay::Assert(
-      "[RUN-3056-3057] DiscardableSharedMemoryHeap::MergeIntoFreeListsClean A %zu %d",
-      span->start_, recordreplay::PointerId(span->shared_memory_));
+      "[RUN-3056-3057] DiscardableSharedMemoryHeap::MergeIntoFreeListsClean A %d",
+      recordreplay::PointerId(span->shared_memory_));
 
   // Merge with previous span if possible.
   auto prev_it = spans_.find(span->start_ - 1);

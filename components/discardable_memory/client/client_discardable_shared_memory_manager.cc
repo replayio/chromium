@@ -141,10 +141,9 @@ ClientDiscardableSharedMemoryManager::DiscardableMemoryImpl::Purge(
   DCHECK(span_);
 
   recordreplay::Assert(
-    "[RUN-3056-3057] ClientDiscardableSharedMemoryManager::DiscardableMemoryImpl::Purge %d %d %lld %d",
+    "[RUN-3056-3057] ClientDiscardableSharedMemoryManager::DiscardableMemoryImpl::Purge %d %d %d",
     is_locked(),
     last_locked_ > min_ticks,
-    span_ ? (long long)span_->start() : -1,
     span_ ? recordreplay::PointerId(span_->shared_memory()) : -1);
 
   if (is_locked())
@@ -378,17 +377,6 @@ ClientDiscardableSharedMemoryManager::AllocateLockedDiscardableMemory(
           &ClientDiscardableSharedMemoryManager::DeletedDiscardableSharedMemory,
           base::Unretained(this), new_id)));
   new_span->set_is_locked(true);
-
-  recordreplay::Assert(
-    "[RUN-3056-3057] ClientDiscardableSharedMemoryManager::AllocateLockedDiscardableMemory B "
-    "%d %d  %zu %zu %zu %zu",
-    new_id,
-    recordreplay::PointerId(new_span->shared_memory()),
-
-    pages,
-    allocation_size_in_bytes,
-    new_span->start(),
-    new_span->length());
 
   // Unlock and insert any left over memory into free lists.
   if (pages < pages_to_allocate) {
@@ -687,8 +675,8 @@ void ClientDiscardableSharedMemoryManager::MemoryUsageChanged(
     size_t new_bytes_total,
     size_t new_bytes_free) const {
   recordreplay::Assert(
-    "[RUN-3056-3057] ClientDiscardableSharedMemoryManager::MemoryUsageChanged %zu %zu",
-    new_bytes_total, new_bytes_free);
+    "[RUN-3056-3057] ClientDiscardableSharedMemoryManager::MemoryUsageChanged %zu",
+    new_bytes_total);
   static crash_reporter::CrashKeyString<24> discardable_memory_allocated(
       "discardable-memory-allocated");
   discardable_memory_allocated.Set(base::NumberToString(new_bytes_total));
