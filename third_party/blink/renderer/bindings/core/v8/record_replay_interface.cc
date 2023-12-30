@@ -4055,7 +4055,7 @@ static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
   // time; just log it and inform the client.
   if (!contextGroupId.has_value()) {
     if (gCDPMessageCallback != nullptr) {
-      // Ensure the message has an ID.
+      // Ensure the message has an ID. If not, handle the error in JavaScript.
       v8::String::Utf8Value inmessage(args.GetIsolate(), args[0]);
       std::string nmessage(*inmessage);
       absl::optional<base::Value> jsonMessage = base::JSONReader::Read(nmessage);
@@ -5470,6 +5470,13 @@ static bool TestEnv(const char* env) {
 
 void OnNewWindow1(v8::Isolate* isolate, LocalFrame* localFrame) {
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
+  
+  recordreplay::Print(
+    "[RUN-2739] OnNewWindow1 win=%d frame=%d %d \"%s\"",
+      localFrame->DomWindow()->RecordReplayId(),
+      localFrame->RecordReplayId(),
+      localFrame->IsCrossOriginToParentOrOuterDocument(),
+      localFrame->GetDocument()->Url().GetString().Utf8().c_str());
 
   // Add __RECORD_REPLAY_ANNOTATION_HOOK__ as a global.
   SetFunctionProperty(isolate, context->Global(), AnnotationHookJSName,
@@ -5576,14 +5583,26 @@ static void RecordReplaySetDefaultContext(v8::Isolate* isolate, LocalFrame* loca
   V8RecordReplaySetDefaultContext(isolate, context);
 }
 
-void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
-  // Register context and callbacks.
-  RecordReplaySetDefaultContext(isolate, localFrame, context);
+void InitializeRecordReplay(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
   V8RecordReplaySetAPIObjectIdCallback(GetBlinkPersistentId);
-
+  RecordReplaySetDefaultContext(isolate, localFrame, context);
   gActiveNetworkRequests =
       new std::unordered_map<std::string, NetworkRequestStatus>();
   gCurrentNetworkStreamData = new std::vector<uint8_t>();
+}
+
+void InitializeRecordReplayAfterCheckpoint() {
+  // Note: This can immediately invoke the callback for events that happened
+  // before the callback was registered.
+  V8RecordReplayRegisterBrowserEventCallback(HandleBrowserEvent);
+}
+
+static void InitializeReplayScripts(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
+  // Register context, s.t. when handling a command and we are not on a 
+  // JS stack, we can always use the current root frame's context.
+  // Note: We are assuming that each tab has its own process, for now.
+  //   (That might not hold true for tabs of the same domain - not sure)
+  RecordReplaySetDefaultContext(isolate, localFrame, context);
 
   // This URL will prevent the script from being reported to the recorder.
   const char* InternalScriptURL = "record-replay-internal";
@@ -5599,36 +5618,28 @@ void SetupRecordReplayCommands(v8::Isolate* isolate, LocalFrame* localFrame, v8:
     // https://linear.app/replay/issue/RUN-2195#comment-e0b6c75b
     localFrame->GetSettings()->SetForceMainWorldInitialization(true);
   }
+
   if (IsGReplayScriptEnabled()) {
     recordreplay::AutoMarkReplayCode amrc;
-    recordreplay::AutoDisallowEvents disallow("SetupRecordReplayCommands");
+    recordreplay::AutoDisallowEvents disallow("InitializeRecordReplay");
     RunScript(isolate, context, gReplayScript, InternalScriptURL);
   }
 }
 
-void SetupRecordReplayCommandsAfterCheckpoint() {
-  // Note: This can immediately invoke the callback for events that happened
-  // before the callback was registered.
-  V8RecordReplayRegisterBrowserEventCallback(HandleBrowserEvent);
-}
-
 void OnNewRootFrame(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
   recordreplay::AutoMarkReplayCode amrc;
-  
-  // 0. Register context, s.t. when handling a command and we are not on a 
-  // JS stack, we can always use the current root frame's context.
-  // Note: We are assuming that each tab has its own process, for now.
-  //   (That might not hold true for tabs of the same domain - not sure)
-  RecordReplaySetDefaultContext(isolate, localFrame, context);
-  
+
   LocalFrame* parentFrame = DynamicTo<LocalFrame>(localFrame->Parent());
-  recordreplay::CommandDiagnostic(
+  recordreplay::Print(
     "[RUN-2739] OnNewRootFrame win=%d frame=%d %d \"%s\" parentFrame=%d",
       localFrame->DomWindow()->RecordReplayId(),
       localFrame->RecordReplayId(),
       localFrame->IsCrossOriginToParentOrOuterDocument(),
       localFrame->GetDocument()->Url().GetString().Utf8().c_str(),
       parentFrame ? parentFrame->RecordReplayId() : 0);
+  
+  // 0. Initialize our scripts.
+  InitializeReplayScripts(isolate, localFrame, context);
 
   // 1. Register navigation event.
   if (localFrame->GetDocument()->Url().ProtocolIsInHTTPFamily()) {
@@ -5657,7 +5668,7 @@ void OnNewWindow2(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Co
             "record-replay-devtools-OnNewWindow");
 
   LocalFrame* parentFrame = DynamicTo<LocalFrame>(localFrame->Parent());
-  recordreplay::CommandDiagnostic(
+  recordreplay::Print(
     "[RUN-2739] OnNewWindow2 %d win=%d frame=%d %d \"%s\" parent=%d",
     newContext == isolate->GetCurrentContext(),
     localFrame->DomWindow()->RecordReplayId(),
