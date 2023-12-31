@@ -101,20 +101,20 @@ static LocalFrame* GetLocalFrameRoot(v8::Isolate* isolate) {
   LocalDOMWindow* currentWindow = CurrentDOMWindow(isolate);
 
   if (!currentWindow) {
-    recordreplay::Print("GetLocalFrameRoot has no window.");
+    recordreplay::Warning("[RuntimeError] GetLocalFrameRoot: no window.");
     return nullptr;
   }
 
   LocalFrame *f = currentWindow->GetFrame();
   if (!f || f->IsDetached() || f->IsProvisional()) {
-    recordreplay::Print("GetLocalFrameRoot has no frame.");
+    recordreplay::Warning("[RuntimeError] GetLocalFrameRoot: window has no frame.");
     return nullptr;
   }
 
   LocalFrame& root = f->LocalFrameRoot();
 
   if (root.IsDetached() || root.IsProvisional()) {
-    recordreplay::Print("GetLocalFrameRoot has no root frame.");
+    recordreplay::Warning("[RuntimeError] GetLocalFrameRoot: root is detached or provisional.");
     return nullptr;
   }
 
@@ -151,6 +151,8 @@ public:
 
   LocalFrame* GetLocalFrameRoot() const { return blink::GetLocalFrameRoot(isolate); }
 };
+
+static LocalFrame* gLocalRootFrame = nullptr;
 
 typedef std::unordered_map<int, InspectorData*> ContextGroupIdInspectorMap;
 
@@ -3883,7 +3885,6 @@ static void LogWarningCallback(const v8::FunctionCallbackInfo<v8::Value>& args) 
 static v8::Eternal<v8::Function>* gCDPMessageCallback;
 
 static void SetCDPMessageCallback(const v8::FunctionCallbackInfo<v8::Value>& args) {
-  CHECK(!gCDPMessageCallback);
   v8::Isolate* isolate = args.GetIsolate();
   CHECK(args[0]->IsFunction());
   v8::Local<v8::Function> callback = args[0].As<v8::Function>();
@@ -5621,23 +5622,24 @@ static void InitializeReplayScripts(v8::Isolate* isolate, LocalFrame* localFrame
 
   if (IsGReplayScriptEnabled()) {
     recordreplay::AutoMarkReplayCode amrc;
-    recordreplay::AutoDisallowEvents disallow("InitializeRecordReplay");
+    recordreplay::AutoDisallowEvents disallow("InitializeReplayScripts");
     RunScript(isolate, context, gReplayScript, InternalScriptURL);
   }
 }
 
 void OnNewRootFrame(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
   recordreplay::AutoMarkReplayCode amrc;
-
-  LocalFrame* parentFrame = DynamicTo<LocalFrame>(localFrame->Parent());
   recordreplay::Print(
-    "[RUN-2739] OnNewRootFrame win=%d frame=%d %d \"%s\" parentFrame=%d",
+    "[RUN-2739] OnNewRootFrame win=%d frame=%d %d \"%s\"",
       localFrame->DomWindow()->RecordReplayId(),
       localFrame->RecordReplayId(),
       localFrame->IsCrossOriginToParentOrOuterDocument(),
-      localFrame->GetDocument()->Url().GetString().Utf8().c_str(),
-      parentFrame ? parentFrame->RecordReplayId() : 0);
+      localFrame->GetDocument()->Url().GetString().Utf8().c_str()
+      );
   
+  // NOTE: The root `LocalFrame` will actually not change over time.
+  gLocalRootFrame = localFrame;
+
   // 0. Initialize our scripts.
   InitializeReplayScripts(isolate, localFrame, context);
 
