@@ -215,10 +215,6 @@ void LocalWindowProxy::Initialize() {
         GetFrame()->DomWindow()->GetAgentClusterID());
     SetSecurityToken(origin.get());
   }
-  
-
-  recordreplay::Print("DDBG LocalWindowProxy::Initialize %s",
-    origin ? origin->Host().Utf8().c_str() : "");
 
   if (recordreplay::IsRecordingOrReplaying("commands") &&
       origin &&
