@@ -219,31 +219,41 @@ void LocalWindowProxy::Initialize() {
   if (recordreplay::IsRecordingOrReplaying("commands") &&
       origin &&
       !origin->Host().empty()) {
+    // Initialize and re-initialize Replay state, command handlers and more.
 
-    // Initialize Replay globals.
-    OnNewWindow1(GetIsolate(), GetFrame());
+    bool doInit = !gRecordReplayStateInitialized;
+    if (doInit) {
+      gRecordReplayStateInitialized = true;
 
-    if (!gRecordReplayStateInitialized) {
+      // Make sure that Replay initialization happens in a root frame,
+      // since only root frames are injected with the necessary fix-ins.
+      CHECK(GetFrame()->IsOutermostMainFrame());
+
       // After creating the first context that is associated with a non-empty
       // origin, we are ready to set up the state used to process driver
-      // commands when recording/replaying, and to create checkpoints. Create
-      // the first checkpoint at which execution can pause.
-      gRecordReplayStateInitialized = true;
+      // commands when recording/replaying, and to create checkpoints.
       InitializeRecordReplay(GetIsolate(), GetFrame(), context);
-      recordreplay::NewCheckpoint();
-      InitializeRecordReplayAfterCheckpoint();
     }
 
     if (GetFrame()->IsOutermostMainFrame()) {
-      // Root-level navigation event.
-      // Note: This must happen after our first checkpoint, or we'll crash with "Progress counter updated before first checkpoint".
+      // Root-level navigation event, possibly before first checkpoint.
       OnNewRootFrame(GetIsolate(), GetFrame(), context);
     }
 
-    // Initialize Replay things that depend on previous Replay initialization 
-    // steps.
-    OnNewWindow2(GetIsolate(), GetFrame(), context);
+    if (doInit) {
+      // Create the first checkpoint at which execution can pause.
+      recordreplay::NewCheckpoint();
+      // Initialize some more.
+      InitializeRecordReplayAfterCheckpoint();
+    }
+    
+    if (GetFrame()->IsOutermostMainFrame()) {
+      // Root-level navigation event, after first checkpoint.
+      OnNewRootFrameAfterCheckpoint(GetIsolate(), GetFrame(), context);
+    }
 
+    // Event for all new windows.
+    OnNewWindowAfterCheckpoint(GetIsolate(), GetFrame(), context);
   }
 
   {

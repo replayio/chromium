@@ -5469,15 +5469,8 @@ static bool TestEnv(const char* env) {
   return v && v[0] && v[0] != '0';
 }
 
-void OnNewWindow1(v8::Isolate* isolate, LocalFrame* localFrame) {
+static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* localFrame) {
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
-  
-  recordreplay::Print(
-    "[RUN-2739] OnNewWindow1 win=%d frame=%d %d \"%s\"",
-      localFrame->DomWindow()->RecordReplayId(),
-      localFrame->RecordReplayId(),
-      localFrame->IsCrossOriginToParentOrOuterDocument(),
-      localFrame->GetDocument()->Url().GetString().Utf8().c_str());
 
   // Add __RECORD_REPLAY_ANNOTATION_HOOK__ as a global.
   SetFunctionProperty(isolate, context->Global(), AnnotationHookJSName,
@@ -5604,6 +5597,9 @@ static void InitializeReplayScripts(v8::Isolate* isolate, LocalFrame* localFrame
   // Note: We are assuming that each tab has its own process, for now.
   //   (That might not hold true for tabs of the same domain - not sure)
   RecordReplaySetDefaultContext(isolate, localFrame, context);
+  
+  // Initialize __RECORD_REPLAY__ things.
+  InitializeRecordReplayApiObjects(isolate, localFrame);
 
   // This URL will prevent the script from being reported to the recorder.
   const char* InternalScriptURL = "record-replay-internal";
@@ -5623,6 +5619,7 @@ static void InitializeReplayScripts(v8::Isolate* isolate, LocalFrame* localFrame
   if (IsGReplayScriptEnabled()) {
     recordreplay::AutoMarkReplayCode amrc;
     recordreplay::AutoDisallowEvents disallow("InitializeReplayScripts");
+    // Run `gReplayScript`.
     RunScript(isolate, context, gReplayScript, InternalScriptURL);
   }
 }
@@ -5640,18 +5637,20 @@ void OnNewRootFrame(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::
   // NOTE: The root `LocalFrame` will actually not change over time.
   gLocalRootFrame = localFrame;
 
-  // 0. Initialize our scripts.
-  InitializeReplayScripts(isolate, localFrame, context);
+  // 1. Reset paint surface so that paints to the new root's surface are not ignored.
+  // See: https://linear.app/replay/issue/RUN-2400
+  recordreplay::DoResetPaintSurface();
 
+  // 2. Initialize our scripts, command handlers etc.
+  InitializeReplayScripts(isolate, localFrame, context);
+}
+
+void OnNewRootFrameAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
   // 1. Register navigation event.
   if (localFrame->GetDocument()->Url().ProtocolIsInHTTPFamily()) {
     recordreplay::OnNavigationEvent(
         nullptr, localFrame->GetDocument()->Url().GetString().Utf8().c_str());
   }
-
-  // 2. Reset paint surface so that paints to the new root's surface are not ignored.
-  // See: https://linear.app/replay/issue/RUN-2400
-  recordreplay::DoResetPaintSurface();
 
   // 3. Initialize React and Redux Devtools stubs.
   if (recordreplay::FeatureEnabled("react-devtools-backend") &&
@@ -5664,14 +5663,14 @@ void OnNewRootFrame(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::
   }
 }
 
-void OnNewWindow2(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> newContext) {
+void OnNewWindowAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> newContext) {
   recordreplay::AutoMarkReplayCode amrc;
   RunScript(isolate, newContext, gOnNewWindowScript,
             "record-replay-devtools-OnNewWindow");
 
   LocalFrame* parentFrame = DynamicTo<LocalFrame>(localFrame->Parent());
   recordreplay::Print(
-    "[RUN-2739] OnNewWindow2 %d win=%d frame=%d %d \"%s\" parent=%d",
+    "[RUN-2739] OnNewWindowAfterCheckpoint %d win=%d frame=%d %d \"%s\" parent=%d",
     newContext == isolate->GetCurrentContext(),
     localFrame->DomWindow()->RecordReplayId(),
     localFrame->RecordReplayId(),
