@@ -215,6 +215,10 @@ void LocalWindowProxy::Initialize() {
         GetFrame()->DomWindow()->GetAgentClusterID());
     SetSecurityToken(origin.get());
   }
+  
+
+  recordreplay::Print("DDBG LocalWindowProxy::Initialize %s",
+    origin ? origin->Host().Utf8().c_str() : "");
 
   if (recordreplay::IsRecordingOrReplaying("commands") &&
       origin &&
@@ -229,9 +233,9 @@ void LocalWindowProxy::Initialize() {
       // commands when recording/replaying, and to create checkpoints. Create
       // the first checkpoint at which execution can pause.
       gRecordReplayStateInitialized = true;
-      SetupRecordReplayCommands(GetIsolate(), GetFrame(), context);
+      InitializeRecordReplay(GetIsolate(), GetFrame(), context);
       recordreplay::NewCheckpoint();
-      SetupRecordReplayCommandsAfterCheckpoint();
+      InitializeRecordReplayAfterCheckpoint();
     }
 
     if (GetFrame()->IsOutermostMainFrame()) {
