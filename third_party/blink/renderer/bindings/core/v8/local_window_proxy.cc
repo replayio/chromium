@@ -216,7 +216,8 @@ void LocalWindowProxy::Initialize() {
     SetSecurityToken(origin.get());
   }
 
-  if (recordreplay::IsRecordingOrReplaying("commands") &&
+  if (world_->IsMainWorld() &&
+      recordreplay::IsRecordingOrReplaying("commands") &&
       origin &&
       !origin->Host().empty()) {
     // Initialize and re-initialize Replay state, command handlers and more.
