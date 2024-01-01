@@ -263,7 +263,7 @@ function getSourceMapURLs(sourceURL, relativeSourceMapURL) {
   try {
     sourceMapURL = new URL(relativeSourceMapURL, sourceBaseURL).toString();
   } catch (err) {
-    log("Failed to process sourcemap url: " + err.message);
+    log("[RuntimeError] Failed to process sourcemap url: " + err.message);
     return null;
   }
 
