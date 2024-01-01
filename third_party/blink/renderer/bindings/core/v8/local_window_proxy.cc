@@ -237,7 +237,8 @@ void LocalWindowProxy::Initialize() {
     }
 
     if (GetFrame()->IsOutermostMainFrame()) {
-      // Root-level navigation event, possibly before first checkpoint.
+      // Root-level navigation event, initially happens before
+      // first checkpoint.
       OnNewRootFrame(GetIsolate(), GetFrame(), context);
     }
 
