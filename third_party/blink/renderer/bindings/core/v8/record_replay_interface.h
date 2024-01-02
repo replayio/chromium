@@ -21,11 +21,11 @@ void InitializeRecordReplayAfterCheckpoint();
 
 // Initialize everything that needs to be initialized with every root frame,
 // before the first Checkpoint.
-void OnNewRootFrame(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context);
+void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context);
 
 // Initialize everything that needs to be initialized with every root frame,
 // after the first Checkpoint.
-void OnNewRootFrameAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context);
+void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context);
 
 // Initialize everything that depends on other initialization steps but
 // for all windows.

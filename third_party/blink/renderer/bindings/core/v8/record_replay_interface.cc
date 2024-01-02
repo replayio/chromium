@@ -5624,10 +5624,10 @@ static void InitializeReplayScripts(v8::Isolate* isolate, LocalFrame* localFrame
   }
 }
 
-void OnNewRootFrame(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
+void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
   recordreplay::AutoMarkReplayCode amrc;
   recordreplay::Print(
-    "[RUN-2739] OnNewRootFrame win=%d frame=%d %d \"%s\"",
+    "[RUN-2739] OnRootFrameInit win=%d frame=%d %d \"%s\"",
       localFrame->DomWindow()->RecordReplayId(),
       localFrame->RecordReplayId(),
       localFrame->IsCrossOriginToParentOrOuterDocument(),
@@ -5645,14 +5645,14 @@ void OnNewRootFrame(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::
   InitializeReplayScripts(isolate, localFrame, context);
 }
 
-void OnNewRootFrameAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
+void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
   // 1. Register navigation event.
   if (localFrame->GetDocument()->Url().ProtocolIsInHTTPFamily()) {
     recordreplay::OnNavigationEvent(
         nullptr, localFrame->GetDocument()->Url().GetString().Utf8().c_str());
   }
 
-  // 3. Initialize React and Redux Devtools stubs.
+  // 2. Initialize React and Redux Devtools stubs.
   if (recordreplay::FeatureEnabled("react-devtools-backend") &&
       !TestEnv("RECORD_REPLAY_DISABLE_REACT_DEVTOOLS")) {
     // Note: We use a special URL for the react devtools as this script needs
