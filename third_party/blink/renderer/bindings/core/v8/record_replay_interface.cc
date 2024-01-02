@@ -101,20 +101,20 @@ static LocalFrame* GetLocalFrameRoot(v8::Isolate* isolate) {
   LocalDOMWindow* currentWindow = CurrentDOMWindow(isolate);
 
   if (!currentWindow) {
-    recordreplay::Warning("[RuntimeError] GetLocalFrameRoot: no window.");
+    recordreplay::Print("[RuntimeError] GetLocalFrameRoot: no window.");
     return nullptr;
   }
 
   LocalFrame *f = currentWindow->GetFrame();
   if (!f || f->IsDetached() || f->IsProvisional()) {
-    recordreplay::Warning("[RuntimeError] GetLocalFrameRoot: window has no frame.");
+    recordreplay::Print("[RuntimeError] GetLocalFrameRoot: window has no frame.");
     return nullptr;
   }
 
   LocalFrame& root = f->LocalFrameRoot();
 
   if (root.IsDetached() || root.IsProvisional()) {
-    recordreplay::Warning("[RuntimeError] GetLocalFrameRoot: root is detached or provisional.");
+    recordreplay::Print("[RuntimeError] GetLocalFrameRoot: root is detached or provisional.");
     return nullptr;
   }
 
