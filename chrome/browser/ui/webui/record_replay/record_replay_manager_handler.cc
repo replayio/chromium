@@ -4,7 +4,7 @@
 
 #include "base/record_replay_driver.h"
 #include "chrome/browser/ui/webui/record_replay/record_replay_manager_handler.h"
-#include "components/record_replay/services/auth_token/public/cpp/auth_token_service_factory.h"
+#include "components/record_replay/services/record_replay/public/cpp/record_replay_service_factory.h"
 #include <string>
 
 #include "base/bind.h"
@@ -30,7 +30,7 @@ void RecordReplayManagerHandler::SetManager(
 void RecordReplayManagerHandler::HandleSignInButtonClicked() {
   fprintf(stderr, "RecordReplay [RUN-2866] ManagerHandler(%p)::HandleSignInButtonClicked()\n", this);
   manager_->HandleSignInButtonClicked();
-  // auth_token::RecordReplayAuthTokenServiceFactory::GetForBrowserContext(profile_)->SetToken(api_key);
+  // record_replay::RecordReplayServiceFactory::GetForBrowserContext(profile_)->SetToken(api_key);
 }
 
 void RecordReplayManagerHandler::GetEnv(const std::string& key, GetEnvCallback callback) {

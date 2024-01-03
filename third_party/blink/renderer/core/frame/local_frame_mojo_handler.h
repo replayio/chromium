@@ -9,7 +9,7 @@
 #include "build/build_config.h"
 #include "components/power_scheduler/power_mode_voter.h"
 #include "services/device/public/mojom/device_posture_provider.mojom-blink.h"
-#include "components/record_replay/services/auth_token/public/mojom/auth_token.mojom-blink.h"
+#include "components/record_replay/services/record_replay/public/mojom/record_replay.mojom-blink.h"
 #include "third_party/blink/public/mojom/frame/back_forward_cache_controller.mojom-blink.h"
 #include "third_party/blink/public/mojom/frame/frame.mojom-blink.h"
 #include "third_party/blink/public/mojom/media/fullscreen_video_element.mojom-blink.h"
@@ -49,7 +49,7 @@ class LocalFrameMojoHandler
       public mojom::blink::HighPriorityLocalFrame,
       public mojom::blink::FullscreenVideoElementHandler,
       public device::mojom::blink::DevicePostureProviderClient,
-      public auth_token::mojom::blink::RecordReplayAuthTokenStoreObserver {
+      public record_replay::mojom::blink::RecordReplayAuthTokenObserver {
  public:
   explicit LocalFrameMojoHandler(blink::LocalFrame& frame);
   void Trace(Visitor* visitor) const;
@@ -75,7 +75,14 @@ class LocalFrameMojoHandler
 
   device::mojom::blink::DevicePostureType GetDevicePosture();
 
-  void RegisterRecordReplayAuthTokenObserver();
+  void RecordReplayEnsureAuthTokenStore();
+  void RecordReplayRegisterAuthTokenObserver();
+  void RecordReplayLogin();
+  void RecordReplaySetToken(const WTF::String& token);
+  void RecordReplayClearToken();
+  void RecordReplaySetUser(const WTF::String& user);
+  void RecordReplayClearUser();
+
  private:
   Page* GetPage() const;
   LocalDOMWindow* DomWindow() const;
@@ -90,9 +97,9 @@ class LocalFrameMojoHandler
   void BindFullscreenVideoElementReceiver(
       mojo::PendingAssociatedReceiver<
           mojom::blink::FullscreenVideoElementHandler> receiver);
-  void BindRecordReplayAuthTokenStoreObserver(
+  void BindRecordReplayAuthTokenObserver(
       mojo::PendingReceiver<
-          auth_token::mojom::blink::RecordReplayAuthTokenStoreObserver> receiver);
+          record_replay::mojom::blink::RecordReplayAuthTokenObserver> receiver);
 
   // blink::mojom::LocalFrame overrides:
   void GetTextSurroundingSelection(
@@ -249,7 +256,7 @@ class LocalFrameMojoHandler
   // DevicePostureServiceClient implementation:
   void OnPostureChanged(device::mojom::blink::DevicePostureType posture) final;
 
-  // RecordReplayAuthTokenStoreObserver implementation:
+  // RecordReplayAuthTokenObserver implementation:
   void OnRecordReplayAuthTokenChanged(const WTF::String& token) final;
 
   Member<blink::LocalFrame> frame_;
@@ -270,8 +277,8 @@ class LocalFrameMojoHandler
   HeapMojoAssociatedRemote<mojom::blink::LocalFrameHost>
       local_frame_host_remote_{nullptr};
 
-  HeapMojoRemote<auth_token::mojom::blink::RecordReplayAuthTokenStore>
-      auth_token_store_{nullptr};
+  HeapMojoRemote<record_replay::mojom::blink::RecordReplayService>
+      record_replay_service_{nullptr};
 
   // LocalFrameMojoHandler can be reused by multiple ExecutionContext.
   HeapMojoAssociatedReceiver<mojom::blink::LocalFrame, LocalFrameMojoHandler>
@@ -288,9 +295,9 @@ class LocalFrameMojoHandler
                              LocalFrameMojoHandler>
       fullscreen_video_receiver_{this, nullptr};
   // LocalFrameMojoHandler can be reused by multiple ExecutionContext.
-  HeapMojoReceiver<auth_token::mojom::blink::RecordReplayAuthTokenStoreObserver,
+  HeapMojoReceiver<record_replay::mojom::blink::RecordReplayAuthTokenObserver,
                    LocalFrameMojoHandler>
-      auth_token_store_observer_receiver_{this, nullptr};
+      record_replay_observer_receiver_{this, nullptr};
 
 
   // LocalFrameMojoHandler can be reused by multiple ExecutionContext.

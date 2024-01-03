@@ -71,8 +71,8 @@
 #include "components/performance_manager/public/performance_manager.h"
 #include "components/prefs/pref_service.h"
 #include "components/reading_list/features/reading_list_switches.h"
-#include "components/record_replay/services/auth_token/public/mojom/auth_token.mojom.h"
-#include "components/record_replay/services/auth_token/public/cpp/auth_token_service_factory.h"
+#include "components/record_replay/services/record_replay/public/mojom/record_replay.mojom.h"
+#include "components/record_replay/services/record_replay/public/cpp/record_replay_service_factory.h"
 #include "components/safe_browsing/buildflags.h"
 #include "components/security_state/content/content_utils.h"
 #include "components/security_state/core/security_state.h"
@@ -374,9 +374,9 @@ namespace internal {
 
 using content::RegisterWebUIControllerInterfaceBinder;
 
-void BindRecordReplayAuthTokenStore(
+void BindRecordReplayService(
     content::RenderFrameHost* frame_host,
-    mojo::PendingReceiver<auth_token::mojom::RecordReplayAuthTokenStore> receiver) {
+    mojo::PendingReceiver<record_replay::mojom::RecordReplayService> receiver) {
 
   // we only bind the receiver if the frame's origin is app.replay.io
   if (frame_host->GetLastCommittedOrigin().host() != "app.replay.io") {
@@ -386,8 +386,8 @@ void BindRecordReplayAuthTokenStore(
   content::BrowserContext* browser_context =
       frame_host->GetProcess()->GetBrowserContext();
 
-  auth_token::RecordReplayAuthTokenServiceFactory::GetForBrowserContext(browser_context)
-      ->BindAuthTokenStore(std::move(receiver));
+  record_replay::RecordReplayServiceFactory::GetForBrowserContext(browser_context)
+      ->BindRecordReplayService(std::move(receiver));
 }
 
 #if BUILDFLAG(ENABLE_UNHANDLED_TAP)
@@ -696,8 +696,8 @@ void PopulateChromeFrameBinders(
     mojo::BinderMapWithContext<content::RenderFrameHost*>* map,
     content::RenderFrameHost* render_frame_host) {
 
-  map->Add<auth_token::mojom::RecordReplayAuthTokenStore>(
-      base::BindRepeating(&BindRecordReplayAuthTokenStore));
+  map->Add<record_replay::mojom::RecordReplayService>(
+      base::BindRepeating(&BindRecordReplayService));
 
   map->Add<image_annotation::mojom::Annotator>(
       base::BindRepeating(&BindImageAnnotator));

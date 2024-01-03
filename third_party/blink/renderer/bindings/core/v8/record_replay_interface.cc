@@ -5818,13 +5818,13 @@ void RecordReplayEventListener::HandleRecordReplayTokenMessage(v8::Local<v8::Con
     // message is either `{ type: "connect" }` or `{ type: "login" }`, with neither payload carrying additional info.
     if (StringEquals(isolate, message_type.As<v8::String>(), "connect")) {
       LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: connect message received";
-      local_frame_->RegisterRecordReplayAuthTokenObserver();
+      local_frame_->RecordReplayRegisterAuthTokenObserver();
       return;
     }
 
     if (StringEquals(isolate, message_type.As<v8::String>(), "login")) {
       LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: login message received";
-      // [RUN-2863] TODO open external browser to login
+      local_frame_->RecordReplayLogin();
       return;
     }
 
@@ -5835,13 +5835,13 @@ void RecordReplayEventListener::HandleRecordReplayTokenMessage(v8::Local<v8::Con
   v8::Local<v8::Value> message_token = message->Get(context, ToV8String(isolate, "token")).ToLocalChecked();
   if (message_token->IsString()) {
     LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: set access token message received, token = " << V8ToString(isolate, message_token);
-    // [RUN-2863] TODO set the access token in browser prefs.
+    local_frame_->RecordReplaySetToken(ToCoreString(message_token.As<v8::String>()));
     return;
   }
 
-  if (message_token->IsNull()) {
+  if (message_token->IsNullOrUndefined()) {
     LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: clear access token message received";
-    // [RUN-2863] TODO clear the access token in browser prefs.
+    local_frame_->RecordReplayClearToken();
     return;
   }
 
@@ -5855,13 +5855,13 @@ void RecordReplayEventListener::HandleRecordReplayMessage(v8::Local<v8::Context>
   v8::Local<v8::Value> message_user = message->Get(context, ToV8String(isolate, "user")).ToLocalChecked();
   if (message_user->IsString()) {
     LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: set user message received, user = " << V8ToString(isolate, message_user);
-    // [RUN-2863] TODO set the user in browser prefs.
+    local_frame_->RecordReplaySetUser(ToCoreString(message_user.As<v8::String>()));
     return;
   }
 
   if (message_user->IsNullOrUndefined()) {
     LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: clear user message received";
-    // [RUN-2863] TODO clear the user in browser prefs.
+    local_frame_->RecordReplayClearUser();
     return;
   }
 

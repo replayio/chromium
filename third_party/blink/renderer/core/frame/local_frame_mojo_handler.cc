@@ -419,7 +419,7 @@ LocalFrameMojoHandler::LocalFrameMojoHandler(blink::LocalFrame& frame)
       &LocalFrameMojoHandler::BindFullscreenVideoElementReceiver,
       WrapWeakPersistent(this)));
   registry->AddInterface(WTF::BindRepeating(
-      &LocalFrameMojoHandler::BindRecordReplayAuthTokenStoreObserver,
+      &LocalFrameMojoHandler::BindRecordReplayAuthTokenObserver,
       WrapWeakPersistent(this)));
 }
 
@@ -437,8 +437,8 @@ void LocalFrameMojoHandler::Trace(Visitor* visitor) const {
   visitor->Trace(high_priority_frame_receiver_);
   visitor->Trace(fullscreen_video_receiver_);
   visitor->Trace(device_posture_receiver_);
-  visitor->Trace(auth_token_store_);
-  visitor->Trace(auth_token_store_observer_receiver_);
+  visitor->Trace(record_replay_service_);
+  visitor->Trace(record_replay_observer_receiver_);
 }
 
 void LocalFrameMojoHandler::WasAttachedAsLocalMainFrame() {
@@ -507,17 +507,50 @@ LocalFrameMojoHandler::GetDevicePosture() {
   return current_device_posture_;
 }
 
-void LocalFrameMojoHandler::RegisterRecordReplayAuthTokenObserver() {
-  if (auth_token_store_.is_bound()) {
+void LocalFrameMojoHandler::RecordReplayEnsureAuthTokenStore() {
+  if (record_replay_service_.is_bound()) {
     return;
   }
 
   auto task_runner = frame_->GetTaskRunner(TaskType::kInternalDefault);
   frame_->GetBrowserInterfaceBroker().GetInterface(
-      auth_token_store_.BindNewPipeAndPassReceiver(task_runner));
+      record_replay_service_.BindNewPipeAndPassReceiver(task_runner));
+}
 
-  auth_token_store_->AddObserver(
-      auth_token_store_observer_receiver_.BindNewPipeAndPassRemote(task_runner));
+void LocalFrameMojoHandler::RecordReplayRegisterAuthTokenObserver() {
+  if (record_replay_observer_receiver_.is_bound()) {
+    return;
+  }
+
+  RecordReplayEnsureAuthTokenStore();
+  auto task_runner = frame_->GetTaskRunner(TaskType::kInternalDefault);
+  record_replay_service_->AddObserver(
+      record_replay_observer_receiver_.BindNewPipeAndPassRemote(task_runner));
+}
+
+void LocalFrameMojoHandler::RecordReplayLogin() {
+  RecordReplayEnsureAuthTokenStore();
+  record_replay_service_->Login();
+}
+
+void LocalFrameMojoHandler::RecordReplaySetToken(const WTF::String& token) {
+  RecordReplayEnsureAuthTokenStore();
+  record_replay_service_->SetToken(token);
+}
+
+void LocalFrameMojoHandler::RecordReplayClearToken() {
+  RecordReplayEnsureAuthTokenStore();
+  record_replay_service_->ClearToken();
+}
+
+void LocalFrameMojoHandler::RecordReplaySetUser(const WTF::String& token) {
+  RecordReplayEnsureAuthTokenStore();
+  record_replay_service_->SetUser(token);
+}
+
+void LocalFrameMojoHandler::RecordReplayClearUser() {
+  RecordReplayEnsureAuthTokenStore();
+  record_replay_service_->ClearUser();
 }
 
 Page* LocalFrameMojoHandler::GetPage() const {
@@ -566,13 +599,13 @@ void LocalFrameMojoHandler::BindToHighPriorityReceiver(
       std::make_unique<ActiveURLMessageFilter>(frame_));
 }
 
-void LocalFrameMojoHandler::BindRecordReplayAuthTokenStoreObserver(
+void LocalFrameMojoHandler::BindRecordReplayAuthTokenObserver(
       mojo::PendingReceiver<
-          auth_token::mojom::blink::RecordReplayAuthTokenStoreObserver> receiver) {
+          record_replay::mojom::blink::RecordReplayAuthTokenObserver> receiver) {
  if (frame_->IsDetached())
     return;
 
-  auth_token_store_observer_receiver_.Bind(
+  record_replay_observer_receiver_.Bind(
       std::move(receiver), frame_->GetTaskRunner(TaskType::kInternalDefault));
 }
 

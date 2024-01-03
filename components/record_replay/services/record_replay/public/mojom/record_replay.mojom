@@ -1,0 +1,20 @@
+module record_replay.mojom;
+
+// Provides access to the browser-side record/replay service.
+interface RecordReplayService {
+  SetToken(string token);
+  ClearToken();
+
+  SetUser (string user);
+  ClearUser();
+
+  // Opens an external browser to log the user in
+  Login();
+
+  AddObserver(pending_remote<RecordReplayAuthTokenObserver> observer);
+  // how do we remove?
+};
+
+interface RecordReplayAuthTokenObserver {
+  OnRecordReplayAuthTokenChanged(string token);
+};
