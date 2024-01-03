@@ -516,10 +516,6 @@ async function buildSymbolsArchive(
   return archiveFile;
 }
 
-const buildIdExtension =
-  process.env["BUILDKITE_BRANCH"] !==
-  process.env["BUILDKITE_PIPELINE_DEFAULT_BRANCH"]
-    ? "-dev"
-    : process.env["LOCAL_DEVELOPER_BUILD_EXTENSION"] || "";
+const buildIdExtension = "";
 const useARM = !!process.env.REPLAY_BUILD_ARM;
 main({ buildIdExtension, driverRevision: process.env.DRIVER_REVISION, useARM });
