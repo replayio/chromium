@@ -91,11 +91,7 @@ for (let i = 0; i < driverContents.length; i++) {
 }
 driverString = driverString.join("");
 
-const buildSuffix =
-  process.env["BUILDKITE_BRANCH"] !== process.env["BUILDKITE_PIPELINE_DEFAULT_BRANCH"]
-    ? "-dev"
-    : process.env["LOCAL_DEVELOPER_BUILD_EXTENSION"] || "";
-const buildId = `${computeBuildId(driverDate, driverRevision)}${buildSuffix}`;
+const buildId = `${computeBuildId(driverDate, driverRevision)}`;
 
 fs.writeFileSync(
   `${__dirname}/base/record_replay_driver.cc`,
