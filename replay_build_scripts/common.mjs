@@ -112,6 +112,10 @@ function runGnGen() {
   spawnChecked(gn(), ["gen", "out/Release"], { stdio: "inherit" });
 }
 
+function runGclientSync() {
+  spawnChecked("gclient", ["sync"], { stdio: "inherit" });
+}
+
 function updateRepo(repo, treeish) {
   log(`Updating ${repo} to ${treeish}`);
   // delete git lock file if it exists on Windows
@@ -148,10 +152,9 @@ export function updateChromiumRepo() {
 
   syncRepo(path.join(chromium, "third_party", "webrtc"), deps.webrtc);
 
-  syncRepo(
-    path.join(chromium, "third_party", "boringssl", "src"),
-    deps.boringssl
-  );
+  syncRepo(path.join(chromium, "third_party", "boringssl", "src"), deps.boringssl);
+
+  runGclientSync();
 
   runGnGen();
 }
@@ -173,10 +176,9 @@ function getChromiumDeps() {
   assert(match, "Could not find skia revision");
   results.skia = match[1];
 
-  match =
-    /'https:\/\/github.com\/replayio\/chromium-webrtc.git' \+ '@' \+ '(.*?)'/.exec(
-      text
-    );
+  match = /'https:\/\/github.com\/replayio\/chromium-webrtc.git' \+ '@' \+ '(.*?)'/.exec(
+    text
+  );
   assert(match, "Could not find webrtc revision");
   results.webrtc = match[1];
 
