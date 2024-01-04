@@ -46,6 +46,8 @@ if (is_mac) {
   import("//third_party/protobuf/proto_library.gni")
 }
 
+import("//build/config/record_replay.gni")
+
 declare_args() {
   # Indicates if the Location object contains the source code information
   # (file, function, line). False means only the program counter (and currently
@@ -1555,6 +1557,7 @@ mixed_component("base") {
     "//build:chromecast_buildflags",
     "//build:chromeos_buildflags",
     "//third_party/abseil-cpp:absl",
+    ":record_replay_buildflags",
   ]
 
   if (use_custom_libcxx && !is_debug) {
@@ -2675,6 +2678,16 @@ buildflag_header("power_monitor_buildflags") {
   _has_battery_provider_impl = is_win || is_mac
 
   flags = [ "HAS_BATTERY_LEVEL_PROVIDER_IMPL=$_has_battery_provider_impl" ]
+}
+
+# Replay buildflags.
+buildflag_header("record_replay_buildflags") {
+  header = "record_replay_buildflags.h"
+  header_dir = "base"
+
+  flags = [
+    "RECORD_REPLAY=$is_record_replay"
+  ]
 }
 
 # This is the subset of files from base that should not be used with a dynamic

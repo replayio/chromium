@@ -47,6 +47,8 @@
 #include "third_party/blink/renderer/platform/wtf/vector_traits.h"
 #include "third_party/blink/renderer/platform/wtf/wtf_size_t.h"
 
+#include "base/record_replay_buildflags.h"
+
 // For ASAN builds, disable inline buffers completely as they cause various
 // issues.
 #ifdef ANNOTATE_CONTIGUOUS_CONTAINER
@@ -57,7 +59,7 @@
 
 namespace WTF {
 
-#if defined(MEMORY_TOOL_REPLACES_ALLOCATOR)
+#if defined(MEMORY_TOOL_ENABLED)
 // The allocation pool for nodes is one big chunk that ASAN has no insight
 // into, so it can cloak errors. Make it as small as possible to force nodes
 // to be allocated individually where ASAN can see them.

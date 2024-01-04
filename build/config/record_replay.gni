@@ -1,0 +1,5 @@
+declare_args() {
+  # Enable Record Replay
+  is_record_replay = true
+}
+
