@@ -6,6 +6,7 @@
 #define COMPONENTS_RECORD_REPLAY_SERVICES_RECORD_REPLAY_PUBLIC_CPP_RECORD_REPLAY_SERVICE_H_
 
 #include "components/keyed_service/core/keyed_service.h"
+#include "components/prefs/pref_registry_simple.h"
 #include "components/record_replay/services/record_replay/public/mojom/record_replay.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -13,11 +14,16 @@
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote_set.h"
 
+class Profile;
+
 namespace record_replay {
+
+// Register preferences dictionary.
+void RegisterProfilePrefs(PrefRegistrySimple* registry);
 
 class RecordReplayService : public KeyedService, public mojom::RecordReplayService {
  public:
-  RecordReplayService();
+  explicit RecordReplayService(Profile* profile);
   RecordReplayService(const RecordReplayService&) = delete;
   RecordReplayService& operator=(const RecordReplayService&) = delete;
   ~RecordReplayService() override;
@@ -36,7 +42,18 @@ class RecordReplayService : public KeyedService, public mojom::RecordReplayServi
 
   void AddObserver(mojo::PendingRemote<mojom::RecordReplayAuthTokenObserver> observer) override;
 
+  // interface for RecordReplayManagerHandler
+  absl::optional<std::string> GetEnv(const std::string& key);
+  std::string GetBuildId();
+  absl::optional<std::string> GetReplayUserToken();
+  void SetReplayUserToken(const absl::optional<std::string>& token);
+  absl::optional<std::string> GetReplayRefreshToken();
+  void SetReplayRefreshToken(const absl::optional<std::string>& token);
+  void ShowAuthenticationError(const std::string& message);
+  void OpenExternalBrowser(const std::string& url);
+
 private:
+  raw_ptr<Profile> profile_;
   mojo::ReceiverSet<mojom::RecordReplayService> services_;
 
   std::string token_;

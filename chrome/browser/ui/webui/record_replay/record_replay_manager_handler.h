@@ -20,6 +20,10 @@
 class AutocompleteController;
 class Profile;
 
+namespace record_replay {
+  class RecordReplayService;
+}
+
 // Implementation of mojo::RecordReplayManagerHandler.  StartOmniboxQuery() calls to a
 // private AutocompleteController. It also listens for updates from the
 // AutocompleteController to OnResultChanged() and passes those results to
@@ -59,6 +63,9 @@ class RecordReplayManagerHandler : public mojom::RecordReplayManagerHandler {
 
   // The Profile* handed to us in our constructor.
   raw_ptr<Profile> profile_;
+
+  // Handle to the component service for record replay.
+  raw_ptr<record_replay::RecordReplayService> service_;
 
   mojo::Receiver<mojom::RecordReplayManagerHandler> receiver_;
 

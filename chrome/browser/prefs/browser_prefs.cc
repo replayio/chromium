@@ -6,6 +6,7 @@
 
 #include <string>
 
+#include "base/record_replay.h"
 #include "base/trace_event/trace_event.h"
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
@@ -134,6 +135,7 @@
 #include "components/prefs/pref_service.h"
 #include "components/privacy_sandbox/privacy_sandbox_prefs.h"
 #include "components/proxy_config/pref_proxy_config_tracker_impl.h"
+#include "components/record_replay/services/record_replay/public/cpp/record_replay_service.h"
 #include "components/safe_browsing/content/common/file_type_policies_prefs.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
 #include "components/search_engines/template_url_prepopulate_data.h"
@@ -1558,6 +1560,9 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry,
   side_search_prefs::RegisterProfilePrefs(registry);
   RegisterBrowserViewProfilePrefs(registry);
 #endif
+
+// Register record-replay prefs dictionary.
+record_replay::RegisterProfilePrefs(registry);
 
 #if !BUILDFLAG(IS_ANDROID)
   registry->RegisterBooleanPref(

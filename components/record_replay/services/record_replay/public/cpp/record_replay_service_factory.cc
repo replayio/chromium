@@ -4,6 +4,7 @@
 
 #include "components/record_replay/services/record_replay/public/cpp/record_replay_service_factory.h"
 
+#include "chrome/browser/profiles/profile.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "content/public/browser/browser_context.h"
 
@@ -31,8 +32,10 @@ RecordReplayServiceFactory::RecordReplayServiceFactory()
 RecordReplayServiceFactory::~RecordReplayServiceFactory() = default;
 
 KeyedService* RecordReplayServiceFactory::BuildServiceInstanceFor(
-    content::BrowserContext* /*context*/) const {
-  return new record_replay::RecordReplayService();
+    content::BrowserContext* context) const {
+  return new record_replay::RecordReplayService(
+    Profile::FromBrowserContext(context)
+  );
 }
 
 // Incognito profiles should use their own instance.

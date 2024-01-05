@@ -24,9 +24,9 @@ class RecordReplayServiceFactory : public BrowserContextKeyedServiceFactory {
   static RecordReplayService* GetForBrowserContext(
       content::BrowserContext* context);
 
+  static RecordReplayServiceFactory* GetInstance();
  private:
   friend class base::NoDestructor<RecordReplayServiceFactory>;
-  static RecordReplayServiceFactory* GetInstance();
 
   RecordReplayServiceFactory();
   ~RecordReplayServiceFactory() override;
