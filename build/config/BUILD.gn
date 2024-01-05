@@ -70,11 +70,12 @@ config("feature_flags") {
     # setting use_ozone globally.
     defines += [ "USE_OZONE=1" ]
   }
+
+  # [Replay] This primarily disables PartitionAlloc.
+  defines += [ "MEMORY_TOOL_REPLACES_ALLOCATOR" ]
+
   if (is_asan || is_hwasan || is_lsan || is_tsan || is_msan) {
     defines += [ "MEMORY_TOOL_ENABLED" ]
-  }
-  if (is_asan || is_hwasan || is_lsan || is_tsan || is_msan || is_record_replay) {
-    defines += [ "MEMORY_TOOL_REPLACES_ALLOCATOR" ]
   }
   if (is_asan) {
     defines += [ "ADDRESS_SANITIZER" ]
