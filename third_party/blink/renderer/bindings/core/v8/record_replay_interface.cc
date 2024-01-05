@@ -205,9 +205,16 @@ const gSourceMapData = new Map();
 
 try {
 
-// Save these before page code potentially overwrites them.
+/** ###########################################################################
+ * Use JS injection prevention:
+ * Save some functions before User JS has a chance to overwrite them.
+ * ##########################################################################*/
+
 const JSON_stringify = JSON.stringify;
 const JSON_parse = JSON.parse;
+
+// RUN-3067
+const Array_push = Array.prototype.push;
 
 ///////////////////////////////////////////////////////////////////////////////
 // utils.js
@@ -331,7 +338,7 @@ class CDPMessageError extends Error {
 function sendMessage(method, params) {
   const id = gNextMessageId++;
   const cdpRequest = new CdpRequest(id);
-  gCdpRequestStack.push(cdpRequest);
+  Array_push.call(gCdpRequestStack, cdpRequest);
   const cdpArgs = JSON_stringify({ method, params, id });
   try {
     sendCDPMessage(cdpArgs);
@@ -385,7 +392,7 @@ function messageCallback(message) {
   } catch (e) {
     warning(`JS Message callback exception: ${e?.stack || e}`);
 
-    return JSON.stringify({
+    return JSON_stringify({
       is_error: true,
       message: e?.message || (e + ''),
       stack: e?.stack?.split?.("\n") || e?.stack || [],
@@ -431,6 +438,12 @@ const CommandCallbacks = {
   "CSS.getAppliedRules": CSS_getAppliedRules
 };
 
+function executeCommand(method, params) {
+  VerboseCommands && log(`[Command ${method}] Handling command, params=${JSON_stringify(params)}...`);
+  const result = CommandCallbacks[method](params);
+  VerboseCommands && log(`[Command ${method}] Handled command, result=${JSON_stringify(result)}`);
+  return result;
+}
 
 function commandCallback(method, params) {
   if (!CommandCallbacks[method]) {
@@ -439,10 +452,7 @@ function commandCallback(method, params) {
   }
 
   try {
-    VerboseCommands && log(`[Command ${method}] Handling command, params=${JSON_stringify(params)}...`);
-    const result = CommandCallbacks[method](params);
-    VerboseCommands && log(`[Command ${method}] Handled command, result=${JSON_stringify(result)}`);
-    return result;
+    return executeCommand(method, params);
   } catch (e) {
     log(`[RuntimeError][Command ${method}] ${e?.stack || e}`);
     // Pass the error up to V8; it can (for now) decide how to handle itself, whether
@@ -455,7 +465,6 @@ function commandCallback(method, params) {
     };
   }
 }
-const executeCommand = commandCallback;
 
 function Target_evaluatePrivileged({ expression }) {
   const result = eval(expression);
@@ -507,7 +516,7 @@ function Target_getCurrentMessageContents() {
   // Get the protocol representation of the message arguments.
   const argumentValues = [];
   for (const arg of gLastConsoleAPICall.args || []) {
-    argumentValues.push(buildRrpObjectFromCdpObject(arg));
+    Array_push.call(argumentValues, buildRrpObjectFromCdpObject(arg));
   }
 
   const level = cdpToRrpConsoleLevels.get(gLastConsoleAPICall.type) || "info";
@@ -561,7 +570,7 @@ function Target_getStepOffsets() {
 
 function Target_getCurrentNetworkRequestEvent() {
   try {
-    const obj = JSON.parse(getCurrentNetworkRequestEvent());
+    const obj = JSON_parse(getCurrentNetworkRequestEvent());
     return { data: obj };
   } catch (e) {
     warning(`JS Target.getCurrentNetworkRequestEvent exception: ${e}`);
@@ -1041,7 +1050,7 @@ function registerCdpObject(cdpObject) {
 function getCdpObjectByRrpId(rrpId) {
   const cdpObject = gCdpObjectsByRrpId.get(rrpId);
   if (!cdpObject) {
-    throw new Error(`getCdpObjectByRrpId failed - rrpId not found: ${JSON.stringify(rrpId)}`);
+    throw new Error(`getCdpObjectByRrpId failed - rrpId not found: ${JSON_stringify(rrpId)}`);
   }
   return cdpObject;
 }
@@ -1220,7 +1229,7 @@ function getBlinkNodeIdByRrpId(nodeRrpId) {
   const cdpObject = getCdpObjectByRrpId(nodeRrpId);
   const nodeId = fromJsGetNodeIdByCpdId(cdpObject.objectId);
   // Note: Don't generate assert message if assert did not fail.
-  assert(nodeId, !nodeId && `${nodeRrpId}: ${JSON.stringify(cdpObject)}`);
+  assert(nodeId, !nodeId && `${nodeRrpId}: ${JSON_stringify(cdpObject)}`);
   return nodeId;
 }
 
@@ -1345,7 +1354,7 @@ ProtocolObjectPreview.prototype = {
     if (!this.properties) {
       this.properties = [];
     }
-    this.properties.push(rrpProp);
+    Array_push.call(this.properties, rrpProp);
   },
 
   addGetterValue(propKey, ownerCdpObject, force = false) {
@@ -1400,7 +1409,7 @@ ProtocolObjectPreview.prototype = {
     if (!this.containerEntries) {
       this.containerEntries = [];
     }
-    this.containerEntries.push(entry);
+    Array_push.call(this.containerEntries, entry);
   },
 
   get pageIndex() { return 0; },
@@ -1449,7 +1458,7 @@ ProtocolObjectPreview.prototype = {
     }
 
     // Add data for blink objects
-    this.extra = previewBlinkObject(this.cdpObj) || {};
+    this.extra = getExtraObjectPreviewData(this.cdpObj, cdpProperties) || {};
 
     if (!isPrototype(this.raw)) { // Ignore prototype itself.
       // Add class-specific data.
@@ -1531,21 +1540,32 @@ function getDescriptionCount(description) {
   }
 }
 
-function previewBlinkObject(cdpObject, cdpProperties) {
+function getExtraObjectPreviewData(cdpObject, cdpProperties) {
   const cdpId = cdpObject.objectId;
   const rrpId = gRrpIdByCdpId.get(cdpId);
   assert(rrpId);
-  const plainObject = getPlainObjectByRrpId(rrpId);
-
-  if (isBlinkInstanceOf(plainObject, Node)) {
+  
+  if (isCdpObjectProxy(cdpObject)) {
+    let targetCdpObj = getInternalProp(cdpProperties, '[[Target]]')?.value;
+    let handlerCdpObj = getInternalProp(cdpProperties, '[[Handler]]')?.value;
     return {
-      node: previewBlinkNode(plainObject)
+      proxyState: {
+        target: buildRrpObjectFromCdpObject(targetCdpObj),
+        handler: buildRrpObjectFromCdpObject(handlerCdpObj)
+      }
+    };
+  } else {
+    const plainObject = getPlainObjectByRrpId(rrpId);
+    if (isBlinkInstanceOf(plainObject, Node)) {
+      return {
+        node: previewBlinkNode(plainObject)
+      }
     }
-  }
 
-  if (isBlinkInstanceOf(plainObject, CSSStyleDeclaration)) {
-    return {
-      style: previewBlinkStyle(plainObject)
+    if (isBlinkInstanceOf(plainObject, CSSStyleDeclaration)) {
+      return {
+        style: previewBlinkStyle(plainObject)
+      }
     }
   }
 }
@@ -1555,7 +1575,7 @@ function previewBlinkNode(node) {
   if (isBlinkInstanceOf(node, Element)) {
     attributes = [];
     for (const { name, value } of node.attributes || []) {
-      attributes.push({ name, value });
+      Array_push.call(attributes, { name, value });
     }
     // TODO: We cannot access pseudo elements using the JS DOM API - https://linear.app/replay/issue/RUN-953/
     // pseudoType = node.localName;
@@ -1633,7 +1653,7 @@ function previewBlinkStyle(style) {
     const value = style.getPropertyValue(name);
     if (value) {
       const important = style.getPropertyPriority(name) == "important" ? true : undefined;
-      properties.push({ name, value, important });
+      Array_push.call(properties, { name, value, important });
     }
   }
 
@@ -1930,7 +1950,7 @@ function createRrpScope(scopeId) {
     }).result;
     for (const { name, value: cdpProp } of properties) {
       const rrpProp = buildRrpObjectFromCdpObject(cdpProp);
-      bindings.push({ ...rrpProp, name });
+      Array_push.call(bindings, { ...rrpProp, name });
     }
   }
 
@@ -2120,7 +2140,7 @@ function DOM_getEventListeners({ node }) {
 
   if (nodeObject.nodeName && nodeObject.nodeName == "HTML") {
     // Add event listeners for the document and window as well.
-    listenerInfos.push(
+    Array_push.call(listenerInfos,
       ...fromJsCollectEventListeners(nodeObject.parentNode)   // document
       // ...fromJsCollectEventListeners(nodeObject.ownerGlobal)  // window
     );
@@ -2131,7 +2151,7 @@ function DOM_getEventListeners({ node }) {
     if (!handler) {
       continue;
     }
-    listeners.push({
+    Array_push.call(listeners, {
       node,
       handler: registerPlainObject(handler),
       type,
@@ -2197,7 +2217,7 @@ function CSS_getComputedStyle({ node }) {
     // else {
     styleInfo = ownerGlobal.getComputedStyle(nodeObj);
     for (let i = 0; i < styleInfo.length; i++) {
-      computedStyle.push({
+      Array_push.call(computedStyle, {
         name: styleInfo.item(i),
         value: styleInfo.getPropertyValue(styleInfo.item(i)),
       });
@@ -2413,7 +2433,7 @@ function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
       rule: rrpRuleId,
       pseudoElement
     };
-    appliedRules.push(appliedRule);
+    Array_push.call(appliedRules, appliedRule);
   }
 
   for (const cdpRule of matchedRules) {
@@ -2879,22 +2899,22 @@ StackingContext.prototype = {
   addZIndexElement(elem, index) {
     const existing = this.zIndexElements.get(index);
     if (existing) {
-      existing.push(elem);
+      Array_push.call(existing, elem);
     } else {
       this.zIndexElements.set(index, [elem]);
     }
   },
 
   addPositionedElement(elem) {
-    this.positionedElements.push(elem);
+    Array_push.call(this.positionedElements, elem);
   },
 
   addFloatingElement(elem) {
-    this.floatingElements.push(elem);
+    Array_push.call(this.floatingElements, elem);
   },
 
   addNonPositionedElement(elem) {
-    this.nonPositionedElements.push(elem);
+    Array_push.call(this.nonPositionedElements, elem);
   },
 
   addChildren(parentNode) {
@@ -2916,9 +2936,9 @@ StackingContext.prototype = {
     const pushElements = (elems) => {
       for (const elem of elems) {
         if (elem.context && elem.context != this) {
-          rv.push(...elem.context.flatten());
+          Array_push.call(rv, ...elem.context.flatten());
         } else {
-          rv.push(elem);
+          Array_push.call(rv, elem);
         }
       }
     };
@@ -3080,6 +3100,7 @@ __RECORD_REPLAY_ARGUMENTS__.internal = {
   getPlainObjectByRrpId,
   registerPlainObject,
   gLastBoundingClientRectsByNodeRrpId,
+  sendCDPMessage: sendMessage,
   getNextStackingContextId: () => gNextStackingContextId,
   setNextStackingContextId: (id) => { gNextStackingContextId = id; },
   updateNextStackingContextId: (f) => { gNextStackingContextId = f(gNextStackingContextId); },
