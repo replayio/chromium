@@ -132,7 +132,8 @@ const gn = currentPlatform() == "windows" ? "gn.bat" : "gn";
 spawnChecked(gn, ["gen", outdir], { stdio: "inherit" });
 
 console.log(`Linting replay js blobs...`);
-spawnChecked("node", ["replay_build_scripts/lint.mjs", `${__dirname}/third_party/blink/renderer/bindings/core/v8/record_replay_interface.cc`], { stdio: "inherit" });
+spawnChecked("npm", ["ci", `${__dirname}/replay_build_scripts`], { stdio: "inherit" });
+spawnChecked("node", [`${__dirname}/replay_build_scripts/lint.mjs`, `${__dirname}/third_party/blink/renderer/bindings/core/v8/record_replay_interface.cc`], { stdio: "inherit" });
 
 console.log(`Building...`);
 const autoninja = currentPlatform() == "windows" ? "autoninja.bat" : "autoninja";
