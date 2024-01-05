@@ -132,8 +132,8 @@ const gn = currentPlatform() == "windows" ? "gn.bat" : "gn";
 spawnChecked(gn, ["gen", outdir], { stdio: "inherit" });
 
 console.log(`Linting replay js blobs...`);
-spawnChecked("npm", ["ci", `${__dirname}/replay_build_scripts`], { stdio: "inherit" });
-spawnChecked("node", [`${__dirname}/replay_build_scripts/lint.mjs`], { stdio: "inherit" });
+spawnChecked("npm", ["ci", "replay_build_scripts"], { stdio: "inherit" });
+spawnChecked("node", [ path.join("replay_build_scripts", "lint.mjs")], { stdio: "inherit" });
 
 console.log(`Building...`);
 const autoninja = currentPlatform() == "windows" ? "autoninja.bat" : "autoninja";
