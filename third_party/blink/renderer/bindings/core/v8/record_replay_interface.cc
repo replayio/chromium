@@ -2532,8 +2532,6 @@ function StackingContextElement(
   style,
   clipBounds
 ) {
-  assert(node.nodeType == Node.ELEMENT_NODE);
-
   // The stacking context this element is contained within.
   this.containingContext = containingContext;
 
