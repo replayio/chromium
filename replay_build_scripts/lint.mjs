@@ -1,7 +1,15 @@
 import * as fs from 'fs';
 import * as eslint from 'eslint';
 
-let replayText = fs.readFileSync(process.argv[2], 'utf8');
+import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+let lintFile = process.argv[2] ||
+    path.join(__dirname, "..", "third_party", "blink", "renderer", "bindings", "core", "v8", "record_replay_interface.cc");
+
+let replayText = fs.readFileSync(lintFile, 'utf8');
 
 let regex = new RegExp('//js', 'g');
 let endRegex = new RegExp('\\)""""', 'g');
