@@ -132,7 +132,7 @@ const gn = currentPlatform() == "windows" ? "gn.bat" : "gn";
 spawnChecked(gn, ["gen", outdir], { stdio: "inherit" });
 
 // only lint when not in buildkite (since buildkite does the linting at a different stage)
-if (!process.env["BUILDKITE_BUILD_ID"]) {
+if (!process.env["BUILDKITE"]) {
   console.log(`Linting replay js blobs...`);
   let cwd;
   try {
