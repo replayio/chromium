@@ -10,6 +10,7 @@ import("//tools/polymer/css_to_wrapper.gni")
 import("//tools/polymer/html_to_wrapper.gni")
 import("//ui/webui/resources/tools/generate_grd.gni")
 import("//ui/webui/webui_features.gni")
+import("./record_replay.gni")
 import("./preprocess_if_expr_sourcemaps.gni")
 import("./ts_library_sourcemaps.gni")
 
