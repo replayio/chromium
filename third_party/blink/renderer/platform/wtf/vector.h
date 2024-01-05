@@ -47,8 +47,6 @@
 #include "third_party/blink/renderer/platform/wtf/vector_traits.h"
 #include "third_party/blink/renderer/platform/wtf/wtf_size_t.h"
 
-#include "base/record_replay_buildflags.h"
-
 // For ASAN builds, disable inline buffers completely as they cause various
 // issues.
 #ifdef ANNOTATE_CONTIGUOUS_CONTAINER

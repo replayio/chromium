@@ -37,8 +37,6 @@
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 #include "third_party/blink/renderer/platform/wtf/type_traits.h"
 
-#include "base/record_replay_buildflags.h"
-
 namespace WTF {
 
 template <bool isInteger, typename T>
