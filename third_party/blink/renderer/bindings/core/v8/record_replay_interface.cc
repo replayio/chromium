@@ -75,6 +75,7 @@ extern v8::Local<v8::Object> RecordReplayGetBytecode(
 } // namespace v8
 
 #define CDPERROR_MISSINGCONTEXT 1001
+#define CDPERROR_NOTALIVE 1002
 
 namespace blink {
 // using RemoteObjectIdTypeRaw = v8_inspector::String16;
@@ -85,6 +86,7 @@ using RemoteObjectIdTypeRaw = std::u16string;
 using RemoteObjectIdType = WTF::String;
 
 extern "C" void V8RecordReplaySetDefaultContext(v8::Isolate* isolate, v8::Local<v8::Context> cx);
+extern "C" int V8RecordReplayGetContextId(v8::Local<v8::Context> cx);
 extern "C" void V8RecordReplayFinishRecording();
 extern "C" void V8RecordReplaySetCrashReason(const char* reason);
 
@@ -153,6 +155,7 @@ public:
 };
 
 static LocalFrame* gLocalRootFrame = nullptr;
+static int defaultContextId = 0;
 
 typedef std::unordered_map<int, InspectorData*> ContextGroupIdInspectorMap;
 
@@ -182,6 +185,7 @@ const {
   getCurrentError,
 
   fromJsMakeDebuggeeValue,
+  fromJsGetDefaultContextId,
   fromJsGetArgumentsInFrame,
   fromJsGetObjectByCdpId,
   fromJsIsBlinkObject,
@@ -198,8 +202,21 @@ const {
 
   // constants
   CDPERROR_MISSINGCONTEXT,
+  CDPERROR_NOTALIVE,
   REPLAY_CDT_PAUSE_OBJECT_GROUP
 } = __RECORD_REPLAY_ARGUMENTS__;
+
+function log(...args) {
+  log_(args.join(' '));
+}
+
+function logTrace(...args) {
+  logTrace_(args.join(' '));
+}
+
+function warning(...args) {
+  warning_(args.join(' '));
+}
 
 const gSourceMapData = new Map();
 
@@ -222,18 +239,6 @@ const Array_push = Array.prototype.push;
 
 // Some of these are duplicated in gSourceMapScript, so watch out when making
 // modifications to update both versions...
-
-function log(...args) {
-  log_(args.join(' '));
-}
-
-function logTrace(...args) {
-  logTrace_(args.join(' '));
-}
-
-function warning(...args) {
-  warning_(args.join(' '));
-}
 
 function assert(v, msg = "") {
   if (!v) {
@@ -324,7 +329,9 @@ class CdpRequest {
   }
 }
 
+const gAlive = true;
 const gCdpRequestStack = [];
+const gEventListeners = new Map();
 
 
 class CDPMessageError extends Error {
@@ -369,7 +376,6 @@ function sendMessage(method, params) {
   return undefined;
 }
 
-const gEventListeners = new Map();
 
 function addEventListener(method, callback) {
   gEventListeners.set(method, callback);
@@ -396,6 +402,7 @@ function messageCallback(message) {
       is_error: true,
       message: e?.message || (e + ''),
       stack: e?.stack?.split?.("\n") || e?.stack || [],
+      code: e?.code,
     });
   }
 }
@@ -439,6 +446,11 @@ const CommandCallbacks = {
 };
 
 function executeCommand(method, params) {
+  if (!gAlive) {
+    const err = new Error(`Context dead - Tried to execute command ${method} when there was no live root frame.`);
+    err.code = CDPERROR_NOTALIVE;
+    throw err;
+  }
   VerboseCommands && log(`[Command ${method}] Handling command, params=${JSON_stringify(params)}...`);
   const result = CommandCallbacks[method](params);
   VerboseCommands && log(`[Command ${method}] Handled command, result=${JSON_stringify(result)}`);
@@ -462,6 +474,7 @@ function commandCallback(method, params) {
       is_error: true,
       message: e?.message || (e + ''),
       stack: e?.stack?.split?.("\n") || e?.stack || [],
+      code: e?.code,
     };
   }
 }
@@ -3190,6 +3203,12 @@ addEventListener("Runtime.executionContextDestroyed", ({ executionContextId }) =
     callback(context, "remove");
   }
   gExecutionContexts.delete(executionContextId);
+
+  if (executionContextId == fromJsGetDefaultContextId()) {
+    // Our own context has shutdown.
+    log(`JS DefaultContext_Destroyed`);
+    gAlive = false;
+  }
 });
 addEventListener("Runtime.executionContextsCleared", () => {
   for (const context of gExecutionContexts.values()) {
@@ -3198,11 +3217,15 @@ addEventListener("Runtime.executionContextsCleared", () => {
     }
   }
   gExecutionContexts.clear();
+
+  // All contexts are gone, including our own.
+  log(`JS Contexts_Cleared`);
+  gAlive = false;
 });
 sendMessage("Runtime.enable");
 
 } catch (e) {
-  log(`Error: Initialization exception ${e}`);
+  warning(`JS_ERROR Initialization: ${e?.stack || e}`);
 }
 
 })();
@@ -4539,6 +4562,20 @@ static void fromJsMakeDebuggeeValue(
   args.GetReturnValue().SetNull();
 }
 
+/**
+ * NOTE: Since the `RemoteObject` type is not publicly exposed, we cannot easily
+ * access it in CPP space. We thus only use it in JS. This basically emulates
+ * gecko's `makeDebuggeeValue`.
+ */
+static void fromJsGetDefaultContextId(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  v8::Isolate* isolate = args.GetIsolate();
+  CHECK(args.Length() == 0 &&
+        "must be called without arguments");
+
+  args.GetReturnValue().Set(v8::Number::New(isolate, defaultContextId));
+}
+
 static void fromJsGetArgumentsInFrame(
     const v8::FunctionCallbackInfo<v8::Value>& args) {
   CHECK(args.Length() == 1 && args[0]->IsString() &&
@@ -5490,9 +5527,11 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
       v8::Boolean::New(isolate,
                        TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE")));
 
-
   DefineProperty(isolate, args, "CDPERROR_MISSINGCONTEXT",
                  v8::Number::New(isolate, (double)CDPERROR_MISSINGCONTEXT));
+
+  DefineProperty(isolate, args, "CDPERROR_NOTALIVE",
+                 v8::Number::New(isolate, (double)CDPERROR_NOTALIVE));
 
   SetFunctionProperty(isolate, args, "log", LogCallback);
   SetFunctionProperty(isolate, args, "logTrace", LogTraceCallback);
@@ -5508,6 +5547,8 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
   // Object Util
   SetFunctionProperty(isolate, args, "fromJsMakeDebuggeeValue",
                       fromJsMakeDebuggeeValue);
+  SetFunctionProperty(isolate, args, "fromJsGetDefaultContextId",
+                      fromJsGetDefaultContextId);
   SetFunctionProperty(isolate, args, "fromJsGetArgumentsInFrame",
                       fromJsGetArgumentsInFrame);
   SetFunctionProperty(isolate, args, "fromJsGetObjectByCdpId",
@@ -5572,13 +5613,8 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
   SetFunctionProperty(isolate, args, "checkPersistentId", fromJsCheckPersistentId);
 }
 
-static void RecordReplaySetDefaultContext(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
-  V8RecordReplaySetDefaultContext(isolate, context);
-}
-
 void InitializeRecordReplay(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
   V8RecordReplaySetAPIObjectIdCallback(GetBlinkPersistentId);
-  RecordReplaySetDefaultContext(isolate, localFrame, context);
   gActiveNetworkRequests =
       new std::unordered_map<std::string, NetworkRequestStatus>();
   gCurrentNetworkStreamData = new std::vector<uint8_t>();
@@ -5595,7 +5631,7 @@ static void InitializeReplayScripts(v8::Isolate* isolate, LocalFrame* localFrame
   // JS stack, we can always use the current root frame's context.
   // Note: We are assuming that each tab has its own process, for now.
   //   (That might not hold true for tabs of the same domain - not sure)
-  RecordReplaySetDefaultContext(isolate, localFrame, context);
+  V8RecordReplaySetDefaultContext(isolate, context);
   
   // Initialize __RECORD_REPLAY__ things.
   InitializeRecordReplayApiObjects(isolate, localFrame);
@@ -5642,6 +5678,9 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
 
   // 2. Initialize our scripts, command handlers etc.
   InitializeReplayScripts(isolate, localFrame, context);
+
+  // 3. Query debugger for contextId, after Runtime.enable.
+  defaultContextId = V8RecordReplayGetContextId(context);
 }
 
 void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
