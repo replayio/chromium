@@ -3239,22 +3239,32 @@ const {
   RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE,
 } = __RECORD_REPLAY_ARGUMENTS__;
 
-const cache = {};
+const sourcemapCache = {};
+
+function makeSourcemapCacheKey(url, hash) {
+  return `${url}:${hash}`;
+}
 
 // Provide a cache for urls, salted with the supplied hash.  Practically, this
 // means if the script content changes at the url, we will re-download the resource.
-async function getCachedResource(url, hash) {
-  const key = `${url}:${hash}`;
-  if (cache[key] && !RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE) {
-    return cache[key];
+async function fetchSourceCached(url, hash) {
+  const key = makeSourcemapCacheKey(url, hash);
+  if (sourcemapCache[key] && !RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE) {
+    return sourcemapCache[key];
   }
 
-  const res = await fetchText(url);
+  const contents = await fetchText(url);
   
-  log(`[sourcemaps] getCachedResource ${key} ${res?.length}`);
+  log(`[sourcemaps] readResourceCached ${key} ${contents?.length}`);
 
-  cache[key] = res;
-  return res;
+  sourcemapCache[key] = contents;
+  return contents;
+}
+
+function addSourceCache(url, contents) {
+  const hash = sha256DigestHex(contents);
+  const key = makeSourcemapCacheKey(url, hash);
+  sourcemapCache[key] = contents;
 }
 
 addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
@@ -3279,7 +3289,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
 
   let sourceMap;
   try {
-    sourceMap = await getCachedResource(sourceMapURL, scriptHash);
+    sourceMap = await fetchSourceCached(sourceMapURL, scriptHash);
   } catch (err) {
     log(`[RuntimeError][sourcemaps] Failed to fetch sourcemap contents for ${sourceMapURL}: ${err.message}`);
   }
@@ -3320,19 +3330,12 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     targetMapURLHash: makeAPIHash(sourceMapURL),
   }));
 
-  for (const { offset, url } of sources) {
-    let sourceContent;
-    try {
-      sourceContent = await getCachedResource(url, scriptHash);
-    } catch (err) {
-      log(`Failed to read original source ${url}: ${err.message}`);
-      continue;
-    }
-    const hash = sha256DigestHex(sourceContent);
+  for (let { offset, contents } of sources) {
+    const hash = sha256DigestHex(contents);
     const name = `source-${hash}`;
 
     if (!recordingDirectoryFileExists(name)) {
-      writeToRecordingDirectory(name, sourceContent);
+      writeToRecordingDirectory(name, contents);
     }
     addRecordingEvent(JSON.stringify({
       kind: "originalSourceAdded",
@@ -3402,6 +3405,7 @@ function collectUnresolvedSourceMapResources(mapText, mapURL) {
 
         if (typeof sourcesContent[i] !== "string") {
           logError(`Invalid sourcesContent entry ${i} is not a string`);
+          break;
         } else {
           let url = sources[i];
           if (typeof sourceRoot === "string" && sourceRoot) {
@@ -3418,6 +3422,7 @@ function collectUnresolvedSourceMapResources(mapText, mapURL) {
           unresolvedSources.push({
             offset,
             url: sourceURL,
+            contents: sourcesContent[i]
           });
         }
       }
@@ -3480,7 +3485,6 @@ function isValidBaseURL(url) {
 }
 
 })();
-
 )"""";
 
 // Script that injects React DevTools "stub" functions to capture
