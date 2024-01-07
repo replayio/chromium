@@ -3227,6 +3227,7 @@ const char* gSourceMapScript = R""""(
 
 const {
   log,
+  warning,
   getRecordingId,
   sha256DigestHex,
   writeToRecordingDirectory,
@@ -3267,83 +3268,94 @@ function addSourceCache(url, hash, contents) {
 }
 
 addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
-  if (!relativeSourceMapURL || relativeSourceMapURL.startsWith("data:"))
-    return;
-
-  const recordingId = getRecordingId();
-  log(`DDBG addNewScriptHandler ${scriptId} A ${sourceURL} ${relativeSourceMapURL}`);
-  if (!recordingId) {
-    // The recording has been invalidated.
-    return;
-  }
-
-  const urls = getSourceMapURLs(sourceURL, relativeSourceMapURL);
-  if (!urls)
-    return;
-
-  const scriptSource = getScriptSource(scriptId);
-  const scriptHash = sha256DigestHex(scriptSource);
-
-  const { sourceMapURL, sourceMapBaseURL } = urls;
-
-  let sourceMap;
   try {
-    sourceMap = await fetchSourceCached(sourceMapURL, scriptHash);
-  } catch (err) {
-    log(`[RuntimeError][sourcemaps] Failed to fetch sourcemap contents for ${sourceMapURL}: ${err.message}`);
-  }
-  
-  log(`DDBG addNewScriptHandler ${scriptId} B ${sourceMap}`);
+    if (!relativeSourceMapURL || relativeSourceMapURL.startsWith("data:"))
+      return;
 
-  if (!sourceMap) {
-    return;
-  }
-
-  const id = scriptHash;
-  const name = `sourcemap-${id}.map`;
-  const lookupName = `sourcemap-${id}.lookup`;
-  
-  log(`DDBG addNewScriptHandler ${scriptId} C ${name} ${lookupName}`);
-
-  let sources;
-  if (!recordingDirectoryFileExists(name) || !recordingDirectoryFileExists(lookupName)) {
-    writeToRecordingDirectory(name, sourceMap);
-
-    sources = collectUnresolvedSourceMapResources(sourceMap, sourceMapURL, sourceURL);
-    writeToRecordingDirectory(lookupName, JSON.stringify(sources));
-  } else {
-    sources = JSON.parse(readFromRecordingDirectory(lookupName));
-  }
-
-  log(`DDBG addNewScriptHandler ${scriptId} D ${JSON.stringify(sources)}`);
-
-  addRecordingEvent(JSON.stringify({
-    kind: "sourcemapAdded",
-    path: getRecordingFilePath(name),
-    recordingId,
-    id,
-    url: sourceMapURL,
-    baseURL: sourceMapBaseURL,
-    targetContentHash: `sha256:${scriptHash}`,
-    targetURLHash: sourceURL ? makeAPIHash(sourceURL) : undefined,
-    targetMapURLHash: makeAPIHash(sourceMapURL),
-  }));
-
-  for (let { offset, url, contents } of sources) {
-    const hash = sha256DigestHex(contents);
-    addSourceCache(url, hash, contents);
-
-    const name = `source-${hash}`;
-    if (!recordingDirectoryFileExists(name)) {
-      writeToRecordingDirectory(name, contents);
+    const recordingId = getRecordingId();
+    log(`DDBG addNewScriptHandler ${scriptId} A ${sourceURL} ${relativeSourceMapURL}`);
+    if (!recordingId) {
+      // The recording has been invalidated.
+      return;
     }
+
+    const urls = getSourceMapURLs(sourceURL, relativeSourceMapURL);
+    if (!urls)
+      return;
+
+    const scriptSource = getScriptSource(scriptId);
+    const scriptHash = sha256DigestHex(scriptSource);
+
+    const { sourceMapURL, sourceMapBaseURL } = urls;
+
+    let sourceMap;
+    try {
+      sourceMap = await fetchSourceCached(sourceMapURL, scriptHash);
+    } catch (err) {
+      log(`[RuntimeError][sourcemaps] Failed to fetch sourcemap contents for ${sourceMapURL}: ${err.message}`);
+    }
+    
+    log(`DDBG addNewScriptHandler ${scriptId} B ${sourceMap}`);
+
+    if (!sourceMap) {
+      return;
+    }
+
+    const id = scriptHash;
+    const name = `sourcemap-${id}.map`;
+    const lookupName = `sourcemap-${id}.lookup`;
+    
+    log(`DDBG addNewScriptHandler ${scriptId} C ${name} ${lookupName}`);
+
+    let sources;
+    if (recordingDirectoryFileExists(name) && recordingDirectoryFileExists(lookupName)) {
+      try {
+        sources = JSON.parse(readFromRecordingDirectory(lookupName));
+      } catch (err) {
+        log(`[RuntimeError][sourcemaps] Failed to load sourcemaps from file: ${lookupName} - ${err.message}`);
+      }
+    }
+
+    if (!sources) {
+      writeToRecordingDirectory(name, sourceMap);
+
+      sources = collectUnresolvedSourceMapResources(sourceMap, sourceMapURL, sourceURL);
+      writeToRecordingDirectory(lookupName, JSON.stringify(sources));
+    }
+
+    log(`DDBG addNewScriptHandler ${scriptId} D ${JSON.stringify(sources)}`);
+
     addRecordingEvent(JSON.stringify({
-      kind: "originalSourceAdded",
+      kind: "sourcemapAdded",
       path: getRecordingFilePath(name),
       recordingId,
-      parentId: id,
-      parentOffset: offset,
+      id,
+      url: sourceMapURL,
+      baseURL: sourceMapBaseURL,
+      targetContentHash: `sha256:${scriptHash}`,
+      targetURLHash: sourceURL ? makeAPIHash(sourceURL) : undefined,
+      targetMapURLHash: makeAPIHash(sourceMapURL),
     }));
+
+    for (let { offset, url, contents } of sources) {
+      const hash = sha256DigestHex(contents);
+      addSourceCache(url, hash, contents);
+
+      const name = `source-${hash}`;
+      if (!recordingDirectoryFileExists(name)) {
+        writeToRecordingDirectory(name, contents);
+      }
+      log(`DDBG_addRecordingEvent originalSourceAdded ${scriptId} D ${JSON.stringify(sources)}`);
+      addRecordingEvent(JSON.stringify({
+        kind: "originalSourceAdded",
+        path: getRecordingFilePath(name),
+        recordingId,
+        parentId: id,
+        parentOffset: offset,
+      }));
+    }
+  } catch (err) {
+    warning(`gSourceMapScript Exception: ${err?.stack || err}`);
   }
 });
 
@@ -3372,69 +3384,56 @@ function collectUnresolvedSourceMapResources(mapText, mapURL) {
     obj = JSON.parse(mapText);
     if (typeof obj !== "object" || !obj) {
       logError(`Invalid source map content - is not object.`);
-      return {
-        sources: [],
-      };
+      return [];
     }
   } catch (err) {
     logError(`Exception parsing sourcemap JSON: ${err.message}`);
-    return {
-      sources: [],
-    };
+    return [];
   }
 
-  try {
-    const unresolvedSources = [];
-    let sourceOffset = 0;
+  const unresolvedSources = [];
+  let sourceOffset = 0;
 
-    if (obj.version !== 3) {
-      logError("Invalid sourcemap version");
-      return {
-        sources: [],
-      };
-    }
+  if (obj.version !== 3) {
+    logError("Invalid sourcemap version");
+    return [];
+  }
 
-    if (!obj?.sources?.length) {
-      logError(`Invalid sourcemap: no sources - ${obj?.sources}`);
-    } else if (!obj.sourcesContent?.length) {
-      logError(`Invalid sourcemap: no sourcesContent - ${obj.sourcesContent}`);
-    } else {
-      const { sourceRoot, sources, sourcesContent } = obj;
-      for (let i = 0; i < sources.length; i++) {
-        const offset = sourceOffset++;
+  else if (!obj?.sources?.length) {
+    logError(`Invalid sourcemap: no sources - ${obj?.sources}`);
+  } else if (!obj.sourcesContent?.length) {
+    logError(`Invalid sourcemap: no sourcesContent - ${obj.sourcesContent}`);
+  } else {
+    const { sourceRoot, sources, sourcesContent } = obj;
+    for (let i = 0; i < sources.length; i++) {
+      const offset = sourceOffset++;
 
-        if (typeof sourcesContent[i] !== "string") {
-          logError(`Invalid sourcesContent entry ${i} is not a string`);
-          break;
-        } else {
-          let url = sources[i];
-          if (typeof sourceRoot === "string" && sourceRoot) {
-            url = sourceRoot.replace(/\/?/, "/") + url;
-          }
-          let sourceURL;
-          try {
-            sourceURL = new URL(url, mapURL).toString();
-          } catch (err) {
-            logError(`Unable to compute original source URL: ${url} - ${err.message}`);
-            continue;
-          }
-
-          unresolvedSources.push({
-            offset,
-            url: sourceURL,
-            contents: sourcesContent[i]
-          });
+      if (typeof sourcesContent[i] !== "string") {
+        logError(`Invalid sourcesContent entry ${i} is not a string`);
+        break;
+      } else {
+        let url = sources[i];
+        if (typeof sourceRoot === "string" && sourceRoot) {
+          url = sourceRoot.replace(/\/?/, "/") + url;
         }
+        let sourceURL;
+        try {
+          sourceURL = new URL(url, mapURL).toString();
+        } catch (err) {
+          logError(`Unable to compute original source URL: ${url} - ${err.message}`);
+          continue;
+        }
+
+        unresolvedSources.push({
+          offset,
+          url: sourceURL,
+          contents: sourcesContent[i]
+        });
       }
     }
-
-    return unresolvedSources;
-  } catch (err) {
-    logError(`Exception parsing sourcemap contents - ${err?.stack || err}`);
-    return {
-      sources: [],
-    };
   }
+
+  return unresolvedSources;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
