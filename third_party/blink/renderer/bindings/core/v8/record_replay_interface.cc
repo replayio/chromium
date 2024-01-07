@@ -3329,7 +3329,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     targetMapURLHash: makeAPIHash(sourceMapURL),
   }));
 
-  for (let { offset, contents } of sources) {
+  for (let { offset, url, contents } of sources) {
     const hash = sha256DigestHex(contents);
     addSourceCache(url, hash, contents);
 
