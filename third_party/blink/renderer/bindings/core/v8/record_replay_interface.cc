@@ -3261,8 +3261,7 @@ async function fetchSourceCached(url, hash) {
   return contents;
 }
 
-function addSourceCache(url, contents) {
-  const hash = sha256DigestHex(contents);
+function addSourceCache(url, hash, contents) {
   const key = makeSourcemapCacheKey(url, hash);
   sourcemapCache[key] = contents;
 }
@@ -3332,8 +3331,9 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
 
   for (let { offset, contents } of sources) {
     const hash = sha256DigestHex(contents);
-    const name = `source-${hash}`;
+    addSourceCache(url, hash, contents);
 
+    const name = `source-${hash}`;
     if (!recordingDirectoryFileExists(name)) {
       writeToRecordingDirectory(name, contents);
     }
