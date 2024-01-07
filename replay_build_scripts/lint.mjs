@@ -78,7 +78,7 @@ function lintScript({ name, text }/*: { name: string, text: string }*/) {
     };
 
     if (messages.length > 0) {
-        console.group(`Script ${name}`)
+        console.group(`## Script ${name} ##`)
         if (result.warnings.length) {
             console.log(`\u001b[33mWarnings: ${JSON.stringify(result.warnings)}`)
         }
