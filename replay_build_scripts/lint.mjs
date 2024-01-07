@@ -72,14 +72,23 @@ function lintScript({ name, text }/*: { name: string, text: string }*/) {
         }
     });
 
-    if (messages.length > 0) {
-        console.log(`Script ${name}:\n`, messages)
-    }
-
-    return {
+    const result = {
         errors: messages.filter(m => m.severity === 2).length,
         warnings: messages.filter(m => m.severity === 1).length,
+    };
+
+    if (messages.length > 0) {
+        console.group(`Script ${name}`)
+        if (result.warnings.length) {
+            console.log(`\u001b[33mWarnings: ${JSON.stringify(result.warnings)}`)
+        }
+        if (result.errors.length) {
+            console.log(`\u001b[31mErrors: ${JSON.stringify(result.errors, null, 2)}`)
+        }
+        console.groupEnd()
     }
+
+    return result
 }
 
 const lineNumbers = findMatches(replayText, regex)
