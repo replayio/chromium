@@ -3249,9 +3249,10 @@ async function getCachedResource(url, hash) {
     return cache[key];
   }
 
-  log(`fetching sourcemap resource ${key}`);
-
   const res = await fetchText(url);
+  
+  log(`[sourcemaps] getCachedResource ${key} ${res?.length}`);
+
   cache[key] = res;
   return res;
 }
@@ -3261,6 +3262,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     return;
 
   const recordingId = getRecordingId();
+  log(`DDBG addNewScriptHandler ${scriptId} A ${sourceURL} ${relativeSourceMapURL}`);
   if (!recordingId) {
     // The recording has been invalidated.
     return;
@@ -3281,6 +3283,9 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   } catch (err) {
     log(`Failed to read sourcemap ${sourceMapURL}: ${err.message}`);
   }
+  
+  log(`DDBG addNewScriptHandler ${scriptId} B ${sourceMap}`);
+
   if (!sourceMap) {
     return;
   }
@@ -3288,6 +3293,8 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   const id = scriptHash;
   const name = `sourcemap-${id}.map`;
   const lookupName = `sourcemap-${id}.lookup`;
+  
+  log(`DDBG addNewScriptHandler ${scriptId} C ${name} ${lookupName}`);
 
   let sources;
   if (!recordingDirectoryFileExists(name) || !recordingDirectoryFileExists(lookupName)) {
@@ -3298,6 +3305,8 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   } else {
     sources = JSON.parse(readFromRecordingDirectory(lookupName));
   }
+
+  log(`DDBG addNewScriptHandler ${scriptId} D ${JSON.stringify(sources)}`);
 
   addRecordingEvent(JSON.stringify({
     kind: "sourcemapAdded",
@@ -3351,45 +3360,49 @@ function makeAPIHash(content) {
 
 function collectUnresolvedSourceMapResources(mapText, mapURL) {
   let obj;
+
+  function logError(msg) {
+    log(`[RuntimeError][sourcemaps] ${msg} (${mapURL})`);
+  }
+
   try {
     obj = JSON.parse(mapText);
     if (typeof obj !== "object" || !obj) {
+      logError(`Invalid source map content - is not object.`);
       return {
         sources: [],
       };
     }
   } catch (err) {
-    log(`Exception parsing sourcemap JSON (${mapURL})`);
+    logError(`Exception parsing sourcemap JSON: ${err.message}`);
     return {
       sources: [],
     };
   }
 
-  function logError(msg) {
-    log(`${msg} (${mapURL}:${sourceOffset})`);
-  }
+  try {
+    const unresolvedSources = [];
+    let sourceOffset = 0;
 
-  const unresolvedSources = [];
-  let sourceOffset = 0;
+    if (obj.version !== 3) {
+      logError("Invalid sourcemap version");
+      return {
+        sources: [],
+      };
+    }
 
-  if (obj.version !== 3) {
-    logError("Invalid sourcemap version");
-    return {
-      sources: [],
-    };
-  }
-
-  if (obj.sources != null) {
-    const { sourceRoot, sources, sourcesContent } = obj;
-
-    if (Array.isArray(sources)) {
+    if (!obj?.sources?.length) {
+      logError(`Invalid sourcemap: no sources - ${obj?.sources}`);
+    } else if (!obj.sourcesContent?.length) {
+      logError(`Invalid sourcemap: no sourcesContent - ${obj.sourcesContent}`);
+    } else {
+      const { sourceRoot, sources, sourcesContent } = obj;
       for (let i = 0; i < sources.length; i++) {
         const offset = sourceOffset++;
 
-        if (
-          !Array.isArray(sourcesContent) ||
-          typeof sourcesContent[i] !== "string"
-        ) {
+        if (typeof sourcesContent[i] !== "string") {
+          logError(`Invalid sourcesContent entry ${i} is not a string`);
+        } else {
           let url = sources[i];
           if (typeof sourceRoot === "string" && sourceRoot) {
             url = sourceRoot.replace(/\/?/, "/") + url;
@@ -3397,8 +3410,8 @@ function collectUnresolvedSourceMapResources(mapText, mapURL) {
           let sourceURL;
           try {
             sourceURL = new URL(url, mapURL).toString();
-          } catch {
-            logError("Unable to compute original source URL: " + url);
+          } catch (err) {
+            logError(`Unable to compute original source URL: ${url} - ${err.message}`);
             continue;
           }
 
@@ -3408,12 +3421,15 @@ function collectUnresolvedSourceMapResources(mapText, mapURL) {
           });
         }
       }
-    } else {
-      logError("Invalid sourcemap source list");
     }
-  }
 
-  return unresolvedSources;
+    return unresolvedSources;
+  } catch (err) {
+    logError(`Exception parsing sourcemap contents - ${err?.stack || err}`);
+    return {
+      sources: [],
+    };
+  }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -4147,6 +4163,8 @@ static void RecordingDirectoryFileExists(const v8::FunctionCallbackInfo<v8::Valu
   std::string path = GetRecordingDirectory() + DirectorySeparator + std::string(*filename);
 
   std::ifstream stream(path);
+  
+  recordreplay::Print("DDBG RecordingDirectoryFileExists %s", path.c_str());
 
   args.GetReturnValue().Set(v8::Boolean::New(isolate, stream.good()));
 }
@@ -4175,6 +4193,8 @@ static void WriteToRecordingDirectory(const v8::FunctionCallbackInfo<v8::Value>&
   recordreplay::Assert("[RUN-1670-1764] WriteToRecordingDirectory %s (%zu)", *filename, (size_t)strlen(*content));
 
   std::string path = GetRecordingDirectory() + DirectorySeparator + std::string(*filename);
+
+  recordreplay::Print("DDBG WriteToRecordingDirectory %s %s", path.c_str(), *content);
   std::ofstream stream(path);
   stream << *content;
   stream.close();
