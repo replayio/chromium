@@ -3281,7 +3281,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   try {
     sourceMap = await getCachedResource(sourceMapURL, scriptHash);
   } catch (err) {
-    log(`Failed to read sourcemap ${sourceMapURL}: ${err.message}`);
+    log(`[RuntimeError][sourcemaps] Failed to fetch sourcemap contents for ${sourceMapURL}: ${err.message}`);
   }
   
   log(`DDBG addNewScriptHandler ${scriptId} B ${sourceMap}`);
