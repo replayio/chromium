@@ -3292,17 +3292,19 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   const lookupName = `sourcemap-${id}.lookup`;
 
   let sources;
-  if (!recordingDirectoryFileExists(name) || !recordingDirectoryFileExists(lookupName)) {
-    writeToRecordingDirectory(name, sourceMap);
-
-    sources = collectUnresolvedSourceMapResources(sourceMap, sourceMapURL, sourceURL);
-    writeToRecordingDirectory(lookupName, JSON.stringify(sources));
-  } else {
+  if (recordingDirectoryFileExists(name) && recordingDirectoryFileExists(lookupName)) {
     try {
       sources = JSON.parse(readFromRecordingDirectory(lookupName));
     } catch (err) {
       log(`[RuntimeError][sourcemaps] Failed to load sourcemaps from file: ${lookupName} - ${err.message}`);
     }
+  }
+
+  if (!sources) {
+    writeToRecordingDirectory(name, sourceMap);
+
+    sources = collectUnresolvedSourceMapResources(sourceMap, sourceMapURL, sourceURL);
+    writeToRecordingDirectory(lookupName, JSON.stringify(sources));
   }
 
   addRecordingEvent(JSON.stringify({
