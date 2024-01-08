@@ -177,6 +177,7 @@ const {
   log: log_,
   logTrace: logTrace_,
   warning: warning_,
+  fromJsIsReplayScriptAlive: isReplayScriptAlive,
   setCDPMessageCallback,
   sendCDPMessage,
   setCommandCallback,
@@ -329,7 +330,6 @@ class CdpRequest {
   }
 }
 
-const gAlive = true;
 const gCdpRequestStack = [];
 const gEventListeners = new Map();
 
@@ -364,7 +364,7 @@ function sendMessage(method, params) {
     }
   } finally {
     const req = gCdpRequestStack.pop();
-    assert(req === cdpRequest, "CDP request stack corrupted");
+    assert(req === cdpRequest, "[RuntimeError] CDP request stack corrupted");
   }
 
   if (cdpRequest.result?.result) {
@@ -445,12 +445,21 @@ const CommandCallbacks = {
   "CSS.getAppliedRules": CSS_getAppliedRules
 };
 
-function executeCommand(method, params) {
-  if (!gAlive) {
-    const err = new Error(`Context dead - Tried to execute command ${method} when there was no live root frame.`);
+function CHECK_ALIVE(message) {
+  if (!isReplayScriptAlive()) {
+    const err = new Error(`ReplayScriptContext UNALIVE - ${message}`);
     err.code = CDPERROR_NOTALIVE;
     throw err;
   }
+}
+
+function getAliveLabel() {
+  return isReplayScriptAlive() ? "" : " [UNALIVE]"
+}
+
+function executeCommand(method, params) {
+  CHECK_ALIVE(`executeCommand ${method}`);
+
   VerboseCommands && log(`[Command ${method}] Handling command, params=${JSON_stringify(params)}...`);
   const result = CommandCallbacks[method](params);
   VerboseCommands && log(`[Command ${method}] Handled command, result=${JSON_stringify(result)}`);
@@ -459,14 +468,14 @@ function executeCommand(method, params) {
 
 function commandCallback(method, params) {
   if (!CommandCallbacks[method]) {
-    log(`[Command ${method}] Missing command callback: ${method}`);
+    log(`[RuntimeError][Command ${method}] Missing command callback: ${method}`);
     return {};
   }
 
   try {
     return executeCommand(method, params);
   } catch (e) {
-    log(`[RuntimeError][Command ${method}] ${e?.stack || e}`);
+    log(`[RuntimeError][Command ${method}]${getAliveLabel()} ${e?.stack || e}`);
     // Pass the error up to V8; it can (for now) decide how to handle itself, whether
     // it should crash or not, etc.  Eventually, the caller of the command should make
     // that decision.
@@ -668,6 +677,7 @@ function buildRrpObjectResult(cdpReturnValue) {
     // Sometimes things go wrong.
     // E.g. sometimes we get "Cannot find default execution context (-32000) when executing" sendMessage
     // from Pause_evaluateIn*.
+    log(`[RuntimeError] buildRrpObjectResult called without cdpReturnValue ()`);
     rrpResult.failed = true;
   }
   return { result: rrpResult };
@@ -3203,12 +3213,6 @@ addEventListener("Runtime.executionContextDestroyed", ({ executionContextId }) =
     callback(context, "remove");
   }
   gExecutionContexts.delete(executionContextId);
-
-  if (executionContextId == fromJsGetDefaultContextId()) {
-    // Our own context has shutdown.
-    log(`JS DefaultContext_Destroyed`);
-    gAlive = false;
-  }
 });
 addEventListener("Runtime.executionContextsCleared", () => {
   for (const context of gExecutionContexts.values()) {
@@ -3217,10 +3221,6 @@ addEventListener("Runtime.executionContextsCleared", () => {
     }
   }
   gExecutionContexts.clear();
-
-  // All contexts are gone, including our own.
-  log(`JS Contexts_Cleared`);
-  gAlive = false;
 });
 sendMessage("Runtime.enable");
 
@@ -3914,6 +3914,39 @@ static void LogWarningCallback(const v8::FunctionCallbackInfo<v8::Value>& args) 
   recordreplay::Warning("%s", *text);
 }
 
+void
+RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
+                                v8::Isolate* isolate) {
+  if (v8::IsMainThread() && IsGReplayScriptEnabled()) {
+    if (!gV8Inspectors) {
+      gV8Inspectors = new std::unordered_map<v8::Isolate*,v8_inspector::V8Inspector*>();
+      gInspectorData = new std::unordered_map<v8::Isolate*, ContextGroupIdInspectorMap*>();
+    }
+
+    gV8Inspectors->insert(std::make_pair(isolate, inspector));
+  }
+}
+
+static bool gReplayScriptAlive = false;
+
+/**
+ * This is called when gReplayScript's context is about to shut down.
+ */
+void RecordReplayHandleScriptShutdown(const char* reason) {
+  CHECK(v8::IsMainThread());
+  if (!gReplayScriptAlive) {
+    // Note: This also gets called initially, where this is meaningless.
+    return;
+  }
+  recordreplay::Print("ReplayScriptContext STATUS_CHANGE_UNALIVE - %s", reason);
+  gReplayScriptAlive = false;
+}
+
+static void fromJsIsReplayScriptAlive(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  v8::Isolate* isolate = args.GetIsolate();
+  args.GetReturnValue().Set(v8::Number::New(isolate, gReplayScriptAlive));
+}
+
 // Function to invoke on CDP responses and events.
 static v8::Eternal<v8::Function>* gCDPMessageCallback;
 
@@ -4031,19 +4064,6 @@ v8_inspector::V8InspectorSession* getInspectorSession(v8::Isolate* isolate, int 
                                             v8_inspector::V8Inspector::kFullyTrusted).release();
   }
   return data->inspectorSession;
-}
-
-void
-RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
-                                v8::Isolate* isolate) {
-  if (v8::IsMainThread() && IsGReplayScriptEnabled()) {
-    if (!gV8Inspectors) {
-      gV8Inspectors = new std::unordered_map<v8::Isolate*,v8_inspector::V8Inspector*>();
-      gInspectorData = new std::unordered_map<v8::Isolate*, ContextGroupIdInspectorMap*>();
-    }
-
-    gV8Inspectors->insert(std::make_pair(isolate, inspector));
-  }
 }
 
 static int GetBlinkPersistentId(v8::Local<v8::Object> object) {
@@ -5549,6 +5569,8 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
   SetFunctionProperty(isolate, args, "warning", LogWarningCallback);
 
   // CDP debugger functionality
+  SetFunctionProperty(isolate, args, "fromJsIsReplayScriptAlive",
+                      fromJsIsReplayScriptAlive);
   SetFunctionProperty(isolate, args, "setCDPMessageCallback",
                       SetCDPMessageCallback);
   SetFunctionProperty(isolate, args, "sendCDPMessage", SendCDPMessage);
@@ -5665,8 +5687,11 @@ static void InitializeReplayScripts(v8::Isolate* isolate, LocalFrame* localFrame
   if (IsGReplayScriptEnabled()) {
     recordreplay::AutoMarkReplayCode amrc;
     recordreplay::AutoDisallowEvents disallow("InitializeReplayScripts");
+
     // Run `gReplayScript`.
     RunScript(isolate, context, gReplayScript, InternalScriptURL);
+    gReplayScriptAlive = true;
+    recordreplay::Print("ReplayScriptContext STATUS_CHANGE_ALIVE");
   }
 }
 
