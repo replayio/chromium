@@ -3250,6 +3250,7 @@ const char* gSourceMapScript = R""""(
 
 const {
   log,
+  warning,
   getRecordingId,
   sha256DigestHex,
   writeToRecordingDirectory,
@@ -3280,6 +3281,7 @@ async function getCachedResource(url, hash) {
 }
 
 addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
+  try {
   if (!relativeSourceMapURL || relativeSourceMapURL.startsWith("data:"))
     return;
 
@@ -3302,7 +3304,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   try {
     sourceMap = await getCachedResource(sourceMapURL, scriptHash);
   } catch (err) {
-    log(`Failed to read sourcemap ${sourceMapURL}: ${err.message}`);
+    log(`[RuntimeError] Failed to read sourcemap ${sourceMapURL}: ${err.message}`);
   }
   if (!sourceMap) {
     return;
@@ -3313,13 +3315,19 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   const lookupName = `sourcemap-${id}.lookup`;
 
   let sources;
-  if (!recordingDirectoryFileExists(name) || !recordingDirectoryFileExists(lookupName)) {
+  if (recordingDirectoryFileExists(name) && recordingDirectoryFileExists(lookupName)) {
+    try {
+      sources = JSON.parse(readFromRecordingDirectory(lookupName));
+    } catch (err) {
+      log(`[RuntimeError][sourcemaps] Failed to load sourcemaps from file: ${lookupName} - ${err.message}`);
+    }
+  }
+
+  if (!sources) {
     writeToRecordingDirectory(name, sourceMap);
 
     sources = collectUnresolvedSourceMapResources(sourceMap, sourceMapURL, sourceURL);
     writeToRecordingDirectory(lookupName, JSON.stringify(sources));
-  } else {
-    sources = JSON.parse(readFromRecordingDirectory(lookupName));
   }
 
   addRecordingEvent(JSON.stringify({
@@ -3339,7 +3347,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     try {
       sourceContent = await getCachedResource(url, scriptHash);
     } catch (err) {
-      log(`Failed to read original source ${url}: ${err.message}`);
+      log(`[RuntimeError] Failed to read original source ${url}: ${err.message}`);
       continue;
     }
     const hash = sha256DigestHex(sourceContent);
@@ -3355,6 +3363,9 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
       parentId: id,
       parentOffset: offset,
     }));
+  }
+  } catch (err) {
+    warning(`[sourcemaps] Error: ${err?.stack || err}`);
   }
 });
 
@@ -3388,12 +3399,12 @@ function collectUnresolvedSourceMapResources(mapText, mapURL) {
     };
   }
 
-  function logError(msg) {
-    log(`${msg} (${mapURL}:${sourceOffset})`);
-  }
-
   const unresolvedSources = [];
   let sourceOffset = 0;
+
+  function logError(msg) {
+    log(`[RuntimeError][sourcemaps] ${msg} (${mapURL}:${sourceOffset})`);
+  }
 
   if (obj.version !== 3) {
     logError("Invalid sourcemap version");
