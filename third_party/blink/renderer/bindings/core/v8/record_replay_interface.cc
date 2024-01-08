@@ -155,7 +155,6 @@ public:
 };
 
 static LocalFrame* gLocalRootFrame = nullptr;
-static int defaultContextId = 0;
 
 typedef std::unordered_map<int, InspectorData*> ContextGroupIdInspectorMap;
 
@@ -186,7 +185,6 @@ const {
   getCurrentError,
 
   fromJsMakeDebuggeeValue,
-  fromJsGetDefaultContextId,
   fromJsGetArgumentsInFrame,
   fromJsGetObjectByCdpId,
   fromJsIsBlinkObject,
@@ -4593,20 +4591,6 @@ static void fromJsMakeDebuggeeValue(
   args.GetReturnValue().SetNull();
 }
 
-/**
- * NOTE: Since the `RemoteObject` type is not publicly exposed, we cannot easily
- * access it in CPP space. We thus only use it in JS. This basically emulates
- * gecko's `makeDebuggeeValue`.
- */
-static void fromJsGetDefaultContextId(
-    const v8::FunctionCallbackInfo<v8::Value>& args) {
-  v8::Isolate* isolate = args.GetIsolate();
-  CHECK(args.Length() == 0 &&
-        "must be called without arguments");
-
-  args.GetReturnValue().Set(v8::Number::New(isolate, defaultContextId));
-}
-
 static void fromJsGetArgumentsInFrame(
     const v8::FunctionCallbackInfo<v8::Value>& args) {
   CHECK(args.Length() == 1 && args[0]->IsString() &&
@@ -5580,8 +5564,6 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
   // Object Util
   SetFunctionProperty(isolate, args, "fromJsMakeDebuggeeValue",
                       fromJsMakeDebuggeeValue);
-  SetFunctionProperty(isolate, args, "fromJsGetDefaultContextId",
-                      fromJsGetDefaultContextId);
   SetFunctionProperty(isolate, args, "fromJsGetArgumentsInFrame",
                       fromJsGetArgumentsInFrame);
   SetFunctionProperty(isolate, args, "fromJsGetObjectByCdpId",
@@ -5714,9 +5696,6 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
 
   // 2. Initialize our scripts, command handlers etc.
   InitializeReplayScripts(isolate, localFrame, context);
-
-  // 3. Query debugger for contextId, after Runtime.enable.
-  defaultContextId = V8RecordReplayGetContextId(context);
 }
 
 void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
