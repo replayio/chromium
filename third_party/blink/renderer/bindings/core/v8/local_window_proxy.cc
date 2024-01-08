@@ -234,6 +234,9 @@ void LocalWindowProxy::Initialize() {
     }
 
     if (doInit || GetFrame() == gRecordReplayFrame) {
+      // TODO: FIX THIS to work with with cross-domain navigation
+      // TODO: test this with cross-domain navigation
+
       // Root-level navigation event, initially happens before
       // first checkpoint.
       // NOTE: We cannot check for GetFrame()->IsOutermostMainFrame() because

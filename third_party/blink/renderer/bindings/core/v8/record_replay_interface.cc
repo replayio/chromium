@@ -154,7 +154,7 @@ public:
   LocalFrame* GetLocalFrameRoot() const { return blink::GetLocalFrameRoot(isolate); }
 };
 
-static LocalFrame* gLocalRootFrame = nullptr;
+static LocalFrame* gRootLocalFrame = nullptr;
 
 typedef std::unordered_map<int, InspectorData*> ContextGroupIdInspectorMap;
 
@@ -3930,9 +3930,9 @@ static bool gReplayScriptAlive = false;
 /**
  * This is called when gReplayScript's context is about to shut down.
  */
-void RecordReplayHandleScriptShutdown(const char* reason) {
+void RecordReplayHandleScriptShutdown(const char* reason, LocalFrame* frame) {
   CHECK(v8::IsMainThread());
-  if (!gReplayScriptAlive) {
+  if (!gReplayScriptAlive || frame != gRootLocalFrame) {
     // Note: This also gets called initially, where this is meaningless.
     return;
   }
@@ -5687,8 +5687,8 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
       localFrame->GetDocument()->Url().GetString().Utf8().c_str()
       );
   
-  // NOTE: The root `LocalFrame` will actually not change over time.
-  gLocalRootFrame = localFrame;
+  // NOTE: The root `LocalFrame` will not necessarily change over time.
+  gRootLocalFrame = localFrame;
 
   // 1. Reset paint surface so that paints to the new root's surface are not ignored.
   // See: https://linear.app/replay/issue/RUN-2400
