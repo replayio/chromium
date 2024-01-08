@@ -72,23 +72,13 @@ function lintScript({ name, text }/*: { name: string, text: string }*/) {
         }
     });
 
-    const errors = messages.filter(m => m.severity === 2)
-    const warnings = messages.filter(m => m.severity === 1)
-
     if (messages.length > 0) {
-        console.group(`## Script ${name} ##`)
-        if (warnings.length) {
-            console.log(`\u001b[33m${warnings.length} Warnings: ${JSON.stringify(warnings)}\x1b[0m`)
-        }
-        if (errors.length) {
-            console.log(`\u001b[31m${errors.length} Errors: ${JSON.stringify(errors, null, 2)}\x1b[0m`)
-        }
-        console.groupEnd()
+        console.log(`Script ${name}:\n`, messages)
     }
 
     return {
-        errors: errors.length,
-        warnings: warnings.length
+        errors: messages.filter(m => m.severity === 2).length,
+        warnings: messages.filter(m => m.severity === 1).length,
     }
 }
 
