@@ -3927,13 +3927,16 @@ RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
 
 static bool gReplayScriptAlive = false;
 
+bool RecordReplayIsReplayScriptAlive() {
+  return gReplayScriptAlive;
+}
+
 /**
  * This is called when gReplayScript's context is about to shut down.
  */
 void RecordReplayHandleScriptShutdown(const char* reason, LocalFrame* frame) {
   CHECK(v8::IsMainThread());
   if (!gReplayScriptAlive || frame != gRootLocalFrame) {
-    // Note: This also gets called initially, where this is meaningless.
     return;
   }
   recordreplay::Print("ReplayScriptContext STATUS_CHANGE_UNALIVE - %s", reason);
@@ -5672,8 +5675,6 @@ static void InitializeReplayScripts(v8::Isolate* isolate, LocalFrame* localFrame
 
     // Run `gReplayScript`.
     RunScript(isolate, context, gReplayScript, InternalScriptURL);
-    gReplayScriptAlive = true;
-    recordreplay::Print("ReplayScriptContext STATUS_CHANGE_ALIVE");
   }
 }
 
@@ -5694,8 +5695,11 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
   // See: https://linear.app/replay/issue/RUN-2400
   recordreplay::DoResetPaintSurface();
 
-  // 2. Initialize our scripts, command handlers etc.
+  // 2. Initialize sourcemap worker, command handlers etc.
   InitializeReplayScripts(isolate, localFrame, context);
+  
+  gReplayScriptAlive = true;
+  recordreplay::Print("ReplayScriptContext STATUS_CHANGE_ALIVE");
 }
 
 void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {

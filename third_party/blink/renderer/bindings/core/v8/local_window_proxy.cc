@@ -161,7 +161,6 @@ void LocalWindowProxy::DisposeContext(Lifecycle next_status,
 
 // Record/replay state is initialized along with the first LocalWindowProxy.
 static bool gRecordReplayStateInitialized;
-static LocalFrame* gRecordReplayFrame = nullptr;
 
 void LocalWindowProxy::Initialize() {
   // https://linear.app/replay/issue/RUN-749
@@ -223,8 +222,8 @@ void LocalWindowProxy::Initialize() {
       !origin->Host().empty()) {
     // Initialize and re-initialize Replay state, command handlers and more.
 
-    bool doInit = !gRecordReplayStateInitialized;
-    if (doInit) {
+    bool shouldInitGlobal = !gRecordReplayStateInitialized;
+    if (shouldInitGlobal) {
       gRecordReplayStateInitialized = true;
 
       // After creating the first context that is associated with a non-empty
@@ -233,27 +232,24 @@ void LocalWindowProxy::Initialize() {
       InitializeRecordReplay(GetIsolate(), GetFrame(), context);
     }
 
-    if (doInit || GetFrame() == gRecordReplayFrame) {
-      // TODO: FIX THIS to work with with cross-domain navigation
-      // TODO: test this with cross-domain navigation
-
+    bool shouldInitFrame = !RecordReplayIsReplayScriptAlive();
+    if (shouldInitFrame) {
       // Root-level navigation event, initially happens before
       // first checkpoint.
-      // NOTE: We cannot check for GetFrame()->IsOutermostMainFrame() because
-      // we also need to (re-)init CSP'ed iframes, which run in their own
-      // process when recording.
-      gRecordReplayFrame = GetFrame();
+      // We need our scripts to live in the root frame. Good thing, the
+      // root frame should always be the first to get initialized.
+      CHECK(GetFrame()->IsLocalRoot());
       OnRootFrameInit(GetIsolate(), GetFrame(), context);
     }
 
-    if (doInit) {
+    if (shouldInitGlobal) {
       // Create the first checkpoint at which execution can pause.
       recordreplay::NewCheckpoint();
       // Initialize some more.
       InitializeRecordReplayAfterCheckpoint();
     }
     
-    if (GetFrame() == gRecordReplayFrame) {
+    if (shouldInitFrame) {
       // Root-level navigation event, after first checkpoint.
       OnRootFrameInitAfterCheckpoint(GetIsolate(), GetFrame(), context);
     }
