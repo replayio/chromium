@@ -85,7 +85,7 @@ class CORE_EXPORT DOMURL final : public ScriptWrappable, public DOMURLUtils {
   void UpdateSearchParams(const String&);
 
   KURL url_;
-  WeakMember<URLSearchParams> search_params_;
+  Member<URLSearchParams> search_params_;
 };
 
 }  // namespace blink
