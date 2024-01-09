@@ -3925,10 +3925,10 @@ RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
   }
 }
 
-static bool gReplayScriptAlive = false;
+static int gReplayScriptAlive = 0;
 
 bool RecordReplayIsReplayScriptAlive() {
-  return gReplayScriptAlive;
+  return !!gReplayScriptAlive;
 }
 
 /**
@@ -3940,7 +3940,7 @@ void RecordReplayHandleScriptShutdown(const char* reason, LocalFrame* frame) {
     return;
   }
   recordreplay::Print("ReplayScriptContext STATUS_CHANGE_UNALIVE - %s", reason);
-  gReplayScriptAlive = false;
+  --gReplayScriptAlive;
 }
 
 static void fromJsIsReplayScriptAlive(const v8::FunctionCallbackInfo<v8::Value>& args) {
@@ -5698,7 +5698,7 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
   // 2. Initialize sourcemap worker, command handlers etc.
   InitializeReplayScripts(isolate, localFrame, context);
   
-  gReplayScriptAlive = true;
+  ++gReplayScriptAlive;
   recordreplay::Print("ReplayScriptContext STATUS_CHANGE_ALIVE");
 }
 

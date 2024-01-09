@@ -232,13 +232,10 @@ void LocalWindowProxy::Initialize() {
       InitializeRecordReplay(GetIsolate(), GetFrame(), context);
     }
 
-    bool initFrame = !RecordReplayIsReplayScriptAlive();
+    bool initFrame = GetFrame()->IsLocalRoot();
     if (initFrame) {
       // Root-level navigation event, initially happens before
       // first checkpoint.
-      // We need our scripts to live in the root frame. Good thing, the
-      // root frame should always be the first to get initialized.
-      CHECK(GetFrame()->IsLocalRoot());
       OnRootFrameInit(GetIsolate(), GetFrame(), context);
     }
 
