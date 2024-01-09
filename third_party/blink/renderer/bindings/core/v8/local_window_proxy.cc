@@ -222,8 +222,8 @@ void LocalWindowProxy::Initialize() {
       !origin->Host().empty()) {
     // Initialize and re-initialize Replay state, command handlers and more.
 
-    bool shouldInitGlobal = !gRecordReplayStateInitialized;
-    if (shouldInitGlobal) {
+    bool initGlobally = !gRecordReplayStateInitialized;
+    if (initGlobally) {
       gRecordReplayStateInitialized = true;
 
       // After creating the first context that is associated with a non-empty
@@ -232,8 +232,8 @@ void LocalWindowProxy::Initialize() {
       InitializeRecordReplay(GetIsolate(), GetFrame(), context);
     }
 
-    bool shouldInitFrame = !RecordReplayIsReplayScriptAlive();
-    if (shouldInitFrame) {
+    bool initFrame = !RecordReplayIsReplayScriptAlive();
+    if (initFrame) {
       // Root-level navigation event, initially happens before
       // first checkpoint.
       // We need our scripts to live in the root frame. Good thing, the
@@ -242,14 +242,14 @@ void LocalWindowProxy::Initialize() {
       OnRootFrameInit(GetIsolate(), GetFrame(), context);
     }
 
-    if (shouldInitGlobal) {
+    if (initGlobally) {
       // Create the first checkpoint at which execution can pause.
       recordreplay::NewCheckpoint();
       // Initialize some more.
       InitializeRecordReplayAfterCheckpoint();
     }
     
-    if (shouldInitFrame) {
+    if (initFrame) {
       // Root-level navigation event, after first checkpoint.
       OnRootFrameInitAfterCheckpoint(GetIsolate(), GetFrame(), context);
     }
