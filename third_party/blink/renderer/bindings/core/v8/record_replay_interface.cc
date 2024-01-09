@@ -445,7 +445,7 @@ const CommandCallbacks = {
 
 function CHECK_ALIVE(message) {
   if (!isReplayScriptAlive()) {
-    const err = new Error(`ReplayScriptContext UNALIVE - ${message}`);
+    const err = new Error(`ReplayScript UNALIVE - ${message}`);
     err.code = CDPERROR_NOTALIVE;
     throw err;
   }
@@ -3925,10 +3925,10 @@ RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
   }
 }
 
-static int gReplayScriptAlive = 0;
+static bool gReplayScriptAlive = false;
 
 bool RecordReplayIsReplayScriptAlive() {
-  return !!gReplayScriptAlive;
+  return gReplayScriptAlive;
 }
 
 /**
@@ -3939,8 +3939,8 @@ void RecordReplayHandleScriptShutdown(const char* reason, LocalFrame* frame) {
   if (!gReplayScriptAlive || frame != gRootLocalFrame) {
     return;
   }
-  recordreplay::Print("ReplayScriptContext STATUS_CHANGE_UNALIVE - %s", reason);
-  --gReplayScriptAlive;
+  recordreplay::Print("ReplayScript STATUS_CHANGE_UNALIVE - %s", reason);
+  gReplayScriptAlive = false;
 }
 
 static void fromJsIsReplayScriptAlive(const v8::FunctionCallbackInfo<v8::Value>& args) {
@@ -5687,6 +5687,13 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
       localFrame->IsCrossOriginToParentOrOuterDocument(),
       localFrame->GetDocument()->Url().GetString().Utf8().c_str()
       );
+
+  if (gReplayScriptAlive) {
+    // Our "V8RecordReplaySetDefaultContext" logic implies a single local
+    // root frame per render process.
+    recordreplay::Warning("ReplayScript Multiple_OnRootFrameInit");
+    return;
+  }
   
   // NOTE: The root `LocalFrame` will not necessarily change over time.
   gRootLocalFrame = localFrame;
@@ -5698,8 +5705,8 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
   // 2. Initialize sourcemap worker, command handlers etc.
   InitializeReplayScripts(isolate, localFrame, context);
   
-  ++gReplayScriptAlive;
-  recordreplay::Print("ReplayScriptContext STATUS_CHANGE_ALIVE");
+  gReplayScriptAlive = true;
+  recordreplay::Print("ReplayScript STATUS_CHANGE_ALIVE");
 }
 
 void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
