@@ -35,15 +35,12 @@ void OnNewWindowAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8
 // Notify the driver that we're adding an error to the console.
 void RecordReplayOnErrorEvent(ErrorEvent* error_event);
 
-// Whether gReplayScript can service arbirary commands.
-// Meaning its frame and debugger session are both alive.
-bool RecordReplayIsReplayScriptAlive();
-
-// Notify our blink bindings that the page that was running gReplayScript has
-//   shutdown, and our V8 debugger session with it.
+// Notify our blink bindings that the page that was running our script(s) is
+//   about to reset, and its ExecutionContext and our V8 debugger session with it.
 // From this point forward, command handling is not possible anymore
 //   until a new page is spawned.
-void RecordReplayHandleScriptShutdown(const char* reason, LocalFrame* frame);
+// Note: JS can still execute, even after this happened.
+void RecordReplayClearContexts(const char* reason, LocalFrame* frame);
 
 // Notify record/replay about new inspectors that have been created.
 void RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,

@@ -131,7 +131,7 @@ void MainThreadDebugger::DidClearContextsForFrame(LocalFrame* frame) {
   DCHECK(IsMainThread());
   if (frame->LocalFrameRoot() == frame) {
     if (recordreplay::IsRecordingOrReplaying("DidClearContextsForFrame")) {
-      RecordReplayHandleScriptShutdown("MainThreadDebugger::DidClearContextsForFrame", frame);
+      RecordReplayClearContexts("MainThreadDebugger::DidClearContextsForFrame", frame);
     }
     GetV8Inspector()->resetContextGroup(ContextGroupId(frame));
   }

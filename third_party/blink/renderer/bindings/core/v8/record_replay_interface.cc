@@ -3925,27 +3925,25 @@ RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
   }
 }
 
-static bool gReplayScriptAlive = false;
-
-bool RecordReplayIsReplayScriptAlive() {
-  return gReplayScriptAlive;
-}
+// Whether the frame that our globally registered script(s)
+// were run in is alive.
+static bool gReplayScriptsAlive = false;
 
 /**
- * This is called when gReplayScript's context is about to shut down.
+ * This is called when our local root frame is about to shut down.
  */
-void RecordReplayHandleScriptShutdown(const char* reason, LocalFrame* frame) {
+void RecordReplayClearContexts(const char* reason, LocalFrame* frame) {
   CHECK(v8::IsMainThread());
-  if (!gReplayScriptAlive || frame != gRootLocalFrame) {
+  if (!gReplayScriptsAlive || frame != gRootLocalFrame) {
     return;
   }
   recordreplay::Print("ReplayScript STATUS_CHANGE_UNALIVE - %s", reason);
-  gReplayScriptAlive = false;
+  gReplayScriptsAlive = false;
 }
 
 static void fromJsIsReplayScriptAlive(const v8::FunctionCallbackInfo<v8::Value>& args) {
   v8::Isolate* isolate = args.GetIsolate();
-  args.GetReturnValue().Set(v8::Number::New(isolate, gReplayScriptAlive));
+  args.GetReturnValue().Set(v8::Number::New(isolate, gReplayScriptsAlive));
 }
 
 // Function to invoke on CDP responses and events.
@@ -5688,7 +5686,7 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
       localFrame->GetDocument()->Url().GetString().Utf8().c_str()
       );
 
-  if (gReplayScriptAlive) {
+  if (gReplayScriptsAlive) {
     // Our "V8RecordReplaySetDefaultContext" logic implies a single local
     // root frame per render process.
     recordreplay::Warning("ReplayScript Multiple_OnRootFrameInit");
@@ -5705,7 +5703,7 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
   // 2. Initialize sourcemap worker, command handlers etc.
   InitializeReplayScripts(isolate, localFrame, context);
   
-  gReplayScriptAlive = true;
+  gReplayScriptsAlive = true;
   recordreplay::Print("ReplayScript STATUS_CHANGE_ALIVE");
 }
 
