@@ -235,6 +235,7 @@ function log(...args) {
   log_(args.join(' '));
 }
 
+// eslint-disable-next-line no-unused-vars
 function logTrace(...args) {
   logTrace_(args.join(' '));
 }
@@ -5644,7 +5645,7 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
     return;
   }
   
-  // NOTE: The root `LocalFrame` will not necessarily change over time.
+  // NOTE: The root `LocalFrame` can change over time.
   gRootLocalFrame = localFrame;
 
   // 1. Reset paint surface so that paints to the new root's surface are not ignored.
