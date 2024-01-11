@@ -37,6 +37,7 @@
 #include "base/metrics/single_sample_metrics.h"
 #include "third_party/blink/renderer/bindings/core/v8/isolated_world_csp.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_controller.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_devtools_event_listener.h"
 #include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
 #include "third_party/blink/renderer/bindings/core/v8/to_v8_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
@@ -161,6 +162,7 @@ void LocalWindowProxy::DisposeContext(Lifecycle next_status,
 
 // Record/replay state is initialized along with the first LocalWindowProxy.
 static bool gRecordReplayStateInitialized;
+static LocalFrame* gRecordReplayFrame = nullptr;
 
 void LocalWindowProxy::Initialize() {
   // https://linear.app/replay/issue/RUN-749
@@ -216,34 +218,46 @@ void LocalWindowProxy::Initialize() {
     SetSecurityToken(origin.get());
   }
 
-  if (recordreplay::IsRecordingOrReplaying("commands") &&
+  if (world_->IsMainWorld() &&
+      recordreplay::IsRecordingOrReplaying("commands") &&
       origin &&
       !origin->Host().empty()) {
+    // Initialize and re-initialize Replay state, command handlers and more.
 
-    // Initialize Replay globals.
-    OnNewWindow1(GetIsolate(), GetFrame());
+    bool doInit = !gRecordReplayStateInitialized;
+    if (doInit) {
+      gRecordReplayStateInitialized = true;
 
-    if (!gRecordReplayStateInitialized) {
       // After creating the first context that is associated with a non-empty
       // origin, we are ready to set up the state used to process driver
-      // commands when recording/replaying, and to create checkpoints. Create
-      // the first checkpoint at which execution can pause.
-      gRecordReplayStateInitialized = true;
-      SetupRecordReplayCommands(GetIsolate(), GetFrame(), context);
+      // commands when recording/replaying, and to create checkpoints.
+      InitializeRecordReplay(GetIsolate(), GetFrame(), context);
+    }
+
+    if (doInit || GetFrame() == gRecordReplayFrame) {
+      // Root-level navigation event, initially happens before
+      // first checkpoint.
+      // NOTE: We cannot check for GetFrame()->IsOutermostMainFrame() because
+      // we also need to (re-)init CSP'ed iframes, which run in their own
+      // process when recording.
+      gRecordReplayFrame = GetFrame();
+      OnRootFrameInit(GetIsolate(), GetFrame(), context);
+    }
+
+    if (doInit) {
+      // Create the first checkpoint at which execution can pause.
       recordreplay::NewCheckpoint();
-      SetupRecordReplayCommandsAfterCheckpoint();
+      // Initialize some more.
+      InitializeRecordReplayAfterCheckpoint();
+    }
+    
+    if (GetFrame() == gRecordReplayFrame) {
+      // Root-level navigation event, after first checkpoint.
+      OnRootFrameInitAfterCheckpoint(GetIsolate(), GetFrame(), context);
     }
 
-    if (GetFrame()->IsOutermostMainFrame()) {
-      // Root-level navigation event.
-      // Note: This must happen after our first checkpoint, or we'll crash with "Progress counter updated before first checkpoint".
-      OnNewRootFrame(GetIsolate(), GetFrame(), context);
-    }
-
-    // Initialize Replay things that depend on previous Replay initialization 
-    // steps.
-    OnNewWindow2(GetIsolate(), GetFrame(), context);
-
+    // Event for all new windows.
+    OnNewWindowAfterCheckpoint(GetIsolate(), GetFrame(), context);
   }
 
   {
@@ -259,17 +273,17 @@ void LocalWindowProxy::Initialize() {
 
   // Add an event listener for the dispatched custom event the devtools uses to register
   // its listener.  Do this outside the recording.
-  SetupRecordReplayEventListener();
+  SetupRecordReplayDevtoolsEventListener();
 
   if (World().IsMainWorld()) {
     GetFrame()->Loader().DispatchDidClearWindowObjectInMainWorld();
   }
 }
 
-void LocalWindowProxy::SetupRecordReplayEventListener() {
+void LocalWindowProxy::SetupRecordReplayDevtoolsEventListener() {
   LocalFrame* localFrame = GetFrame();
 
-  record_replay_listener_ = RecordReplayEventListener::Create(GetIsolate(), localFrame);
+  record_replay_listener_ = RecordReplayDevtoolsEventListener::Create(GetIsolate(), localFrame);
 
   bool added = localFrame->DomWindow()->addEventListener("WebChannelMessageToChrome", record_replay_listener_.Get());
 
