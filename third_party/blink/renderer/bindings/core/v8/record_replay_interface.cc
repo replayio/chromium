@@ -31,6 +31,7 @@
 #include "third_party/blink/renderer/core/inspector/inspector_network_agent.h"
 #include "third_party/blink/renderer/core/inspector/inspector_resource_container.h"
 #include "third_party/blink/renderer/core/inspector/inspector_resource_content_loader.h"
+#include "third_party/blink/renderer/core/inspector/main_thread_debugger.h"
 #include "third_party/blink/renderer/core/inspector/resolve_node.h"
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
@@ -85,7 +86,6 @@ using RemoteObjectIdTypeRaw = std::u16string;
 using RemoteObjectIdType = WTF::String;
 
 extern "C" void V8RecordReplaySetDefaultContext(v8::Isolate* isolate, v8::Local<v8::Context> cx);
-extern "C" int V8RecordReplayGetContextId(v8::Local<v8::Context> cx);
 extern "C" void V8RecordReplayFinishRecording();
 extern "C" void V8RecordReplaySetCrashReason(const char* reason);
 
@@ -3963,7 +3963,7 @@ absl::optional<int> GetCurrentContextGroupIdForIsolate(v8::Isolate* isolate) {
   LocalFrame* local_frame_root = GetLocalFrameRoot(isolate);
 
   if (local_frame_root != nullptr) {
-    return WeakIdentifierMap<LocalFrame>::Identifier(local_frame_root);
+    return MainThreadDebugger::Instance()->ContextGroupId(local_frame_root);
   }
 
   return absl::optional<int>();
