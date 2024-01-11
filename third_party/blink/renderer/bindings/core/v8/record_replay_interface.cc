@@ -243,6 +243,14 @@ function warning(...args) {
   warning_(args.join(' '));
 }
 
+function assert(v, msg = "") {
+  if (!v) {
+    const m = `Assertion failed when handling command (${msg})`;
+    log(`[RuntimeError] ${m} - ${Error().stack}`);
+    throw new Error(m);
+  }
+}
+
 const gSourceMapData = new Map();
 
 try {
@@ -3389,17 +3397,11 @@ function collectUnresolvedSourceMapResources(mapText, mapURL) {
   return unresolvedSources;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-// utils.js
-///////////////////////////////////////////////////////////////////////////////
-
-// Some of these are duplicated in gReplayScript, so watch out when making
-// modifications to update both versions...
-
-function assert(v) {
+function assert(v, msg = "") {
   if (!v) {
-    log(`Error: Assertion failed ${Error().stack}`);
-    throw new Error("Assertion failed");
+    const m = `Assertion failed when handling command (${msg})`;
+    log(`[RuntimeError] ${m} - ${Error().stack}`);
+    throw new Error(m);
   }
 }
 
@@ -3796,11 +3798,10 @@ const char* gOnNewWindowScript = R""""(
     window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ = window.top.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__;
 
     // TODO: Feels like this cross-context function usage can cause trouble, especially when
-    //      breaking inside the iframe's JS and trying to access something inside the iframe via 
-    //      __RECORD_REPLAY__.
-    //      All the while accessing anything via `__RECORD_REPLAY_ARGUMENTS__` should be fine?
+    //      the user pauses inside the iframe's JS and tries to access something inside the iframe via 
+    //      __RECORD_REPLAY__?
     window.__RECORD_REPLAY__ = window.top.__RECORD_REPLAY__;
-    window.__RECORD_REPLAY_ARGUMENTS__.internal = window.top.__RECORD_REPLAY_ARGUMENTS__.internal
+    window.__RECORD_REPLAY_ARGUMENTS__ = window.top.__RECORD_REPLAY_ARGUMENTS__;
   }
   catch (err) {
     // TODO: RUN-1990
@@ -5427,20 +5428,22 @@ static std::string GetStackTrace(v8::Isolate* isolate, v8::TryCatch& try_catch) 
 
   std::stringstream ss;
   v8::Local<v8::Message> message = try_catch.Message();
-  ss << V8ToString(isolate, message->Get()) << std::endl
-     << V8ToString(isolate, GetSourceLine(isolate, message)) << std::endl;
-
-  v8::Local<v8::StackTrace> trace = message->GetStackTrace();
-  if (trace.IsEmpty())
-    return ss.str();
-
-  int len = trace->GetFrameCount();
-  for (int i = 0; i < len; ++i) {
-    v8::Local<v8::StackFrame> frame = trace->GetFrame(isolate, i);
-    ss << V8ToString(isolate, frame->GetScriptName()) << ":"
-       << frame->GetLineNumber() << ":" << frame->GetColumn() << ": "
-       << V8ToString(isolate, frame->GetFunctionName()) << std::endl;
+  if (!message.IsEmpty()) {
+    ss << V8ToString(isolate, message->Get()) << std::endl;
   }
+  ss << V8ToString(isolate, GetSourceLine(isolate, message)) << std::endl;
+
+  // v8::Local<v8::StackTrace> trace = message->GetStackTrace();
+  // if (trace.IsEmpty())
+  //   return ss.str();
+
+  // int len = trace->GetFrameCount();
+  // for (int i = 0; i < len; ++i) {
+  //   v8::Local<v8::StackFrame> frame = trace->GetFrame(isolate, i);
+  //   ss << V8ToString(isolate, frame->GetScriptName()) << ":"
+  //      << frame->GetLineNumber() << ":" << frame->GetColumn() << ": "
+  //      << V8ToString(isolate, frame->GetFunctionName()) << std::endl;
+  // }
   return ss.str();
 }
 
