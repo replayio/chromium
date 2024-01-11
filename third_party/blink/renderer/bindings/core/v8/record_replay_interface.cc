@@ -22,7 +22,6 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_node.h"
 #include "third_party/blink/renderer/core/css/css_style_declaration.h"
 #include "third_party/blink/renderer/core/dom/dom_node_ids.h"
-#include "third_party/blink/renderer/core/dom/events/custom_event.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/settings.h"
 #include "third_party/blink/renderer/core/inspector/inspected_frames.h"
@@ -227,6 +226,7 @@ function log(...args) {
   log_(args.join(' '));
 }
 
+// eslint-disable-next-line no-unused-vars
 function logTrace(...args) {
   logTrace_(args.join(' '));
 }
@@ -249,6 +249,11 @@ function isFunction(val) {
 
 function isObject(val) {
   return !!val && (typeof val === "object" || isFunction(val))
+}
+
+// eslint-disable-next-line no-unused-vars
+function isNonNullObject(obj) {
+  return obj && (typeof obj == "object" || typeof obj == "function");
 }
 
 function typeofMaybeNull(value) {
@@ -980,10 +985,6 @@ function registerPlainObject(plainObject) {
   return rrpId;
 }
 
-function isNonNullObject(obj) {
-  return obj && (typeof obj == "object" || typeof obj == "function");
-}
-
 function getPlainObjectByCdpId(cdpId) {
   const rrpId = gRrpIdByCdpId.get(cdpId);
   assert(rrpId);
@@ -1009,12 +1010,6 @@ function getPlainObjectByRrpId(rrpId) {
     gPlainObjectByRrpId.set(rrpId, plainObject);
   }
   return plainObject;
-}
-
-function getPlainObjectFromCdpObject(cdpObject) {
-  const cdpId = cdpObject.objectId;
-  assert(cdpId);
-  return fromJsGetObjectByCdpId(cdpId);
 }
 
 /**
@@ -1532,14 +1527,6 @@ ProtocolObjectPreview.prototype = {
   }
 };
 
-// Get a count from an object description like "Array(42)"
-function getDescriptionCount(description) {
-  const match = /\((\d+)\)/.exec(description || "");
-  if (match) {
-    return +match[1];
-  }
-}
-
 function getExtraObjectPreviewData(cdpObject, cdpProperties) {
   const cdpId = cdpObject.objectId;
   const rrpId = gRrpIdByCdpId.get(cdpId);
@@ -1664,7 +1651,7 @@ function previewBlinkStyle(style) {
   };
 }
 
-function previewArray(cdpProperties) {
+function previewArray(_cdpProperties) {
   // TODO: [RUN-2223] Find out why Array.length does not always return a value.
   // this.addGetterValue('length', this.cdpObj, /* force */ true);
 
@@ -2210,43 +2197,6 @@ function CSS_getComputedStyle({ node }) {
  * {@link CSS_getAppliedRules}
  * ##########################################################################*/
 
-// This set is the intersection of the elements described at [1] and the
-// elements which the firefox devtools server actually operates on [2].
-//
-// [1] https://developer.mozilla.org/en-US/docs/Web/CSS/Pseudo-elements
-// [2] PSEUDO_ELEMENTS in devtools/shared/css/generated/properties-db.js
-const PseudoElements = [
-  ":after",
-  ":backdrop",
-  ":before",
-  ":cue",
-  ":first-letter",
-  ":first-line",
-  ":marker",
-  ":placeholder",
-  ":selection",
-];
-
-/**
- * @see https://developer.mozilla.org/en-US/docs/Web/API/CSSRule
- * @see https://developer.mozilla.org/en-US/docs/Web/API/CSSStyleRule
- * @see https://static.replay.io/protocol/tot/CSS/#type-Rule
- */
-class CssRule {
-  /**
-   * @deprecated
-   */
-  type;
-  cssText;
-  parentStyleSheet;
-  startLine;
-  startColumn;
-  originalLocation;
-  selectorText;
-  style;
-}
-
-
 /**
  *
  * @see https://developer.mozilla.org/en-US/docs/Web/API/CSSRule
@@ -2421,7 +2371,7 @@ function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
   for (const cdpInheritedEntry of inheritedEntries) {
     // see https://chromedevtools.github.io/devtools-protocol/tot/CSS/#type-InheritedStyleEntry
     const {
-      inlineStyle, // inherited inline style
+      // inlineStyle, // inherited inline style
       matchedCSSRules  // inherited non-inline rules
     } = cdpInheritedEntry;
 
@@ -3227,6 +3177,7 @@ const char* gSourceMapScript = R""""(
 
 const {
   log,
+  warning,
   getRecordingId,
   sha256DigestHex,
   writeToRecordingDirectory,
@@ -3257,6 +3208,7 @@ async function getCachedResource(url, hash) {
 }
 
 addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
+  try {
   if (!relativeSourceMapURL || relativeSourceMapURL.startsWith("data:"))
     return;
 
@@ -3279,7 +3231,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   try {
     sourceMap = await getCachedResource(sourceMapURL, scriptHash);
   } catch (err) {
-    log(`Failed to read sourcemap ${sourceMapURL}: ${err.message}`);
+    log(`[RuntimeError] Failed to read sourcemap ${sourceMapURL}: ${err.message}`);
   }
   if (!sourceMap) {
     return;
@@ -3290,13 +3242,19 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   const lookupName = `sourcemap-${id}.lookup`;
 
   let sources;
-  if (!recordingDirectoryFileExists(name) || !recordingDirectoryFileExists(lookupName)) {
+  if (recordingDirectoryFileExists(name) && recordingDirectoryFileExists(lookupName)) {
+    try {
+      sources = JSON.parse(readFromRecordingDirectory(lookupName));
+    } catch (err) {
+      log(`[RuntimeError][sourcemaps] Failed to load sourcemaps from file: ${lookupName} - ${err.message}`);
+    }
+  }
+
+  if (!sources) {
     writeToRecordingDirectory(name, sourceMap);
 
     sources = collectUnresolvedSourceMapResources(sourceMap, sourceMapURL, sourceURL);
     writeToRecordingDirectory(lookupName, JSON.stringify(sources));
-  } else {
-    sources = JSON.parse(readFromRecordingDirectory(lookupName));
   }
 
   addRecordingEvent(JSON.stringify({
@@ -3316,7 +3274,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     try {
       sourceContent = await getCachedResource(url, scriptHash);
     } catch (err) {
-      log(`Failed to read original source ${url}: ${err.message}`);
+      log(`[RuntimeError] Failed to read original source ${url}: ${err.message}`);
       continue;
     }
     const hash = sha256DigestHex(sourceContent);
@@ -3332,6 +3290,9 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
       parentId: id,
       parentOffset: offset,
     }));
+  }
+  } catch (err) {
+    warning(`[sourcemaps] Error: ${err?.stack || err}`);
   }
 });
 
@@ -3365,12 +3326,12 @@ function collectUnresolvedSourceMapResources(mapText, mapURL) {
     };
   }
 
-  function logError(msg) {
-    log(`${msg} (${mapURL}:${sourceOffset})`);
-  }
-
   const unresolvedSources = [];
   let sourceOffset = 0;
+
+  function logError(msg) {
+    log(`[RuntimeError][sourcemaps] ${msg} (${mapURL}:${sourceOffset})`);
+  }
 
   if (obj.version !== 3) {
     logError("Invalid sourcemap version");
@@ -3553,6 +3514,7 @@ function onCommitFiberUnmount(rendererID, fiber) {
   window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook:v1:" + annotationType, "");
 }
 
+// eslint-disable-next-line no-unused-vars
 function onCommitFiberRoot(rendererID, root, priorityLevel) {
   // The "commit" handler should be the only one the routine needs to do the work as of 2023-05-01.
   // We capture unmounted fibers in the unmount handler above, and the routine
@@ -3584,6 +3546,7 @@ function onCommitFiberRoot(rendererID, root, priorityLevel) {
   unmountedFibersSet.clear();
 }
 
+// eslint-disable-next-line no-unused-vars
 function onPostCommitFiberRoot(rendererID, root) {
   const annotationType = "post-commit-fiber-root";
   window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook:v1:" + annotationType, "");
@@ -3630,7 +3593,6 @@ function isFiltered(action, localFilter) {
 
 
 const listeners = {};
-const source = '@devtools-page';
 function isArray(arg) {
   return Array.isArray(arg);
 }
@@ -3663,7 +3625,7 @@ function saveReplayAnnotation(action, state, connectionType, extractedConfig, co
     config
   };
 }
-function sendMessage(action, state, preConfig = {}, instanceId, name) {
+function sendMessage(action, state, preConfig = {}, _instanceId, _name) {
   if (!action || !action.type) {
     action = {
       type: 'update'
@@ -3674,7 +3636,6 @@ function sendMessage(action, state, preConfig = {}, instanceId, name) {
     };
   }
   const [config, extractedExtensionConfig] = extractExtensionConfig(preConfig);
-  instanceId = instanceId ?? extractedExtensionConfig.instanceId;
   saveReplayAnnotation(action, state, 'generic', extractedExtensionConfig, config);
 }
 function extractExtensionConfig(preConfig) {
@@ -3725,14 +3686,14 @@ function connect(preConfig) {
     saveReplayAnnotation(amendedAction, state, 'generic', extractedExtensionConfig, config);
     return;
   };
-  const init = (state, liftedData) => {
+  const init = (_state, _liftedData) => {
     window.__RECORD_REPLAY_ANNOTATION_HOOK__('redux-devtools-setup', JSON.stringify({
       type: 'init',
       connectionType: 'generic',
       instanceId
     }));
   };
-  const error = payload => {};
+  const error = (_payload) => {};
   return {
     init,
     subscribe,
@@ -5716,152 +5677,6 @@ static void GetCurrentError(const v8::FunctionCallbackInfo<v8::Value>& args) {
                   v8::Number::New(isolate, gCurrentErrorEvent->Location()->ScriptId()));
 
   args.GetReturnValue().Set(rv);
-}
-
-bool GetStringProperty(v8::Local<v8::Context> context, v8::Local<v8::Object> obj, const char* name, v8::Local<v8::String>* out) {
-  v8::Isolate* isolate = context->GetIsolate();
-  v8::Local<v8::String> v8Name = ToV8String(isolate, name);
-  v8::Local<v8::Value> v8Value = obj->Get(context, v8Name).ToLocalChecked();
-
-  return v8Value->ToString(context).ToLocal(out);
-}
-
-bool GetObjectProperty(v8::Local<v8::Context> context, v8::Local<v8::Object> obj, const char* name, v8::Local<v8::Object>* out) {
-  v8::Isolate* isolate = context->GetIsolate();
-  v8::Local<v8::String> v8Name = ToV8String(isolate, name);
-  v8::Local<v8::Value> v8Value = obj->Get(context, v8Name).ToLocalChecked();
-
-  return v8Value->ToObject(context).ToLocal(out);
-}
-
-bool StringEquals(v8::Isolate* isolate, v8::Local<v8::String> str1, const char* str2) {
-  return str1->StringEquals(ToV8String(isolate, str2));
-}
-
-void RecordReplayEventListener::Invoke(ExecutionContext* context, Event* event) {
-  v8::Isolate* isolate = context->GetIsolate();
-  v8::Local<v8::Context> v8_context = isolate->GetCurrentContext();
-  ScriptState* scriptState = ScriptState::Current(isolate);
-  CustomEvent* customEvent = To<CustomEvent>(event);
-
-  if (!customEvent) {
-    return;
-  }
-
-  v8::Local<v8::Value> detail = customEvent->detail(scriptState).V8Value();
-  v8::Local<v8::String> detail_json;
-  if (!detail->ToString(v8_context).ToLocal(&detail_json)) {
-    LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: detail is not a string";
-    return;
-  }
-
-  // for debugging:
-  // LOG(ERROR) << "RecordReplayEventListener: detail = " << V8ToString(isolate, detail_json);
-
-  // detail is a JSON stringified object with one of the following forms:
-
-  // { "id": "record-replay-token", "message": { "type": "connect" } }      => register auth token observer
-  // { "id": "record-replay-token", "message": { "type": "login" } }        => open external browser to login
-  // { "id": "record-replay-token", "message": { "token": <string|null> } } => set access token if string.  clear if null (or undefined?)
-  // { "id": "record-replay", "message": { "user": <string|null> } }        => set user if string.  clear if null (or undefined?)
-
-  v8::Local<v8::Object> detail_obj;
-  if (!v8::JSON::Parse(v8_context, detail_json).ToLocalChecked()->ToObject(v8_context).ToLocal(&detail_obj)) {
-    LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: detail is not a JSON object";
-    return;
-  }
-
-  // always pull out the id and message properties, and early out if id isn't a string or message isn't an object
-  v8::Local<v8::String> id_str;
-  if (!GetStringProperty(v8_context, detail_obj, "id", &id_str)) {
-    LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: id is not an string";
-    return;
-  }
-
-  v8::Local<v8::Object> message_obj;
-  if (!GetObjectProperty(v8_context, detail_obj, "message", &message_obj)) {
-    LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: message is not an object";
-    return;
-  }
-
-
-  if (StringEquals(isolate, id_str, "record-replay-token")) {
-    HandleRecordReplayTokenMessage(v8_context, message_obj);
-  } else if (StringEquals(isolate, id_str, "record-replay")) {
-    HandleRecordReplayMessage(v8_context, message_obj);
-  } else {
-    LOG(ERROR) << "[RUN-2863] Unknown event id: " << V8ToString(isolate, id_str);
-  }
-}
-
-void RecordReplayEventListener::HandleRecordReplayTokenMessage(v8::Local<v8::Context> context, v8::Local<v8::Object> message) {
-  v8::Isolate* isolate = context->GetIsolate();
-
-  // cases here:
-  // { "id": "record-replay-token", "message": { "type": "connect" } }      => register auth token observer
-  // { "id": "record-replay-token", "message": { "type": "login" } }        => open external browser to login
-  // { "id": "record-replay-token", "message": { "token": <string|null> } } => set access token if string.  clear if null (or undefined?)
-
-  // first check if there's a type property to handle the first two cases above.
-  v8::Local<v8::Value> message_type = message->Get(context, ToV8String(isolate, "type")).ToLocalChecked();
-  if (message_type->IsString()) {
-    // message is either `{ type: "connect" }` or `{ type: "login" }`, with neither payload carrying additional info.
-    if (StringEquals(isolate, message_type.As<v8::String>(), "connect")) {
-      LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: connect message received";
-      local_frame_->RegisterRecordReplayAuthTokenObserver();
-      return;
-    }
-
-    if (StringEquals(isolate, message_type.As<v8::String>(), "login")) {
-      LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: login message received";
-      // [RUN-2863] TODO open external browser to login
-      return;
-    }
-
-    LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: unknown record-replay-token message type: " << V8ToString(isolate, message_type);
-  }
-
-  // if we're here, we should only be in the `{ token: ... }` case from the list above.
-  v8::Local<v8::Value> message_token = message->Get(context, ToV8String(isolate, "token")).ToLocalChecked();
-  if (message_token->IsString()) {
-    LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: set access token message received, token = " << V8ToString(isolate, message_token);
-    // [RUN-2863] TODO set the access token in browser prefs.
-    return;
-  }
-
-  if (message_token->IsNull()) {
-    LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: clear access token message received";
-    // [RUN-2863] TODO clear the access token in browser prefs.
-    return;
-  }
-
-  LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: unknown record-replay-token message";
-}
-
-void RecordReplayEventListener::HandleRecordReplayMessage(v8::Local<v8::Context> context, v8::Local<v8::Object> message) {
-  v8::Isolate* isolate = context->GetIsolate();
-
-  // the only message handled here is `{ user: <string|null> }`
-  v8::Local<v8::Value> message_user = message->Get(context, ToV8String(isolate, "user")).ToLocalChecked();
-  if (message_user->IsString()) {
-    LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: set user message received, user = " << V8ToString(isolate, message_user);
-    // [RUN-2863] TODO set the user in browser prefs.
-    return;
-  }
-
-  if (message_user->IsNullOrUndefined()) {
-    LOG(ERROR) << "[RUN-2863] RecordReplayEventListener: clear user message received";
-    // [RUN-2863] TODO clear the user in browser prefs.
-    return;
-  }
-
-  LOG(ERROR) << "[RUN-2863] Unknown record-replay message type";
-  return;
-}
-
-void RecordReplayEventListener::Trace(Visitor* visitor) const {
-  visitor->Trace(local_frame_);
-  EventListener::Trace(visitor);
 }
 
 }  // namespace blink
