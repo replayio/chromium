@@ -9,6 +9,11 @@
 #include "content/public/browser/web_contents.h"
 
 class Browser;
+class Profile;
+
+namespace record_replay {
+  class RecordReplayService;
+}
 
 struct RecordReplayToolbarButtonWebContentsObserver;
 
@@ -30,6 +35,8 @@ class RecordReplayToolbarButton: public ToolbarButton {
 
   void RefreshIconState();
   void EnsurePostRecordingWebContents();
+
+  record_replay::RecordReplayService* GetRecordReplayService() const;
 
   const raw_ptr<Browser> browser_;
   content::WebContents* web_contents_;

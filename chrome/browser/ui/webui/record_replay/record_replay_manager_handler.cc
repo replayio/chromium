@@ -26,6 +26,7 @@ RecordReplayManagerHandler::~RecordReplayManagerHandler() = default;
 void RecordReplayManagerHandler::SetManager(
     mojo::PendingRemote<mojom::RecordReplayManager> manager) {
   manager_.Bind(std::move(manager));
+  manager_->HandleSignInButtonClicked();
 }
 
 void RecordReplayManagerHandler::HandleSignInButtonClicked() {

@@ -10,6 +10,8 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/common/webui_url_constants.h"
+#include "components/record_replay/services/record_replay/public/cpp/record_replay_service.h"
+#include "components/record_replay/services/record_replay/public/cpp/record_replay_service_factory.h"
 #include "ui/views/controls/button/button_controller.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -90,6 +92,18 @@ void RecordReplayToolbarButton::ButtonPressed() {
 }
 
 void RecordReplayToolbarButton::StartRecording() {
+  // TODO: Check for record-replay API key here.
+  // If it's not set, then we shouldn't have reached this location
+  // in the logic.
+  auto* service = GetRecordReplayService();
+  fprintf(stderr, "KVKV: RecordReplayToolbarButton::StartRecording(): svc=%p\n", service);
+  absl::optional<std::string> token = service->GetReplayUserToken();
+  if (!token.has_value()) {
+    fprintf(stderr, "KVKV: RecordReplayToolbarButton::StartRecording(): no token\n");
+  } else {
+    fprintf(stderr, "KVKV: RecordReplayToolbarButton::StartRecording(): token=%s\n", token.value().c_str());
+  }
+
   // Get the current active tab.  This provides the URL we'll be recording.
   TabStripModel* tab_strip_model = browser_->tab_strip_model();
   content::WebContents* old_web_contents = tab_strip_model->GetActiveWebContents();
@@ -105,6 +119,7 @@ void RecordReplayToolbarButton::StartRecording() {
   CHECK(!web_contents_observer_.get());
   content::WebContents::CreateParams new_params(browser_context);
   new_params.record_replay_for_recording = true;
+
   std::unique_ptr<content::WebContents> new_web_contents(
     content::WebContents::Create(new_params));
   web_contents_ = new_web_contents.get();
@@ -160,6 +175,13 @@ void RecordReplayToolbarButton::RecordingTabDestroyed() {
     web_contents_observer_.release();
   }
   RefreshIconState();
+}
+
+record_replay::RecordReplayService*
+RecordReplayToolbarButton::GetRecordReplayService() const {
+  return record_replay::RecordReplayServiceFactory::GetForBrowserContext(
+    browser_->profile()
+  );
 }
 
 void RecordReplayToolbarButton::RefreshIconState() {
