@@ -3968,7 +3968,8 @@ absl::optional<int> GetCurrentContextGroupIdForIsolate(v8::Isolate* isolate) {
   LocalFrame* local_frame_root = GetLocalFrameRoot(isolate);
 
   if (local_frame_root != nullptr) {
-    return MainThreadDebugger::Instance()->ContextGroupId(local_frame_root);
+    // Get (do NOT create) a ContextGroupId:
+    return WeakIdentifierMap<LocalFrame>::Identifier(local_frame_root);
   }
 
   return absl::optional<int>();
