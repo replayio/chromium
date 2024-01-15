@@ -1462,7 +1462,7 @@ ProtocolObjectPreview.prototype = {
     let cdpProperties;
     // log(`DDBG fill() ${this.rrpId} ${this.level.toUpperCase()}`);
 
-    if (this.pageSizeForTesting && this.pageSizeForTesting < 1) {
+    if (this.pageSizeForTesting && !(this.pageSizeForTesting > 0)) {
       throw new Error("invalid pageSizeForTesting: " + this.pageSizeForTesting);
     }
 
