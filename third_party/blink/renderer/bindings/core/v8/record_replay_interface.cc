@@ -1458,18 +1458,19 @@ ProtocolObjectPreview.prototype = {
   },
 
   fill() {
+    // Data returned from V8 debugger.
     let cdpProperties;
+    // log(`DDBG fill() ${this.rrpId} ${this.level.toUpperCase()}`);
+
+    // Names of properties + getters.
+    const foundProps = new Set();
+
     if (this.level === 'noProperties') {
       cdpProperties = { result: [] };
     } else {
       // Loop until we have as many items as requested:
       let pageSize = 0;
       let nReturnedProperties = 0;
-      let i = 0;
-      let lastCdpProps = null;
-
-      // add properties + getterValues (based on what we did in gecko).
-      const addedProps = new Set();
 
       do {
         // Note: Often, we get more properties than we asked for.
@@ -1505,44 +1506,41 @@ ProtocolObjectPreview.prototype = {
         }
         nReturnedProperties = cdpProperties.result.length;
 
-        // TODO: Convert below for loop to keep all props in here
-        lastCdpProps = cdpProperties.result.filter();
-
         /**
          * @see https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#type-PropertyDescriptor
          */
-        for (; i < cdpProperties.result.length; ++i) {
-          if (this.overflow) {
-            // early out
-            break;
-          }
+        for (let i = 0; i < cdpProperties.result.length; ++i) {
           const cdpProp = cdpProperties.result[i];
           const { name: propKey } = cdpProp;
-          if (propKey === "__proto__" || addedProps.has(propKey)) {
+          if (propKey === "__proto__" || foundProps.has(propKey)) {
             continue;
           }
           // The debugger provides all prototype props as well.
           // This heuristic happens to filter them out, but keeps own props and prototype getters in.
           // See: https://linear.app/replay/issue/RUN-1592#comment-4011cec0
           if (cdpProp.isOwn || (cdpProp.configurable && cdpProp.enumerable)) {
+            foundProps.add(propKey);
           }
-          addedProps.add(propKey);
         }
 
-        log(`DDBG LOOP ${i}/${pageSize} ${!this.overflow && nReturnedProperties >= pageSize} ${this.overflow} ${nReturnedProperties}`);
+        // log(`DDBG LOOP ${cdpProperties.result.length}/${pageSize} ${!this.overflow && nReturnedProperties >= pageSize} ${this.overflow} ${nReturnedProperties}`);
 
         // Keep going if we did not get enough items but the query returned as many items as requested.
-        // TODO: !this.overflow can't work anymore
-      } while (TODO && !this.overflow && nReturnedProperties >= pageSize);
+        // Note: Go to +1 for the `overflow` flag.
+      } while (foundProps.size <= (this.nRequestedItems + 1) && nReturnedProperties >= pageSize);
     }
     
     for (const cdpProp of cdpProperties.result) {
+      const { name: propKey } = cdpProp;
+      if (!foundProps.has(propKey)) {
+        continue;
+      }
       const rrpProp = createRrpPropertyDescriptor(cdpProp);
       const force = false;
       this.addProperty(this.cdpObj, rrpProp, force);
     }
 
-    log(`DDBG DONE ${JSON_stringify(cdpProperties.result)}`);
+    // log(`DDBG DONE ${JSON_stringify(Array.from(foundProps.values()))}`);
 
     /**
      * Note: The following logic only reads `internalProperties` from
