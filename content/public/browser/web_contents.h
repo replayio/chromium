@@ -266,6 +266,9 @@ class WebContents : public PageNavigator,
     // Indicates that the content should be recorded by the Record Replay
     // framework.
     bool record_replay_for_recording = false;
+
+    // Specifies the record-replay api key for streaming recording.
+    absl::optional<std::string> record_replay_api_key;
   };
 
   // Creates a new WebContents.
