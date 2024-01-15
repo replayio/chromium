@@ -806,8 +806,8 @@ function Pause_getExceptionValue() {
   return { exception: rv.exception ? buildRrpObjectFromCdpObject(rv.exception) : undefined, data: {} };
 }
 
-function Pause_getObjectPreview({ object, level = "full" }) {
-  const objectData = createPauseObject(object, level);
+function Pause_getObjectPreview({ object, level = "full", pageSizeForTesting = 0 }) {
+  const objectData = createPauseObject(object, level, pageSizeForTesting);
   return { data: { objects: [objectData] } };
 }
 
@@ -1264,7 +1264,7 @@ function isCdpObjectProxy(cdpObj) {
  * @return {RRP.Pause.Object}
  * @see https://static.replay.io/protocol/tot/Pause/#type-Object
  */
-function createPauseObject(rrpId, level) {
+function createPauseObject(rrpId, level, pageSizeForTesting) {
   rrpId = rrpId + ""; // Must be a string.
   const existingPreview = gObjectPreviewByRrpId.get(rrpId);
   if (existingPreview) {
@@ -1279,7 +1279,7 @@ function createPauseObject(rrpId, level) {
   const { persistentId } = cdpObj;
   let preview;
   if (level != "none") {
-    preview = new ProtocolObjectPreview(rrpId, cdpObj, level).fill();
+    preview = new ProtocolObjectPreview(rrpId, cdpObj, level, pageSizeForTesting).fill();
   }
 
   return { objectId: rrpId, persistentId, className, preview };
@@ -1328,10 +1328,11 @@ const MaxItems = {
   "full": 1000,
 };
 
-function ProtocolObjectPreview(rrpId, obj, level) {
+function ProtocolObjectPreview(rrpId, obj, level, pageSizeForTesting) {
   this.rrpId = rrpId;
   this.cdpObj = obj;
   this.level = level;
+  this.pageSizeForTesting = pageSizeForTesting;
   this.overflow = false;
   this.numItems = 0;
   this.extra = {};
@@ -1453,14 +1454,17 @@ ProtocolObjectPreview.prototype = {
     // We theoretically only want to add +1 but we might end up not getting
     // enough props to determine overflow, so +5 is slightly safer.
     // If +5 is not enough, we will loop and do a lot more work.
-    // return this.nRequestedItems + 5;
-    return 2;
+    return this.pageSizeForTesting || (this.nRequestedItems + 5);
   },
 
   fill() {
     // Data returned from V8 debugger.
     let cdpProperties;
     // log(`DDBG fill() ${this.rrpId} ${this.level.toUpperCase()}`);
+
+    if (this.pageSizeForTesting && this.pageSizeForTesting < 1) {
+      throw new Error("invalid pageSizeForTesting: " + this.pageSizeForTesting);
+    }
 
     // Names of properties + getters.
     const foundProps = new Set();
