@@ -156,6 +156,8 @@ steps:
 
   - label: ":hammer: Trigger Runtime FE Tests"
     trigger: "runtime-fe-end-to-end-tests"
+    build:
+      branch: dominik/run-3006-chromium-object-missing-properties
     depends_on:
       - "build-chromium-linux-x86_64"
 
