@@ -503,6 +503,19 @@ IDBRequest* IDBObjectStore::DoPut(ScriptState* script_state,
         IDBDatabase::kTransactionReadOnlyErrorMessage);
     return nullptr;
   }
+  
+  {
+    v8::Local<v8::String> v8_string;
+    v8::TryCatch try_catch(script_state->GetIsolate());
+    if (v8::JSON::Stringify(script_state->GetContext(), value.V8Value())
+            .ToLocal(&v8_string)) {
+      String string = ToBlinkString<String>(v8_string, kDoNotExternalize);
+      recordreplay::Assert("[RUN-1806-2977] IDBObjectStore::DoPut %s %d %d",
+                           string.Utf8().c_str(),
+                           ExecutionContext::From(script_state)->IsSecureContext(),
+                           put_mode);
+    }
+  }
 
   v8::Isolate* isolate = script_state->GetIsolate();
   DCHECK(isolate->InContext());
