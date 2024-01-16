@@ -1550,8 +1550,7 @@ ProtocolObjectPreview.prototype = {
      * Note: The following logic only reads `internalProperties` from
      * cdpProperties, which get fully re-queried with every `getProperties` query.
      * Those are also affected by `pageSize`, but should
-     * not require a loop, since they are (AFAIK) added unconditionally.
-     * Also, built-ins with `CustomPreviewer`s have unlimited pageSize.
+     * not require a loop, since they should be added unconditionally.
      */
 
     // Add class-specific data.
