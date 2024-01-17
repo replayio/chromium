@@ -147,7 +147,7 @@ steps:
   #     - "build-chromium-linux-x86_64"
   #     - "build-chromium-mac-x86_64"
   #     - "build-chromium-mac-arm64"
-
+ 
   # - label: ":hammer: Trigger Metabase Tests"
   #   trigger: "testing-runtime-metabase"
   #   depends_on:
@@ -162,8 +162,8 @@ steps:
       - "build-chromium-linux-x86_64"
 
   # wait for all steps above, but also continue if they fail
-  - wait: ~
-    continue_on_failure: true
+  # - wait: ~
+  #   continue_on_failure: true
 
   # - label: "Buildevents Watch"
   #   key: "buildevents-watch"
