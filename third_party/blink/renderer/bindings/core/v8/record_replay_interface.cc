@@ -1457,6 +1457,16 @@ ProtocolObjectPreview.prototype = {
     return this.pageSizeForTesting || (this.nRequestedItems + 5);
   },
 
+  /**
+   * Ignore certain prototype props.
+   */
+  shouldAddProp(cdpProp) {
+    // The debugger provides all prototype props as well.
+    // This heuristic happens to filter them out, but keeps own props and prototype getters in.
+    // See: https://linear.app/replay/issue/RUN-1592#comment-4011cec0
+    return cdpProp.isOwn || (cdpProp.configurable && cdpProp.enumerable);
+  },
+
   fill() {
     // Data returned from V8 debugger.
     let cdpProperties;
@@ -1472,7 +1482,10 @@ ProtocolObjectPreview.prototype = {
     if (this.level === 'noProperties') {
       cdpProperties = { result: [] };
     } else {
-      // Loop until we have as many items as requested:
+      // Loop until we have as many items as requested. We need to loop because
+      // the debugger, for some reason, also returns many unwanted prototype
+      // props, which might wash out the actual props that we want.
+      // See |shouldAddProp| for reference.
       let pageSize = 0;
       let nReturnedProperties = 0;
 
@@ -1519,10 +1532,7 @@ ProtocolObjectPreview.prototype = {
           if (propKey === "__proto__" || foundProps.has(propKey)) {
             continue;
           }
-          // The debugger provides all prototype props as well.
-          // This heuristic happens to filter them out, but keeps own props and prototype getters in.
-          // See: https://linear.app/replay/issue/RUN-1592#comment-4011cec0
-          if (cdpProp.isOwn || (cdpProp.configurable && cdpProp.enumerable)) {
+          if (shouldAddProp(cdpProp)) {
             foundProps.add(propKey);
           }
         }
@@ -1547,10 +1557,14 @@ ProtocolObjectPreview.prototype = {
     // log(`DDBG DONE ${JSON_stringify(Array.from(foundProps.values()))}`);
 
     /**
-     * Note: The following logic only reads `internalProperties` from
-     * cdpProperties, which get fully re-queried with every `getProperties` query.
-     * Those are also affected by `pageSize`, but should
-     * not require a loop, since they should be added unconditionally.
+     * Explanation:The following logic depends on more `cdpProperties` but
+     * is not affected by above `pageSize`:
+     * 
+     * 1. Inherent props of built-ins, such as Error.stack or Array.length are
+     *    always added unconditionally.
+     * 2. {Weak,}{Set,Map} is a container type whose contents are not in
+     *    `properties`, but rather require a separate query that only returns
+     *    actual container contents, thereby not requiring above loop.
      */
 
     // Add class-specific data.
@@ -1741,6 +1755,9 @@ function previewTypedArray() {
   this.addGetterValue('buffer', this.cdpObj, /* force */ true);
 }
 
+/**
+ * {Weak,}{Set,Map} use internalProperties to store their contents.
+ */
 function previewSetMap(cdpProperties) {
   if (!cdpProperties.internalProperties) {
     return;
