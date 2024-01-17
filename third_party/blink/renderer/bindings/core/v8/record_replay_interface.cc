@@ -1567,7 +1567,7 @@ ProtocolObjectPreview.prototype = {
      *    actual container contents, thereby not requiring above loop.
      */
 
-    // Add class-specific data.
+    // Add builtin-specific data.
     if (!isPrototype(this.raw)) { // Ignore prototype itself.
       const previewers = CustomPreviewers[this.cdpObj.className];
       if (previewers) {
@@ -1586,7 +1586,7 @@ ProtocolObjectPreview.prototype = {
       }
     }
     // Add data for blink and other special objects.
-    this.extra = getExtraObjectPreviewData(this.cdpObj, cdpProperties) || {};
+    Object.assign(this.extra, getExtraObjectPreviewData(this.cdpObj, cdpProperties));
     // Add Prototype data.
     let prototypeCdp = getInternalProp(cdpProperties, '[[Prototype]]')?.value;
     let prototypeRrpId;
@@ -1733,17 +1733,17 @@ function previewBlinkStyle(style) {
   };
 }
 
+function getDescriptionCount(description) {
+  const match = /\((\d+)\)/.exec(description || "");
+  if (match) {
+    return +match[1];
+  }
+  return undefined;
+}
+
 function previewArray(_cdpProperties) {
   // TODO: [RUN-2223] Find out why Array.length does not always return a value.
-  // this.addGetterValue('length', this.cdpObj, /* force */ true);
-
-  // Workaround: Get length from CDP description.
-  const desc = this.cdpObj.description || "";
-  const lengthStr = desc.match(/\d+/)?.[0];
-  if (!lengthStr) {
-    warning(`[RUN-2223] JS previewArray - could not extract length from CDP description: ${JSON_stringify(this.cdpObj)}`);
-  }
-  const length = parseInt(lengthStr || "0");
+  const length = getDescriptionCount(this.cdpObj.description);
   this.setGetterValue("length", createRrpValueRaw(length));
 }
 
@@ -1769,11 +1769,14 @@ function previewSetMap(cdpProperties) {
     return;
   }
 
-  // get size for Set and Map (Weak{Set,Map} don't have an observable size)
-  if (["Set", "Map"].includes(this.cdpObj.className)) {
-    // simply invoke the native getter
-    this.addGetterValue('size', this.cdpObj, /* force */ true);
-    this.extra.containerEntryCount = this.raw.size;
+  // Get size from description.
+  const size = getDescriptionCount(internal.value.description);
+  log(`DDBG PREVIEW ${internal.value.description}, ${size}`);
+  if (size !== undefined) {
+    this.extra.containerEntryCount = size;
+    if (["Set", "Map"].includes(this.raw.className)) {
+      this.addProperty({ name: "size", value: size }, /* force */ true);
+    }
   }
 
   const entries = sendMessage("Runtime.getProperties", {
