@@ -1532,7 +1532,7 @@ ProtocolObjectPreview.prototype = {
           if (propKey === "__proto__" || foundProps.has(propKey)) {
             continue;
           }
-          if (shouldAddProp(cdpProp)) {
+          if (this.shouldAddProp(cdpProp)) {
             foundProps.add(propKey);
           }
         }
@@ -1756,7 +1756,8 @@ function previewTypedArray() {
 }
 
 /**
- * {Weak,}{Set,Map} use internalProperties to store their contents.
+ * Query the internal object of {Weak,}{Set,Map}s that store their
+ * containerEntries.
  */
 function previewSetMap(cdpProperties) {
   if (!cdpProperties.internalProperties) {
