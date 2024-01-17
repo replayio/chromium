@@ -30,7 +30,7 @@ steps:
   #    - "queue=runtime"
   - label: "Build chromium - Linux"
     key: "build-chromium-linux-x86_64"
-    depends_on: "preflight-checks"
+    # depends_on: "preflight-checks"
     timeout_in_minutes: 60
     plugins:
       - thedyrt/skip-checkout#v0.1.1:
