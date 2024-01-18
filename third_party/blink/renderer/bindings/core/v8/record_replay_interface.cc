@@ -1470,7 +1470,6 @@ ProtocolObjectPreview.prototype = {
   fill() {
     // Data returned from V8 debugger.
     let cdpProperties;
-    // log(`DDBG fill() ${this.rrpId} ${this.level.toUpperCase()}`);
 
     if (this.pageSizeForTesting && !(this.pageSizeForTesting > 0)) {
       throw new Error("invalid pageSizeForTesting: " + this.pageSizeForTesting);
@@ -1537,8 +1536,6 @@ ProtocolObjectPreview.prototype = {
           }
         }
 
-        // log(`DDBG LOOP ${cdpProperties.result.length}/${pageSize} ${!this.overflow && nReturnedProperties >= pageSize} ${this.overflow} ${nReturnedProperties}`);
-
         // Keep going if we did not get enough items but the query returned as many items as requested.
         // Note: Go to +1 for the `overflow` flag.
       } while (foundProps.size <= (this.nRequestedItems + 1) && nReturnedProperties >= pageSize);
@@ -1553,8 +1550,6 @@ ProtocolObjectPreview.prototype = {
       const force = false;
       this.addProperty(this.cdpObj, rrpProp, force);
     }
-
-    // log(`DDBG DONE ${JSON_stringify(Array.from(foundProps.values()))}`);
 
     /**
      * Explanation:The following logic depends on more `cdpProperties` but
@@ -1590,7 +1585,6 @@ ProtocolObjectPreview.prototype = {
     // Add Prototype data.
     let prototypeCdp = getInternalProp(cdpProperties, '[[Prototype]]')?.value;
     let prototypeRrpId;
-    let getterValues;
     if (prototypeCdp) {
       prototypeRrpId = registerCdpObject(prototypeCdp);
     }
@@ -1600,7 +1594,7 @@ ProtocolObjectPreview.prototype = {
       prototypeId: prototypeRrpId,
       overflow: (this.overflow && this.level != "full") ? true : undefined,
       properties: this.properties,
-      getterValues: getterValues ? [...this.getterValues.values()] : undefined,
+      getterValues: this.getterValues ? [...this.getterValues.values()] : undefined,
       containerEntries: this.containerEntries,
       ...this.extra,
     };
@@ -1771,7 +1765,6 @@ function previewSetMap(cdpProperties) {
 
   // Get size from description.
   const size = getDescriptionCount(internal.value.description);
-  log(`DDBG PREVIEW ${internal.value.description}, ${size}`);
   if (size !== undefined) {
     this.extra.containerEntryCount = size;
     if (["Set", "Map"].includes(this.raw.className)) {
