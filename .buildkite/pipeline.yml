@@ -150,11 +150,8 @@ steps:
 
   - label: ":hammer: Trigger Metabase Tests"
     trigger: "testing-runtime-metabase"
-    build:
-      branch: "toshok/junit-reporter"
     depends_on:
       - "build-chromium-linux-x86_64"
-    #if: build.branch == "master"
 
   - label: ":hammer: Trigger Runtime FE Tests"
     trigger: "runtime-fe-end-to-end-tests"
