@@ -157,7 +157,7 @@ steps:
   - label: ":hammer: Trigger Runtime FE Tests"
     trigger: "runtime-fe-end-to-end-tests"
     build:
-      branch: "aditya/add-flag-to-disable-clone"
+      branch: "main"
     depends_on:
       - "build-chromium-linux-x86_64"
 
