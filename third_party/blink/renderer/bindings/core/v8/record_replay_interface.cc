@@ -1260,6 +1260,10 @@ function isCdpObjectProxy(cdpObj) {
   return cdpObj.subtype === "proxy";
 }
 
+function isCdpObjectPromise(cdpObj) {
+  return cdpObj.subtype === "promise";
+}
+
 /**
  * @return {RRP.Pause.Object}
  * @see https://static.replay.io/protocol/tot/Pause/#type-Object
@@ -1627,6 +1631,15 @@ function getExtraObjectPreviewData(cdpObject, cdpProperties) {
       proxyState: {
         target: buildRrpObjectFromCdpObject(targetCdpObj),
         handler: buildRrpObjectFromCdpObject(handlerCdpObj)
+      }
+    };
+  } else if (isCdpObjectPromise(cdpObject)) {
+    let stateCdpObj = getInternalProp(cdpProperties, '[[PromiseState]]')?.value;
+    let valueCdpObj = getInternalProp(cdpProperties, '[[PromiseResult]]')?.value;
+    return {
+      promiseState: {
+        state: buildRrpObjectFromCdpObject(stateCdpObj),
+        value: buildRrpObjectFromCdpObject(valueCdpObj)
       }
     };
   } else {
