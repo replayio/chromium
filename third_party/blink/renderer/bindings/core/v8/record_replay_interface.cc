@@ -1636,11 +1636,14 @@ function getExtraObjectPreviewData(cdpObject, cdpProperties) {
   } else if (isCdpObjectPromise(cdpObject)) {
     let stateCdpObj = getInternalProp(cdpProperties, '[[PromiseState]]')?.value;
     let valueCdpObj = getInternalProp(cdpProperties, '[[PromiseResult]]')?.value;
+    const promiseState = {
+      state: stateCdpObj.value || undefined
+    };
+    if (promiseState.state !== "pending") {
+      promiseState.value = buildRrpObjectFromCdpObject(valueCdpObj);
+    }
     return {
-      promiseState: {
-        state: buildRrpObjectFromCdpObject(stateCdpObj),
-        value: buildRrpObjectFromCdpObject(valueCdpObj)
-      }
+      promiseState
     };
   } else {
     const plainObject = getPlainObjectByRrpId(rrpId);
