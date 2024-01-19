@@ -1361,13 +1361,23 @@ ProtocolObjectPreview.prototype = {
     return true;
   },
 
+  checkAddProperty(ownerCdpObject, name) {
+    if (isObjectPropertyBlacklisted(ownerCdpObject, name)) {
+      return false;
+    }
+    if (this.getterValues?.has(name)) {
+      return false;
+    }
+    return true;
+  },
+
   addProperty(ownerCdpObject, rrpProp, force) {
-    if (isObjectPropertyBlacklisted(ownerCdpObject, rrpProp.name)) {
-      return;
+    if (this.checkAddProperty(ownerCdpObject, rrpProp.name)) {
+      this.addPropertyUnchecked(rrpProp, force);
     }
-    if (this.getterValues?.has(rrpProp.name)) {
-      return;
-    }
+  },
+
+  addPropertyUnchecked(rrpProp, force) {
     if (!this.startAddItem(force)) {
       return;
     }
@@ -1391,7 +1401,7 @@ ProtocolObjectPreview.prototype = {
 
     const rrpValue = evalPropRrpNotNull(this.raw, propKey);
     if (rrpValue) {
-      this.setGetterValue(propKey, rrpValue, force);
+      this.setGetterValueUnchecked(propKey, rrpValue, force);
     }
   },
 
@@ -1406,12 +1416,12 @@ ProtocolObjectPreview.prototype = {
     const plainValue = this.raw[propKey].call(this.raw);
     const rrpValue = createRrpValueRaw(plainValue);
     if (rrpValue) {
-      this.setGetterValue(propKey, rrpValue, /* force */ true);
+      this.setGetterValueUnchecked(propKey, rrpValue, /* force */ true);
     }
     return plainValue;
   },
 
-  setGetterValue(key, valueObject, force = true) {
+  setGetterValueUnchecked(key, valueObject, force = true) {
     if (!this.startAddItem(force)) {
       return;
     }
@@ -1461,10 +1471,12 @@ ProtocolObjectPreview.prototype = {
    * Ignore certain prototype props.
    */
   shouldAddProp(cdpProp) {
-    // The debugger provides all prototype props as well.
-    // This heuristic happens to filter them out, but keeps own props and prototype getters in.
+    // The debugger provides all prototype props on top of the object's own props.
+    // This heuristic happens to keep only what we want:
+    //    Own props and prototype getters.
     // See: https://linear.app/replay/issue/RUN-1592#comment-4011cec0
-    return cdpProp.isOwn || (cdpProp.configurable && cdpProp.enumerable);
+    return (cdpProp.isOwn || (cdpProp.configurable && cdpProp.enumerable)) &&
+      this.checkAddProperty(this.cdpObj, cdpProp.name);
   },
 
   fill() {
@@ -1548,7 +1560,7 @@ ProtocolObjectPreview.prototype = {
       }
       const rrpProp = createRrpPropertyDescriptor(cdpProp);
       const force = false;
-      this.addProperty(this.cdpObj, rrpProp, force);
+      this.addPropertyUnchecked(rrpProp, force);
     }
 
     /**
@@ -1574,7 +1586,7 @@ ProtocolObjectPreview.prototype = {
             const cdpEntry = cdpProperties.result.find(prop => prop.name === entry);
             if (cdpEntry) {
               const rrpEntry = buildRrpObjectFromCdpObject(cdpEntry.value);
-              this.setGetterValue(entry, rrpEntry);
+              this.setGetterValueUnchecked(entry, rrpEntry);
             }
           }
         }
@@ -1738,7 +1750,7 @@ function getDescriptionCount(description) {
 function previewArray(_cdpProperties) {
   // TODO: [RUN-2223] Find out why Array.length does not always return a value.
   const length = getDescriptionCount(this.cdpObj.description);
-  this.setGetterValue("length", createRrpValueRaw(length));
+  this.setGetterValueUnchecked("length", createRrpValueRaw(length));
 }
 
 function previewTypedArray() {
@@ -1764,13 +1776,24 @@ function previewSetMap(cdpProperties) {
   }
 
   // Get size from description.
-  const size = getDescriptionCount(internal.value.description);
-  if (size !== undefined) {
-    this.extra.containerEntryCount = size;
-    if (["Set", "Map"].includes(this.raw.className)) {
-      this.addProperty({ name: "size", value: size }, /* force */ true);
-    }
+  let size;
+
+  if (["Set", "Map"].includes(this.cdpObj.className)) {
+    // NOTE: For some reason, the internal backing array size is capped to
+    // pageSize for Set and Map.
+    // This type of inconsistency is possible since *we* added paging to the
+    // debugger (RUN-1315), and it might have (albeit small) negative impacts
+    // like this.
+    // SLN: Simply query the size getter instead.
+    size = this.raw.size;
+    const rrpSize = { name: "size", value: size };
+    this.addPropertyUnchecked(rrpSize, /* force */ true);
+    this.setGetterValueUnchecked(rrpSize.name, rrpSize, /* force */ true);
+  } else {
+    // Weak{Set,Map}
+    size = getDescriptionCount(internal.value.description);
   }
+  this.extra.containerEntryCount = size;
 
   const entries = sendMessage("Runtime.getProperties", {
     objectId: internal.value.objectId,
@@ -1816,7 +1839,7 @@ function previewDate() {
 }
 
 function previewError() {
-  this.setGetterValue("name", { value: this.cdpObj.className });
+  this.setGetterValueUnchecked("name", { value: this.cdpObj.className });
 }
 
 const ErrorProperties = [
