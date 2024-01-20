@@ -245,13 +245,18 @@ async function main(options) {
 
   // Perform all buildkite-specific stuff
   if (process.env["BUILDKITE"]) {
+    const pakSizesFile = recordPAKSizes(options);
+
     buildkiteStuff(
       downloadUris,
       platform,
       buildId,
       buildArm ? "arm64" : "x86_64",
-      symbolsArchiveFile
+      symbolsArchiveFile,
+      pakSizesFile
     );
+
+    fs.unlinkSync(pakSizesFile);
   }
   fs.unlinkSync(symbolsArchiveFile);
 }
@@ -261,7 +266,8 @@ function buildkiteStuff(
   platform,
   buildId,
   arch,
-  symbolsArchiveFile
+  symbolsArchiveFile,
+  pakSizesFile
 ) {
   const markdownDownloadList = downloadUris
     .map((uri) =>
@@ -302,6 +308,10 @@ function buildkiteStuff(
   fs.cpSync(
     symbolsArchiveFile,
     path.join(BUILDKITE_ARTIFACT_DIRECTORY, symbolsArchiveFile)
+  );
+  fs.cpSync(
+    pakSizesFile,
+    path.join(BUILDKITE_ARTIFACT_DIRECTORY, "pak-sizes")
   );
 
   log(
@@ -491,6 +501,40 @@ function computeBuildId(
       : driverDate;
 
   return `${currentPlatform()}-${runtimeName}-${date}-${runtimeRevision}-${driverRevision}${buildIdExtension}`;
+}
+
+function recordPAKSizes(options) {
+  // Record the size of each pak file we care about.
+  const pakFiles = ["resources.pak"];
+
+  const releaseDir = options.useARM ? "Release-ARM" : "Release";
+  // the containing directory (a subdir of releaseDir) of these files varies by Platform
+  let pakDir;
+  switch (currentPlatform()) {
+    case Platform.macOS:
+      pakDir = path.join("out", releaseDir, "Chromium Framework.framework/Versions/Current/Resources");
+      break;
+    case Platform.linux:
+      pakDir = path.join("out", releaseDir);
+      break;
+    case Platform.windows:
+      throw new Error("No Clue Yet");
+      break;
+    default:
+      throw new Error("NYI");
+  }
+
+  let pakSizes = "";
+  for (const pakFile of pakFiles) {
+    const file = path.join(pakDir, pakFile);
+    const size = fs.statSync(file).size;
+    pakSizes += `${pakFile} ${size}\n`;
+  }
+
+  const archSuffix = options.useArm ? "-arm" : "";
+  const pakSizesFile = `pak-sizes${archSuffix}`;
+  fs.writeFileSync(pakSizesFile, pakSizes);
+  return pakSizesFile;
 }
 
 async function buildSymbolsArchive(
