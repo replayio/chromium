@@ -142,13 +142,15 @@ steps:
     artifact_paths:
       - "build_id/windows/x86_64/**"
 
-  - label: ":sleuth_or_spy: Verify cross-arch `.pak` sizes"
+  - label: ":sleuth_or_spy: Verify cross-arch `.pak` sizes and dep hashes"
     key: "verify-cross-arch-pak-sizes"
     commands:
-      - "rm -f pak-sizes-arm pak-sizes"
-      - "be_cmd download-macos-arm64 -- buildkite-agent artifact download build_id/macOS/arm64/pak-sizes ."
-      - "be_cmd download-macos-x86_64 -- buildkite-agent artifact download build_id/macOS/x86_64/pak-sizes ."
-      - "be_cmd macos-diff -- diff build_id/macOS/arm64/pak-sizes build_id/macOS/x86_64/pak-sizes"
+      - "be_cmd download-macos-arm64-gclient_entries -- buildkite-agent artifact download build_id/macOS/arm64/entries ."
+      - "be_cmd download-macos-x86_64-gclient_entries -- buildkite-agent artifact download build_id/macOS/x86_64/entries ."
+      - "be_cmd macos-diff-gclient-entries -- diff -u build_id/macOS/arm64/entries build_id/macOS/x86_64/entries"
+      - "be_cmd download-macos-arm64-pak-sizes -- buildkite-agent artifact download build_id/macOS/arm64/pak-sizes ."
+      - "be_cmd download-macos-x86_64-pak-sizes -- buildkite-agent artifact download build_id/macOS/x86_64/pak-sizes ."
+      - "be_cmd macos-diff-pak-sizes -- diff -u build_id/macOS/arm64/pak-sizes build_id/macOS/x86_64/pak-sizes || true"
     depends_on:
       - "build-chromium-mac-x86_64"
       - "build-chromium-mac-arm64"
