@@ -3054,7 +3054,7 @@ __RECORD_REPLAY_ARGUMENTS__.internal = {
   getPlainObjectByRrpId,
   registerPlainObject,
   gLastBoundingClientRectsByNodeRrpId,
-  sendCDPMessage: sendMessage,
+  sendCDPMessage,
   getNextStackingContextId: () => gNextStackingContextId,
   setNextStackingContextId: (id) => { gNextStackingContextId = id; },
   updateNextStackingContextId: (f) => { gNextStackingContextId = f(gNextStackingContextId); },
