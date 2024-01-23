@@ -255,8 +255,6 @@ function assert(v, msg = "") {
 
 const gSourceMapData = new Map();
 
-try {
-
 /** ###########################################################################
  * Use JS injection prevention:
  * Save some functions before User JS has a chance to overwrite them.
@@ -381,6 +379,13 @@ function sendCDPMessage(method, params) {
   }
   return undefined;
 }
+
+/**
+ * [RUN-3160] We have dependencies on this in the backend, via Target.evaluatePrivileged.
+ * @deprecated Use {@link sendCDPMessage} instead.
+ */
+// eslint-disable-next-line
+const sendMessage = sendCDPMessage;
 
 
 function addEventListener(method, callback) {
@@ -3177,10 +3182,6 @@ addEventListener("Runtime.executionContextsCleared", () => {
 });
 sendCDPMessage("Runtime.enable");
 
-} catch (e) {
-  warning(`JS_ERROR Initialization: ${e?.stack || e}`);
-}
-
 })();
 
 )"""";
@@ -3200,7 +3201,6 @@ sendCDPMessage("Runtime.enable");
 const char* gSourceMapScript = R""""(
 //js
 (() => {
-
 const {
   log,
   warning,
@@ -3445,7 +3445,6 @@ function isValidBaseURL(url) {
 }
 
 })();
-
 )"""";
 
 // Script that injects React DevTools "stub" functions to capture
@@ -5659,9 +5658,8 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
 
   // 2. Initialize sourcemap worker, command handlers etc.
   gReplayScriptsAlive = true;
-  InitializeReplayScripts(isolate, localFrame, context);
-  
   recordreplay::Print("ReplayScript STATUS_CHANGE_ALIVE");
+  InitializeReplayScripts(isolate, localFrame, context);
 }
 
 void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
