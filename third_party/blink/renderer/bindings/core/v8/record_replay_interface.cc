@@ -178,7 +178,7 @@ const {
   warning: warning_,
   fromJsIsReplayScriptAlive: isReplayScriptAlive,
   setCDPMessageCallback,
-  sendCDPMessage,
+  sendCDPMessage: sendCDPMessageRaw,
   setCommandCallback,
   setClearPauseDataCallback,
   addNewScriptHandler,
@@ -385,7 +385,8 @@ function sendCDPMessage(method, params) {
  * @deprecated Use {@link sendCDPMessage} instead.	
  */	
 // eslint-disable-next-line	
-const sendMessage = sendCDPMessage;	
+const sendMessage = sendCDPMessage;
+
 
 function addEventListener(method, callback) {
   gEventListeners.set(method, callback);
