@@ -5755,12 +5755,11 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
   // 1. Reset paint surface so that paints to the new root's surface are not ignored.
   // See: https://linear.app/replay/issue/RUN-2400
   recordreplay::DoResetPaintSurface();
-
-  // 2. Initialize sourcemap worker, command handlers etc.
-  InitializeReplayScripts(isolate, localFrame, context);
   
+  // 2. Initialize sourcemap worker, command handlers etc.
   gReplayScriptsAlive = true;
   recordreplay::Print("ReplayScript STATUS_CHANGE_ALIVE");
+  InitializeReplayScripts(isolate, localFrame, context);
 }
 
 void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
