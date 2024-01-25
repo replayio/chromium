@@ -1361,7 +1361,7 @@ ProtocolObjectPreview.prototype = {
 
   startAddItem(force) {
     if (!force) {
-      if (this.hasAllItems) {
+      if (this.hasReachedItemLimit) {
         this.overflow = true;
         return false;
       }
@@ -1451,16 +1451,20 @@ ProtocolObjectPreview.prototype = {
     Array_push.call(this.containerEntries, entry);
   },
 
+  get unlimitedItems() {
+    // Ignore prop limits of native objects.
+    // (Because that is how we do it in gecko.)
+    return isBlinkObject(this.raw, this.cdpObj);
+  },
+
   get nRequestedItems() {
-    if (isBlinkObject(this.raw, this.cdpObj)) {
-      // Don't limit props of native objects, and ignore prop limits.
-      // (Because that is how we do it in gecko.)
-      return 0;
-    }
     return MaxItems[this.level] || 10;
   },
 
-  get hasAllItems() {
+  get hasReachedItemLimit() {
+    if (this.unlimitedItems) {
+      return false;
+    }
     return this.numItems >= this.nRequestedItems;
   },
 
@@ -1473,7 +1477,13 @@ ProtocolObjectPreview.prototype = {
     // We theoretically only want to add +1 but we might end up not getting
     // enough props to determine overflow, so +5 is slightly safer.
     // If +5 is not enough, we will loop and do a lot more work.
-    return this.pageSizeForTesting || (this.nRequestedItems + 5);
+    if (this.pageSizeForTesting) {
+      return this.pageSizeForTesting;
+    }
+    if (this.unlimitedItems) {
+      return 0;
+    }
+    return this.nRequestedItems + 5;
   },
 
   /**
@@ -1559,7 +1569,12 @@ ProtocolObjectPreview.prototype = {
 
         // Keep going if we did not get enough items but the query returned as many items as requested.
         // Note: Go to +1 for the `overflow` flag.
-      } while (foundProps.size <= (this.nRequestedItems + 1) && nReturnedProperties >= pageSize);
+        // log(`DDBG fill() C ${[foundProps.size, this.unlimitedItems, this.nRequestedItems, nReturnedProperties, pageSize].join(", ")}`);
+      } while (
+        !this.unlimitedItems &&
+        foundProps.size <= (this.nRequestedItems + 1) &&
+        nReturnedProperties >= pageSize
+      );
     }
     
     for (const cdpProp of cdpProperties.result) {
