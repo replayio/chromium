@@ -167,10 +167,48 @@ function prepareMacOSBinaries(buildId) {
     recursive: true,
     force: true,
   });
-  fs.renameSync(
-    path.join(outdir, "Chromium.app"),
-    path.join(outdir, "Replay-Chromium.app")
+  const appPath = path.join(outdir, "Replay-Chromium.app");
+  fs.renameSync(path.join(outdir, "Chromium.app"), appPath);
+
+  const originalWorkingDir = process.env["REPLAY_ORIGINAL_WORKING_DIR"];
+  const codesignPath = path.join(
+    originalWorkingDir,
+    process.env["REPLAY_APPLE_CODESIGN_PATH"]
   );
+  const p12FilePath = path.join(
+    originalWorkingDir,
+    process.env["REPLAY_APPLE_CODESIGN_CERT_PATH"]
+  );
+  const p12PassPath = path.join(
+    originalWorkingDir,
+    process.env["REPLAY_APPLE_CODESIGN_CERT_PASS_PATH"]
+  );
+  const appStoreApiKeyPath = path.join(
+    originalWorkingDir,
+    process.env["REPLAY_APP_STORE_CONNECT_API_KEY_PATH"]
+  );
+  const shouldCodesign = !!codesignPath;
+  if (!shouldCodesign) {
+    console.error("Missing codesigning environment variables", {
+      codesignPath,
+      p12FilePath,
+      p12PassPath,
+      appStoreApiKeyPath,
+    });
+    process.exit(1);
+  }
+  if (shouldCodesign) {
+    spawnChecked(codesignPath, [
+      "sign",
+      "--p12-file",
+      p12FilePath,
+      "--p12-password-file",
+      p12PassPath,
+      appPath,
+    ]);
+  } else {
+    log("Skipping codesigning of app bundle");
+  }
   spawnChecked(
     "hdiutil",
     [
@@ -186,6 +224,27 @@ function prepareMacOSBinaries(buildId) {
     ],
     { cwd: outdir, stdio: "inherit" }
   );
+  if (shouldCodesign) {
+    spawnChecked(codesignPath, [
+      "sign",
+      "--p12-file",
+      p12FilePath,
+      "--p12-password-file",
+      p12PassPath,
+      buildIdDmgArchive,
+    ]);
+    // TODO(dmiller): re-enable notarization once we have it working
+    // spawnChecked(codesignPath, [
+    //   "notary-submit",
+    //   "--api-key-file",
+    //   appStoreApiKeyPath,
+    //   "--staple",
+    //   buildIdDmgArchive,
+    // ]);
+  } else {
+    log("Skipping signing/notarization of dmg");
+  }
+
   const buildIdTarArchive = buildArm
     ? `${buildId}-arm.tar.xz`
     : `${buildId}.tar.xz`;
