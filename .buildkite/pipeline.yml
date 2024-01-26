@@ -218,7 +218,8 @@ steps:
         RECORD_REPLAY_METADATA_SOURCE_COMMIT_ID: "${BUILDKITE_COMMIT}"
         RECORD_REPLAY_METADATA_SOURCE_BRANCH: "${BUILDKITE_BRANCH}"
         RECORD_REPLAY_METADATA_SOURCE_MERGE_ID: "${BUILDKITE_PULL_REQUEST}"
-        RECORD_REPLAY_METADATA_SOURCE_REPOSITORY: "${BUILDKITE_PULL_REQUEST_REPO}"
+        # this is passed as a git URL which the replay plugin expects and parses in BUILDKITE_REPO
+        BUILDKITE_REPO: "${BUILDKITE_PULL_REQUEST_REPO}"
 
   # wait for all steps above, but also continue if they fail
   - wait: ~
