@@ -170,11 +170,10 @@ function prepareMacOSBinaries(buildId) {
   const appPath = path.join(outdir, "Replay-Chromium.app");
   fs.renameSync(path.join(outdir, "Chromium.app"), appPath);
 
-  const originalWorkingDir = process.env["REPLAY_ORIGINAL_WORKING_DIR"];
-  const codesignPath = path.join(
-    originalWorkingDir,
-    process.env["REPLAY_APPLE_CODESIGN_PATH"]
-  );
+  const originalWorkingDir =
+    process.env["REPLAY_ORIGINAL_WORKING_DIR"] || process.cwd();
+  const codesignPath = process.env["REPLAY_APPLE_CODESIGN_PATH"];
+  const fullCodesignPath = path.join(originalWorkingDir, codesignPath);
   const p12FilePath = path.join(
     originalWorkingDir,
     process.env["REPLAY_APPLE_CODESIGN_CERT_PATH"]
@@ -190,7 +189,8 @@ function prepareMacOSBinaries(buildId) {
   const shouldCodesign = !!codesignPath;
   if (!shouldCodesign) {
     console.error("Missing codesigning environment variables", {
-      codesignPath,
+      codesignPath: codesignPath,
+      fullCodesignPath,
       p12FilePath,
       p12PassPath,
       appStoreApiKeyPath,
@@ -198,7 +198,7 @@ function prepareMacOSBinaries(buildId) {
     process.exit(1);
   }
   if (shouldCodesign) {
-    spawnChecked(codesignPath, [
+    spawnChecked(fullCodesignPath, [
       "sign",
       "--p12-file",
       p12FilePath,
@@ -225,7 +225,7 @@ function prepareMacOSBinaries(buildId) {
     { cwd: outdir, stdio: "inherit" }
   );
   if (shouldCodesign) {
-    spawnChecked(codesignPath, [
+    spawnChecked(fullCodesignPath, [
       "sign",
       "--p12-file",
       p12FilePath,
