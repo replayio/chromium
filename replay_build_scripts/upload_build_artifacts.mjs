@@ -252,14 +252,13 @@ function prepareMacOSBinaries(buildId) {
       p12PassPath,
       buildIdDmgArchive,
     ]);
-    // TODO(dmiller): re-enable notarization once we have it working
-    // spawnChecked(codesignPath, [
-    //   "notary-submit",
-    //   "--api-key-file",
-    //   appStoreApiKeyPath,
-    //   "--staple",
-    //   buildIdDmgArchive,
-    // ]);
+    spawnChecked(codesignPath, [
+      "notary-submit",
+      "--api-key-file",
+      appStoreApiKeyPath,
+      "--staple",
+      buildIdDmgArchive,
+    ]);
   } else {
     log("Skipping signing/notarization of dmg");
   }
@@ -271,6 +270,7 @@ function prepareMacOSBinaries(buildId) {
     ? "macos-chromium-arm.tar.xz"
     : "macos-chromium.tar.xz";
 
+  // TODO(dmiller): Maybe try creating this before we sign?
   spawnChecked(
     "tar",
     ["cfJ", path.join(process.cwd(), buildIdTarArchive), "Replay-Chromium.app"],
