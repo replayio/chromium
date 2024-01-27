@@ -252,6 +252,18 @@ function prepareMacOSBinaries(buildId) {
     spawnChecked(
       fullCodesignPath,
       [
+        "sign",
+        "--p12-file",
+        p12FilePath,
+        "--p12-password-file",
+        p12PassPath,
+        buildIdDmgArchiveFullPath,
+      ],
+      { stdio: "inherit" }
+    );
+    spawnChecked(
+      fullCodesignPath,
+      [
         "notary-submit",
         "--api-key-file",
         appStoreApiKeyPath,
