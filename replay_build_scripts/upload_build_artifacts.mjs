@@ -227,7 +227,7 @@ function prepareMacOSBinaries(buildId) {
         ...codeSignatureFlags,
         appPath,
       ],
-      { stdio: "inherit " }
+      { stdio: "inherit" }
     );
   } else {
     log("Skipping codesigning of app bundle");
