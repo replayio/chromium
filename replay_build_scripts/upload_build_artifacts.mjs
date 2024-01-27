@@ -244,14 +244,6 @@ function prepareMacOSBinaries(buildId) {
     { cwd: outdir, stdio: "inherit" }
   );
   if (shouldCodesign) {
-    spawnChecked(fullCodesignPath, [
-      "sign",
-      "--p12-file",
-      p12FilePath,
-      "--p12-password-file",
-      p12PassPath,
-      buildIdDmgArchive,
-    ]);
     spawnChecked(codesignPath, [
       "notary-submit",
       "--api-key-file",
@@ -260,7 +252,7 @@ function prepareMacOSBinaries(buildId) {
       buildIdDmgArchive,
     ]);
   } else {
-    log("Skipping signing/notarization of dmg");
+    log("Skipping notarization of dmg");
   }
 
   const buildIdTarArchive = buildArm
