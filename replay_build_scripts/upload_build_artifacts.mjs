@@ -197,6 +197,24 @@ function prepareMacOSBinaries(buildId) {
     });
     process.exit(1);
   }
+
+  const pathsToSign = [
+    "Contents/MacOS/Chromium",
+    "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/app_mode_loader",
+    "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/Chromium Helper (Alerts).app/Contents/MacOS/Chromium Helper (Alerts)",
+    "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/Chromium Helper (GPU).app/Contents/MacOS/Chromium Helper (GPU)",
+    "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/Chromium Helper (Plugin).app/Contents/MacOS/Chromium Helper (Plugin)",
+    "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)",
+    "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/Chromium Helper.app/Contents/MacOS/Chromium Helper",
+    "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/chrome_crashpad_handler",
+  ];
+
+  const codeSignatureValues = pathsToSign.map((path) => `${path}:runtime`);
+  const codeSignatureFlags = codeSignatureValues.flatMap((value) => [
+    "--code-signature-flags",
+    value,
+  ]);
+
   if (shouldCodesign) {
     spawnChecked(fullCodesignPath, [
       "sign",
@@ -204,6 +222,7 @@ function prepareMacOSBinaries(buildId) {
       p12FilePath,
       "--p12-password-file",
       p12PassPath,
+      ...codeSignatureFlags,
       appPath,
     ]);
   } else {
