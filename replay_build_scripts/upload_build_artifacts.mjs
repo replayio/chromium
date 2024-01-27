@@ -216,23 +216,28 @@ function prepareMacOSBinaries(buildId) {
   ]);
 
   if (shouldCodesign) {
-    spawnChecked(fullCodesignPath, [
-      "sign",
-      "--p12-file",
-      p12FilePath,
-      "--p12-password-file",
-      p12PassPath,
-      ...codeSignatureFlags,
-      appPath,
-    ]);
+    spawnChecked(
+      fullCodesignPath,
+      [
+        "sign",
+        "--p12-file",
+        p12FilePath,
+        "--p12-password-file",
+        p12PassPath,
+        ...codeSignatureFlags,
+        appPath,
+      ],
+      { stdio: "inherit " }
+    );
   } else {
     log("Skipping codesigning of app bundle");
   }
+  const buildIdDmgArchiveFullPath = path.join(outdir, buildIdDmgArchive);
   spawnChecked(
     "hdiutil",
     [
       "create",
-      path.join(process.cwd(), buildIdDmgArchive),
+      buildIdDmgArchiveFullPath
       "-ov",
       "-volname",
       "Replay-Chromium",
@@ -244,13 +249,17 @@ function prepareMacOSBinaries(buildId) {
     { cwd: outdir, stdio: "inherit" }
   );
   if (shouldCodesign) {
-    spawnChecked(codesignPath, [
-      "notary-submit",
-      "--api-key-file",
-      appStoreApiKeyPath,
-      "--staple",
-      buildIdDmgArchive,
-    ]);
+    spawnChecked(
+      codesignPath,
+      [
+        "notary-submit",
+        "--api-key-file",
+        appStoreApiKeyPath,
+        "--staple",
+        buildIdDmgArchiveFullPath,
+      ],
+      { stdio: "inherit" }
+    );
   } else {
     log("Skipping notarization of dmg");
   }
