@@ -250,7 +250,7 @@ function prepareMacOSBinaries(buildId) {
   if (shouldCodesign) {
     const buildIdDmgArchiveFullPath = path.join(outdir, buildIdDmgArchive);
     spawnChecked(
-      codesignPath,
+      fullCodesignPath,
       [
         "notary-submit",
         "--api-key-file",
