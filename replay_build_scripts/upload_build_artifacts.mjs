@@ -232,11 +232,12 @@ function prepareMacOSBinaries(buildId) {
   } else {
     log("Skipping codesigning of app bundle");
   }
+  const buildIdDmgArchiveFullPath = path.join(outdir, buildIdDmgArchive);
   spawnChecked(
     "hdiutil",
     [
       "create",
-      buildIdDmgArchive,
+      buildIdDmgArchiveFullPath,
       "-ov",
       "-volname",
       "Replay-Chromium",
@@ -248,7 +249,6 @@ function prepareMacOSBinaries(buildId) {
     { cwd: outdir, stdio: "inherit" }
   );
   if (shouldCodesign) {
-    const buildIdDmgArchiveFullPath = path.join(outdir, buildIdDmgArchive);
     spawnChecked(
       fullCodesignPath,
       [
