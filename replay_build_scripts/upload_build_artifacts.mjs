@@ -232,12 +232,11 @@ function prepareMacOSBinaries(buildId) {
   } else {
     log("Skipping codesigning of app bundle");
   }
-  const buildIdDmgArchiveFullPath = path.join(outdir, buildIdDmgArchive);
   spawnChecked(
     "hdiutil",
     [
       "create",
-      buildIdDmgArchiveFullPath,
+      path.join(process.cwd(), buildIdDmgArchive),
       "-ov",
       "-volname",
       "Replay-Chromium",
@@ -257,7 +256,7 @@ function prepareMacOSBinaries(buildId) {
         p12FilePath,
         "--p12-password-file",
         p12PassPath,
-        buildIdDmgArchiveFullPath,
+        buildIdDmgArchive,
       ],
       { stdio: "inherit" }
     );
@@ -268,7 +267,7 @@ function prepareMacOSBinaries(buildId) {
         "--api-key-file",
         appStoreApiKeyPath,
         "--staple",
-        buildIdDmgArchiveFullPath,
+        buildIdDmgArchive,
       ],
       { stdio: "inherit" }
     );
