@@ -237,7 +237,7 @@ function prepareMacOSBinaries(buildId) {
     "hdiutil",
     [
       "create",
-      buildIdDmgArchiveFullPath
+      buildIdDmgArchiveFullPath,
       "-ov",
       "-volname",
       "Replay-Chromium",
