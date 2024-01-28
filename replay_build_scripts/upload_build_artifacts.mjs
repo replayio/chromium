@@ -62,6 +62,7 @@ function copyBuildFiles(srcDir, dstDir) {
       "icudtl.dat",
       "v8_context_snapshot.bin",
       "vk_swiftshader_icd.json",
+      "replay",
 
       // linux
       "chrome",
@@ -99,7 +100,11 @@ function copyBuildFiles(srcDir, dstDir) {
 
   for (const file of fs.readdirSync(srcDir)) {
     if (shouldCopyFile(file)) {
-      fs.cpSync(path.join(srcDir, file), path.join(dstDir, file));
+      fs.cpSync(
+        path.join(srcDir, file),
+        path.join(dstDir, file),
+        { recursive: true }
+      );
     }
   }
   fs.cpSync(path.join(srcDir, "locales"), path.join(dstDir, "locales"), {
@@ -609,7 +614,7 @@ async function buildSymbolsArchive(
 
 const buildIdExtension =
   process.env["BUILDKITE_BRANCH"] !==
-  process.env["BUILDKITE_PIPELINE_DEFAULT_BRANCH"]
+    process.env["BUILDKITE_PIPELINE_DEFAULT_BRANCH"]
     ? "-dev"
     : process.env["LOCAL_DEVELOPER_BUILD_EXTENSION"] || "";
 const useARM = !!process.env.REPLAY_BUILD_ARM;
