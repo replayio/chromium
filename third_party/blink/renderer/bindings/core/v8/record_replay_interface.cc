@@ -790,22 +790,15 @@ window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ = reduxDevtoolsExtensionCompose;
 const char* gOnNewWindowScript = R""""(
 //js
 (() => {
-  try {
-    window.__REACT_DEVTOOLS_GLOBAL_HOOK__ = window.top.__REACT_DEVTOOLS_GLOBAL_HOOK__;
-    window.__REDUX_DEVTOOLS_EXTENSION__ = window.top.__REDUX_DEVTOOLS_EXTENSION__;
-    window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ = window.top.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__;
+  window.__REACT_DEVTOOLS_GLOBAL_HOOK__ = window.top.__REACT_DEVTOOLS_GLOBAL_HOOK__;
+  window.__REDUX_DEVTOOLS_EXTENSION__ = window.top.__REDUX_DEVTOOLS_EXTENSION__;
+  window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ = window.top.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__;
 
-    // TODO: Feels like this cross-context function usage can cause trouble, especially when
-    //      the user pauses inside the iframe's JS and tries to access something inside the iframe via 
-    //      __RECORD_REPLAY__?
-    window.__RECORD_REPLAY__ = window.top.__RECORD_REPLAY__;
-    window.__RECORD_REPLAY_ARGUMENTS__ = window.top.__RECORD_REPLAY_ARGUMENTS__;
-  }
-  catch (err) {
-    // TODO: RUN-1990
-    // window.top is not always accessible due to cross-origin restrictions.
-    __RECORD_REPLAY_ARGUMENTS__.log(`[RuntimeError] gOnNewWindowScript failed: ${err.stack}`);
-  }
+  // TODO: Feels like this cross-context function usage can cause trouble, especially when
+  //      the user pauses inside the iframe's JS and tries to access something inside the iframe via 
+  //      __RECORD_REPLAY__?
+  window.__RECORD_REPLAY__ = window.top.__RECORD_REPLAY__;
+  window.__RECORD_REPLAY_ARGUMENTS__ = window.top.__RECORD_REPLAY_ARGUMENTS__;
 })()
 )"""";
 
