@@ -22,7 +22,7 @@ steps:
       - "be_cmd npm-ci -- npm ci"
       - "be_cmd lint-replay_build_scripts -- npm run lint"
       - "popd"
-      - "be_cmd lint-replay-scripts -- node replay_build_scripts/lint.mjs third_party/blink/renderer/bindings/core/v8/record_replay_interface.cc"
+      - "be_cmd lint-replay-scripts -- node replay_build_scripts/lint.mjs"
     env:
       RECORD_REPLAY_BACKEND_DIR: /home/ubuntu/chromium/backend
     agents:
