@@ -31,8 +31,6 @@ steps:
       - "queue=runtime"
   - label: "Build chromium - Linux"
     key: "build-chromium-linux-x86_64"
-    env:
-      DRIVER_REVISION: fc53029d7f06
     depends_on: "preflight-checks"
     timeout_in_minutes: 60
     plugins:
@@ -58,6 +56,7 @@ steps:
       - "be_cmd buck2-build -- buck2 build --console simple //:chromium"
       - "popd"
     env:
+      DRIVER_REVISION: fc53029d7f06
       RBE_service: simpsonite.cluster.engflow.com:443
       RBE_service_no_auth: true
       RBE_use_application_default_credentials: true
