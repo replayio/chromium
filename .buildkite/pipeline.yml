@@ -212,6 +212,7 @@ steps:
     depends_on:
       - "build-chromium-linux-x86_64"
     build:
+      branch: ryan/run-3177-summarize-fe-e2e-tests-auto-record-failed-tests
       env:
         RUNTIME_TEAM_API_KEY: "rwk_o4eIfrkch6Y7eKFbJPGtKrVxNh0UiTF81KYU4IE3otr"
         RECORD_REPLAY_METADATA_SOURCE_COMMIT_TITLE: "${BUILDKITE_MESSAGE}"
