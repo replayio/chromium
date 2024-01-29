@@ -211,11 +211,6 @@ steps:
     trigger: "runtime-fe-end-to-end-tests"
     depends_on:
       - "build-chromium-linux-x86_64"
-    plugins:
-      - seek-oss/aws-sm#v2.3.1:
-          region: us-east-2
-          env:
-            RUNTIME_TEAM_API_KEY: runtime-replay-api-key
     build:
       branch: ryan/run-3177-summarize-fe-e2e-tests-auto-record-failed-tests
       env:
