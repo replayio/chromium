@@ -53,7 +53,7 @@ steps:
       - "be_cmd update-all-repos -- node replay_build_scripts/update-all-repos.mjs"
       - "pushd ../backend"
       - "be_cmd buck2-kill -- buck2 kill"
-      - "be_cmd buck2-build -- buck2 build --console simple //:chromium"
+      - "be_cmd buck2-build -- buck2 build -c replay.driver_revision=$DRIVER_REVISION --console simple //:chromium"
       - "popd"
     env:
       DRIVER_REVISION: fc53029d7f06
@@ -93,7 +93,7 @@ steps:
   #     - "be_cmd update-all-repos -- node replay_build_scripts/update-all-repos.mjs"
   #     - "pushd ../backend"
   #     - "be_cmd buck2-kill -- buckle kill"
-  #     - "be_cmd buck2-build -- buckle build --console simple //:chromium --target-platforms=//:macos-x86_64"
+  #     - "be_cmd buck2-build -- buckle build -c replay.driver_revision=$DRIVER_REVISION --console simple //:chromium --target-platforms=//:macos-x86_64"
   #     - "popd"
   #   env:
   #     RBE_service: simpsonite.cluster.engflow.com:443
@@ -132,7 +132,7 @@ steps:
   #     - "be_cmd update-all-repos -- node replay_build_scripts/update-all-repos.mjs"
   #     - "pushd ../backend"
   #     - "be_cmd buck2-kill -- buckle kill"
-  #     - "be_cmd buck2-build -- buckle build --console simple //:chromium --target-platforms=//:macos-arm64"
+  #     - "be_cmd buck2-build -- buckle build -c replay.driver_revision=$DRIVER_REVISION --console simple //:chromium --target-platforms=//:macos-arm64"
   #     - "popd"
   #   env:
   #     RBE_service: simpsonite.cluster.engflow.com:443
@@ -208,10 +208,18 @@ steps:
   #     - "build-chromium-linux-x86_64"
   #   if: build.branch == "master"
 
-  # - label: ":hammer: Trigger Runtime FE Tests"
-  #   trigger: "runtime-fe-end-to-end-tests"
-  #   depends_on:
-  #     - "build-chromium-linux-x86_64"
+  - label: ":hammer: Trigger Runtime FE Tests"
+    trigger: "runtime-fe-end-to-end-tests"
+    depends_on:
+      - "build-chromium-linux-x86_64"
+    build:
+      env:
+        RECORD_REPLAY_METADATA_SOURCE_COMMIT_TITLE: "${BUILDKITE_MESSAGE}"
+        RECORD_REPLAY_METADATA_SOURCE_COMMIT_ID: "${BUILDKITE_COMMIT}"
+        RECORD_REPLAY_METADATA_SOURCE_BRANCH: "${BUILDKITE_BRANCH}"
+        RECORD_REPLAY_METADATA_SOURCE_MERGE_ID: "${BUILDKITE_PULL_REQUEST}"
+        # this is passed as a git URL which the replay plugin expects and parses
+        RUNTIME_REPO: "${BUILDKITE_PULL_REQUEST_REPO}"
 
   # wait for all steps above, but also continue if they fail
   # - wait: ~
