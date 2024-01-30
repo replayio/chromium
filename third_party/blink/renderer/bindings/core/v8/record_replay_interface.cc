@@ -89,15 +89,18 @@ using RemoteObjectIdType = WTF::String;
 extern "C" void V8RecordReplaySetDefaultContext(v8::Isolate* isolate, v8::Local<v8::Context> cx);
 extern "C" void V8RecordReplayFinishRecording();
 extern "C" void V8RecordReplaySetCrashReason(const char* reason);
-extern "C" char* V8RecordReplayReadRuntimeFileContents(const char* aPath, size_t* aLength);
+extern "C" char* V8RecordReplayReadReplayFileContents(const char* aPath, size_t* aLength);
 
 static const char REPLAY_CDT_PAUSE_OBJECT_GROUP[] =
     "REPLAY_CDT_PAUSE_OBJECT_GROUP";
 
+static bool IsGReplayScriptEnabledWhenRecording() {
+  return !recordreplay::FeatureEnabled("replay-only-gReplayScript");
+}
 
 static bool IsGReplayScriptEnabled() {
   return recordreplay::IsReplaying() ||
-         !recordreplay::FeatureEnabled("replay-only-gReplayScript");
+         IsGReplayScriptEnabledWhenRecording();
 }
 
 static LocalFrame* GetLocalFrameRoot(v8::Isolate* isolate) {
@@ -162,24 +165,41 @@ typedef std::unordered_map<int, InspectorData*> ContextGroupIdInspectorMap;
 std::unordered_map<v8::Isolate*, ContextGroupIdInspectorMap*>* gInspectorData = nullptr;
 std::unordered_map<v8::Isolate*, v8_inspector::V8Inspector*>* gV8Inspectors = nullptr;
 
+static std::string readFileContentsRaw(const char* filename, size_t& len) {
+  std::ifstream ifs(filename);
+  std::stringstream ss;
+  ss << ifs.rdbuf();
+  std::string s = ss.str();
+  len = s.length();
+  return s;
+}
+
+static String ReadScriptFile(const char* fname) {
+  // "__RECORD_REPLAY_ARGUMENTS__.log(`DDBG ReplayCommandHandler ############`)";
+  size_t len;
+  bool replayOnly = IsGReplayScriptEnabledWhenRecording();
+  char * toBeDeleted = nullptr;
+  
+  // Important: Treat as UTF-8.
+  String result = String::FromUTF8(
+    replayOnly
+      ? (toBeDeleted = V8RecordReplayReadReplayFileContents(fname, &len))
+      : readFileContentsRaw(fname, len).c_str(),
+    len
+  );
+  recordreplay::Print("DDBG ReadScriptFile %zu", len);
+  
+
+  if (toBeDeleted) {
+    // Free original.
+    delete[] toBeDeleted;
+  }
+  return result;
+}
+
 // static
 String ReadReplayCommandHandlerScript() {
-  size_t len;
-  recordreplay::Print("DDBG ReadReplayCommandHandlerScript A");
-  const char* js =
-    // "__RECORD_REPLAY_ARGUMENTS__.log(`DDBG ReplayCommandHandler ############`)";
-    V8RecordReplayReadRuntimeFileContents("replay/replay_command_handlers.js", &len);
-  recordreplay::Print("DDBG ReadReplayCommandHandlerScript B %zu", len);
-  // len = strlen(js);
-
-  // Important: Treat as UTF-8.
-  String res = String::FromUTF8(js, len);
-
-  // Free original.
-  // delete[] js;
-  recordreplay::Print("DDBG ReadReplayCommandHandlerScript C");
-
-  return res;
+  return ReadScriptFile("replay_command_handlers.js");
 }
 
 
