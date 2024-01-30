@@ -218,23 +218,6 @@ function prepareMacOSBinaries(buildId) {
     value,
   ]);
 
-  if (shouldCodesign) {
-    spawnChecked(
-      fullCodesignPath,
-      [
-        "sign",
-        "--p12-file",
-        p12FilePath,
-        "--p12-password-file",
-        p12PassPath,
-        ...codeSignatureFlags,
-        appPath,
-      ],
-      { stdio: "inherit" }
-    );
-  } else {
-    log("Skipping codesigning of app bundle");
-  }
   spawnChecked(
     "hdiutil",
     [
@@ -252,7 +235,34 @@ function prepareMacOSBinaries(buildId) {
   );
 
   if (shouldCodesign) {
-    fs.cpSync(path.join(process.cwd(), buildIdDmgArchive), signedDmg);
+    spawnChecked(
+      fullCodesignPath,
+      [
+        "sign",
+        "--p12-file",
+        p12FilePath,
+        "--p12-password-file",
+        p12PassPath,
+        ...codeSignatureFlags,
+        appPath,
+      ],
+      { stdio: "inherit" }
+    );
+    spawnChecked(
+      "hdiutil",
+      [
+        "create",
+        path.join(process.cwd(), signedDmg),
+        "-ov",
+        "-volname",
+        "Replay-Chromium",
+        "-fs",
+        "HFS+",
+        "-srcfolder",
+        "Replay-Chromium.app",
+      ],
+      { cwd: outdir, stdio: "inherit" }
+    );
     spawnChecked(
       fullCodesignPath,
       [
@@ -277,7 +287,7 @@ function prepareMacOSBinaries(buildId) {
       { stdio: "inherit" }
     );
   } else {
-    log("Skipping notarization of dmg");
+    log("Skipping signing/notarization of dmg");
   }
 
   const buildIdTarArchive = buildArm
