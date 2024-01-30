@@ -234,6 +234,19 @@ function prepareMacOSBinaries(buildId) {
     { cwd: outdir, stdio: "inherit" }
   );
 
+  const buildIdTarArchive = buildArm
+    ? `${buildId}-arm.tar.xz`
+    : `${buildId}.tar.xz`;
+  const tarArchive = buildArm
+    ? "macos-chromium-arm.tar.xz"
+    : "macos-chromium.tar.xz";
+
+  spawnChecked(
+    "tar",
+    ["cfJ", path.join(process.cwd(), buildIdTarArchive), "Replay-Chromium.app"],
+    { cwd: outdir }
+  );
+
   if (shouldCodesign) {
     spawnChecked(
       fullCodesignPath,
@@ -290,19 +303,6 @@ function prepareMacOSBinaries(buildId) {
     log("Skipping signing/notarization of dmg");
   }
 
-  const buildIdTarArchive = buildArm
-    ? `${buildId}-arm.tar.xz`
-    : `${buildId}.tar.xz`;
-  const tarArchive = buildArm
-    ? "macos-chromium-arm.tar.xz"
-    : "macos-chromium.tar.xz";
-
-  // TODO(dmiller): Maybe try creating this before we sign?
-  spawnChecked(
-    "tar",
-    ["cfJ", path.join(process.cwd(), buildIdTarArchive), "Replay-Chromium.app"],
-    { cwd: outdir }
-  );
   fs.renameSync(
     path.join(outdir, "Replay-Chromium.app"),
     path.join(outdir, "Chromium.app")
