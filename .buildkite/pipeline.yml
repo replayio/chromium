@@ -56,7 +56,7 @@ steps:
       - "be_cmd buck2-build -- buck2 build -c replay.driver_revision=$DRIVER_REVISION --console simple //:chromium"
       - "popd"
     env:
-      DRIVER_REVISION: fc53029d7f06
+      DRIVER_REVISION: 04903a6b1b25
       RBE_service: simpsonite.cluster.engflow.com:443
       RBE_service_no_auth: true
       RBE_use_application_default_credentials: true
