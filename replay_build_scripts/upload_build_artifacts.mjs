@@ -162,6 +162,9 @@ function prepareWindowsBinaries(buildId) {
 function prepareMacOSBinaries(buildId) {
   const buildIdDmgArchive = buildArm ? `${buildId}-arm.dmg` : `${buildId}.dmg`;
   const dmgArchive = buildArm ? "macos-chromium-arm.dmg" : "macos-chromium.dmg";
+  const signedDmg = buildArm
+    ? `${buildId}-arm-signed.dmg`
+    : `${buildId}-signed.dmg`;
   const outdir = buildArm ? "out/Release-ARM" : "out/Release";
   fs.rmSync(path.join(outdir, "Replay-Chromium.app"), {
     recursive: true,
@@ -247,7 +250,9 @@ function prepareMacOSBinaries(buildId) {
     ],
     { cwd: outdir, stdio: "inherit" }
   );
+
   if (shouldCodesign) {
+    fs.cpSync(path.join(process.cwd(), buildIdDmgArchive), signedDmg);
     spawnChecked(
       fullCodesignPath,
       [
@@ -256,7 +261,7 @@ function prepareMacOSBinaries(buildId) {
         p12FilePath,
         "--p12-password-file",
         p12PassPath,
-        buildIdDmgArchive,
+        signedDmg,
       ],
       { stdio: "inherit" }
     );
@@ -267,7 +272,7 @@ function prepareMacOSBinaries(buildId) {
         "--api-key-file",
         appStoreApiKeyPath,
         "--staple",
-        buildIdDmgArchive,
+        signedDmg,
       ],
       { stdio: "inherit" }
     );
@@ -296,7 +301,12 @@ function prepareMacOSBinaries(buildId) {
   fs.cpSync(buildIdDmgArchive, dmgArchive);
   fs.cpSync(buildIdTarArchive, tarArchive);
 
-  return [buildIdDmgArchive, buildIdTarArchive];
+  const buildArtifacts = [buildIdDmgArchive, buildIdTarArchive];
+  if (shouldCodesign) {
+    buildArtifacts.push(signedDmg);
+  }
+
+  return buildArtifacts;
 }
 
 async function main(options) {
