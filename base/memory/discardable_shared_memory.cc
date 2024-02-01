@@ -256,11 +256,13 @@ DiscardableSharedMemory::LockResult DiscardableSharedMemory::Lock(
 
     SharedState old_state(SharedState::UNLOCKED, last_known_usage_);
     SharedState new_state(SharedState::LOCKED, Time());
-    SharedState result(subtle::Acquire_CompareAndSwap(
+    SharedState result(static_cast<AtomicType>(recordreplay::RecordReplayValue(
+      "DiscardableSharedMemory::Lock",
+      static_cast<uintptr_t>(subtle::Acquire_CompareAndSwap(
         &SharedStateFromSharedMemory(shared_memory_mapping_)->value.i,
-        old_state.value.i, new_state.value.i));
-    if (recordreplay::RecordReplayValue("DiscardableSharedMemory::Lock",
-                                        result.value.u != old_state.value.u)) {
+        old_state.value.i, new_state.value.i))
+    )));
+    if (result.value.u != old_state.value.u) {
       // https://linear.app/replay/issue/BAC-2426
       // Update |last_known_usage_| in case the above CAS failed because of
       // an incorrect timestamp.
