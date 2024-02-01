@@ -56,7 +56,7 @@ steps:
       - "be_cmd buck2-build -- buck2 build -c replay.driver_revision=$DRIVER_REVISION --console simple //:chromium"
       - "popd"
     env:
-      DRIVER_REVISION: 04903a6b1b25
+      DRIVER_REVISION: 801ad93c4453
       RBE_service: simpsonite.cluster.engflow.com:443
       RBE_service_no_auth: true
       RBE_use_application_default_credentials: true
@@ -212,6 +212,7 @@ steps:
     depends_on:
       - "build-chromium-linux-x86_64"
     build:
+      branch: dominik/run-3113
       env:
         RECORD_REPLAY_METADATA_SOURCE_COMMIT_TITLE: "${BUILDKITE_MESSAGE}"
         RECORD_REPLAY_METADATA_SOURCE_COMMIT_ID: "${BUILDKITE_COMMIT}"
