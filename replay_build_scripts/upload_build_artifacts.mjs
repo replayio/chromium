@@ -173,51 +173,6 @@ function prepareMacOSBinaries(buildId) {
   const appPath = path.join(outdir, "Replay-Chromium.app");
   fs.renameSync(path.join(outdir, "Chromium.app"), appPath);
 
-  const originalWorkingDir =
-    process.env["REPLAY_ORIGINAL_WORKING_DIR"] || process.cwd();
-  const codesignPath = process.env["REPLAY_APPLE_CODESIGN_PATH"];
-  const fullCodesignPath = path.join(originalWorkingDir, codesignPath);
-  const p12FilePath = path.join(
-    originalWorkingDir,
-    process.env["REPLAY_APPLE_CODESIGN_CERT_PATH"]
-  );
-  const p12PassPath = path.join(
-    originalWorkingDir,
-    process.env["REPLAY_APPLE_CODESIGN_CERT_PASS_PATH"]
-  );
-  const appStoreApiKeyPath = path.join(
-    originalWorkingDir,
-    process.env["REPLAY_APP_STORE_CONNECT_API_KEY_PATH"]
-  );
-  const shouldCodesign = !!codesignPath;
-  if (!shouldCodesign) {
-    console.error("Missing codesigning environment variables", {
-      codesignPath: codesignPath,
-      fullCodesignPath,
-      p12FilePath,
-      p12PassPath,
-      appStoreApiKeyPath,
-    });
-    process.exit(1);
-  }
-
-  const pathsToSign = [
-    "Contents/MacOS/Chromium",
-    "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/app_mode_loader",
-    "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/Chromium Helper (Alerts).app/Contents/MacOS/Chromium Helper (Alerts)",
-    "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/Chromium Helper (GPU).app/Contents/MacOS/Chromium Helper (GPU)",
-    "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/Chromium Helper (Plugin).app/Contents/MacOS/Chromium Helper (Plugin)",
-    "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)",
-    "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/Chromium Helper.app/Contents/MacOS/Chromium Helper",
-    "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/chrome_crashpad_handler",
-  ];
-
-  const codeSignatureValues = pathsToSign.map((path) => `${path}:runtime`);
-  const codeSignatureFlags = codeSignatureValues.flatMap((value) => [
-    "--code-signature-flags",
-    value,
-  ]);
-
   spawnChecked(
     "hdiutil",
     [
@@ -247,7 +202,60 @@ function prepareMacOSBinaries(buildId) {
     { cwd: outdir }
   );
 
+  const shouldCodesign = !!process.env["REPLAY_APPLE_CODESIGN_PATH"];
+
   if (shouldCodesign) {
+    const anyCodesignEnvVarIsNotSet = [
+      "REPLAY_APPLE_CODESIGN_PATH",
+      "REPLAY_APPLE_CODESIGN_CERT_PATH",
+      "REPLAY_APPLE_CODESIGN_CERT_PASS_PATH",
+      "REPLAY_APP_STORE_CONNECT_API_KEY_PATH",
+    ].some((envVar) => !process.env[envVar]);
+    if (anyCodesignEnvVarIsNotSet) {
+      console.error("Missing codesign environment variables", {
+        REPLAY_APPLE_CODESIGN_PATH:
+          process.env["REPLAY_APPLE_CODESIGN_PATH"] || "missing",
+        REPLAY_APPLE_CODESIGN_CERT_PATH:
+          process.env["REPLAY_APPLE_CODESIGN_CERT_PATH"] || "missing",
+        REPLAY_APPLE_CODESIGN_CERT_PASS_PATH:
+          process.env["REPLAY_APPLE_CODESIGN_CERT_PASS_PATH"] || "missing",
+        REPLAY_APP_STORE_CONNECT_API_KEY_PATH:
+          process.env["REPLAY_APP_STORE_CONNECT_API_KEY_PATH"] || "missing",
+      });
+    }
+    const originalWorkingDir =
+      process.env["REPLAY_ORIGINAL_WORKING_DIR"] || process.cwd();
+    const codesignPath = process.env["REPLAY_APPLE_CODESIGN_PATH"];
+    const fullCodesignPath = path.join(originalWorkingDir, codesignPath);
+    const p12FilePath = path.join(
+      originalWorkingDir,
+      process.env["REPLAY_APPLE_CODESIGN_CERT_PATH"]
+    );
+    const p12PassPath = path.join(
+      originalWorkingDir,
+      process.env["REPLAY_APPLE_CODESIGN_CERT_PASS_PATH"]
+    );
+    const appStoreApiKeyPath = path.join(
+      originalWorkingDir,
+      process.env["REPLAY_APP_STORE_CONNECT_API_KEY_PATH"]
+    );
+    const pathsToSign = [
+      "Contents/MacOS/Chromium",
+      "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/app_mode_loader",
+      "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/Chromium Helper (Alerts).app/Contents/MacOS/Chromium Helper (Alerts)",
+      "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/Chromium Helper (GPU).app/Contents/MacOS/Chromium Helper (GPU)",
+      "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/Chromium Helper (Plugin).app/Contents/MacOS/Chromium Helper (Plugin)",
+      "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)",
+      "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/Chromium Helper.app/Contents/MacOS/Chromium Helper",
+      "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/chrome_crashpad_handler",
+    ];
+
+    const codeSignatureValues = pathsToSign.map((path) => `${path}:runtime`);
+    const codeSignatureFlags = codeSignatureValues.flatMap((value) => [
+      "--code-signature-flags",
+      value,
+    ]);
+
     spawnChecked(
       fullCodesignPath,
       [
