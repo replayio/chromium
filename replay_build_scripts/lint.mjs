@@ -148,7 +148,7 @@ async function main() {
   await lintFile(
     path.join(
       ROOT_DIR,
-      "third_party/blink/renderer/bindings/core/v8/replay/replay_command_handlers.js",
+      "replay-assets/replay_command_handlers.js",
     )
   );
 }

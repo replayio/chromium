@@ -25,7 +25,6 @@ blink_core_sources("v8") {
     ":generated",
     "//third_party/blink/renderer/platform",
     "//v8",
-    ":replay_command_handlers_js",
   ]
 }
 
@@ -52,11 +51,6 @@ source_set("testing") {
     "//third_party/blink/renderer/platform",
     "//v8",
   ]
-}
-
-copy("replay_command_handlers_js") {
-  sources = [ "replay/replay_command_handlers.js" ]
-  outputs = [ "$root_out_dir/replay/{{source_file_part}}" ]
 }
 
 group("generated") {

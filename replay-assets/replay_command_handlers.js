@@ -87,8 +87,6 @@ function assert(v, msg = "") {
   }
 }
 
-log("DDBG THISsss WORKS ######################!");
-
 const gSourceMapData = new Map();
 
 /** ###########################################################################

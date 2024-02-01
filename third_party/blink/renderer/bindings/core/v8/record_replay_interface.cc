@@ -165,42 +165,47 @@ typedef std::unordered_map<int, InspectorData*> ContextGroupIdInspectorMap;
 std::unordered_map<v8::Isolate*, ContextGroupIdInspectorMap*>* gInspectorData = nullptr;
 std::unordered_map<v8::Isolate*, v8_inspector::V8Inspector*>* gV8Inspectors = nullptr;
 
-static std::string readFileContentsRaw(const char* filename, size_t& len) {
-  std::ifstream ifs(filename);
+static std::string ReadReplayAssetFileRaw(const char* filename, size_t& len) {
+  const char* scriptDir = getenv("RECORD_REPLAY_ASSETS_DIRECTORY");
+  if (!scriptDir) {
+    recordreplay::Crash("ReadReplayAssetFileRaw failed: RECORD_REPLAY_ASSETS_DIRECTORY not provided");
+  }
+
+  std::string fpath = std::string(scriptDir) + std::string("/") + filename;
+  std::ifstream ifs(fpath);
   std::stringstream ss;
   ss << ifs.rdbuf();
   std::string s = ss.str();
   len = s.length();
+  if (!len) {
+    recordreplay::Crash("ReadReplayAssetFileRaw failed: %s", fpath.c_str());
+  }
   return s;
 }
 
-static String ReadScriptFile(const char* fname) {
+static String ReadReplayAssetFile(const char* fname) {
   // "__RECORD_REPLAY_ARGUMENTS__.log(`DDBG ReplayCommandHandler ############`)";
   size_t len;
-  char* linkerAllocated = nullptr;
-  
+
   // Important: Treat as UTF-8.
   String result = String::FromUTF8(
     IsGReplayScriptEnabledWhenRecording()
       // Recording + Replay.
-      ? readFileContentsRaw(fname, len).c_str()
+      ? ReadReplayAssetFileRaw(fname, len).c_str()
       // Replay only.
-      : (linkerAllocated = V8RecordReplayReadReplayFileContents(fname, &len)),
+      : V8RecordReplayReadReplayFileContents(fname, &len),
     len
   );
-  recordreplay::Print("DDBG ReadScriptFile %zu", len);
-  
-
-  if (linkerAllocated) {
-    // Free original if allocated by driver.
-    delete[] linkerAllocated;
+  if (!len) {
+    recordreplay::Crash("ReadReplayAssetFile failed: %s", fname);
   }
+  recordreplay::Print("DDBG ReadReplayAssetFile %zu", len);
   return result;
 }
 
 // static
 String ReadReplayCommandHandlerScript() {
-  return ReadScriptFile("replay_command_handlers.js");
+  return ReadReplayAssetFile("replay_command_handlers.js");
 }
 
 // Script which defines handlers for recorder commands, and is only loaded while
@@ -5777,10 +5782,13 @@ static void InitializeReplayScripts(v8::Isolate* isolate, LocalFrame* localFrame
 
   if (IsGReplayScriptEnabled()) {
     recordreplay::AutoMarkReplayCode amrc;
-    recordreplay::AutoDisallowEvents disallow("InitializeReplayScripts");
+    String commandHandlerScript = ReadReplayCommandHandlerScript();
+    {
+      recordreplay::AutoDisallowEvents disallow("InitializeReplayScripts");
 
-    // Run `gReplayScript`.
-    RunScript(isolate, context, ReadReplayCommandHandlerScript().Utf8().c_str(), InternalScriptURL);
+      // Run `commandHandlerScript`.
+      RunScript(isolate, context, commandHandlerScript.Utf8().c_str(), InternalScriptURL);
+    }
   }
 }
 

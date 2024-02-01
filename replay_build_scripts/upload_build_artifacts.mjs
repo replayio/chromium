@@ -55,7 +55,8 @@ function uploadToAllBuckets(localPath, s3Path) {
   }
 }
 
-function copyBuildFiles(srcDir, dstDir) {
+function copyBuildFiles(dstDir) {
+  const outDir = path.join("out", "Release");
   function shouldCopyFile(file) {
     const names = [
       // shared
@@ -98,16 +99,19 @@ function copyBuildFiles(srcDir, dstDir) {
     return false;
   }
 
-  for (const file of fs.readdirSync(srcDir)) {
+  for (const file of fs.readdirSync(outDir)) {
     if (shouldCopyFile(file)) {
       fs.cpSync(
-        path.join(srcDir, file),
+        path.join(outDir, file),
         path.join(dstDir, file),
         { recursive: true }
       );
     }
   }
-  fs.cpSync(path.join(srcDir, "locales"), path.join(dstDir, "locales"), {
+  fs.cpSync(path.join(outDir, "locales"), path.join(dstDir, "locales"), {
+    recursive: true,
+  });
+  fs.cpSync(path.join("replay-assets"), path.join(dstDir, "replay-assets"), {
     recursive: true,
   });
 }
@@ -117,10 +121,9 @@ function prepareLinuxBinaries(buildId) {
   const buildArchive = "linux-chromium.tar.xz";
 
   spawnChecked("rm", ["-rf", "replay-chromium"], { stdio: "inherit" });
-
   fs.mkdirSync("replay-chromium");
 
-  copyBuildFiles("out/Release", "replay-chromium");
+  copyBuildFiles("replay-chromium");
 
   // Parallel build (requires xz), unlimited cores, w/ reasonable compression.
   spawnChecked(
@@ -141,7 +144,7 @@ function prepareWindowsBinaries(buildId) {
   fs.rmSync("replay-chromium", { force: true, recursive: true });
   fs.mkdirSync("replay-chromium");
 
-  copyBuildFiles(path.join("out", "Release"), "replay-chromium");
+  copyBuildFiles("replay-chromium");
 
   // On windows we need to add a couple OpenSSL DLLs to the archive so that the driver will run.
   // This needs to be fixed, see https://github.com/RecordReplay/backend/issues/2847
