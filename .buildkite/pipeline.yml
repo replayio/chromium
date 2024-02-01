@@ -53,10 +53,10 @@ steps:
       - "be_cmd update-all-repos -- node replay_build_scripts/update-all-repos.mjs"
       - "pushd ../backend"
       - "be_cmd buck2-kill -- buck2 kill"
-      - "be_cmd buck2-build -- buck2 build -c replay.driver_revision=$DRIVER_REVISION --console simple //:chromium"
+      - "be_cmd buck2-build -- buck2 build -c replay.driver_revision=$$DRIVER_REVISION --console simple //:chromium"
       - "popd"
     env:
-      DRIVER_REVISION: 0bc6ba80796f
+      DRIVER_REVISION: 32e25b1ca2c0
       RBE_service: simpsonite.cluster.engflow.com:443
       RBE_service_no_auth: true
       RBE_use_application_default_credentials: true
