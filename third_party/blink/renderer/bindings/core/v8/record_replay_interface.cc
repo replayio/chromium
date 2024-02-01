@@ -89,7 +89,7 @@ using RemoteObjectIdType = WTF::String;
 extern "C" void V8RecordReplaySetDefaultContext(v8::Isolate* isolate, v8::Local<v8::Context> cx);
 extern "C" void V8RecordReplayFinishRecording();
 extern "C" void V8RecordReplaySetCrashReason(const char* reason);
-extern "C" char* V8RecordReplayReadReplayFileContents(const char* aPath, size_t* aLength);
+extern "C" char* V8RecordReplayReadAssetFileContents(const char* aPath, size_t* aLength);
 
 static const char REPLAY_CDT_PAUSE_OBJECT_GROUP[] =
     "REPLAY_CDT_PAUSE_OBJECT_GROUP";
@@ -193,7 +193,7 @@ static String ReadReplayAssetFile(const char* fname) {
       // Recording + Replay.
       ? ReadReplayAssetFileRaw(fname, len).c_str()
       // Replay only.
-      : V8RecordReplayReadReplayFileContents(fname, &len),
+      : V8RecordReplayReadAssetFileContents(fname, &len),
     len
   );
   if (!len) {
