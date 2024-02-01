@@ -177,22 +177,23 @@ static std::string readFileContentsRaw(const char* filename, size_t& len) {
 static String ReadScriptFile(const char* fname) {
   // "__RECORD_REPLAY_ARGUMENTS__.log(`DDBG ReplayCommandHandler ############`)";
   size_t len;
-  bool replayOnly = IsGReplayScriptEnabledWhenRecording();
-  char * toBeDeleted = nullptr;
+  char* linkerAllocated = nullptr;
   
   // Important: Treat as UTF-8.
   String result = String::FromUTF8(
-    replayOnly
-      ? (toBeDeleted = V8RecordReplayReadReplayFileContents(fname, &len))
-      : readFileContentsRaw(fname, len).c_str(),
+    IsGReplayScriptEnabledWhenRecording()
+      // Recording + Replay.
+      ? readFileContentsRaw(fname, len).c_str()
+      // Replay only.
+      : (linkerAllocated = V8RecordReplayReadReplayFileContents(fname, &len)),
     len
   );
   recordreplay::Print("DDBG ReadScriptFile %zu", len);
   
 
-  if (toBeDeleted) {
-    // Free original.
-    delete[] toBeDeleted;
+  if (linkerAllocated) {
+    // Free original if allocated by driver.
+    delete[] linkerAllocated;
   }
   return result;
 }
