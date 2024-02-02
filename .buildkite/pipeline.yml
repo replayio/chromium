@@ -22,7 +22,7 @@ steps:
       - "be_cmd npm-ci -- npm ci"
       - "be_cmd lint-replay_build_scripts -- npm run lint"
       - "popd"
-      - "be_cmd lint-replay-scripts -- node replay_build_scripts/lint.mjs third_party/blink/renderer/bindings/core/v8/record_replay_interface.cc"
+      - "be_cmd lint-replay-scripts -- node replay_build_scripts/lint.mjs"
     env:
       RECORD_REPLAY_BACKEND_DIR: /home/ubuntu/chromium/backend
     agents:
@@ -53,7 +53,7 @@ steps:
       - "be_cmd update-all-repos -- node replay_build_scripts/update-all-repos.mjs"
       - "pushd ../backend"
       - "be_cmd buck2-kill -- buck2 kill"
-      - "be_cmd buck2-build -- buck2 build -c replay.driver_revision=$DRIVER_REVISION --console simple //:chromium"
+      - "be_cmd buck2-build -- buck2 build -c replay.driver_revision=$$DRIVER_REVISION --console simple //:chromium"
       - "popd"
     env:
       RBE_service: simpsonite.cluster.engflow.com:443
@@ -92,7 +92,7 @@ steps:
       - "be_cmd update-all-repos -- node replay_build_scripts/update-all-repos.mjs"
       - "pushd ../backend"
       - "be_cmd buck2-kill -- buckle kill"
-      - "be_cmd buck2-build -- buckle build -c replay.driver_revision=$DRIVER_REVISION --console simple //:chromium --target-platforms=//:macos-x86_64"
+      - "be_cmd buck2-build -- buckle build -c replay.driver_revision=$$DRIVER_REVISION --console simple //:chromium --target-platforms=//:macos-x86_64"
       - "popd"
     env:
       RBE_service: simpsonite.cluster.engflow.com:443
@@ -131,7 +131,7 @@ steps:
       - "be_cmd update-all-repos -- node replay_build_scripts/update-all-repos.mjs"
       - "pushd ../backend"
       - "be_cmd buck2-kill -- buckle kill"
-      - "be_cmd buck2-build -- buckle build -c replay.driver_revision=$DRIVER_REVISION --console simple //:chromium --target-platforms=//:macos-arm64"
+      - "be_cmd buck2-build -- buckle build -c replay.driver_revision=$$DRIVER_REVISION --console simple //:chromium --target-platforms=//:macos-arm64"
       - "popd"
     env:
       RBE_service: simpsonite.cluster.engflow.com:443
