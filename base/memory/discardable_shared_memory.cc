@@ -381,21 +381,21 @@ void DiscardableSharedMemory::Unlock(size_t offset, size_t length) {
     return;
 
   Time current_time = Now();
-  CHECK(!current_time.is_null());
+  DCHECK(!current_time.is_null());
 
   SharedState old_state(SharedState::LOCKED, Time());
   SharedState new_state(SharedState::UNLOCKED, current_time);
   // Note: timestamp cannot be NULL as that is a unique value used when
   // locked or purged.
-  CHECK(!new_state.GetTimestamp().is_null());
+  DCHECK(!new_state.GetTimestamp().is_null());
   // Timestamp precision should at least be accurate to the second.
-  CHECK_EQ((new_state.GetTimestamp() - Time::UnixEpoch()).InSeconds(),
+  DCHECK_EQ((new_state.GetTimestamp() - Time::UnixEpoch()).InSeconds(),
             (current_time - Time::UnixEpoch()).InSeconds());
   SharedState result(subtle::Release_CompareAndSwap(
       &SharedStateFromSharedMemory(shared_memory_mapping_)->value.i,
       old_state.value.i, new_state.value.i));
 
-  CHECK_EQ(old_state.value.u, result.value.u);
+  DCHECK_EQ(old_state.value.u, result.value.u);
 
   last_known_usage_ = current_time;
 }
