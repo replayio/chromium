@@ -111,6 +111,11 @@ function copyBuildFiles(dstDir) {
   fs.cpSync(path.join(outDir, "locales"), path.join(dstDir, "locales"), {
     recursive: true,
   });
+
+  copyAssets(dstDir);
+}
+
+function copyAssets(dstDir) {
   fs.cpSync(path.join("replay-assets"), path.join(dstDir, "replay-assets"), {
     recursive: true,
   });
@@ -171,14 +176,23 @@ function prepareMacOSBinaries(buildId) {
   const buildIdDmgArchive = buildArm ? `${buildId}-arm.dmg` : `${buildId}.dmg`;
   const dmgArchive = buildArm ? "macos-chromium-arm.dmg" : "macos-chromium.dmg";
   const outdir = buildArm ? "out/Release-ARM" : "out/Release";
+
+  // Copy assets.
+  copyAssets(path.join(outdir, "Chromium.app"));
+
+  // Clean up.
   fs.rmSync(path.join(outdir, "Replay-Chromium.app"), {
     recursive: true,
     force: true,
   });
+
+  // Get ready.
   fs.renameSync(
     path.join(outdir, "Chromium.app"),
     path.join(outdir, "Replay-Chromium.app")
   );
+
+  // Bundle dmg file.
   spawnChecked(
     "hdiutil",
     [
@@ -201,16 +215,20 @@ function prepareMacOSBinaries(buildId) {
     ? "macos-chromium-arm.tar.xz"
     : "macos-chromium.tar.xz";
 
+  // Bundle tar ball.
   spawnChecked(
     "tar",
     ["cfJ", path.join(process.cwd(), buildIdTarArchive), "Replay-Chromium.app"],
     { cwd: outdir }
   );
+
+  // Clean up.
   fs.renameSync(
     path.join(outdir, "Replay-Chromium.app"),
     path.join(outdir, "Chromium.app")
   );
 
+  // Move things into place.
   fs.cpSync(buildIdDmgArchive, dmgArchive);
   fs.cpSync(buildIdTarArchive, tarArchive);
 

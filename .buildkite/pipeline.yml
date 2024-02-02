@@ -56,6 +56,7 @@ steps:
       - "be_cmd buck2-build -- buck2 build -c replay.driver_revision=$$DRIVER_REVISION --console simple //:chromium"
       - "popd"
     env:
+      DRIVER_REVISION: 9f98371d6a42
       RBE_service: simpsonite.cluster.engflow.com:443
       RBE_service_no_auth: true
       RBE_use_application_default_credentials: true
@@ -95,6 +96,7 @@ steps:
       - "be_cmd buck2-build -- buckle build -c replay.driver_revision=$$DRIVER_REVISION --console simple //:chromium --target-platforms=//:macos-x86_64"
       - "popd"
     env:
+      DRIVER_REVISION: 9f98371d6a42
       RBE_service: simpsonite.cluster.engflow.com:443
       RBE_service_no_auth: true
       RBE_use_application_default_credentials: true
@@ -134,6 +136,7 @@ steps:
       - "be_cmd buck2-build -- buckle build -c replay.driver_revision=$$DRIVER_REVISION --console simple //:chromium --target-platforms=//:macos-arm64"
       - "popd"
     env:
+      DRIVER_REVISION: 9f98371d6a42
       RBE_service: simpsonite.cluster.engflow.com:443
       RBE_service_no_auth: true
       RBE_use_application_default_credentials: true
@@ -156,6 +159,7 @@ steps:
       - https://github.com/jazzdan/skip-checkout-buildkite-plugin.git#jazzdan/windows-support: ~
     command: "cd C:\\Users\\Administrator\\chromium\\src && git fetch --all && git reset --hard origin/$BUILDKITE_BRANCH && node replay_build_scripts/update-all-repos.mjs && node buildWindows.mjs &&  node replay_build_scripts/upload_build_artifacts.mjs"
     env:
+      DRIVER_REVISION: 9f98371d6a42
       RBE_service: simpsonite.cluster.engflow.com:443
       RBE_service_no_auth: true
       RBE_use_application_default_credentials: true
