@@ -230,7 +230,7 @@ bool DiscardableSharedMemory::Unmap() {
 
 DiscardableSharedMemory::LockResult DiscardableSharedMemory::Lock(
     size_t offset, size_t length) {
-  recordreplay::Assert("[RUN-1877-2453] DiscardableSharedMemory::Lock Start %d %zu",
+  recordreplay::Assert("[RUN-1877-3208] DiscardableSharedMemory::Lock Start %d %zu",
                        recordreplay::PointerId(this),
                        locked_page_count_);
 
@@ -242,7 +242,7 @@ DiscardableSharedMemory::LockResult DiscardableSharedMemory::Lock(
 
   DCHECK(shared_memory_mapping_.IsValid());
 
-  recordreplay::Assert("[RUN-1877-2453] DiscardableSharedMemory::Lock A %zu %d",
+  recordreplay::Assert("[RUN-1877-3208] DiscardableSharedMemory::Lock A %zu %d",
                        locked_page_count_, !last_known_usage_.is_null());
 
   // We need to successfully acquire the platform independent lock before
@@ -264,14 +264,14 @@ DiscardableSharedMemory::LockResult DiscardableSharedMemory::Lock(
     )));
     if (result.value.u != old_state.value.u) {
       // https://linear.app/replay/issue/BAC-2426
-      recordreplay::Assert("[RUN-1877-2453] DiscardableSharedMemory::Lock B");
       // Update |last_known_usage_| in case the above CAS failed because of
       // an incorrect timestamp.
       last_known_usage_ = result.GetTimestamp();
+      recordreplay::Assert("[RUN-1877-3208] DiscardableSharedMemory::Lock B %d", !last_known_usage_.is_null());
       return FAILED;
     }
 
-    recordreplay::Assert("[RUN-1877-2453] DiscardableSharedMemory::Lock C");
+    recordreplay::Assert("[RUN-1877-3208] DiscardableSharedMemory::Lock C");
   }
 
   // Zero for length means "everything onward".
@@ -372,7 +372,7 @@ void DiscardableSharedMemory::Unlock(size_t offset, size_t length) {
   DCHECK_EQ(locked_pages_.size(), locked_page_count_);
 #endif
 
-  recordreplay::Assert("[RUN-1877-2481] DiscardableSharedMemory::Unlock C %zu",
+  recordreplay::Assert("[RUN-1877-3208] DiscardableSharedMemory::Unlock C %zu",
                        locked_page_count_);
 
   // Early out and avoid releasing the platform independent lock if some pages
@@ -381,21 +381,21 @@ void DiscardableSharedMemory::Unlock(size_t offset, size_t length) {
     return;
 
   Time current_time = Now();
-  DCHECK(!current_time.is_null());
+  CHECK(!current_time.is_null());
 
   SharedState old_state(SharedState::LOCKED, Time());
   SharedState new_state(SharedState::UNLOCKED, current_time);
   // Note: timestamp cannot be NULL as that is a unique value used when
   // locked or purged.
-  DCHECK(!new_state.GetTimestamp().is_null());
+  CHECK(!new_state.GetTimestamp().is_null());
   // Timestamp precision should at least be accurate to the second.
-  DCHECK_EQ((new_state.GetTimestamp() - Time::UnixEpoch()).InSeconds(),
+  CHECK_EQ((new_state.GetTimestamp() - Time::UnixEpoch()).InSeconds(),
             (current_time - Time::UnixEpoch()).InSeconds());
   SharedState result(subtle::Release_CompareAndSwap(
       &SharedStateFromSharedMemory(shared_memory_mapping_)->value.i,
       old_state.value.i, new_state.value.i));
 
-  DCHECK_EQ(old_state.value.u, result.value.u);
+  CHECK_EQ(old_state.value.u, result.value.u);
 
   last_known_usage_ = current_time;
 }
@@ -416,7 +416,7 @@ bool DiscardableSharedMemory::Purge(Time current_time) {
       &SharedStateFromSharedMemory(shared_memory_mapping_)->value.i,
       old_state.value.i, new_state.value.i));
 
-  recordreplay::Assert("[RUN-1877-2453] DiscardableSharedMemory::Purge A %d",
+  recordreplay::Assert("[RUN-1877-3208] DiscardableSharedMemory::Purge A %d",
                        result.value.u != old_state.value.u);
 
   // Update |last_known_usage_| to |current_time| if the memory is locked. This
@@ -428,6 +428,8 @@ bool DiscardableSharedMemory::Purge(Time current_time) {
     last_known_usage_ = result.GetLockState() == SharedState::LOCKED
                             ? current_time
                             : result.GetTimestamp();
+    recordreplay::Assert("[RUN-1877-3208] DiscardableSharedMemory::Purge B %d %d",
+                         result.GetLockState(), last_known_usage_.is_null());
     return false;
   }
 
@@ -497,9 +499,9 @@ bool DiscardableSharedMemory::Purge(Time current_time) {
   ZX_DCHECK(status == ZX_OK, status) << "zx_vmo_op_range(ZX_VMO_OP_DECOMMIT)";
 #endif  // BUILDFLAG(IS_FUCHSIA)
 
-  recordreplay::Assert("[RUN-1877-2481] DiscardableSharedMemory::Purge C");
 
   last_known_usage_ = Time();
+  recordreplay::Assert("[RUN-1877-3208] DiscardableSharedMemory::Purge C %d", last_known_usage_.is_null());
   return true;
 }
 
