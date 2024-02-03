@@ -101,11 +101,9 @@ function copyBuildFiles(dstDir) {
 
   for (const file of fs.readdirSync(outDir)) {
     if (shouldCopyFile(file)) {
-      fs.cpSync(
-        path.join(outDir, file),
-        path.join(dstDir, file),
-        { recursive: true }
-      );
+      fs.cpSync(path.join(outDir, file), path.join(dstDir, file), {
+        recursive: true,
+      });
     }
   }
   fs.cpSync(path.join(outDir, "locales"), path.join(dstDir, "locales"), {
@@ -182,7 +180,7 @@ function prepareMacOSBinaries(buildId) {
   const appPath = path.join(outdir, "Replay-Chromium.app");
 
   // Copy assets.
-  copyAssets(path.join(outdir, "Chromium.app"));
+  copyAssets(path.join(outdir, "Chromium.app/Contents/Resources"));
 
   // Clean up.
   fs.rmSync(appPath, {
@@ -334,10 +332,7 @@ function prepareMacOSBinaries(buildId) {
   }
 
   // Clean up.
-  fs.renameSync(
-    appPath,
-    path.join(outdir, "Chromium.app")
-  );
+  fs.renameSync(appPath, path.join(outdir, "Chromium.app"));
 
   // Move things into place.
   fs.cpSync(buildIdDmgArchive, dmgArchive);
@@ -753,7 +748,7 @@ async function buildSymbolsArchive(
 
 const buildIdExtension =
   process.env["BUILDKITE_BRANCH"] !==
-    process.env["BUILDKITE_PIPELINE_DEFAULT_BRANCH"]
+  process.env["BUILDKITE_PIPELINE_DEFAULT_BRANCH"]
     ? "-dev"
     : process.env["LOCAL_DEVELOPER_BUILD_EXTENSION"] || "";
 const useARM = !!process.env.REPLAY_BUILD_ARM;
