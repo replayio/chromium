@@ -5,7 +5,13 @@ import * as path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT_DIR = path.join(__dirname, "..");
+
+const lintFile =
+  process.argv[2] ||
+  path.join(
+    __dirname,
+    "../third_party/blink/renderer/bindings/core/v8/record_replay_interface.cc",
+  );
 
 const linter = new eslint.Linter();
 const engine = new eslint.ESLint();
@@ -21,18 +27,15 @@ function findMatches(text /*: string*/, regex /*: RegExp*/) {
   return matches;
 }
 
-function extractNamedScriptBlock(
+function getNamedTextBlock(
   text /*: string*/,
   start /*: number*/,
   end /*: number*/,
 ) {
   const lines = text.split("\n");
-  const name = lines[start].split(" ")[2];
-
-  // NOTE: Ignore the start and end lines.
-  const block_lines = lines.slice(start + 1, end);
-  // console.log("block_lines",start, end, block_lines[0], block_lines[1]);
-  return { name, text: "\n".repeat(start + 1) + block_lines.join("\n") };
+  const name = lines[start - 1].split(" ")[2];
+  const block_lines = lines.slice(start, end);
+  return { name, text: "\n".repeat(start) + block_lines.join("\n") };
 }
 
 // this function from eslint (lib/eslint/flat-eslint.js)
@@ -66,7 +69,7 @@ function calculateStatsPerFile(messages) {
   return stat;
 }
 
-async function lintScript(fpath, { name, text } /*: { name: string, text: string }*/) {
+async function lintScript({ name, text } /*: { name: string, text: string }*/) {
   const messages = linter.verify(text, {
     parserOptions: {
       ecmaVersion: 2023,
@@ -109,17 +112,15 @@ async function lintScript(fpath, { name, text } /*: { name: string, text: string
     },
   });
 
-  // console.log("messages", fpath, JSON.stringify(messages, null, 2), text);
-
   let results = [
     {
-      filePath: `${name ? `${name}: ` : ""} ${fpath}`,
+      filePath: `${lintFile} (${name})`,
       messages,
       ...calculateStatsPerFile(messages),
     },
   ];
 
-  const formatter = await engine.loadFormatter("visualstudio");
+  const formatter = await engine.loadFormatter();
   console.log(await formatter.format(results, {}));
 
   let errorCount = 0;
@@ -136,57 +137,28 @@ async function lintScript(fpath, { name, text } /*: { name: string, text: string
 }
 
 async function main() {
-  await lintFile(
-    path.join(
-      ROOT_DIR,
-      "third_party/blink/renderer/bindings/core/v8/record_replay_interface.cc",
-    ),
-    /R""""\(/g,
-    /\)""""/g
+  const replayText = fs.readFileSync(lintFile, "utf8");
+
+  const regex = new RegExp("//js", "g");
+  const endRegex = new RegExp('\\)""""', "g");
+
+  const lineNumbers = findMatches(replayText, regex);
+  const endLineNumbers = findMatches(replayText, endRegex);
+
+  const textBlocks = lineNumbers.map((lineNumber, index) =>
+    getNamedTextBlock(replayText, lineNumber, endLineNumbers[index]),
   );
-
-  await lintFile(
-    path.join(
-      ROOT_DIR,
-      "replay-assets/replay_command_handlers.js",
-    )
-  );
-}
-
-async function lintFile(fpath, startRegex, endRegex) {
-  const replayText = fs.readFileSync(fpath, "utf8");
-
-  let jsTextBlocks;
-  if (startRegex) {
-    const lineNumbers = findMatches(replayText, startRegex);
-    const endLineNumbers = findMatches(replayText, endRegex);
-    if (lineNumbers?.length != endLineNumbers?.length) {
-      throw new Error(`Lint failed in ${fpath} - start and end line numbers don't match: ${lineNumbers?.length} != ${endLineNumbers?.length}`);
-    }
-    // console.log("lintFile", lineNumbers?.length, endLineNumbers?.length);
-    jsTextBlocks = lineNumbers.map((lineNumber, index) =>
-      extractNamedScriptBlock(replayText, lineNumber, endLineNumbers[index]),
-    );
-
-    if (!jsTextBlocks.length) {
-      throw new Error(`Invalid regexes or file path. Could not find js text block in ${fpath}.`);
-    }
-  } else {
-    jsTextBlocks = [{ text: replayText }];
-  }
 
   let errorCount = 0;
   let warningCount = 0;
-  console.group(`Linting ${jsTextBlocks.length} scripts in ${fpath}...:`);
-  for (const jsTextBlock of jsTextBlocks) {
+  for (const block of textBlocks) {
     const { errorCount: blockErrorCount, warningCount: blockWarningCount } =
-      await lintScript(fpath, jsTextBlock);
+      await lintScript(block);
     errorCount += blockErrorCount;
     warningCount += blockWarningCount;
   }
 
   console.log(`Total counts: ${errorCount} errors, ${warningCount} warnings`);
-  console.groupEnd();
   if (errorCount > 0) {
     process.exit(1);
   }

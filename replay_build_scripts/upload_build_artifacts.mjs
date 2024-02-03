@@ -55,15 +55,13 @@ function uploadToAllBuckets(localPath, s3Path) {
   }
 }
 
-function copyBuildFiles(dstDir) {
-  const outDir = path.join("out", "Release");
+function copyBuildFiles(srcDir, dstDir) {
   function shouldCopyFile(file) {
     const names = [
       // shared
       "icudtl.dat",
       "v8_context_snapshot.bin",
       "vk_swiftshader_icd.json",
-      "replay",
 
       // linux
       "chrome",
@@ -99,24 +97,12 @@ function copyBuildFiles(dstDir) {
     return false;
   }
 
-  for (const file of fs.readdirSync(outDir)) {
+  for (const file of fs.readdirSync(srcDir)) {
     if (shouldCopyFile(file)) {
-      fs.cpSync(
-        path.join(outDir, file),
-        path.join(dstDir, file),
-        { recursive: true }
-      );
+      fs.cpSync(path.join(srcDir, file), path.join(dstDir, file));
     }
   }
-  fs.cpSync(path.join(outDir, "locales"), path.join(dstDir, "locales"), {
-    recursive: true,
-  });
-
-  copyAssets(dstDir);
-}
-
-function copyAssets(dstDir) {
-  fs.cpSync(path.join("replay-assets"), path.join(dstDir, "replay-assets"), {
+  fs.cpSync(path.join(srcDir, "locales"), path.join(dstDir, "locales"), {
     recursive: true,
   });
 }
@@ -126,9 +112,10 @@ function prepareLinuxBinaries(buildId) {
   const buildArchive = "linux-chromium.tar.xz";
 
   spawnChecked("rm", ["-rf", "replay-chromium"], { stdio: "inherit" });
+
   fs.mkdirSync("replay-chromium");
 
-  copyBuildFiles("replay-chromium");
+  copyBuildFiles("out/Release", "replay-chromium");
 
   // Parallel build (requires xz), unlimited cores, w/ reasonable compression.
   spawnChecked(
@@ -149,7 +136,7 @@ function prepareWindowsBinaries(buildId) {
   fs.rmSync("replay-chromium", { force: true, recursive: true });
   fs.mkdirSync("replay-chromium");
 
-  copyBuildFiles("replay-chromium");
+  copyBuildFiles(path.join("out", "Release"), "replay-chromium");
 
   // On windows we need to add a couple OpenSSL DLLs to the archive so that the driver will run.
   // This needs to be fixed, see https://github.com/RecordReplay/backend/issues/2847
@@ -179,19 +166,13 @@ function prepareMacOSBinaries(buildId) {
     ? `${buildId}-arm-signed.dmg`
     : `${buildId}-signed.dmg`;
   const outdir = buildArm ? "out/Release-ARM" : "out/Release";
-  const appPath = path.join(outdir, "Replay-Chromium.app");
-
-  // Copy assets.
-  copyAssets(path.join(outdir, "Chromium.app"));
-
-  // Clean up.
-  fs.rmSync(appPath, {
+  fs.rmSync(path.join(outdir, "Replay-Chromium.app"), {
     recursive: true,
     force: true,
   });
+  const appPath = path.join(outdir, "Replay-Chromium.app");
   fs.renameSync(path.join(outdir, "Chromium.app"), appPath);
 
-  // Bundle dmg file.
   spawnChecked(
     "hdiutil",
     [
@@ -215,14 +196,12 @@ function prepareMacOSBinaries(buildId) {
     ? "macos-chromium-arm.tar.xz"
     : "macos-chromium.tar.xz";
 
-  // Bundle tar ball.
   spawnChecked(
     "tar",
     ["cfJ", path.join(process.cwd(), buildIdTarArchive), "Replay-Chromium.app"],
     { cwd: outdir }
   );
 
-  // Mac Code Signing.
   const shouldCodesign = !!process.env["REPLAY_APPLE_CODESIGN_PATH"];
 
   if (shouldCodesign) {
@@ -332,13 +311,11 @@ function prepareMacOSBinaries(buildId) {
     log("Skipping signing/notarization of dmg");
   }
 
-  // Clean up.
   fs.renameSync(
-    appPath,
+    path.join(outdir, "Replay-Chromium.app"),
     path.join(outdir, "Chromium.app")
   );
 
-  // Move things into place.
   fs.cpSync(buildIdDmgArchive, dmgArchive);
   fs.cpSync(buildIdTarArchive, tarArchive);
 
@@ -752,7 +729,7 @@ async function buildSymbolsArchive(
 
 const buildIdExtension =
   process.env["BUILDKITE_BRANCH"] !==
-    process.env["BUILDKITE_PIPELINE_DEFAULT_BRANCH"]
+  process.env["BUILDKITE_PIPELINE_DEFAULT_BRANCH"]
     ? "-dev"
     : process.env["LOCAL_DEVELOPER_BUILD_EXTENSION"] || "";
 const useARM = !!process.env.REPLAY_BUILD_ARM;
