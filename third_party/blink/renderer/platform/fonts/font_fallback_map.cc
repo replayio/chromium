@@ -19,32 +19,10 @@ FontFallbackMap::~FontFallbackMap() {
   InvalidateAll();
 }
 
-static std::atomic<int> g_record_replay_fallback_list_lock = 0;
-static int GetOrCreateFallbackListLock() {
-  if (!g_record_replay_fallback_list_lock) {
-    g_record_replay_fallback_list_lock = (int)recordreplay::CreateOrderedLock("FontFallbackMap");
-  }
-  return g_record_replay_fallback_list_lock;
-}
-
 scoped_refptr<FontFallbackList> FontFallbackMap::Get(
     const FontDescription& font_description) {
   AutoLockForParallelTextShaping guard(lock_);
   auto iter = fallback_list_for_description_.find(font_description);
-  if (!IsMainThread()) {
-    recordreplay::Warning("[RUN-3109] FontFallbackMap::Get on non-main thread");
-  }
-  {
-    // We see a divergence in the following Assert but with no obvious
-    // root cause.
-    // It might be possible that |fallback_list_for_description_| gets modified
-    // by more than one thread but |lock_| is actually a no-op.
-    // → Let's add auto-ordering here just to make sure that we see the
-    // warning before we hit this Assert again. If we see the warning,
-    // we can enforce that |lock_| is actually an ordered lock.
-    // Else, look for other possible sources of non-determinism.
-    recordreplay::AutoOrderedLock lck(GetOrCreateFallbackListLock());
-  }
   recordreplay::Assert("[RUN-3109] FontFallbackMap::Get %d %d %d %u",
                        iter != fallback_list_for_description_.end(),
                        iter != fallback_list_for_description_.end() ? iter->value->RecordReplayId() : -1,
@@ -69,6 +47,8 @@ void FontFallbackMap::Remove(const FontDescription& font_description) {
   DCHECK_NE(iter, fallback_list_for_description_.end());
   DCHECK(iter->value->IsValid());
   DCHECK(iter->value->HasOneRef());
+  recordreplay::Assert("[RUN-3109] FontFallbackMap::Remove %u",
+                       font_description.GetHash());
   fallback_list_for_description_.erase(iter);
 }
 
@@ -78,6 +58,9 @@ void FontFallbackMap::InvalidateAll() {
     return;
   }
   lock_.AssertAcquired();
+
+  recordreplay::Assert("[RUN-3109] FontFallbackMap::InvalidateAll");
+
   for (auto& entry : fallback_list_for_description_)
     entry.value->MarkInvalid();
   fallback_list_for_description_.clear();
@@ -93,6 +76,16 @@ void FontFallbackMap::InvalidateInternal(Predicate predicate) {
       entry.value->MarkInvalid();
     }
   }
+
+  if (recordreplay::IsRecordingOrReplaying() && recordreplay::AreAssertsDisabled()) {
+    std::ostringstream ss;
+    for (auto& entry : invalidated) {
+      ss << entry.GetHash() << ",";
+    }
+    recordreplay::Assert(
+      "[RUN-3109] FontFallbackMap::InvalidateInternal %s", ss.str().c_str());
+  }
+
   fallback_list_for_description_.RemoveAll(invalidated);
 }
 
