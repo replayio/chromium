@@ -54,6 +54,7 @@ void SVGTreeScopeResources::Trace(Visitor* visitor) const {
       SVGTreeScopeResources, &SVGTreeScopeResources::ProcessCustomWeakness>(
       this);
   visitor->Trace(resources_);
+  visitor->Trace(replay_strong_resources_);
   visitor->Trace(tree_scope_);
 }
 
