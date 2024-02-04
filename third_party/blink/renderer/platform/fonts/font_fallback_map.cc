@@ -77,7 +77,7 @@ void FontFallbackMap::InvalidateInternal(Predicate predicate) {
     }
   }
 
-  if (recordreplay::IsRecordingOrReplaying() && recordreplay::AreAssertsDisabled()) {
+  if (recordreplay::IsRecordingOrReplaying() && !recordreplay::AreAssertsDisabled()) {
     std::ostringstream ss;
     for (auto& entry : invalidated) {
       ss << entry.GetHash() << ",";
