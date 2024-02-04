@@ -19,19 +19,37 @@ FontFallbackMap::~FontFallbackMap() {
   InvalidateAll();
 }
 
+static std::atomic<int> g_record_replay_fallback_list_lock = 0;
+static int GetOrCreateFallbackListLock() {
+  if (!g_record_replay_fallback_list_lock) {
+    g_record_replay_fallback_list_lock = (int)recordreplay::CreateOrderedLock("FontFallbackMap");
+  }
+  return g_record_replay_fallback_list_lock;
+}
+
 scoped_refptr<FontFallbackList> FontFallbackMap::Get(
     const FontDescription& font_description) {
   AutoLockForParallelTextShaping guard(lock_);
   auto iter = fallback_list_for_description_.find(font_description);
-  recordreplay::Assert("[RUN-3109] FontFallbackMap::Get %d %u %d",
+  if (!IsMainThread()) {
+    recordreplay::Warning("[RUN-3109] FontFallbackMap::Get on non-main thread");
+  }
+  {
+    // We see a divergence in the following Assert but with no obvious
+    // root cause.
+    // It might be possible that |fallback_list_for_description_| gets modified
+    // by more than one thread but |lock_| is actually a no-op.
+    // → Let's add auto-ordering here just to make sure that we see the
+    // warning before we hit this Assert again. If we see the warning,
+    // we can enforce that |lock_| is actually an ordered lock.
+    // Else, look for other possible sources of non-determinism.
+    recordreplay::AutoOrderedLock lck(GetOrCreateFallbackListLock());
+  }
+  recordreplay::Assert("[RUN-3109] FontFallbackMap::Get %d %d %d %u",
                        iter != fallback_list_for_description_.end(),
-                       font_description.GetHash(),
-#if defined(USE_PARALLEL_TEXT_SHAPING)
-  1
-#else
-  0
-#endif
-                       );
+                       iter != fallback_list_for_description_.end() ? iter->value->RecordReplayId() : -1,
+                       iter != fallback_list_for_description_.end() ? iter->value->HasOneRef() : -1,
+                       font_description.GetHash());
   if (iter != fallback_list_for_description_.end()) {
     DCHECK(iter->value->IsValid());
     return iter->value;
