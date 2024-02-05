@@ -101,11 +101,9 @@ function copyBuildFiles(dstDir) {
 
   for (const file of fs.readdirSync(outDir)) {
     if (shouldCopyFile(file)) {
-      fs.cpSync(
-        path.join(outDir, file),
-        path.join(dstDir, file),
-        { recursive: true }
-      );
+      fs.cpSync(path.join(outDir, file), path.join(dstDir, file), {
+        recursive: true,
+      });
     }
   }
   fs.cpSync(path.join(outDir, "locales"), path.join(dstDir, "locales"), {
@@ -334,10 +332,7 @@ function prepareMacOSBinaries(buildId) {
   }
 
   // Clean up.
-  fs.renameSync(
-    appPath,
-    path.join(outdir, "Chromium.app")
-  );
+  fs.renameSync(appPath, path.join(outdir, "Chromium.app"));
 
   // Move things into place.
   fs.cpSync(buildIdDmgArchive, dmgArchive);
@@ -376,34 +371,34 @@ async function main(options) {
 
   log(`Pushing Artifacts to S3`);
 
-  const downloadUris = uploadArchives(buildArchives);
+  // const downloadUris = uploadArchives(buildArchives);
 
-  uploadToAllBuckets(symbolsArchiveFile, `symbols/${symbolsArchiveFile}`);
-  downloadUris.push(`s3://${S3Bucket}/symbols/${symbolsArchiveFile}`);
+  // // uploadToAllBuckets(symbolsArchiveFile, `symbols/${symbolsArchiveFile}`);
+  // downloadUris.push(`s3://${S3Bucket}/symbols/${symbolsArchiveFile}`);
 
-  for (const buildArchive of buildArchives) {
-    log(`BuildUploaded https://static.replay.io/downloads/${buildArchive}`);
-  }
+  // for (const buildArchive of buildArchives) {
+  //   log(`BuildUploaded https://static.replay.io/downloads/${buildArchive}`);
+  // }
 
-  // Perform all buildkite-specific stuff
-  if (process.env["BUILDKITE"]) {
-    const pakSizesFile = recordPAKSizes(options);
-    const entriesFile = recordGClientEntries(options);
+  // // Perform all buildkite-specific stuff
+  // if (process.env["BUILDKITE"]) {
+  //   const pakSizesFile = recordPAKSizes(options);
+  //   const entriesFile = recordGClientEntries(options);
 
-    buildkiteStuff(
-      downloadUris,
-      platform,
-      buildId,
-      buildArm ? "arm64" : "x86_64",
-      symbolsArchiveFile,
-      pakSizesFile,
-      entriesFile
-    );
+  //   buildkiteStuff(
+  //     downloadUris,
+  //     platform,
+  //     buildId,
+  //     buildArm ? "arm64" : "x86_64",
+  //     symbolsArchiveFile,
+  //     pakSizesFile,
+  //     entriesFile
+  //   );
 
-    fs.unlinkSync(pakSizesFile);
-    fs.unlinkSync(entriesFile);
-  }
-  fs.unlinkSync(symbolsArchiveFile);
+  //   fs.unlinkSync(pakSizesFile);
+  //   fs.unlinkSync(entriesFile);
+  // }
+  // fs.unlinkSync(symbolsArchiveFile);
 }
 
 function buildkiteStuff(
@@ -753,7 +748,7 @@ async function buildSymbolsArchive(
 
 const buildIdExtension =
   process.env["BUILDKITE_BRANCH"] !==
-    process.env["BUILDKITE_PIPELINE_DEFAULT_BRANCH"]
+  process.env["BUILDKITE_PIPELINE_DEFAULT_BRANCH"]
     ? "-dev"
     : process.env["LOCAL_DEVELOPER_BUILD_EXTENSION"] || "";
 const useARM = !!process.env.REPLAY_BUILD_ARM;
