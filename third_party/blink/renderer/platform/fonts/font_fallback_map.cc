@@ -18,7 +18,7 @@ FontFallbackMap::~FontFallbackMap() {
   AutoLockForParallelTextShaping guard(lock_);
   InvalidateAll();
 }
-
+THISWONTCOMPILE
 scoped_refptr<FontFallbackList> FontFallbackMap::Get(
     const FontDescription& font_description) {
   AutoLockForParallelTextShaping guard(lock_);
