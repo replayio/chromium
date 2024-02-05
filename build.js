@@ -26,13 +26,13 @@ const outdir = buildArm ? "out/Release-ARM" : "out/Release";
 
 // Ensure that the git repository is "trusted", otherwise we'll get errors like:
 // fatal: unsafe repository ('/chromium/src' is owned by someone else)
-spawnChecked(
-  "git",
-  ["config", "--global", "--add", "safe.directory", __dirname],
-  {
-    stdio: "inherit",
-  }
-);
+// spawnChecked(
+//   "git",
+//   ["config", "--global", "--add", "safe.directory", __dirname],
+//   {
+//     stdio: "inherit",
+//   }
+// );
 
 if (currentPlatform() == "macOS") {
   // Make sure the main executable gets rebuilt with the new build ID.
