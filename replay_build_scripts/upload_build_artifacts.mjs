@@ -55,13 +55,15 @@ function uploadToAllBuckets(localPath, s3Path) {
   }
 }
 
-function copyBuildFiles(srcDir, dstDir) {
+function copyBuildFiles(dstDir) {
+  const outDir = path.join("out", "Release");
   function shouldCopyFile(file) {
     const names = [
       // shared
       "icudtl.dat",
       "v8_context_snapshot.bin",
       "vk_swiftshader_icd.json",
+      "replay",
 
       // linux
       "chrome",
@@ -97,12 +99,24 @@ function copyBuildFiles(srcDir, dstDir) {
     return false;
   }
 
-  for (const file of fs.readdirSync(srcDir)) {
+  for (const file of fs.readdirSync(outDir)) {
     if (shouldCopyFile(file)) {
-      fs.cpSync(path.join(srcDir, file), path.join(dstDir, file));
+      fs.cpSync(
+        path.join(outDir, file),
+        path.join(dstDir, file),
+        { recursive: true }
+      );
     }
   }
-  fs.cpSync(path.join(srcDir, "locales"), path.join(dstDir, "locales"), {
+  fs.cpSync(path.join(outDir, "locales"), path.join(dstDir, "locales"), {
+    recursive: true,
+  });
+
+  copyAssets(dstDir);
+}
+
+function copyAssets(dstDir) {
+  fs.cpSync(path.join("replay-assets"), path.join(dstDir, "replay-assets"), {
     recursive: true,
   });
 }
@@ -112,10 +126,9 @@ function prepareLinuxBinaries(buildId) {
   const buildArchive = "linux-chromium.tar.xz";
 
   spawnChecked("rm", ["-rf", "replay-chromium"], { stdio: "inherit" });
-
   fs.mkdirSync("replay-chromium");
 
-  copyBuildFiles("out/Release", "replay-chromium");
+  copyBuildFiles("replay-chromium");
 
   // Parallel build (requires xz), unlimited cores, w/ reasonable compression.
   spawnChecked(
@@ -136,7 +149,7 @@ function prepareWindowsBinaries(buildId) {
   fs.rmSync("replay-chromium", { force: true, recursive: true });
   fs.mkdirSync("replay-chromium");
 
-  copyBuildFiles(path.join("out", "Release"), "replay-chromium");
+  copyBuildFiles("replay-chromium");
 
   // On windows we need to add a couple OpenSSL DLLs to the archive so that the driver will run.
   // This needs to be fixed, see https://github.com/RecordReplay/backend/issues/2847
@@ -162,15 +175,23 @@ function prepareWindowsBinaries(buildId) {
 function prepareMacOSBinaries(buildId) {
   const buildIdDmgArchive = buildArm ? `${buildId}-arm.dmg` : `${buildId}.dmg`;
   const dmgArchive = buildArm ? "macos-chromium-arm.dmg" : "macos-chromium.dmg";
+  const signedDmg = buildArm
+    ? `${buildId}-arm-signed.dmg`
+    : `${buildId}-signed.dmg`;
   const outdir = buildArm ? "out/Release-ARM" : "out/Release";
-  fs.rmSync(path.join(outdir, "Replay-Chromium.app"), {
+  const appPath = path.join(outdir, "Replay-Chromium.app");
+
+  // Copy assets.
+  copyAssets(path.join(outdir, "Chromium.app"));
+
+  // Clean up.
+  fs.rmSync(appPath, {
     recursive: true,
     force: true,
   });
-  fs.renameSync(
-    path.join(outdir, "Chromium.app"),
-    path.join(outdir, "Replay-Chromium.app")
-  );
+  fs.renameSync(path.join(outdir, "Chromium.app"), appPath);
+
+  // Bundle dmg file.
   spawnChecked(
     "hdiutil",
     [
@@ -186,6 +207,7 @@ function prepareMacOSBinaries(buildId) {
     ],
     { cwd: outdir, stdio: "inherit" }
   );
+
   const buildIdTarArchive = buildArm
     ? `${buildId}-arm.tar.xz`
     : `${buildId}.tar.xz`;
@@ -193,20 +215,140 @@ function prepareMacOSBinaries(buildId) {
     ? "macos-chromium-arm.tar.xz"
     : "macos-chromium.tar.xz";
 
+  // Bundle tar ball.
   spawnChecked(
     "tar",
     ["cfJ", path.join(process.cwd(), buildIdTarArchive), "Replay-Chromium.app"],
     { cwd: outdir }
   );
+
+  // Mac Code Signing.
+  // TODO: https://linear.app/replay/issue/RUN-3225/remove-code-signing-temporarily
+  const shouldCodesign = false; // !!process.env["REPLAY_APPLE_CODESIGN_PATH"];
+
+  if (shouldCodesign) {
+    const anyCodesignEnvVarIsNotSet = [
+      "REPLAY_APPLE_CODESIGN_PATH",
+      "REPLAY_APPLE_CODESIGN_CERT_PATH",
+      "REPLAY_APPLE_CODESIGN_CERT_PASS_PATH",
+      "REPLAY_APP_STORE_CONNECT_API_KEY_PATH",
+    ].some((envVar) => !process.env[envVar]);
+    if (anyCodesignEnvVarIsNotSet) {
+      console.error("Missing codesign environment variables", {
+        REPLAY_APPLE_CODESIGN_PATH:
+          process.env["REPLAY_APPLE_CODESIGN_PATH"] || "missing",
+        REPLAY_APPLE_CODESIGN_CERT_PATH:
+          process.env["REPLAY_APPLE_CODESIGN_CERT_PATH"] || "missing",
+        REPLAY_APPLE_CODESIGN_CERT_PASS_PATH:
+          process.env["REPLAY_APPLE_CODESIGN_CERT_PASS_PATH"] || "missing",
+        REPLAY_APP_STORE_CONNECT_API_KEY_PATH:
+          process.env["REPLAY_APP_STORE_CONNECT_API_KEY_PATH"] || "missing",
+      });
+    }
+    const originalWorkingDir =
+      process.env["REPLAY_ORIGINAL_WORKING_DIR"] || process.cwd();
+    const codesignPath = process.env["REPLAY_APPLE_CODESIGN_PATH"];
+    const fullCodesignPath = path.join(originalWorkingDir, codesignPath);
+    const p12FilePath = path.join(
+      originalWorkingDir,
+      process.env["REPLAY_APPLE_CODESIGN_CERT_PATH"]
+    );
+    const p12PassPath = path.join(
+      originalWorkingDir,
+      process.env["REPLAY_APPLE_CODESIGN_CERT_PASS_PATH"]
+    );
+    const appStoreApiKeyPath = path.join(
+      originalWorkingDir,
+      process.env["REPLAY_APP_STORE_CONNECT_API_KEY_PATH"]
+    );
+    const pathsToSign = [
+      "Contents/MacOS/Chromium",
+      "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/app_mode_loader",
+      "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/Chromium Helper (Alerts).app/Contents/MacOS/Chromium Helper (Alerts)",
+      "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/Chromium Helper (GPU).app/Contents/MacOS/Chromium Helper (GPU)",
+      "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/Chromium Helper (Plugin).app/Contents/MacOS/Chromium Helper (Plugin)",
+      "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)",
+      "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/Chromium Helper.app/Contents/MacOS/Chromium Helper",
+      "Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/chrome_crashpad_handler",
+    ];
+
+    const codeSignatureValues = pathsToSign.map((path) => `${path}:runtime`);
+    const codeSignatureFlags = codeSignatureValues.flatMap((value) => [
+      "--code-signature-flags",
+      value,
+    ]);
+
+    spawnChecked(
+      fullCodesignPath,
+      [
+        "sign",
+        "--p12-file",
+        p12FilePath,
+        "--p12-password-file",
+        p12PassPath,
+        ...codeSignatureFlags,
+        appPath,
+      ],
+      { stdio: "inherit" }
+    );
+    spawnChecked(
+      "hdiutil",
+      [
+        "create",
+        path.join(process.cwd(), signedDmg),
+        "-ov",
+        "-volname",
+        "Replay-Chromium",
+        "-fs",
+        "HFS+",
+        "-srcfolder",
+        "Replay-Chromium.app",
+      ],
+      { cwd: outdir, stdio: "inherit" }
+    );
+    spawnChecked(
+      fullCodesignPath,
+      [
+        "sign",
+        "--p12-file",
+        p12FilePath,
+        "--p12-password-file",
+        p12PassPath,
+        signedDmg,
+      ],
+      { stdio: "inherit" }
+    );
+    spawnChecked(
+      fullCodesignPath,
+      [
+        "notary-submit",
+        "--api-key-file",
+        appStoreApiKeyPath,
+        "--staple",
+        signedDmg,
+      ],
+      { stdio: "inherit" }
+    );
+  } else {
+    log("Skipping signing/notarization of dmg");
+  }
+
+  // Clean up.
   fs.renameSync(
-    path.join(outdir, "Replay-Chromium.app"),
+    appPath,
     path.join(outdir, "Chromium.app")
   );
 
+  // Move things into place.
   fs.cpSync(buildIdDmgArchive, dmgArchive);
   fs.cpSync(buildIdTarArchive, tarArchive);
 
-  return [buildIdDmgArchive, buildIdTarArchive];
+  const buildArtifacts = [buildIdDmgArchive, buildIdTarArchive];
+  if (shouldCodesign) {
+    buildArtifacts.push(signedDmg);
+  }
+
+  return buildArtifacts;
 }
 
 async function main(options) {
@@ -611,7 +753,7 @@ async function buildSymbolsArchive(
 
 const buildIdExtension =
   process.env["BUILDKITE_BRANCH"] !==
-  process.env["BUILDKITE_PIPELINE_DEFAULT_BRANCH"]
+    process.env["BUILDKITE_PIPELINE_DEFAULT_BRANCH"]
     ? "-dev"
     : process.env["LOCAL_DEVELOPER_BUILD_EXTENSION"] || "";
 const useARM = !!process.env.REPLAY_BUILD_ARM;
