@@ -155,7 +155,7 @@ const autoninja =
   currentPlatform() == "windows" ? "autoninja.bat" : "autoninja";
 // make the windows build verbose so we can see what's going on
 const platformAutoNinjaArgs = currentPlatform() == "windows" ? ["-v"] : [];
-spawnChecked(autoninja, ["-v", ...platformAutoNinjaArgs, "-C", outdir, "chrome"], {
+spawnChecked(autoninja, [...platformAutoNinjaArgs, "-C", outdir, "chrome"], {
   stdio: "inherit",
 });
 
