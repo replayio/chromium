@@ -29,6 +29,8 @@ const {
   fromJsCollectEventListeners,
   fromJsDomPerformSearch,
 
+  loadPreambleScript,
+
   // network
   getCurrentNetworkRequestEvent,
   getCurrentNetworkStreamData,
@@ -272,6 +274,7 @@ const CommandCallbacks = {
   "Target.getCurrentNetworkRequestEvent": Target_getCurrentNetworkRequestEvent,
   "Target.getCurrentNetworkStreamData": Target_getCurrentNetworkStreamData,
   "Target.topFrameLocation": Target_topFrameLocation,
+  "Target.loadPreamble": Target_loadPreamble,
   "Pause.evaluateInFrame": Pause_evaluateInFrame,
   "Pause.evaluateInGlobal": Pause_evaluateInGlobal,
   "Pause.getAllFrames": Pause_getAllFrames,
@@ -449,6 +452,10 @@ function Target_getCurrentNetworkStreamData(params) {
   } else {
     warning(`JS Target.getCurrentNetworkStreamData returned no data.`);
   }
+}
+
+function Target_loadPreamble(script) {
+  loadPreambleScript(script);
 }
 
 function Target_topFrameLocation() {
@@ -3043,6 +3050,10 @@ function replayEval(fn) {
   }
 }
 
+function registerGlobal(name, val) {
+  window.top.__RECORD_REPLAY_GLOBALS__[name] = val;
+}
+
 /** ###########################################################################
  * Export JS API methods via `__RECORD_REPLAY__`.
  * This is officially available for scripts in `eval*` commands to use.
@@ -3059,6 +3070,7 @@ Object.assign(__RECORD_REPLAY__, {
   warning,
   getFrameArgumentsArray,
   getCurrentEvaluateFrame,
+  registerGlobal,
   replayEval
 });
 

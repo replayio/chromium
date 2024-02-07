@@ -17,6 +17,7 @@
 #include "base/record_replay.h"
 #include "content/public/renderer/render_thread.h"
 #include "content/public/renderer/v8_value_converter.h"
+#include "third_party/blink/renderer/bindings/core/v8/local_window_proxy.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_document.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_node.h"
@@ -823,6 +824,10 @@ const char* gOnNewWindowScript = R""""(
   //      __RECORD_REPLAY__?
   window.__RECORD_REPLAY__ = window.top.__RECORD_REPLAY__;
   window.__RECORD_REPLAY_ARGUMENTS__ = window.top.__RECORD_REPLAY_ARGUMENTS__;
+
+  for (g of window.top.__RECORD_REPLAY_GLOBALS__) {
+    window[g] = window.top[g];
+  }
 })()
 )"""";
 
@@ -2350,6 +2355,46 @@ static void fromJsEndReplayCode(
   recordreplay::ExitReplayCode();
 }
 
+// Connects replay globals that must be accessible from all contexts; MUST be called
+// with AutoMarkReplayCode.
+static void ConnectPreambleGlobals(LocalFrame* frame, v8::Isolate *isolate) {
+  for (Frame* child = frame->Tree().FirstChild(); child != nullptr; child = child->Tree().NextSibling()) {
+    auto* child_local_frame = DynamicTo<LocalFrame>(child);
+    if (child_local_frame != nullptr) {
+      v8::Local<v8::Context> frameContext = child_local_frame->WindowProxy(DOMWrapperWorld::MainWorld())->ContextIfInitialized();
+      if (!frameContext.IsEmpty()) {
+        RunScript(isolate, frameContext, gOnNewWindowScript,
+              "record-replay-OnNewWindow");
+      }
+      ConnectPreambleGlobals(child_local_frame, isolate);
+    }
+  }
+}
+
+
+// Executes the provided script in the root context, and then propagates all registered globals
+// throughout all descendent contexts.
+static void loadPreambleScript(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsString() &&
+        "[RuntimeError] must be called with a string");
+
+  v8::String::Utf8Value script(args.GetIsolate(), args[0]);
+
+  recordreplay::AutoMarkReplayCode amrc;
+
+  LocalFrame* rootFrame = GetLocalFrameRoot(args.GetIsolate());
+  v8::Local<v8::Context> rootContext = rootFrame->WindowProxy(DOMWrapperWorld::MainWorld())->ContextIfInitialized();
+
+  if (!rootContext.IsEmpty()) {
+    RunScript(args.GetIsolate(), rootContext, *script, "record-replay-preambleScript");
+
+    ConnectPreambleGlobals(rootFrame, args.GetIsolate());
+  } else {
+    recordreplay::Warning("loadPreambleScript: no root context found.  Skipping.");
+  }
+}
+
 /** ###########################################################################
  * misc
  * ##########################################################################*/
@@ -2502,6 +2547,10 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
   DefineProperty(isolate, context->Global(), "__RECORD_REPLAY_ARGUMENTS__",
                  args);
 
+  v8::Local<v8::Object> globals = v8::Object::New(isolate);
+  DefineProperty(isolate, context->Global(), "__RECORD_REPLAY_GLOBALS__",
+                 globals);
+
   DefineProperty(isolate, args, "REPLAY_CDT_PAUSE_OBJECT_GROUP",
                  ToV8String(isolate, REPLAY_CDT_PAUSE_OBJECT_GROUP));
 
@@ -2570,6 +2619,8 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
                       fromJsBeginReplayCode);
   SetFunctionProperty(isolate, args, "endReplayCode",
                       fromJsEndReplayCode);
+  SetFunctionProperty(isolate, args, "loadPreambleScript",
+                      loadPreambleScript);
 
   // unsorted Replay stuff
   SetFunctionProperty(
