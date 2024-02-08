@@ -92,6 +92,8 @@ extern "C" void V8RecordReplayFinishRecording();
 extern "C" void V8RecordReplaySetCrashReason(const char* reason);
 extern "C" char* V8RecordReplayReadAssetFileContents(const char* aPath, size_t* aLength);
 
+static void RunScript(v8::Isolate* isolate, v8::Local<v8::Context> context, const char* source_raw, const char* filename);
+
 static const char REPLAY_CDT_PAUSE_OBJECT_GROUP[] =
     "REPLAY_CDT_PAUSE_OBJECT_GROUP";
 
@@ -825,7 +827,7 @@ const char* gOnNewWindowScript = R""""(
   window.__RECORD_REPLAY__ = window.top.__RECORD_REPLAY__;
   window.__RECORD_REPLAY_ARGUMENTS__ = window.top.__RECORD_REPLAY_ARGUMENTS__;
 
-  for (g of window.top.__RECORD_REPLAY_GLOBALS__) {
+  for (const g of window.top.__RECORD_REPLAY_GLOBALS__) {
     window[g] = window.top[g];
   }
 })()
@@ -2547,7 +2549,7 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
   DefineProperty(isolate, context->Global(), "__RECORD_REPLAY_ARGUMENTS__",
                  args);
 
-  v8::Local<v8::Object> globals = v8::Object::New(isolate);
+  v8::Local<v8::Object> globals = v8::Map::New(isolate);
   DefineProperty(isolate, context->Global(), "__RECORD_REPLAY_GLOBALS__",
                  globals);
 
