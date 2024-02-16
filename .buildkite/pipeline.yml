@@ -73,7 +73,7 @@ steps:
     depends_on:
       - "build-chromium-linux-x86_64"
     build:
-      branch: cklochek/run-3223-re-enable-breakpoints-06-object_preview-04-stepping
+      branch: cklochek/logpoint_weirdness
       env:
         RECORD_REPLAY_METADATA_SOURCE_COMMIT_TITLE: "${BUILDKITE_MESSAGE}"
         RECORD_REPLAY_METADATA_SOURCE_COMMIT_ID: "${BUILDKITE_COMMIT}"
