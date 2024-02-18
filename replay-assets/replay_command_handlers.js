@@ -2351,6 +2351,7 @@ function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
     addCdpRule(cdpRule.rule);
   }
 
+  // [RUN-2999] Our devtools client queries `inheritedEntries` separately.
   // for (const cdpInheritedEntry of inheritedEntries) {
   //   // see https://chromedevtools.github.io/devtools-protocol/tot/CSS/#type-InheritedStyleEntry
   //   const {
