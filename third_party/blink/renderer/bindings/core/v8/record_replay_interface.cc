@@ -357,7 +357,7 @@ function collectUnresolvedSourceMapResources(mapText, mapURL) {
   let sourceOffset = 0;
 
   function logError(msg) {
-    warning(`[RuntimeError][sourcemaps] ${msg} (${mapURL}:${sourceOffset})`);
+    log(`[RuntimeError][sourcemaps] ${msg} (${mapURL}:${sourceOffset})`);
   }
 
   try {
