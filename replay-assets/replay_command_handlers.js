@@ -2290,6 +2290,7 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
   const rulePreview = {
     className: 'CSSRule',
     preview: {
+      overflow: true,
       rule: {
         type,
         cssText: ruleCssText,
@@ -2350,18 +2351,18 @@ function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
     addCdpRule(cdpRule.rule);
   }
 
-  // for (const cdpInheritedEntry of inheritedEntries) {
-  //   // see https://chromedevtools.github.io/devtools-protocol/tot/CSS/#type-InheritedStyleEntry
-  //   const {
-  //     // inlineStyle, // inherited inline style
-  //     matchedCSSRules  // inherited non-inline rules
-  //   } = cdpInheritedEntry;
+  for (const cdpInheritedEntry of inheritedEntries) {
+    // see https://chromedevtools.github.io/devtools-protocol/tot/CSS/#type-InheritedStyleEntry
+    const {
+      // inlineStyle, // inherited inline style
+      matchedCSSRules  // inherited non-inline rules
+    } = cdpInheritedEntry;
 
-  //   for (const match of matchedCSSRules) {
-  //     // match.matchingSelectors
-  //     addCdpRule(match.rule);
-  //   }
-  // }
+    for (const match of matchedCSSRules) {
+      // match.matchingSelectors
+      addCdpRule(match.rule);
+    }
+  }
 
   for (const pseudoMatch of pseudoIdMatches) {
     const {
