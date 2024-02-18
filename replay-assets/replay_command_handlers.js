@@ -2290,6 +2290,7 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
   const rulePreview = {
     className: 'CSSRule',
     preview: {
+      overflow: true,
       rule: {
         type,
         cssText: ruleCssText,
@@ -2333,7 +2334,7 @@ function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
 
   const {
     matchedRules = EmptyArray,
-    inheritedEntries = EmptyArray,
+    // inheritedEntries = EmptyArray,
     pseudoIdMatches = EmptyArray
   } = cdpMatchedStyles;
 
