@@ -1309,20 +1309,28 @@ ProtocolObjectPreview.prototype = {
   },
 
   /**
-   * Limit the amount of props we get back.
+   * Limit the amount of props we get back from CDP Runtime.getProperties.
    * @see https://linear.app/replay/issue/RUN-1315/very-bad-command-performance-getallframes-wandb#comment-f8f54931
    */
   get pageSize() {
-    // The +5 is a heuristic to force overflow.
-    // We theoretically only want to add +1 but we might end up not getting
-    // enough props to determine overflow, so +5 is slightly safer.
-    // If +5 is not enough, we will loop and do a lot more work.
     if (this.pageSizeForTesting) {
       return this.pageSizeForTesting;
     }
     if (this.unlimitedItems) {
       return 0;
     }
+
+    // [RUN-3149] special-case for JS objects.  request a large enough number
+    // that we're likely to get all props, so they can then be filtered down
+    // to the requested number and they should be in order.
+    if (this.cdpObj.className === "Object") {
+      return 100;
+    }
+
+    // The +5 is a heuristic to force overflow.
+    // We theoretically only want to add +1 but we might end up not getting
+    // enough props to determine overflow, so +5 is slightly safer.
+    // If +5 is not enough, we will loop and do a lot more work.
     return this.nRequestedItems + 5;
   },
 
