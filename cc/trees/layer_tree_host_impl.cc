@@ -2359,6 +2359,8 @@ viz::CompositorFrameMetadata LayerTreeHostImpl::MakeCompositorFrameMetadata() {
   return metadata;
 }
 
+static bool gDebugLoggedMakeRenderFrameMetadata = false;
+
 RenderFrameMetadata LayerTreeHostImpl::MakeRenderFrameMetadata(
     FrameData* frame) {
   RenderFrameMetadata metadata;
@@ -2375,6 +2377,16 @@ RenderFrameMetadata LayerTreeHostImpl::MakeRenderFrameMetadata(
   metadata.page_scale_factor = active_tree_->current_page_scale_factor();
   metadata.external_page_scale_factor =
       active_tree_->external_page_scale_factor();
+
+  if (!gDebugLoggedMakeRenderFrameMetadata) {
+    gDebugLoggedMakeRenderFrameMetadata = true;
+    recordreplay::Print("[RUN-2989-3357] LayerTreeHostImpl::MakeRenderFrameMetadata %dx%d dsf=%f psf=%f epsf=%f",
+      metadata.viewport_size_in_pixels.width(),
+      metadata.viewport_size_in_pixels.height(),
+      metadata.device_scale_factor,
+      metadata.page_scale_factor,
+      metadata.external_page_scale_factor);
+  }
 
   metadata.top_controls_height =
       browser_controls_offset_manager_->TopControlsHeight();
