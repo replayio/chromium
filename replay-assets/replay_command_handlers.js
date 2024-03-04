@@ -1725,12 +1725,91 @@ function getInternalFunctionLocationProp(cdpProperties) {
   return getInternalProp(cdpProperties, '[[FunctionLocation]]');
 }
 
+/**
+ * String utility for function parameter parsing.
+ */
+function hasSubstringAt(haystack, needle, i) {
+  return haystack.substring(1 + i - needle.length, 1 + i) === needle;
+}
+
+/**
+ * [RUN-3146] Extract parameter names from the description.
+ * @param {string} s 
+ * @return {string[]}
+ */
+function extractFunctionParameterNames(s) {
+  /**
+   * Function head declaration patterns:
+   * P1. modifiers function f(PARAMS) Body
+   * P2. modifiers f(PARAMS) Body  // ObjectMethod, ClassMethod
+   * P3. modifiers (PARAMS) => ExpressionOrBody
+   * P4. modifiers PARAM => ExpressionOrBody
+   */
+
+  // All patterns fall into two buckets:
+  // PARENS: Get the thing within the first opening pair of parentheses.
+  // SINGLEARROW: Get the single param before =>.
+
+  // Go: Find A or B (whatever comes first), while ignoring comments.
+  /**
+   * The function header without comments.
+   */
+  let header = "";
+  /**
+   * When in a comment, this is set to the counterpart that we are looking for.
+   * @type {string | null}
+   */
+  let expectedCommentEnd = null;
+  let parensStart = -1;
+  for (let i = 0; i < s.length; ++i) {
+    const c = s[i];
+    if (expectedCommentEnd) {
+      // In a comment.
+      if (hasSubstringAt(s, expectedCommentEnd, i)) {
+        // Comment End: Start new segment from here.
+        expectedCommentEnd = null;
+      } 
+    }
+    else {
+      // Not in a comment.
+      if (hasSubstringAt(s, "//", i) || hasSubstringAt(s, "/*", i)) {
+        // Comment Start.
+        if (c === "*") {
+          expectedCommentEnd = "*/";
+        } else {
+          expectedCommentEnd = "\n";
+        }
+        // Remove "/" from header:
+        header = header.slice(0, -1);
+      } else {
+        if (c === "(") {
+          // PARENS: Params start.
+          parensStart = header.length + 1;
+        } else if (c === ")") {
+          // PARENS: Params end.
+          return header.substring(parensStart).split(",").map(p => p.trim());
+        } else if (hasSubstringAt(s, "=>", i)) {
+          // SINGLEARROW: Found the arrow → The last word in the header (sans "=") is the param.
+          const param = header.trim().match(/([^\s]+)\s*=$/)?.[1];
+          return param ? [param] : [];
+        }
+        // Add to the header.
+        header += c;
+      }
+    }
+  }
+
+  // This should not happen, but might.
+  log(`[RuntimeError] extractFunctionParameterNames failed for: ${s.slice(0, 80)}...`);
+  return [];
+}
+
 function previewFunction(cdpProperties) {
   const nameProperty = cdpProperties.result.find(prop => prop.name == "name");
   const locationProperty = getInternalFunctionLocationProp(cdpProperties);
 
   if (nameProperty) {
-    // RUN-1991: nameProperty.value might not always exist, for some reason.
+    // RUN-1991: nameProperty.value might not always exist.
     this.extra.functionName = nameProperty?.value?.value || "";
   }
 
@@ -1740,6 +1819,10 @@ function previewFunction(cdpProperties) {
       warning(`[RUN-1991] previewFunction missing location: ${JSON_stringify(nameProperty)}, ${JSON_stringify(locationProperty)}`);
     }
     this.extra.functionLocation = createProtocolLocation(loc);
+  }
+
+  if (this.cdpObj.description) {
+    this.extra.functionParameterNames = extractFunctionParameterNames(this.cdpObj.description);
   }
 }
 
