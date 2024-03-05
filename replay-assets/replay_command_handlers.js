@@ -1725,8 +1725,6 @@ function getInternalFunctionLocationProp(cdpProperties) {
   return getInternalProp(cdpProperties, '[[FunctionLocation]]');
 }
 
-const log = console.log.bind(console);
-
 /**
  * String utility for function parameter parsing.
  */
@@ -1817,19 +1815,16 @@ function extractFunctionParameterNames(s) {
           } else if (insideInitializer && c === ",") {
             // Initializer end.
             insideInitializer = false;
+          } else if (ignoreStack.length && ignoreStack[ignoreStack.length - 1] === c) {
+            // Inside destructuring argument or initializer expression:
+            // Exit node.
+            ignoreStack.pop();
+            continue; // Ignore this, too.
           } else if (complementaryTokensStart.includes(c)) {
-            // Inside destructuring argument or initializer expression.
+            // Inside destructuring argument or initializer expression:
+            // Enter node.
             const tokenIdx = complementaryTokensStart.indexOf(c);
             ignoreStack.push(complementaryTokensEnd[tokenIdx]);
-          } else if (ignoreStack.length) {
-            // Inside destructuring argument or initializer expression.
-            if (complementaryTokensEnd.includes(c)) {
-              const end = ignoreStack.pop();
-              if (end !== c) {
-                log(`[RuntimError] extractFunctionParameterNames unexpected token "${c}", expected "${end}" at "${s.substring(0, i+1)}"`);
-                return [];
-              }
-            }
           } else if (c === ")") {
             // PARENS: Params end.
             return header.substring(parensStart).split(",").map(p => p.trim());
