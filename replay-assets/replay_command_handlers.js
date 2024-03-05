@@ -1725,6 +1725,8 @@ function getInternalFunctionLocationProp(cdpProperties) {
   return getInternalProp(cdpProperties, '[[FunctionLocation]]');
 }
 
+const log = console.log.bind(console);
+
 /**
  * String utility for function parameter parsing.
  */
@@ -1732,76 +1734,122 @@ function hasSubstringAt(haystack, needle, i) {
   return haystack.substring(1 + i - needle.length, 1 + i) === needle;
 }
 
+
+const complementaryTokensStart = "({[\"'`";
+const complementaryTokensEnd =   ")}]\"'`";
+
 /**
  * [RUN-3146] Extract parameter names from the description.
  * @param {string} s 
  * @return {string[]}
  */
 function extractFunctionParameterNames(s) {
-  /**
-   * Function head declaration patterns:
-   * P1. modifiers function f(PARAMS) Body
-   * P2. modifiers f(PARAMS) Body  // ObjectMethod, ClassMethod
-   * P3. modifiers (PARAMS) => ExpressionOrBody
-   * P4. modifiers PARAM => ExpressionOrBody
-   */
+  try {
+    /** 
+     * Function head declaration patterns:
+     * P1. modifiers function f(PARAMS) Body
+     * P2. modifiers f(PARAMS) Body  // ObjectMethod, ClassMethod
+     * P3. modifiers (PARAMS) => ExpressionOrBody
+     * P4. modifiers PARAM => ExpressionOrBody
+     */
 
-  // All patterns fall into two buckets:
-  // PARENS: Get the thing within the first opening pair of parentheses.
-  // SINGLEARROW: Get the single param before =>.
+    // All patterns fall into two buckets:
+    // PARENS: Get the thing within the first opening pair of parentheses.
+    // SINGLEARROW: Get the single param before =>.
 
-  // Go: Find A or B (whatever comes first), while ignoring comments.
-  /**
-   * The function header without comments.
-   */
-  let header = "";
-  /**
-   * When in a comment, this is set to the counterpart that we are looking for.
-   * @type {string | null}
-   */
-  let expectedCommentEnd = null;
-  let parensStart = -1;
-  for (let i = 0; i < s.length; ++i) {
-    const c = s[i];
-    if (expectedCommentEnd) {
-      // In a comment.
-      if (hasSubstringAt(s, expectedCommentEnd, i)) {
-        // Comment End: Start new segment from here.
-        expectedCommentEnd = null;
-      } 
-    }
-    else {
-      // Not in a comment.
-      if (hasSubstringAt(s, "//", i) || hasSubstringAt(s, "/*", i)) {
-        // Comment Start.
-        if (c === "*") {
-          expectedCommentEnd = "*/";
+    // Base case: Find A or B (whatever comes first), while ignoring comments.
+    // Special case 1: Parameter initializers (e.g. `x = f()`).
+    //    Commas can be part of initializers, but they would have to be contained
+    //    by complementary tokens, any of: ``""''[](){}. 
+    //    → Let's simply ignore everything inside of that.
+    // Special case 2: Argument destructuring.
+    //    Don't give it a name (empty string).
+    //    Same concept as case 1.
+
+    /**
+     * The function header without comments.
+     */
+    let header = "";
+    /**
+     * When in a comment, this is set to the counterpart that we are looking for.
+     * @type {string | null}
+     */
+    let expectedCommentEnd = null;
+    let parensStart = -1;
+    let insideInitializer = false;
+    /**
+     * @type {string[]}
+     */
+    const ignoreStack = [];
+    for (let i = 0; i < s.length; ++i) {
+      const c = s[i];
+      if (expectedCommentEnd) {
+        // In a comment.
+        if (hasSubstringAt(s, expectedCommentEnd, i)) {
+          // Comment End: Start new segment from here.
+          expectedCommentEnd = null;
+        } 
+      }
+      else {
+        // Not in a comment.
+        if (hasSubstringAt(s, "//", i) || hasSubstringAt(s, "/*", i)) {
+          // Comment Start.
+          if (c === "*") {
+            expectedCommentEnd = "*/";
+          } else {
+            expectedCommentEnd = "\n";
+          }
+          // Remove "/" from header:
+          header = header.slice(0, -1);
         } else {
-          expectedCommentEnd = "\n";
+          if (parensStart === -1) {
+            if (c === "(") {
+              // PARENS: Params start.
+              parensStart = header.length + 1;
+            } else if (hasSubstringAt(s, "=>", i)) {
+              // SINGLEARROW: Found the arrow → The last word in the header (sans "=") is the param.
+              const param = header.trim().match(/([^\s]+)\s*=$/)?.[1];
+              return param ? [param] : [];
+            }
+          } else if (c === "=") {
+            // Initializer start.
+            insideInitializer = true;
+          } else if (insideInitializer && c === ",") {
+            // Initializer end.
+            insideInitializer = false;
+          } else if (complementaryTokensStart.includes(c)) {
+            // Inside some arbitrary syntax construct.
+            // → Ignore, since that's not part of the parameter name.
+            const tokenIdx = complementaryTokensStart.indexOf(c);
+            ignoreStack.push(complementaryTokensEnd[tokenIdx]);
+          } else if (ignoreStack.length) {
+            // Inside destructuring argument or initializer expression.
+            if (complementaryTokensEnd.includes(c)) {
+              const end = ignoreStack.pop();
+              if (end !== c) {
+                log(`[RuntimError] extractFunctionParameterNames unexpected token "${c}", expected "${end}" at "${s.substring(0, i+1)}"`);
+                return [];
+              }
+            }
+          } else if (c === ")") {
+            // PARENS: Params end.
+            return header.substring(parensStart).split(",").map(p => p.trim());
+          }
+
+          if (!insideInitializer && !ignoreStack.length) {
+            // Add to the header.
+            header += c;
+          }
         }
-        // Remove "/" from header:
-        header = header.slice(0, -1);
-      } else {
-        if (c === "(") {
-          // PARENS: Params start.
-          parensStart = header.length + 1;
-        } else if (c === ")") {
-          // PARENS: Params end.
-          return header.substring(parensStart).split(",").map(p => p.trim());
-        } else if (hasSubstringAt(s, "=>", i)) {
-          // SINGLEARROW: Found the arrow → The last word in the header (sans "=") is the param.
-          const param = header.trim().match(/([^\s]+)\s*=$/)?.[1];
-          return param ? [param] : [];
-        }
-        // Add to the header.
-        header += c;
       }
     }
-  }
 
-  // This should not happen, but might.
-  log(`[RuntimeError] extractFunctionParameterNames failed for: ${s.slice(0, 80)}...`);
-  return [];
+    // This should not happen, but might.
+    log(`[RuntimeError] extractFunctionParameterNames fell through for: ${s.slice(0, 80)}...`);
+    return [];
+  } catch (err) {
+    log(`[RuntimeError] extractFunctionParameterNames failed for: ${s.slice(0, 80)}...\n ${err?.stack || err}`);
+  }
 }
 
 function previewFunction(cdpProperties) {
