@@ -1818,8 +1818,7 @@ function extractFunctionParameterNames(s) {
             // Initializer end.
             insideInitializer = false;
           } else if (complementaryTokensStart.includes(c)) {
-            // Inside some arbitrary syntax construct.
-            // → Ignore, since that's not part of the parameter name.
+            // Inside destructuring argument or initializer expression.
             const tokenIdx = complementaryTokensStart.indexOf(c);
             ignoreStack.push(complementaryTokensEnd[tokenIdx]);
           } else if (ignoreStack.length) {
