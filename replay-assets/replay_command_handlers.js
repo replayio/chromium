@@ -1728,10 +1728,17 @@ function getInternalFunctionLocationProp(cdpProperties) {
 /**
  * String utility for function parameter parsing.
  */
-function hasSubstringAt(haystack, needle, i) {
+function substringEndsAt(haystack, needle, i) {
   return haystack.substring(1 + i - needle.length, 1 + i) === needle;
 }
 
+/**
+ * @return {boolean} (a + b).endsWith(end)
+ */
+function stringsEndWith(a, b, end) {
+  // NOTE: This can be done more performantly.
+  return (a + b).endsWith(end);
+}
 
 const complementaryTokensStart = "({[\"'`";
 const complementaryTokensEnd =   ")}]\"'`";
@@ -1752,22 +1759,22 @@ function extractFunctionParameterNames(s) {
      */
 
     // All patterns fall into two buckets:
-    // PARENS: Get the thing within the first opening pair of parentheses.
-    // SINGLEARROW: Get the single param before =>.
+    // A. PARENS: Get the thing within the first opening pair of parentheses.
+    // B. SINGLEARROW: Get the single param before =>.
 
-    // Base case: Find A or B (whatever comes first), while ignoring comments.
+    // Base case: Find pattern A or B, while ignoring comments.
     // Special case 1: Parameter initializers (e.g. `x = f()`).
     //    Commas can be part of initializers, but they would have to be contained
     //    by complementary tokens, any of: ``""''[](){}. 
     //    → Let's simply ignore everything inside of that.
     // Special case 2: Argument destructuring.
-    //    Don't give it a name (empty string).
-    //    Same concept as case 1.
+    //    -> Don't give the param a name (empty string).
+    //    Same parsing logic as case 1.
 
     /**
-     * The function header without comments.
+     * The function header without (i) comments and without (ii) nested AST nodes.
      */
-    let header = "";
+    let cleanHeader = "";
     /**
      * When in a comment, this is set to the counterpart that we are looking for.
      * @type {string | null}
@@ -1783,58 +1790,61 @@ function extractFunctionParameterNames(s) {
       const c = s[i];
       if (expectedCommentEnd) {
         // In a comment.
-        if (hasSubstringAt(s, expectedCommentEnd, i)) {
+        if (substringEndsAt(s, expectedCommentEnd, i)) {
           // Comment End: Start new segment from here.
           expectedCommentEnd = null;
-        } 
-      }
-      else {
-        // Not in a comment.
-        if (hasSubstringAt(s, "//", i) || hasSubstringAt(s, "/*", i)) {
-          // Comment Start.
-          if (c === "*") {
-            expectedCommentEnd = "*/";
-          } else {
-            expectedCommentEnd = "\n";
-          }
-          // Remove "/" from header:
-          header = header.slice(0, -1);
-        } else {
-          if (parensStart === -1) {
-            if (c === "(") {
-              // PARENS: Params start.
-              parensStart = header.length + 1;
-            } else if (hasSubstringAt(s, "=>", i)) {
-              // SINGLEARROW: Found the arrow → The last word in the header (sans "=") is the param.
-              const param = header.trim().match(/([^\s]+)\s*=$/)?.[1];
-              return param ? [param] : [];
-            }
-          } else if (c === "=") {
-            // Initializer start.
-            insideInitializer = true;
-          } else if (insideInitializer && c === ",") {
-            // Initializer end.
-            insideInitializer = false;
-          } else if (ignoreStack.length && ignoreStack[ignoreStack.length - 1] === c) {
-            // Inside destructuring argument or initializer expression:
-            // Exit node.
-            ignoreStack.pop();
-            continue; // Ignore this, too.
-          } else if (complementaryTokensStart.includes(c)) {
-            // Inside destructuring argument or initializer expression:
-            // Enter node.
-            const tokenIdx = complementaryTokensStart.indexOf(c);
-            ignoreStack.push(complementaryTokensEnd[tokenIdx]);
-          } else if (c === ")") {
-            // PARENS: Params end.
-            return header.substring(parensStart).split(",").map(p => p.trim());
-          }
-
-          if (!insideInitializer && !ignoreStack.length) {
-            // Add to the header.
-            header += c;
-          }
         }
+        continue;
+      }
+
+      // Not in a comment.
+      if (cleanHeader.endsWith("/") && (c === "/" || c === "*")) {
+        // Comment Start.
+        if (c === "*") {
+          expectedCommentEnd = "*/";
+        } else {
+          expectedCommentEnd = "\n";
+        }
+        // Remove "/" from header:
+        cleanHeader = cleanHeader.slice(0, -1);
+        continue;
+      }
+
+      // Parse everything but comments:
+      if (parensStart === -1) {
+        // Not in params parentheses.
+        if (c === "(") {
+          // PARENS: Params start.
+          parensStart = cleanHeader.length + 1;
+        } else if (stringsEndWith(cleanHeader, c, "=>")) {
+          // SINGLEARROW: Found the arrow → The last word in the header (sans "=") is the param.
+          const param = cleanHeader.trim().match(/([^\s]+)\s*=$/)?.[1];
+          return param ? [param] : [];
+        }
+      } else if (c === "=") {
+        // Initializer start.
+        insideInitializer = true;
+      } else if (insideInitializer && c === ",") {
+        // Initializer end.
+        insideInitializer = false;
+      } else if (ignoreStack.length && ignoreStack[ignoreStack.length - 1] === c) {
+        // Inside destructuring argument or initializer expression:
+        // Exit node.
+        ignoreStack.pop();
+        continue; // Ignore this, too.
+      } else if (complementaryTokensStart.includes(c)) {
+        // Inside destructuring argument or initializer expression:
+        // Enter node. Push complementary (to be searched for) onto stack.
+        const tokenIdx = complementaryTokensStart.indexOf(c);
+        ignoreStack.push(complementaryTokensEnd[tokenIdx]);
+      } else if (c === ")") {
+        // PARENS: Params end.
+        return cleanHeader.substring(parensStart).split(",").map(p => p.trim());
+      }
+
+      if (!insideInitializer && !ignoreStack.length) {
+        // Keep the character.
+        cleanHeader += c;
       }
     }
 
