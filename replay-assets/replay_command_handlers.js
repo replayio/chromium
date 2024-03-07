@@ -1811,45 +1811,72 @@ function extractFunctionParameterNames(s) {
       }
 
       // Parse everything but comments:
+
       if (parensStart === -1) {
         // Not in params parentheses.
         if (c === "(") {
           // PARENS: Params start.
-          parensStart = cleanHeader.length + 1;
-        } else if (stringsEndWith(cleanHeader, c, "=>")) {
+          cleanHeader += c;
+          parensStart = cleanHeader.length;
+          continue;
+        }
+
+        if (stringsEndWith(cleanHeader, c, "=>")) {
           // SINGLEARROW: Found the arrow → The last word in the header (sans "=") is the param.
           const param = cleanHeader.trim().match(/([^\s]+)\s*=$/)?.[1];
           return param ? [param] : [];
         }
-      } else if (c === "=") {
-        // Initializer start.
-        insideInitializer = true;
-      } else if (insideInitializer && c === ",") {
-        // Initializer end.
-        insideInitializer = false;
-      } else if (ignoreStack.length && ignoreStack[ignoreStack.length - 1] === c) {
-        // Inside destructuring argument or initializer expression:
-        // Exit node.
-        ignoreStack.pop();
-        continue; // Ignore this, too.
-      } else if (complementaryTokensStart.includes(c)) {
+
+        // otherwise keep the character
+        cleanHeader += c;
+        continue;
+      }
+
+      // destructuring
+      if (complementaryTokensStart.includes(c)) {
         // Inside destructuring argument or initializer expression:
         // Enter node. Push complementary (to be searched for) onto stack.
         const tokenIdx = complementaryTokensStart.indexOf(c);
         ignoreStack.push(complementaryTokensEnd[tokenIdx]);
-      } else if (c === ")") {
+        continue; // don't include destructuring in the header
+      }
+      if (ignoreStack.length) {
+        // Inside destructuring or initializer expression.
+        if (c === ignoreStack[ignoreStack.length - 1]) {
+          // Exit node.
+          ignoreStack.pop();
+        }
+
+        continue; // don't include the destructuring in the header
+      }
+
+      if (c === ")") {
         // PARENS: Params end.
         return cleanHeader.substring(parensStart).split(",").map(p => p.trim());
       }
 
-      if (!insideInitializer && !ignoreStack.length) {
-        // Keep the character.
-        cleanHeader += c;
+      // initializers
+      if (c === "=") {
+        // Initializer start.
+        insideInitializer = true;
+        continue; // don't include initializers in the header
       }
+      if (insideInitializer) {
+        if (c === ",") {
+          // Initializer end.
+          insideInitializer = false;
+          cleanHeader += c; // include the comma in the header.  it's not part of an initializer, it's the separator between params.
+        }
+
+        continue;
+      }
+
+      // all other characters are kept
+      cleanHeader += c;
     }
 
     // This should not happen, but might.
-    log(`[RuntimeError] extractFunctionParameterNames fell through for: ${s.slice(0, 80)}...`);
+    log(`[RuntimeError] extractFunctionParameterNames fell through for: ${s.slice(0, 80)}... header=${cleanHeader}`);
     return [];
   } catch (err) {
     log(`[RuntimeError] extractFunctionParameterNames failed for: ${s.slice(0, 80)}...\n ${err?.stack || err}`);
