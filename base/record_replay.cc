@@ -33,7 +33,7 @@ namespace recordreplay {
         (const char* why), (why), bool, false)                          \
   Macro(V8RecordReplayHasDivergedFromRecording, (), (), bool, false)    \
   Macro(V8RecordReplayNewDependencyGraphNode,                           \
-        (const char* json), (json)), int, 0))                           \
+        (const char* json), (json), int, 0)                             \
   Macro(V8RecordReplayAllowSideEffects, (), (), bool, true)             \
   Macro(V8RecordReplayPointerId, (const void* ptr), (ptr), int, 0)      \
   Macro(V8RecordReplayIdPointer, (int id), (id), void*, nullptr)        \
