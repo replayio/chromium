@@ -6,6 +6,7 @@
 
 #include "base/base64.h"
 #include "base/record_replay.h"
+#include "base/record_replay_render_interface.h"
 #include "base/strings/stringprintf.h"
 #include "cc/animation/animation_events.h"
 #include "cc/trees/compositor_commit_data.h"
@@ -340,6 +341,13 @@ static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
 
   gRepaintEvent = nullptr;
   return gRepaintResult;
+}
+
+const gfx::Size* GetCurrentViewportPixelSize() {
+  if (gOutputSurface) {
+    return &gOutputSurface->software_device()->ReplayViewportPixelSize();
+  }
+  return nullptr;
 }
 
 } // namespace recordreplay

@@ -29,6 +29,7 @@ const {
   fromJsCssGetStylesheetByCpdId,
   fromJsCollectEventListeners,
   fromJsDomPerformSearch,
+  getCurrentViewportPixelSize,
 
   // network
   getCurrentNetworkRequestEvent,
@@ -681,7 +682,21 @@ function Pause_getScope({ scope }) {
 }
 
 function Graphics_getDevicePixelRatio() {
-  return { ratio: window?.devicePixelRatio || 0 };
+  // RUN-2989: On Mac, devicePixelRatio is incorrect in the early lifetime
+  // of the process, so we need to compute the actual pixel ratio of hardware
+  // pixels to page pixels.
+  // getCurrentViewportPixelSize
+  const size = getCurrentViewportPixelSize();
+  if (size) {
+    // We only need one.
+    const ratioX = size.width / innerWidth;
+    return {
+      ratio: ratioX
+    };
+  }
+  return {
+    ratio: window?.devicePixelRatio || 0
+  };
 }
 
 
@@ -3308,5 +3323,7 @@ addEventListener("Runtime.executionContextsCleared", () => {
   gExecutionContexts.clear();
 });
 sendCDPMessage("Runtime.enable");
+
+log(`DDBG devicePixelRatio`, devicePixelRatio);
 
 })();

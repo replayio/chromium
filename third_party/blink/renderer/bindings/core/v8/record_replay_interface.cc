@@ -15,6 +15,7 @@
 #include "base/json/json_writer.h"
 #include "base/process/process_handle.h"
 #include "base/record_replay.h"
+#include "base/record_replay_render_interface.h"
 #include "content/public/renderer/render_thread.h"
 #include "content/public/renderer/v8_value_converter.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
@@ -53,6 +54,10 @@ static const char DirectorySeparator = '\\';
 #endif
 
 static const char *AnnotationHookJSName = "__RECORD_REPLAY_ANNOTATION_HOOK__";
+
+namespace recordreplay {
+extern const gfx::Size* GetCurrentViewportPixelSize();
+}
 
 namespace v8 {
 
@@ -2345,6 +2350,21 @@ static void fromJsEndReplayCode(
   recordreplay::ExitReplayCode();
 }
 
+static void fromJsGetCurrentViewportPixelSize(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  v8::Isolate* isolate = args.GetIsolate();
+
+  const gfx::Size* size = recordreplay::GetCurrentViewportPixelSize();
+
+  if (size) {
+    v8::Local<v8::Object> jsSize = v8::Object::New(isolate);
+    SetDataProperty(isolate, jsSize, "width",
+                    v8::Number::New(isolate, size->width()));
+    SetDataProperty(isolate, jsSize, "height",
+                    v8::Number::New(isolate, size->height()));
+    args.GetReturnValue().Set(jsSize);
+  }
+}
+
 /** ###########################################################################
  * misc
  * ##########################################################################*/
@@ -2567,6 +2587,10 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
                       fromJsBeginReplayCode);
   SetFunctionProperty(isolate, args, "endReplayCode",
                       fromJsEndReplayCode);
+
+  // Graphics.
+  SetFunctionProperty(isolate, args, "getCurrentViewportPixelSize",
+                      fromJsGetCurrentViewportPixelSize);
 
   // unsorted Replay stuff
   SetFunctionProperty(
