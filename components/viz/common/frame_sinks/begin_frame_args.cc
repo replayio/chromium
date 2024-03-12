@@ -144,14 +144,15 @@ BeginFrameArgs BeginFrameArgs::Create(BeginFrameArgs::CreationLocation location,
                                       base::TimeTicks frame_time,
                                       base::TimeTicks deadline,
                                       base::TimeDelta interval,
-                                      BeginFrameArgs::BeginFrameArgsType type) {
+                                      BeginFrameArgs::BeginFrameArgsType type,
+                                      bool replay_force_draw) {
   DCHECK_NE(type, BeginFrameArgs::INVALID);
 #ifdef NDEBUG
   return BeginFrameArgs(source_id, sequence_number, frame_time, deadline,
                         interval, type);
 #else
   BeginFrameArgs args = BeginFrameArgs(source_id, sequence_number, frame_time,
-                                       deadline, interval, type);
+                                       deadline, interval, type, replay_force_draw);
   args.created_from = location;
   return args;
 #endif
