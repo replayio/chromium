@@ -55,10 +55,6 @@ static const char DirectorySeparator = '\\';
 
 static const char *AnnotationHookJSName = "__RECORD_REPLAY_ANNOTATION_HOOK__";
 
-namespace recordreplay {
-extern const gfx::Size* GetCurrentViewportPixelSize();
-}
-
 namespace v8 {
 
 extern void FunctionCallbackRecordReplaySetCommandCallback(const FunctionCallbackInfo<Value>& args);
@@ -99,13 +95,13 @@ extern "C" char* V8RecordReplayReadAssetFileContents(const char* aPath, size_t* 
 static const char REPLAY_CDT_PAUSE_OBJECT_GROUP[] =
     "REPLAY_CDT_PAUSE_OBJECT_GROUP";
 
-static bool IsGReplayScriptEnabledWhenRecording() {
+static bool IsCommandHandlingEnabledWhenRecording() {
   return !recordreplay::FeatureEnabled("replay-only-command-handling");
 }
 
-static bool IsGReplayScriptEnabled() {
+static bool IsCommandHandlingEnabled() {
   return recordreplay::IsReplaying() ||
-         IsGReplayScriptEnabledWhenRecording();
+         IsCommandHandlingEnabledWhenRecording();
 }
 
 static LocalFrame* GetLocalFrameRoot(v8::Isolate* isolate) {
@@ -193,7 +189,7 @@ static String ReadReplayAssetFile(const char* fname) {
 
   // Important: Treat as UTF-8.
   String result = String::FromUTF8(
-    IsGReplayScriptEnabledWhenRecording()
+    IsCommandHandlingEnabledWhenRecording()
       // Recording + Replay.
       ? ReadReplayAssetFileRaw(fname, len).c_str()
       // Replay only.
@@ -878,7 +874,7 @@ static void LogWarningCallback(const v8::FunctionCallbackInfo<v8::Value>& args) 
 void
 RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
                                 v8::Isolate* isolate) {
-  if (v8::IsMainThread() && IsGReplayScriptEnabled()) {
+  if (v8::IsMainThread() && IsCommandHandlingEnabled()) {
     if (!gV8Inspectors) {
       gV8Inspectors = new std::unordered_map<v8::Isolate*,v8_inspector::V8Inspector*>();
       gInspectorData = new std::unordered_map<v8::Isolate*, ContextGroupIdInspectorMap*>();
@@ -1016,7 +1012,7 @@ InspectorData* getInspectorFor(v8::Isolate* isolate, int contextGroupId) {
  */
 v8_inspector::V8InspectorSession* getInspectorSession(v8::Isolate* isolate, int contextGroupId) {
   CHECK(v8::IsMainThread());
-  CHECK(IsGReplayScriptEnabled());
+  CHECK(IsCommandHandlingEnabled());
   CHECK(gV8Inspectors);
 
   v8_inspector::V8Inspector* inspector = (*gV8Inspectors)[isolate];
@@ -2655,7 +2651,7 @@ static void InitializeReplayScripts(v8::Isolate* isolate, LocalFrame* localFrame
     localFrame->GetSettings()->SetForceMainWorldInitialization(true);
   }
 
-  if (IsGReplayScriptEnabled()) {
+  if (IsCommandHandlingEnabled()) {
     recordreplay::AutoMarkReplayCode amrc;
     String commandHandlerScript = ReadReplayCommandHandlerScript();
     {
