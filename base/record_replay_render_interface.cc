@@ -16,11 +16,22 @@ static ResetPaintSurfaceCallback gResetPaintSurfaceCallback = nullptr;
 void SetResetPaintSurfaceCallback(ResetPaintSurfaceCallback reset_paint_surface) {
   gResetPaintSurfaceCallback = reset_paint_surface;
 }
-
 void DoResetPaintSurface() {
   if (gResetPaintSurfaceCallback) {
     gResetPaintSurfaceCallback();
   }
+}
+
+// Callback to retrieve size data.
+static GetCurrentViewportPixelSizeCallback gGetCurrentViewportPixelSize = nullptr;
+void SetGetCurrentViewportPixelSizeCallback(GetCurrentViewportPixelSizeCallback cb) {
+  gGetCurrentViewportPixelSize = cb;
+}
+const gfx::Size* GetCurrentViewportPixelSize() {
+  if (gGetCurrentViewportPixelSize) {
+    return gGetCurrentViewportPixelSize();
+  }
+  return nullptr;
 }
 
 }  // namespace recordreplay

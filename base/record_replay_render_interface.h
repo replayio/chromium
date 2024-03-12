@@ -6,14 +6,20 @@
 #ifndef BASE_RECORD_REPLAY_RENDER_INTERFACE_H_
 #define BASE_RECORD_REPLAY_RENDER_INTERFACE_H_
 
+
+#include "ui/gfx/geometry/size.h"
+
+using gfx::Size;
+
 namespace recordreplay {
 
 typedef void (*ResetPaintSurfaceCallback)();
-
 void SetResetPaintSurfaceCallback(ResetPaintSurfaceCallback reset_paint_surface);
-
 void DoResetPaintSurface();
 
+typedef const gfx::Size* (*GetCurrentViewportPixelSizeCallback)();
+void SetGetCurrentViewportPixelSizeCallback(GetCurrentViewportPixelSizeCallback cb);
+const gfx::Size* GetCurrentViewportPixelSize();
 
 
 }  // namespace recordreplay

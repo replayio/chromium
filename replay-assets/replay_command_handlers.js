@@ -688,7 +688,7 @@ function Graphics_getDevicePixelRatio() {
   // getCurrentViewportPixelSize
   const size = getCurrentViewportPixelSize();
   if (size) {
-    // We only need one.
+    // Note: X and Y ratios should be the same.
     const ratioX = size.width / innerWidth;
     return {
       ratio: ratioX

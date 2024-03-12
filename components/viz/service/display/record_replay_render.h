@@ -58,7 +58,7 @@ void SetCompositorProxy(cc::ProxyMain* proxy);
 // Called when a compositor proxy has been destroyed and can't be used to trigger repaints.
 void CompositorProxyDestroyed(cc::ProxyMain* proxy);
 
-const gfx::Size* GetCurrentViewportPixelSize();
+const gfx::Size* GetCurrentViewportPixelSizeImpl();
 
 } // namespace recordreplay
 

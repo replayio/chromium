@@ -67,6 +67,7 @@ static void InitializeRenderer() {
                                         nullptr);
 
   recordreplay::SetResetPaintSurfaceCallback(ResetSurfaceId);
+  recordreplay::SetGetCurrentViewportPixelSizeCallback(GetCurrentViewportPixelSizeImpl);
 }
 
 static std::string SurfaceIdString(const viz::LocalSurfaceId& local_surface_id) {
@@ -343,7 +344,9 @@ static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
   return gRepaintResult;
 }
 
-const gfx::Size* GetCurrentViewportPixelSize() {
+const gfx::Size* GetCurrentViewportPixelSizeImpl() {
+  CHECK(IsMainThread());
+
   if (gOutputSurface) {
     return &gOutputSurface->software_device()->ReplayViewportPixelSize();
   }
