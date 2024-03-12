@@ -6,8 +6,8 @@
 #include "base/record_replay_render_interface.h"
 
 // We use this file to allow depending on record_replay_render from blink.
-// We cannot access it directly since, during V8 snapshotting, blink is linked
-// but the display service is not.
+// We cannot access the render code directly since, during V8 snapshotting,
+// blink is linked, but the display service is not.
 
 namespace recordreplay {
 
@@ -22,7 +22,6 @@ void DoResetPaintSurface() {
   }
 }
 
-// Callback to retrieve size data.
 static GetCurrentViewportPixelSizeCallback gGetCurrentViewportPixelSize = nullptr;
 void SetGetCurrentViewportPixelSizeCallback(GetCurrentViewportPixelSizeCallback cb) {
   gGetCurrentViewportPixelSize = cb;

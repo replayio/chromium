@@ -83,7 +83,7 @@ class VIZ_SERVICE_EXPORT SoftwareOutputDevice {
   // platform's proposed surface size.
   virtual bool SupportsOverridePlatformSize() const;
 
-  // Expose this so we can compute the correct pixel ratio.
+  // [RUN-2989] Allow Replay commmand handlers to read the viewport size.
   const gfx::Size& ReplayViewportPixelSize() const {
     return viewport_pixel_size_;
   }

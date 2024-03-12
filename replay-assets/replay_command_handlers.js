@@ -685,7 +685,6 @@ function Graphics_getDevicePixelRatio() {
   // RUN-2989: On Mac, devicePixelRatio is incorrect in the early lifetime
   // of the process, so we need to compute the actual pixel ratio of hardware
   // pixels to page pixels.
-  // getCurrentViewportPixelSize
   const size = getCurrentViewportPixelSize();
   if (size) {
     // Note: X and Y ratios should be the same.
@@ -1419,8 +1418,6 @@ ProtocolObjectPreview.prototype = {
           foundProps.add(propKey);
         }
       }
-
-      // log(`************** DDBG fill() C ${[this.unlimitedItems, cdpProperties.result.length, propertiesToFetch].join(", ")}`);
     }
     
     for (const cdpProp of cdpProperties.result) {
@@ -3323,7 +3320,5 @@ addEventListener("Runtime.executionContextsCleared", () => {
   gExecutionContexts.clear();
 });
 sendCDPMessage("Runtime.enable");
-
-log(`DDBG devicePixelRatio`, devicePixelRatio);
 
 })();
