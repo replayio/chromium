@@ -300,7 +300,7 @@ static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
   gRepaintJPEGQuality = jpeg_quality;
   gRepaintResult = nullptr;
 
-  base::WaitableEvent event;
+  /*base::WaitableEvent event;
   gRepaintEvent = &event;
 
   // Update layout state on the main thread and commit a new paint.
@@ -336,7 +336,7 @@ static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
 
   // Wait for the repainting frame to complete.
   bool signaled = event.TimedWait(base::Milliseconds(500));
-  CHECK(signaled);
+  CHECK(signaled);*/
 
   gRepaintEvent = nullptr;
   return gRepaintResult;
