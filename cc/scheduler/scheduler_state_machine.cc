@@ -363,9 +363,7 @@ bool SchedulerStateMachine::ShouldDraw() const {
   // aborted draw to keep things moving. If we are not waiting for the first
   // draw however, we don't want to abort for no reason.
   if (PendingDrawsShouldBeAborted())
-    if (replay_force_draw_) {
     return active_tree_needs_first_draw_;
-  }
 
   // Do not draw more than once in the deadline. Aborted draws are ok because
   // those are effectively nops.
