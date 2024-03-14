@@ -26,11 +26,13 @@ static GetCurrentViewportPixelSizeCallback gGetCurrentViewportPixelSize = nullpt
 void SetGetCurrentViewportPixelSizeCallback(GetCurrentViewportPixelSizeCallback cb) {
   gGetCurrentViewportPixelSize = cb;
 }
-const gfx::Size* GetCurrentViewportPixelSize() {
+
+const gfx::Size gDefaultSize; // {0,0}
+gfx::Size GetCurrentViewportPixelSize() {
   if (gGetCurrentViewportPixelSize) {
     return gGetCurrentViewportPixelSize();
   }
-  return nullptr;
+  return gDefaultSize;
 }
 
 }  // namespace recordreplay

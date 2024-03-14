@@ -686,8 +686,10 @@ function Graphics_getDevicePixelRatio() {
   // of the process, so we need to compute the actual pixel ratio of hardware
   // pixels to page pixels.
   const size = getCurrentViewportPixelSize();
-  if (size) {
-    // Note: X and Y ratios should be the same.
+  if (size.width) {
+    // Note1: This size might not yet have been initialized, in which case,
+    //          it will default to {0,0}.
+    // Note2: X and Y ratios should be the same.
     const ratioX = size.width / innerWidth;
     return {
       ratio: ratioX

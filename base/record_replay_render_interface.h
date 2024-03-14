@@ -17,11 +17,11 @@ typedef void (*ResetPaintSurfaceCallback)();
 void SetResetPaintSurfaceCallback(ResetPaintSurfaceCallback reset_paint_surface);
 void DoResetPaintSurface();
 
-typedef const gfx::Size* (*GetCurrentViewportPixelSizeCallback)();
+typedef gfx::Size (*GetCurrentViewportPixelSizeCallback)();
 // This callback is set when the first render surface is created.
 void SetGetCurrentViewportPixelSizeCallback(GetCurrentViewportPixelSizeCallback cb);
 // Get the current surface size in pixels.
-const gfx::Size* GetCurrentViewportPixelSize();
+gfx::Size GetCurrentViewportPixelSize();
 
 
 }  // namespace recordreplay

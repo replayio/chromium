@@ -2349,16 +2349,14 @@ static void fromJsEndReplayCode(
 static void fromJsGetCurrentViewportPixelSize(const v8::FunctionCallbackInfo<v8::Value>& args) {
   v8::Isolate* isolate = args.GetIsolate();
 
-  const gfx::Size* size = recordreplay::GetCurrentViewportPixelSize();
+  gfx::Size size = recordreplay::GetCurrentViewportPixelSize();
 
-  if (size) {
-    v8::Local<v8::Object> jsSize = v8::Object::New(isolate);
-    SetDataProperty(isolate, jsSize, "width",
-                    v8::Number::New(isolate, size->width()));
-    SetDataProperty(isolate, jsSize, "height",
-                    v8::Number::New(isolate, size->height()));
-    args.GetReturnValue().Set(jsSize);
-  }
+  v8::Local<v8::Object> jsSize = v8::Object::New(isolate);
+  SetDataProperty(isolate, jsSize, "width",
+                  v8::Number::New(isolate, size.width()));
+  SetDataProperty(isolate, jsSize, "height",
+                  v8::Number::New(isolate, size.height()));
+  args.GetReturnValue().Set(jsSize);
 }
 
 /** ###########################################################################

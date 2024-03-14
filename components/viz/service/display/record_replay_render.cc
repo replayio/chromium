@@ -243,6 +243,9 @@ static std::atomic<base::WaitableEvent*> gRepaintEvent;
 // Encoded result of repainting.
 static std::atomic<char*> gRepaintResult;
 
+// Real size of |gRepaintResult|.
+static std::atomic<gfx::Size> gDeviceViewportSize;
+
 void OnPaintFinished(const SkPixmap& pixmap) {
   static bool hasPaints = false;
   if (!hasPaints) {
@@ -251,6 +254,10 @@ void OnPaintFinished(const SkPixmap& pixmap) {
   }
 
   gCurrentPixmap = &pixmap;
+  if (gOutputSurface) {
+    // Obtain device size on impl thread.
+    gDeviceViewportSize = gOutputSurface->software_device()->ReplayViewportPixelSize();
+  }
 
   if (HasDivergedFromRecording()) {
     // If we've diverged from the recording then we're probably repainting,
@@ -344,13 +351,8 @@ static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
   return gRepaintResult;
 }
 
-const gfx::Size* GetCurrentViewportPixelSizeImpl() {
-  CHECK(IsMainThread());
-
-  if (gOutputSurface) {
-    return &gOutputSurface->software_device()->ReplayViewportPixelSize();
-  }
-  return nullptr;
+gfx::Size GetCurrentViewportPixelSizeImpl() {
+  return gDeviceViewportSize;
 }
 
 } // namespace recordreplay
