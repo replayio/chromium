@@ -360,6 +360,8 @@ using WeakDocumentSet = blink::HeapHashSet<blink::WeakMember<blink::Document>>;
 static WeakDocumentSet& LiveDocumentSet();
 #endif
 
+extern "C" int V8RecordReplayDependencyGraphExecutionNode();
+
 namespace blink {
 
 namespace {
@@ -3658,8 +3660,30 @@ void Document::close() {
   CheckCompleted();
 }
 
+void Document::RecordReplayOnRemoveLoadEventDelay() {
+  if (recordreplay::IsReplaying() &&
+      !recordreplay::FeatureEnabled("no-dependency-graph")) {
+    int node_id = V8RecordReplayDependencyGraphExecutionNode();
+    if (node_id) {
+      record_replay_load_event_dependency_nodes_.push_back(node_id);
+    } else {
+      recordreplay::Warning("DependencyGraph load event delay unknown node");
+    }
+  }
+}
+
 void Document::ImplicitClose() {
   DCHECK(!InStyleRecalc());
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::IsReplaying()) {
+    int node_id = recordreplay::NewDependencyGraphNode("{\"kind\":\"documentLoaded\"}");
+    for (int parent_node_id : record_replay_load_event_dependency_nodes_) {
+      recordreplay::AddDependencyGraphEdge(parent_node_id, node_id,
+                                           "{\"kind\":\"loadEventDelay\"}");
+    }
+    execute.emplace(node_id);
+  }
 
   load_event_progress_ = kLoadEventInProgress;
 
@@ -7678,6 +7702,8 @@ void Document::DecrementLoadEventDelayCount() {
   DCHECK(load_event_delay_count_);
   --load_event_delay_count_;
 
+  RecordReplayOnRemoveLoadEventDelay();
+
   if (!load_event_delay_count_)
     CheckLoadEventSoon();
 }
@@ -7685,6 +7711,8 @@ void Document::DecrementLoadEventDelayCount() {
 void Document::DecrementLoadEventDelayCountAndCheckLoadEvent() {
   DCHECK(load_event_delay_count_);
   --load_event_delay_count_;
+
+  RecordReplayOnRemoveLoadEventDelay();
 
   if (!load_event_delay_count_)
     CheckCompleted();
