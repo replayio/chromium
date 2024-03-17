@@ -355,6 +355,8 @@
 #include "third_party/blink/renderer/platform/wtf/text/string_buffer.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_encoding_registry.h"
 
+#include "base/json/json_writer.h"
+
 #ifndef NDEBUG
 using WeakDocumentSet = blink::HeapHashSet<blink::WeakMember<blink::Document>>;
 static WeakDocumentSet& LiveDocumentSet();
@@ -3677,7 +3679,12 @@ void Document::ImplicitClose() {
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::IsReplaying()) {
-    int node_id = recordreplay::NewDependencyGraphNode("{\"kind\":\"documentLoaded\"}");
+    base::Value::Dict info;
+    info.Set("kind", "documentLoaded");
+    info.Set("url", Url().GetString().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
     for (int parent_node_id : record_replay_load_event_dependency_nodes_) {
       recordreplay::AddDependencyGraphEdge(parent_node_id, node_id,
                                            "{\"kind\":\"loadEventDelay\"}");
