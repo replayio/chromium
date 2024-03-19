@@ -248,7 +248,7 @@ void OnNetworkPrepareRequest(const blink::Document* document, const blink::Resou
   if (form_body) {
     WTF::String data = form_body->FlattenToString();
     base::DictionaryValue requestDataDict;
-    requestDataDict.String("requestId", requestId);
+    requestDataDict.SetString("requestId", requestId);
     std::string dataStr = data.Utf8();
     requestDataDict.SetString("data", dataStr);
     requestDataDict.SetInteger("dataLength", (int)dataStr.size());
