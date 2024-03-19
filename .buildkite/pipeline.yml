@@ -239,11 +239,9 @@ steps:
         # This is used by packages/e2e-tests/playwright.config.ts
         CI: "1"
 
-  - label: "Trigger Runtime Command Tests :hammer:"
+  - label: "Trigger Runtime Command Tests (macos-arm64) :hammer:"
     trigger: "runtime-command-tests"
     depends_on:
-      - "build-chromium-linux-x86_64"
-      - "build-chromium-mac-x86_64"
       - "build-chromium-mac-arm64"
 
   # wait for all steps above, but also continue if they fail
