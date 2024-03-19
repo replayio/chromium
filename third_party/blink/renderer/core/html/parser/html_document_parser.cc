@@ -1102,6 +1102,17 @@ void HTMLDocumentParser::Append(const String& input_source) {
     V8RecordReplayHTMLParseAddData(this, input_source.Utf8().c_str());
   }
 
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::IsReplaying()) {
+    base::Value::Dict info;
+    info.Set("kind", "documentAppendString");
+    info.Set("url", GetDocument()->Url().GetString().Utf8());
+    info.Set("length", input_source.Utf8().length());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
+
   const SegmentedString source(input_source);
 
   ScanInBackground(input_source);

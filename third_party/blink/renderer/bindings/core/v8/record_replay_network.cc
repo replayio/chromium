@@ -309,8 +309,20 @@ void OnNetworkReceiveData(uint64_t inspector_id, const char* data, int length) {
     return;
   }
 
+  std::string requestId = RecordReplayNetworkRequestId(inspector_id);
+
+  if (recordreplay::IsReplaying()) {
+    base::Value::Dict info;
+    info.Set("kind", "networkReceiveData");
+    info.Set("requestId", requestId);
+    info.Set("length", length);
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    recordreplay::NewDependencyGraphNode(json.c_str());
+  }
+
   base::DictionaryValue dict;
-  dict.SetString("requestId", RecordReplayNetworkRequestId(inspector_id));
+  dict.SetString("requestId", requestId);
   dict.SetDoubleKey("dataLength", (double) length);
   if (data) {
     std::string data_base64 = base::Base64Encode(
