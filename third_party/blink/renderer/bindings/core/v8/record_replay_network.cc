@@ -50,7 +50,7 @@ static std::string RecordReplayNetworkRequestId(uint64_t inspector_id) {
   // Inspector identifiers can vary when replaying due to differences in inspector
   // behavior. Make sure the identifiers we report to the recorder are consistent
   // by manually recording/replaying the identifier.
-  uint64_t identifer = RecordReplayValue("NetworkRequestId", inspector_id);
+  uint64_t identifier = RecordReplayValue("NetworkRequestId", inspector_id);
 
   char request_id[64];
   snprintf(request_id, 64, "%d.%lu", (int) base::GetCurrentProcId(), (unsigned long) identifier);
