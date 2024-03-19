@@ -2092,6 +2092,9 @@ void RenderFrameImpl::Unload(
                routing_id_);
   DCHECK(!base::RunLoop::IsNestedOnCurrentThread());
 
+  int dependency_node_id = recordreplay::NewDependencyGraphNode("{\"kind\":\"renderFrameUnload\"}");
+  recordreplay::AutoDependencyExecution execute(dependency_node_id);
+
   // Send an UpdateState message before we get deleted.
   // TODO(dcheng): Improve this comment to clarify why it's important to sent
   // state updates.
