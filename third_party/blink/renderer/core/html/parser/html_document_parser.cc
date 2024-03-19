@@ -75,6 +75,7 @@
 #include "third_party/blink/renderer/platform/wtf/shared_buffer.h"
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
 
+#include "base/json/json_writer.h"
 #include "base/record_replay.h"
 
 // V8 API for HTML parsing activity that will be reported to the record/replay driver.
@@ -1107,7 +1108,7 @@ void HTMLDocumentParser::Append(const String& input_source) {
     base::Value::Dict info;
     info.Set("kind", "documentAppendString");
     info.Set("url", GetDocument()->Url().GetString().Utf8());
-    info.Set("length", input_source.Utf8().length());
+    info.Set("length", (int)input_source.Utf8().length());
     std::string json;
     base::JSONWriter::Write(info, &json);
     execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
