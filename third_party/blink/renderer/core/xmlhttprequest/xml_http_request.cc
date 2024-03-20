@@ -572,9 +572,17 @@ void XMLHttpRequest::DispatchReadyStateChangeEvent() {
   ScopedEventDispatchProtect protect(&event_dispatch_recursion_level_);
   recordreplay::Assert(
       "[RUN-1126] XMLHttpRequest::DispatchReadyStateChangeEvent %d %d", state_, async_);
-  recordreplay::AutoMarkerDependencyExecution execute(
-    "ScriptExecution", "XMLHttpRequest::DispatchReadyStateChangeEvent"
-  );
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::IsReplaying()) {
+    base::Value::Dict info;
+    info.Set("kind", "xhrReadyStateChangeEvent");
+    info.Set("url", Url().GetString().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
+
   if (async_ || (state_ <= kOpened || state_ == kDone)) {
     DEVTOOLS_TIMELINE_TRACE_EVENT("XHRReadyStateChange",
                                   inspector_xhr_ready_state_change_event::Data,
@@ -1815,9 +1823,15 @@ void XMLHttpRequest::NotifyParserStopped() {
 void XMLHttpRequest::EndLoading() {
   probe::DidFinishXHR(GetExecutionContext(), this);
 
-  recordreplay::AutoMarkerDependencyExecution execute(
-    "ScriptExecution", "XMLHttpRequest::EndLoading"
-  );
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::IsReplaying()) {
+    base::Value::Dict info;
+    info.Set("kind", "xhrEndLoading");
+    info.Set("url", Url().GetString().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
 
   if (loader_) {
     // Set |m_error| in order to suppress the cancel notification (see
