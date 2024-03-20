@@ -3897,6 +3897,10 @@ bool Document::DispatchBeforeUnloadEvent(ChromeClient* chrome_client,
          !GetEventTargetData()->event_listener_map.Contains(
              event_type_names::kBeforeunload));
 
+  recordreplay::AutoMarkerDependencyExecution execute(
+    "ScriptExecution", "Document::DispatchBeforeUnloadEvent"
+  );
+
   PageDismissalScope in_page_dismissal;
   auto& before_unload_event = *MakeGarbageCollected<BeforeUnloadEvent>();
   before_unload_event.initEvent(event_type_names::kBeforeunload, false, true);
@@ -3982,6 +3986,10 @@ void Document::DispatchUnloadEvents(UnloadEventTimingInfo* unload_timing_info) {
       load_event_progress_ > kUnloadEventInProgress) {
     return;
   }
+
+  recordreplay::AutoMarkerDependencyExecution execute(
+    "ScriptExecution", "Document::DispatchUnloadEvents"
+  );
 
   Element* current_focused_element = FocusedElement();
   if (auto* input = DynamicTo<HTMLInputElement>(current_focused_element))
@@ -7166,6 +7174,11 @@ void Document::OnPrepareToStopParsing() {
 void Document::FinishedParsing() {
   DCHECK(!GetScriptableDocumentParser() || !parser_->IsParsing());
   DCHECK(!GetScriptableDocumentParser() || ready_state_ != kLoading);
+
+  recordreplay::AutoMarkerDependencyExecution execute(
+    "ScriptExecution", "Document::FinishedParsing"
+  );
+
   SetParsingState(kInDOMContentLoaded);
   DocumentParserTiming::From(*this).MarkParserStop();
 

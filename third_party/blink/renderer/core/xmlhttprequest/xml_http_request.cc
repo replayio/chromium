@@ -572,6 +572,9 @@ void XMLHttpRequest::DispatchReadyStateChangeEvent() {
   ScopedEventDispatchProtect protect(&event_dispatch_recursion_level_);
   recordreplay::Assert(
       "[RUN-1126] XMLHttpRequest::DispatchReadyStateChangeEvent %d %d", state_, async_);
+  recordreplay::AutoMarkerDependencyExecution execute(
+    "ScriptExecution", "XMLHttpRequest::DispatchReadyStateChangeEvent"
+  );
   if (async_ || (state_ <= kOpened || state_ == kDone)) {
     DEVTOOLS_TIMELINE_TRACE_EVENT("XHRReadyStateChange",
                                   inspector_xhr_ready_state_change_event::Data,
@@ -1811,6 +1814,10 @@ void XMLHttpRequest::NotifyParserStopped() {
 
 void XMLHttpRequest::EndLoading() {
   probe::DidFinishXHR(GetExecutionContext(), this);
+
+  recordreplay::AutoMarkerDependencyExecution execute(
+    "ScriptExecution", "XMLHttpRequest::EndLoading"
+  );
 
   if (loader_) {
     // Set |m_error| in order to suppress the cancel notification (see

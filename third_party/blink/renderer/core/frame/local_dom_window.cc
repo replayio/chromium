@@ -1154,6 +1154,9 @@ void LocalDOMWindow::DispatchMessageEventWithOriginCheck(
     std::unique_ptr<SourceLocation> location,
     const base::UnguessableToken& source_agent_cluster_id) {
   TRACE_EVENT0("blink", "LocalDOMWindow::DispatchMessageEventWithOriginCheck");
+  recordreplay::AutoMarkerDependencyExecution execute(
+    "ScriptExecution", "LocalDOMWindow::DispatchMessageEventWithOriginCheck"
+  );
   if (intended_target_origin) {
     bool valid_target =
         intended_target_origin->IsSameOriginWith(GetSecurityOrigin());
