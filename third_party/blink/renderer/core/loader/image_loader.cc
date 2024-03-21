@@ -71,6 +71,8 @@
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 #include "third_party/blink/renderer/platform/weborigin/security_policy.h"
 
+#include "base/json/json_writer.h"
+
 namespace blink {
 
 namespace {
