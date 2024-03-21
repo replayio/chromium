@@ -208,7 +208,7 @@ void LazyLoadImageObserver::LoadIfNearViewport(
   DCHECK(!entries.empty());
 
   recordreplay::AutoDependencyExecution execute(
-    recordreplay::NewDependencyGraphNode("{\"kind\":\"lazyImageNearViewport\"}");
+    recordreplay::NewDependencyGraphNode("{\"kind\":\"lazyImageNearViewport\"}")
   );
 
   for (auto entry : entries) {
