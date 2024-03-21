@@ -280,9 +280,18 @@ void ScriptRunner::ExecutePendingScript(PendingScript* pending_script) {
 
   pending_script->ExecuteScriptBlock();
 
-  recordreplay::AutoMarkerDependencyExecution execute(
-    "LoadEventDelay", "ScriptRunner::ExecutePendingScript"
-  );
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::IsReplaying()) {
+    base::Value::Dict info;
+    info.Set("kind", "executePendingScript");
+    Script* script = pending_script->GetSource();
+    if (script) {
+      info.Set("url", script->SourceUrl().GetString().Utf8());
+    }
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
 
   document_->DecrementLoadEventDelayCount();
 }
