@@ -457,9 +457,15 @@ void ImageLoader::DoUpdateFromElement(
     network::mojom::ReferrerPolicy referrer_policy,
     UpdateType update_type,
     bool force_blocking) {
-  recordreplay::AutoMarkerDependencyExecution execute(
-    "LoadEventDelay", "ImageLoader::DoUpdateFromElement"
-  );
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::IsReplaying()) {
+    base::Value::Dict info;
+    info.Set("kind", "imageUpdateFromElement");
+    info.Set("url", element_->ImageSourceURL().GetString().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
 
   // FIXME: According to
   // http://www.whatwg.org/specs/web-apps/current-work/multipage/embedded-content.html#the-img-element:the-img-element-55
@@ -924,11 +930,18 @@ void ImageLoader::DispatchPendingLoadEvent(
   if (!image_content_)
     return;
   CHECK(image_complete_);
-  DispatchLoadEvent();
 
-  recordreplay::AutoMarkerDependencyExecution execute(
-    "LoadEventDelay", "ImageLoader::DispatchPendingLoadEvent"
-  );
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::IsReplaying()) {
+    base::Value::Dict info;
+    info.Set("kind", "imageLoaded");
+    info.Set("url", element_->ImageSourceURL().GetString().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
+
+  DispatchLoadEvent();
 
   // Checks Document's load event synchronously here for performance.
   // This is safe because DispatchPendingLoadEvent() is called asynchronously.
