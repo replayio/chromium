@@ -44,6 +44,8 @@
 #include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
 
+#include "base/json/json_writer.h"
+
 namespace {
 
 void PostTaskWithLowPriorityUntilTimeout(
