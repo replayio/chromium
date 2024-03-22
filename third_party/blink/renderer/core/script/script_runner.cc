@@ -280,17 +280,10 @@ void ScriptRunner::ExecutePendingScript(PendingScript* pending_script) {
   DCHECK(!document_->domWindow() || !document_->domWindow()->IsContextPaused());
   DCHECK(pending_script);
 
-  pending_script->ExecuteScriptBlock();
+  int node_id = recordreplay::NewDependencyGraphNode("{\"kind\":\"executePendingScript\"}");
+  recordreplay::AutoDependencyExecution execute(node_id);
 
-  absl::optional<recordreplay::AutoDependencyExecution> execute;
-  if (recordreplay::IsReplaying()) {
-    base::Value::Dict info;
-    info.Set("kind", "executePendingScript");
-    info.Set("url", pending_script->UrlForTracing().GetString().Utf8());
-    std::string json;
-    base::JSONWriter::Write(info, &json);
-    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
-  }
+  pending_script->ExecuteScriptBlock();
 
   document_->DecrementLoadEventDelayCount();
 }
