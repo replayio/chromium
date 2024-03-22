@@ -132,6 +132,12 @@ function updateRepo(repo, treeish) {
 
 function enforceBackendPreludeVersion() {
   const backend = getBackendDir();
+
+  spawnChecked("git", ["submodule", "update", "--init", "--recursive"], {
+    cwd: backend,
+    stdio: "inherit",
+  });
+
   const preludeVersion = fs.readFileSync(
     path.join(backend, ".preludeversion"),
     "utf8"
