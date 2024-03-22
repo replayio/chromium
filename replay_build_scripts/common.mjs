@@ -130,6 +130,17 @@ function updateRepo(repo, treeish) {
   syncRepo(repo, treeish);
 }
 
+function enforceBackendPreludeVersion() {
+  const backend = getBackendDir();
+  const preludeVersion = fs.readFileSync(
+    path.join(backend, ".preludeversion"),
+    "utf8"
+  );
+
+  const prelude = path.join(backend, "prelude");
+  updateRepo(prelude, preludeVersion);
+}
+
 export function updateBackendRepo() {
   const backend = getBackendDir();
   // if process.env.REPLAY_BACKEND_REV is set, use that, otherwise use the REPLAY_BACKEND_REV file
@@ -137,6 +148,7 @@ export function updateBackendRepo() {
     ? process.env.REPLAY_BACKEND_REV
     : fs.readFileSync("REPLAY_BACKEND_REV", "utf8").trim();
   updateRepo(backend, rev);
+  enforceBackendPreludeVersion();
   // create a symlink to chromium in the backend checkout
   const chromiumRepoPath = process.cwd();
   const chromiumPathInBackend = path.join(backend, "chromium");
