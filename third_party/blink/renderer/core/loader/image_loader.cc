@@ -475,7 +475,7 @@ void ImageLoader::DoUpdateFromElement(
     std::string json;
     base::JSONWriter::Write(info, &json);
     int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
-    if (record_replay_dependency_node_id) {
+    if (record_replay_scheduled_node_id) {
       recordreplay::AddDependencyGraphEdge(
         record_replay_scheduled_node_id, node_id,
         "{\"kind\":\"imageUpdateScheduled\"}"
