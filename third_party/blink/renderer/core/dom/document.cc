@@ -2273,7 +2273,7 @@ void Document::UpdateStyle() {
     info.Set("url", Url().GetString().Utf8());
     std::string json;
     base::JSONWriter::Write(info, &json);
-    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str());
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
   }
 
   unsigned initial_element_count = GetStyleEngine().StyleForElementCount();
