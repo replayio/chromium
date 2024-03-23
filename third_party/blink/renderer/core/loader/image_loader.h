@@ -174,6 +174,7 @@ class CORE_EXPORT ImageLoader : public GarbageCollected<ImageLoader>,
       UpdateFromElementBehavior,
       network::mojom::ReferrerPolicy = network::mojom::ReferrerPolicy::kDefault,
       UpdateType = UpdateType::kAsync,
+      int record_replay_scheduled_node_id,
       bool force_blocking = false);
 
   virtual void DispatchLoadEvent() = 0;
