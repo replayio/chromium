@@ -131,7 +131,7 @@ class ImageLoader::Task {
     ExecutionContext* context = loader_->GetElement()->GetExecutionContext();
     async_task_context_.Schedule(context, "Image");
     world_ = context->GetCurrentWorld();
-    record_replay_scheduled_node_id = recordreplay::NewDependencyGraphNode(
+    record_replay_scheduled_node_id_ = recordreplay::NewDependencyGraphNode(
       "{\"kind\":\"scheduleImageUpdateTask\"}"
     );
   }
@@ -145,7 +145,8 @@ class ImageLoader::Task {
     ExecutionContext* context = element->GetExecutionContext();
     probe::AsyncTask async_task(context, &async_task_context_);
     loader_->DoUpdateFromElement(world_, update_behavior_, referrer_policy_,
-                                 record_replay_scheduled_node_id);
+                                 UpdateType::kAsync,
+                                 record_replay_scheduled_node_id_);
   }
 
   void ClearLoader() {
@@ -161,10 +162,10 @@ class ImageLoader::Task {
   scoped_refptr<const DOMWrapperWorld> world_;
   network::mojom::ReferrerPolicy referrer_policy_;
 
+  int record_replay_scheduled_node_id_ = 0;
+
   probe::AsyncTaskContext async_task_context_;
   base::WeakPtrFactory<Task> weak_factory_{this};
-
-  int record_replay_scheduled_node_id = 0;
 };
 
 ImageLoader::ImageLoader(Element* element)
