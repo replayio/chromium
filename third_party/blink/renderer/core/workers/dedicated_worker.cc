@@ -251,7 +251,7 @@ void DedicatedWorker::OnHostCreated(
         back_forward_cache_controller_host) {
   // Keep track of network requests made while starting the worker.
   recordreplay::AutoDependencyExecution execute(
-    recordreplay::NewDependencyGraphNode("{\"kind\":\"onWorkerHostCreated\"}")
+    recordreplay::NewDependencyGraphNode("{\"kind\":\"workerHostCreated\"}")
   );
 
   DCHECK(!base::FeatureList::IsEnabled(features::kPlzDedicatedWorker));

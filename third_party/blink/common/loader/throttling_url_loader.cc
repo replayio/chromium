@@ -748,7 +748,7 @@ void ThrottlingURLLoader::OnReceiveRedirect(
     info.Set("new_url", redirect_info.new_url.spec());
     std::string json;
     base::JSONWriter::Write(info, &json);
-    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str());
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
   }
 
   if (!throttles_.empty()) {
