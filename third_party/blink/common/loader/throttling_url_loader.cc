@@ -743,7 +743,7 @@ void ThrottlingURLLoader::OnReceiveRedirect(
   absl::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::IsReplaying()) {
     base::Value::Dict info;
-    info.Set("kind", "onReceiveRedirect");
+    info.Set("kind", "receivedRedirect");
     info.Set("original_url", original_url_.spec());
     info.Set("new_url", redirect_info.new_url.spec());
     std::string json;

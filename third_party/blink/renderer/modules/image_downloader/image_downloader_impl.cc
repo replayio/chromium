@@ -181,7 +181,7 @@ void ImageDownloaderImpl::DownloadImage(const KURL& image_url,
     info.Set("url", image_url.GetString().Utf8());
     std::string json;
     base::JSONWriter::Write(info, &json);
-    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str());
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
   }
 
   // Constrain the preferred size by the max bitmap size. This will prevent

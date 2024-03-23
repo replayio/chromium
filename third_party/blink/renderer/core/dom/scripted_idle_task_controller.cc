@@ -211,8 +211,9 @@ void ScriptedIdleTaskController::RunCallback(
       "[RUN-2419] ScriptedIdleTaskController::RunCallback A %d",
       id);
 
-  int node_id = recordreplay::NewDependencyGraphNode("{\"kind\":\"executeIdleCallback\"}");
-  recordreplay::AutoDependencyExecution execute(node_id);
+  recordreplay::AutoDependencyExecution execute(
+    recordreplay::NewDependencyGraphNode("{\"kind\":\"executeIdleCallback\"}")
+  );
 
   // Keep the idle task in |idle_tasks_| so that it's still wrapper-traced.
   // TODO(https://crbug.com/796145): Remove this hack once on-stack objects
