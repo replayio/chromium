@@ -156,6 +156,9 @@ class CORE_EXPORT PendingScript : public GarbageCollected<PendingScript>,
     return original_execution_context_;
   }
 
+  // IDs for nodes which executing the script depends on.
+  Vector<int> record_replay_dependency_node_ids_;
+
  private:
   static void ExecuteScriptBlockInternal(
       Script*,
@@ -186,9 +189,6 @@ class CORE_EXPORT PendingScript : public GarbageCollected<PendingScript>,
   // documents and thus don't retain a strong references.
   WeakMember<Document> original_element_document_;
   WeakMember<ExecutionContext> original_execution_context_;
-
-  // IDs for nodes which executing the script depends on.
-  Vector<int> record_replay_dependency_node_ids_;
 
   const bool created_during_document_write_;
 };
