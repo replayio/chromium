@@ -187,6 +187,9 @@ class CORE_EXPORT PendingScript : public GarbageCollected<PendingScript>,
   WeakMember<Document> original_element_document_;
   WeakMember<ExecutionContext> original_execution_context_;
 
+  // IDs for nodes which executing the script depends on.
+  Vector<int> record_replay_dependency_node_ids_;
+
   const bool created_during_document_write_;
 };
 

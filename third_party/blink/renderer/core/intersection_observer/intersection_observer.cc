@@ -531,8 +531,8 @@ void IntersectionObserver::Deliver() {
     return;
   HeapVector<Member<IntersectionObserverEntry>> entries;
 
-  recordreplay::AutoMarkerDependencyExecution execute(
-    "ScriptExecution", "IntersectionObserver::Deliver"
+  recordreplay::AutoDependencyExecution execute(
+    recordreplay::NewDependencyGraphNode("{\"kind\":\"intersectionChanged\"}")
   );
 
   HeapVector<Member<IntersectionObservation>> observations_vector;

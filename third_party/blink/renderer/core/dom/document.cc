@@ -3908,9 +3908,15 @@ bool Document::DispatchBeforeUnloadEvent(ChromeClient* chrome_client,
          !GetEventTargetData()->event_listener_map.Contains(
              event_type_names::kBeforeunload));
 
-  recordreplay::AutoMarkerDependencyExecution execute(
-    "ScriptExecution", "Document::DispatchBeforeUnloadEvent"
-  );
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::IsReplaying()) {
+    base::Value::Dict info;
+    info.Set("kind", "documentBeforeUnload");
+    info.Set("url", Url().GetString().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
 
   PageDismissalScope in_page_dismissal;
   auto& before_unload_event = *MakeGarbageCollected<BeforeUnloadEvent>();
@@ -3998,9 +4004,15 @@ void Document::DispatchUnloadEvents(UnloadEventTimingInfo* unload_timing_info) {
     return;
   }
 
-  recordreplay::AutoMarkerDependencyExecution execute(
-    "ScriptExecution", "Document::DispatchUnloadEvents"
-  );
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::IsReplaying()) {
+    base::Value::Dict info;
+    info.Set("kind", "documentUnloaded");
+    info.Set("url", Url().GetString().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
 
   Element* current_focused_element = FocusedElement();
   if (auto* input = DynamicTo<HTMLInputElement>(current_focused_element))
