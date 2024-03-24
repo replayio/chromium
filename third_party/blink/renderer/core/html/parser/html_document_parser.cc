@@ -830,6 +830,16 @@ bool HTMLDocumentParser::PumpTokenizer() {
   DCHECK(!IsStopped());
   DCHECK(token_producer_);
 
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::IsReplaying()) {
+    base::Value::Dict info;
+    info.Set("kind", "documentPumpTokenizer");
+    info.Set("url", GetDocument()->Url().GetString().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
+
   did_pump_tokenizer_ = true;
 
   NestingLevelIncrementer session = task_runner_state_->ScopedPumpSession();
