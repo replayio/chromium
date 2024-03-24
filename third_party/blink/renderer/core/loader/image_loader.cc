@@ -176,7 +176,9 @@ ImageLoader::ImageLoader(Element* element)
       lazy_image_load_state_(LazyImageLoadState::kNone) {
   RESOURCE_LOADING_DVLOG(1) << "new ImageLoader " << this;
 
-  record_replay_created_node_id_ = recordreplay::NewDependencyGraphNode("imageLoaderCreated");
+  record_replay_created_node_id_ = recordreplay::NewDependencyGraphNode(
+    "{\"kind\":\"imageLoaderCreated\"}"
+  );
 }
 
 ImageLoader::~ImageLoader() = default;
