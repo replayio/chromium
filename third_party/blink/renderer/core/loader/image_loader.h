@@ -308,6 +308,8 @@ class CORE_EXPORT ImageLoader : public GarbageCollected<ImageLoader>,
   };
 
   HeapVector<Member<DecodeRequest>> decode_requests_;
+
+  int record_replay_created_node_id_ = 0;
 };
 
 }  // namespace blink

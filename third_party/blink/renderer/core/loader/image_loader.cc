@@ -175,6 +175,8 @@ ImageLoader::ImageLoader(Element* element)
       was_deferred_explicitly_(false),
       lazy_image_load_state_(LazyImageLoadState::kNone) {
   RESOURCE_LOADING_DVLOG(1) << "new ImageLoader " << this;
+
+  record_replay_created_node_id_ = recordreplay::NewDependencyGraphNode("imageLoaderCreated");
 }
 
 ImageLoader::~ImageLoader() = default;
@@ -475,6 +477,10 @@ void ImageLoader::DoUpdateFromElement(
     std::string json;
     base::JSONWriter::Write(info, &json);
     int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
+    recordreplay::AddDependencyGraphEdge(
+      record_replay_created_node_id_, node_id,
+      "{\"kind\":\"imageLoader\"}"
+    );
     if (record_replay_scheduled_node_id) {
       recordreplay::AddDependencyGraphEdge(
         record_replay_scheduled_node_id, node_id,
@@ -956,7 +962,12 @@ void ImageLoader::DispatchPendingLoadEvent(
     info.Set("url", element_->ImageSourceURL().GetString().Utf8());
     std::string json;
     base::JSONWriter::Write(info, &json);
-    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+    int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
+    recordreplay::AddDependencyGraphEdge(
+      record_replay_created_node_id_, node_id,
+      "{\"kind\":\"imageLoader\"}"
+    );
+    execute.emplace(node_id);
   }
 
   DispatchLoadEvent();
@@ -975,7 +986,12 @@ void ImageLoader::DispatchPendingErrorEvent(
     info.Set("url", element_->ImageSourceURL().GetString().Utf8());
     std::string json;
     base::JSONWriter::Write(info, &json);
-    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+    int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
+    recordreplay::AddDependencyGraphEdge(
+      record_replay_created_node_id_, node_id,
+      "{\"kind\":\"imageLoader\"}"
+    );
+    execute.emplace(node_id);
   }
 
   GetElement()->DispatchEvent(*Event::Create(event_type_names::kError), "ImageLoader::DispatchPendingErrorEvent");

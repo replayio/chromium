@@ -66,10 +66,6 @@ void FrameRequestCallbackCollection::ExecuteFrameCallbacks(
   ExecutionContext::ScopedRequestAnimationFrameStatus scoped_raf_status(
       context_);
 
-  recordreplay::AutoMarkerDependencyExecution execute(
-    "ScriptExecution", "FrameRequestCallbackCollection::ExecuteFrameCallbacks"
-  );
-
   // First, generate a list of callbacks to consider.  Callbacks registered from
   // this point on are considered only for the "next" frame, not this one.
   DCHECK(callbacks_to_invoke_.empty());
@@ -123,6 +119,10 @@ void V8FrameCallback::Trace(blink::Visitor* visitor) const {
 }
 
 void V8FrameCallback::Invoke(double highResTime) {
+  recordreplay::AutoMarkerDependencyExecution execute(
+    "ScriptExecution", "V8FrameCallback::Invoke"
+  );
+
   callback_->InvokeAndReportException(nullptr, highResTime);
 }
 

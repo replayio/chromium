@@ -149,8 +149,8 @@ void NetworkInformation::ConnectionChange(
     bool save_data) {
   DCHECK(GetExecutionContext()->IsContextThread());
 
-  recordreplay::AutoMarkerDependencyExecution execute(
-    "ScriptExecution", "NetworkInformation::ConnectionChange"
+  recordreplay::AutoDependencyExecution execute(
+    recordreplay::NewDependencyGraphNode("{\"kind\":\"networkConnectionChange\"}")
   );
 
   const String host = Host();
