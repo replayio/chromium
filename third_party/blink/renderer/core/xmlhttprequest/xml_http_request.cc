@@ -576,7 +576,7 @@ void XMLHttpRequest::DispatchReadyStateChangeEvent() {
       "[RUN-1126] XMLHttpRequest::DispatchReadyStateChangeEvent %d %d", state_, async_);
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
-  if (recordreplay::IsReplaying() && !recordreplay::FeatureEnabled("no-dependency-graph")) {
+  if (recordreplay::DependencyGraphEnabled()) {
     base::Value::Dict info;
     info.Set("kind", "xhrReadyStateChangeEvent");
     info.Set("url", Url().GetString().Utf8());
@@ -1826,7 +1826,7 @@ void XMLHttpRequest::EndLoading() {
   probe::DidFinishXHR(GetExecutionContext(), this);
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
-  if (recordreplay::IsReplaying() && !recordreplay::FeatureEnabled("no-dependency-graph")) {
+  if (recordreplay::DependencyGraphEnabled()) {
     base::Value::Dict info;
     info.Set("kind", "xhrEndLoading");
     info.Set("url", Url().GetString().Utf8());

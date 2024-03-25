@@ -602,7 +602,7 @@ void Resource::DidAddClient(ResourceClient* client) {
     return;
   if (IsLoaded()) {
     absl::optional<recordreplay::AutoDependencyExecution> execute;
-    if (recordreplay::IsReplaying() && !recordreplay::FeatureEnabled("no-dependency-graph")) {
+    if (recordreplay::DependencyGraphEnabled()) {
       base::Value::Dict info;
       info.Set("kind", "resourceAlreadyLoaded");
       info.Set("url", Url().GetString().Utf8());

@@ -831,7 +831,7 @@ bool HTMLDocumentParser::PumpTokenizer() {
   DCHECK(token_producer_);
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
-  if (recordreplay::IsReplaying() && !recordreplay::FeatureEnabled("no-dependency-graph")) {
+  if (recordreplay::DependencyGraphEnabled()) {
     base::Value::Dict info;
     info.Set("kind", "documentPumpTokenizer");
     info.Set("url", GetDocument()->Url().GetString().Utf8());
@@ -1114,7 +1114,7 @@ void HTMLDocumentParser::Append(const String& input_source) {
   }
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
-  if (recordreplay::IsReplaying() && !recordreplay::FeatureEnabled("no-dependency-graph")) {
+  if (recordreplay::DependencyGraphEnabled()) {
     base::Value::Dict info;
     info.Set("kind", "documentAppendString");
     info.Set("url", GetDocument()->Url().GetString().Utf8());

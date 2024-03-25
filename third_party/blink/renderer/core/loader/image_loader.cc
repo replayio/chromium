@@ -472,7 +472,7 @@ void ImageLoader::DoUpdateFromElement(
     int record_replay_scheduled_node_id,
     bool force_blocking) {
   absl::optional<recordreplay::AutoDependencyExecution> execute;
-  if (recordreplay::IsReplaying() && !recordreplay::FeatureEnabled("no-dependency-graph")) {
+  if (recordreplay::DependencyGraphEnabled()) {
     base::Value::Dict info;
     info.Set("kind", "imageUpdateFromElement");
     info.Set("url", element_->ImageSourceURL().GetString().Utf8());
@@ -958,7 +958,7 @@ void ImageLoader::DispatchPendingLoadEvent(
   CHECK(image_complete_);
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
-  if (recordreplay::IsReplaying() && !recordreplay::FeatureEnabled("no-dependency-graph")) {
+  if (recordreplay::DependencyGraphEnabled()) {
     base::Value::Dict info;
     info.Set("kind", "imageLoaded");
     info.Set("url", element_->ImageSourceURL().GetString().Utf8());
@@ -982,7 +982,7 @@ void ImageLoader::DispatchPendingLoadEvent(
 void ImageLoader::DispatchPendingErrorEvent(
     std::unique_ptr<IncrementLoadEventDelayCount> count) {
   absl::optional<recordreplay::AutoDependencyExecution> execute;
-  if (recordreplay::IsReplaying() && !recordreplay::FeatureEnabled("no-dependency-graph")) {
+  if (recordreplay::DependencyGraphEnabled()) {
     base::Value::Dict info;
     info.Set("kind", "imageError");
     info.Set("url", element_->ImageSourceURL().GetString().Utf8());

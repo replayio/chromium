@@ -2386,7 +2386,7 @@ void ResourceFetcher::ScheduleStaleRevalidate(Resource* stale_resource) {
 void ResourceFetcher::RevalidateStaleResource(Resource* stale_resource,
                                               int record_replay_scheduled_node_id) {
   absl::optional<recordreplay::AutoDependencyExecution> execute;
-  if (recordreplay::IsReplaying() && !recordreplay::FeatureEnabled("no-dependency-graph")) {
+  if (recordreplay::DependencyGraphEnabled()) {
     int node_id = recordreplay::NewDependencyGraphNode("{\"kind\":\"revalidateStaleResource\"}");
     recordreplay::AddDependencyGraphEdge(
       record_replay_scheduled_node_id, node_id,

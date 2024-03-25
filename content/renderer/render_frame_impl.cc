@@ -2587,7 +2587,7 @@ void RenderFrameImpl::CommitNavigation(
   LogCommitHistograms(commit_params->commit_sent, is_main_frame_);
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
-  if (recordreplay::IsReplaying() && !recordreplay::FeatureEnabled("no-dependency-graph")) {
+  if (recordreplay::DependencyGraphEnabled()) {
     base::Value::Dict info;
     info.Set("kind", "renderFrameNavigate");
     info.Set("url", common_params->url.spec());

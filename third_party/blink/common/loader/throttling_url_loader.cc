@@ -741,7 +741,7 @@ void ThrottlingURLLoader::OnReceiveRedirect(
   // Keep track of network requests triggered by the download message we are
   // handling from the browser process.
   absl::optional<recordreplay::AutoDependencyExecution> execute;
-  if (recordreplay::IsReplaying() && !recordreplay::FeatureEnabled("no-dependency-graph")) {
+  if (recordreplay::DependencyGraphEnabled()) {
     base::Value::Dict info;
     info.Set("kind", "receivedRedirect");
     info.Set("original_url", original_url_.spec());
