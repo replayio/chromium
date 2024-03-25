@@ -175,7 +175,7 @@ void ImageDownloaderImpl::DownloadImage(const KURL& image_url,
   // Keep track of network requests triggered by the download mojo message
   // we are handling.
   absl::optional<recordreplay::AutoDependencyExecution> execute;
-  if (recordreplay::IsReplaying()) {
+  if (recordreplay::IsReplaying() && !recordreplay::FeatureEnabled("no-dependency-graph")) {
     base::Value::Dict info;
     info.Set("kind", "downloadImage");
     info.Set("url", image_url.GetString().Utf8());

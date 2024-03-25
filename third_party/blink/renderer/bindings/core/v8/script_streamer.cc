@@ -993,7 +993,7 @@ void ResourceScriptStreamer::StreamingComplete(LoadingState loading_state) {
       });
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
-  if (recordreplay::IsReplaying()) {
+  if (recordreplay::IsReplaying() && !recordreplay::FeatureEnabled("no-dependency-graph")) {
     int node_id = recordreplay::NewDependencyGraphNode(
       "{\"kind\":\"scriptStreamingComplete\"}"
     );

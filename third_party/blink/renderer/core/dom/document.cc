@@ -2267,7 +2267,7 @@ void Document::UpdateStyle() {
 
   // Updating style can trigger network requests, so keep track of execution.
   absl::optional<recordreplay::AutoDependencyExecution> execute;
-  if (recordreplay::IsReplaying()) {
+  if (recordreplay::IsReplaying() && !recordreplay::FeatureEnabled("no-dependency-graph")) {
     base::Value::Dict info;
     info.Set("kind", "documentUpdateStyle");
     info.Set("url", Url().GetString().Utf8());
@@ -3689,7 +3689,7 @@ void Document::ImplicitClose() {
   DCHECK(!InStyleRecalc());
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
-  if (recordreplay::IsReplaying()) {
+  if (recordreplay::IsReplaying() && !recordreplay::FeatureEnabled("no-dependency-graph")) {
     base::Value::Dict info;
     info.Set("kind", "documentLoaded");
     info.Set("url", Url().GetString().Utf8());
@@ -3909,7 +3909,7 @@ bool Document::DispatchBeforeUnloadEvent(ChromeClient* chrome_client,
              event_type_names::kBeforeunload));
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
-  if (recordreplay::IsReplaying()) {
+  if (recordreplay::IsReplaying() && !recordreplay::FeatureEnabled("no-dependency-graph")) {
     base::Value::Dict info;
     info.Set("kind", "documentBeforeUnload");
     info.Set("url", Url().GetString().Utf8());
@@ -4005,7 +4005,7 @@ void Document::DispatchUnloadEvents(UnloadEventTimingInfo* unload_timing_info) {
   }
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
-  if (recordreplay::IsReplaying()) {
+  if (recordreplay::IsReplaying() && !recordreplay::FeatureEnabled("no-dependency-graph")) {
     base::Value::Dict info;
     info.Set("kind", "documentUnloaded");
     info.Set("url", Url().GetString().Utf8());
@@ -7199,7 +7199,7 @@ void Document::FinishedParsing() {
   DCHECK(!GetScriptableDocumentParser() || ready_state_ != kLoading);
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
-  if (recordreplay::IsReplaying()) {
+  if (recordreplay::IsReplaying() && !recordreplay::FeatureEnabled("no-dependency-graph")) {
     base::Value::Dict info;
     info.Set("kind", "documentFinishedParsing");
     info.Set("url", Url().GetString().Utf8());

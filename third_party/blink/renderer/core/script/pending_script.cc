@@ -190,7 +190,7 @@ void PendingScript::ExecuteScriptBlock() {
   Dispose();
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
-  if (recordreplay::IsReplaying()) {
+  if (recordreplay::IsReplaying() && !recordreplay::FeatureEnabled("no-dependency-graph")) {
     base::Value::Dict info;
     info.Set("kind", "executeScriptBlock");
     info.Set("url", script->SourceUrl().GetString().Utf8());

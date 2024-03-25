@@ -1156,7 +1156,7 @@ void LocalDOMWindow::DispatchMessageEventWithOriginCheck(
   TRACE_EVENT0("blink", "LocalDOMWindow::DispatchMessageEventWithOriginCheck");
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
-  if (recordreplay::IsReplaying()) {
+  if (recordreplay::IsReplaying() && !recordreplay::FeatureEnabled("no-dependency-graph")) {
     int node_id = recordreplay::NewDependencyGraphNode("{\"kind\":\"dispatchMessageEvent\"}");
     int created_node_id = event->RecordReplayDependencyGraphNodeId();
     if (created_node_id)
