@@ -164,7 +164,7 @@ class CORE_EXPORT ScriptPromiseResolver
 
     recordreplay::Assert(
       "[RUN-3404-3409] ScriptPromiseResolver::ResolveOrReject A"
-      "%d %d %d %d %d %d"
+      "%d %d %d %d %d %d",
       state_,
       !!GetScriptState()->ContextIsValid(),
       !!GetExecutionContext(),
