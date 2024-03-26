@@ -55,7 +55,6 @@ if (!REPLAY_LOCAL_DRIVER_DIR) {
         `Invalid DRIVER_REVISION was "${driverRevisionOverride}" but must have a length of exactly 12`
       );
     }
-    driverRevisionOverride = driverRevisionOverride.substring(0, 12);
     downloadArchive = `${currentPlatform()}-recordreplay-${driverRevisionOverride}${archSuffix}.tgz`;
   }
   spawnChecked(
