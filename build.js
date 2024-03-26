@@ -48,8 +48,8 @@ if (!REPLAY_LOCAL_DRIVER_DIR) {
   let driverArchive = `${currentPlatform()}-recordreplay${archSuffix}.tgz`;
   let downloadArchive = driverArchive;
   let driverRevisionOverride = DRIVER_REVISION;
-  driverRevisionOverride = driverRevisionOverride.substring(0, 12);
   if (driverRevisionIsSet) {
+    driverRevisionOverride = driverRevisionOverride.substring(0, 12);
     if (driverRevisionOverride.length !== 12) {
       throw new Error(
         `Invalid DRIVER_REVISION was "${driverRevisionOverride}" but must have a length of exactly 12`
