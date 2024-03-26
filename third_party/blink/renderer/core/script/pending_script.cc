@@ -71,7 +71,11 @@ PendingScript::PendingScript(ScriptElementBase* element,
       original_element_document_(&element->GetDocument()),
       original_execution_context_(element->GetExecutionContext()),
       created_during_document_write_(
-          element->GetDocument().IsInDocumentWrite()) {}
+          element->GetDocument().IsInDocumentWrite()) {
+  record_replay_dependency_node_ids_.push_back(
+    recordreplay::NewDependencyGraphNode("{\"kind\":\"pendingScriptCreated\"}")
+  );
+}
 
 PendingScript::~PendingScript() {}
 
@@ -186,13 +190,19 @@ void PendingScript::ExecuteScriptBlock() {
   Dispose();
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
-  if (recordreplay::IsReplaying()) {
+  if (recordreplay::DependencyGraphEnabled()) {
     base::Value::Dict info;
     info.Set("kind", "executeScriptBlock");
-    info.Set("url", script->SourceUrl().GetString().Utf8());
+    if (script)
+      info.Set("url", script->SourceUrl().GetString().Utf8());
     std::string json;
     base::JSONWriter::Write(info, &json);
     int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
+    for (int other_node_id : record_replay_dependency_node_ids_) {
+      recordreplay::AddDependencyGraphEdge(
+        other_node_id, node_id, "{\"kind\":\"pendingScript\"}"
+      );
+    }
     execute.emplace(node_id);
   }
 
