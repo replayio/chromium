@@ -190,7 +190,8 @@ void ScriptRunner::RemoveDelayReasonFromScript(PendingScript* pending_script,
     base::Value::Dict info;
     info.Set("kind", "scheduleExecuteAsyncScript");
     if (pending_script->IsEligibleForLowPriorityAsyncScriptExecution()) {
-      info.Set("lowPriorityTimeout", features::kTimeoutForLowPriorityAsyncScriptExecution.Get());
+      double timeout = features::kTimeoutForLowPriorityAsyncScriptExecution.Get().InMillisecondsF();
+      info.Set("lowPriorityTimeout", timeout);
     }
     std::string json;
     base::JSONWriter::Write(info, &json);
