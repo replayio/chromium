@@ -52,6 +52,8 @@ ProxyMain::ProxyMain(LayerTreeHost* layer_tree_host,
   TRACE_EVENT0("cc", "ProxyMain::ProxyMain");
   DCHECK(task_runner_provider_);
   DCHECK(IsMainThread());
+  
+  recordreplay::InitPaintCallback();
 }
 
 ProxyMain::~ProxyMain() {
