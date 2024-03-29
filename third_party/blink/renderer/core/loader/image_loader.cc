@@ -486,7 +486,7 @@ void ImageLoader::DoUpdateFromElement(
     if (record_replay_scheduled_node_id) {
       recordreplay::AddDependencyGraphEdge(
         record_replay_scheduled_node_id, node_id,
-        "{\"kind\":\"imageUpdateScheduled\"}"
+        "{\"kind\":\"scheduler\"}"
       );
     }
     execute.emplace(node_id);
