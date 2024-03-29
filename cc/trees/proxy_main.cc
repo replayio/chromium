@@ -54,6 +54,9 @@ ProxyMain::ProxyMain(LayerTreeHost* layer_tree_host,
   DCHECK(IsMainThread());
   
   recordreplay::InitPaintCallback();
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    recordreplay::SetCompositorProxy(this);
+  }
 }
 
 ProxyMain::~ProxyMain() {

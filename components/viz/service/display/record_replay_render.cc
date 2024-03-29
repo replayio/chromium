@@ -220,7 +220,6 @@ void InitPaintCallback() {
   static bool hasPaints = false;
   if (!hasPaints) {
     hasPaints = true;
-    recordreplay::Print("DDBG InitPaintCallback");
     V8RecordReplaySetPaintCallback(PaintCallback);
   }
 }
@@ -324,7 +323,7 @@ static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
   // Wait for the repainting frame to complete.
   bool signaled = event.TimedWait(base::Milliseconds(3000));
   if (!signaled) {
-    Print("Failed waiting to get a repaint.");
+    Print("[RuntimeError] Failed waiting to get a repaint.");
     gRepaintResult = nullptr;
   }
 
