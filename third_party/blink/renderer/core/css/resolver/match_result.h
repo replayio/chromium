@@ -204,9 +204,24 @@ class CORE_EXPORT MatchResult {
     RecordReplayMatchedPropertiesVector result;
     result.resize(matched_properties_.size());
 
+    recordreplay::Assert("[DDBG] GetRecordReplayMatchedProperties A %u",
+      matched_properties_.size()
+    );
+
     for (WTF::wtf_size_t i = 0; i < matched_properties_.size(); ++i) {
       memcpy(&result[i].types_, &matched_properties_[i].types_, sizeof(MatchedProperties::Data));
       result[i].record_replay_id_properties = recordreplay::PointerId(matched_properties_[i].properties.Get());
+
+      recordreplay::Assert("[DDBG] GetRecordReplayMatchedProperties B %u %d %d %d %d %d %d %d",
+        i,
+        result[i].record_replay_id_properties,
+        (int)matched_properties_[i].types_.is_inline_style,
+        (int)matched_properties_[i].types_.layer_order,
+        (int)matched_properties_[i].types_.link_match_type,
+        (int)matched_properties_[i].types_.origin,
+        (int)matched_properties_[i].types_.tree_order,
+        (int)matched_properties_[i].types_.valid_property_filter
+      );
     }
 
     return result;

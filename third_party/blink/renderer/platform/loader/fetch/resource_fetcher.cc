@@ -1233,6 +1233,10 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
   if (resource->GetType() == ResourceType::kImage) {
     image_resources_.insert(resource);
     not_loaded_image_resources_.insert(resource);
+    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+                                              "ResourceFetcher::RequestResource")) {
+      replay_strong_not_loaded_image_resources_.insert(resource);
+    }
     if (params.GetImageRequestBehavior() ==
         FetchParameters::ImageRequestBehavior::kNonBlockingImage) {
       load_blocking_policy = ImageLoadBlockingPolicy::kForceNonBlockingLoad;
@@ -2247,6 +2251,11 @@ void ResourceFetcher::UpdateAllImageResourcePriorities() {
   }
 
   not_loaded_image_resources_.RemoveAll(to_be_removed);
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+        "ResourceFetcher::UpdateAllImageResourcePriorities")) {
+    replay_strong_not_loaded_image_resources_.RemoveAll(to_be_removed);
+  }
+
   // Explicitly free the backing store to not regress memory.
   // TODO(bikineev): Revisit when young generation is done.
   to_be_removed.clear();
@@ -2493,6 +2502,7 @@ void ResourceFetcher::Trace(Visitor* visitor) const {
   visitor->Trace(non_blocking_loaders_);
   visitor->Trace(cached_resources_map_);
   visitor->Trace(image_resources_);
+  visitor->Trace(replay_strong_not_loaded_image_resources_);
   visitor->Trace(not_loaded_image_resources_);
   visitor->Trace(preloads_);
   visitor->Trace(matched_preloads_);

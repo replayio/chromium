@@ -161,6 +161,7 @@ bool HasUnresolvedReferences(CSSParserTokenRange range) {
 MatchResult& StyleCascade::MutableMatchResult() {
   DCHECK(!generation_) << "Apply has already been called";
   needs_match_result_analyze_ = true;
+  recordreplay::Assert("[DDBG] StyleCascade::MutableMatchResult ");
   return match_result_;
 }
 

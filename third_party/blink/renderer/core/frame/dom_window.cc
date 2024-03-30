@@ -271,6 +271,12 @@ String DOMWindow::SanitizedCrossDomainAccessErrorMessage(
   } else {
     message = "Blocked a frame with origin \"" + active_origin->ToString() +
               "\" from accessing a cross-origin frame.";
+
+    if (recordreplay::IsInReplayCode() || recordreplay::AreEventsDisallowed()) {
+      recordreplay::Warning("DOMWindow::SanitizedCrossDomainAccessErrorMessage %s %s",
+        location_ ? location_->toString().Utf8().c_str() : "",
+        message.Utf8().c_str());
+    }
   }
 
   // FIXME: Evaluate which details from 'crossDomainAccessErrorMessage' may

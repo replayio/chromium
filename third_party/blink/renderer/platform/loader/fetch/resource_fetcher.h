@@ -467,6 +467,7 @@ class PLATFORM_EXPORT ResourceFetcher
 
   // |image_resources_| is the subset of all image resources for the document.
   HeapHashSet<WeakMember<Resource>,  WTF::MemberHashRecordReplayRegisteredPointerId<Resource>> image_resources_;
+  HeapHashSet<Member<Resource>,  WTF::MemberHashRecordReplayRegisteredPointerId<Resource>> replay_strong_not_loaded_image_resources_;
 
   // |not_loaded_image_resources_| is a subset of |image_resources_| where
   // |Resource::IsLoaded| might be false. The is used for performance
