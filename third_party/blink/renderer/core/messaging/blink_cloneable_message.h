@@ -29,6 +29,9 @@ struct CORE_EXPORT BlinkCloneableMessage {
   v8_inspector::V8StackTraceId sender_stack_trace_id;
   base::UnguessableToken sender_agent_cluster_id;
   bool locked_to_sender_agent_cluster = false;
+
+  int record_replay_message_id = 0;
+  base::ProcessId record_replay_process_id = base::kNullProcessId;
 };
 
 }  // namespace blink

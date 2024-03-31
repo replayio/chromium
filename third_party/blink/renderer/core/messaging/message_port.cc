@@ -144,6 +144,21 @@ void MessagePort::postMessage(ScriptState* script_state,
   msg.sender_agent_cluster_id = GetExecutionContext()->GetAgentClusterID();
   msg.locked_to_sender_agent_cluster = msg.message->IsLockedToAgentCluster();
 
+  if (recordreplay::IsRecordingOrReplaying() && recordreplay::IsMainThread()) {
+    msg.record_replay_message_id = recordreplay::NewIdMainThread();
+    msg.record_replay_process_id = base::GetCurrentProcId();
+
+    if (recordreplay::DependencyGraphEnabled()) {
+      base::Value::Dict info;
+      info.Set("kind", "postMessage");
+      info.Set("messageId", (int)msg.record_replay_message_id);
+      info.Set("processId", (int)msg.record_replay_process_id);
+      std::string json;
+      base::JSONWriter::Write(info, &json);
+      recordreplay::NewDependencyGraphNode(json.c_str());
+    }
+  }
+
   auto* tracker = ThreadScheduler::Current()->GetTaskAttributionTracker();
   // Only pass the parent task ID if we're in the main world, as isolated world
   // task tracking is not yet supported.
@@ -320,6 +335,18 @@ bool MessagePort::Accept(mojo::Message* mojo_message) {
   if (!mojom::blink::TransferableMessage::DeserializeFromMessage(
           std::move(*mojo_message), &message)) {
     return false;
+  }
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "acceptMessage");
+    info.Set("messageId", (int)message.record_replay_message_id);
+    info.Set("processId", (int)message.record_replay_process_id);
+    info.Set("currentProcessId", (int)base::GetCurrentProcId());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
   }
 
   ExecutionContext* context = GetExecutionContext();
