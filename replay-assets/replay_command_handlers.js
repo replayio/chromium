@@ -840,7 +840,7 @@ function clearPauseDataCallback() {
       objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP,
     });
   } catch (e) {
-    warning(`JS clearPauseDataCallback exception: ${e}`);
+    warning(`JS clearPauseDataCallback exception: ${e?.stack || e}`);
   }
 }
 
