@@ -192,18 +192,16 @@ function sendCDPMessage(method, params) {
   try {
     sendCDPMessageRaw(cdpArgs);
   } catch (err) {
-    if (!cdpRequest.result) {
-      throw err;
-    } else {
-      // The CDP request was serviced, followed by a "ghostly" cross-origin
-      // (and maybe other?) error:
-      // Generally speaking, CDP commands should not throw.
-      // If they do, we saw those errors being thrown by previous
-      // user JS which happen to still be pending and then get thrown upon CDP
-      // result return.
-      // E.g.: https://linear.app/replay/issue/RUN-1680#comment-1dfa142b
-      log(`[RuntimeError][RUN-1680] sendCDPMessage(${method}) failed: ${err?.message}`);
-    }
+    // [TT-341] The CDP request was serviced, but then followed by a "ghostly"
+    // exception:
+    // Generally speaking, CDP commands should never throw.
+    // If they do, the error has always been an error being thrown by previous
+    // user JS which happens to still be pending and then gets re-thrown upon
+    // CDP result return.
+    // The errors we have seen here are usually Cross origin errors, but maybe
+    // others might be re-thrown here as well?
+    log(`[RuntimeError][TT-341] sendCDPMessage(${method}) failed: ${err?.stack || err}`);
+    // throw new Error(`sendCDPMessage error: ${err.stack}`);
   } finally {
     const req = gCdpRequestStack.pop();
     assert(req === cdpRequest, "[RuntimeError] CDP request stack corrupted");
@@ -219,7 +217,9 @@ function sendCDPMessage(method, params) {
 }
 
 /**	
- * [RUN-3160] We have dependencies on this in the backend, via Target.evaluatePrivileged.	
+ * [RUN-3160] We expose this because we have dependencies on this in the
+ * backend, via Target.evaluatePrivileged.	
+ * 
  * @deprecated Use {@link sendCDPMessage} instead.	
  */	
 // eslint-disable-next-line	
@@ -235,10 +235,13 @@ function messageCallback(message) {
   try {
     message = JSON_parse(message);
     if (message.id) {
+      // This is a response to a request that we have sent.
+      // It either has a response value or encountered an error:
       const request = gCdpRequestStack[gCdpRequestStack.length - 1];
       assert(message.id === request.messageId, "CDP request stack corrupted");
       request.result = message;
     } else {
+      // CDP event (push notification).
       const listener = gEventListeners.get(message.method);
       if (listener) {
         listener(message.params);
