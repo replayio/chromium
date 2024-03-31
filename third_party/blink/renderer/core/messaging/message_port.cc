@@ -146,13 +146,13 @@ void MessagePort::postMessage(ScriptState* script_state,
 
   if (recordreplay::IsRecordingOrReplaying() && recordreplay::IsMainThread()) {
     msg.record_replay_message_id = recordreplay::NewIdMainThread();
-    msg.record_replay_process_id = base::GetCurrentProcId();
+    msg.record_replay_process_id = (int)base::GetCurrentProcId();
 
     if (recordreplay::DependencyGraphEnabled()) {
       base::Value::Dict info;
       info.Set("kind", "postMessage");
-      info.Set("messageId", (int)msg.record_replay_message_id);
-      info.Set("processId", (int)msg.record_replay_process_id);
+      info.Set("messageId", msg.record_replay_message_id);
+      info.Set("processId", msg.record_replay_process_id);
       std::string json;
       base::JSONWriter::Write(info, &json);
       recordreplay::NewDependencyGraphNode(json.c_str());
@@ -341,8 +341,8 @@ bool MessagePort::Accept(mojo::Message* mojo_message) {
   if (recordreplay::DependencyGraphEnabled()) {
     base::Value::Dict info;
     info.Set("kind", "acceptMessage");
-    info.Set("messageId", (int)message.record_replay_message_id);
-    info.Set("processId", (int)message.record_replay_process_id);
+    info.Set("messageId", message.record_replay_message_id);
+    info.Set("processId", message.record_replay_process_id);
     info.Set("currentProcessId", (int)base::GetCurrentProcId());
     std::string json;
     base::JSONWriter::Write(info, &json);

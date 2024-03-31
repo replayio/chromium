@@ -31,7 +31,7 @@ struct CORE_EXPORT BlinkCloneableMessage {
   bool locked_to_sender_agent_cluster = false;
 
   int record_replay_message_id = 0;
-  base::ProcessId record_replay_process_id = base::kNullProcessId;
+  int record_replay_process_id = 0;
 };
 
 }  // namespace blink
