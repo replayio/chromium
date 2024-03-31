@@ -517,6 +517,11 @@ void DOMWebSocket::DidConnect(const String& subprotocol,
   common_.SetState(kOpen);
   subprotocol_ = subprotocol;
   extensions_ = extensions;
+
+  recordreplay::AutoMarkerDependencyExecution execute(
+    "ScriptExecution", "DOMWebSocket::DidConnect"
+  );
+
   event_queue_->Dispatch(Event::Create(event_type_names::kOpen));
 }
 
@@ -527,6 +532,10 @@ void DOMWebSocket::DidReceiveTextMessage(const String& msg) {
   DCHECK_NE(common_.GetState(), kConnecting);
   if (common_.GetState() != kOpen)
     return;
+
+  recordreplay::AutoMarkerDependencyExecution execute(
+    "ScriptExecution", "DOMWebSocket::DidReceiveTextMessage"
+  );
 
   DCHECK(!origin_string_.IsNull());
   event_queue_->Dispatch(MessageEvent::Create(msg, origin_string_));
