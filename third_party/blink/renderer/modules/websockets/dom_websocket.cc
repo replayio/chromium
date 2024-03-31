@@ -71,6 +71,8 @@
 #include "third_party/blink/renderer/platform/wtf/text/string_utf8_adaptor.h"
 #include "third_party/blink/renderer/platform/wtf/wtf_size_t.h"
 
+#include "base/json/json_writer.h"
+
 namespace blink {
 
 DOMWebSocket::EventQueue::EventQueue(EventTarget* target)
@@ -341,7 +343,7 @@ void DOMWebSocket::send(const String& message,
       info.Set("id", record_replay_id_);
       info.Set("binary", false);
       info.Set("text", message.Utf8());
-      info.Set("encodedLength", encoded_message.length());
+      info.Set("encodedLength", (int)encoded_message.length());
       base::JSONWriter::Write(info, &annotationContents);
     }
     recordreplay::OnAnnotation("DOMWebsocket", annotationContents.c_str());
@@ -375,7 +377,7 @@ void DOMWebSocket::send(DOMArrayBuffer* binary_data,
       info.Set("kind", "send");
       info.Set("id", record_replay_id_);
       info.Set("binary", true);
-      info.Set("encodedLength", binary_data->ByteLength());
+      info.Set("encodedLength", (int)binary_data->ByteLength());
       base::JSONWriter::Write(info, &annotationContents);
     }
     recordreplay::OnAnnotation("DOMWebsocket", annotationContents.c_str());
@@ -409,7 +411,7 @@ void DOMWebSocket::send(NotShared<DOMArrayBufferView> array_buffer_view,
       info.Set("kind", "send");
       info.Set("id", record_replay_id_);
       info.Set("binary", true);
-      info.Set("encodedLength", array_buffer_view->byteLength());
+      info.Set("encodedLength", (int)array_buffer_view->byteLength());
       base::JSONWriter::Write(info, &annotationContents);
     }
     recordreplay::OnAnnotation("DOMWebsocket", annotationContents.c_str());
@@ -446,7 +448,7 @@ void DOMWebSocket::send(Blob* binary_data, ExceptionState& exception_state) {
       info.Set("kind", "send");
       info.Set("id", record_replay_id_);
       info.Set("binary", true);
-      info.Set("encodedLength", size);
+      info.Set("encodedLength", (int)size);
       base::JSONWriter::Write(info, &annotationContents);
     }
     recordreplay::OnAnnotation("DOMWebsocket", annotationContents.c_str());
@@ -640,7 +642,7 @@ void DOMWebSocket::DidReceiveTextMessage(const String& msg) {
       info.Set("id", record_replay_id_);
       info.Set("binary", false);
       info.Set("text", text);
-      info.Set("encodedLength", text.length());
+      info.Set("encodedLength", (int)text.length());
       base::JSONWriter::Write(info, &annotationContents);
     }
     recordreplay::OnAnnotation("DOMWebsocket", annotationContents.c_str());
@@ -678,12 +680,11 @@ void DOMWebSocket::DidReceiveBinaryMessage(
   if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
     std::string annotationContents;
     if (recordreplay::IsReplaying()) {
-      std::string text = msg.Utf8();
       base::Value::Dict info;
       info.Set("kind", "newMessage");
       info.Set("id", record_replay_id_);
       info.Set("binary", true);
-      info.Set("encodedLength", size);
+      info.Set("encodedLength", (int)size);
       base::JSONWriter::Write(info, &annotationContents);
     }
     recordreplay::OnAnnotation("DOMWebsocket", annotationContents.c_str());
