@@ -204,13 +204,18 @@ function sendCDPMessage(method, params) {
     // throw new Error(`sendCDPMessage error: ${err.stack}`);
   } finally {
     const req = gCdpRequestStack.pop();
-    assert(req === cdpRequest, "[RuntimeError] CDP request stack corrupted");
+    try {
+      assert(req === cdpRequest, "[RuntimeError] CDP request stack corrupted");
+    } catch (ddbgErr) {
+      warning(`[RuntimeError] sendCDPMessage A ${req === cdpRequest} ${ddbgErr?.stack || JSON_stringify(ddbgErr)}`);
+    }
   }
 
   if (cdpRequest.result?.result) {
     return cdpRequest.result.result;
   }
   if (cdpRequest.result?.error) {
+    warning(`[RuntimeError] sendCDPMessage B RES=${JSON_stringify(cdpRequest.error)}`);
     throw new CDPMessageError(cdpRequest.result.error.message, cdpRequest.result.error.code);
   }
   return undefined;
@@ -248,10 +253,11 @@ function messageCallback(message) {
       }
     }
   } catch (e) {
-    warning(`JS Message callback exception: ${e?.stack || e}`);
+    warning(`JS Message callback exception (${message?.method}): ${e?.stack || e}`);
 
     return JSON_stringify({
       is_error: true,
+      method: message?.method,
       message: e?.message || (e + ''),
       stack: e?.stack?.split?.("\n") || e?.stack || [],
       code: e?.code,
@@ -338,6 +344,7 @@ function commandCallback(method, params) {
     // that decision.
     return {
       is_error: true,
+      method,
       message: e?.message || (e + ''),
       stack: e?.stack?.split?.("\n") || e?.stack || [],
       code: e?.code,
