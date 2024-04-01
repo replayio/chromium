@@ -360,7 +360,7 @@ void DOMWebSocket::send(const String& message,
     if (recordreplay::IsReplaying()) {
       base::Value::Dict info;
       info.Set("kind", "send");
-      info.Set("id", record_replay_id_);
+      info.Set("socketId", record_replay_id_);
       info.Set("binary", false);
       info.Set("text", message.Utf8());
       info.Set("encodedLength", (int)encoded_message.length());
@@ -405,7 +405,7 @@ void DOMWebSocket::send(DOMArrayBuffer* binary_data,
     if (recordreplay::IsReplaying()) {
       base::Value::Dict info;
       info.Set("kind", "send");
-      info.Set("id", record_replay_id_);
+      info.Set("socketId", record_replay_id_);
       info.Set("binary", true);
       info.Set("encodedLength", (int)binary_data->ByteLength());
       base::JSONWriter::Write(info, &annotationContents);
@@ -449,7 +449,7 @@ void DOMWebSocket::send(NotShared<DOMArrayBufferView> array_buffer_view,
     if (recordreplay::IsReplaying()) {
       base::Value::Dict info;
       info.Set("kind", "send");
-      info.Set("id", record_replay_id_);
+      info.Set("socketId", record_replay_id_);
       info.Set("binary", true);
       info.Set("encodedLength", (int)array_buffer_view->byteLength());
       base::JSONWriter::Write(info, &annotationContents);
@@ -496,7 +496,7 @@ void DOMWebSocket::send(Blob* binary_data, ExceptionState& exception_state) {
     if (recordreplay::IsReplaying()) {
       base::Value::Dict info;
       info.Set("kind", "send");
-      info.Set("id", record_replay_id_);
+      info.Set("socketId", record_replay_id_);
       info.Set("binary", true);
       info.Set("encodedLength", (int)size);
       base::JSONWriter::Write(info, &annotationContents);
@@ -537,7 +537,7 @@ void DOMWebSocket::CloseInternal(int code,
     if (recordreplay::IsReplaying()) {
       base::Value::Dict info;
       info.Set("kind", "close");
-      info.Set("id", record_replay_id_);
+      info.Set("socketId", record_replay_id_);
       info.Set("code", code);
       info.Set("reason", reason.Utf8());
       base::JSONWriter::Write(info, &annotationContents);
@@ -654,7 +654,7 @@ void DOMWebSocket::DidConnect(const String& subprotocol,
     if (recordreplay::IsReplaying()) {
       base::Value::Dict info;
       info.Set("kind", "connected");
-      info.Set("id", record_replay_id_);
+      info.Set("socketId", record_replay_id_);
       info.Set("subprotocol", subprotocol.Utf8());
       info.Set("extensions", extensions.Utf8());
       base::JSONWriter::Write(info, &annotationContents);
@@ -689,7 +689,7 @@ void DOMWebSocket::DidReceiveTextMessage(const String& msg) {
       std::string text = msg.Utf8();
       base::Value::Dict info;
       info.Set("kind", "newMessage");
-      info.Set("id", record_replay_id_);
+      info.Set("socketId", record_replay_id_);
       info.Set("binary", false);
       info.Set("text", text);
       info.Set("encodedLength", (int)text.length());
@@ -732,7 +732,7 @@ void DOMWebSocket::DidReceiveBinaryMessage(
     if (recordreplay::IsReplaying()) {
       base::Value::Dict info;
       info.Set("kind", "newMessage");
-      info.Set("id", record_replay_id_);
+      info.Set("socketId", record_replay_id_);
       info.Set("binary", true);
       info.Set("encodedLength", (int)size);
       base::JSONWriter::Write(info, &annotationContents);
