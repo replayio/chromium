@@ -57,6 +57,8 @@
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
 
+#include "base/json/json_writer.h"
+
 namespace blink {
 
 MessagePort::MessagePort(ExecutionContext& execution_context)
@@ -144,8 +146,8 @@ void MessagePort::postMessage(ScriptState* script_state,
   msg.sender_agent_cluster_id = GetExecutionContext()->GetAgentClusterID();
   msg.locked_to_sender_agent_cluster = msg.message->IsLockedToAgentCluster();
 
-  if (recordreplay::IsRecordingOrReplaying() && recordreplay::IsMainThread()) {
-    msg.record_replay_message_id = recordreplay::NewIdMainThread();
+  if (recordreplay::IsRecordingOrReplaying() && IsMainThread()) {
+    msg.record_replay_message_id = recordreplay::NewIdMainThread("MessagePort::postMessage");
     msg.record_replay_process_id = (int)base::GetCurrentProcId();
 
     if (recordreplay::DependencyGraphEnabled()) {
