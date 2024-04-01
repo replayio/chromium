@@ -242,6 +242,16 @@ DOMWebSocket* DOMWebSocket::Create(
   if (exception_state.HadException())
     return nullptr;
 
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "websocketCreated");
+    info.Set("socketId", websocket->record_replay_id_);
+    info.Set("url", url.Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    recordreplay::NewDependencyGraphNode(json.c_str());
+  }
+
   return websocket;
 }
 
@@ -356,7 +366,7 @@ void DOMWebSocket::send(const String& message,
       info.Set("encodedLength", (int)encoded_message.length());
       base::JSONWriter::Write(info, &annotationContents);
     }
-    recordreplay::OnAnnotation("DOMWebsocket", annotationContents.c_str());
+    recordreplay::OnAnnotation("DOMWebSocket", annotationContents.c_str());
   }
 
   RecordSendTypeHistogram(WebSocketSendType::kString);
@@ -400,7 +410,7 @@ void DOMWebSocket::send(DOMArrayBuffer* binary_data,
       info.Set("encodedLength", (int)binary_data->ByteLength());
       base::JSONWriter::Write(info, &annotationContents);
     }
-    recordreplay::OnAnnotation("DOMWebsocket", annotationContents.c_str());
+    recordreplay::OnAnnotation("DOMWebSocket", annotationContents.c_str());
   }
 
   RecordSendTypeHistogram(WebSocketSendType::kArrayBuffer);
@@ -444,7 +454,7 @@ void DOMWebSocket::send(NotShared<DOMArrayBufferView> array_buffer_view,
       info.Set("encodedLength", (int)array_buffer_view->byteLength());
       base::JSONWriter::Write(info, &annotationContents);
     }
-    recordreplay::OnAnnotation("DOMWebsocket", annotationContents.c_str());
+    recordreplay::OnAnnotation("DOMWebSocket", annotationContents.c_str());
   }
 
   RecordSendTypeHistogram(WebSocketSendType::kArrayBufferView);
@@ -491,7 +501,7 @@ void DOMWebSocket::send(Blob* binary_data, ExceptionState& exception_state) {
       info.Set("encodedLength", (int)size);
       base::JSONWriter::Write(info, &annotationContents);
     }
-    recordreplay::OnAnnotation("DOMWebsocket", annotationContents.c_str());
+    recordreplay::OnAnnotation("DOMWebSocket", annotationContents.c_str());
   }
 
   // When the runtime type of |binary_data| is File,
@@ -532,7 +542,7 @@ void DOMWebSocket::CloseInternal(int code,
       info.Set("reason", reason.Utf8());
       base::JSONWriter::Write(info, &annotationContents);
     }
-    recordreplay::OnAnnotation("DOMWebsocket", annotationContents.c_str());
+    recordreplay::OnAnnotation("DOMWebSocket", annotationContents.c_str());
   }
 
   common_.CloseInternal(code, reason, channel_, exception_state);
@@ -649,7 +659,7 @@ void DOMWebSocket::DidConnect(const String& subprotocol,
       info.Set("extensions", extensions.Utf8());
       base::JSONWriter::Write(info, &annotationContents);
     }
-    recordreplay::OnAnnotation("DOMWebsocket", annotationContents.c_str());
+    recordreplay::OnAnnotation("DOMWebSocket", annotationContents.c_str());
   }
 
   event_queue_->Dispatch(Event::Create(event_type_names::kOpen));
@@ -685,7 +695,7 @@ void DOMWebSocket::DidReceiveTextMessage(const String& msg) {
       info.Set("encodedLength", (int)text.length());
       base::JSONWriter::Write(info, &annotationContents);
     }
-    recordreplay::OnAnnotation("DOMWebsocket", annotationContents.c_str());
+    recordreplay::OnAnnotation("DOMWebSocket", annotationContents.c_str());
   }
 
   DCHECK(!origin_string_.IsNull());
@@ -727,7 +737,7 @@ void DOMWebSocket::DidReceiveBinaryMessage(
       info.Set("encodedLength", (int)size);
       base::JSONWriter::Write(info, &annotationContents);
     }
-    recordreplay::OnAnnotation("DOMWebsocket", annotationContents.c_str());
+    recordreplay::OnAnnotation("DOMWebSocket", annotationContents.c_str());
   }
 
   switch (binary_type_) {
