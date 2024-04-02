@@ -92,7 +92,7 @@ void SkFontGetGlyphExtentsForHarfBuzz(const SkFont& font,
   // on Mac, https://bugs.chromium.org/p/skia/issues/detail?id=5328
   SkPath path;
   if (
-    !recordreplay::AreEventsDisallowed("divergent-update") &&
+    !recordreplay::AreEventsUnavailable("divergent-update") &&
     font.getPath(glyph, &path)
   ) {
     sk_bounds = path.getBounds();
@@ -122,7 +122,7 @@ void SkFontGetBoundsForGlyph(const SkFont& font, Glyph glyph, SkRect* bounds) {
   // on Mac, https://bugs.chromium.org/p/skia/issues/detail?id=5328
   SkPath path;
   if (
-    !recordreplay::AreEventsDisallowed("divergent-update") &&
+    !recordreplay::AreEventsUnavailable("divergent-update") &&
     font.getPath(glyph, &path)
   ) {
     *bounds = path.getBounds();
