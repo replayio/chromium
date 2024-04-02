@@ -76,8 +76,7 @@ void BeginDisallowEventsWithLabel(const char* label);
 void EndDisallowEvents();
 
 // Whether we are in a code path that we have explicitely identified as
-// divergent. Those are generally code paths that either belong to the runtime
-// or Replay's intermittent command handling.
+// divergent.
 bool AreEventsDisallowed(const char* why = nullptr);
 
 void EnterReplayCode();
