@@ -257,7 +257,7 @@ DOMWebSocket* DOMWebSocket::Create(
     if (recordreplay::IsReplaying()) {
       base::Value::Dict info;
       info.Set("kind", "create");
-      info.Set("socketId", record_replay_id_);
+      info.Set("socketId", websocket->record_replay_id_);
       info.Set("url", url.Utf8());
       base::JSONWriter::Write(info, &annotationContents);
     }
