@@ -2623,9 +2623,8 @@ void InitializeRecordReplay(
   gCurrentNetworkStreamData = new std::vector<uint8_t>();
   
   // Add process type metadata.
-  char buf[256];
-  snprintf(buf, sizeof(buf), "{ \"process\": \"%s\" }", processType);
-  V8RecordReplayAddMetadata(buf);
+  std::string metadata = std::string("{ \"process\": \"") + processType + "\" }";
+  V8RecordReplayAddMetadata(metadata.c_str());
 }
 
 void InitializeRecordReplayAfterCheckpoint() {
