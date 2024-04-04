@@ -74,6 +74,7 @@
 #include "v8/include/v8.h"
 
 #include "base/record_replay.h"
+#include "third_party/blink/renderer/controller/dev_tools_frontend_impl.h"
 
 namespace blink {
 
@@ -159,6 +160,20 @@ void LocalWindowProxy::DisposeContext(Lifecycle next_status,
   lifecycle_ = next_status;
 }
 
+static const char* RecordReplayGetProcessType(
+  bool isMainWorld, bool isRoot, bool isDevtools) {
+  if (!isMainWorld) {
+    return "extension";
+  }
+  if (isDevtools) {
+    return "devtools";
+  }
+  if (isRoot) {
+    return "root";
+  }
+  return "iframe";
+}
+
 // Record/replay state is initialized along with the first LocalWindowProxy.
 static bool gRecordReplayStateInitialized;
 
@@ -220,12 +235,8 @@ void LocalWindowProxy::Initialize() {
     SetSecurityToken(origin.get());
   }
 
-  if (world_->IsMainWorld() &&
-      recordreplay::IsRecordingOrReplaying("commands") &&
-      origin &&
+  if (origin &&
       !origin->Host().empty()) {
-    // Initialize and re-initialize Replay state, command handlers and more.
-
     bool initGlobally = !gRecordReplayStateInitialized;
     if (initGlobally) {
       gRecordReplayStateInitialized = true;
@@ -233,30 +244,38 @@ void LocalWindowProxy::Initialize() {
       // After creating the first context that is associated with a non-empty
       // origin, we are ready to set up the state used to process driver
       // commands when recording/replaying, and to create checkpoints.
-      InitializeRecordReplay(GetIsolate(), GetFrame(), context);
+      InitializeRecordReplay(
+        RecordReplayGetProcessType(world_->IsMainWorld(),
+          GetFrame()->IsOutermostMainFrame(),
+          !!DevToolsFrontendImpl::From(GetFrame())),
+        GetIsolate(), GetFrame(), context
+      );
     }
 
-    bool initFrame = GetFrame()->IsLocalRoot();
-    if (initFrame) {
-      // Root-level navigation event, initially happens before
-      // first checkpoint.
-      OnRootFrameInit(GetIsolate(), GetFrame(), context);
-    }
+    if (world_->IsMainWorld() &&
+      recordreplay::IsRecordingOrReplaying("commands")) {
+      bool initFrame = GetFrame()->IsLocalRoot();
+      if (initFrame) {
+        // Root-level navigation event, initially happens before
+        // first checkpoint.
+        OnRootFrameInit(GetIsolate(), GetFrame(), context);
+      }
 
-    if (initGlobally) {
-      // Create the first checkpoint at which execution can pause.
-      recordreplay::NewCheckpoint();
-      // Initialize some more.
-      InitializeRecordReplayAfterCheckpoint();
-    }
-    
-    if (initFrame) {
-      // Root-level navigation event, after first checkpoint.
-      OnRootFrameInitAfterCheckpoint(GetIsolate(), GetFrame(), context);
-    }
+      if (initGlobally) {
+        // Create the first checkpoint at which execution can pause.
+        recordreplay::NewCheckpoint();
+        // Initialize some more.
+        InitializeRecordReplayAfterCheckpoint();
+      }
+      
+      if (initFrame) {
+        // Root-level navigation event, after first checkpoint.
+        OnRootFrameInitAfterCheckpoint(GetIsolate(), GetFrame(), context);
+      }
 
-    // Event for all new windows.
-    OnNewWindowAfterCheckpoint(GetIsolate(), GetFrame(), context);
+      // Event for all new windows.
+      OnNewWindowAfterCheckpoint(GetIsolate(), GetFrame(), context);
+    }
   }
 
   {
