@@ -161,7 +161,12 @@ void LocalWindowProxy::DisposeContext(Lifecycle next_status,
 }
 
 static const char* RecordReplayGetProcessType(
-  bool isMainWorld, bool isRoot, bool isDevtools) {
+  LocalFrame* frame,
+  scoped_refptr<DOMWrapperWorld> world
+) {
+  bool isMainWorld = world->IsMainWorld();
+  bool isRoot = frame->IsOutermostMainFrame();
+  bool isDevtools = !!DevToolsFrontendImpl::From(frame);
   if (!isMainWorld) {
     return "extension";
   }
@@ -245,9 +250,10 @@ void LocalWindowProxy::Initialize() {
       // origin, we are ready to set up the state used to process driver
       // commands when recording/replaying, and to create checkpoints.
       InitializeRecordReplay(
-        RecordReplayGetProcessType(world_->IsMainWorld(),
-          GetFrame()->IsOutermostMainFrame(),
-          !!DevToolsFrontendImpl::From(GetFrame())),
+        RecordReplayGetProcessType(
+          GetFrame(),
+          world_
+        ),
         GetIsolate(), GetFrame(), context
       );
     }
