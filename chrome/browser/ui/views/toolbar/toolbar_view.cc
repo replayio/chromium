@@ -291,7 +291,7 @@ void ToolbarView::Init() {
   // RecordReplay: #RUN-2762
   // Only show the record-button if `RECORD_ALL_CONTENT` is not set.
   std::unique_ptr<RecordReplayToolbarButton> record_replay_button;
-  if (getenv("RECORD_ALL_CONTENT") == nullptr) {
+  if (getenv("CHROMIUM_UI")) {
     record_replay_button =
       std::make_unique<RecordReplayToolbarButton>(browser_);
   }
