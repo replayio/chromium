@@ -241,7 +241,7 @@ void LocalWindowProxy::Initialize() {
   }
 
   if (recordreplay::IsRecordingOrReplaying("commands") &&
-      (origin && !origin->Host().empty())) {
+      origin && !origin->Host().empty()) {
     bool initGlobally = !gRecordReplayStateInitialized;
     if (initGlobally) {
       gRecordReplayStateInitialized = true;
