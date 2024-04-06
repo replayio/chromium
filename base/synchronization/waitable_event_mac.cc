@@ -170,6 +170,11 @@ bool WaitableEvent::TimedWait(const TimeDelta& wait_delta) {
                                     (end_time -
                                      subtle::TimeTicksNowIgnoringOverride())
                                         .InMillisecondsRoundedUp()))) {
+    recordreplay::Print("DDBG TimedWait %d %d %d",
+      (int)timeout,
+      (int)rcv_size
+      (int)sizeof(timeout)
+    );
     kr = mach_msg(&msg.header, options, 0, rcv_size, receive_right_->Name(),
                   timeout, MACH_PORT_NULL);
   }
