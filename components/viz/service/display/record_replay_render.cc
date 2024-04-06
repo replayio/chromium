@@ -321,7 +321,7 @@ static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
   gCurrentCompositorProxy->RecordReplayRepaint();
 
   // Wait for the repainting frame to complete.
-  bool signaled = event.TimedWait(base::Milliseconds(3000));
+  bool signaled = event.TimedWait(base::Milliseconds(321));
   if (!signaled) {
     Print("[RuntimeError] Failed waiting to get a repaint.");
     gRepaintResult = nullptr;
