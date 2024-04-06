@@ -454,7 +454,15 @@ void LayerTreeHost::WaitForCommitCompletion(bool for_protected_sequence) const {
   if (commit_completion_event_) {
     TRACE_EVENT0("cc", "LayerTreeHost::WaitForCommitCompletion");
     base::ElapsedTimer timer;
-    commit_completion_event_->Wait();
+    if (recordreplay::AreEventsUnavailable()) {
+      // [TT-250] Convert this hang into a crash.
+      bool signaled = commit_completion_event_->TimedWait(base::Seconds(3));
+      if (!signaled) {
+        recordreplay::Crash("[TT-250] LayerTreeHost::WaitForCommitCompletion failed.");
+      }
+    } else {
+      commit_completion_event_->Wait();
+    }
     commit_completion_event_ = nullptr;
     if (for_protected_sequence) {
       waited_for_protected_sequence_ = true;
