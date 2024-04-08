@@ -289,7 +289,7 @@ void ToolbarView::Init() {
   }
 
   // RecordReplay: #RUN-2762
-  // Only show the record-button if `RECORD_ALL_CONTENT` is not set.
+  // Only show the record-button if our chromium UI is enabled.
   std::unique_ptr<RecordReplayToolbarButton> record_replay_button;
   if (getenv("CHROMIUM_UI")) {
     record_replay_button =
