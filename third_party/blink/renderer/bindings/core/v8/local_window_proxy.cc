@@ -297,7 +297,7 @@ void LocalWindowProxy::Initialize() {
   // Add an event listener for the dispatched custom event the devtools uses to register
   // its listener.  Do this outside the recording.
   if (getenv("CHROMIUM_UI")) {
-    SetupRecordReplayEventListener();
+    SetupRecordReplayWebChannel();
   }
 
   if (World().IsMainWorld()) {
@@ -305,7 +305,7 @@ void LocalWindowProxy::Initialize() {
   }
 }
 
-void LocalWindowProxy::SetupRecordReplayEventListener() {
+void LocalWindowProxy::SetupRecordReplayWebChannel() {
   LocalFrame* localFrame = GetFrame();
 
   record_replay_listener_ = RecordReplayEventListener::Create(GetIsolate(), localFrame);
