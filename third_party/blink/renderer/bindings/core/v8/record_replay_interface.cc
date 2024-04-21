@@ -1647,7 +1647,7 @@ static void fromJsHasReturnValue(
     const v8::FunctionCallbackInfo<v8::Value>& args) {
   v8::Isolate* isolate = args.GetIsolate();
 
-  v8::Local<v8::Object> return_value;
+  v8::Local<v8::Value> return_value;
   bool has_return_value = V8RecordReplayCurrentReturnValue(&return_value);
 
   args.GetReturnValue().Set(has_return_value);
@@ -1661,7 +1661,7 @@ static void fromJsGetReturnValue(
     const v8::FunctionCallbackInfo<v8::Value>& args) {
   v8::Isolate* isolate = args.GetIsolate();
 
-  v8::Local<v8::Object> return_value;
+  v8::Local<v8::Value> return_value;
   bool has_return_value = V8RecordReplayCurrentReturnValue(&return_value);
 
   if (has_return_value) {
