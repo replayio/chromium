@@ -1645,8 +1645,6 @@ static void fromJsIsBlinkObject(
  */
 static void fromJsHasReturnValue(
     const v8::FunctionCallbackInfo<v8::Value>& args) {
-  v8::Isolate* isolate = args.GetIsolate();
-
   v8::Local<v8::Value> return_value;
   bool has_return_value = V8RecordReplayCurrentReturnValue(&return_value);
 
@@ -1659,8 +1657,6 @@ static void fromJsHasReturnValue(
  */
 static void fromJsGetReturnValue(
     const v8::FunctionCallbackInfo<v8::Value>& args) {
-  v8::Isolate* isolate = args.GetIsolate();
-
   v8::Local<v8::Value> return_value;
   bool has_return_value = V8RecordReplayCurrentReturnValue(&return_value);
 
