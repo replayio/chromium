@@ -247,7 +247,7 @@ void LocalWindowProxy::Initialize() {
     if (initGlobally) {
       gRecordReplayStateInitialized = true;
 
-      if (initGlobally && !isRoot) {
+      if (!isRoot) {
         recordreplay::Warning(
             "LocalWindowProxy::Initialize Called on non-root frame first: %s",
             GetFrame()->GetDocument()->Url().GetString().Utf8().c_str());
