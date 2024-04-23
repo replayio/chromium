@@ -211,6 +211,7 @@ steps:
     depends_on:
       - "build-chromium-linux-x86_64"
     build:
+      branch: toshok/tt-1006-update-runtime-tests
       env:
         OS: "linux"
         ARCH: "x86_64"
@@ -226,6 +227,7 @@ steps:
     depends_on:
       - "build-chromium-mac-arm64"
     build:
+      branch: toshok/tt-1006-update-runtime-tests
       env:
         OS: "macos"
         ARCH: "arm64"
