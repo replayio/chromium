@@ -9,6 +9,9 @@ def read_commit_hash(file_path):
 
 def generate_buildkite_pipeline(commit_hash):
     """Generates a Buildkite pipeline with a dynamic commit hash in JSON format."""
+
+    # driver_revision is the first 12 characters of the commit hash.
+    driver_revision = commit_hash.split()[0][:12]
     pipeline = {
         "steps": [
             {
@@ -22,7 +25,7 @@ def generate_buildkite_pipeline(commit_hash):
             {
                 "trigger": "chromium-build",
                 "build": {
-                    "env": {"DRIVER_REVISION": commit_hash},
+                    "env": {"DRIVER_REVISION": driver_revision},
                 },
                 "depends_on": ["deploy-driver-linker"],
             },
