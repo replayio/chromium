@@ -693,15 +693,14 @@ LocalWindowProxy::LocalWindowProxy(v8::Isolate* isolate,
                                    LocalFrame& frame,
                                    scoped_refptr<DOMWrapperWorld> world)
     : WindowProxy(isolate, frame, std::move(world)) {
-
-  if (GetFrame()->IsLocalRoot()) {
+  if (frame.IsLocalRoot()) {
     // The |origin| logic is copied from |LocalWindowProxy::Initialize|.
     scoped_refptr<const SecurityOrigin> origin;
     if (world_->IsMainWorld()) {
-      origin = GetFrame()->DomWindow()->GetSecurityOrigin();
+      origin = frame.DomWindow()->GetSecurityOrigin();
     } else {
       origin = world_->IsolatedWorldSecurityOrigin(
-          GetFrame()->DomWindow()->GetAgentClusterID());
+          frame.DomWindow()->GetAgentClusterID());
     }
 
     if (origin && !origin->Host().empty()) {
