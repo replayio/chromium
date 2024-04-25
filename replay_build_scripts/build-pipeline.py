@@ -14,8 +14,10 @@ def generate_buildkite_pipeline(commit_hash):
             {
                 "trigger": "deploy-driver-linker",
                 "key": "deploy-driver-linker",
-                "message": "Triggered from chromium: ${BUILDKIT_MESSAGE}",
-                "build": {"commit": commit_hash},
+                "build": {
+                    "commit": commit_hash,
+                    "message": "Triggered from chromium: ${BUILDKIT_MESSAGE}",
+                },
             },
             {
                 "trigger": "chromium-build",
