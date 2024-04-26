@@ -214,7 +214,7 @@ static char* PaintCallback(const char* mime_type, int jpeg_quality) {
 static std::atomic<size_t> gCurrentPaintBookmark;
 
 // Bookmark for the last point where a paint was committed on the main thread.
-static size_t gLastCommitBookmark;
+static std::atomic<size_t> gLastCommitBookmark;
 
 void InitPaintCallback() {
   static bool hasPaints = false;
