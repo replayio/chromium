@@ -19,7 +19,7 @@ def generate_buildkite_pipeline(commit_hash):
                 "key": "deploy-driver-linker",
                 "build": {
                     "commit": commit_hash,
-                    "message": "Triggered from chromium: ${BUILDKIT_MESSAGE}",
+                    "message": "Triggered from chromium: ${BUILDKITE_MESSAGE}",
                 },
             },
             {
