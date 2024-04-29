@@ -27,7 +27,7 @@ def generate_buildkite_pipeline(commit_hash):
                 "build": {
                     "env": {"DRIVER_REVISION": driver_revision},
                 },
-                "depends_on": ["deploy-driver-linker"],
+                "depends_on": ["build-driver-linker"],
             },
         ]
     }
