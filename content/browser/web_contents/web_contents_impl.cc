@@ -3088,7 +3088,7 @@ void WebContentsImpl::Init(const WebContents::CreateParams& params,
   if (record_replay_for_recording_) {
     // RecordReplay [RUN-2762]
     // If the `record_replay_for_recording` flag is set, then
-    // we need to tell tat to the site instance that was created.
+    // we need to tell that to the site instance that was created.
     static_cast<SiteInstanceImpl*>(site_instance.get())
         ->PreventAssociationWithSpareProcess();
     static_cast<SiteInstanceImpl*>(site_instance.get())
