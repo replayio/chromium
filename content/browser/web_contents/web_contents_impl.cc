@@ -1097,9 +1097,13 @@ std::unique_ptr<WebContentsImpl> WebContentsImpl::CreateWithOpener(
   std::unique_ptr<WebContentsImpl> new_contents(
       new WebContentsImpl(params.browser_context));
 
-  // Forward flag indicating that this web-contents is being created
-  // for a replay.io recording.
-  if (params.record_replay_for_recording) {
+  // Forward params flag (and RECORD_ALL_CONTENT env var) indicating that this
+  // web-contents is being created for a replay.io recording.  Ideally we'd
+  // modify the params here to avoid directly setting on `new_contents`, but
+  // it's const here.
+  std::unique_ptr<base::Environment> env(base::Environment::Create());
+  bool has_record_all_content = env->HasVar("RECORD_ALL_CONTENT");
+  if (params.record_replay_for_recording || has_record_all_content) {
     new_contents->record_replay_for_recording_ = true;
   }
 
@@ -3070,11 +3074,9 @@ void WebContentsImpl::Init(const WebContents::CreateParams& params,
     last_active_time_ = params.last_active_time;
 
   // RecordReplay [RUN-2762]
-  // If the `record_replay_for_recording` flag is set on the params, then
-  // `site_instance` on params should be null.
-  if (params.record_replay_for_recording) {
-    CHECK(params.site_instance.get() == nullptr);
-  }
+  // We don't really need to do this, but just in case, merge
+  // this->record_replay_for_recording_ and params.record_replay_for_recording.
+  record_replay_for_recording_ = record_replay_for_recording_ || params.record_replay_for_recording;
 
   scoped_refptr<SiteInstance> site_instance = params.site_instance;
   if (!site_instance)
@@ -3083,10 +3085,10 @@ void WebContentsImpl::Init(const WebContents::CreateParams& params,
     static_cast<SiteInstanceImpl*>(site_instance.get())
         ->PreventAssociationWithSpareProcess();
   }
-  if (params.record_replay_for_recording) {
+  if (record_replay_for_recording_) {
     // RecordReplay [RUN-2762]
-    // If the `record_replay_for_recording` flag is set on the params, then
-    // we need to tell the site instance that was created that
+    // If the `record_replay_for_recording` flag is set, then
+    // we need to tell tat to the site instance that was created.
     static_cast<SiteInstanceImpl*>(site_instance.get())
         ->PreventAssociationWithSpareProcess();
     static_cast<SiteInstanceImpl*>(site_instance.get())

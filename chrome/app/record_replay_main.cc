@@ -266,9 +266,6 @@ static bool RecordReplayRecordingDisabled(bool cmdline_for_recording) {
       BusyWait();
     return true;
   }
-  if (getenv("RECORD_ALL_CONTENT")) {
-    return false;
-  }
   if (cmdline_for_recording) {
     return false;
   }

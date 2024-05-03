@@ -4315,6 +4315,10 @@ bool RenderProcessHostImpl::MayReuseAndIsSuitable(
 bool RenderProcessHostImpl::MayReuseAndIsSuitable(
     RenderProcessHost* host,
     SiteInstanceImpl* site_instance) {
+  if (site_instance->RecordReplayForRecording()) {
+    return false;
+  }
+
   return MayReuseAndIsSuitable(host, site_instance->GetIsolationContext(),
                                site_instance->GetSiteInfo());
 }
