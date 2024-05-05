@@ -18,6 +18,8 @@
 
 namespace blink {
 
+extern bool LocalDOMWindowPointerIsValid(LocalDOMWindow* window);
+
 namespace {
 
 void MeasureFetchProperties(ExecutionContext* execution_context,
@@ -133,6 +135,10 @@ ScriptPromise GlobalFetch::fetch(ScriptState* script_state,
                                  const RequestInit* init,
                                  ExceptionState& exception_state) {
   recordreplay::Print("GlobalFetch::fetch %p %p", &window, window.GetExecutionContext());
+  if (!LocalDOMWindowPointerIsValid(&window)) {
+    exception_state.ThrowTypeError("Invalid receiver.");
+    return ScriptPromise();
+  }
 
   UseCounter::Count(window.GetExecutionContext(), WebFeature::kFetch);
   if (!window.GetFrame()) {

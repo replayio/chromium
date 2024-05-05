@@ -192,6 +192,12 @@ class LocalDOMWindow::NetworkStateObserver final
       online_observer_handle_;
 };
 
+static std::unordered_set<LocalDOMWindow*>* gValidDOMWindowPointers;
+
+bool LocalDOMWindowPointerIsValid(LocalDOMWindow* window) {
+  return gValidDOMWindowPointers && gValidDOMWindowPointers->find(window) != gValidDOMWindowPointers->end();
+}
+
 LocalDOMWindow::LocalDOMWindow(LocalFrame& frame, WindowAgent* agent)
     : DOMWindow(frame),
       ExecutionContext(V8PerIsolateData::MainThreadIsolate(), agent),
@@ -214,7 +220,11 @@ LocalDOMWindow::LocalDOMWindow(LocalFrame& frame, WindowAgent* agent)
       network_state_observer_(MakeGarbageCollected<NetworkStateObserver>(this)),
       closewatcher_stack_(
           MakeGarbageCollected<CloseWatcher::WatcherStack>(this)) {
+  CHECK(IsMainThread());
   recordreplay::Print("LocalDOMWindow %p", this);
+  if (!gValidDOMWindowPointers)
+    gValidDOMWindowPointers = new std::unordered_set<LocalDOMWindow*>();
+  gValidDOMWindowPointers->insert(this);
 }
 
 void LocalDOMWindow::BindContentSecurityPolicy() {
@@ -896,7 +906,11 @@ void LocalDOMWindow::DispatchPopstateEvent(
   DispatchEvent(*PopStateEvent::Create(std::move(state_object), history()), "LocalDOMWindow::DispatchPopstateEvent");
 }
 
-LocalDOMWindow::~LocalDOMWindow() = default;
+LocalDOMWindow::~LocalDOMWindow() {
+  CHECK(IsMainThread());
+  CHECK(gValidDOMWindowPointers);
+  gValidDOMWindowPointers->erase(this);
+}
 
 void LocalDOMWindow::Dispose() {
   BackForwardCacheBufferLimitTracker::Get()
