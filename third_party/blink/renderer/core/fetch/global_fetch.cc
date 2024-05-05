@@ -132,6 +132,8 @@ ScriptPromise GlobalFetch::fetch(ScriptState* script_state,
                                  const V8RequestInfo* input,
                                  const RequestInit* init,
                                  ExceptionState& exception_state) {
+  recordreplay::Print("GlobalFetch::fetch %p %p", &window, window.GetExecutionContext());
+
   UseCounter::Count(window.GetExecutionContext(), WebFeature::kFetch);
   if (!window.GetFrame()) {
     exception_state.ThrowTypeError("The global scope is shutting down.");
