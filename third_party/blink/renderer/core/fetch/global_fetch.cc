@@ -134,7 +134,10 @@ ScriptPromise GlobalFetch::fetch(ScriptState* script_state,
                                  const V8RequestInfo* input,
                                  const RequestInit* init,
                                  ExceptionState& exception_state) {
-  recordreplay::Print("GlobalFetch::fetch %p %p", &window, window.GetExecutionContext());
+  // Workaround for invalid window pointers being used when this function was called
+  // when no creation context is available for an unknown reason.
+  //
+  // See https://linear.app/replay/issue/TT-957
   if (!LocalDOMWindowPointerIsValid(&window)) {
     exception_state.ThrowTypeError("Invalid receiver.");
     return ScriptPromise();

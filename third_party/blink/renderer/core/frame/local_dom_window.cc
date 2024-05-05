@@ -194,6 +194,9 @@ class LocalDOMWindow::NetworkStateObserver final
 
 static std::unordered_set<LocalDOMWindow*>* gValidDOMWindowPointers;
 
+// Workaround for invalid window pointers being used.
+//
+// See https://linear.app/replay/issue/TT-957
 bool LocalDOMWindowPointerIsValid(LocalDOMWindow* window) {
   return gValidDOMWindowPointers && gValidDOMWindowPointers->find(window) != gValidDOMWindowPointers->end();
 }
@@ -221,7 +224,6 @@ LocalDOMWindow::LocalDOMWindow(LocalFrame& frame, WindowAgent* agent)
       closewatcher_stack_(
           MakeGarbageCollected<CloseWatcher::WatcherStack>(this)) {
   CHECK(IsMainThread());
-  recordreplay::Print("LocalDOMWindow %p", this);
   if (!gValidDOMWindowPointers)
     gValidDOMWindowPointers = new std::unordered_set<LocalDOMWindow*>();
   gValidDOMWindowPointers->insert(this);
