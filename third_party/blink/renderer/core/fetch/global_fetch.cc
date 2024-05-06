@@ -139,6 +139,14 @@ ScriptPromise GlobalFetch::fetch(ScriptState* script_state,
   //
   // See https://linear.app/replay/issue/TT-957
   if (!LocalDOMWindowPointerIsValid(&window)) {
+    std::string debug_url;
+    switch (input->GetContentType()) {
+      case V8RequestInfo::ContentType::kRequest:
+        debug_url = input->GetAsRequest()->url().GetString().Utf8();
+      case V8RequestInfo::ContentType::kUSVString:
+        debug_url = input->GetAsUSVString().Utf8();
+    }
+    recordreplay::Warning("[TT-957] GlobalFetch::fetch Context gone: %s", debug_url.c_str());
     exception_state.ThrowTypeError("Invalid receiver.");
     return ScriptPromise();
   }
