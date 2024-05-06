@@ -245,11 +245,11 @@ void LocalWindowProxy::Initialize() {
     bool initGlobally = !gRecordReplayStateInitialized;
 
     // Whether this is the relative root frame of this process.
-    bool isRoot = GetFrame()->IsLocalRoot();
+    bool isMainFrame = GetFrame()->IsMainFrame();
     if (initGlobally) {
       gRecordReplayStateInitialized = true;
 
-      if (!isRoot) {
+      if (!isMainFrame) {
         recordreplay::Warning(
             "LocalWindowProxy::Initialize Called on non-root frame first: %s",
             GetFrame()->GetDocument()->Url().GetString().Utf8().c_str());
@@ -267,7 +267,7 @@ void LocalWindowProxy::Initialize() {
       );
     }
 
-    if (isRoot) {
+    if (isMainFrame) {
       // Root-level navigation event, initially happens before
       // first checkpoint.
       OnRootFrameInit(GetIsolate(), GetFrame(), context);
@@ -280,7 +280,7 @@ void LocalWindowProxy::Initialize() {
       InitializeRecordReplayAfterCheckpoint();
     }
     
-    if (isRoot) {
+    if (isMainFrame) {
       // Root-level navigation event, after first checkpoint.
       OnRootFrameInitAfterCheckpoint(GetIsolate(), GetFrame(), context);
     }
@@ -689,38 +689,20 @@ void LocalWindowProxy::SetAbortScriptExecution(
 // We keep track of the most recently created local window proxy
 // for ensuring that record/replay state is initialized when
 // the first paint is triggered. FIXME clean up reference.
-static LocalWindowProxy* gLatestRootWindowProxy;
+static LocalWindowProxy* gLatestLocalWindowProxy;
 
 LocalWindowProxy::LocalWindowProxy(v8::Isolate* isolate,
                                    LocalFrame& frame,
                                    scoped_refptr<DOMWrapperWorld> world)
-    : WindowProxy(isolate, frame, std::move(world)) { }
-
-void LocalWindowProxy::RecordReplayOnFrameInit() {
-  recordreplay::Trace("LocalWindowProxy::RecordReplayOnFrameInit");
-  LocalFrame* frame = GetFrame();
-  if (frame->IsLocalRoot()) {
-    // The |origin| logic is copied from |LocalWindowProxy::Initialize|.
-    scoped_refptr<const SecurityOrigin> origin;
-    if (world_->IsMainWorld()) {
-      origin = frame->DomWindow()->GetSecurityOrigin();
-    } else {
-      origin = world_->IsolatedWorldSecurityOrigin(
-          frame->DomWindow()->GetAgentClusterID());
-    }
-
-    if (origin && !origin->Host().empty()) {
-      gLatestRootWindowProxy = this;
-    }
-  }
+    : WindowProxy(isolate, frame, std::move(world)) {
+  gLatestLocalWindowProxy = this;
 }
-
 
 bool RecordReplayStateEnsureInitialized() {
   if (recordreplay::IsRecordingOrReplaying("commands") &&
       !gRecordReplayStateInitialized &&
-      gLatestRootWindowProxy) {
-    gLatestRootWindowProxy->InitializeIfNeeded();
+      gLatestLocalWindowProxy) {
+    gLatestLocalWindowProxy->InitializeIfNeeded();
   }
   return gRecordReplayStateInitialized;
 }
