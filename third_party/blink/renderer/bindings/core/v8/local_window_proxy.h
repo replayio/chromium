@@ -72,10 +72,6 @@ class LocalWindowProxy final : public WindowProxy {
   void SetAbortScriptExecution(
       v8::Context::AbortScriptExecutionCallback callback);
 
-  // Use this to get an instance to the root |LocalWindowProxy| as early
-  // as possible, so we reduce the risk of dropping any rendered frames.
-  void RecordReplayOnFrameInit();
-
  private:
   void SetupRecordReplayWebChannel();
 
