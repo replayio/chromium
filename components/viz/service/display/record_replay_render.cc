@@ -235,7 +235,7 @@ void OnCommitPaint() {
 }
 
 void OnReadyToCommit() {
-  gLastCommitBookmark = gCurrentPaintBookmark;
+  gLastCommitBookmark.store(gCurrentPaintBookmark, std::memory_order_relaxed);
 }
 
 // How to encode repainted graphics.
