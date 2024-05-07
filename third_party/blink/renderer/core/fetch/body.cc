@@ -61,6 +61,9 @@ class BodyConsumerBase : public GarbageCollected<BodyConsumerBase>,
   // TODO(yhirano): Fix this problem in a more sophisticated way.
   template <typename T>
   void ResolveLater(const T& object) {
+    record_replay_scheduled_node_id_ = recordreplay::NewDependencyGraphNode(
+      "{\"kind\":\"scheduleResolveBodyConsumer\"}"
+    );
     task_runner_->PostTask(FROM_HERE,
                            WTF::BindOnce(&BodyConsumerBase::ResolveNow<T>,
                                          WrapPersistent(this), object));
@@ -74,11 +77,23 @@ class BodyConsumerBase : public GarbageCollected<BodyConsumerBase>,
  private:
   template <typename T>
   void ResolveNow(const T& object) {
+    absl::optional<recordreplay::AutoDependencyExecution> execute;
+    if (recordreplay::DependencyGraphEnabled()) {
+      int node_id = recordreplay::NewDependencyGraphNode(
+        "{\"kind\":\"resolveBodyConsumer\"}"
+      );
+      recordreplay::AddDependencyGraphEdge(
+        record_replay_scheduled_node_id_, node_id, "{\"kind\":\"scheduler\"}"
+      );
+      execute.emplace(node_id);
+    }
+
     resolver_->Resolve(object);
   }
 
   const Member<ScriptPromiseResolver> resolver_;
   const scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
+  int record_replay_scheduled_node_id_;
 };
 
 class BodyBlobConsumer final : public BodyConsumerBase {
