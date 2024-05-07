@@ -636,10 +636,11 @@ void ImageLoader::DoUpdateFromElement(
     RejectPendingDecodes(update_type);
 
   recordreplay::Assert(
-      "[TT-418-1118] ImageLoader::DoUpdateFromElement B %d %d %d %d",
+      "[TT-418-1118] ImageLoader::DoUpdateFromElement B %d %d %d layout=%d %d",
       update_behavior,
       !!old_image_content,
       new_image_content == old_image_content,
+
       !!element_->GetLayoutObject(),
       element_->GetLayoutObject() && element_->GetLayoutObject()->IsImage()
   );
