@@ -170,10 +170,6 @@ void ResizeObserver::DeliverObservations() {
     execute.emplace(node_id);
   }
 
-  recordreplay::AutoMarkerDependencyExecution execute(
-    "ScriptExecution", "ResizeObserver::DeliverObservations"
-  );
-
   HeapVector<Member<ResizeObserverEntry>> entries;
 
   for (auto& observation : active_observations_) {
