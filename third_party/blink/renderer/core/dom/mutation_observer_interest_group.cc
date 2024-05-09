@@ -32,6 +32,8 @@
 
 #include "third_party/blink/renderer/core/dom/mutation_record.h"
 
+#include "base/json/json_writer.h"
+
 namespace blink {
 
 MutationObserverInterestGroup* MutationObserverInterestGroup::CreateIfNeeded(
@@ -71,6 +73,16 @@ bool MutationObserverInterestGroup::IsOldValueRequested() {
 void MutationObserverInterestGroup::EnqueueMutationRecord(
     MutationRecord* mutation) {
   MutationRecord* mutation_with_null_old_value = nullptr;
+
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "enqueueMutationRecord");
+    info.Set("mutationType", mutation->type().Utf8());
+    info.Set("mutationNode", mutation->target() ? mutation->target()->RecordReplayId() : 0);
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    recordreplay::NewDependencyGraphNode(json.c_str());
+  }
 
   for (auto& iter : observers_) {
     MutationObserver* observer = iter.key.Get();
