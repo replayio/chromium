@@ -1394,7 +1394,7 @@ void RenderThreadImpl::RecordReplayBrowserEvent(
     const std::string& name,
     base::Value::Dict value) {
   // Do nothing if not in record/replay mode.
-  if (!recordreplay::IsRecordingOrReplaying("browser-event") || !v8::IsMainThread()) {
+  if (!recordreplay::IsRecordingOrReplaying("browser-event") || !recordreplay::IsMainThread()) {
     return;
   }
 

@@ -881,7 +881,7 @@ static void LogWarningCallback(const v8::FunctionCallbackInfo<v8::Value>& args) 
 void
 RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
                                 v8::Isolate* isolate) {
-  if (v8::IsMainThread() && IsCommandHandlingEnabled()) {
+  if (recordreplay::IsMainThread() && IsCommandHandlingEnabled()) {
     if (!gV8Inspectors) {
       gV8Inspectors = new std::unordered_map<v8::Isolate*,v8_inspector::V8Inspector*>();
       gInspectorData = new std::unordered_map<v8::Isolate*, ContextGroupIdInspectorMap*>();
@@ -899,7 +899,7 @@ static bool gReplayScriptsAlive = false;
  * This is called when our local root frame is about to shut down.
  */
 void RecordReplayClearContexts(const char* reason, LocalFrame* frame) {
-  CHECK(v8::IsMainThread());
+  CHECK(recordreplay::IsMainThread());
   if (!gReplayScriptsAlive || frame != gRootLocalFrame) {
     return;
   }
@@ -930,7 +930,7 @@ static void SetCDPMessageCallback(const v8::FunctionCallbackInfo<v8::Value>& arg
 static void SendMessageToFrontend(const v8_inspector::StringView& message) {
   recordreplay::AutoDisallowEvents disallow(
       "RecordReplay_SendMessageToFrontend");
-  CHECK(v8::IsMainThread());
+  CHECK(recordreplay::IsMainThread());
 
   CHECK(gCDPMessageCallback);
 
@@ -1018,7 +1018,7 @@ InspectorData* getInspectorFor(v8::Isolate* isolate, int contextGroupId) {
  * we are on main thread when accessing it.
  */
 v8_inspector::V8InspectorSession* getInspectorSession(v8::Isolate* isolate, int contextGroupId) {
-  CHECK(v8::IsMainThread());
+  CHECK(recordreplay::IsMainThread());
   CHECK(IsCommandHandlingEnabled());
   CHECK(gV8Inspectors);
 
@@ -2762,7 +2762,7 @@ void OnNewWindowAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8
 static ErrorEvent* gCurrentErrorEvent;
 
 void RecordReplayOnErrorEvent(ErrorEvent* error_event) {
-  if (!v8::IsMainThread()) {
+  if (!recordreplay::IsMainThread()) {
     return;
   }
 

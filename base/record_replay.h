@@ -117,6 +117,9 @@ void UnregisterPointer(const void* ptr);
 int PointerId(const void* ptr);
 void* IdPointer(int id);
 
+bool IsMainThread();
+size_t GetCurrentThreadId();
+
 void OnEvent(const char* aEvent, bool aBefore);
 void OnMouseEvent(const char* kind, size_t clientX, size_t clientY);
 void OnKeyEvent(const char* kind, const char* key);

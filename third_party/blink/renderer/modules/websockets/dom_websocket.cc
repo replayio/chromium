@@ -252,7 +252,7 @@ DOMWebSocket* DOMWebSocket::Create(
     recordreplay::NewDependencyGraphNode(json.c_str());
   }
 
-  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+  if (recordreplay::IsRecordingOrReplaying() && recordreplay::IsMainThread()) {
     std::string annotationContents;
     if (recordreplay::IsReplaying()) {
       base::Value::Dict info;
@@ -367,7 +367,7 @@ void DOMWebSocket::send(const String& message,
     execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
   }
 
-  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+  if (recordreplay::IsRecordingOrReplaying() && recordreplay::IsMainThread()) {
     std::string annotationContents;
     if (recordreplay::IsReplaying()) {
       base::Value::Dict info;
@@ -412,7 +412,7 @@ void DOMWebSocket::send(DOMArrayBuffer* binary_data,
     execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
   }
 
-  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+  if (recordreplay::IsRecordingOrReplaying() && recordreplay::IsMainThread()) {
     std::string annotationContents;
     if (recordreplay::IsReplaying()) {
       base::Value::Dict info;
@@ -456,7 +456,7 @@ void DOMWebSocket::send(NotShared<DOMArrayBufferView> array_buffer_view,
     execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
   }
 
-  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+  if (recordreplay::IsRecordingOrReplaying() && recordreplay::IsMainThread()) {
     std::string annotationContents;
     if (recordreplay::IsReplaying()) {
       base::Value::Dict info;
@@ -503,7 +503,7 @@ void DOMWebSocket::send(Blob* binary_data, ExceptionState& exception_state) {
     execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
   }
 
-  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+  if (recordreplay::IsRecordingOrReplaying() && recordreplay::IsMainThread()) {
     std::string annotationContents;
     if (recordreplay::IsReplaying()) {
       base::Value::Dict info;
@@ -544,7 +544,7 @@ void DOMWebSocket::close(uint16_t code, ExceptionState& exception_state) {
 void DOMWebSocket::CloseInternal(int code,
                                  const String& reason,
                                  ExceptionState& exception_state) {
-  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+  if (recordreplay::IsRecordingOrReplaying() && recordreplay::IsMainThread()) {
     std::string annotationContents;
     if (recordreplay::IsReplaying()) {
       base::Value::Dict info;
@@ -661,7 +661,7 @@ void DOMWebSocket::DidConnect(const String& subprotocol,
     execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
   }
 
-  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+  if (recordreplay::IsRecordingOrReplaying() && recordreplay::IsMainThread()) {
     std::string annotationContents;
     if (recordreplay::IsReplaying()) {
       base::Value::Dict info;
@@ -695,7 +695,7 @@ void DOMWebSocket::DidReceiveTextMessage(const String& msg) {
     execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
   }
 
-  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+  if (recordreplay::IsRecordingOrReplaying() && recordreplay::IsMainThread()) {
     std::string annotationContents;
     if (recordreplay::IsReplaying()) {
       std::string text = msg.Utf8();
@@ -739,7 +739,7 @@ void DOMWebSocket::DidReceiveBinaryMessage(
     execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
   }
 
-  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+  if (recordreplay::IsRecordingOrReplaying() && recordreplay::IsMainThread()) {
     std::string annotationContents;
     if (recordreplay::IsReplaying()) {
       base::Value::Dict info;
@@ -777,7 +777,7 @@ void DOMWebSocket::DidError() {
   ReflectBufferedAmountConsumption();
   common_.SetState(kClosed);
 
-  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+  if (recordreplay::IsRecordingOrReplaying() && recordreplay::IsMainThread()) {
     std::string annotationContents;
     if (recordreplay::IsReplaying()) {
       base::Value::Dict info;
@@ -825,7 +825,7 @@ void DOMWebSocket::DidClose(
 
   ReleaseChannel();
 
-  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+  if (recordreplay::IsRecordingOrReplaying() && recordreplay::IsMainThread()) {
     std::string annotationContents;
     if (recordreplay::IsReplaying()) {
       base::Value::Dict info;

@@ -26,7 +26,7 @@ using namespace blink;
 namespace recordreplay {
 
 static bool PermitRecordReplayBrowserEvents() {
-  return IsRecordingOrReplaying("notify-network") && v8::IsMainThread();
+  return IsRecordingOrReplaying("notify-network") && recordreplay::IsMainThread();
 }
 
 static const char* HttpVersionToString(blink::ResourceResponse::HTTPVersion version) {

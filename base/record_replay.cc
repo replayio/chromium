@@ -43,6 +43,7 @@ namespace recordreplay {
   Macro(V8RecordReplayHasDisabledFeatures, (), (), bool, false)         \
   Macro(V8RecordReplayAreAssertsDisabled, (), (), bool, false)          \
   Macro(V8IsMainThread, (), (), bool, false)                            \
+  Macro(V8RecordReplayGetCurrentThreadId, (), (), size_t, 0)            \
   Macro(V8RecordReplayIsInReplayCode,                                   \
         (const char* why), (why), bool, false)                          \
   Macro(V8RecordReplayHadMismatch, (), (), bool, false)
@@ -453,6 +454,14 @@ void* IdPointer(int id) {
   return V8RecordReplayIdPointer(id);
 }
 
+bool IsMainThread() {
+  return V8IsMainThread();
+}
+
+size_t GetCurrentThreadId() {
+  return V8RecordReplayGetCurrentThreadId();
+}
+
 void OnEvent(const char* aEvent, bool aBefore) {
   V8RecordReplayOnEvent(aEvent, aBefore);
 }
@@ -534,10 +543,6 @@ AutoMarkerDependencyExecution::~AutoMarkerDependencyExecution() {
     EndDependencyExecution();
 }
 
-bool IsMainThread() {
-  return V8IsMainThread();
-}
-
 static int gNextMainThreadId = 1;
 
 static bool CheckNewId(const char* name) {
@@ -565,9 +570,9 @@ int NewIdMainThread(const char* name) {
   if (!CheckNewId(name)) {
     return 0;
   }
-  if (!V8IsMainThread()) {
+  if (!IsMainThread()) {
     fprintf(stderr, "NewIdMainThread not main thread: %s\n", name);
-    CHECK(V8IsMainThread());
+    CHECK(IsMainThread());
   }
   return gNextMainThreadId++;
 }
