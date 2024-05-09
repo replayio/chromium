@@ -140,7 +140,7 @@ function enforceBackendPreludeVersion() {
 
   const preludeVersion = fs.readFileSync(
     path.join(backend, ".preludeversion"),
-    "utf8"
+    "utf8",
   );
 
   const prelude = path.join(backend, "prelude");
@@ -166,8 +166,9 @@ export function updateBackendRepo() {
 
 export function updateChromiumRepo() {
   const chromium = process.cwd();
-  const branch = process.env["BUILDKITE_BRANCH"];
-  updateRepo(chromium, `origin/${branch}`);
+  const rev =
+    process.env["CHROMIUM_REVISION"] || process.env["BUILDKITE_COMMIT"];
+  updateRepo(chromium, rev);
 
   const deps = getChromiumDeps();
 
@@ -179,7 +180,7 @@ export function updateChromiumRepo() {
 
   syncRepo(
     path.join(chromium, "third_party", "boringssl", "src"),
-    deps.boringssl
+    deps.boringssl,
   );
 
   runGclientSync();
@@ -206,7 +207,7 @@ function getChromiumDeps() {
 
   match =
     /'https:\/\/github.com\/replayio\/chromium-webrtc.git' \+ '@' \+ '(.*?)'/.exec(
-      text
+      text,
     );
   assert(match, "Could not find webrtc revision");
   results.webrtc = match[1];
@@ -220,6 +221,15 @@ function getChromiumDeps() {
 
 export function getBackendDir() {
   return path.resolve(
-    process.env.RECORD_REPLAY_BACKEND_DIR || path.join(__dirname, "..", "..")
+    process.env.RECORD_REPLAY_BACKEND_DIR || path.join(__dirname, "..", ".."),
+  );
+}
+
+export function getArtifactDir() {
+  return path.join(
+    process.env.BUILDKITE_BUILD_CHECKOUT_PATH || "./",
+    "build_id",
+    currentPlatform(),
+    outputArchitecture(),
   );
 }
