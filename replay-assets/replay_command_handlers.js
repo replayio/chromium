@@ -49,7 +49,7 @@ const {
 // utils.js
 ///////////////////////////////////////////////////////////////////////////////
 
-// Some of these are duplicated in gSourceMapScript, so watch out when making
+// Some of these are duplicated in replay_sourcemap_handler, so watch out when making
 // modifications to update both versions...
 
 function isFunction(val) {
@@ -422,7 +422,7 @@ function Target_getCurrentMessageContents() {
   };
 }
 
-addNewScriptHandler((scriptId, sourceURL, relativeSourceMapURL) => {
+addNewScriptHandler("commands", (scriptId, sourceURL, relativeSourceMapURL) => {
   if (!relativeSourceMapURL)
     return;
 
