@@ -264,7 +264,7 @@ void OnPaintFinished(const SkPixmap& pixmap) {
     if (gRepaintEvent)
       gRepaintResult = EncodeBitmapContents(gRepaintMimeType, gRepaintJPEGQuality);
   } else {
-    size_t bookmark = gLastCommitBookmark;
+    size_t bookmark = gLastCommitBookmark.load();
     if (bookmark) {
       V8RecordReplayPaintFinished(bookmark);
     }
