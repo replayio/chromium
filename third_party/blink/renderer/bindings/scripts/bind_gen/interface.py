@@ -352,8 +352,6 @@ def bind_callback_local_vars(code_node, cg_context):
                     std::string stack;
                     recordreplay::GetCurrentJSStack(&stack);
                     recordreplay::Warning("[TT-957] Context gone: %s", stack.c_str());
-                    // TODO: Remove the crash after local testing has completed.
-                    recordreplay::Crash("[TT-957] Context gone: %s", stack.c_str());
                     exception_state.ThrowTypeError("[TT-957] Context Gone");
                     return;
                 }""")
