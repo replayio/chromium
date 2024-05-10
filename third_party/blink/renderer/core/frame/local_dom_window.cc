@@ -192,15 +192,6 @@ class LocalDOMWindow::NetworkStateObserver final
       online_observer_handle_;
 };
 
-static std::unordered_set<LocalDOMWindow*>* gValidDOMWindowPointers;
-
-// Workaround for invalid window pointers being used.
-//
-// See https://linear.app/replay/issue/TT-957
-bool LocalDOMWindowPointerIsValid(LocalDOMWindow* window) {
-  return gValidDOMWindowPointers && gValidDOMWindowPointers->find(window) != gValidDOMWindowPointers->end();
-}
-
 LocalDOMWindow::LocalDOMWindow(LocalFrame& frame, WindowAgent* agent)
     : DOMWindow(frame),
       ExecutionContext(V8PerIsolateData::MainThreadIsolate(), agent),
@@ -222,12 +213,7 @@ LocalDOMWindow::LocalDOMWindow(LocalFrame& frame, WindowAgent* agent)
       post_message_counter_(PostMessagePartition::kSameProcess),
       network_state_observer_(MakeGarbageCollected<NetworkStateObserver>(this)),
       closewatcher_stack_(
-          MakeGarbageCollected<CloseWatcher::WatcherStack>(this)) {
-  CHECK(IsMainThread());
-  if (!gValidDOMWindowPointers)
-    gValidDOMWindowPointers = new std::unordered_set<LocalDOMWindow*>();
-  gValidDOMWindowPointers->insert(this);
-}
+          MakeGarbageCollected<CloseWatcher::WatcherStack>(this)) {}
 
 void LocalDOMWindow::BindContentSecurityPolicy() {
   DCHECK(!GetContentSecurityPolicy()->IsBound());
@@ -908,11 +894,7 @@ void LocalDOMWindow::DispatchPopstateEvent(
   DispatchEvent(*PopStateEvent::Create(std::move(state_object), history()), "LocalDOMWindow::DispatchPopstateEvent");
 }
 
-LocalDOMWindow::~LocalDOMWindow() {
-  CHECK(IsMainThread());
-  CHECK(gValidDOMWindowPointers);
-  gValidDOMWindowPointers->erase(this);
-}
+LocalDOMWindow::~LocalDOMWindow() = default;
 
 void LocalDOMWindow::Dispose() {
   BackForwardCacheBufferLimitTracker::Get()
