@@ -2272,6 +2272,8 @@ static void RunScript(v8::Isolate* isolate, v8::Local<v8::Context> context, cons
   v8::ScriptOrigin origin(isolate, filename_string);
 
   v8::TryCatch try_catch(isolate);
+  CHECK(!!source_raw);
+  CHECK(!!strlen(source_raw));
   v8::Local<v8::String> source = ToV8String(isolate, source_raw);
   auto maybe_script = v8::Script::Compile(context, source, &origin);
 
