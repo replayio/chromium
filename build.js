@@ -167,11 +167,12 @@ function spawnChecked(cmd, args, options) {
 
   const rv = spawnSync(cmd, args, options);
 
-  if (rv.status != 0 || rv.error) {
+  if (rv.status || rv.error || rv.signal) {
+    const errMsg = ` Spawned process "${prettyCmd}" failed: status=${rv.status || ""}, signal=${rv.signal || ""}, err=${rv.error || ""}`;
     console.error(
-      `Process failed: err=${rv.error || ""}, signal=${rv.signal || ""}`
+      errMsg
     );
-    throw new Error(`Spawned process failed with exit code ${rv.status}`);
+    throw new Error(errMsg);
   }
 
   return rv;
