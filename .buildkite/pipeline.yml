@@ -221,6 +221,7 @@ steps:
     depends_on:
       - "build-chromium-linux-x86_64"
     build:
+      branch: toshok/tt-1009-build-reasons
       env:
         OS: "linux"
         ARCH: "x86_64"
@@ -236,6 +237,7 @@ steps:
     depends_on:
       - "build-chromium-mac-arm64"
     build:
+      branch: toshok/tt-1009-build-reasons
       env:
         OS: "macos"
         ARCH: "arm64"
