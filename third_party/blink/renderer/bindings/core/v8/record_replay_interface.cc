@@ -111,24 +111,24 @@ static bool IsCommandHandlingEnabled() {
          IsCommandHandlingEnabledWhenRecording();
 }
 
-static LocalFrame* GetLocalFrameRoot(v8::Isolate* isolate) {
+static LocalFrame* GetCurrentLocalFrameRoot(v8::Isolate* isolate) {
   LocalDOMWindow* currentWindow = CurrentDOMWindow(isolate);
 
   if (!currentWindow) {
-    recordreplay::Print("[RuntimeError] GetLocalFrameRoot: no window.");
+    recordreplay::Print("[RuntimeError] GetCurrentLocalFrameRoot: no window.");
     return nullptr;
   }
 
   LocalFrame *f = currentWindow->GetFrame();
   if (!f || f->IsDetached() || f->IsProvisional()) {
-    recordreplay::Print("[RuntimeError] GetLocalFrameRoot: window has no frame.");
+    recordreplay::Print("[RuntimeError] GetCurrentLocalFrameRoot: window has no frame.");
     return nullptr;
   }
 
   LocalFrame& root = f->LocalFrameRoot();
 
   if (root.IsDetached() || root.IsProvisional()) {
-    recordreplay::Print("[RuntimeError] GetLocalFrameRoot: root is detached or provisional.");
+    recordreplay::Print("[RuntimeError] GetCurrentLocalFrameRoot: root is detached or provisional.");
     return nullptr;
   }
 
@@ -163,7 +163,7 @@ public:
     inspectorSession = nullptr;
   }
 
-  LocalFrame* GetLocalFrameRoot() const { return blink::GetLocalFrameRoot(isolate); }
+  LocalFrame* GetCurrentLocalFrameRoot() const { return blink::GetCurrentLocalFrameRoot(isolate); }
 };
 
 static LocalFrame* gRootLocalFrame = nullptr;
@@ -748,10 +748,11 @@ struct InspectorChannel final : public v8_inspector::V8Inspector::Channel {
 };
 
 absl::optional<int> GetCurrentContextGroupIdForIsolate(v8::Isolate* isolate) {
-  LocalFrame* local_frame_root = GetLocalFrameRoot(isolate);
+  LocalFrame* local_frame_root = GetCurrentLocalFrameRoot(isolate);
 
-  if (local_frame_root != nullptr) {
-    // Get (do NOT create) a ContextGroupId:
+  if (local_frame_root) {
+    // Gets (but does NOT create!) a contextGroupId.
+    // NOTE: Copied from |MainThreadDebugger::ContextGroupId|.
     return WeakIdentifierMap<LocalFrame>::Identifier(local_frame_root);
   }
 
@@ -1145,7 +1146,7 @@ static InspectedFrames* getOrCreateInspectedFrames(v8::Isolate* isolate, int con
   InspectorData *data = getInspectorFor(isolate, contextGroupId);
 
   if (!data->inspectedFrames) {
-    data->inspectedFrames = MakeGarbageCollected<InspectedFrames>(data->GetLocalFrameRoot());
+    data->inspectedFrames = MakeGarbageCollected<InspectedFrames>(data->GetCurrentLocalFrameRoot());
   }
   return data->inspectedFrames;
 }
@@ -1166,7 +1167,7 @@ absl::optional<InspectorDOMAgent*> getOrCreateInspectorDOMAgent(v8::Isolate* iso
     InspectedFrames* inspectedFrames = getOrCreateInspectedFrames(isolate, *contextGroupId);
     data->inspectorDomAgent = MakeGarbageCollected<InspectorDOMAgent>(
         isolate, inspectedFrames, getInspectorSession(isolate, *contextGroupId));
-    data->inspectorDomAgent->FrameDocumentUpdated(data->GetLocalFrameRoot());
+    data->inspectorDomAgent->FrameDocumentUpdated(data->GetCurrentLocalFrameRoot());
   }
   return data->inspectorDomAgent;
 }
@@ -1188,7 +1189,7 @@ absl::optional<InspectorDOMDebuggerAgent*> getOrCreateInspectorDOMDebuggerAgent(
 
     // RUN-1061: registering the agent here allows it to receive `UserCallback`
     // events.
-    data->GetLocalFrameRoot()->GetProbeSink()->AddInspectorDOMDebuggerAgent(data->inspectorDomDebuggerAgent);
+    data->GetCurrentLocalFrameRoot()->GetProbeSink()->AddInspectorDOMDebuggerAgent(data->inspectorDomDebuggerAgent);
   }
   return data->inspectorDomDebuggerAgent;
 }
@@ -1222,7 +1223,7 @@ absl::optional<InspectorCSSAgent*> getOrCreateInspectorCSSAgent(v8::Isolate* iso
     InspectedFrames* inspectedFrames = getOrCreateInspectedFrames(isolate, *contextGroupId);
 
     auto* resource_content_loader =
-        MakeGarbageCollected<InspectorResourceContentLoader>(data->GetLocalFrameRoot());
+        MakeGarbageCollected<InspectorResourceContentLoader>(data->GetCurrentLocalFrameRoot());
     auto* resource_container =
         MakeGarbageCollected<InspectorResourceContainer>(inspectedFrames);
     auto domAgent = getOrCreateInspectorDOMAgent(isolate);
@@ -2472,6 +2473,13 @@ static void InitializeReplayScripts(v8::Isolate* isolate, LocalFrame* localFrame
 
 void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
   recordreplay::AutoMarkReplayCode amrc;
+  // TODO: keep track of this frame's and context's lifecycle?
+  //    → Find all relevant events.
+  //    → Log contextGroupId + contextId
+  //    → See how contextGroupId in blink maps against contextGroupId in V8. It should be the same. Its also the V8InspectorSession id.
+  //    → Consider using gContextChangeCallbacks for this.
+  // TODO: fix and use GetCurrentLocalFrameRoot
+  // TODO: consider using blink::GetCurrentLocalFrameRoot
   recordreplay::Trace(
     "[RUN-2739] OnRootFrameInit win=%d frame=%d %d %d %d %d parent=%d" " \"%s\"",
       localFrame->DomWindow()->RecordReplayId(),
@@ -2486,6 +2494,8 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
       
       localFrame->GetDocument()->Url().GetString().Utf8().c_str()
       );
+
+  CHECK(localFrame == localFrame->LocalFrameRoot());
   
   // NOTE: The root `LocalFrame` can change over time.
   gRootLocalFrame = localFrame;
