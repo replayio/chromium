@@ -243,13 +243,15 @@ PageState WebHistoryItem::ToPageState() {
   
   std::stringstream breakdowns;
   RecordReplayStringifyFrameState(breakdowns, state.top);
-  breakdowns << " http_body="
-    << RecordReplayGetLen(state.top.http_body.http_content_type) << ","
-    << " elems=" << state.top.http_body.request_body->elements()->size() << ":";
-  for (size_t i = 0; i < http_body.ElementCount(); ++i) {
-    WebHTTPBody::Element elem;
-    http_body.ElementAt(i, elem);
-    breakdowns << elem.blob_length << ",";
+  if (!http_body.IsNull()) {
+    breakdowns << " http_body="
+      << RecordReplayGetLen(state.top.http_body.http_content_type) << ","
+      << " elems=" << state.top.http_body.request_body->elements()->size() << ":";
+    for (size_t i = 0; i < http_body.ElementCount(); ++i) {
+      WebHTTPBody::Element elem;
+      http_body.ElementAt(i, elem);
+      breakdowns << elem.blob_length << ",";
+    }
   }
   recordreplay::Assert(
     "[TT-492-1184] WebHistoryItem::ToPageState files=%s top=%s",
