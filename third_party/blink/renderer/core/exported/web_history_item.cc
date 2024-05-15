@@ -154,8 +154,9 @@ static int RecordReplayGetLen(absl::optional<std::basic_string<T>> s) {
 template<class T>
 static std::string RecordReplayStringifySizes(std::vector<absl::optional<std::basic_string<T>>> v) {
   std::stringstream s;
+  s << v.size() << ":";
   for (auto entry : v) {
-    if (entry.)
+    s << RecordReplayGetLen(entry) << ",";
   }
   return s.str();
 }
@@ -252,7 +253,7 @@ PageState WebHistoryItem::ToPageState() {
   }
   recordreplay::Assert(
     "[TT-492-1184] WebHistoryItem::ToPageState files=%s top=%s",
-    RecordReplayStringifySizes(state.referenced_files),
+    RecordReplayStringifySizes(state.referenced_files).c_str(),
     breakdowns.str().c_str()
   );
 
