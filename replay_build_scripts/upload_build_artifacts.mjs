@@ -439,7 +439,7 @@ function buildkiteStuff(
   );
 
   const buildIdSubset = buildIdToBuildIdSubset(buildId);
-  const buildIdMessage = `# Build ID subset \n\n\`_Copy this when you're releasing this build and the release pipeline asks you for the build ID subset_\n\n\`${buildIdSubset}\`\n`;
+  const buildIdMessage = `# Build ID subset \n\n_Copy this when you're releasing this build and the release pipeline asks you for the build ID subset_\n\n\`${buildIdSubset}\`\n`;
   spawnChecked(
     "buildkite-agent",
     [
