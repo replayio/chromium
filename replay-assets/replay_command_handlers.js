@@ -14,9 +14,6 @@ const {
   hasDiverged,
   setCDPMessageCallback,
   sendCDPMessage: sendCDPMessageRaw,
-  setCommandCallback,
-  setClearPauseDataCallback,
-  addNewScriptHandler,
   getCurrentError,
 
   layoutDom,
@@ -140,13 +137,11 @@ function isValidBaseURL(url) {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// message.js
+// CDP Handlers.
 ///////////////////////////////////////////////////////////////////////////////
 
-function initMessages() {
+function initCdp() {
   setCDPMessageCallback(messageCallback);
-  setCommandCallback(commandCallback);
-  setClearPauseDataCallback(clearPauseDataCallback);
 }
 
 let gNextMessageId = 1;
@@ -421,21 +416,6 @@ function Target_getCurrentMessageContents() {
     argumentValues,
   };
 }
-
-addNewScriptHandler("commands", (scriptId, sourceURL, relativeSourceMapURL) => {
-  if (!relativeSourceMapURL)
-    return;
-
-  const urls = getSourceMapURLs(sourceURL, relativeSourceMapURL);
-  if (!urls)
-    return;
-
-  const { sourceMapURL, sourceMapBaseURL } = urls;
-  gSourceMapData.set(scriptId, {
-    url: sourceMapURL,
-    baseUrl: sourceMapBaseURL
-  });
-}, /* disallowEvents */ true);
 
 function Target_getSourceMapURL({ sourceId }) {
   return gSourceMapData.get(sourceId) || {};
@@ -3313,12 +3293,37 @@ function wrapReplayApiFunction(fn) {
 }
 
 
+/** ###########################################################################
+ * Callback management.
+ * ##########################################################################*/
+
+function initCallbacks(callbackRegistry) {
+  // TODO: Init these callbacks correctly!
+  setCommandCallback(commandCallback);
+  setClearPauseDataCallback(clearPauseDataCallback);
+  addNewScriptHandler("commands", (scriptId, sourceURL, relativeSourceMapURL) => {
+    if (!relativeSourceMapURL)
+      return;
+  
+    const urls = getSourceMapURLs(sourceURL, relativeSourceMapURL);
+    if (!urls)
+      return;
+  
+    const { sourceMapURL, sourceMapBaseURL } = urls;
+    gSourceMapData.set(scriptId, {
+      url: sourceMapURL,
+      baseUrl: sourceMapBaseURL
+    });
+  }, /* disallowEvents */ true);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // main.js
 ///////////////////////////////////////////////////////////////////////////////
 
 patchReplayApi();
-initMessages();
+initCdp();
+initCallbacks();
 addEventListener("Runtime.consoleAPICalled", onConsoleAPICall);
 addEventListener("Runtime.executionContextCreated", ({ context }) => {
   gExecutionContexts.set(context.id, context);

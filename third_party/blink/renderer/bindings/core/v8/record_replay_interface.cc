@@ -57,9 +57,6 @@ static const char *AnnotationHookJSName = "__RECORD_REPLAY_ANNOTATION_HOOK__";
 
 namespace v8 {
 
-extern void FunctionCallbackRecordReplaySetCommandCallback(const FunctionCallbackInfo<Value>& args);
-extern void FunctionCallbackRecordReplaySetClearPauseDataCallback(const FunctionCallbackInfo<Value>& callArgs);
-extern void FunctionCallbackRecordReplayAddNewScriptHandler(const FunctionCallbackInfo<Value>& args);
 extern void FunctionCallbackRecordReplayGetScriptSource(const FunctionCallbackInfo<Value>& args);
 
 namespace internal {
@@ -174,7 +171,7 @@ std::unordered_map<v8::Isolate*, ContextGroupIdInspectorMap*>* gInspectorData = 
 std::unordered_map<v8::Isolate*, v8_inspector::V8Inspector*>* gV8Inspectors = nullptr;
 
 static std::string ReadReplayAssetFile(const char* filename, size_t& len) {
-  // TODO: Get "binary dir" from Chromium here first.
+  // TODO: Get "binary dir" from Chromium.
   const char* scriptDir = getenv("RECORD_REPLAY_ASSETS_DIRECTORY");
   if (!scriptDir) {
     recordreplay::Crash("ReadReplayAssetFile failed: RECORD_REPLAY_ASSETS_DIRECTORY not provided");
@@ -2336,8 +2333,6 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
   SetFunctionProperty(isolate, args, "setCDPMessageCallback",
                       SetCDPMessageCallback);
   SetFunctionProperty(isolate, args, "sendCDPMessage", SendCDPMessage);
-  SetFunctionProperty(isolate, args, "setCommandCallback",
-                      v8::FunctionCallbackRecordReplaySetCommandCallback);
 
   SetFunctionProperty(isolate, args, "layoutDom", LayoutDom);
 
@@ -2392,17 +2387,12 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
                       fromJsGetCurrentViewportPixelSize);
 
   // unsorted Replay stuff
-  SetFunctionProperty(
-      isolate, args, "setClearPauseDataCallback",
-      v8::FunctionCallbackRecordReplaySetClearPauseDataCallback);
   SetFunctionProperty(isolate, args, "getCurrentError", GetCurrentError);
   SetFunctionProperty(isolate, args, "getRecordingId", GetRecordingId);
   SetFunctionProperty(isolate, args, "sha256DigestHex", SHA256DigestHex);
   SetFunctionProperty(isolate, args, "writeToRecordingDirectory",
                       WriteToRecordingDirectory);
   SetFunctionProperty(isolate, args, "addRecordingEvent", AddRecordingEvent);
-  SetFunctionProperty(isolate, args, "addNewScriptHandler",
-                      v8::FunctionCallbackRecordReplayAddNewScriptHandler);
   SetFunctionProperty(isolate, args, "getScriptSource",
                       v8::FunctionCallbackRecordReplayGetScriptSource);
 
