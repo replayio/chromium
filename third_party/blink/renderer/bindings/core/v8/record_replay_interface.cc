@@ -174,6 +174,7 @@ std::unordered_map<v8::Isolate*, ContextGroupIdInspectorMap*>* gInspectorData = 
 std::unordered_map<v8::Isolate*, v8_inspector::V8Inspector*>* gV8Inspectors = nullptr;
 
 static std::string ReadReplayAssetFile(const char* filename, size_t& len) {
+  // TODO: Get "binary dir" from Chromium here first.
   const char* scriptDir = getenv("RECORD_REPLAY_ASSETS_DIRECTORY");
   if (!scriptDir) {
     recordreplay::Crash("ReadReplayAssetFile failed: RECORD_REPLAY_ASSETS_DIRECTORY not provided");
