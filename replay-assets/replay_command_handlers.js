@@ -3297,7 +3297,7 @@ function wrapReplayApiFunction(fn) {
  * Callback management.
  * ##########################################################################*/
 
-function initCallbacks(callbackRegistry) {
+function initializeCallbacks(callbackRegistry) {
   // TODO: Init these callbacks correctly!
   setCommandCallback(commandCallback);
   setClearPauseDataCallback(clearPauseDataCallback);

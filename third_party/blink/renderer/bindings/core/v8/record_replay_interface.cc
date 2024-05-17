@@ -40,6 +40,7 @@
 #include "third_party/blink/renderer/platform/bindings/v8_dom_wrapper.h"
 #include "third_party/inspector_protocol/crdtp/maybe.h"
 #include "v8/include/v8-inspector.h"
+#include "v8/include/replayio.h"
 
 #include <array>
 #include <fstream>
@@ -84,9 +85,7 @@ using RemoteObjectIdTypeRaw = std::u16string;
 // The more convenient type that we use
 using RemoteObjectIdType = WTF::String;
 
-extern "C" void V8RecordReplaySetDefaultContext(v8::Isolate* isolate, v8::Local<v8::Context> cx);
 extern "C" void V8RecordReplayFinishRecording();
-extern "C" void V8RecordReplaySetCrashReason(const char* reason);
 extern "C" char* V8RecordReplayReadAssetFileContents(const char* aPath, size_t* aLength);
 extern "C" void V8RecordReplayOnConsoleMessage(size_t bookmark);
 extern "C" void V8RecordReplayAddMetadata(const char* jsonString);
@@ -2425,12 +2424,12 @@ void InitializeRecordReplayAfterCheckpoint() {
   V8RecordReplayRegisterBrowserEventCallback(HandleBrowserEvent);
 }
 
-static void InitializeReplayScripts(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
+static void InitializeRootContext(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
   // Register context, s.t. when handling a command and we are not on a 
   // JS stack, we can always use the current root frame's context.
   // Note: We are assuming that each tab has its own process, for now.
   //   (That might not hold true for tabs of the same domain - not sure)
-  V8RecordReplaySetDefaultContext(isolate, context);
+  v8::replayio::ReplayRootContext* newRoot = v8::replayio::RecordReplayCreateRootContext(isolate, context);
   
   // Initialize __RECORD_REPLAY__ things.
   InitializeRecordReplayApiObjects(isolate, localFrame);
@@ -2442,6 +2441,7 @@ static void InitializeReplayScripts(v8::Isolate* isolate, LocalFrame* localFrame
       !TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_COLLECTION")) {
     recordreplay::AutoMarkReplayCode amrc;
     RunScript(isolate, context, ReadReplaySourcemapHandlerScript().Utf8().c_str(), InternalScriptURL);
+    // TODO: initializeCallbacks(newRoot)
   }
 
   if (recordreplay::FeatureEnabled("force-main-world-initialization")) {
@@ -2454,10 +2454,11 @@ static void InitializeReplayScripts(v8::Isolate* isolate, LocalFrame* localFrame
     recordreplay::AutoMarkReplayCode amrc;
     String commandHandlerScript = ReadReplayCommandHandlerScript();
     {
-      recordreplay::AutoDisallowEvents disallow("InitializeReplayScripts");
+      recordreplay::AutoDisallowEvents disallow("InitializeRootContext");
 
       // Run `commandHandlerScript`.
       RunScript(isolate, context, commandHandlerScript.Utf8().c_str(), InternalScriptURL);
+      // TODO: initializeCallbacks(newRoot)
     }
   }
 }
@@ -2498,7 +2499,7 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
   // 2. Initialize sourcemap worker, command handlers etc.
   gReplayScriptsAlive = true;
   recordreplay::Print("ReplayScript STATUS_CHANGE_ALIVE");
-  InitializeReplayScripts(isolate, localFrame, context);
+  InitializeRootContext(isolate, localFrame, context);
 }
 
 void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
