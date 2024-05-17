@@ -2441,6 +2441,8 @@ static void InitializeRootContext(v8::Isolate* isolate, LocalFrame* localFrame, 
       !TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_COLLECTION")) {
     recordreplay::AutoMarkReplayCode amrc;
     RunScript(isolate, context, ReadReplaySourcemapHandlerScript().Utf8().c_str(), InternalScriptURL);
+    // TODO
+    newRoot->CallGlobalFunction();
     // TODO: initializeCallbacks(newRoot)
   }
 
