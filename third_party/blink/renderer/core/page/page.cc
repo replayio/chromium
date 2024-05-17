@@ -24,6 +24,7 @@
 #include "base/compiler_specific.h"
 #include "base/feature_list.h"
 #include "base/record_replay.h"
+#include "base/record_replay_paint_surface.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/mojom/frame/lifecycle.mojom-blink-forward.h"
 #include "third_party/blink/public/platform/platform.h"
@@ -536,9 +537,30 @@ void Page::VisitedStateChanged(LinkHash link_hash) {
 void Page::SetVisibilityState(
     mojom::blink::PageVisibilityState visibility_state,
     bool is_initial_state) {
+  
+  std::string main_frame_info;
+
+  if (auto* main_local_frame = DynamicTo<LocalFrame>(main_frame_.Get())) {
+    main_frame_info = main_local_frame->GetDocument()->Url().GetString().Utf8();
+  } else {
+    main_frame_info = "remote!?!?";
+  }
+
+  std::stringstream from;
+  std::stringstream to;
+  from << lifecycle_state_->visibility;
+  to << visibility_state;
+  recordreplay::Print("Page(%s) from %s to %s\n", main_frame_info.c_str(), from.str().c_str(), to.str().c_str());
+
   if (lifecycle_state_->visibility == visibility_state)
     return;
   lifecycle_state_->visibility = visibility_state;
+
+  if (visibility_state == mojom::blink::PageVisibilityState::kVisible) {
+    // When a page is made visible, signal that the paint surface is about to change,
+    // so we don't ignore the paints.
+    recordreplay::DoResetPaintSurface();
+  }
 
   if (is_initial_state)
     return;
