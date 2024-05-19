@@ -13,6 +13,7 @@
 #include "base/base64.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
+#include "base/path_service.h"
 #include "base/process/process_handle.h"
 #include "base/record_replay.h"
 #include "base/record_replay_render_interface.h"
@@ -171,19 +172,30 @@ std::unordered_map<v8::Isolate*, v8_inspector::V8Inspector*>* gV8Inspectors = nu
 
 static std::string ReadReplayAssetFile(const char* filename, size_t& len) {
   // TODO: Get "binary dir" from Chromium.
-  const char* scriptDir = getenv("RECORD_REPLAY_ASSETS_DIRECTORY");
-  if (!scriptDir) {
-    recordreplay::Crash("ReadReplayAssetFile failed: RECORD_REPLAY_ASSETS_DIRECTORY not provided");
-  }
+  base::FilePath binPath;
+  std::string assetsDir;
 
-  std::string fpath = std::string(scriptDir) + std::string("/") + filename;
+  // TODO: Test this on mac.
+  if (base::PathService::Get(base::FILE_EXE, &binPath)) {
+    // PathService::Get(base::DIR_EXE, result);
+    assetsDir = binPath.DirName().AppendASCII("replay-assets").AsUTF8Unsafe();
+  } else if (getenv("RECORD_REPLAY_ASSETS_DIRECTORY")) {
+    assetsDir = getenv("RECORD_REPLAY_ASSETS_DIRECTORY");
+  }
+  if (!assetsDir.length()) {
+    recordreplay::Crash("ReadReplayAssetFile failed: Neither base::FILE_EXE nor RECORD_REPLAY_ASSETS_DIRECTORY provided.");
+  }
+  recordreplay::Print("DDBG ReadReplayAssetFile %s", assetsDir.c_str());
+  std::string fpath = assetsDir + std::string("/") + filename;
   std::ifstream ifs(fpath);
   std::stringstream ss;
   ss << ifs.rdbuf();
   std::string s = ss.str();
   len = s.length();
   if (!len) {
-    recordreplay::Crash("ReadReplayAssetFile failed: %s", fpath.c_str());
+    recordreplay::Crash("ReadReplayAssetFile (\"%s\") failed: %s",
+      fpath.c_str(),
+      strerror(errno));
   }
   return s;
 }
