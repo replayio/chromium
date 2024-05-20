@@ -83,6 +83,7 @@
 #include "third_party/blink/renderer/core/page/validation_message_client_impl.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
 #include "third_party/blink/renderer/core/probe/core_probes.h"
+#include "third_party/blink/renderer/core/record_replay/lifecycle.h"
 #include "third_party/blink/renderer/core/scroll/scrollbar_theme.h"
 #include "third_party/blink/renderer/core/scroll/scrollbar_theme_overlay_mobile.h"
 #include "third_party/blink/renderer/core/scroll/smooth_scroll_sequencer.h"
@@ -537,30 +538,14 @@ void Page::VisitedStateChanged(LinkHash link_hash) {
 void Page::SetVisibilityState(
     mojom::blink::PageVisibilityState visibility_state,
     bool is_initial_state) {
-  
-  std::string main_frame_info;
-
-  if (auto* main_local_frame = DynamicTo<LocalFrame>(main_frame_.Get())) {
-    main_frame_info = main_local_frame->GetDocument()->Url().GetString().Utf8();
-  } else {
-    main_frame_info = "remote!?!?";
-  }
-
-  std::stringstream from;
-  std::stringstream to;
-  from << lifecycle_state_->visibility;
-  to << visibility_state;
-  recordreplay::Print("Page(%s) from %s to %s\n", main_frame_info.c_str(), from.str().c_str(), to.str().c_str());
-
   if (lifecycle_state_->visibility == visibility_state)
     return;
   lifecycle_state_->visibility = visibility_state;
 
-  if (visibility_state == mojom::blink::PageVisibilityState::kVisible) {
-    // When a page is made visible, signal that the paint surface is about to change,
-    // so we don't ignore the paints.
-    recordreplay::DoResetPaintSurface();
-  }
+  // ideally we could use an observer for this (and we might eventually find that we can),
+  // but in the interest of always getting paints, we need do this even if
+  // is_initial_state == true.
+  recordreplay::NotePageVisibilityStateChanged(this);
 
   if (is_initial_state)
     return;
