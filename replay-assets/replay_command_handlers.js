@@ -3327,13 +3327,12 @@ function handleNewScript(scriptId, sourceURL, relativeSourceMapURL) {
   });
 }
 
-function initializeEvents(eventEmitter) {
-  eventEmitter.prototype = EventEmitterPrototype;
-  eventEmitter._callbacks = {};
-  eventEmitter.on("command", commandCallback);
-  eventEmitter.on("clearPauseDataCallback", clearPauseDataCallback);
-  // TODO: Some instances of handleNewScript need disallowEvents at the C++ level.
-  eventEmitter.on("newScript", handleNewScript);
+function initializeEvents(ReplayJsEventEmitter) {
+  ReplayJsEventEmitter.prototype = EventEmitterPrototype;
+  ReplayJsEventEmitter._callbacks = {};
+  ReplayJsEventEmitter.on("command", commandCallback);
+  ReplayJsEventEmitter.on("clearPauseDataCallback", clearPauseDataCallback);
+  ReplayJsEventEmitter.on("newScriptEventsDisallowed", handleNewScript);
 }
 
 ///////////////////////////////////////////////////////////////////////////////

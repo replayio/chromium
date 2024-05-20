@@ -29,7 +29,7 @@ async function getCachedResource(url, hash) {
   return res;
 }
 
-async function newScriptHandler(scriptId, sourceURL, relativeSourceMapURL) {
+async function handleNewScript(scriptId, sourceURL, relativeSourceMapURL) {
   try {
     if (!relativeSourceMapURL || relativeSourceMapURL.startsWith("data:"))
       return;
@@ -134,9 +134,8 @@ async function newScriptHandler(scriptId, sourceURL, relativeSourceMapURL) {
   }
 }
 
-function initializeCallbacks(callbackRegistry) {
-  TODO
-  // newScriptHandler
+function initializeEvents(ReplayJsEventEmitter) {
+  ReplayJsEventEmitter.on("newScript", handleNewScript);
 }
 
 async function fetchText(url) {
@@ -261,4 +260,4 @@ function isValidBaseURL(url) {
 }
 
 // Script return value
-initializeCallbacks;
+initializeEvents
