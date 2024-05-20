@@ -5,7 +5,6 @@ const {
   sha256DigestHex,
   writeToRecordingDirectory,
   addRecordingEvent,
-  addNewScriptHandler,
   getScriptSource,
   recordingDirectoryFileExists,
   readFromRecordingDirectory,
@@ -30,99 +29,122 @@ async function getCachedResource(url, hash) {
   return res;
 }
 
-addNewScriptHandler("sourcemaps", async (scriptId, sourceURL, relativeSourceMapURL) => {
+async function newScriptHandler(scriptId, sourceURL, relativeSourceMapURL) {
   try {
-  if (!relativeSourceMapURL || relativeSourceMapURL.startsWith("data:"))
-    return;
+    if (!relativeSourceMapURL || relativeSourceMapURL.startsWith("data:"))
+      return;
 
-  const recordingId = getRecordingId();
-  if (!recordingId) {
-    // The recording has been invalidated.
-    return;
-  }
+    const recordingId = getRecordingId();
+    if (!recordingId) {
+      // The recording has been invalidated.
+      return;
+    }
 
-  const urls = getSourceMapURLs(sourceURL, relativeSourceMapURL);
-  if (!urls)
-    return;
+    const urls = getSourceMapURLs(sourceURL, relativeSourceMapURL);
+    if (!urls) return;
 
-  const scriptSource = getScriptSource(scriptId);
-  const scriptHash = sha256DigestHex(scriptSource);
+    const scriptSource = getScriptSource(scriptId);
+    const scriptHash = sha256DigestHex(scriptSource);
 
-  const { sourceMapURL, sourceMapBaseURL } = urls;
+    const { sourceMapURL, sourceMapBaseURL } = urls;
 
-  let sourceMap;
-  try {
-    sourceMap = await getCachedResource(sourceMapURL, scriptHash);
-  } catch (err) {
-    log(`[RuntimeError] Failed to read sourcemap ${sourceMapURL}: ${err.message}`);
-  }
-  if (!sourceMap) {
-    return;
-  }
-
-  const id = scriptHash;
-  const name = `sourcemap-${id}.map`;
-  const lookupName = `sourcemap-${id}.lookup`;
-
-  let sources;
-  if (recordingDirectoryFileExists(name) && recordingDirectoryFileExists(lookupName)) {
+    let sourceMap;
     try {
-      sources = JSON.parse(readFromRecordingDirectory(lookupName));
+      sourceMap = await getCachedResource(sourceMapURL, scriptHash);
     } catch (err) {
-      log(`[RuntimeError][sourcemaps] Failed to load sourcemaps from file: ${lookupName} - ${err.message}`);
+      log(
+        `[RuntimeError] Failed to read sourcemap ${sourceMapURL}: ${err.message}`
+      );
     }
-  }
-
-  if (!sources) {
-    writeToRecordingDirectory(name, sourceMap);
-
-    sources = collectUnresolvedSourceMapResources(sourceMap, sourceMapURL, sourceURL);
-    writeToRecordingDirectory(lookupName, JSON.stringify(sources));
-  }
-
-  addRecordingEvent(JSON.stringify({
-    kind: "sourcemapAdded",
-    path: getRecordingFilePath(name),
-    recordingId,
-    id,
-    url: sourceMapURL,
-    baseURL: sourceMapBaseURL,
-    targetContentHash: `sha256:${scriptHash}`,
-    targetURLHash: sourceURL ? makeAPIHash(sourceURL) : undefined,
-    targetMapURLHash: makeAPIHash(sourceMapURL),
-  }));
-
-  for (const { offset, url } of sources) {
-    let sourceContent;
-    try {
-      sourceContent = await getCachedResource(url, scriptHash);
-    } catch (err) {
-      log(`[RuntimeError][sourcemaps] Failed to read original source ${url}: ${err.message}`);
-      continue;
+    if (!sourceMap) {
+      return;
     }
-    const hash = sha256DigestHex(sourceContent);
-    const name = `source-${hash}`;
 
-    if (!recordingDirectoryFileExists(name)) {
-      writeToRecordingDirectory(name, sourceContent);
+    const id = scriptHash;
+    const name = `sourcemap-${id}.map`;
+    const lookupName = `sourcemap-${id}.lookup`;
+
+    let sources;
+    if (
+      recordingDirectoryFileExists(name) &&
+      recordingDirectoryFileExists(lookupName)
+    ) {
+      try {
+        sources = JSON.parse(readFromRecordingDirectory(lookupName));
+      } catch (err) {
+        log(
+          `[RuntimeError][sourcemaps] Failed to load sourcemaps from file: ${lookupName} - ${err.message}`
+        );
+      }
     }
-    addRecordingEvent(JSON.stringify({
-      kind: "originalSourceAdded",
-      path: getRecordingFilePath(name),
-      recordingId,
-      parentId: id,
-      parentOffset: offset,
-    }));
-  }
+
+    if (!sources) {
+      writeToRecordingDirectory(name, sourceMap);
+
+      sources = collectUnresolvedSourceMapResources(
+        sourceMap,
+        sourceMapURL,
+        sourceURL
+      );
+      writeToRecordingDirectory(lookupName, JSON.stringify(sources));
+    }
+
+    addRecordingEvent(
+      JSON.stringify({
+        kind: "sourcemapAdded",
+        path: getRecordingFilePath(name),
+        recordingId,
+        id,
+        url: sourceMapURL,
+        baseURL: sourceMapBaseURL,
+        targetContentHash: `sha256:${scriptHash}`,
+        targetURLHash: sourceURL ? makeAPIHash(sourceURL) : undefined,
+        targetMapURLHash: makeAPIHash(sourceMapURL),
+      })
+    );
+
+    for (const { offset, url } of sources) {
+      let sourceContent;
+      try {
+        sourceContent = await getCachedResource(url, scriptHash);
+      } catch (err) {
+        log(
+          `[RuntimeError][sourcemaps] Failed to read original source ${url}: ${err.message}`
+        );
+        continue;
+      }
+      const hash = sha256DigestHex(sourceContent);
+      const name = `source-${hash}`;
+
+      if (!recordingDirectoryFileExists(name)) {
+        writeToRecordingDirectory(name, sourceContent);
+      }
+      addRecordingEvent(
+        JSON.stringify({
+          kind: "originalSourceAdded",
+          path: getRecordingFilePath(name),
+          recordingId,
+          parentId: id,
+          parentOffset: offset,
+        })
+      );
+    }
   } catch (err) {
     warning(`[RuntimeError][sourcemaps] Exception - ${err?.stack || err}`);
   }
-});
+}
+
+function initializeCallbacks(callbackRegistry) {
+  TODO
+  // newScriptHandler
+}
 
 async function fetchText(url) {
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`Fetching ${url} failed with status code ${response.status} (${response.statusText})`);
+    throw new Error(
+      `Fetching ${url} failed with status code ${response.status} (${response.statusText})`
+    );
   }
   return await response.text();
 }
@@ -147,7 +169,9 @@ function collectUnresolvedSourceMapResources(mapText, mapURL) {
       return [];
     }
   } catch (err) {
-    logError(`Exception parsing sourcemap JSON (${mapURL}): ${err?.message || err}`);
+    logError(
+      `Exception parsing sourcemap JSON (${mapURL}): ${err?.message || err}`
+    );
     return [];
   }
 
@@ -220,8 +244,9 @@ function getSourceMapURLs(sourceURL, relativeSourceMapURL) {
 
   // If the map was a data: URL or something along those lines, we want
   // to resolve paths in the map relative to the overall base.
-  const sourceMapBaseURL =
-    isValidBaseURL(sourceMapURL) ? sourceMapURL : sourceBaseURL;
+  const sourceMapBaseURL = isValidBaseURL(sourceMapURL)
+    ? sourceMapURL
+    : sourceBaseURL;
 
   return { sourceMapURL, sourceMapBaseURL };
 }
@@ -234,3 +259,6 @@ function isValidBaseURL(url) {
     return false;
   }
 }
+
+// Script return value
+initializeCallbacks;

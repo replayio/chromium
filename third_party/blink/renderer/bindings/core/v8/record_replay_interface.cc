@@ -2277,7 +2277,7 @@ static std::string GetStackTrace(v8::Isolate* isolate, v8::TryCatch& try_catch) 
   return ss.str();
 }
 
-static void RunScript(v8::Isolate* isolate, v8::Local<v8::Context> context, const char* source_raw, const char* filename) {
+static v8::Local<v8::Value> RunScript(v8::Isolate* isolate, v8::replayio::ReplayRootContext* root, const char* source_raw, const char* filename) {
   v8::Local<v8::String> filename_string = ToV8String(isolate, filename);
   v8::ScriptOrigin origin(isolate, filename_string);
 
@@ -2285,7 +2285,8 @@ static void RunScript(v8::Isolate* isolate, v8::Local<v8::Context> context, cons
   CHECK(!!source_raw);
   CHECK(!!strlen(source_raw));
   v8::Local<v8::String> source = ToV8String(isolate, source_raw);
-  auto maybe_script = v8::Script::Compile(context, source, &origin);
+  v8::Local<v8::Value> cx = root->GetContext();
+  auto maybe_script = v8::Script::Compile(cx, source, &origin);
 
   v8::Local<v8::Script> script;
   if (!maybe_script.ToLocal(&script)) {
@@ -2293,10 +2294,18 @@ static void RunScript(v8::Isolate* isolate, v8::Local<v8::Context> context, cons
       GetStackTrace(isolate, try_catch).c_str());
   }
   v8::Local<v8::Value> rv;
-  if (!script->Run(context).ToLocal(&rv)) {
+  if (!script->Run(cx).ToLocal(&rv)) {
     recordreplay::Crash("Replay RunScript INIT failed: %s",
       GetStackTrace(isolate, try_catch).c_str());
   }
+  if (rv->IsFunction()) {
+    constexpr int Argc = 1;
+    v8::Local<v8::Value> argv[] = {
+      root->GetEventEmitter()
+    };
+    root->CallFunction(rv.As<v8::Function>(), Argc, argv);
+  }
+  return rv;
 }
 
 static bool TestEnv(const char* env) {
@@ -2452,10 +2461,9 @@ static void InitializeRootContext(v8::Isolate* isolate, LocalFrame* localFrame, 
   if (recordreplay::FeatureEnabled("collect-source-maps") &&
       !TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_COLLECTION")) {
     recordreplay::AutoMarkReplayCode amrc;
-    RunScript(isolate, context, ReadReplaySourcemapHandlerScript().Utf8().c_str(), InternalScriptURL);
-    // TODO
-    newRoot->CallGlobalFunction();
-    // TODO: initializeCallbacks(newRoot)
+    v8::Local<v8::Value> rv = RunScript(
+      isolate, newRoot, ReadReplaySourcemapHandlerScript().Utf8().c_str(), InternalScriptURL
+    );
   }
 
   if (recordreplay::FeatureEnabled("force-main-world-initialization")) {
@@ -2471,8 +2479,7 @@ static void InitializeRootContext(v8::Isolate* isolate, LocalFrame* localFrame, 
       recordreplay::AutoDisallowEvents disallow("InitializeRootContext");
 
       // Run `commandHandlerScript`.
-      RunScript(isolate, context, commandHandlerScript.Utf8().c_str(), InternalScriptURL);
-      // TODO: initializeCallbacks(newRoot)
+      RunScript(isolate, newRoot, commandHandlerScript.Utf8().c_str(), InternalScriptURL);
     }
   }
 }

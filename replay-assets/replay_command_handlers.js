@@ -3297,24 +3297,43 @@ function wrapReplayApiFunction(fn) {
  * Callback management.
  * ##########################################################################*/
 
-function initializeCallbacks(callbackRegistry) {
-  // TODO: Init these callbacks correctly!
-  setCommandCallback(commandCallback);
-  setClearPauseDataCallback(clearPauseDataCallback);
-  addNewScriptHandler("commands", (scriptId, sourceURL, relativeSourceMapURL) => {
-    if (!relativeSourceMapURL)
-      return;
-  
-    const urls = getSourceMapURLs(sourceURL, relativeSourceMapURL);
-    if (!urls)
-      return;
-  
-    const { sourceMapURL, sourceMapBaseURL } = urls;
-    gSourceMapData.set(scriptId, {
-      url: sourceMapURL,
-      baseUrl: sourceMapBaseURL
-    });
-  }, /* disallowEvents */ true);
+const EventEmitterPrototype = {
+  on(event, cb) {
+    this._callbacks[event] ||= [];
+    this._callbacks[event].push(cb);
+  },
+
+  emit(event, arg) {
+    let cbs = this._callbacks[event];
+    if (!cbs) {
+      throw new Error(`JS_emit_failed_unknown_event: ${event}`);
+    }
+    cbs.forEach((cb) => cb(arg));
+  },
+};
+
+function handleNewScript(scriptId, sourceURL, relativeSourceMapURL) {
+  if (!relativeSourceMapURL)
+    return;
+
+  const urls = getSourceMapURLs(sourceURL, relativeSourceMapURL);
+  if (!urls)
+    return;
+
+  const { sourceMapURL, sourceMapBaseURL } = urls;
+  gSourceMapData.set(scriptId, {
+    url: sourceMapURL,
+    baseUrl: sourceMapBaseURL
+  });
+}
+
+function initializeEvents(eventEmitter) {
+  eventEmitter.prototype = EventEmitterPrototype;
+  eventEmitter._callbacks = {};
+  eventEmitter.on("command", commandCallback);
+  eventEmitter.on("clearPauseDataCallback", clearPauseDataCallback);
+  // TODO: Some instances of handleNewScript need disallowEvents at the C++ level.
+  eventEmitter.on("newScript", handleNewScript);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -3349,3 +3368,6 @@ addEventListener("Runtime.executionContextsCleared", () => {
 sendCDPMessage("Runtime.enable");
 
 })();
+
+// Script return value
+initializeEvents
