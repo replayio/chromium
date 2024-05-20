@@ -1042,6 +1042,8 @@ void Page::WillBeDestroyed() {
     s->BreakLinkages();
   }
 
+  recordreplay::NotePageWillBeDestroyed(this);
+
   page_scheduler_ = nullptr;
 }
 
