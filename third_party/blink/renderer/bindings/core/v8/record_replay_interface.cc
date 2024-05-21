@@ -58,11 +58,8 @@ static const char DirectorySeparator = '\\';
 static const char *AnnotationHookJSName = "__RECORD_REPLAY_ANNOTATION_HOOK__";
 
 namespace v8 {
-
-extern void FunctionCallbackRecordReplayGetScriptSource(const FunctionCallbackInfo<Value>& args);
-
 namespace internal {
-
+extern void FunctionCallbackRecordReplayGetScriptSource(const FunctionCallbackInfo<Value>& args);
 extern int RecordReplayObjectId(v8::Isolate* isolate, v8::Local<v8::Context> cx,
                                 v8::Local<v8::Value> object, bool allow_create);
 extern void RecordReplayConfirmObjectHasId(v8::Isolate* isolate,
@@ -2285,7 +2282,7 @@ static v8::Local<v8::Value> RunScript(v8::Isolate* isolate, v8::replayio::Replay
   CHECK(!!source_raw);
   CHECK(!!strlen(source_raw));
   v8::Local<v8::String> source = ToV8String(isolate, source_raw);
-  v8::Local<v8::Value> cx = root->GetContext();
+  v8::Local<v8::Context> cx = root->GetContext();
   auto maybe_script = v8::Script::Compile(cx, source, &origin);
 
   v8::Local<v8::Script> script;
@@ -2414,7 +2411,7 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
                       WriteToRecordingDirectory);
   SetFunctionProperty(isolate, args, "addRecordingEvent", AddRecordingEvent);
   SetFunctionProperty(isolate, args, "getScriptSource",
-                      v8::FunctionCallbackRecordReplayGetScriptSource);
+                      v8::internal::FunctionCallbackRecordReplayGetScriptSource);
 
   SetFunctionProperty(isolate, args, "recordingDirectoryFileExists",
                       RecordingDirectoryFileExists);
@@ -2461,7 +2458,7 @@ static void InitializeRootContext(v8::Isolate* isolate, LocalFrame* localFrame, 
   if (recordreplay::FeatureEnabled("collect-source-maps") &&
       !TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_COLLECTION")) {
     recordreplay::AutoMarkReplayCode amrc;
-    v8::Local<v8::Value> rv = RunScript(
+    RunScript(
       isolate, newRoot, ReadReplaySourcemapHandlerScript().Utf8().c_str(), InternalScriptURL
     );
   }
@@ -2536,14 +2533,16 @@ void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame
     // Note: We use a special URL for the react devtools as this script needs
     // to be reported to the recorder so that evaluations can be performed in
     // its frames.
-    RunScript(isolate, context, gReactDevtoolsScript, "record-replay-react-devtools");
-    RunScript(isolate, context, gReduxDevtoolsScript, "record-replay-redux-devtools");
+    v8::replayio::ReplayRootContext* root = v8::replayio::RecordReplayGetRootContext(context);
+    RunScript(isolate, root, gReactDevtoolsScript, "record-replay-react-devtools");
+    RunScript(isolate, root, gReduxDevtoolsScript, "record-replay-redux-devtools");
   }
 }
 
 void OnNewWindowAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> newContext) {
+  v8::replayio::ReplayRootContext* root = v8::replayio::RecordReplayGetRootContext(newContext);
   recordreplay::AutoMarkReplayCode amrc;
-  RunScript(isolate, newContext, gOnNewWindowScript,
+  RunScript(isolate, root, gOnNewWindowScript,
             "record-replay-OnNewWindow");
 
   LocalFrame* parentFrame = DynamicTo<LocalFrame>(localFrame->Parent());

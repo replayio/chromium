@@ -1,4 +1,3 @@
-(() => {
 // Script which defines handlers for recorder commands, 
 // and usually is only loaded while replaying.
 const EmptyArray = Object.freeze([]); // reduce unnecessary mem churn
@@ -3294,21 +3293,21 @@ function wrapReplayApiFunction(fn) {
 
 
 /** ###########################################################################
- * Callback management.
+ * ReplayJs: Internal event handling.
  * ##########################################################################*/
 
-const EventEmitterPrototype = {
+const ReplayJsEventEmitterPrototype = {
   on(event, cb) {
     this._callbacks[event] ||= [];
     this._callbacks[event].push(cb);
   },
 
-  emit(event, arg) {
+  emit(event, ...args) {
     let cbs = this._callbacks[event];
     if (!cbs) {
-      throw new Error(`JS_emit_failed_unknown_event: ${event}`);
+      throw new Error(`ReplayJsEvent_emit_failed_unknown_event: ${event}`);
     }
-    cbs.forEach((cb) => cb(arg));
+    cbs.forEach((cb) => cb(...args));
   },
 };
 
@@ -3327,8 +3326,8 @@ function handleNewScript(scriptId, sourceURL, relativeSourceMapURL) {
   });
 }
 
-function initializeEvents(ReplayJsEventEmitter) {
-  ReplayJsEventEmitter.prototype = EventEmitterPrototype;
+function initializeReplayJsEvents(ReplayJsEventEmitter) {
+  ReplayJsEventEmitter.prototype = ReplayJsEventEmitterPrototype;
   ReplayJsEventEmitter._callbacks = {};
   ReplayJsEventEmitter.on("command", commandCallback);
   ReplayJsEventEmitter.on("clearPauseDataCallback", clearPauseDataCallback);
@@ -3366,7 +3365,6 @@ addEventListener("Runtime.executionContextsCleared", () => {
 });
 sendCDPMessage("Runtime.enable");
 
-})();
 
 // Script return value
-initializeEvents
+initializeReplayJsEvents
