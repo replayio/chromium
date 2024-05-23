@@ -9,10 +9,10 @@ class Page;
 
 namespace recordreplay {
 
-void NotePageVisibilityStateChanged(blink::Page* page);
-void NotePageFocusControllerActiveChanged(blink::Page* page);
+void NotifyPageVisibilityStateChanged(blink::Page* page);
+void NotifyPageFocusControllerActiveChanged(blink::Page* page);
 
-void NotePageWillBeDestroyed(blink::Page* page);
+void NotifyPageWillBeDestroyed(blink::Page* page);
 
 } // namespace recordreplay
 

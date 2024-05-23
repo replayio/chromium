@@ -1377,7 +1377,7 @@ bool FocusController::SetFocusedElement(Element* element,
 }
 
 void FocusController::ActiveHasChanged() {
-  recordreplay::NotePageFocusControllerActiveChanged(page_);
+  recordreplay::NotifyPageFocusControllerActiveChanged(page_);
   Frame* frame = FocusedOrMainFrame();
   if (auto* local_frame = DynamicTo<LocalFrame>(frame)) {
     Document* const document = local_frame->LocalFrameRoot().GetDocument();

@@ -545,7 +545,7 @@ void Page::SetVisibilityState(
   // ideally we could use an observer for this (and we might eventually find that we can),
   // but in the interest of always getting paints, we need do this even if
   // is_initial_state == true.
-  recordreplay::NotePageVisibilityStateChanged(this);
+  recordreplay::NotifyPageVisibilityStateChanged(this);
 
   if (is_initial_state)
     return;
@@ -1042,7 +1042,7 @@ void Page::WillBeDestroyed() {
     s->BreakLinkages();
   }
 
-  recordreplay::NotePageWillBeDestroyed(this);
+  recordreplay::NotifyPageWillBeDestroyed(this);
 
   page_scheduler_ = nullptr;
 }

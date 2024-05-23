@@ -8,8 +8,8 @@
 
 #define LOG_LIFECYCLE_EVENTS 1
 
-namespace recordreplay {
 
+namespace {
 // the current set of ordinary pages, presumably scoped to this renderer process
 // (TODO verify this last part) lives at blink::Page::OrdinaryPages().  We
 // should be able to use this to get the JS contexts for each main frame, but I
@@ -19,18 +19,18 @@ namespace recordreplay {
 // already, but until/unless we find it, we'll update it here.  It should be
 // safe to keep the raw pointer to the page, since we'll clear it when the page
 // is destroyed.
-static blink::Page* last_active_page = nullptr;
+static blink::Page* gLastActivePage = nullptr;
 
-static void set_last_active_page(blink::Page* page) {
-    if (page == last_active_page) {
+static void SetLastActivePage(blink::Page* page) {
+    if (page == gLastActivePage) {
         // it's already the active page
         return;
     }
 
 #if LOG_LIFECYCLE_EVENTS
-    recordreplay::Print("  - updating last-active page\n");
+    recordreplay::Print("[ContextRoots] updating last-active page");
 #endif
-    last_active_page = page;
+    gLastActivePage = page;
 
     // signal that the paint surface is about to change, so we don't ignore
     // the paints to the surface corresponding to our now active page.
@@ -55,15 +55,15 @@ static void set_last_active_page(blink::Page* page) {
     recordreplay::DoResetPaintSurface();
 }
 
-static void reset_last_active_page() {
+static void ResetLastActivePage() {
 #if LOG_LIFECYCLE_EVENTS
-    recordreplay::Print("  - clearing last-active page\n");
+    recordreplay::Print("[ContextRoots] clearing last-active page");
 #endif
-    last_active_page = nullptr;
+    gLastActivePage = nullptr;
 }
 
 #if LOG_LIFECYCLE_EVENTS
-static std::string page_description(blink::Page* page) {
+static std::string PageDescription(blink::Page* page) {
     std::string main_frame_info;
 
     if (auto* main_local_frame = blink::DynamicTo<blink::LocalFrame>(page->MainFrame())) {
@@ -78,57 +78,58 @@ static std::string page_description(blink::Page* page) {
 }
 #endif
 
-void NotePageVisibilityStateChanged(blink::Page* page) {
+} // namespace
+
+namespace recordreplay {
+
+void NotifyPageVisibilityStateChanged(blink::Page* page) {
     if (!recordreplay::IsRecordingOrReplaying()) {
         return;
     }
 
 #if LOG_LIFECYCLE_EVENTS
-    std::string page_desc = page_description(page);
     std::stringstream to;
     to << page->GetVisibilityState();
-    recordreplay::Print("%s visibility changed to %s\n", page_desc.c_str(), to.str().c_str());
+    recordreplay::Print("[ContextRoots] %s visibility changed to %s", PageDescription(page).c_str(), to.str().c_str());
 #endif
 
     // When a page is focused and is made visible, it becomes our last-active page.
     if (page->GetFocusController().IsActive() &&
         page->GetVisibilityState() == blink::mojom::blink::PageVisibilityState::kVisible) {
 
-        set_last_active_page(page);
+        SetLastActivePage(page);
     }
 }
 
-void NotePageFocusControllerActiveChanged(blink::Page* page) {
+void NotifyPageFocusControllerActiveChanged(blink::Page* page) {
     if (!recordreplay::IsRecordingOrReplaying()) {
         return;
     }
 
 #if LOG_LIFECYCLE_EVENTS
-    std::string page_desc = page_description(page);
-    recordreplay::Print("%s focus controller changed to %s\n", page_desc.c_str(), page->GetFocusController().IsActive() ? "active" : "inactive");
+    recordreplay::Print("[ContextRoots] %s focus controller changed to %s", PageDescription(page).c_str(), page->GetFocusController().IsActive() ? "active" : "inactive");
 #endif
 
     // When a page visible and then focused, it becomes our last-active page.
     if (page->GetFocusController().IsActive() &&
         page->GetVisibilityState() == blink::mojom::blink::PageVisibilityState::kVisible) {
 
-        set_last_active_page(page);
+        SetLastActivePage(page);
     }
 
 }
 
-void NotePageWillBeDestroyed(blink::Page* page) {
+void NotifyPageWillBeDestroyed(blink::Page* page) {
     if (!recordreplay::IsRecordingOrReplaying()) {
         return;
     }
 
 #if LOG_LIFECYCLE_EVENTS
-    std::string page_desc = page_description(page);
-    recordreplay::Print("%s will be destroyed\n", page_desc.c_str());
+    recordreplay::Print("[ContextRoots] %s will be destroyed", PageDescription(page).c_str());
 #endif
 
-    if (page == last_active_page) {
-        reset_last_active_page();
+    if (page == gLastActivePage) {
+        ResetLastActivePage();
     }
 }
 
