@@ -245,7 +245,7 @@ void History::pushState(ScriptState* script_state,
                         const String& title,
                         const String& url,
                         ExceptionState& exception_state) {
-  v8::Isolate* isolate = script_state->GetIsolate();
+    v8::Isolate* isolate = script_state->GetIsolate();
   WebFrameLoadType load_type = WebFrameLoadType::kStandard;
   if (LocalDOMWindow* window = DomWindow()) {
     DCHECK(window->GetFrame());
@@ -262,6 +262,7 @@ void History::pushState(ScriptState* script_state,
     }
   }
 
+  recordreplay::AutoAssertBufferAllocations bufferAssets("TT-492-1249");
   scoped_refptr<SerializedScriptValue> serialized_data =
       SerializedScriptValue::Serialize(isolate, data.V8Value(),
                                        SerializedScriptValue::SerializeOptions(

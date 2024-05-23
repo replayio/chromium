@@ -344,6 +344,7 @@ void MessageEvent::initMessageEvent(const AtomicString& type,
 ScriptValue MessageEvent::data(ScriptState* script_state) {
   is_data_dirty_ = false;
 
+  recordreplay::AutoAssertBufferAllocations bufferAssets("TT-358-1249");
   recordreplay::Assert("[RUN-2037-2976] MessageEvent::data %d", RecordReplayId());
 
   v8::Isolate* isolate = script_state->GetIsolate();
