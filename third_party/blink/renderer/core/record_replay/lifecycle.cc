@@ -10,10 +10,15 @@
 
 namespace recordreplay {
 
-// the current set of ordinary pages, presumably scoped to this renderer process (TODO verify this)
-// lives at blink::Page::OrdinaryPages()
+// the current set of ordinary pages, presumably scoped to this renderer process
+// (TODO verify this last part) lives at blink::Page::OrdinaryPages().  We
+// should be able to use this to get the JS contexts for each main frame, but I
+// haven't traced through.
 
-// There might be a reference to our last-active page someplace in blink already, but until/unless we find it:
+// There might be a reference to our last-active page someplace in blink
+// already, but until/unless we find it, we'll update it here.  It should be
+// safe to keep the raw pointer to the page, since we'll clear it when the page
+// is destroyed.
 static blink::Page* last_active_page = nullptr;
 
 static void set_last_active_page(blink::Page* page) {
@@ -26,8 +31,27 @@ static void set_last_active_page(blink::Page* page) {
     recordreplay::Print("  - updating last-active page\n");
 #endif
     last_active_page = page;
+
     // signal that the paint surface is about to change, so we don't ignore
     // the paints to the surface corresponding to our now active page.
+
+    // TODO(toshok): we need recordreplay::DoSetPaintSurface (which doesn't yet
+    // exist) here instead of recordreplay::DoResetPaintSurface.
+    //
+    // Resetting the paint surface will cause us to choose the surface we paint
+    // next as the active paint surface. This won't always be what we want, I
+    // think - we want the surface corresponding to the page we're setting as
+    // the active page.
+    //
+    // Imagine multiple windows, both showing a page from the same renderer
+    // process.  If page 1 holds the active paint surface and we click on page
+    // 2, we want to move the active surface over to page 2.  But if page 1 has
+    // an async paint queued up, it might paint before page 2 does, and remain
+    // the active surface.
+    //
+    // While I think this is fine for now - resetting the paint surface more
+    // often will cause us to be correct more often - it won't land us 100%
+    // where we want to be.
     recordreplay::DoResetPaintSurface();
 }
 
@@ -55,6 +79,10 @@ static std::string page_description(blink::Page* page) {
 #endif
 
 void NotePageVisibilityStateChanged(blink::Page* page) {
+    if (!recordreplay::IsRecordingOrReplaying()) {
+        return;
+    }
+
 #if LOG_LIFECYCLE_EVENTS
     std::string page_desc = page_description(page);
     std::stringstream to;
@@ -71,6 +99,10 @@ void NotePageVisibilityStateChanged(blink::Page* page) {
 }
 
 void NotePageFocusControllerActiveChanged(blink::Page* page) {
+    if (!recordreplay::IsRecordingOrReplaying()) {
+        return;
+    }
+
 #if LOG_LIFECYCLE_EVENTS
     std::string page_desc = page_description(page);
     recordreplay::Print("%s focus controller changed to %s\n", page_desc.c_str(), page->GetFocusController().IsActive() ? "active" : "inactive");
@@ -86,6 +118,10 @@ void NotePageFocusControllerActiveChanged(blink::Page* page) {
 }
 
 void NotePageWillBeDestroyed(blink::Page* page) {
+    if (!recordreplay::IsRecordingOrReplaying()) {
+        return;
+    }
+
 #if LOG_LIFECYCLE_EVENTS
     std::string page_desc = page_description(page);
     recordreplay::Print("%s will be destroyed\n", page_desc.c_str());
