@@ -16,6 +16,7 @@
 #include "base/path_service.h"
 #include "base/process/process_handle.h"
 #include "base/record_replay.h"
+#include "base/record_replay_paint_surface.h"
 #include "base/record_replay_render_interface.h"
 #include "content/public/renderer/render_thread.h"
 #include "content/public/renderer/v8_value_converter.h"
