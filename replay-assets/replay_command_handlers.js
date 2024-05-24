@@ -3340,7 +3340,6 @@ function initializeReplayJsEvents(ReplayJsEventEmitter) {
 
 patchReplayApi();
 initCdp();
-initCallbacks();
 addEventListener("Runtime.consoleAPICalled", onConsoleAPICall);
 addEventListener("Runtime.executionContextCreated", ({ context }) => {
   gExecutionContexts.set(context.id, context);

@@ -143,6 +143,9 @@ const AssetFiles = [
   "replay_sourcemap_handler.js",
 ];
 
+let totalErrorCount = 0;
+let totalWarningCount = 0;
+
 async function main() {
   await lintFile(
     path.join(
@@ -155,6 +158,13 @@ async function main() {
 
   for (const jsFile of AssetFiles) {
     await lintFile(path.join(ROOT_DIR, "replay-assets/" + jsFile));
+  }
+
+  const bad = !!totalErrorCount;
+  console.log(`\n${bad ? '❌' : '✅'} Final Result:\n  ${totalErrorCount} errors\n  ${totalWarningCount} warnings`);
+  console.groupEnd();
+  if (bad) {
+    process.exit(1);
   }
 }
 
@@ -194,11 +204,10 @@ async function lintFile(fpath, startRegex, endRegex) {
     warningCount += blockWarningCount;
   }
 
-  console.log(`Total counts: ${errorCount} errors, ${warningCount} warnings`);
+  console.log(`Stats: ${errorCount} errors, ${warningCount} warnings`);
+  totalErrorCount += errorCount;
+  totalWarningCount += warningCount;
   console.groupEnd();
-  if (errorCount > 0) {
-    process.exit(1);
-  }
 }
 
 main();
