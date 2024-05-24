@@ -174,22 +174,22 @@ static std::string ReadReplayAssetFile(const char* filename, size_t& len) {
   std::string assetsDir;
 
   // TODO: Test this on mac.
-  if (base::PathService::Get(base::FILE_EXE, &binPath)) {
+  if (getenv("RECORD_REPLAY_ASSETS_DIRECTORY")) {
+    assetsDir = getenv("RECORD_REPLAY_ASSETS_DIRECTORY");
+  } else if (base::PathService::Get(base::FILE_EXE, &binPath)) {
     // PathService::Get(base::DIR_EXE, result);
     assetsDir = binPath.DirName().AppendASCII("replay-assets").AsUTF8Unsafe();
-  } else if (getenv("RECORD_REPLAY_ASSETS_DIRECTORY")) {
-    assetsDir = getenv("RECORD_REPLAY_ASSETS_DIRECTORY");
   }
   if (!assetsDir.length()) {
     recordreplay::Crash("ReadReplayAssetFile failed: Neither base::FILE_EXE nor RECORD_REPLAY_ASSETS_DIRECTORY provided.");
   }
-  recordreplay::Print("DDBG ReadReplayAssetFile %s", assetsDir.c_str());
   std::string fpath = assetsDir + std::string("/") + filename;
   std::ifstream ifs(fpath);
   std::stringstream ss;
   ss << ifs.rdbuf();
   std::string s = ss.str();
   len = s.length();
+  recordreplay::Print("DDBG ReadReplayAssetFile %s %zu", fpath.c_str(), len);
   if (!len) {
     recordreplay::Crash("ReadReplayAssetFile (\"%s\") failed: %s",
       fpath.c_str(),
@@ -2227,83 +2227,9 @@ static void InvokeOnAnnotation(const v8::FunctionCallbackInfo<v8::Value>& args) 
   recordreplay::OnAnnotation(*kind, *contents);
 }
 
-/**
- * Copied from gin/try_catch.h.
- */
-static v8::Local<v8::String> GetSourceLine(v8::Isolate* isolate,
-                                    v8::Local<v8::Message> message) {
-  auto maybe = message->GetSourceLine(isolate->GetCurrentContext());
-  v8::Local<v8::String> source_line;
-  return maybe.ToLocal(&source_line) ? source_line : v8::String::Empty(isolate);
-}
-
 static const std::string V8ToString(v8::Isolate* isolate, v8::Local<v8::Value> str) {
   v8::String::Utf8Value s(isolate, str);
   return *s;
-}
-
-/**
- * Error reporting utility based on ShellRunner::Run.
- * WARNING: It does not work very well. For some reason, we have to try/catch
- * inside the JS code to get a proper error message. Might have to do with the
- * fact that we are running this before the window and/or other mechanisms have
- * not fully initialized.
- */
-static std::string GetStackTrace(v8::Isolate* isolate, v8::TryCatch& try_catch) {
-  if (!try_catch.HasCaught()) {
-    return "";
-  }
-
-  std::stringstream ss;
-  v8::Local<v8::Message> message = try_catch.Message();
-  if (!message.IsEmpty()) {
-    ss << V8ToString(isolate, message->Get()) << std::endl;
-  }
-  ss << V8ToString(isolate, GetSourceLine(isolate, message)) << std::endl;
-
-  // v8::Local<v8::StackTrace> trace = message->GetStackTrace();
-  // if (trace.IsEmpty())
-  //   return ss.str();
-
-  // int len = trace->GetFrameCount();
-  // for (int i = 0; i < len; ++i) {
-  //   v8::Local<v8::StackFrame> frame = trace->GetFrame(isolate, i);
-  //   ss << V8ToString(isolate, frame->GetScriptName()) << ":"
-  //      << frame->GetLineNumber() << ":" << frame->GetColumn() << ": "
-  //      << V8ToString(isolate, frame->GetFunctionName()) << std::endl;
-  // }
-  return ss.str();
-}
-
-static v8::Local<v8::Value> RunScript(v8::Isolate* isolate, v8::replayio::ReplayRootContext* root, const char* source_raw, const char* filename) {
-  v8::Local<v8::String> filename_string = ToV8String(isolate, filename);
-  v8::ScriptOrigin origin(isolate, filename_string);
-
-  v8::TryCatch try_catch(isolate);
-  CHECK(!!source_raw);
-  CHECK(!!strlen(source_raw));
-  v8::Local<v8::String> source = ToV8String(isolate, source_raw);
-  v8::Local<v8::Context> cx = root->GetContext();
-  auto maybe_script = v8::Script::Compile(cx, source, &origin);
-
-  v8::Local<v8::Script> script;
-  if (!maybe_script.ToLocal(&script)) {
-    recordreplay::Crash("Replay RunScript COMPILE failed: %s",
-      GetStackTrace(isolate, try_catch).c_str());
-  }
-  v8::Local<v8::Value> rv;
-  if (!script->Run(cx).ToLocal(&rv)) {
-    recordreplay::Crash("Replay RunScript INIT failed: %s",
-      GetStackTrace(isolate, try_catch).c_str());
-  }
-  if (rv->IsFunction()) {
-    constexpr int Argc = 1;
-    v8::Local<v8::Value> argv[] = {
-      root->GetEventEmitter()
-    };
-    root->CallFunction(rv.As<v8::Function>(), Argc, argv);
-  }
-  return rv;
 }
 
 static bool TestEnv(const char* env) {
@@ -2443,6 +2369,8 @@ void InitializeRecordReplayAfterCheckpoint() {
   V8RecordReplayRegisterBrowserEventCallback(HandleBrowserEvent);
 }
 
+static const char* InternalScriptURL = "record-replay-internal";
+
 static void InitializeRootContext(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
   // Register context, s.t. when handling a command and we are not on a 
   // JS stack, we can always use the current root frame's context.
@@ -2454,15 +2382,6 @@ static void InitializeRootContext(v8::Isolate* isolate, LocalFrame* localFrame, 
   InitializeRecordReplayApiObjects(isolate, localFrame);
 
   // This URL will prevent the script from being reported to the recorder.
-  const char* InternalScriptURL = "record-replay-internal";
-
-  if (recordreplay::FeatureEnabled("collect-source-maps") &&
-      !TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_COLLECTION")) {
-    recordreplay::AutoMarkReplayCode amrc;
-    RunScript(
-      isolate, newRoot, ReadReplaySourcemapHandlerScript().Utf8().c_str(), InternalScriptURL
-    );
-  }
 
   if (recordreplay::FeatureEnabled("force-main-world-initialization")) {
     // Call this here to avoid divergence later.
@@ -2477,8 +2396,25 @@ static void InitializeRootContext(v8::Isolate* isolate, LocalFrame* localFrame, 
       recordreplay::AutoDisallowEvents disallow("InitializeRootContext");
 
       // Run `commandHandlerScript`.
-      RunScript(isolate, newRoot, commandHandlerScript.Utf8().c_str(), InternalScriptURL);
+      newRoot->RunScriptAndCallBack(
+        commandHandlerScript.Utf8().c_str(),
+        InternalScriptURL + std::string("://CommandHandler")
+      );
     }
+  }
+
+  recordreplay::Print("DDBG ReplaySourcemapHandlerScript A %d %d",
+    recordreplay::FeatureEnabled("collect-source-maps"),
+    !TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_COLLECTION"));
+  if (recordreplay::FeatureEnabled("collect-source-maps") &&
+      !TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_COLLECTION")) {
+    recordreplay::AutoMarkReplayCode amrc;
+    
+    recordreplay::Print("DDBG ReplaySourcemapHandlerScript GO!");
+    newRoot->RunScriptAndCallBack(
+      ReadReplaySourcemapHandlerScript().Utf8().c_str(),
+      InternalScriptURL + std::string("://SourcemapHandler")
+    );
   }
 }
 
@@ -2535,21 +2471,20 @@ void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame
     // to be reported to the recorder so that evaluations can be performed in
     // its frames.
     v8::replayio::ReplayRootContext* root = v8::replayio::RecordReplayGetRootContext(context);
-    RunScript(isolate, root, gReactDevtoolsScript, "record-replay-react-devtools");
-    RunScript(isolate, root, gReduxDevtoolsScript, "record-replay-redux-devtools");
+    root->RunScriptAndCallBack(gReactDevtoolsScript, "record-replay-react-devtools");
+    root->RunScriptAndCallBack(gReduxDevtoolsScript, "record-replay-redux-devtools");
   }
 }
 
-void OnNewWindowAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> newContext) {
+void OnNewWindowAfterCheckpoint(LocalFrame* localFrame, v8::Local<v8::Context> newContext) {
   v8::replayio::ReplayRootContext* root = v8::replayio::RecordReplayGetRootContext(newContext);
   recordreplay::AutoMarkReplayCode amrc;
-  RunScript(isolate, root, gOnNewWindowScript,
-            "record-replay-OnNewWindow");
+  root->RunScriptAndCallBack(gOnNewWindowScript, "record-replay-OnNewWindow");
 
   LocalFrame* parentFrame = DynamicTo<LocalFrame>(localFrame->Parent());
   recordreplay::Print(
     "[RUN-2739] OnNewWindowAfterCheckpoint %d win=%d frame=%d %d \"%s\" parent=%d",
-    newContext == isolate->GetCurrentContext(),
+    newContext == root->GetContext(),
     localFrame->DomWindow()->RecordReplayId(),
     localFrame->RecordReplayId(),
     localFrame->IsCrossOriginToParentOrOuterDocument(),

@@ -32,7 +32,7 @@ void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame
 // Initialize everything that depends on other initialization steps but
 // for all windows.
 // This is the last Replay code that we run for a new Window object.
-void OnNewWindowAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context);
+void OnNewWindowAfterCheckpoint(LocalFrame* localFrame, v8::Local<v8::Context> context);
 
 // Notify the driver that we're adding an error to the console.
 void RecordReplayOnErrorEvent(ErrorEvent* error_event);

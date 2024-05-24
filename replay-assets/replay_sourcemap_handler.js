@@ -1,3 +1,4 @@
+(() => {
 const {
   log,
   warning,
@@ -135,6 +136,7 @@ async function handleNewScript(scriptId, sourceURL, relativeSourceMapURL) {
 }
 
 function initializeEvents(ReplayJsEventEmitter) {
+  log(`DDBG replay_sourcemap_handler initializeEvents`);
   ReplayJsEventEmitter.on("newScript", handleNewScript);
 }
 
@@ -260,4 +262,5 @@ function isValidBaseURL(url) {
 }
 
 // Script return value
-initializeEvents
+return initializeEvents;
+})();

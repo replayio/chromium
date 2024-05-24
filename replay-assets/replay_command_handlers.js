@@ -1,3 +1,4 @@
+(() => {
 // Script which defines handlers for recorder commands, 
 // and usually is only loaded while replaying.
 const EmptyArray = Object.freeze([]); // reduce unnecessary mem churn
@@ -222,7 +223,7 @@ function sendCDPMessage(method, params) {
 const sendMessage = sendCDPMessage;
 
 
-function addEventListener(method, callback) {
+function addCDPEventListener(method, callback) {
   gEventListeners.set(method, callback);
 }
 
@@ -316,16 +317,16 @@ function executeCommand(method, params) {
   return result;
 }
 
-function commandCallback(method, params) {
-  if (!CommandCallbacks[method]) {
-    log(`[RuntimeError][Command ${method}] Missing command callback: ${method}`);
+function commandCallback(commandName, params) {
+  if (!CommandCallbacks[commandName]) {
+    log(`[RuntimeError][Command ${commandName}] Missing command callback: ${commandName}`);
     return {};
   }
 
   try {
-    return executeCommand(method, params);
+    return executeCommand(commandName, params);
   } catch (e) {
-    log(`[RuntimeError][Command ${method}]${getAliveLabel()} ${e?.stack || e}`);
+    log(`[RuntimeError][Command ${commandName}]${getAliveLabel()} ${e?.stack || e}`);
     // Pass the error up to V8; it can (for now) decide how to handle itself, whether
     // it should crash or not, etc.  Eventually, the caller of the command should make
     // that decision.
@@ -3304,10 +3305,22 @@ const ReplayJsEventEmitterPrototype = {
 
   emit(event, ...args) {
     let cbs = this._callbacks[event];
-    if (!cbs) {
-      throw new Error(`ReplayJsEvent_emit_failed_unknown_event: ${event}`);
+    // if (!cbs) {
+    //   throw new Error(`ReplayJsEvent_emit_failed_unknown_event: ${event}`);
+    // }
+    log(`DDBG ${!!cbs} ReplayJsEventEmitter.emit("${event}", ${JSON.stringify(args)})`);
+    if (cbs) {
+      cbs.forEach((cb) => cb(...args));
     }
-    cbs.forEach((cb) => cb(...args));
+  },
+
+  emitWithResult(event, ...args) {
+    let cbs = this._callbacks[event];
+    if (!cbs?.length) {
+      throw new Error(`ReplayJsEvent_emitWithResult_failed_unknown_event: ${event}`);
+    }
+    log(`DDBG ${!!cbs} ReplayJsEventEmitter.emitWithResult("${event}", ${JSON.stringify(args)})`);
+    return cbs[0](...args);
   },
 };
 
@@ -3327,7 +3340,7 @@ function handleNewScript(scriptId, sourceURL, relativeSourceMapURL) {
 }
 
 function initializeReplayJsEvents(ReplayJsEventEmitter) {
-  ReplayJsEventEmitter.prototype = ReplayJsEventEmitterPrototype;
+  Object.assign(ReplayJsEventEmitter, ReplayJsEventEmitterPrototype);
   ReplayJsEventEmitter._callbacks = {};
   ReplayJsEventEmitter.on("command", commandCallback);
   ReplayJsEventEmitter.on("clearPauseDataCallback", clearPauseDataCallback);
@@ -3340,21 +3353,21 @@ function initializeReplayJsEvents(ReplayJsEventEmitter) {
 
 patchReplayApi();
 initCdp();
-addEventListener("Runtime.consoleAPICalled", onConsoleAPICall);
-addEventListener("Runtime.executionContextCreated", ({ context }) => {
+addCDPEventListener("Runtime.consoleAPICalled", onConsoleAPICall);
+addCDPEventListener("Runtime.executionContextCreated", ({ context }) => {
   gExecutionContexts.set(context.id, context);
   for (const callback of gContextChangeCallbacks) {
     callback(context, "add");
   }
 });
-addEventListener("Runtime.executionContextDestroyed", ({ executionContextId }) => {
+addCDPEventListener("Runtime.executionContextDestroyed", ({ executionContextId }) => {
   const context = gExecutionContexts.get(executionContextId);
   for (const callback of gContextChangeCallbacks) {
     callback(context, "remove");
   }
   gExecutionContexts.delete(executionContextId);
 });
-addEventListener("Runtime.executionContextsCleared", () => {
+addCDPEventListener("Runtime.executionContextsCleared", () => {
   for (const context of gExecutionContexts.values()) {
     for (const callback of gContextChangeCallbacks) {
       callback(context, "remove");
@@ -3366,4 +3379,5 @@ sendCDPMessage("Runtime.enable");
 
 
 // Script return value
-initializeReplayJsEvents
+return initializeReplayJsEvents;
+})();

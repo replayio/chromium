@@ -289,7 +289,7 @@ void LocalWindowProxy::Initialize() {
     }
 
     // Event for all new windows.
-    OnNewWindowAfterCheckpoint(GetIsolate(), GetFrame(), context);
+    OnNewWindowAfterCheckpoint(GetFrame(), context);
   }
 
   {
