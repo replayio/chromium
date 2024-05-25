@@ -2237,7 +2237,9 @@ static bool TestEnv(const char* env) {
   return v && v[0] && v[0] != '0';
 }
 
-static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* localFrame) {
+static void InitializeRecordReplayApiObjects(
+    v8::Isolate* isolate, LocalFrame* localFrame, v8::replayio::ReplayRootContext* newRoot
+  ) {
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
 
   // Add __RECORD_REPLAY_ANNOTATION_HOOK__ as a global.
@@ -2279,6 +2281,8 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
   SetFunctionProperty(isolate, args, "sendCDPMessage", SendCDPMessage);
 
   SetFunctionProperty(isolate, args, "layoutDom", LayoutDom);
+
+  // DefineProperty(isolate, args, "ReplayJsEventEmitter", newRoot->GetEventEmitter());
 
   // Object Util
   SetFunctionProperty(isolate, args, "fromJsMakeDebuggeeValue",
@@ -2379,7 +2383,7 @@ static void InitializeRootContext(v8::Isolate* isolate, LocalFrame* localFrame, 
   v8::replayio::ReplayRootContext* newRoot = v8::replayio::RecordReplayCreateRootContext(isolate, context);
   
   // Initialize __RECORD_REPLAY__ things.
-  InitializeRecordReplayApiObjects(isolate, localFrame);
+  InitializeRecordReplayApiObjects(isolate, localFrame, newRoot);
 
   // This URL will prevent the script from being reported to the recorder.
 
@@ -2409,7 +2413,7 @@ static void InitializeRootContext(v8::Isolate* isolate, LocalFrame* localFrame, 
   if (recordreplay::FeatureEnabled("collect-source-maps") &&
       !TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_COLLECTION")) {
     recordreplay::AutoMarkReplayCode amrc;
-    
+
     recordreplay::Print("DDBG ReplaySourcemapHandlerScript GO!");
     newRoot->RunScriptAndCallBack(
       ReadReplaySourcemapHandlerScript().Utf8().c_str(),
@@ -2427,7 +2431,7 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
   //    → Consider using gContextChangeCallbacks for this.
   // TODO: fix and use GetCurrentLocalFrameRoot
   // TODO: consider using blink::GetCurrentLocalFrameRoot
-  recordreplay::Trace(
+  recordreplay::Print(
     "[RUN-2739] OnRootFrameInit win=%d frame=%d %d %d %d %d parent=%d" " \"%s\"",
       localFrame->DomWindow()->RecordReplayId(),
       localFrame->RecordReplayId(),

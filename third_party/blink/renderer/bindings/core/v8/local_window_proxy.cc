@@ -185,6 +185,8 @@ static bool gRecordReplayStateInitialized;
 void LocalWindowProxy::Initialize() {
   // https://linear.app/replay/issue/RUN-749
   recordreplay::Assert("LocalWindowProxy::Initialize Start");
+  
+  recordreplay::Print("DDBG Init A");
 
   recordreplay::AutoMarkerDependencyExecution execute(
     "ScriptExecution", "LocalWindowProxy::Initialize"
@@ -240,16 +242,27 @@ void LocalWindowProxy::Initialize() {
     SetSecurityToken(origin.get());
   }
 
+  recordreplay::Print("DDBG Init B");
+
+  recordreplay::Print("DDBG Init C %d %d %d %d %s",
+    world_->IsMainWorld(),
+    !!origin,
+    origin && !origin->Host().empty(),
+    !!GetFrame()->GetDocument(),
+    GetFrame()->GetDocument() ? GetFrame()->GetDocument()->Url().GetString().Utf8().c_str() : ""
+  );
+
   if (recordreplay::IsRecordingOrReplaying("commands") &&
-      origin && !origin->Host().empty()) {
+      origin && !origin->Host().empty() &&
+      world_->IsMainWorld()) {
     bool initGlobally = !gRecordReplayStateInitialized;
 
     // Whether this is the relative root frame of this process.
-    bool isMainFrame = GetFrame()->IsLocalRoot() && world_->IsMainWorld();
+    bool isLocalRoot = GetFrame()->IsLocalRoot();
     if (initGlobally) {
       gRecordReplayStateInitialized = true;
 
-      if (!isMainFrame) {
+      if (!isLocalRoot) {
         recordreplay::Warning(
             "LocalWindowProxy::Initialize Called on frame that does not OnRootFrameInit: %d %d origin=%s url=%s",
             GetFrame()->IsMainFrame(),
@@ -270,7 +283,7 @@ void LocalWindowProxy::Initialize() {
       );
     }
 
-    if (isMainFrame) {
+    if (isLocalRoot) {
       // Root-level navigation event, initially happens before
       // first checkpoint.
       OnRootFrameInit(GetIsolate(), GetFrame(), context);
@@ -283,7 +296,7 @@ void LocalWindowProxy::Initialize() {
       InitializeRecordReplayAfterCheckpoint();
     }
     
-    if (isMainFrame) {
+    if (isLocalRoot) {
       // Root-level navigation event, after first checkpoint.
       OnRootFrameInitAfterCheckpoint(GetIsolate(), GetFrame(), context);
     }
@@ -312,6 +325,7 @@ void LocalWindowProxy::Initialize() {
   if (World().IsMainWorld()) {
     GetFrame()->Loader().DispatchDidClearWindowObjectInMainWorld();
   }
+  recordreplay::Print("DDBG Init D");
 }
 
 void LocalWindowProxy::SetupRecordReplayWebChannel() {
