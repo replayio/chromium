@@ -1,3 +1,4 @@
+log(`DDBG replay_command_handler.js SCRIPT GO A`);
 (() => {
 // Script which defines handlers for recorder commands, 
 // and usually is only loaded while replaying.
@@ -3341,6 +3342,7 @@ function handleNewScript(scriptId, sourceURL, relativeSourceMapURL) {
 
 function initializeReplayJsEvents(ReplayJsEventEmitter) {
   Object.assign(ReplayJsEventEmitter, ReplayJsEventEmitterPrototype);
+  log(`DDBG initializeReplayJsEvents ${ReplayJsEventEmitter.emit instanceof Function}`);
   ReplayJsEventEmitter._callbacks = {};
   ReplayJsEventEmitter.on("command", commandCallback);
   ReplayJsEventEmitter.on("clearPauseDataCallback", clearPauseDataCallback);
@@ -3377,6 +3379,7 @@ addCDPEventListener("Runtime.executionContextsCleared", () => {
 });
 sendCDPMessage("Runtime.enable");
 
+log(`DDBG replay_command_handler.js SCRIPT GO B`);
 
 // Script return value
 return initializeReplayJsEvents;
