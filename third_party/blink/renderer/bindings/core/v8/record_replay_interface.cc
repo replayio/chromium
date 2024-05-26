@@ -183,6 +183,9 @@ static std::string ReadReplayAssetFile(const char* filename, size_t& len) {
   if (!assetsDir.length()) {
     recordreplay::Crash("ReadReplayAssetFile failed: Neither base::FILE_EXE nor RECORD_REPLAY_ASSETS_DIRECTORY provided.");
   }
+  // TODO: We have to go up by 9 directories on Mac -
+  // E.g.:
+  // Replay-Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/replay-assets/replay_sourcemap_handler.js
   std::string fpath = assetsDir + std::string("/") + filename;
   std::ifstream ifs(fpath);
   std::stringstream ss;
