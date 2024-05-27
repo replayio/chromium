@@ -12,6 +12,8 @@
 #include "base/synchronization/lock.h"
 #include "base/thread_annotations.h"
 
+#include "v8/include/replayio-macros.h"
+
 #include <cstdint>
 #include <memory>
 
@@ -462,15 +464,5 @@ class AutoPseudoStackEntry {
 };
 
 } // namespace recordreplay
-
-// #define REPLAY_ASSERT(format, ...) \
-//   if (recordreplay::HasAsserts()) \
-//     recordreplay::Assert(format, ##__VA_ARGS__) \
-//   static_assert(true, "require semicolon")
-
-// #define REPLAY_ASSERT_MAYBE_EVENTS_DISALLOWED(format, ...) \
-//   if (recordreplay::HasAsserts() && !recordreplay::AreEventsDisallowed()) \
-//     recordreplay::Assert(format, ##__VA_ARGS__) \
-//   static_assert(true, "require semicolon")
 
 #endif // BASE_RECORD_REPLAY_H_
