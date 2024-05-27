@@ -1,4 +1,4 @@
-log(`DDBG replay_sourcemap_handler.js SCRIPT V101`);
+// DDBG replay_sourcemap_handler.js SCRIPT V101
 (() => {
 const {
   log,
