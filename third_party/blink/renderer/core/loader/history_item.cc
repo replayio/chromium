@@ -35,6 +35,8 @@
 #include "third_party/blink/renderer/platform/weborigin/security_policy.h"
 #include "third_party/blink/renderer/platform/wtf/uuid.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 static int64_t GenerateSequenceNumber() {
