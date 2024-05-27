@@ -28,14 +28,15 @@ bool IsReplaying();
 char* GetRecordingId();
 void FinishRecording();
 
-bool HadMismatch();
-
 void Print(const char* format, ...);
 void Diagnostic(const char* format, ...);
 void CommandDiagnostic(const char* format, ...);
 void CommandDiagnosticTrace(const char* format, ...);
 void Warning(const char* format, ...);
 void Trace(const char* format, ...);
+
+bool HadMismatch();
+bool HasAsserts();
 void Assert(const char* format, ...);
 void AssertMaybeEventsDisallowed(const char* format, ...);
 void AssertBytes(const char* why, const void* buf, size_t size);
@@ -461,5 +462,15 @@ class AutoPseudoStackEntry {
 };
 
 } // namespace recordreplay
+
+// #define REPLAY_ASSERT(format, ...) \
+//   if (recordreplay::HasAsserts()) \
+//     recordreplay::Assert(format, ##__VA_ARGS__) \
+//   static_assert(true, "require semicolon")
+
+// #define REPLAY_ASSERT_MAYBE_EVENTS_DISALLOWED(format, ...) \
+//   if (recordreplay::HasAsserts() && !recordreplay::AreEventsDisallowed()) \
+//     recordreplay::Assert(format, ##__VA_ARGS__) \
+//   static_assert(true, "require semicolon")
 
 #endif // BASE_RECORD_REPLAY_H_

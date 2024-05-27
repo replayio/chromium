@@ -243,6 +243,10 @@ bool HadMismatch() {
   return V8RecordReplayHadMismatch();
 }
 
+bool HasAsserts() {
+  return !AreAssertsDisabled() && IsRecordingOrReplaying();
+}
+
 void Assert(const char* format, ...) {
 #ifndef NACL_TC_REV
   va_list ap;

@@ -137,7 +137,7 @@ void HistoryItem::ClearDocumentState() {
 
 void HistoryItem::SetStateObject(scoped_refptr<SerializedScriptValue> object) {
   if (object) {
-    recordreplay::Assert(
+    REPLAY_ASSERT(
       "[TT-492-1184] HistoryItem::SetStateObject %s",
       object->ToWireString().Utf8().c_str()
     );
