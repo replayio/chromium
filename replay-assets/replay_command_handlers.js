@@ -1,4 +1,4 @@
-log(`DDBG replay_command_handler.js SCRIPT GO A`);
+log(`DDBG replay_command_handler.js SCRIPT V101`);
 (() => {
 // Script which defines handlers for recorder commands, 
 // and usually is only loaded while replaying.

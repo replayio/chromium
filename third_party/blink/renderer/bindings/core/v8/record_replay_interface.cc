@@ -178,7 +178,11 @@ static std::string ReadReplayAssetFile(const char* filename, size_t& len) {
     assetsDir = getenv("RECORD_REPLAY_ASSETS_DIRECTORY");
   } else if (base::PathService::Get(base::FILE_EXE, &binPath)) {
     // PathService::Get(base::DIR_EXE, result);
-    assetsDir = binPath.DirName().AppendASCII("replay-assets").AsUTF8Unsafe();
+    auto assetRoot = binPath.DirName();
+#if BUILDFLAG(IS_MAC)
+    assetRoot = assetRoot.AppendASCII("../../../../../../../../..");
+#endif
+    assetsDir = assetRoot.AppendASCII("replay-assets").AsUTF8Unsafe();
   }
   if (!assetsDir.length()) {
     recordreplay::Crash("ReadReplayAssetFile failed: Neither base::FILE_EXE nor RECORD_REPLAY_ASSETS_DIRECTORY provided.");
@@ -192,7 +196,10 @@ static std::string ReadReplayAssetFile(const char* filename, size_t& len) {
   ss << ifs.rdbuf();
   std::string s = ss.str();
   len = s.length();
-  recordreplay::Print("DDBG ReadReplayAssetFile %s %zu", fpath.c_str(), len);
+  recordreplay::Print("DDBG ReadReplayAssetFile from '%s' (%zu): %s...",
+    fpath.c_str(),
+    len,
+    s.substr(0, 100).c_str());
   if (!len) {
     recordreplay::Crash("ReadReplayAssetFile (\"%s\") failed: %s",
       fpath.c_str(),
