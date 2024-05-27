@@ -3383,4 +3383,4 @@ log(`DDBG replay_command_handler.js SCRIPT GO B`);
 
 // Script return value
 return initializeReplayJsEvents;
-})();
+})()
