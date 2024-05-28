@@ -2502,7 +2502,6 @@ void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame
 
 void OnNewWindowAfterCheckpoint(LocalFrame* localFrame, v8::Local<v8::Context> newContext) {
   v8::replayio::ReplayRootContext* root = v8::replayio::RecordReplayGetRootContext(newContext);
-  recordreplay::AutoMarkReplayCode amrc;
   root->RunScriptAndCallBack(gOnNewWindowScript, "record-replay-OnNewWindow");
 
   LocalFrame* parentFrame = DynamicTo<LocalFrame>(localFrame->Parent());
