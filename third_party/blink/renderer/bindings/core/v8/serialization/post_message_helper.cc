@@ -22,6 +22,7 @@ scoped_refptr<SerializedScriptValue> PostMessageHelper::SerializeMessageByMove(
     const StructuredSerializeOptions* options,
     Transferables& transferables,
     ExceptionState& exception_state) {
+  REPLAY_ASSERT("DDBG PostMessageHelper::SerializeMessageByMove %d %d", options->hasTransfer(), options->hasTransfer() && !options->transfer().empty());
   if (options->hasTransfer() && !options->transfer().empty()) {
     if (!SerializedScriptValue::ExtractTransferables(
             isolate, options->transfer(), transferables, exception_state)) {
