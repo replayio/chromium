@@ -258,15 +258,15 @@ scoped_refptr<SerializedScriptValue> V8ScriptValueSerializer::Serialize(
            .To(&wrote_value)) {
     DCHECK(try_catch.HasCaught());
     exception_state.RethrowV8Exception(try_catch.Exception());
-    REPLAY_ASSERT("DDBG V8ScriptValueSerializer::Serialize B");
+    REPLAY_ASSERT("DDBG V8ScriptValueSerializer::Serialize B %d", try_catch.HasCaught());
     return nullptr;
   }
   DCHECK(wrote_value);
 
   // Finalize the transfer (e.g. detaching array buffers).
   FinalizeTransfer(exception_state);
+  REPLAY_ASSERT("DDBG V8ScriptValueSerializer::Serialize C %d", exception_state.HadException());
   if (exception_state.HadException())
-    REPLAY_ASSERT("DDBG V8ScriptValueSerializer::Serialize C");
     return nullptr;
 
   if (shared_array_buffers_.size()) {
