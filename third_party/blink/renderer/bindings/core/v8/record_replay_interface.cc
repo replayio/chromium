@@ -2409,15 +2409,15 @@ static void InitializeRootContext(v8::Isolate* isolate, LocalFrame* localFrame, 
 
   {
     newRoot->RunScriptAndCallBack(
-      ReadReplaySourcemapHandlerScript().Utf8().c_str(),
-      InternalScriptURL + std::string("://Sourcemap-Handler")
+      ReadReplayJsEventsBaseScript().Utf8().c_str(),
+      InternalScriptURL + std::string("://JS-Events-Base")
     );
   }
 
   {
     newRoot->RunScriptAndCallBack(
-      ReadReplayJsEventsBaseScript().Utf8().c_str(),
-      InternalScriptURL + std::string("://JS-Events-Base")
+      ReadReplaySourcemapHandlerScript().Utf8().c_str(),
+      InternalScriptURL + std::string("://Sourcemap-Handler")
     );
   }
 
