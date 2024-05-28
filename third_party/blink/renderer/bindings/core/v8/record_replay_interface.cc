@@ -237,12 +237,16 @@ static String ReadReplayCommandAssetFile(const char* fname) {
   return result;
 }
 
-static String ReadReplaySourcemapHandlerScript() {
-  return ReadReplayAssetFile("replay_sourcemap_handler.js");
+static String ReadReplayJsEventsBaseScript() {
+  return ReadReplayAssetFile("replay_js_base.js");
 }
 
 static String ReadReplayCommandHandlerScript() {
   return ReadReplayCommandAssetFile("replay_command_handlers.js");
+}
+
+static String ReadReplaySourcemapHandlerScript() {
+  return ReadReplayAssetFile("replay_sourcemap_handler.js");
 }
 
 
@@ -2403,8 +2407,21 @@ static void InitializeRootContext(v8::Isolate* isolate, LocalFrame* localFrame, 
     localFrame->GetSettings()->SetForceMainWorldInitialization(true);
   }
 
+  {
+    newRoot->RunScriptAndCallBack(
+      ReadReplaySourcemapHandlerScript().Utf8().c_str(),
+      InternalScriptURL + std::string("://Sourcemap-Handler")
+    );
+  }
+
+  {
+    newRoot->RunScriptAndCallBack(
+      ReadReplayJsEventsBaseScript().Utf8().c_str(),
+      InternalScriptURL + std::string("://JS-Events-Base")
+    );
+  }
+
   if (IsCommandHandlingEnabled()) {
-    recordreplay::AutoMarkReplayCode amrc;
     String commandHandlerScript = ReadReplayCommandHandlerScript();
     {
       recordreplay::AutoDisallowEvents disallow("InitializeRootContext");
@@ -2412,19 +2429,13 @@ static void InitializeRootContext(v8::Isolate* isolate, LocalFrame* localFrame, 
       // Run `commandHandlerScript`.
       newRoot->RunScriptAndCallBack(
         commandHandlerScript.Utf8().c_str(),
-        InternalScriptURL + std::string("://CommandHandler")
+        InternalScriptURL + std::string("://Command-Handler")
       );
     }
   }
 
-  recordreplay::Print("DDBG ReplaySourcemapHandlerScript A %d %d",
-    recordreplay::FeatureEnabled("collect-source-maps"),
-    !TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_COLLECTION"));
   if (recordreplay::FeatureEnabled("collect-source-maps") &&
       !TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_COLLECTION")) {
-    recordreplay::AutoMarkReplayCode amrc;
-
-    recordreplay::Print("DDBG ReplaySourcemapHandlerScript GO!");
     newRoot->RunScriptAndCallBack(
       ReadReplaySourcemapHandlerScript().Utf8().c_str(),
       InternalScriptURL + std::string("://SourcemapHandler")
@@ -2433,7 +2444,6 @@ static void InitializeRootContext(v8::Isolate* isolate, LocalFrame* localFrame, 
 }
 
 void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
-  recordreplay::AutoMarkReplayCode amrc;
   // TODO: keep track of this frame's and context's lifecycle?
   //    → Find all relevant events.
   //    → Log contextGroupId + contextId
