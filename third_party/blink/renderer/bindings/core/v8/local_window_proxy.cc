@@ -255,7 +255,7 @@ void LocalWindowProxy::Initialize() {
   if (recordreplay::IsRecordingOrReplaying("commands") &&
       origin && !origin->Host().empty() &&
       world_->IsMainWorld()) {
-    recordreplay::AutoMarkReplayCode amrc("LocalWindowProxy::Initialize");
+    recordreplay::AutoMarkReplayCode amrc();
 
     bool initGlobally = !gRecordReplayStateInitialized;
 

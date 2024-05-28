@@ -139,6 +139,7 @@ async function lintScript(
 }
 
 const AssetFiles = [
+  "replay_js_base.js",
   "replay_command_handlers.js",
   "replay_sourcemap_handler.js",
 ];
