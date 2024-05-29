@@ -238,7 +238,7 @@ static String ReadReplayCommandAssetFile(const char* fname) {
 }
 
 static String ReadReplayJsEventsBaseScript() {
-  return ReadReplayAssetFile("replay_js_base.js");
+  return ReadReplayAssetFile("replay_init.js");
 }
 
 static String ReadReplayCommandHandlerScript() {
@@ -2410,7 +2410,7 @@ static void InitializeRootContext(v8::Isolate* isolate, LocalFrame* localFrame, 
   {
     newRoot->RunScriptAndCallBack(
       ReadReplayJsEventsBaseScript().Utf8().c_str(),
-      InternalScriptURL + std::string("://JS-Events-Base")
+      InternalScriptURL + std::string("://Replay-Init")
     );
   }
 
