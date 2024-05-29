@@ -3,6 +3,11 @@
  * ReplayJs: Internal event handling.
  * ##########################################################################*/
 
+const {
+  log: log1
+} = __RECORD_REPLAY_ARGUMENTS__;
+
+
 const ReplayJsEventEmitterPrototype = {
   on(event, cb) {
     this._callbacks[event] ||= [];
@@ -14,7 +19,7 @@ const ReplayJsEventEmitterPrototype = {
     // if (!cbs) {
     //   throw new Error(`ReplayJsEvent_emit_failed_unknown_event: ${event}`);
     // }
-    log(`DDBG ${!!cbs} ReplayJsEventEmitter.emit("${event}", ${JSON.stringify(args)})`);
+    log1(`DDBG ${!!cbs} ReplayJsEventEmitter.emit("${event}", ${JSON.stringify(args)})`);
     if (cbs) {
       cbs.forEach((cb) => cb(...args));
     }
@@ -25,7 +30,7 @@ const ReplayJsEventEmitterPrototype = {
     if (!cbs?.length) {
       throw new Error(`ReplayJsEvent_emitWithResult_failed_unknown_event: ${event}`);
     }
-    log(`DDBG ${!!cbs} ReplayJsEventEmitter.emitWithResult("${event}", ${JSON.stringify(args)})`);
+    log1(`DDBG ${!!cbs} ReplayJsEventEmitter.emitWithResult("${event}", ${JSON.stringify(args)})`);
     return cbs[0](...args);
   },
 };
