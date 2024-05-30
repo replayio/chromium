@@ -24,7 +24,7 @@ function findMatches(text /*: string*/, regex /*: RegExp*/) {
 function extractNamedScriptBlock(
   text /*: string*/,
   start /*: number*/,
-  end /*: number*/,
+  end /*: number*/
 ) {
   const lines = text.split("\n");
   const name = lines[start].split(" ")[2];
@@ -66,7 +66,10 @@ function calculateStatsPerFile(messages) {
   return stat;
 }
 
-async function lintScript(fpath, { name, text } /*: { name: string, text: string }*/) {
+async function lintScript(
+  fpath,
+  { name, text } /*: { name: string, text: string }*/
+) {
   const messages = linter.verify(text, {
     parserOptions: {
       ecmaVersion: 2023,
@@ -136,40 +139,41 @@ async function lintScript(fpath, { name, text } /*: { name: string, text: string
 }
 
 async function main() {
-  await lintFile(
-    path.join(
-      ROOT_DIR,
-      "third_party/blink/renderer/bindings/core/v8/record_replay_interface.cc",
-    ),
-    /R""""\(/g,
-    /\)""""/g
-  );
-
-  await lintFile(
-    path.join(
-      ROOT_DIR,
-      "replay-assets/replay_command_handlers.js",
-    )
-  );
+  await lintFile("third_party/blink/renderer/bindings/core/v8/record_replay_interface.cc");
+  await lintFile("replay-assets/replay_command_handlers.js");
+  await lintFile("replay-assets/replay_sourcemaps.js");
+  await lintFile("replay-assets/replay_react_devtools.js");
+  await lintFile("replay-assets/replay_redux_devtools.js");
 }
 
-async function lintFile(fpath, startRegex, endRegex) {
+async function lintFile(relativeFilePath) {
+  const fpath = path.join(ROOT_DIR, relativeFilePath);
   const replayText = fs.readFileSync(fpath, "utf8");
 
   let jsTextBlocks;
-  if (startRegex) {
+
+  // for .cc files we have a start and end regex, and can have several blocks to lint.
+  // for .js files we have no regexes (since we lint the entire file), and we only have a single block.
+  if (fpath.endsWith(".cc") {
+    const startRegex = /R""""\(/g;
+    const endRegex = /\)""""/g;
+
     const lineNumbers = findMatches(replayText, startRegex);
     const endLineNumbers = findMatches(replayText, endRegex);
     if (lineNumbers?.length != endLineNumbers?.length) {
-      throw new Error(`Lint failed in ${fpath} - start and end line numbers don't match: ${lineNumbers?.length} != ${endLineNumbers?.length}`);
+      throw new Error(
+        `Lint failed in ${fpath} - start and end line numbers don't match: ${lineNumbers?.length} != ${endLineNumbers?.length}`
+      );
     }
     // console.log("lintFile", lineNumbers?.length, endLineNumbers?.length);
     jsTextBlocks = lineNumbers.map((lineNumber, index) =>
-      extractNamedScriptBlock(replayText, lineNumber, endLineNumbers[index]),
+      extractNamedScriptBlock(replayText, lineNumber, endLineNumbers[index])
     );
 
     if (!jsTextBlocks.length) {
-      throw new Error(`Invalid regexes or file path. Could not find js text block in ${fpath}.`);
+      throw new Error(
+        `Invalid regexes or file path. Could not find js text block in ${fpath}.`
+      );
     }
   } else {
     jsTextBlocks = [{ text: replayText }];
