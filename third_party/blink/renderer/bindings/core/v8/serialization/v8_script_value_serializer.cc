@@ -238,7 +238,6 @@ scoped_refptr<SerializedScriptValue> V8ScriptValueSerializer::Serialize(
 
   // Prepare to transfer the provided transferables.
   PrepareTransfer(exception_state);
-  REPLAY_ASSERT("DDBG V8ScriptValueSerializer::Serialize A");
   if (exception_state.HadException())
     return nullptr;
 
@@ -258,14 +257,12 @@ scoped_refptr<SerializedScriptValue> V8ScriptValueSerializer::Serialize(
            .To(&wrote_value)) {
     DCHECK(try_catch.HasCaught());
     exception_state.RethrowV8Exception(try_catch.Exception());
-    REPLAY_ASSERT("DDBG V8ScriptValueSerializer::Serialize B %d", try_catch.HasCaught());
     return nullptr;
   }
   DCHECK(wrote_value);
 
   // Finalize the transfer (e.g. detaching array buffers).
   FinalizeTransfer(exception_state);
-  REPLAY_ASSERT("DDBG V8ScriptValueSerializer::Serialize C %d", exception_state.HadException());
   if (exception_state.HadException())
     return nullptr;
 
@@ -275,19 +272,14 @@ scoped_refptr<SerializedScriptValue> V8ScriptValueSerializer::Serialize(
       exception_state.ThrowDOMException(
           DOMExceptionCode::kDataCloneError,
           "SharedArrayBuffer transfer requires self.crossOriginIsolated.");
-      REPLAY_ASSERT("DDBG V8ScriptValueSerializer::Serialize D");
       return nullptr;
     }
   }
-  
-  REPLAY_ASSERT("DDBG V8ScriptValueSerializer::Serialize GO");
 
   serialized_script_value_->CloneSharedArrayBuffers(shared_array_buffers_);
 
   // Finalize the results.
   std::pair<uint8_t*, size_t> buffer = serializer_.Release();
-  
-  REPLAY_ASSERT("DDBG V8ScriptValueSerializer::Serialize DONE");
 
   serialized_script_value_->SetData(
       SerializedScriptValue::DataBufferPtr(buffer.first), buffer.second);

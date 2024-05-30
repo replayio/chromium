@@ -65,10 +65,11 @@ IDBValueWrapper::IDBValueWrapper(
   options.for_storage = SerializedScriptValue::kForStorage;
   options.wasm_policy = wasm_policy;
 
-  REPLAY_ASSERT("DDBG IDBValueWrapper::IDBValueWrapper A");
-  serialized_value_ = SerializedScriptValue::Serialize(isolate, value, options,
-                                                       exception_state);
-  REPLAY_ASSERT("DDBG IDBValueWrapper::IDBValueWrapper B");
+  {
+    recordreplay::AutoAssertBufferAllocations autoAsserts("TT-492-1286");
+    serialized_value_ = SerializedScriptValue::Serialize(isolate, value, options,
+                                                         exception_state);
+  }
   if (serialized_value_) {
     original_data_length_ = serialized_value_->DataLengthInBytes();
   }

@@ -512,10 +512,8 @@ IDBRequest* IDBObjectStore::DoPut(ScriptState* script_state,
       ExecutionContext::From(script_state)->IsSecureContext()
           ? SerializedScriptValue::SerializeOptions::kSerialize
           : SerializedScriptValue::SerializeOptions::kBlockedInNonSecureContext;
-  REPLAY_ASSERT("DDBG IDBObjectStore::DoPut A");
   IDBValueWrapper value_wrapper(isolate, value.V8Value(), wasm_policy,
                                 exception_state);
-  REPLAY_ASSERT("DDBG IDBObjectStore::DoPut B");
   transaction_->SetActiveDuringSerialization(true);
   if (exception_state.HadException())
     return nullptr;
