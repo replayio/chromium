@@ -280,7 +280,6 @@ scoped_refptr<SerializedScriptValue> V8ScriptValueSerializer::Serialize(
 
   // Finalize the results.
   std::pair<uint8_t*, size_t> buffer = serializer_.Release();
-
   serialized_script_value_->SetData(
       SerializedScriptValue::DataBufferPtr(buffer.first), buffer.second);
   return std::move(serialized_script_value_);
