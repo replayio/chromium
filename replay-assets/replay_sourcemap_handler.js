@@ -1,5 +1,10 @@
-// DDBG replay_sourcemap_handler.js SCRIPT V101
+// replay_sourcemap_handler.js
 (() => {
+  
+// Avoid monkey patching.
+const fetch = window.fetch;
+const DateNow = Date.now;
+
 const {
   log,
   warning,
@@ -102,6 +107,7 @@ async function handleNewScript(scriptId, sourceURL, relativeSourceMapURL) {
         targetContentHash: `sha256:${scriptHash}`,
         targetURLHash: sourceURL ? makeAPIHash(sourceURL) : undefined,
         targetMapURLHash: makeAPIHash(sourceMapURL),
+        timestamp: DateNow(),
       })
     );
 
@@ -128,6 +134,7 @@ async function handleNewScript(scriptId, sourceURL, relativeSourceMapURL) {
           recordingId,
           parentId: id,
           parentOffset: offset,
+          timestamp: DateNow(),
         })
       );
     }
