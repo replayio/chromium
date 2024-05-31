@@ -226,6 +226,9 @@ const char* gSourceMapScript = R""""(
 //js
 (() => {
 
+// Don't call monkey-patched |fetch|.
+const fetch = window.fetch;
+
 const {
   log,
   warning,
