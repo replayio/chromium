@@ -185,9 +185,6 @@ static bool gRecordReplayStateInitialized;
 void LocalWindowProxy::Initialize() {
   // https://linear.app/replay/issue/RUN-749
   recordreplay::Assert("LocalWindowProxy::Initialize Start");
-  
-  recordreplay::Print("DDBG Init A");
-
   recordreplay::AutoMarkerDependencyExecution execute(
     "ScriptExecution", "LocalWindowProxy::Initialize"
   );
@@ -241,16 +238,6 @@ void LocalWindowProxy::Initialize() {
         GetFrame()->DomWindow()->GetAgentClusterID());
     SetSecurityToken(origin.get());
   }
-
-  recordreplay::Print("DDBG Init B");
-
-  recordreplay::Print("DDBG Init C %d %d %d %d %s",
-    world_->IsMainWorld(),
-    !!origin,
-    origin && !origin->Host().empty(),
-    !!GetFrame()->GetDocument(),
-    GetFrame()->GetDocument() ? GetFrame()->GetDocument()->Url().GetString().Utf8().c_str() : ""
-  );
 
   {
     recordreplay::AutoMarkReplayCode amrc;
@@ -330,7 +317,6 @@ void LocalWindowProxy::Initialize() {
   if (World().IsMainWorld()) {
     GetFrame()->Loader().DispatchDidClearWindowObjectInMainWorld();
   }
-  recordreplay::Print("DDBG Init D");
 }
 
 void LocalWindowProxy::SetupRecordReplayWebChannel() {

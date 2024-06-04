@@ -196,10 +196,9 @@ static std::string ReadReplayAssetFile(const char* filename, size_t& len) {
   ss << ifs.rdbuf();
   std::string s = ss.str();
   len = s.length();
-  recordreplay::Print("DDBG ReadReplayAssetFile from '%s' (%zu): %s...",
+  recordreplay::Print("ReadReplayAssetFile from '%s' (%zu)",
     fpath.c_str(),
-    len,
-    s.substr(0, 100).c_str());
+    len);
   if (!len) {
     recordreplay::Crash("ReadReplayAssetFile (\"%s\") failed: %s",
       fpath.c_str(),

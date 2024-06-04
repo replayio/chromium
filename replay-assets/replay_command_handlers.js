@@ -1,4 +1,3 @@
-// DDBG replay_command_handler.js SCRIPT V101
 (() => {
 // Script which defines handlers for recorder commands, 
 // and usually is only loaded while replaying.
@@ -315,6 +314,10 @@ function executeCommand(method, params) {
   VerboseCommands && log(`[Command ${method}] Handling command, params=${JSON_stringify(params)}...`);
   const result = CommandCallbacks[method](params);
   VerboseCommands && log(`[Command ${method}] Handled command, result=${JSON_stringify(result)}`);
+  if (!result) {
+    // NOTE: CommandCallback expects a result.
+    throw new Error(`[Command ${method}] Did not return a result.`);
+  }
   return result;
 }
 
@@ -3347,8 +3350,6 @@ addCDPEventListener("Runtime.executionContextsCleared", () => {
   gExecutionContexts.clear();
 });
 sendCDPMessage("Runtime.enable");
-
-log(`DDBG replay_command_handler.js SCRIPT GO B`);
 
 // Script return value
 return initializeReplayJsEvents;

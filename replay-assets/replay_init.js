@@ -16,10 +16,6 @@ const ReplayJsEventEmitterPrototype = {
 
   emit(event, ...args) {
     let cbs = this._callbacks[event];
-    // if (!cbs) {
-    //   throw new Error(`ReplayJsEvent_emit_failed_unknown_event: ${event}`);
-    // }
-    log1(`DDBG ${!!cbs} ReplayJsEventEmitter.emit("${event}", ${JSON.stringify(args)})`);
     if (cbs) {
       cbs.forEach((cb) => cb(...args));
     }
@@ -28,10 +24,11 @@ const ReplayJsEventEmitterPrototype = {
   emitWithResult(event, ...args) {
     let cbs = this._callbacks[event];
     if (!cbs?.length) {
+      // If the caller expects a return value, there must be at least one callback registered.
       throw new Error(`ReplayJsEvent_emitWithResult_failed_unknown_event: ${event}`);
     }
-    log1(`DDBG ${!!cbs} ReplayJsEventEmitter.emitWithResult("${event}", ${JSON.stringify(args)})`);
-    return cbs[0](...args);
+    const rv = cbs[0](...args);
+    return rv;
   },
 };
 

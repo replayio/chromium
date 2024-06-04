@@ -144,7 +144,6 @@ async function handleNewScript(scriptId, sourceURL, relativeSourceMapURL) {
 }
 
 function initializeEvents(ReplayJsEventEmitter) {
-  log(`DDBG replay_sourcemap_handler initializeEvents`);
   ReplayJsEventEmitter.on("newScript", handleNewScript);
 }
 

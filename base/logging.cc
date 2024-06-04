@@ -763,7 +763,7 @@ LogMessage::~LogMessage() {
 
   // Prevent calling |BeingDebugged| since it tries to create a debugger process.
   // That attempt will cause a crash when replaying when events are disallowed.
-  if (severity_ == LOGGING_FATAL && RecordReplayIsReplaying() && !base::debug::BeingDebugged()) {
+  if (severity_ == LOGGING_FATAL && !RecordReplayIsReplaying() && !base::debug::BeingDebugged()) {
     // Include a stack trace on a fatal, unless a debugger is attached.
     base::debug::StackTrace stack_trace;
     stream_ << std::endl;  // Newline to separate from log message.
