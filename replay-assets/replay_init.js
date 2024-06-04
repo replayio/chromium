@@ -3,11 +3,6 @@
  * ReplayJs: Internal event handling.
  * ##########################################################################*/
 
-const {
-  log: log1
-} = __RECORD_REPLAY_ARGUMENTS__;
-
-
 const ReplayJsEventEmitterPrototype = {
   on(event, cb) {
     this._callbacks[event] ||= [];
