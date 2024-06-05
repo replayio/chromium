@@ -1579,7 +1579,7 @@ static void LayoutDom(
   }
 }
 
-static void ForTestSerializeValueToString(
+static void ForTestingSerializeValueToString(
   const v8::FunctionCallbackInfo<v8::Value>& args) {
   v8::Isolate* isolate = args.GetIsolate();
 
@@ -2672,8 +2672,8 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
 
   // exported for tests
   SetFunctionProperty(
-    isolate, args, "forTestSerializeValueToString",
-    ForTestSerializeValueToString);
+    isolate, args, "forTestingSerializeValueToString",
+    ForTestingSerializeValueToString);
 }
 
 void InitializeRecordReplay(
