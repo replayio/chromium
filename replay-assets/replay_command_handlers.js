@@ -42,10 +42,10 @@ const {
   // constants
   CDPERROR_MISSINGCONTEXT,
   CDPERROR_NOTALIVE,
-  REPLAY_CDT_PAUSE_OBJECT_GROUP
+  REPLAY_CDT_PAUSE_OBJECT_GROUP,
 
   // for testing
-  forTestingSerializeValueToString,
+  forTestingSerializeValueToString
 
 } = __RECORD_REPLAY_ARGUMENTS__;
 
