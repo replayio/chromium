@@ -185,7 +185,6 @@ static bool gRecordReplayStateInitialized;
 void LocalWindowProxy::Initialize() {
   // https://linear.app/replay/issue/RUN-749
   recordreplay::Assert("LocalWindowProxy::Initialize Start");
-
   recordreplay::AutoMarkerDependencyExecution execute(
     "ScriptExecution", "LocalWindowProxy::Initialize"
   );
@@ -240,56 +239,62 @@ void LocalWindowProxy::Initialize() {
     SetSecurityToken(origin.get());
   }
 
-  if (recordreplay::IsRecordingOrReplaying("commands") &&
-      origin && !origin->Host().empty()) {
-    bool initGlobally = !gRecordReplayStateInitialized;
+  {
+    recordreplay::AutoMarkReplayCode amrc;
 
-    // Whether this is the relative root frame of this process.
-    bool isMainFrame = GetFrame()->IsMainFrame() && world_->IsMainWorld();
-    if (initGlobally) {
-      gRecordReplayStateInitialized = true;
+    if (recordreplay::IsRecordingOrReplaying("commands") &&
+        origin && !origin->Host().empty() &&
+        world_->IsMainWorld()) {
 
-      if (!isMainFrame) {
-        recordreplay::Warning(
-            "LocalWindowProxy::Initialize Called on non-root frame first: %d %d origin=%s url=%s",
-            GetFrame()->IsMainFrame(),
-            world_->IsMainWorld(),
-            origin->ToRawString().Utf8().c_str(),
-            GetFrame()->GetDocument()->Url().GetString().Utf8().c_str());
+      bool initGlobally = !gRecordReplayStateInitialized;
+
+      // Whether this is the relative root frame of this process.
+      bool isLocalRoot = GetFrame()->IsLocalRoot();
+      if (initGlobally) {
+        gRecordReplayStateInitialized = true;
+
+        if (!isLocalRoot) {
+          recordreplay::Warning(
+              "LocalWindowProxy::Initialize Called on frame that does not OnRootFrameInit: %d %d origin=%s url=%s",
+              GetFrame()->IsMainFrame(),
+              world_->IsMainWorld(),
+              origin->ToRawString().Utf8().c_str(),
+              GetFrame()->GetDocument()->Url().GetString().Utf8().c_str());
+        }
+
+        // After creating the first context that is associated with a non-empty
+        // origin, we are ready to set up the state used to process driver
+        // commands when recording/replaying, and to create checkpoints.
+        InitializeRecordReplay(
+          RecordReplayGetProcessType(
+            GetFrame(),
+            world_
+          ),
+          GetIsolate(), GetFrame(), context
+        );
       }
 
-      // After creating the first context that is associated with a non-empty
-      // origin, we are ready to set up the state used to process driver
-      // commands when recording/replaying, and to create checkpoints.
-      InitializeRecordReplay(
-        RecordReplayGetProcessType(
-          GetFrame(),
-          world_
-        ),
-        GetIsolate(), GetFrame(), context
-      );
-    }
+      if (isLocalRoot) {
+        // Root-level navigation event, initially happens before
+        // first checkpoint.
+        OnRootFrameInit(GetIsolate(), GetFrame(), context);
+      }
 
-    if (isMainFrame) {
-      // Root-level navigation event, initially happens before
-      // first checkpoint.
-      OnRootFrameInit(GetIsolate(), GetFrame(), context);
-    }
+      if (initGlobally) {
+        // Create the first checkpoint at which execution can pause.
+        recordreplay::NewCheckpoint();
+        // Initialize some more.
+        InitializeRecordReplayAfterCheckpoint();
+      }
+      
+      if (isLocalRoot) {
+        // Root-level navigation event, after first checkpoint.
+        OnRootFrameInitAfterCheckpoint(GetIsolate(), GetFrame(), context);
+      }
 
-    if (initGlobally) {
-      // Create the first checkpoint at which execution can pause.
-      recordreplay::NewCheckpoint();
-      // Initialize some more.
-      InitializeRecordReplayAfterCheckpoint();
+      // Event for all new windows.
+      OnNewWindowAfterCheckpoint(GetFrame(), context);
     }
-    
-    if (isMainFrame) {
-      // Root-level navigation event, after first checkpoint.
-      OnRootFrameInitAfterCheckpoint(GetIsolate(), GetFrame(), context);
-    }
-
-    // Event for all new windows.
-    OnNewWindowAfterCheckpoint(GetIsolate(), GetFrame(), context);
   }
 
   {

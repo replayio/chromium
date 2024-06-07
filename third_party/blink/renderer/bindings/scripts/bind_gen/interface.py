@@ -337,9 +337,25 @@ def bind_callback_local_vars(code_node, cg_context):
                                "V8PerIsolateData::From(${isolate});")),
         S("property_name",
           "const char* const ${property_name} = \"${property.identifier}\";"),
+        # S("receiver_context",
+        #   ("v8::Local<v8::Context> ${receiver_context} = "
+        #    "${v8_receiver}->GetCreationContextChecked();")),
         S("receiver_context",
-          ("v8::Local<v8::Context> ${receiver_context} = "
-           "${v8_receiver}->GetCreationContextChecked();")),
+          ("v8::Local<v8::Context> ${receiver_context} = " +
+          "${v8_receiver}->GetCreationContextChecked();")
+          # TODO: Remove this once we feel safe that this recorder crash is gone.
+          if (cg_context.class_like.identifier != "Window" or 
+             (cg_context.property_ and cg_context.property_.identifier) != "fetch")
+          else
+            ("""v8::Local<v8::Context> ${receiver_context} = v8_receiver->GetCreationContext().FromMaybe(v8::Local<v8::Context>());
+                if (${receiver_context}.IsEmpty()) {
+                    std::string stack;
+                    recordreplay::GetCurrentJSStack(&stack);
+                    recordreplay::Warning("[TT-957] Context gone: %s", stack.c_str());
+                    exception_state.ThrowTypeError("[TT-957] Context Gone");
+                    return;
+                }""")
+        ),
         S("receiver_script_state",
           ("ScriptState* ${receiver_script_state} = "
            "ScriptState::From(${receiver_context});")),

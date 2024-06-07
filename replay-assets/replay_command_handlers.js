@@ -14,9 +14,6 @@ const {
   hasDiverged,
   setCDPMessageCallback,
   sendCDPMessage: sendCDPMessageRaw,
-  setCommandCallback,
-  setClearPauseDataCallback,
-  addNewScriptHandler,
   getCurrentError,
 
   layoutDom,
@@ -53,7 +50,7 @@ const {
 // utils.js
 ///////////////////////////////////////////////////////////////////////////////
 
-// Some of these are duplicated in gSourceMapScript, so watch out when making
+// Some of these are duplicated in replay_sourcemap_handler, so watch out when making
 // modifications to update both versions...
 
 function isFunction(val) {
@@ -144,13 +141,11 @@ function isValidBaseURL(url) {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// message.js
+// CDP Handlers.
 ///////////////////////////////////////////////////////////////////////////////
 
-function initMessages() {
+function initCdp() {
   setCDPMessageCallback(messageCallback);
-  setCommandCallback(commandCallback);
-  setClearPauseDataCallback(clearPauseDataCallback);
 }
 
 let gNextMessageId = 1;
@@ -232,7 +227,7 @@ function sendCDPMessage(method, params) {
 const sendMessage = sendCDPMessage;
 
 
-function addEventListener(method, callback) {
+function addCDPEventListener(method, callback) {
   gEventListeners.set(method, callback);
 }
 
@@ -323,19 +318,23 @@ function executeCommand(method, params) {
   VerboseCommands && log(`[Command ${method}] Handling command, params=${JSON_stringify(params)}...`);
   const result = CommandCallbacks[method](params);
   VerboseCommands && log(`[Command ${method}] Handled command, result=${JSON_stringify(result)}`);
+  if (!result) {
+    // NOTE: CommandCallback expects a result.
+    throw new Error(`[Command ${method}] Did not return a result.`);
+  }
   return result;
 }
 
-function commandCallback(method, params) {
-  if (!CommandCallbacks[method]) {
-    log(`[RuntimeError][Command ${method}] Missing command callback: ${method}`);
+function commandCallback(commandName, params) {
+  if (!CommandCallbacks[commandName]) {
+    log(`[RuntimeError][Command ${commandName}] Missing command callback: ${commandName}`);
     return {};
   }
 
   try {
-    return executeCommand(method, params);
+    return executeCommand(commandName, params);
   } catch (e) {
-    log(`[RuntimeError][Command ${method}]${getAliveLabel()} ${e?.stack || e}`);
+    log(`[RuntimeError][Command ${commandName}]${getAliveLabel()} ${e?.stack || e}`);
     // Pass the error up to V8; it can (for now) decide how to handle itself, whether
     // it should crash or not, etc.  Eventually, the caller of the command should make
     // that decision.
@@ -425,21 +424,6 @@ function Target_getCurrentMessageContents() {
     argumentValues,
   };
 }
-
-addNewScriptHandler((scriptId, sourceURL, relativeSourceMapURL) => {
-  if (!relativeSourceMapURL)
-    return;
-
-  const urls = getSourceMapURLs(sourceURL, relativeSourceMapURL);
-  if (!urls)
-    return;
-
-  const { sourceMapURL, sourceMapBaseURL } = urls;
-  gSourceMapData.set(scriptId, {
-    url: sourceMapURL,
-    baseUrl: sourceMapBaseURL
-  });
-}, /* disallowEvents */ true);
 
 function Target_getSourceMapURL({ sourceId }) {
   return gSourceMapData.get(sourceId) || {};
@@ -3317,28 +3301,52 @@ function wrapReplayApiFunction(fn) {
   };
 }
 
+/** ###########################################################################
+ * ReplayJs: Internal event handling.
+ * ##########################################################################*/
+
+function handleNewScript(scriptId, sourceURL, relativeSourceMapURL) {
+  if (!relativeSourceMapURL)
+    return;
+
+  const urls = getSourceMapURLs(sourceURL, relativeSourceMapURL);
+  if (!urls)
+    return;
+
+  const { sourceMapURL, sourceMapBaseURL } = urls;
+  gSourceMapData.set(scriptId, {
+    url: sourceMapURL,
+    baseUrl: sourceMapBaseURL
+  });
+}
+
+function initializeReplayJsEvents(ReplayJsEventEmitter) {
+  ReplayJsEventEmitter.on("command", commandCallback);
+  ReplayJsEventEmitter.on("clearPauseDataCallback", clearPauseDataCallback);
+  ReplayJsEventEmitter.on("newScriptEventsDisallowed", handleNewScript);
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // main.js
 ///////////////////////////////////////////////////////////////////////////////
 
 patchReplayApi();
-initMessages();
-addEventListener("Runtime.consoleAPICalled", onConsoleAPICall);
-addEventListener("Runtime.executionContextCreated", ({ context }) => {
+initCdp();
+addCDPEventListener("Runtime.consoleAPICalled", onConsoleAPICall);
+addCDPEventListener("Runtime.executionContextCreated", ({ context }) => {
   gExecutionContexts.set(context.id, context);
   for (const callback of gContextChangeCallbacks) {
     callback(context, "add");
   }
 });
-addEventListener("Runtime.executionContextDestroyed", ({ executionContextId }) => {
+addCDPEventListener("Runtime.executionContextDestroyed", ({ executionContextId }) => {
   const context = gExecutionContexts.get(executionContextId);
   for (const callback of gContextChangeCallbacks) {
     callback(context, "remove");
   }
   gExecutionContexts.delete(executionContextId);
 });
-addEventListener("Runtime.executionContextsCleared", () => {
+addCDPEventListener("Runtime.executionContextsCleared", () => {
   for (const context of gExecutionContexts.values()) {
     for (const callback of gContextChangeCallbacks) {
       callback(context, "remove");
@@ -3348,4 +3356,6 @@ addEventListener("Runtime.executionContextsCleared", () => {
 });
 sendCDPMessage("Runtime.enable");
 
-})();
+// Script return value
+return initializeReplayJsEvents;
+})()

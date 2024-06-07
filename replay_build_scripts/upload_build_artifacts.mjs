@@ -172,17 +172,18 @@ function prepareMacOSBinaries(buildId) {
     ? `${buildId}-arm-signed.dmg`
     : `${buildId}-signed.dmg`;
   const outdir = buildArm ? "out/Release-ARM" : "out/Release";
-  const appPath = path.join(outdir, "Replay-Chromium.app");
+  const appDstName = "Replay-Chromium.app";
+  const appDstPath = path.join(outdir, appDstName);
 
   // Copy assets.
   copyAssets(path.join(outdir, "Chromium.app"));
 
   // Clean up.
-  fs.rmSync(appPath, {
+  fs.rmSync(appDstPath, {
     recursive: true,
     force: true,
   });
-  fs.renameSync(path.join(outdir, "Chromium.app"), appPath);
+  fs.renameSync(path.join(outdir, "Chromium.app"), appDstPath);
 
   // Bundle dmg file.
   spawnChecked(
@@ -196,7 +197,7 @@ function prepareMacOSBinaries(buildId) {
       "-fs",
       "HFS+",
       "-srcfolder",
-      "Replay-Chromium.app",
+      appDstName,
     ],
     { cwd: outdir, stdio: "inherit" }
   );
@@ -211,7 +212,7 @@ function prepareMacOSBinaries(buildId) {
   // Bundle tar ball.
   spawnChecked(
     "tar",
-    ["cfJ", path.join(process.cwd(), buildIdTarArchive), "Replay-Chromium.app"],
+    ["cfJ", path.join(process.cwd(), buildIdTarArchive), appDstName],
     { cwd: outdir }
   );
 
@@ -280,7 +281,7 @@ function prepareMacOSBinaries(buildId) {
         "--p12-password-file",
         p12PassPath,
         ...codeSignatureFlags,
-        appPath,
+        appDstPath,
       ],
       { stdio: "inherit" }
     );
@@ -295,7 +296,7 @@ function prepareMacOSBinaries(buildId) {
         "-fs",
         "HFS+",
         "-srcfolder",
-        "Replay-Chromium.app",
+        appDstName,
       ],
       { cwd: outdir, stdio: "inherit" }
     );
@@ -327,7 +328,7 @@ function prepareMacOSBinaries(buildId) {
   }
 
   // Clean up.
-  fs.renameSync(appPath, path.join(outdir, "Chromium.app"));
+  fs.renameSync(appDstPath, path.join(outdir, "Chromium.app"));
 
   // Move things into place.
   fs.cpSync(buildIdDmgArchive, dmgArchive);

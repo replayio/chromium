@@ -127,6 +127,8 @@ typedef FILE* FileHandle;
 #include <windows.h>
 #endif
 
+static void* REPLAY_NO_HANDLE = reinterpret_cast<void*>(1);
+
 static void* LookupRecordReplaySymbol(const char* name) {
 #if !BUILDFLAG(IS_WIN)
   void* fnptr = dlsym(RTLD_DEFAULT, name);
@@ -134,20 +136,35 @@ static void* LookupRecordReplaySymbol(const char* name) {
   HMODULE module = GetModuleHandleA("windows-recordreplay.dll");
   void* fnptr = module ? (void*)GetProcAddress(module, name) : nullptr;
 #endif
-  return fnptr ? fnptr : reinterpret_cast<void*>(1);
+  return fnptr ? fnptr : REPLAY_NO_HANDLE;
+}
+
+static void* g_record_replay_print_ptr;
+static bool HasReplayModule() {
+  if (!g_record_replay_print_ptr) {
+    g_record_replay_print_ptr = LookupRecordReplaySymbol("RecordReplayPrint");
+  }
+  return g_record_replay_print_ptr != REPLAY_NO_HANDLE;
 }
 
 static void RecordReplayPrint(const char* aFormat, ...) {
-  static void* fnptr;
-  if (!fnptr) {
-    fnptr = LookupRecordReplaySymbol("RecordReplayPrint");
-  }
-  if (fnptr != reinterpret_cast<void*>(1)) {
+  if (HasReplayModule()) {
     va_list ap;
     va_start(ap, aFormat);
-    reinterpret_cast<void(*)(const char*, va_list)>(fnptr)(aFormat, ap);
+    reinterpret_cast<void(*)(const char*, va_list)>(g_record_replay_print_ptr)(aFormat, ap);
     va_end(ap);
   }
+}
+
+static bool RecordReplayIsReplaying() {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayIsReplaying");
+  }
+  if (fnptr != REPLAY_NO_HANDLE) {
+    return reinterpret_cast<bool(*)()>(fnptr)();
+  }
+  return false;
 }
 
 namespace logging {
@@ -743,7 +760,10 @@ LogMessage::~LogMessage() {
   size_t stack_start = stream_.str().length();
 #if !defined(OFFICIAL_BUILD) && !BUILDFLAG(IS_NACL) && !defined(__UCLIBC__) && \
     !BUILDFLAG(IS_AIX)
-  if (severity_ == LOGGING_FATAL && !base::debug::BeingDebugged()) {
+
+  // Prevent calling |BeingDebugged| since it tries to create a debugger process.
+  // That attempt will cause a crash when replaying when events are disallowed.
+  if (severity_ == LOGGING_FATAL && !RecordReplayIsReplaying() && !base::debug::BeingDebugged()) {
     // Include a stack trace on a fatal, unless a debugger is attached.
     base::debug::StackTrace stack_trace;
     stream_ << std::endl;  // Newline to separate from log message.
@@ -766,8 +786,15 @@ LogMessage::~LogMessage() {
 #endif
   stream_ << std::endl;
   std::string str_newline(stream_.str());
-
-  RecordReplayPrint("LogMessage %s", str_newline.c_str());
+  
+  if (severity_ == LOGGING_FATAL) {
+    // TODO: We actually want to crash with the right reason, but we don't have
+    // access to V8RecordReplayCrash.
+    // RecordReplayCrash("FATAL: %s", str_newline.c_str());
+    RecordReplayPrint("FATAL: %s", str_newline.c_str());
+  } else {
+    RecordReplayPrint("LogMessage [%d/%d] %s", severity_, LOGGING_NUM_SEVERITIES-1, str_newline.c_str());
+  }
 
   TRACE_LOG_MESSAGE(
       file_, base::StringPiece(str_newline).substr(message_start_), line_);
@@ -981,7 +1008,7 @@ LogMessage::~LogMessage() {
       // information, and displaying message boxes when the application is
       // hosed can cause additional problems.
 #ifndef NDEBUG
-      if (!base::debug::BeingDebugged()) {
+      if (!RecordReplayIsReplaying() && !base::debug::BeingDebugged()) {
         // Displaying a dialog is unnecessary when debugging and can complicate
         // debugging.
         DisplayDebugMessageInDialog(stream_.str());

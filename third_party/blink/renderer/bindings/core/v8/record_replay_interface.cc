@@ -13,6 +13,7 @@
 #include "base/base64.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
+#include "base/path_service.h"
 #include "base/process/process_handle.h"
 #include "base/record_replay.h"
 #include "base/record_replay_paint_surface.h"
@@ -42,6 +43,7 @@
 #include "third_party/blink/renderer/platform/bindings/v8_dom_wrapper.h"
 #include "third_party/inspector_protocol/crdtp/maybe.h"
 #include "v8/include/v8-inspector.h"
+#include "v8/include/replayio.h"
 
 #include <array>
 #include <fstream>
@@ -58,14 +60,8 @@ static const char DirectorySeparator = '\\';
 static const char *AnnotationHookJSName = "__RECORD_REPLAY_ANNOTATION_HOOK__";
 
 namespace v8 {
-
-extern void FunctionCallbackRecordReplaySetCommandCallback(const FunctionCallbackInfo<Value>& args);
-extern void FunctionCallbackRecordReplaySetClearPauseDataCallback(const FunctionCallbackInfo<Value>& callArgs);
-extern void FunctionCallbackRecordReplayAddNewScriptHandler(const FunctionCallbackInfo<Value>& args);
-extern void FunctionCallbackRecordReplayGetScriptSource(const FunctionCallbackInfo<Value>& args);
-
 namespace internal {
-
+extern void FunctionCallbackRecordReplayGetScriptSource(const FunctionCallbackInfo<Value>& args);
 extern int RecordReplayObjectId(v8::Isolate* isolate, v8::Local<v8::Context> cx,
                                 v8::Local<v8::Value> object, bool allow_create);
 extern void RecordReplayConfirmObjectHasId(v8::Isolate* isolate,
@@ -89,9 +85,7 @@ using RemoteObjectIdTypeRaw = std::u16string;
 // The more convenient type that we use
 using RemoteObjectIdType = WTF::String;
 
-extern "C" void V8RecordReplaySetDefaultContext(v8::Isolate* isolate, v8::Local<v8::Context> cx);
 extern "C" void V8RecordReplayFinishRecording();
-extern "C" void V8RecordReplaySetCrashReason(const char* reason);
 extern "C" char* V8RecordReplayReadAssetFileContents(const char* aPath, size_t* aLength);
 extern "C" void V8RecordReplayOnConsoleMessage(size_t bookmark);
 extern "C" void V8RecordReplayAddMetadata(const char* jsonString);
@@ -113,24 +107,24 @@ static bool IsCommandHandlingEnabled() {
          IsCommandHandlingEnabledWhenRecording();
 }
 
-static LocalFrame* GetLocalFrameRoot(v8::Isolate* isolate) {
+static LocalFrame* GetCurrentLocalFrameRoot(v8::Isolate* isolate) {
   LocalDOMWindow* currentWindow = CurrentDOMWindow(isolate);
 
   if (!currentWindow) {
-    recordreplay::Print("[RuntimeError] GetLocalFrameRoot: no window.");
+    recordreplay::Print("[RuntimeError] GetCurrentLocalFrameRoot: no window.");
     return nullptr;
   }
 
   LocalFrame *f = currentWindow->GetFrame();
   if (!f || f->IsDetached() || f->IsProvisional()) {
-    recordreplay::Print("[RuntimeError] GetLocalFrameRoot: window has no frame.");
+    recordreplay::Print("[RuntimeError] GetCurrentLocalFrameRoot: window has no frame.");
     return nullptr;
   }
 
   LocalFrame& root = f->LocalFrameRoot();
 
   if (root.IsDetached() || root.IsProvisional()) {
-    recordreplay::Print("[RuntimeError] GetLocalFrameRoot: root is detached or provisional.");
+    recordreplay::Print("[RuntimeError] GetCurrentLocalFrameRoot: root is detached or provisional.");
     return nullptr;
   }
 
@@ -165,7 +159,7 @@ public:
     inspectorSession = nullptr;
   }
 
-  LocalFrame* GetLocalFrameRoot() const { return blink::GetLocalFrameRoot(isolate); }
+  LocalFrame* GetCurrentLocalFrameRoot() const { return blink::GetCurrentLocalFrameRoot(isolate); }
 };
 
 static LocalFrame* gRootLocalFrame = nullptr;
@@ -175,20 +169,41 @@ typedef std::unordered_map<int, InspectorData*> ContextGroupIdInspectorMap;
 std::unordered_map<v8::Isolate*, ContextGroupIdInspectorMap*>* gInspectorData = nullptr;
 std::unordered_map<v8::Isolate*, v8_inspector::V8Inspector*>* gV8Inspectors = nullptr;
 
-static std::string ReadReplayAssetFileRaw(const char* filename, size_t& len) {
-  const char* scriptDir = getenv("RECORD_REPLAY_ASSETS_DIRECTORY");
-  if (!scriptDir) {
-    recordreplay::Crash("ReadReplayAssetFileRaw failed: RECORD_REPLAY_ASSETS_DIRECTORY not provided");
-  }
+static std::string ReadReplayAssetFile(const char* filename, size_t& len) {
+  // TODO: Get "binary dir" from Chromium.
+  base::FilePath binPath;
+  std::string assetsDir;
 
-  std::string fpath = std::string(scriptDir) + std::string("/") + filename;
+  // TODO: Test this on mac.
+  if (getenv("RECORD_REPLAY_ASSETS_DIRECTORY")) {
+    assetsDir = getenv("RECORD_REPLAY_ASSETS_DIRECTORY");
+  } else if (base::PathService::Get(base::FILE_EXE, &binPath)) {
+    // PathService::Get(base::DIR_EXE, result);
+    auto assetRoot = binPath.DirName();
+#if BUILDFLAG(IS_MAC)
+    assetRoot = assetRoot.AppendASCII("../../../../../../../../..");
+#endif
+    assetsDir = assetRoot.AppendASCII("replay-assets").AsUTF8Unsafe();
+  }
+  if (!assetsDir.length()) {
+    recordreplay::Crash("ReadReplayAssetFile failed: Neither base::FILE_EXE nor RECORD_REPLAY_ASSETS_DIRECTORY provided.");
+  }
+  // TODO: We have to go up by 9 directories on Mac -
+  // E.g.:
+  // Replay-Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/108.0.5359.0/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/replay-assets/replay_sourcemap_handler.js
+  std::string fpath = assetsDir + std::string("/") + filename;
   std::ifstream ifs(fpath);
   std::stringstream ss;
   ss << ifs.rdbuf();
   std::string s = ss.str();
   len = s.length();
+  recordreplay::Print("ReadReplayAssetFile from '%s' (%zu)",
+    fpath.c_str(),
+    len);
   if (!len) {
-    recordreplay::Crash("ReadReplayAssetFileRaw failed: %s", fpath.c_str());
+    recordreplay::Crash("ReadReplayAssetFile (\"%s\") failed: %s",
+      fpath.c_str(),
+      strerror(errno));
   }
   return s;
 }
@@ -197,10 +212,21 @@ static String ReadReplayAssetFile(const char* fname) {
   size_t len;
 
   // Important: Treat as UTF-8.
+  String result = String::FromUTF8(ReadReplayAssetFile(fname, len).c_str(), len);
+  if (!len) {
+    recordreplay::Crash("ReadReplayAssetFile failed: %s", fname);
+  }
+  return result;
+}
+
+static String ReadReplayCommandAssetFile(const char* fname) {
+  size_t len;
+
+  // Important: Treat as UTF-8.
   String result = String::FromUTF8(
     IsCommandHandlingEnabledWhenRecording()
       // Recording + Replay.
-      ? ReadReplayAssetFileRaw(fname, len).c_str()
+      ? ReadReplayAssetFile(fname, len).c_str()
       // Replay only.
       : V8RecordReplayReadAssetFileContents(fname, &len),
     len
@@ -211,268 +237,22 @@ static String ReadReplayAssetFile(const char* fname) {
   return result;
 }
 
-// static
-String ReadReplayCommandHandlerScript() {
-  return ReadReplayAssetFile("replay_command_handlers.js");
+static String ReadReplayJsEventsBaseScript() {
+  return ReadReplayAssetFile("replay_init.js");
+}
+
+static String ReadReplayCommandHandlerScript() {
+  return ReadReplayCommandAssetFile("replay_command_handlers.js");
+}
+
+static String ReadReplaySourcemapHandlerScript() {
+  return ReadReplayAssetFile("replay_sourcemap_handler.js");
 }
 
 
 /** ###########################################################################
- * gSourceMapScript
+ * RDT Scripts
  * ##########################################################################*/
-
-// Script which sets a handler for collecting source maps from scripts in the
-// recording. Runs when recording/replaying if source map collection is enabled.
-const char* gSourceMapScript = R""""(
-//js
-(() => {
-
-// Avoid monkey patching.
-const fetch = window.fetch;
-const DateNow = Date.now;
-
-const {
-  log,
-  warning,
-  getRecordingId,
-  sha256DigestHex,
-  writeToRecordingDirectory,
-  addRecordingEvent,
-  addNewScriptHandler,
-  getScriptSource,
-  recordingDirectoryFileExists,
-  readFromRecordingDirectory,
-  getRecordingFilePath,
-  RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE,
-} = __RECORD_REPLAY_ARGUMENTS__;
-
-const cache = {};
-
-// Provide a cache for urls, salted with the supplied hash.  Practically, this
-// means if the script content changes at the url, we will re-download the resource.
-async function getCachedResource(url, hash) {
-  const key = `${url}:${hash}`;
-  if (cache[key] && !RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE) {
-    return cache[key];
-  }
-
-  log(`fetching sourcemap resource ${key}`);
-
-  const res = await fetchText(url);
-  cache[key] = res;
-  return res;
-}
-
-addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
-  try {
-  if (!relativeSourceMapURL || relativeSourceMapURL.startsWith("data:"))
-    return;
-
-  const recordingId = getRecordingId();
-  if (!recordingId) {
-    // The recording has been invalidated.
-    return;
-  }
-
-  const urls = getSourceMapURLs(sourceURL, relativeSourceMapURL);
-  if (!urls)
-    return;
-
-  const scriptSource = getScriptSource(scriptId);
-  const scriptHash = sha256DigestHex(scriptSource);
-
-  const { sourceMapURL, sourceMapBaseURL } = urls;
-
-  let sourceMap;
-  try {
-    sourceMap = await getCachedResource(sourceMapURL, scriptHash);
-  } catch (err) {
-    log(`[RuntimeError] Failed to read sourcemap ${sourceMapURL}: ${err.message}`);
-  }
-  if (!sourceMap) {
-    return;
-  }
-
-  const id = scriptHash;
-  const name = `sourcemap-${id}.map`;
-  const lookupName = `sourcemap-${id}.lookup`;
-
-  let sources;
-  if (recordingDirectoryFileExists(name) && recordingDirectoryFileExists(lookupName)) {
-    try {
-      sources = JSON.parse(readFromRecordingDirectory(lookupName));
-    } catch (err) {
-      log(`[RuntimeError][sourcemaps] Failed to load sourcemaps from file: ${lookupName} - ${err.message}`);
-    }
-  }
-
-  if (!sources) {
-    writeToRecordingDirectory(name, sourceMap);
-
-    sources = collectUnresolvedSourceMapResources(sourceMap, sourceMapURL, sourceURL);
-    writeToRecordingDirectory(lookupName, JSON.stringify(sources));
-  }
-
-  addRecordingEvent(JSON.stringify({
-    kind: "sourcemapAdded",
-    path: getRecordingFilePath(name),
-    recordingId,
-    id,
-    url: sourceMapURL,
-    baseURL: sourceMapBaseURL,
-    targetContentHash: `sha256:${scriptHash}`,
-    targetURLHash: sourceURL ? makeAPIHash(sourceURL) : undefined,
-    targetMapURLHash: makeAPIHash(sourceMapURL),
-    timestamp: DateNow(),
-  }));
-
-  for (const { offset, url } of sources) {
-    let sourceContent;
-    try {
-      sourceContent = await getCachedResource(url, scriptHash);
-    } catch (err) {
-      log(`[RuntimeError][sourcemaps] Failed to read original source ${url}: ${err.message}`);
-      continue;
-    }
-    const hash = sha256DigestHex(sourceContent);
-    const name = `source-${hash}`;
-
-    if (!recordingDirectoryFileExists(name)) {
-      writeToRecordingDirectory(name, sourceContent);
-    }
-    addRecordingEvent(JSON.stringify({
-      kind: "originalSourceAdded",
-      path: getRecordingFilePath(name),
-      recordingId,
-      parentId: id,
-      parentOffset: offset,
-      timestamp: DateNow(),
-    }));
-  }
-  } catch (err) {
-    warning(`[RuntimeError][sourcemaps] Exception - ${err?.stack || err}`);
-  }
-});
-
-async function fetchText(url) {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Fetching ${url} failed with status code ${response.status} (${response.statusText})`);
-  }
-  return await response.text();
-}
-
-function makeAPIHash(content) {
-  assert(typeof content === "string");
-  const digestHex = sha256DigestHex(content);
-  return "sha256:" + digestHex;
-}
-
-function collectUnresolvedSourceMapResources(mapText, mapURL) {
-  let obj;
-  let sourceOffset = 0;
-
-  function logError(msg) {
-    log(`[RuntimeError][sourcemaps] ${msg} (${mapURL}:${sourceOffset})`);
-  }
-
-  try {
-    obj = JSON.parse(mapText);
-    if (typeof obj !== "object" || !obj) {
-      return [];
-    }
-  } catch (err) {
-    logError(`Exception parsing sourcemap JSON (${mapURL}): ${err?.message || err}`);
-    return [];
-  }
-
-  const unresolvedSources = [];
-  if (obj.version !== 3) {
-    logError("Invalid sourcemap version: " + obj.version);
-    return [];
-  }
-
-  if (obj.sources != null) {
-    const { sourceRoot, sources, sourcesContent } = obj;
-
-    if (Array.isArray(sources)) {
-      for (let i = 0; i < sources.length; i++) {
-        const offset = sourceOffset++;
-
-        if (
-          !Array.isArray(sourcesContent) ||
-          typeof sourcesContent[i] !== "string"
-        ) {
-          let url = sources[i];
-          if (typeof sourceRoot === "string" && sourceRoot) {
-            url = sourceRoot.replace(/\/?/, "/") + url;
-          }
-          let sourceURL;
-          try {
-            sourceURL = new URL(url, mapURL).toString();
-          } catch {
-            logError("Unable to compute original source URL: " + url);
-            continue;
-          }
-
-          unresolvedSources.push({
-            offset,
-            url: sourceURL,
-          });
-        }
-      }
-    } else {
-      logError("Invalid sourcemap sources list");
-    }
-  }
-
-  return unresolvedSources;
-}
-
-function assert(v, msg = "") {
-  if (!v) {
-    const m = `Assertion failed when handling command (${msg})`;
-    log(`[RuntimeError] ${m} - ${Error().stack}`);
-    throw new Error(m);
-  }
-}
-
-function getSourceMapURLs(sourceURL, relativeSourceMapURL) {
-  let sourceBaseURL;
-  if (typeof sourceURL === "string" && isValidBaseURL(sourceURL)) {
-    sourceBaseURL = sourceURL;
-  } else if (window?.location?.href && isValidBaseURL(window?.location?.href)) {
-    sourceBaseURL = window.location.href;
-  }
-
-  let sourceMapURL;
-  try {
-    sourceMapURL = new URL(relativeSourceMapURL, sourceBaseURL).toString();
-  } catch (err) {
-    log("Failed to process sourcemap url: " + err.message);
-    return null;
-  }
-
-  // If the map was a data: URL or something along those lines, we want
-  // to resolve paths in the map relative to the overall base.
-  const sourceMapBaseURL =
-    isValidBaseURL(sourceMapURL) ? sourceMapURL : sourceBaseURL;
-
-  return { sourceMapURL, sourceMapBaseURL };
-}
-
-function isValidBaseURL(url) {
-  try {
-    new URL("", url);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-})();
-
-)"""";
 
 // Script that injects React DevTools "stub" functions to capture
 // marker annotations while recording, for use in later processing
@@ -989,10 +769,11 @@ struct InspectorChannel final : public v8_inspector::V8Inspector::Channel {
 };
 
 absl::optional<int> GetCurrentContextGroupIdForIsolate(v8::Isolate* isolate) {
-  LocalFrame* local_frame_root = GetLocalFrameRoot(isolate);
+  LocalFrame* local_frame_root = GetCurrentLocalFrameRoot(isolate);
 
-  if (local_frame_root != nullptr) {
-    // Get (do NOT create) a ContextGroupId:
+  if (local_frame_root) {
+    // Gets (but does NOT create!) a contextGroupId.
+    // NOTE: Copied from |MainThreadDebugger::ContextGroupId|.
     return WeakIdentifierMap<LocalFrame>::Identifier(local_frame_root);
   }
 
@@ -1386,7 +1167,7 @@ static InspectedFrames* getOrCreateInspectedFrames(v8::Isolate* isolate, int con
   InspectorData *data = getInspectorFor(isolate, contextGroupId);
 
   if (!data->inspectedFrames) {
-    data->inspectedFrames = MakeGarbageCollected<InspectedFrames>(data->GetLocalFrameRoot());
+    data->inspectedFrames = MakeGarbageCollected<InspectedFrames>(data->GetCurrentLocalFrameRoot());
   }
   return data->inspectedFrames;
 }
@@ -1407,7 +1188,7 @@ absl::optional<InspectorDOMAgent*> getOrCreateInspectorDOMAgent(v8::Isolate* iso
     InspectedFrames* inspectedFrames = getOrCreateInspectedFrames(isolate, *contextGroupId);
     data->inspectorDomAgent = MakeGarbageCollected<InspectorDOMAgent>(
         isolate, inspectedFrames, getInspectorSession(isolate, *contextGroupId));
-    data->inspectorDomAgent->FrameDocumentUpdated(data->GetLocalFrameRoot());
+    data->inspectorDomAgent->FrameDocumentUpdated(data->GetCurrentLocalFrameRoot());
   }
   return data->inspectorDomAgent;
 }
@@ -1429,7 +1210,7 @@ absl::optional<InspectorDOMDebuggerAgent*> getOrCreateInspectorDOMDebuggerAgent(
 
     // RUN-1061: registering the agent here allows it to receive `UserCallback`
     // events.
-    data->GetLocalFrameRoot()->GetProbeSink()->AddInspectorDOMDebuggerAgent(data->inspectorDomDebuggerAgent);
+    data->GetCurrentLocalFrameRoot()->GetProbeSink()->AddInspectorDOMDebuggerAgent(data->inspectorDomDebuggerAgent);
   }
   return data->inspectorDomDebuggerAgent;
 }
@@ -1463,7 +1244,7 @@ absl::optional<InspectorCSSAgent*> getOrCreateInspectorCSSAgent(v8::Isolate* iso
     InspectedFrames* inspectedFrames = getOrCreateInspectedFrames(isolate, *contextGroupId);
 
     auto* resource_content_loader =
-        MakeGarbageCollected<InspectorResourceContentLoader>(data->GetLocalFrameRoot());
+        MakeGarbageCollected<InspectorResourceContentLoader>(data->GetCurrentLocalFrameRoot());
     auto* resource_container =
         MakeGarbageCollected<InspectorResourceContainer>(inspectedFrames);
     auto domAgent = getOrCreateInspectorDOMAgent(isolate);
@@ -2478,72 +2259,9 @@ static void InvokeOnAnnotation(const v8::FunctionCallbackInfo<v8::Value>& args) 
   recordreplay::OnAnnotation(*kind, *contents);
 }
 
-/**
- * Copied from gin/try_catch.h.
- */
-static v8::Local<v8::String> GetSourceLine(v8::Isolate* isolate,
-                                    v8::Local<v8::Message> message) {
-  auto maybe = message->GetSourceLine(isolate->GetCurrentContext());
-  v8::Local<v8::String> source_line;
-  return maybe.ToLocal(&source_line) ? source_line : v8::String::Empty(isolate);
-}
-
 static const std::string V8ToString(v8::Isolate* isolate, v8::Local<v8::Value> str) {
   v8::String::Utf8Value s(isolate, str);
   return *s;
-}
-
-/**
- * Error reporting utility based on ShellRunner::Run.
- * WARNING: It does not work very well. For some reason, we have to try/catch
- * inside the JS code to get a proper error message. Might have to do with the
- * fact that we are running this before the window and/or other mechanisms have
- * not fully initialized.
- */
-static std::string GetStackTrace(v8::Isolate* isolate, v8::TryCatch& try_catch) {
-  if (!try_catch.HasCaught()) {
-    return "";
-  }
-
-  std::stringstream ss;
-  v8::Local<v8::Message> message = try_catch.Message();
-  if (!message.IsEmpty()) {
-    ss << V8ToString(isolate, message->Get()) << std::endl;
-  }
-  ss << V8ToString(isolate, GetSourceLine(isolate, message)) << std::endl;
-
-  // v8::Local<v8::StackTrace> trace = message->GetStackTrace();
-  // if (trace.IsEmpty())
-  //   return ss.str();
-
-  // int len = trace->GetFrameCount();
-  // for (int i = 0; i < len; ++i) {
-  //   v8::Local<v8::StackFrame> frame = trace->GetFrame(isolate, i);
-  //   ss << V8ToString(isolate, frame->GetScriptName()) << ":"
-  //      << frame->GetLineNumber() << ":" << frame->GetColumn() << ": "
-  //      << V8ToString(isolate, frame->GetFunctionName()) << std::endl;
-  // }
-  return ss.str();
-}
-
-static void RunScript(v8::Isolate* isolate, v8::Local<v8::Context> context, const char* source_raw, const char* filename) {
-  v8::Local<v8::String> filename_string = ToV8String(isolate, filename);
-  v8::ScriptOrigin origin(isolate, filename_string);
-
-  v8::TryCatch try_catch(isolate);
-  v8::Local<v8::String> source = ToV8String(isolate, source_raw);
-  auto maybe_script = v8::Script::Compile(context, source, &origin);
-
-  v8::Local<v8::Script> script;
-  if (!maybe_script.ToLocal(&script)) {
-    recordreplay::Crash("Replay RunScript COMPILE failed: %s",
-      GetStackTrace(isolate, try_catch).c_str());
-  }
-  v8::Local<v8::Value> rv;
-  if (!script->Run(context).ToLocal(&rv)) {
-    recordreplay::Crash("Replay RunScript INIT failed: %s",
-      GetStackTrace(isolate, try_catch).c_str());
-  }
 }
 
 static bool TestEnv(const char* env) {
@@ -2551,7 +2269,9 @@ static bool TestEnv(const char* env) {
   return v && v[0] && v[0] != '0';
 }
 
-static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* localFrame) {
+static void InitializeRecordReplayApiObjects(
+    v8::Isolate* isolate, LocalFrame* localFrame, v8::replayio::ReplayRootContext* newRoot
+  ) {
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
 
   // Add __RECORD_REPLAY_ANNOTATION_HOOK__ as a global.
@@ -2591,10 +2311,10 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
   SetFunctionProperty(isolate, args, "setCDPMessageCallback",
                       SetCDPMessageCallback);
   SetFunctionProperty(isolate, args, "sendCDPMessage", SendCDPMessage);
-  SetFunctionProperty(isolate, args, "setCommandCallback",
-                      v8::FunctionCallbackRecordReplaySetCommandCallback);
 
   SetFunctionProperty(isolate, args, "layoutDom", LayoutDom);
+
+  // DefineProperty(isolate, args, "ReplayJsEventEmitter", newRoot->GetEventEmitter());
 
   // Object Util
   SetFunctionProperty(isolate, args, "fromJsMakeDebuggeeValue",
@@ -2647,19 +2367,14 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
                       fromJsGetCurrentViewportPixelSize);
 
   // unsorted Replay stuff
-  SetFunctionProperty(
-      isolate, args, "setClearPauseDataCallback",
-      v8::FunctionCallbackRecordReplaySetClearPauseDataCallback);
   SetFunctionProperty(isolate, args, "getCurrentError", GetCurrentError);
   SetFunctionProperty(isolate, args, "getRecordingId", GetRecordingId);
   SetFunctionProperty(isolate, args, "sha256DigestHex", SHA256DigestHex);
   SetFunctionProperty(isolate, args, "writeToRecordingDirectory",
                       WriteToRecordingDirectory);
   SetFunctionProperty(isolate, args, "addRecordingEvent", AddRecordingEvent);
-  SetFunctionProperty(isolate, args, "addNewScriptHandler",
-                      v8::FunctionCallbackRecordReplayAddNewScriptHandler);
   SetFunctionProperty(isolate, args, "getScriptSource",
-                      v8::FunctionCallbackRecordReplayGetScriptSource);
+                      v8::internal::FunctionCallbackRecordReplayGetScriptSource);
 
   SetFunctionProperty(isolate, args, "recordingDirectoryFileExists",
                       RecordingDirectoryFileExists);
@@ -2695,24 +2410,19 @@ void InitializeRecordReplayAfterCheckpoint() {
   V8RecordReplayRegisterBrowserEventCallback(HandleBrowserEvent);
 }
 
-static void InitializeReplayScripts(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
+static const char* InternalScriptURL = "record-replay-internal";
+
+static void InitializeRootContext(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
   // Register context, s.t. when handling a command and we are not on a 
   // JS stack, we can always use the current root frame's context.
   // Note: We are assuming that each tab has its own process, for now.
   //   (That might not hold true for tabs of the same domain - not sure)
-  V8RecordReplaySetDefaultContext(isolate, context);
+  v8::replayio::ReplayRootContext* newRoot = v8::replayio::RecordReplayCreateRootContext(isolate, context);
   
   // Initialize __RECORD_REPLAY__ things.
-  InitializeRecordReplayApiObjects(isolate, localFrame);
+  InitializeRecordReplayApiObjects(isolate, localFrame, newRoot);
 
   // This URL will prevent the script from being reported to the recorder.
-  const char* InternalScriptURL = "record-replay-internal";
-
-  if (recordreplay::FeatureEnabled("collect-source-maps") &&
-      !TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_COLLECTION")) {
-    recordreplay::AutoMarkReplayCode amrc;
-    RunScript(isolate, context, gSourceMapScript, InternalScriptURL);
-  }
 
   if (recordreplay::FeatureEnabled("force-main-world-initialization")) {
     // Call this here to avoid divergence later.
@@ -2720,21 +2430,51 @@ static void InitializeReplayScripts(v8::Isolate* isolate, LocalFrame* localFrame
     localFrame->GetSettings()->SetForceMainWorldInitialization(true);
   }
 
+  {
+    newRoot->RunScriptAndCallBack(
+      ReadReplayJsEventsBaseScript().Utf8().c_str(),
+      InternalScriptURL + std::string("://Replay-Init")
+    );
+  }
+
+  {
+    newRoot->RunScriptAndCallBack(
+      ReadReplaySourcemapHandlerScript().Utf8().c_str(),
+      InternalScriptURL + std::string("://Sourcemap-Handler")
+    );
+  }
+
   if (IsCommandHandlingEnabled()) {
-    recordreplay::AutoMarkReplayCode amrc;
     String commandHandlerScript = ReadReplayCommandHandlerScript();
     {
-      recordreplay::AutoDisallowEvents disallow("InitializeReplayScripts");
+      recordreplay::AutoDisallowEvents disallow("InitializeRootContext");
 
       // Run `commandHandlerScript`.
-      RunScript(isolate, context, commandHandlerScript.Utf8().c_str(), InternalScriptURL);
+      newRoot->RunScriptAndCallBack(
+        commandHandlerScript.Utf8().c_str(),
+        InternalScriptURL + std::string("://Command-Handler")
+      );
     }
+  }
+
+  if (recordreplay::FeatureEnabled("collect-source-maps") &&
+      !TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_COLLECTION")) {
+    newRoot->RunScriptAndCallBack(
+      ReadReplaySourcemapHandlerScript().Utf8().c_str(),
+      InternalScriptURL + std::string("://SourcemapHandler")
+    );
   }
 }
 
 void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
-  recordreplay::AutoMarkReplayCode amrc;
-  recordreplay::Trace(
+  // TODO: keep track of this frame's and context's lifecycle?
+  //    → Find all relevant events.
+  //    → Log contextGroupId + contextId
+  //    → See how contextGroupId in blink maps against contextGroupId in V8. It should be the same. Its also the V8InspectorSession id.
+  //    → Consider using gContextChangeCallbacks for this.
+  // TODO: fix and use GetCurrentLocalFrameRoot
+  // TODO: consider using blink::GetCurrentLocalFrameRoot
+  recordreplay::Print(
     "[RUN-2739] OnRootFrameInit win=%d frame=%d %d %d %d %d parent=%d" " \"%s\"",
       localFrame->DomWindow()->RecordReplayId(),
       localFrame->RecordReplayId(),
@@ -2748,6 +2488,8 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
       
       localFrame->GetDocument()->Url().GetString().Utf8().c_str()
       );
+
+  CHECK(localFrame == localFrame->LocalFrameRoot());
   
   // NOTE: The root `LocalFrame` can change over time.
   gRootLocalFrame = localFrame;
@@ -2759,7 +2501,7 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
   // 2. Initialize sourcemap worker, command handlers etc.
   gReplayScriptsAlive = true;
   recordreplay::Print("ReplayScript STATUS_CHANGE_ALIVE");
-  InitializeReplayScripts(isolate, localFrame, context);
+  InitializeRootContext(isolate, localFrame, context);
 }
 
 void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
@@ -2775,20 +2517,20 @@ void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame
     // Note: We use a special URL for the react devtools as this script needs
     // to be reported to the recorder so that evaluations can be performed in
     // its frames.
-    RunScript(isolate, context, gReactDevtoolsScript, "record-replay-react-devtools");
-    RunScript(isolate, context, gReduxDevtoolsScript, "record-replay-redux-devtools");
+    v8::replayio::ReplayRootContext* root = v8::replayio::RecordReplayGetRootContext(context);
+    root->RunScriptAndCallBack(gReactDevtoolsScript, "record-replay-react-devtools");
+    root->RunScriptAndCallBack(gReduxDevtoolsScript, "record-replay-redux-devtools");
   }
 }
 
-void OnNewWindowAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> newContext) {
-  recordreplay::AutoMarkReplayCode amrc;
-  RunScript(isolate, newContext, gOnNewWindowScript,
-            "record-replay-OnNewWindow");
+void OnNewWindowAfterCheckpoint(LocalFrame* localFrame, v8::Local<v8::Context> newContext) {
+  v8::replayio::ReplayRootContext* root = v8::replayio::RecordReplayGetRootContext(newContext);
+  root->RunScriptAndCallBack(gOnNewWindowScript, "record-replay-OnNewWindow");
 
   LocalFrame* parentFrame = DynamicTo<LocalFrame>(localFrame->Parent());
   recordreplay::Print(
     "[RUN-2739] OnNewWindowAfterCheckpoint %d win=%d frame=%d %d \"%s\" parent=%d",
-    newContext == isolate->GetCurrentContext(),
+    newContext == root->GetContext(),
     localFrame->DomWindow()->RecordReplayId(),
     localFrame->RecordReplayId(),
     localFrame->IsCrossOriginToParentOrOuterDocument(),

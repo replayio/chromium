@@ -216,6 +216,7 @@ steps:
     depends_on:
       - "build-chromium-linux-x86_64"
     build:
+      branch: dominik/tt-1261-recorder-crashes-from-save-examplests-are-not-uploaded
       env:
         OS: "linux"
         ARCH: "x86_64"
@@ -231,6 +232,7 @@ steps:
     depends_on:
       - "build-chromium-mac-arm64"
     build:
+      branch: dominik/tt-1261-recorder-crashes-from-save-examplests-are-not-uploaded
       env:
         OS: "macos"
         ARCH: "arm64"
