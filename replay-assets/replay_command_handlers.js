@@ -39,7 +39,11 @@ const {
   // constants
   CDPERROR_MISSINGCONTEXT,
   CDPERROR_NOTALIVE,
-  REPLAY_CDT_PAUSE_OBJECT_GROUP
+  REPLAY_CDT_PAUSE_OBJECT_GROUP,
+
+  // for testing
+  forTestingSerializeValueToString
+
 } = __RECORD_REPLAY_ARGUMENTS__;
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -3256,7 +3260,8 @@ Object.assign(__RECORD_REPLAY__, {
   warning,
   getFrameArgumentsArray,
   getCurrentEvaluateFrame,
-  replayEval
+  replayEval,
+  forTestingSerializeValueToString
 });
 
 /** ###########################################################################
