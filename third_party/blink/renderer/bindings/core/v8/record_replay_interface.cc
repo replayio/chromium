@@ -1597,7 +1597,7 @@ static void ForTestingSerializeValueToArray(
 
   v8::Local<v8::Array> result = v8::Array::New(isolate);
   for (size_t i = 0; i < data.size(); ++i) {
-    result->Set(context, i, v8::Number::New(isolate, data[i])).Check();
+    result->Set(context, (uint32_t)i, v8::Number::New(isolate, data[i])).Check();
   }
 
   args.GetReturnValue().Set(result);
