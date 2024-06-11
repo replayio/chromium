@@ -130,7 +130,7 @@ void FrameTaskQueueController::TaskQueueCreated(
 
 void FrameTaskQueueController::RemoveTaskQueueAndVoter(
     MainThreadTaskQueue* queue) {
-  if (recordreplay::AreEventsDisallowed()) {
+  if (recordreplay::AreEventsDisallowed("leak-references")) {
     // Avoid divergence of |all_task_queues_and_voters_|.
     return;
   }
