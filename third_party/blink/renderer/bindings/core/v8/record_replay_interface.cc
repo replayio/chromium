@@ -2676,15 +2676,12 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
                       GetRecordingFilePath);
   SetFunctionProperty(isolate, args, "getPersistentId", fromJsGetPersistentId);
   SetFunctionProperty(isolate, args, "checkPersistentId", fromJsCheckPersistentId);
-<<<<<<< HEAD
   SetFunctionProperty(isolate, args, "getProgressCounter", fromJsGetProgressCounter);
-=======
 
   // exported for tests
   SetFunctionProperty(
     isolate, args, "forTestingSerializeValueToString",
     ForTestingSerializeValueToString);
->>>>>>> origin/master
 }
 
 void InitializeRecordReplay(
