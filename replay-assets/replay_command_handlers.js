@@ -42,7 +42,11 @@ const {
   // constants
   CDPERROR_MISSINGCONTEXT,
   CDPERROR_NOTALIVE,
-  REPLAY_CDT_PAUSE_OBJECT_GROUP
+  REPLAY_CDT_PAUSE_OBJECT_GROUP,
+
+  // for testing
+  forTestingSerializeValueToString
+
 } = __RECORD_REPLAY_ARGUMENTS__;
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -2157,7 +2161,8 @@ function DOM_getAllBoundingClientRects() {
         return [left, top, right, bottom];
       });
 
-      const clipBounds = shiftRect(elem.clipBounds, elem.offset);
+      const clipBounds =
+        shiftRect(elem.clipBounds, elem.offset, transformMatrix);
       // ignore elements that are completely outside their clipBounds
       if (
         clipBounds.left > right ||
@@ -3272,7 +3277,8 @@ Object.assign(__RECORD_REPLAY__, {
   warning,
   getFrameArgumentsArray,
   getCurrentEvaluateFrame,
-  replayEval
+  replayEval,
+  forTestingSerializeValueToString
 });
 
 /** ###########################################################################
