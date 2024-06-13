@@ -731,10 +731,13 @@ bool EventTarget::dispatchEventForBindings(Event* event,
       event->type() == event_type_names::kMousedown ||
       event->type() == event_type_names::kMousemove)
     ) {
-      Node* node = event->target() ? event->target()->ToNode() : nullptr;
-      gfx::Rect bbox = node ? node->PixelSnappedBoundingBox() : gfx::Rect();
-      gfx::Point center = bbox.CenterPoint();
-      recordreplay::OnMouseEvent(event->type().Utf8().c_str(), center.x(), center.y(), true);
+      // Node* node = ToNode();
+      // gfx::Rect bbox = node ? node->PixelSnappedBoundingBox() : gfx::Rect();
+      // gfx::Point center = bbox.CenterPoint();
+      auto& mouseEvent = To<MouseEvent>(*event);
+      size_t x = (size_t)std::round(mouseEvent.clientX());
+      size_t y = (size_t)std::round(mouseEvent.clientY());
+      recordreplay::OnMouseEvent(event->type().Utf8().c_str(), x, y, true);
     } else if (event->IsKeyboardEvent() &&
       (event->type() == event_type_names::kKeydown ||
       event->type() == event_type_names::kKeyup ||
