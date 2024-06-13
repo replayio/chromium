@@ -194,16 +194,23 @@ void ScriptPromise::InternalResolver::Resolve(v8::Local<v8::Value> value) {
 }
 
 void ScriptPromise::InternalResolver::Reject(v8::Local<v8::Value> value) {
+  recordreplay::Assert("[TT-1361] ScriptPromise::InternalResolver::Reject");
+
   if (resolver_.IsEmpty())
     return;
   v8::MicrotasksScope microtasks_scope(
       script_state_->GetIsolate(), ToMicrotaskQueue(script_state_),
       v8::MicrotasksScope::kDoNotRunMicrotasks);
+
+  recordreplay::Assert("[TT-1361] ScriptPromise::InternalResolver::Reject #1");
+
   // |result| can be empty when the thread is being terminated. We ignore such
   // errors, thus [[maybe_unused]].
   [[maybe_unused]] v8::Maybe<bool> result =
       resolver_.V8Value().As<v8::Promise::Resolver>()->Reject(
           script_state_->GetContext(), value);
+
+  recordreplay::Assert("[TT-1361] ScriptPromise::InternalResolver::Reject #2");
 
   Clear();
 }
