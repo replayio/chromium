@@ -245,6 +245,8 @@ steps:
 
   - label: "Trigger Runtime Command Tests (macos-arm64) :hammer:"
     trigger: "runtime-command-tests"
+    build:
+      branch: dominik/tt-240-capture-mouse-and-keyboard-session-events-from-test
     depends_on:
       - "build-chromium-mac-arm64"
 
