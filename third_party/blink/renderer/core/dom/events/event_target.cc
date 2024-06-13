@@ -731,9 +731,6 @@ bool EventTarget::dispatchEventForBindings(Event* event,
       event->type() == event_type_names::kMousedown ||
       event->type() == event_type_names::kMousemove)
     ) {
-      // Node* node = ToNode();
-      // gfx::Rect bbox = node ? node->PixelSnappedBoundingBox() : gfx::Rect();
-      // gfx::Point center = bbox.CenterPoint();
       auto* mouseEvent = DynamicTo<MouseEvent>(event);
       size_t x = (size_t)std::round(mouseEvent->clientX());
       size_t y = (size_t)std::round(mouseEvent->clientY());
