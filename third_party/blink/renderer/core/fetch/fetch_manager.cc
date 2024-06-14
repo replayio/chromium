@@ -899,14 +899,10 @@ void FetchManager::Loader::Failed(
     execution_context_->AddConsoleMessage(console_message);
   }
   if (resolver_) {
-    recordreplay::Assert("[TT-1361] Loader::Failed #1");
-
     ScriptState* state = resolver_->GetScriptState();
     ScriptState::Scope scope(state);
     if (dom_exception) {
-      recordreplay::Assert("[TT-1361] Loader::Failed #2");
       resolver_->Reject(dom_exception);
-      recordreplay::Assert("[TT-1361] Loader::Failed #3");
     } else {
       v8::Local<v8::Value> value = exception_.Get(state->GetIsolate());
       exception_.Reset();
@@ -924,9 +920,7 @@ void FetchManager::Loader::Failed(
             V8String(state->GetIsolate(),
                      IdentifiersFactory::IdFromToken(*issue_id)));
       }
-      recordreplay::Assert("[TT-1361] Loader::Failed #4");
       resolver_->Reject(value);
-      recordreplay::Assert("[TT-1361] Loader::Failed #5");
     }
   }
 
