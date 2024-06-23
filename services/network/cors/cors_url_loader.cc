@@ -1021,7 +1021,6 @@ void CorsURLLoader::SetCorsFlagIfNeeded() {
   if (HasSpecialAccessToDestination())
     return;
 
-  // if (request_.url.host() == "prod-cdn.superblocks.com") {
   if (options_ & mojom::kURLLoadOptionReplayRequest) {
     return;
   }
