@@ -21,21 +21,29 @@ const {
   RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE,
 } = __RECORD_REPLAY_ARGUMENTS__;
 
-const cache = {};
+const fetchPromiseCache = {};
+
+async function fetchText(url) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Fetching ${url} failed with status code ${response.status} (${response.statusText})`);
+  }
+  return await response.text();
+}
 
 // Provide a cache for urls, salted with the supplied hash.  Practically, this
 // means if the script content changes at the url, we will re-download the resource.
-async function getCachedResource(url, hash) {
+async function fetchTextWithCache(url, hash) {
   const key = `${url}:${hash}`;
-  if (cache[key] && !RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE) {
-    return cache[key];
+  if (fetchPromiseCache[key] && !RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE) {
+    return fetchPromiseCache[key];
   }
 
   log(`fetching sourcemap resource ${key}`);
 
-  const res = await fetchText(url);
-  cache[key] = res;
-  return res;
+  const resPromise = fetchText(url);
+  fetchPromiseCache[key] = resPromise;
+  return resPromise;
 }
 
 addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
@@ -54,13 +62,13 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     return;
 
   const scriptSource = getScriptSource(scriptId);
-  const scriptHash = sha256DigestHex(scriptSource);
+  const generatedScriptHash = sha256DigestHex(scriptSource);
 
   const { sourceMapURL, sourceMapBaseURL } = urls;
 
   let sourceMap;
   try {
-    sourceMap = await getCachedResource(sourceMapURL, scriptHash);
+    sourceMap = await fetchTextWithCache(sourceMapURL, generatedScriptHash);
   } catch (err) {
     log(`[RuntimeError] Failed to read sourcemap ${sourceMapURL}: ${err.message}`);
   }
@@ -68,7 +76,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     return;
   }
 
-  const id = scriptHash;
+  const id = generatedScriptHash;
   const name = `sourcemap-${id}.map`;
   const lookupName = `sourcemap-${id}.lookup`;
 
@@ -82,6 +90,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   }
 
   if (!sources) {
+    // Sources did not exist or changed.
     writeToRecordingDirectory(name, sourceMap);
 
     sources = collectUnresolvedSourceMapResources(sourceMap, sourceMapURL, sourceURL);
@@ -95,7 +104,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     id,
     url: sourceMapURL,
     baseURL: sourceMapBaseURL,
-    targetContentHash: `sha256:${scriptHash}`,
+    targetContentHash: `sha256:${generatedScriptHash}`,
     targetURLHash: sourceURL ? makeAPIHash(sourceURL) : undefined,
     targetMapURLHash: makeAPIHash(sourceMapURL),
     timestamp: DateNow(),
@@ -104,7 +113,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   for (const { offset, url } of sources) {
     let sourceContent;
     try {
-      sourceContent = await getCachedResource(url, scriptHash);
+      sourceContent = await fetchTextWithCache(url, generatedScriptHash);
     } catch (err) {
       log(`[RuntimeError][sourcemaps] Failed to read original source ${url}: ${err.message}`);
       continue;
@@ -128,14 +137,6 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     warning(`[RuntimeError][sourcemaps] Exception - ${err?.stack || err}`);
   }
 });
-
-async function fetchText(url) {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Fetching ${url} failed with status code ${response.status} (${response.statusText})`);
-  }
-  return await response.text();
-}
 
 function makeAPIHash(content) {
   assert(typeof content === "string");
