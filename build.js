@@ -46,8 +46,15 @@ if (!REPLAY_LOCAL_DRIVER_DIR) {
   // REPLAY_BACKEND_REV unless it was overridden via the environment.
   console.log(`Downloading driver...`);
   const driverArchive = `${currentPlatform()}-recordreplay${archSuffix}.tgz`;
-  const driverRevision = driverRevisionIsSet ? DRIVER_REVISION : fs.readFileSync("REPLAY_BACKEND_REV", "utf8");
-  const downloadArchive = `${currentPlatform()}-recordreplay-${driverRevision.trim().substring(0,12)}${archSuffix}.tgz`;
+  console.log(
+    `driver revision is set: ${driverRevisionIsSet}`,
+    JSON.stringify(DRIVER_REVISION),
+    JSON.stringify(fs.readFileSync("REPLAY_BACKEND_REV", "utf8"))
+  );
+  const driverRevision = driverRevisionIsSet
+    ? DRIVER_REVISION
+    : fs.readFileSync("REPLAY_BACKEND_REV", "utf8");
+  const downloadArchive = `${currentPlatform()}-recordreplay-${driverRevision.trim().substring(0, 12)}${archSuffix}.tgz`;
   spawnChecked(
     "curl",
     [
