@@ -39,14 +39,26 @@ async function fetchTextWithCache(url, hash) {
     return fetchPromiseCache[key];
   }
 
-  log(`fetching sourcemap resource ${key}`);
+  log(`[sourcemaps] Fetching sourcemap resource ${key}`);
 
   const resPromise = fetchText(url);
   fetchPromiseCache[key] = resPromise;
   return resPromise;
 }
 
+// let testRan = 0;
+
 addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
+  // if (!testRan) {
+  //   testRan = 1;
+  //   // Test: This fetch should work, independent on where we call it from!
+  //   try {
+  //     const res = await fetchTextWithCache("https://prod-cdn.superblocks.com/static/js/44415.fa3fd847.js.map", "");
+  //     log(`✅ DDBG Test SUCCESS - ${res}`);
+  //   } catch (err) {
+  //     log(`❌ DDBG Test FAILED - ${err.stack}`);
+  //   }
+  // }
   try {
   if (!relativeSourceMapURL || relativeSourceMapURL.startsWith("data:"))
     return;
@@ -70,7 +82,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   try {
     sourceMap = await fetchTextWithCache(sourceMapURL, generatedScriptHash);
   } catch (err) {
-    log(`[RuntimeError] Failed to read sourcemap ${sourceMapURL}: ${err.message}`);
+    log(`[RuntimeError][sourcemaps] Failed to read sourcemap ${sourceMapURL}: ${err.message}`);
   }
   if (!sourceMap) {
     return;
@@ -96,6 +108,8 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     sources = collectUnresolvedSourceMapResources(sourceMap, sourceMapURL, sourceURL);
     writeToRecordingDirectory(lookupName, JSON.stringify(sources));
   }
+
+  log(`[sourcemaps] Wrote sourcemap to file. Found ${sources.length} unresolved sources for "${sourceMapURL}". Downloading...`);
 
   addRecordingEvent(JSON.stringify({
     kind: "sourcemapAdded",
@@ -133,6 +147,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
       timestamp: DateNow(),
     }));
   }
+  log(`[sourcemaps] Finished downloading ${sources.length} sources for "${sourceMapURL}".`);
   } catch (err) {
     warning(`[RuntimeError][sourcemaps] Exception - ${err?.stack || err}`);
   }
