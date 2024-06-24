@@ -36,7 +36,9 @@ async function fetchText(url) {
 async function fetchTextWithCache(url, hash) {
   const key = `${url}:${hash}`;
   if (fetchPromiseCache[key] && !RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE) {
-    return fetchPromiseCache[key];
+    // The first caller will finish this.
+    // Tell the second caller not to re-try this.
+    return null;
   }
 
   log(`[sourcemaps] Fetching sourcemap resource ${key}`);
@@ -85,6 +87,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     log(`[RuntimeError][sourcemaps] Failed to read sourcemap ${sourceMapURL}: ${err.message}`);
   }
   if (!sourceMap) {
+    // Download failed or someone is already processing these.
     return;
   }
 
@@ -102,7 +105,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   }
 
   if (!sources) {
-    // Sources did not exist or changed.
+    // Sources changed or did not exist.
     writeToRecordingDirectory(name, sourceMap);
 
     sources = collectUnresolvedSourceMapResources(sourceMap, sourceMapURL, sourceURL);
@@ -130,6 +133,9 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
       sourceContent = await fetchTextWithCache(url, generatedScriptHash);
     } catch (err) {
       log(`[RuntimeError][sourcemaps] Failed to read original source ${url}: ${err.message}`);
+    }
+    if (!sourceContent) {
+      // Download failed or someone is already processing these.
       continue;
     }
     const hash = sha256DigestHex(sourceContent);
