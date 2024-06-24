@@ -95,7 +95,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     // Sources changed or did not exist.
     writeToRecordingDirectory(name, sourceMap);
 
-    sources = collectUnresolvedSourceMapResources(sourceMap, sourceMapURL, sourceURL);
+    sources = collectUnresolvedSourceMapResources(sourceMap, sourceMapURL);
     writeToRecordingDirectory(lookupName, JSON.stringify(sources));
   }
 
