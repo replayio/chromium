@@ -3,7 +3,7 @@
 (() => {
 
 // Avoid monkey patching.
-const fetch = window.fetch;
+const { fetch, URL, Error } = window;
 const DateNow = Date.now;
 
 const {
@@ -36,9 +36,8 @@ async function fetchText(url) {
 async function fetchTextWithCache(url, hash) {
   const key = `${url}:${hash}`;
   if (fetchPromiseCache[key] && !RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE) {
-    // The first caller will finish this.
-    // Tell the second caller not to re-try this.
-    return null;
+    // Return past or on-going work item.
+    return fetchPromiseCache[key];
   }
 
   log(`[sourcemaps] Fetching sourcemap resource ${key}`);
@@ -48,19 +47,7 @@ async function fetchTextWithCache(url, hash) {
   return resPromise;
 }
 
-// let testRan = 0;
-
 addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
-  // if (!testRan) {
-  //   testRan = 1;
-  //   // Test: This fetch should work, independent on where we call it from!
-  //   try {
-  //     const res = await fetchTextWithCache("https://prod-cdn.superblocks.com/static/js/44415.fa3fd847.js.map", "");
-  //     log(`✅ DDBG Test SUCCESS - ${res}`);
-  //   } catch (err) {
-  //     log(`❌ DDBG Test FAILED - ${err.stack}`);
-  //   }
-  // }
   try {
   if (!relativeSourceMapURL || relativeSourceMapURL.startsWith("data:"))
     return;
@@ -87,7 +74,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     log(`[RuntimeError][sourcemaps] Failed to read sourcemap ${sourceMapURL}: ${err.message}`);
   }
   if (!sourceMap) {
-    // Download failed or someone is already processing these.
+    // Download failed or nothing there.
     return;
   }
 
@@ -135,7 +122,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
       log(`[RuntimeError][sourcemaps] Failed to read original source ${url}: ${err.message}`);
     }
     if (!sourceContent) {
-      // Download failed or someone is already processing these.
+      // Download failed or nothing there.
       continue;
     }
     const hash = sha256DigestHex(sourceContent);
