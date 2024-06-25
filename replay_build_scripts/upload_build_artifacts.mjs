@@ -618,7 +618,7 @@ function computeBuildId(
     const driverFile = `${currentPlatform()}-recordreplay.${driverExtension()}`;
 
     const driverArchive = `${currentPlatform()}-recordreplay.tgz`;
-    const driverRevision = driverRevisionIsSet
+    driverRevision = driverRevisionIsSet
       ? driverRevision
       : fs.readFileSync("REPLAY_BACKEND_REV", "utf8");
     // NOTE(dmiller): we seem to always download the x86 driver here but that's OK because we're just using
