@@ -79,7 +79,7 @@ class IntersectionObserverController
 
   // IntersectionObservers for which this is the execution context of the
   // callback, and with unsent notifications.
-  HeapHashSet<Member<IntersectionObserver>> pending_intersection_observers_;
+  HeapHashSet<Member<IntersectionObserver>, WTF::MemberHashRecordReplayRegisteredPointerId<IntersectionObserver>> pending_intersection_observers_;
   // This is 'true' if any tracked node is the target of an observer for
   // which observer->trackVisibility() is true.
   bool needs_occlusion_tracking_;
