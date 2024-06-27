@@ -7,12 +7,19 @@ group("replay-assets") {
     ]
 }
 
+# there's doubtless a better way to do this ... somehow.
+if (is_mac) {
+    out_dir = "$root_out_dir/Chromium.app/replay-assets/"
+} else {
+    out_dir = "$root_out_dir/replay-assets/"
+}
+
 symlink("replay_command_handler") {
     source = "replay_command_handler.js"
-    output = "$root_out_dir/replay-assets/replay_command_handler.js"
+    output = out_dir + "replay_command_handler.js"
 }
 
 symlink("replay_sourcemap_handler") {
     source = "replay_sourcemap_handler.js"
-    output = "$root_out_dir/replay-assets/replay_sourcemap_handler.js"
+    output = out_dir + "replay_sourcemap_handler.js"
 }
