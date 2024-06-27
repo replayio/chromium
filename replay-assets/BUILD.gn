@@ -10,5 +10,5 @@ copy("replay-assets") {
     "replay_command_handlers.js",
     "replay_sourcemap_handler.js"
   ]
-  outputs = [ out_dir + "/{{source_file_part}}" ]
+  outputs = [ out_dir + "{{source_file_part}}" ]
 }
