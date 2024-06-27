@@ -1216,6 +1216,10 @@ void FrameSchedulerImpl::OnWebSchedulingTaskQueuePriorityChanged(
 
 void FrameSchedulerImpl::OnWebSchedulingTaskQueueDestroyed(
     MainThreadTaskQueue* queue) {
+  if (recordreplay::AreEventsDisallowed() &&
+      recordreplay::FeatureEnabled("leak-references", "FrameSchedulerImpl::OnWebSchedulingTaskQueueDestroyed")) {
+    return;
+  }
   if (queue->CanBeThrottled())
     RemoveThrottleableQueueFromBudgetPools(queue);
 
