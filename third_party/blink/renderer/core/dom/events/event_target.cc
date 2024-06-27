@@ -742,8 +742,7 @@ bool EventTarget::dispatchEventForBindings(Event* event,
             y = mouseEvent->clientY();
 
             if (!x && !y) {
-              if (Node* node = ToNode()) {
-                auto* element = DynamicTo<Element>(node);
+              if (auto* element = DynamicTo<Element>(this)) {
                 auto* rect = element->getBoundingClientRect();
                 x = rect->x() + rect->width() / 2;
                 y = rect->y() + rect->height() / 2;
