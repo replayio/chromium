@@ -8762,8 +8762,9 @@ void Document::CountDeprecation(mojom::WebFeature feature) {
 }
 
 void Document::CountProperty(CSSPropertyID property) const {
-  REPLAY_ASSERT("[TT-366-1467] Document::CountProperty %d %d",
+  REPLAY_ASSERT("[TT-366-1480] Document::CountProperty %d %d %d",
                 !!Loader(),
+                !!GetFrame(),
                 property);
   if (DocumentLoader* loader = Loader()) {
     loader->GetUseCounter().Count(

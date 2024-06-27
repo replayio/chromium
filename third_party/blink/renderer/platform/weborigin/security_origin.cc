@@ -627,6 +627,9 @@ bool SecurityOrigin::IsSameOriginDomainWith(
     detail = AccessResultDomainDetail::kDomainNotRelevant;
     can_access = false;
   }
+  
+  REPLAY_ASSERT("[TT-366-1480] SecurityOrigin::IsSameOriginDomainWith %d %d",
+    can_access, detail);
 
   return can_access;
 }
