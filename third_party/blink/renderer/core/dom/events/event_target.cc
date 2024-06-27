@@ -738,8 +738,8 @@ bool EventTarget::dispatchEventForBindings(Event* event,
       if (const LocalDOMWindow* window = ExecutingWindow()) {
         if (const LocalFrame* frame = window->GetFrame()) {
           if (frame->GetPage()) {
-            x = mouseEvent->clientX();
-            y = mouseEvent->clientY();
+            x = mouseEvent->pageX();
+            y = mouseEvent->pageY();
 
             if (!x && !y) {
               if (auto* element = DynamicTo<Element>(this)) {
