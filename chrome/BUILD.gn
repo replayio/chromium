@@ -352,6 +352,8 @@ if (!is_android && !is_mac) {
       }
     }
 
+    data_deps += [ "//replay-assets" ]
+
     # These files are used by the installer so we need a public dep.
     public_deps += [ ":packed_resources" ]
 

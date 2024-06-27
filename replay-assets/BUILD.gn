@@ -1,0 +1,18 @@
+import("//build/symlink.gni")
+
+group("replay-assets") {
+    deps = [
+        ":replay_command_handler",
+        ":replay_sourcemap_handler"
+    ]
+}
+
+symlink("replay_command_handler") {
+    source = "replay_command_handler.js"
+    output = "$root_out_dir/replay-assets/replay_command_handler.js"
+}
+
+symlink("replay_sourcemap_handler") {
+    source = "replay_sourcemap_handler.js"
+    output = "$root_out_dir/replay-assets/replay_sourcemap_handler.js"
+}
