@@ -33,7 +33,12 @@ class PLATFORM_EXPORT HeapObserverSet {
   // Removes the given observer from this list. Does nothing if this observer is
   // not in this list.
   void RemoveObserver(ObserverType* observer) {
-    CHECK(iteration_state_ & kAllowingRemoval);
+    CHECK(iteration_state_ & kAllowingRemoval);    
+    if (recordreplay::AreEventsDisallowed() &&
+        recordreplay::IsRecordingOrReplaying("leak-references", "HeapObserverSet")) {
+      return;
+    }
+
     observers_.erase(observer);
     if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
                                              "HeapObserverSet"))
@@ -54,6 +59,11 @@ class PLATFORM_EXPORT HeapObserverSet {
   // Removes all the observers from this list.
   void Clear() {
     CHECK(iteration_state_ & kAllowingRemoval);
+    if (recordreplay::AreEventsDisallowed() &&
+        recordreplay::IsRecordingOrReplaying("leak-references", "HeapObserverSet")) {
+      return;
+    }
+
     observers_.clear();
     if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
                                              "HeapObserverSet"))
