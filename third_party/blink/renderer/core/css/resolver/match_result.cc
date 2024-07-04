@@ -68,19 +68,19 @@ void MatchResult::AddMatchedProperties(
 void MatchResult::FinishAddingUARules() {
   DCHECK_EQ(current_origin_, CascadeOrigin::kUserAgent);
   current_origin_ = CascadeOrigin::kUser;
-  REPLAY_ASSERT("[RUN-2424-3053] FinishAddingUARules");
+  REPLAY_ASSERT("[TT-366-1480] FinishAddingUARules");
 }
 
 void MatchResult::FinishAddingUserRules() {
   DCHECK_EQ(current_origin_, CascadeOrigin::kUser);
   current_origin_ = CascadeOrigin::kAuthorPresentationalHint;
-  REPLAY_ASSERT("[RUN-2424-3053] FinishAddingUserRules");
+  REPLAY_ASSERT("[TT-366-1480] FinishAddingUserRules");
 }
 
 void MatchResult::FinishAddingPresentationalHints() {
   DCHECK_EQ(current_origin_, CascadeOrigin::kAuthorPresentationalHint);
   current_origin_ = CascadeOrigin::kAuthor;
-  REPLAY_ASSERT("[RUN-2424-3053] FinishAddingPresentationalHints");
+  REPLAY_ASSERT("[TT-366-1480] FinishAddingPresentationalHints");
 }
 
 void MatchResult::FinishAddingAuthorRulesForTreeScope(
@@ -88,13 +88,14 @@ void MatchResult::FinishAddingAuthorRulesForTreeScope(
   DCHECK_EQ(current_origin_, CascadeOrigin::kAuthor);
   tree_scopes_.push_back(&tree_scope);
   current_tree_order_ = base::ClampAdd(current_tree_order_, 1);
-  REPLAY_ASSERT("[RUN-2424-3053] MatchResult::FinishAddingAuthorRulesForTreeScope %u",
+  REPLAY_ASSERT("[TT-366-1480] MatchResult::FinishAddingAuthorRulesForTreeScope %d %u",
+    tree_scope.RecordReplayId(),
     tree_scopes_.size()
   );
 }
 
 void MatchResult::Reset() {
-  REPLAY_ASSERT("[RUN-2424-3053] MatchResult::Reset %u",
+  REPLAY_ASSERT("[TT-366-1480] MatchResult::Reset %u",
     (unsigned)current_tree_order_
   );
 

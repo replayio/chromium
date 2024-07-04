@@ -662,6 +662,8 @@ StyleRuleBase* CSSParserImpl::ConsumeAtRule(CSSParserTokenStream& stream,
 StyleRuleBase* CSSParserImpl::ConsumeQualifiedRule(
     CSSParserTokenStream& stream,
     AllowedRulesType allowed_rules) {
+  REPLAY_ASSERT("[TT-366-1480] CSSParserImpl::ConsumeQualifiedRule %d",
+    allowed_rules);
   if (allowed_rules <= kRegularRules) {
     return ConsumeStyleRule(stream);
   }

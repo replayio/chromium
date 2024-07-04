@@ -195,6 +195,8 @@ class CORE_EXPORT CSSValue : public GarbageCollected<CSSValue> {
   void TraceAfterDispatch(blink::Visitor* visitor) const {}
   void Trace(Visitor*) const;
 
+  uint8_t ReplayGetClassType() const { return class_type_; }
+
  protected:
   enum ClassType {
     kNumericLiteralClass,

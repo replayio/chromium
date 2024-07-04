@@ -239,6 +239,8 @@ FontDescription::FamilyDescription StyleBuilderConverterBase::ConvertFontFamily(
     const CSSValue& value,
     FontBuilder* font_builder,
     const Document* document_for_count) {
+  REPLAY_ASSERT("[TT-366-1480] StyleBuilderConverterBase::ConvertFontFamily %d",
+    (int)value.ReplayGetClassType());
   FontDescription::FamilyDescription desc(FontDescription::kNoFamily);
 
   if (const auto* system_font =

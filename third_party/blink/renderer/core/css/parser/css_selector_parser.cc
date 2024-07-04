@@ -457,6 +457,8 @@ ArenaUniquePtr<CSSParserSelector> CSSSelectorParser::ConsumeRelativeSelector(
 
 ArenaUniquePtr<CSSParserSelector> CSSSelectorParser::ConsumeComplexSelector(
     CSSParserTokenRange& range) {
+  REPLAY_ASSERT("[TT-366-1480] CSSSelectorParser::ConsumeComplexSelector %u",
+    range.size());
   ArenaUniquePtr<CSSParserSelector> selector = ConsumeCompoundSelector(range);
   if (!selector)
     return nullptr;
