@@ -229,7 +229,7 @@ KURL CSSParserContext::CompleteURL(const String& url) const {
 }
 
 void CSSParserContext::Count(WebFeature feature) const {
-  REPLAY_ASSERT("[TT-366-1467] CSSParserContext::Count feat %d %d",
+  REPLAY_ASSERT_MAYBE_EVENTS_DISALLOWED("[TT-366-1467] CSSParserContext::Count feat %d %d",
                 IsUseCounterRecordingEnabled(),
                 feature);
   if (IsUseCounterRecordingEnabled())
@@ -242,7 +242,7 @@ void CSSParserContext::CountDeprecation(WebFeature feature) const {
 }
 
 void CSSParserContext::Count(CSSParserMode mode, CSSPropertyID property) const {
-  REPLAY_ASSERT("[TT-366-1467] CSSParserContext::Count prop %d %d %d",
+  REPLAY_ASSERT_MAYBE_EVENTS_DISALLOWED("[TT-366-1467] CSSParserContext::Count prop %d %d %d",
                 IsUseCounterRecordingEnabled(),
                 (int)mode,
                 property);
