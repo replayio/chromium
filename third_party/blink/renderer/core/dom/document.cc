@@ -8749,9 +8749,6 @@ void Document::CountUse(mojom::WebFeature feature) const {
 }
 
 void Document::CountUse(mojom::WebFeature feature) {
-  REPLAY_ASSERT_MAYBE_EVENTS_DISALLOWED("[TT-366-1467] Document::CountUse %d %d",
-                !!execution_context_,
-                feature);
   if (execution_context_)
     execution_context_->CountUse(feature);
 }

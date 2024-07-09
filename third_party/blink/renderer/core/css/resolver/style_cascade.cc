@@ -799,9 +799,12 @@ const CSSValue* StyleCascade::Resolve(const CSSProperty& property,
 const CSSValue* StyleCascade::ResolveSubstitutions(const CSSProperty& property,
                                                    const CSSValue& value,
                                                    CascadeResolver& resolver) {
-  REPLAY_ASSERT("[TT-366-1480] StyleCascade::ResolveSubstitutions %d %d",
+  REPLAY_ASSERT("[TT-366-1480] StyleCascade::ResolveSubstitutions %d %d %d %d %d",
     property.PropertyID(),
-    (int)value.ReplayGetClassType());
+    (int)value.ReplayGetClassType(),
+    !!DynamicTo<CSSCustomPropertyDeclaration>(value),
+    !!DynamicTo<CSSVariableReferenceValue>(value),
+    !!DynamicTo<cssvalue::CSSPendingSubstitutionValue>(value));
   if (const auto* v = DynamicTo<CSSCustomPropertyDeclaration>(value))
     return ResolveCustomProperty(property, *v, resolver);
   if (const auto* v = DynamicTo<CSSVariableReferenceValue>(value))

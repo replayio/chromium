@@ -2294,6 +2294,11 @@ void Element::setAttribute(const QualifiedName& name,
 DISABLE_CFI_PERF
 void Element::AttributeChanged(const AttributeModificationParams& params) {
   const QualifiedName& name = params.name;
+  REPLAY_ASSERT("[TT-366-1480] Element::AttributeChanged %d %s=%s",
+    params.reason,
+    name.LocalName().Utf8().c_str(),
+    params.new_value.Utf8().c_str()
+  );
   if (name == html_names::kSlotAttr && params.old_value != params.new_value) {
     if (ShadowRoot* root = ShadowRootOfParent())
       root->DidChangeHostChildSlotName(params.old_value, params.new_value);

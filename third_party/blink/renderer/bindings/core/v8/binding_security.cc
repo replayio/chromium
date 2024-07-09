@@ -132,11 +132,7 @@ bool CanAccessWindowInternal(
   // processes. See https://crbug.com/601629.
   const auto* local_target_window = DynamicTo<LocalDOMWindow>(target_window);
   if (!(accessing_window && local_target_window)) {
-    REPLAY_ASSERT("[TT-366-1480] CanAccessWindowInternal A %d %d",
-      !!accessing_window,
-      !!local_target_window);
     return false;
-  }
 
   const SecurityOrigin* accessing_origin =
       accessing_window->GetSecurityOrigin();
@@ -260,10 +256,6 @@ bool BindingSecurity::ShouldAllowAccessTo(
     ErrorReportOption reporting_option) {
   DCHECK(target);
 
-  REPLAY_ASSERT_MAYBE_EVENTS_DISALLOWED("[TT-366-1480] BindingSecurity::ShouldAllowAccessTo A %d %d %d",
-    recordreplay::IsInReplayCode(),
-    !!accessing_window,
-    !!target->GetFrame());
   if (recordreplay::IsInReplayCode())
     return true;
 
@@ -278,7 +270,6 @@ bool BindingSecurity::ShouldAllowAccessTo(
   bool can_access = CanAccessWindow(accessing_window, target, reporting_option);
 
   if (!can_access && accessing_window) {
-    REPLAY_ASSERT("[TT-366-1480] BindingSecurity::ShouldAllowAccessTo B");
     UseCounter::Count(accessing_window->document(),
                       WebFeature::kCrossOriginPropertyAccess);
     if (target->opener() == accessing_window) {
@@ -295,9 +286,6 @@ bool BindingSecurity::ShouldAllowAccessTo(
     const Location* target,
     ExceptionState& exception_state) {
   DCHECK(target);
-
-  REPLAY_ASSERT("[TT-366-1480] BindingSecurity::ShouldAllowAccessTo %d",
-    !!target->DomWindow()->GetFrame());
 
   // TODO(https://crbug.com/723057): This is intended to match the legacy
   // behavior of when access checks revolved around Frame pointers rather than
@@ -385,9 +373,6 @@ bool BindingSecurity::ShouldAllowAccessToFrame(
     const LocalDOMWindow* accessing_window,
     const Frame* target,
     ErrorReportOption reporting_option) {
-  REPLAY_ASSERT("[TT-366-1480] BindingSecurity::ShouldAllowAccessToFrame %d %d",
-    !target,
-    !target || !target->GetSecurityContext());
   if (!target || !target->GetSecurityContext())
     return false;
   return CanAccessWindow(accessing_window, target->DomWindow(),
@@ -404,9 +389,6 @@ bool ShouldAllowAccessToV8ContextInternal(
   // Workers and worklets do not support multiple contexts, so both of
   // |accessing_context| and |target_context| must be windows at this point.
 
-  REPLAY_ASSERT_MAYBE_EVENTS_DISALLOWED("[TT-366-1480] ShouldAllowAccessToV8ContextInternal A %d",
-    recordreplay::IsInReplayCode()
-  );
   if (recordreplay::IsInReplayCode())
     return true;
 
@@ -417,7 +399,6 @@ bool ShouldAllowAccessToV8ContextInternal(
     ReportOrThrowSecurityError(ToLocalDOMWindow(accessing_context), nullptr,
                                DOMWindow::CrossDocumentAccessPolicy::kAllowed,
                                error_report);
-    REPLAY_ASSERT("[TT-366-1480] ShouldAllowAccessToV8ContextInternal B");
     return false;
   }
   // Fast path for the most likely case.
@@ -428,7 +409,6 @@ bool ShouldAllowAccessToV8ContextInternal(
   // TODO(dcheng): Why doesn't this code just use DOMWindows throughout? Can't
   // we just always use ToLocalDOMWindow(context)?
   if (!target_frame) {
-    REPLAY_ASSERT("[TT-366-1480] ShouldAllowAccessToV8ContextInternal C");
     // Sandbox detached frames - they can't create cross origin objects.
     LocalDOMWindow* accessing_window = ToLocalDOMWindow(accessing_context);
     LocalDOMWindow* target_window = ToLocalDOMWindow(target_context);
