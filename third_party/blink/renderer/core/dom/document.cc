@@ -8762,7 +8762,7 @@ void Document::CountDeprecation(mojom::WebFeature feature) {
 }
 
 void Document::CountProperty(CSSPropertyID property) const {
-  REPLAY_ASSERT("[TT-366-1480] Document::CountProperty %d %d %d %d",
+  REPLAY_ASSERT_MAYBE_EVENTS_DISALLOWED("[TT-366-1480] Document::CountProperty %d %d %d %d",
                 domWindow() ? domWindow()->RecordReplayId() : -1,
                 GetFrame() ? GetFrame()->RecordReplayId() : -1,
                 !!Loader(),
