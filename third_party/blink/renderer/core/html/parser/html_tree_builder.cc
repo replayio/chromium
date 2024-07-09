@@ -332,6 +332,10 @@ void HTMLTreeBuilder::ConstructTree(AtomicHTMLToken* token) {
   else
     ProcessToken(token);
 
+  REPLAY_ASSERT("[TT-366-1480] HTMLTreeBuilder::ConstructTree %d %d",
+    parser_->IsDetached(),
+    tree_.HasPendingTasks());
+
   if (parser_->IsDetached())
     return;
 
