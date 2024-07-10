@@ -131,7 +131,7 @@ bool CanAccessWindowInternal(
   // origin, depending on the model being used to allocate Frames between
   // processes. See https://crbug.com/601629.
   const auto* local_target_window = DynamicTo<LocalDOMWindow>(target_window);
-  if (!(accessing_window && local_target_window)) {
+  if (!(accessing_window && local_target_window))
     return false;
 
   const SecurityOrigin* accessing_origin =
