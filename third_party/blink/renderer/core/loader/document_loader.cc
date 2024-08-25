@@ -2374,6 +2374,10 @@ void DocumentLoader::CommitNavigation() {
          frame_->GetDocument()->ConnectedSubframeCount() == 0);
   state_ = kCommitted;
 
+  recordreplay::AutoDependencyExecution execute(
+    recordreplay::NewDependencyGraphNode("{\"kind\":\"documentCommitNavigation\"}")
+  );
+
   // Prepare a DocumentInit before clearing the frame, because it may need to
   // inherit an aliased security context.
   Document* owner_document = nullptr;
