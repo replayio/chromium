@@ -115,6 +115,10 @@ IDBTransaction::IDBTransaction(
           &IDBTransaction::SetActive, WrapPersistent(this), false));
 
   database_->TransactionCreated(this);
+
+  record_replay_created_node_id_ = recordreplay::NewDependencyGraphNode(
+    "{\"kind\":\"newIDBTransaction\"}"
+  );
 }
 
 IDBTransaction::IDBTransaction(
