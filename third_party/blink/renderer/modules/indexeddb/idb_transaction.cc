@@ -141,6 +141,10 @@ IDBTransaction::IDBTransaction(
   DCHECK(scope_.empty());
 
   database_->TransactionCreated(this);
+
+  record_replay_created_node_id_ = recordreplay::NewDependencyGraphNode(
+    "{\"kind\":\"newIDBTransaction\"}"
+  );
 }
 
 IDBTransaction::~IDBTransaction() {
@@ -470,6 +474,17 @@ void IDBTransaction::OnComplete() {
   if (!GetExecutionContext()) {
     Finished();
     return;
+  }
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    int node_id = recordreplay::NewDependencyGraphNode(
+      "{\"kind\":\"completeIDBTransaction\"}"
+    );
+    recordreplay::AddDependencyGraphEdge(
+      record_replay_created_node_id_, node_id, "{\"kind\":\"creator\"}"
+    );
+    execute.emplace(node_id);
   }
 
   DCHECK_NE(state_, kFinished);
