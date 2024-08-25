@@ -480,17 +480,6 @@ void IDBTransaction::OnComplete() {
     return;
   }
 
-  absl::optional<recordreplay::AutoDependencyExecution> execute;
-  if (recordreplay::DependencyGraphEnabled()) {
-    int node_id = recordreplay::NewDependencyGraphNode(
-      "{\"kind\":\"completeIDBTransaction\"}"
-    );
-    recordreplay::AddDependencyGraphEdge(
-      record_replay_created_node_id_, node_id, "{\"kind\":\"creator\"}"
-    );
-    execute.emplace(node_id);
-  }
-
   DCHECK_NE(state_, kFinished);
   state_ = kCommitting;
 
@@ -636,6 +625,17 @@ void IDBTransaction::EnqueueEvent(Event* event) {
       << event->type() << ".";
   if (!GetExecutionContext())
     return;
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    int node_id = recordreplay::NewDependencyGraphNode(
+      "{\"kind\":\"enqueueIDBTransactionEvent\"}"
+    );
+    recordreplay::AddDependencyGraphEdge(
+      record_replay_created_node_id_, node_id, "{\"kind\":\"creator\"}"
+    );
+    execute.emplace(node_id);
+  }
 
   event->SetTarget(this);
   event_queue_->EnqueueEvent(FROM_HERE, *event);
