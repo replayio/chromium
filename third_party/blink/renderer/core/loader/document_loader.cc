@@ -1782,6 +1782,14 @@ void DocumentLoader::StartLoadingResponse() {
 
   CreateParserPostCommit();
 
+  // The above call will initialize the LocalWindowProxy for the initial
+  // document which creates the first record/replay checkpoint. Nodes/edges
+  // we create before this point will be ignored so we indicate the document
+  // is starting to load right afterwards.
+  recordreplay::AutoDependencyExecution execute(
+    recordreplay::NewDependencyGraphNode("{\"kind\":\"documentStartLoadingResponse\"}")
+  );
+
   // The main document from an MHTML archive is not loaded from its HTTP
   // response, but from the main resource within the archive (in the response).
   if (loading_main_document_from_mhtml_archive_) {
@@ -2373,10 +2381,6 @@ void DocumentLoader::CommitNavigation() {
   DCHECK(!frame_->GetDocument() ||
          frame_->GetDocument()->ConnectedSubframeCount() == 0);
   state_ = kCommitted;
-
-  recordreplay::AutoDependencyExecution execute(
-    recordreplay::NewDependencyGraphNode("{\"kind\":\"documentCommitNavigation\"}")
-  );
 
   // Prepare a DocumentInit before clearing the frame, because it may need to
   // inherit an aliased security context.
