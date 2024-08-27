@@ -172,6 +172,7 @@ void StyleCascade::AddInterpolations(const ActiveInterpolationsMap* map,
 }
 
 void StyleCascade::Apply(CascadeFilter filter) {
+  REPLAY_ASSERT("[TT-366-1480] StyleCascade::Apply %d", (int)generation_);
   AnalyzeIfNeeded();
 
   CascadeResolver resolver(filter, ++generation_);
@@ -637,6 +638,12 @@ void StyleCascade::LookupAndApply(const CSSProperty& property,
   DCHECK(!resolver.IsLocked(property));
 
   CascadePriority* priority = map_.Find(name);
+
+  REPLAY_ASSERT("[TT-366-1480] StyleCascade::LookupAndApply %d %d %d %d",
+    priority ? (int)priority->GetPosition() : -1,
+    priority ? (int)priority->GetGeneration() : -1,
+    priority ? (int)priority->GetOrigin() : -1,
+    name.Id());
   if (!priority)
     return;
 
@@ -660,6 +667,11 @@ void StyleCascade::LookupAndApplyValue(const CSSProperty& property,
 void StyleCascade::LookupAndApplyDeclaration(const CSSProperty& property,
                                              CascadePriority* priority,
                                              CascadeResolver& resolver) {
+  REPLAY_ASSERT("[TT-366-1480] StyleCascade::LookupAndApplyDeclaration %d %d %d",
+    property.PropertyID(),
+    (int)priority->GetGeneration(),
+    (int)resolver.generation_
+  );
   if (priority->GetGeneration() >= resolver.generation_) {
     // Already applied this generation.
     return;
@@ -787,6 +799,12 @@ const CSSValue* StyleCascade::Resolve(const CSSProperty& property,
 const CSSValue* StyleCascade::ResolveSubstitutions(const CSSProperty& property,
                                                    const CSSValue& value,
                                                    CascadeResolver& resolver) {
+  REPLAY_ASSERT("[TT-366-1480] StyleCascade::ResolveSubstitutions %d %d %d %d %d",
+    property.PropertyID(),
+    (int)value.ReplayGetClassType(),
+    !!DynamicTo<CSSCustomPropertyDeclaration>(value),
+    !!DynamicTo<CSSVariableReferenceValue>(value),
+    !!DynamicTo<cssvalue::CSSPendingSubstitutionValue>(value));
   if (const auto* v = DynamicTo<CSSCustomPropertyDeclaration>(value))
     return ResolveCustomProperty(property, *v, resolver);
   if (const auto* v = DynamicTo<CSSVariableReferenceValue>(value))

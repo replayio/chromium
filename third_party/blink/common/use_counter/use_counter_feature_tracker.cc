@@ -35,10 +35,16 @@ bool UseCounterFeatureTracker::Test(const UseCounterFeature& feature) const {
 
 bool UseCounterFeatureTracker::TestAndSet(const UseCounterFeature& feature) {
   bool has_record = Test(feature);
-  REPLAY_ASSERT("[TT-366-1456] UseCounterFeatureTracker::TestAndSet %d %d %u",
-                has_record,
-                feature.type(),
-                feature.value());
+  REPLAY_ASSERT_IF(
+    // [Rebase-Check] This might change with a rebase.
+    // Ignore Cross-origin access check (WebFeature::kCrossOriginPropertyAccess)
+    // because it looks like an allowed divergence.
+    (int)feature.type() != 0 || ((int)feature.value() != 1977 && 
+      ((int)feature.value() < 4115 || (int)feature.value() > 4144)),
+    "[TT-366-1480] UseCounterFeatureTracker::TestAndSet %d %d %u",
+    has_record,
+    feature.type(),
+    feature.value());
   Set(feature, true);
   return has_record;
 }

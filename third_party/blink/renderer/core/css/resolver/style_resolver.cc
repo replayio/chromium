@@ -1874,6 +1874,9 @@ StyleResolver::CacheSuccess StyleResolver::ApplyMatchedCache(
     const MatchResult& match_result) {
   const Element& element = state.GetElement();
 
+  REPLAY_ASSERT("[TT-366-1480] StyleResolver::ApplyMatchedCache %d",
+    element.RecordReplayId());
+
   MatchedPropertiesCache::Key key(match_result);
 
   bool is_inherited_cache_hit = false;

@@ -8749,9 +8749,6 @@ void Document::CountUse(mojom::WebFeature feature) const {
 }
 
 void Document::CountUse(mojom::WebFeature feature) {
-  REPLAY_ASSERT("[TT-366-1467] Document::CountUse %d %d",
-                !!execution_context_,
-                feature);
   if (execution_context_)
     execution_context_->CountUse(feature);
 }
@@ -8762,7 +8759,9 @@ void Document::CountDeprecation(mojom::WebFeature feature) {
 }
 
 void Document::CountProperty(CSSPropertyID property) const {
-  REPLAY_ASSERT("[TT-366-1467] Document::CountProperty %d %d",
+  REPLAY_ASSERT_MAYBE_EVENTS_DISALLOWED("[TT-366-1480] Document::CountProperty %d %d %d %d",
+                domWindow() ? domWindow()->RecordReplayId() : -1,
+                GetFrame() ? GetFrame()->RecordReplayId() : -1,
                 !!Loader(),
                 property);
   if (DocumentLoader* loader = Loader()) {
