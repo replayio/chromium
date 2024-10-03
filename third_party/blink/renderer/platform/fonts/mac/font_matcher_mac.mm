@@ -202,6 +202,7 @@ NSFont* MatchNSFontFamily(const AtomicString& desired_family_string,
     while ((available_font = [available_fonts nextObject])) {
       if ([desired_family caseInsensitiveCompare:available_font] ==
           NSOrderedSame) {
+        fprintf(stderr, "GET_FONT_WITH_NAME %p %p %.2f\n", (void*)NSFont, available_font, size);
         name_matched_font = [NSFont fontWithName:available_font size:size];
 
         // Special case Osaka-Mono.  According to <rdar://problem/3999467>, we
