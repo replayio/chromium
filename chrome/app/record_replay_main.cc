@@ -241,6 +241,7 @@ static DriverHandle OpenDriverHandle() {
   return DoLoadDriverHandle(filename);
 }
 
+/*
 static void MaybeStartProfiling() {
   const char* directory = getenv("RECORD_REPLAY_PROFILE_DIRECTORY");
   if (!directory) {
@@ -252,6 +253,7 @@ static void MaybeStartProfiling() {
 
   gRecordReplayProfileExecution(path);
 }
+*/
 
 static __attribute__((noinline)) void BusyWait() {
   fprintf(stderr, "Busy-waiting...\n");
