@@ -389,6 +389,9 @@ static void* RecordReplayAttach(int* pargc, const char*** pargv) {
   const char* dispatchAddress = getenv("RECORD_REPLAY_SERVER");
 
   gRecordReplayAttach(dispatchAddress, recordreplay::gBuildId);
+
+  return nullptr;
+#if 0
   gRecordReplaySaveRecording(nullptr);
 
 #if BUILDFLAG(IS_WIN)
@@ -408,4 +411,5 @@ static void* RecordReplayAttach(int* pargc, const char*** pargv) {
   MaybeStartProfiling();
 
   return handle;
+#endif
 }
