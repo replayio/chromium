@@ -11,7 +11,11 @@ Only one build configuration is currently supported.
    * NOTE: The `gclient sync` here updates all subrepositories to the correct point, including both repositories we've modified and ones we haven't.  See "Setting dependency revisions" below for more.
    * NOTE: After `git pull`, you might see "You are not currently on a branch. Please specify which branch you want to merge with.". In this case, `git switch master` will ignore all local changes, and instead tracks and switches to the remote `master` on the current branch ([more info here](https://stackoverflow.com/a/9537923)).
    ```sh
-   cd /path/to/chromium/src
+   if [[ -z "$REPLAY_DIR" ]]; then
+      echo "ERROR: \$REPLAY_DIR env var must be set to the root directory containing all Replay code."
+      return -1
+   fi
+   cd $REPLAY_DIR/chromium/src
    git remote set-url origin https://github.com/replayio/chromium.git
    git branch -D main
    git pull
@@ -19,8 +23,7 @@ Only one build configuration is currently supported.
    gclient sync
    ```
 3. Setup engflow:
-   Follow [the instructions here](https://www.notion.so/replayio/Migrating-local-chromium-buld-from-goma-to-reclient-c24f36853bbe408b97c4e9931a7af1e8) up to step 8.
-
+   * Follow [the instructions here](https://www.notion.so/replayio/Migrating-local-chromium-buld-from-goma-to-reclient-c24f36853bbe408b97c4e9931a7af1e8).
 4. Gen + Configure your build:
    * If you are using Linux, see [Troubleshooting](#troubleshooting) first.
    ```
@@ -54,17 +57,24 @@ Only one build configuration is currently supported.
      target_cpu = "arm64"
      ```
      A hermetic version of xcode also needs to be downloaded and installed. Run the following:
-     ```
-     cd /path/to/chromium/src
+     ```bash
+     cd $REPLAY_DIR/chromium/src
      mkdir -p ./build/mac_files/xcode_binaries
      cd build/mac_files/xcode_binaries
      wget https://static.replay.io/downloads/hermetic_xcode.tar.gz
      tar xf hermetic_xcode.tar.gz
      ```
-6. Build:
-   ```
-   node build
-   ```
+6. Build
+   * Build commands:
+      ```sh
+      # If you are using a locally built driver, make sure env vars are set, and its built first:
+      export REPLAY_LOCAL_DRIVER_DIR="$REPLAY_DIR/backend/out"
+      pushd $REPLAY_DIR > /dev/null && ./scripts/chromium/build-linker.sh # to build local driver + linker
+      popd > /dev/null
+
+      # Actually building chromium:
+      node build
+      ```
 
 # Troubleshooting
 
@@ -127,7 +137,7 @@ git push
 ## Update other dependencies
 
 ```sh
-cd /path/to/chromium
+cd $REPLAY_DIR/chromium
 gclient sync -D
 ```
 
