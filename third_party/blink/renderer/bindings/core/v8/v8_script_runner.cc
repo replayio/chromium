@@ -824,6 +824,18 @@ ScriptEvaluationResult V8ScriptRunner::EvaluateModule(
     // only after module error handling to ensure proper timing with and
     // without top-level await.
 
+    absl::optional<recordreplay::AutoDependencyExecution> execute;
+    if (recordreplay::DependencyGraphEnabled()) {
+      base::Value::Dict info;
+      info.Set("kind", "evaluateModule");
+      if (module_script)
+        info.Set("url", module_script->SourceUrl().GetString().Utf8());
+      std::string json;
+      base::JSONWriter::Write(info, &json);
+      int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
+      execute.emplace(node_id);
+    }
+
     v8::MaybeLocal<v8::Value> maybe_result =
         record->Evaluate(script_state->GetContext());
 
