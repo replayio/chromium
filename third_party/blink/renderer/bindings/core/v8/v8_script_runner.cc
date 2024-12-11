@@ -60,6 +60,7 @@
 #include "third_party/blink/renderer/platform/scheduler/public/event_loop.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_encoding.h"
 
+#include "base/json/json_writer.h"
 #include "third_party/blink/renderer/bindings/core/v8/record_replay_events.h"
 
 namespace blink {
