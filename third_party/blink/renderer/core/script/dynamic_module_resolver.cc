@@ -137,7 +137,7 @@ void DynamicImportTreeClient::NotifyModuleTreeLoadFinished(
   absl::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::DependencyGraphEnabled()) {
     base::Value::Dict info;
-    info.Set("kind", "dynamicImportLoadFinished");
+    info.Set("kind", "dynamicImportTreeLoadFinished");
     if (module_script)
       info.Set("url", module_script->SourceUrl().GetString().Utf8());
     std::string json;
