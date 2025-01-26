@@ -37,6 +37,8 @@
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
+#include "base/json/json_writer.h"
+
 namespace blink {
 
 namespace {
@@ -251,6 +253,7 @@ ScriptPromise LockManager::request(ScriptState* script_state,
                  exception_state);
 }
 
+// andarist
 ScriptPromise LockManager::request(ScriptState* script_state,
                                    const String& name,
                                    const LockOptions* options,
@@ -333,6 +336,17 @@ ScriptPromise LockManager::request(ScriptState* script_state,
     return ScriptPromise();
   }
 
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "lockManagerRequest");
+    info.Set("name", name.Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
+    execute.emplace(node_id);
+  }
+
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   ScriptPromise promise = resolver->Promise();
 
@@ -340,7 +354,7 @@ ScriptPromise LockManager::request(ScriptState* script_state,
       context, resolver,
       WTF::BindOnce(&LockManager::RequestImpl, WrapWeakPersistent(this),
                     WrapPersistent(resolver), WrapPersistent(options), name,
-                    WrapPersistent(callback), mode));
+                    WrapPersistent(callback), mode)); // callback gets used here
 
   // 12. Return promise.
   return promise;
