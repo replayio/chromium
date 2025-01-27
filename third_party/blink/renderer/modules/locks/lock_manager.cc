@@ -179,10 +179,12 @@ class LockManager::LockRequestImpl final
     if (recordreplay::DependencyGraphEnabled()) {
       base::Value::Dict info;
       info.Set("kind", "lockRequestGranted");
-      info.Set("name", name_.Utf8());
       std::string json;
       base::JSONWriter::Write(info, &json);
       int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
+      recordreplay::AddDependencyGraphEdge(
+          record_replay_dependency_graph_node_id_, node_id,
+          "{\"kind\":\"baseLock\"}");
       execute.emplace(node_id);
     }
 
@@ -264,7 +266,6 @@ ScriptPromise LockManager::request(ScriptState* script_state,
                  exception_state);
 }
 
-// andarist
 ScriptPromise LockManager::request(ScriptState* script_state,
                                    const String& name,
                                    const LockOptions* options,
@@ -347,6 +348,17 @@ ScriptPromise LockManager::request(ScriptState* script_state,
     return ScriptPromise();
   }
 
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "lockManagerRequest");
+    info.Set("name", name.Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
+    execute.emplace(node_id);
+  }
+
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   ScriptPromise promise = resolver->Promise();
 
@@ -354,7 +366,7 @@ ScriptPromise LockManager::request(ScriptState* script_state,
       context, resolver,
       WTF::BindOnce(&LockManager::RequestImpl, WrapWeakPersistent(this),
                     WrapPersistent(resolver), WrapPersistent(options), name,
-                    WrapPersistent(callback), mode)); // callback gets used here
+                    WrapPersistent(callback), mode));
 
   // 12. Return promise.
   return promise;
