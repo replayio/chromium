@@ -77,14 +77,16 @@ class LockManager::LockRequestImpl final
       mojom::blink::LockMode mode,
       mojo::PendingAssociatedReceiver<mojom::blink::LockRequest> receiver,
       mojo::PendingRemote<mojom::blink::ObservedFeature> lock_lifetime,
-      LockManager* manager)
+      LockManager* manager,
+      int record_replay_dependency_graph_node_id)
       : callback_(callback),
         resolver_(resolver),
         name_(name),
         mode_(mode),
         receiver_(this, manager->GetExecutionContext()),
         lock_lifetime_(std::move(lock_lifetime)),
-        manager_(manager) {
+        manager_(manager),
+        record_replay_dependency_graph_node_id_(record_replay_dependency_graph_node_id) {
     receiver_.Bind(
         std::move(receiver),
         manager->GetExecutionContext()->GetTaskRunner(TaskType::kWebLocks));
@@ -184,7 +186,7 @@ class LockManager::LockRequestImpl final
       int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
       recordreplay::AddDependencyGraphEdge(
           record_replay_dependency_graph_node_id_, node_id,
-          "{\"kind\":\"baseLock\"}");
+          "{\"kind\":\"creator\"}");
       execute.emplace(node_id);
     }
 
@@ -231,6 +233,8 @@ class LockManager::LockRequestImpl final
   // registered. If the context is destroyed then |manager_| will dispose of
   // |this| which terminates the request on the service side.
   Member<LockManager> manager_;
+
+  int record_replay_dependency_graph_node_id_;
 };
 
 const char LockManager::kSupplementName[] = "LockManager";
@@ -416,14 +420,20 @@ void LockManager::RequestImpl(ScriptPromiseResolver* resolver,
 
   mojo::PendingAssociatedRemote<mojom::blink::LockRequest> request_remote;
 
-  // 11.1. Let request be the result of running the steps to request a lock with
-  // promise, the current agent, environment’s id, origin, callback, name,
-  // options’ mode dictionary member, options’ ifAvailable dictionary member,
-  // and options’ steal dictionary member.
+  int record_replay_dependency_graph_node_id = -1;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "lockManagerRequest");
+    info.Set("name", name.Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    record_replay_dependency_graph_node_id = recordreplay::NewDependencyGraphNode(json.c_str());
+  }
+
   LockRequestImpl* request = MakeGarbageCollected<LockRequestImpl>(
       callback, resolver, name, mode,
       request_remote.InitWithNewEndpointAndPassReceiver(),
-      std::move(lock_lifetime), this);
+      std::move(lock_lifetime), this, record_replay_dependency_graph_node_id);
   AddPendingRequest(request);
 
   // 11.2. If options’ signal dictionary member is present, then add the
