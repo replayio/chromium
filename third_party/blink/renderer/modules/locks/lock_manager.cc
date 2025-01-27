@@ -178,6 +178,7 @@ class LockManager::LockRequestImpl final
         std::move(lock_lifetime_), manager_);
     manager_->held_locks_.insert(lock);
 
+    absl::optional<recordreplay::AutoDependencyExecution> execute;
     if (recordreplay::DependencyGraphEnabled()) {
       base::Value::Dict info;
       info.Set("kind", "lockRequestGranted");
@@ -187,7 +188,7 @@ class LockManager::LockRequestImpl final
       recordreplay::AddDependencyGraphEdge(
           record_replay_dependency_graph_node_id_, node_id,
           "{\"kind\":\"creator\"}");
-      recordreplay::AutoDependencyExecution execute(node_id);
+      execute.emplace(node_id);
     }
 
     // Note that either invoking `callback` or calling ScriptPromise::Cast to
