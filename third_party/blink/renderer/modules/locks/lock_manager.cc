@@ -179,7 +179,7 @@ class LockManager::LockRequestImpl final
     if (recordreplay::DependencyGraphEnabled()) {
       base::Value::Dict info;
       info.Set("kind", "lockRequestGranted");
-      info.Set("name", name.Utf8());
+      info.Set("name", name_.Utf8());
       std::string json;
       base::JSONWriter::Write(info, &json);
       int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
