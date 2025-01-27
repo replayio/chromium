@@ -86,7 +86,8 @@ class LockManager::LockRequestImpl final
         receiver_(this, manager->GetExecutionContext()),
         lock_lifetime_(std::move(lock_lifetime)),
         manager_(manager),
-        record_replay_dependency_graph_node_id_(record_replay_dependency_graph_node_id) {
+        record_replay_dependency_graph_node_id_(
+            record_replay_dependency_graph_node_id) {
     receiver_.Bind(
         std::move(receiver),
         manager->GetExecutionContext()->GetTaskRunner(TaskType::kWebLocks));
@@ -352,15 +353,15 @@ ScriptPromise LockManager::request(ScriptState* script_state,
     return ScriptPromise();
   }
 
-  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  int record_replay_dependency_graph_node_id = -1;
   if (recordreplay::DependencyGraphEnabled()) {
     base::Value::Dict info;
     info.Set("kind", "lockManagerRequest");
     info.Set("name", name.Utf8());
     std::string json;
     base::JSONWriter::Write(info, &json);
-    int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
-    execute.emplace(node_id);
+    record_replay_dependency_graph_node_id =
+        recordreplay::NewDependencyGraphNode(json.c_str());
   }
 
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
@@ -370,7 +371,8 @@ ScriptPromise LockManager::request(ScriptState* script_state,
       context, resolver,
       WTF::BindOnce(&LockManager::RequestImpl, WrapWeakPersistent(this),
                     WrapPersistent(resolver), WrapPersistent(options), name,
-                    WrapPersistent(callback), mode));
+                    WrapPersistent(callback), mode,
+                    record_replay_dependency_graph_node_id));
 
   // 12. Return promise.
   return promise;
@@ -380,7 +382,8 @@ void LockManager::RequestImpl(ScriptPromiseResolver* resolver,
                               const LockOptions* options,
                               const String& name,
                               V8LockGrantedCallback* callback,
-                              mojom::blink::LockMode mode) {
+                              mojom::blink::LockMode mode,
+                              int record_replay_dependency_graph_node_id) {
   ExecutionContext* context = resolver->GetExecutionContext();
 
   if (!resolver->GetExecutionContext() ||
@@ -420,16 +423,10 @@ void LockManager::RequestImpl(ScriptPromiseResolver* resolver,
 
   mojo::PendingAssociatedRemote<mojom::blink::LockRequest> request_remote;
 
-  int record_replay_dependency_graph_node_id = -1;
-  if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
-    info.Set("kind", "lockManagerRequest");
-    info.Set("name", name.Utf8());
-    std::string json;
-    base::JSONWriter::Write(info, &json);
-    record_replay_dependency_graph_node_id = recordreplay::NewDependencyGraphNode(json.c_str());
-  }
-
+  // 11.1. Let request be the result of running the steps to request a lock with
+  // promise, the current agent, environment’s id, origin, callback, name,
+  // options’ mode dictionary member, options’ ifAvailable dictionary member,
+  // and options’ steal dictionary member.
   LockRequestImpl* request = MakeGarbageCollected<LockRequestImpl>(
       callback, resolver, name, mode,
       request_remote.InitWithNewEndpointAndPassReceiver(),
