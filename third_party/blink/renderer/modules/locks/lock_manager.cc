@@ -175,6 +175,17 @@ class LockManager::LockRequestImpl final
         std::move(lock_lifetime_), manager_);
     manager_->held_locks_.insert(lock);
 
+    absl::optional<recordreplay::AutoDependencyExecution> execute;
+    if (recordreplay::DependencyGraphEnabled()) {
+      base::Value::Dict info;
+      info.Set("kind", "lockRequestGranted");
+      info.Set("name", name.Utf8());
+      std::string json;
+      base::JSONWriter::Write(info, &json);
+      int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
+      execute.emplace(node_id);
+    }
+
     // Note that either invoking `callback` or calling ScriptPromise::Cast to
     // convert the resulting value to a Promise can or will execute javascript.
     // This means that the ExecutionContext could be synchronously destroyed,
@@ -334,17 +345,6 @@ ScriptPromise LockManager::request(ScriptState* script_state,
     exception_state.ThrowDOMException(DOMExceptionCode::kAbortError,
                                       kRequestAbortedMessage);
     return ScriptPromise();
-  }
-
-  absl::optional<recordreplay::AutoDependencyExecution> execute;
-  if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
-    info.Set("kind", "lockManagerRequest");
-    info.Set("name", name.Utf8());
-    std::string json;
-    base::JSONWriter::Write(info, &json);
-    int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
-    execute.emplace(node_id);
   }
 
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
