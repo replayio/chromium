@@ -187,7 +187,7 @@ class LockManager::LockRequestImpl final
       recordreplay::AddDependencyGraphEdge(
           record_replay_dependency_graph_node_id_, node_id,
           "{\"kind\":\"creator\"}");
-      recordreplay::AutoDependencyExecution execute(node_id)
+      recordreplay::AutoDependencyExecution execute(node_id);
     }
 
     // Note that either invoking `callback` or calling ScriptPromise::Cast to
