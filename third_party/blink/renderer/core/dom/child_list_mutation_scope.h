@@ -113,7 +113,7 @@ class ChildListMutationScope final {
   }
 
   void ChildAdded(Node& child) {
-    int node_id = RecordReplayOnDOMMutation(target, "childAdded");
+    int node_id = RecordReplayOnDOMMutation(child, "childAdded");
     if (node_id != -1) {
       recordreplay::AddDependencyGraphEdge(list_node_id_, node_id,
                                            "{\"kind\":\"mutationScope\"}");
@@ -123,7 +123,7 @@ class ChildListMutationScope final {
   }
 
   void WillRemoveChild(Node& child) {
-    int node_id = RecordReplayOnDOMMutation(target, "willRemoveChild");
+    int node_id = RecordReplayOnDOMMutation(child, "willRemoveChild");
     if (node_id != -1) {
       recordreplay::AddDependencyGraphEdge(list_node_id_, node_id,
                                            "{\"kind\":\"mutationScope\"}");
