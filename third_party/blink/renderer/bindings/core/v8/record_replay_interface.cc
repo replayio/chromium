@@ -2774,7 +2774,7 @@ void RecordReplayEventListener::Trace(Visitor* visitor) const {
   EventListener::Trace(visitor);
 }
 
-void RecordReplayOnDOMMutation(Node& target, const char* type) {
+int RecordReplayOnDOMMutation(Node& target, const char* type) {
   if (!recordreplay::DependencyGraphEnabled()) {
     return -1;
   }
