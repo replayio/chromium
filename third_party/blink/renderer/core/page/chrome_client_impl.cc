@@ -405,6 +405,8 @@ void ChromeClientImpl::AddMessageToConsole(LocalFrame* local_frame,
 
   // [RUN-2650] source_id is sometimes a divergent URL.
   std::string source_id_str = source_id.Ascii();
+  recordreplay::Print(
+      "ChromeClientImpl::AddMessageToConsole (print) source_id", source_id_str);
   recordreplay::RecordReplayString(
       "ChromeClientImpl::AddMessageToConsole source_id", source_id_str);
   const String new_source_id =
