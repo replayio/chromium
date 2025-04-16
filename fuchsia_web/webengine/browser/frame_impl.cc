@@ -1344,6 +1344,14 @@ bool FrameImpl::DidAddMessageToConsole(
 
   std::string source_id_utf8 = base::UTF16ToUTF8(source_id);
   std::string message_utf8 = base::UTF16ToUTF8(message);
+  recordreplay::Assert(
+      "[PRO-1150] FrameImpl::DidAddMessageToConsole source_id %s",
+      source_id_utf8.c_str());
+  recordreplay::Assert(
+      "[PRO-1150] FrameImpl::DidAddMessageToConsole message %s",
+      message_utf8.c_str());
+  recordreplay::Assert(
+      "[PRO-1150] FrameImpl::DidAddMessageToConsole line_no %d", line_no);
   console_logger_.LogMessage(source_id_utf8, line_no, message_utf8, severity);
 
   return true;
