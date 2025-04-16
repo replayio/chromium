@@ -178,7 +178,9 @@ void V8Initializer::MessageHandlerInMainThread(v8::Local<v8::Message> message,
         ToCoreStringWithNullCheck(message->Get()), std::move(location)));
     return;
   }
-
+  
+  String source = ToCoreStringWithUndefinedOrNullCheck(message->GetSource(script_state->GetContext()).ToLocalChecked());
+  recordreplay::Assert("MessageHandlerInMainThread %s", source.Utf8().c_str());
   const auto sanitize_script_errors = message->IsSharedCrossOrigin()
                                           ? SanitizeScriptErrors::kDoNotSanitize
                                           : SanitizeScriptErrors::kSanitize;
