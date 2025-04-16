@@ -179,9 +179,17 @@ void V8Initializer::MessageHandlerInMainThread(v8::Local<v8::Message> message,
     return;
   }
 
+  v8::Local<String> source =
+      message->GetSource(script_state->GetContext()).ToLocalChecked();
+  v8::String::Utf8Value source_str(isolate, source);
+  recordreplay::Assert("MessageHandlerInMainThread %s", *source_str);
   const auto sanitize_script_errors = message->IsSharedCrossOrigin()
                                           ? SanitizeScriptErrors::kDoNotSanitize
                                           : SanitizeScriptErrors::kSanitize;
+
+  const auto sanitize_script_errors =
+      message->IsSharedCrossOrigin() ? SanitizeScriptErrors::kDoNotSanitize
+                                      : SanitizeScriptErrors::kSanitize;
 
   ErrorEvent* event = ErrorEvent::Create(
       ToCoreStringWithNullCheck(message->Get()), std::move(location),
