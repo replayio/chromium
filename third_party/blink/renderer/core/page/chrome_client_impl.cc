@@ -410,20 +410,21 @@ void ChromeClientImpl::AddMessageToConsole(LocalFrame* local_frame,
   const String new_source_id =
       String::FromUTF8(&stack_trace_str[0], stack_trace_str.length());
 
+  recordreplay::Assert(
+      "[PRO-1150] ChromeClientImpl::AddMessageToConsole source_id %s",
+      source_id.Utf8().c_str());
+  recordreplay::Assert(
+      "[PRO-1150] ChromeClientImpl::AddMessageToConsole line_number %d",
+      line_number);
+
   if (!message.IsNull()) {
     mojo::internal::AutoRecordReplayAssertBufferAllocations rraba(
         "RUN-2650-2651");
     recordreplay::Assert(
-        "[PRO-1150] ChromeClientImpl::AddMessageToConsole source_id %s",
-        source_id.Utf8().c_str());
-    recordreplay::Assert(
         "[PRO-1150] ChromeClientImpl::AddMessageToConsole message %s",
         message.Utf8().c_str());
-    recordreplay::Assert(
-        "[PRO-1150] ChromeClientImpl::AddMessageToConsole line_number %d",
-        line_number);
     local_frame->GetLocalFrameHostRemote().DidAddMessageToConsole(
-        level, message, static_cast<int32_t>(line_number), source_id,
+        level, message, static_cast<int32_t>(line_number), new_source_id,
         new_stack_trace);
   }
 
