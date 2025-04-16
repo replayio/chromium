@@ -178,9 +178,14 @@ void V8Initializer::MessageHandlerInMainThread(v8::Local<v8::Message> message,
         ToCoreStringWithNullCheck(message->Get()), std::move(location)));
     return;
   }
-  
-  String source = ToCoreStringWithUndefinedOrNullCheck(message->GetSource(script_state->GetContext()).ToLocalChecked());
+
+  String source = ToCoreStringWithUndefinedOrNullCheck(
+      message->GetSource(script_state->GetContext()).ToLocalChecked());
   recordreplay::Assert("MessageHandlerInMainThread %s", source.Utf8().c_str());
+  const auto sanitize_script_errors = message->IsSharedCrossOrigin()
+                                          ? SanitizeScriptErrors::kDoNotSanitize
+                                          : SanitizeScriptErrors::kSanitize;
+
   const auto sanitize_script_errors = message->IsSharedCrossOrigin()
                                           ? SanitizeScriptErrors::kDoNotSanitize
                                           : SanitizeScriptErrors::kSanitize;
@@ -483,8 +488,9 @@ CodeGenerationCheckCallbackInMainThread(v8::Local<v8::Context> context,
   return {true, std::move(stringified_source)};
 }
 
-bool V8Initializer::WasmCodeGenerationCheckCallbackInMainThread(v8::Local<v8::Context> context,
-                                                 v8::Local<v8::String> source) {
+bool V8Initializer::WasmCodeGenerationCheckCallbackInMainThread(
+    v8::Local<v8::Context> context,
+    v8::Local<v8::String> source) {
   if (ExecutionContext* execution_context = ToExecutionContext(context)) {
     if (ContentSecurityPolicy* policy =
             execution_context->GetContentSecurityPolicy()) {
