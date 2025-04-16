@@ -63,6 +63,7 @@ ErrorEvent::ErrorEvent(ScriptState* script_state,
       sanitized_message_(),
       world_(&script_state->World()) {
   sanitized_message_ = initializer->message();
+  recordreplay::Assert("[PRO-1150] ErrorEvent::ErrorEvent A %s", sanitized_message_.Utf8().c_str());
   location_ = std::make_unique<SourceLocation>(initializer->filename(),
                                                String(), initializer->lineno(),
                                                initializer->colno(), nullptr);
@@ -89,6 +90,7 @@ ErrorEvent::ErrorEvent(const String& message,
       sanitized_message_(message),
       location_(std::move(location)),
       world_(world) {
+  recordreplay::Assert("[PRO-1150] ErrorEvent::ErrorEvent B %s", sanitized_message_.Utf8().c_str());
   if (!error.IsEmpty())
     error_.Set(error.GetIsolate(), error.V8Value());
 }
@@ -96,6 +98,7 @@ ErrorEvent::ErrorEvent(const String& message,
 void ErrorEvent::SetUnsanitizedMessage(const String& message) {
   DCHECK(unsanitized_message_.empty());
   unsanitized_message_ = message;
+  recordreplay::Assert("[PRO-1150] ErrorEvent::SetUnsanitizedMessage %s", message.Utf8().c_str());
 }
 
 ErrorEvent::~ErrorEvent() = default;
