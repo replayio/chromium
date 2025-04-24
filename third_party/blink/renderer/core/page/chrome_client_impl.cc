@@ -411,8 +411,6 @@ void ChromeClientImpl::AddMessageToConsole(LocalFrame* local_frame,
       String::FromUTF8(&stack_trace_str[0], stack_trace_str.length());
 
   if (!message.IsNull()) {
-    mojo::internal::AutoRecordReplayAssertBufferAllocations rraba(
-        "RUN-2650-2651");
     recordreplay::Assert(
         "[PRO-1150] ChromeClientImpl::AddMessageToConsole message %s",
         message.Utf8().c_str());
