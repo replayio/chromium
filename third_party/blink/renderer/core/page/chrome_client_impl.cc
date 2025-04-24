@@ -414,7 +414,7 @@ void ChromeClientImpl::AddMessageToConsole(LocalFrame* local_frame,
     mojo::internal::AutoRecordReplayAssertBufferAllocations rraba(
         "RUN-2650-2651");
     local_frame->GetLocalFrameHostRemote().DidAddMessageToConsole(
-        level, message, static_cast<int32_t>(line_number), source_id,
+        level, message, static_cast<int32_t>(line_number), new_source_id,
         new_stack_trace);
   }
 
