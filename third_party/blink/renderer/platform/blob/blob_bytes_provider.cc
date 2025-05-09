@@ -55,6 +55,11 @@ class BlobBytesStreamer {
     while (true) {
       uint32_t num_bytes = base::saturated_cast<uint32_t>(
           data_[current_item_]->length() - current_item_offset_);
+      std::string current_data(data_[current_item_]->data(), num_bytes);
+      recordreplay::Assert(
+          "[PRO-1304] BlobBytesStreamer::OnWritable ->data() %s, "
+          "current_item_offset_, num_bytes: %u",
+          current_data.c_str(), num_bytes);
       MojoResult write_result =
           pipe_->WriteData(data_[current_item_]->data() + current_item_offset_,
                            &num_bytes, MOJO_WRITE_DATA_FLAG_NONE);
