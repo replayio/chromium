@@ -2356,14 +2356,14 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
                       InvokeOnAnnotation);
 
   if (gRecordReplayObj->IsEmpty()) {
-    gRecordReplayObj->Set(isolate, v8::Object::New(isolate));
+    gRecordReplayObj.Set(isolate, v8::Object::New(isolate));
   }
   DefineProperty(isolate, context->Global(), "__RECORD_REPLAY__",
-                 gRecordReplayObj->Get(isolate));
+                 gRecordReplayObj.Get(isolate));
 
   if (gRecordReplayArgsObj != nullptr) {
     v8::Local<v8::Object> args = v8::Object::New(isolate);
-    gRecordReplayArgsObj->Set(isolate, args);
+    gRecordReplayArgsObj.Set(isolate, args);
     
     DefineProperty(isolate, args, "REPLAY_CDT_PAUSE_OBJECT_GROUP",
                    ToV8String(isolate, REPLAY_CDT_PAUSE_OBJECT_GROUP));
@@ -2478,7 +2478,7 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
                         ForTestingSerializeValueToArray);
   }
   DefineProperty(isolate, context->Global(), "__RECORD_REPLAY_ARGUMENTS__",
-                 gRecordReplayArgsObj->Get(isolate));
+                 gRecordReplayArgsObj.Get(isolate));
 }
 
 void InitializeRecordReplay(
