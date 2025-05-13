@@ -1006,11 +1006,11 @@ static void ReportCommitNavigation(const WebNavigationParams* navigation_params,
   std::string annotationContents;
   if (recordreplay::IsReplaying()) {
     base::Value::Dict info;
-    info.Set("commit_reason", commit_reason);
+    info.Set("commit_reason", (int)commit_reason);
     info.Set("url", navigation_params->url.GetString().Utf8());
     info.Set("http_method", navigation_params->http_method.Utf8());
     info.Set("referrer", navigation_params->referrer.Utf8());
-    info.Set("referrer_policy", navigation_params->referrer_policy);
+    info.Set("referrer_policy", (int)navigation_params->referrer_policy);
     base::JSONWriter::Write(info, &annotationContents);
   }
   recordreplay::OnAnnotation("CommitNavigation", annotationContents.c_str());
