@@ -2345,8 +2345,8 @@ static bool TestEnv(const char* env) {
   return v && v[0] && v[0] != '0';
 }
 
-static v8::Eternal<v8::Object>* gRecordReplayObj;
-static v8::Eternal<v8::Object>* gRecordReplayArgsObj;
+static v8::Eternal<v8::Object> gRecordReplayObj;
+static v8::Eternal<v8::Object> gRecordReplayArgsObj;
 
 static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* localFrame) {
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
