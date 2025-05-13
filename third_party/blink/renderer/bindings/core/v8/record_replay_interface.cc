@@ -2356,7 +2356,7 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
                       InvokeOnAnnotation);
 
   if (gRecordReplayObj->IsEmpty()) {
-    gRecordReplayObj.Set(isolate, v8::Object::New(isolate));
+    gRecordReplayObj->Set(isolate, v8::Object::New(isolate));
   }
   DefineProperty(isolate, context->Global(), "__RECORD_REPLAY__",
                  gRecordReplayObj->Get(isolate));
