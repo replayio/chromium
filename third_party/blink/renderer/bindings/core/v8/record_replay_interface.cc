@@ -2345,8 +2345,8 @@ static bool TestEnv(const char* env) {
   return v && v[0] && v[0] != '0';
 }
 
-static v8::Eternal<v8::Object> gRecordReplayObj;
-static v8::Eternal<v8::Object> gRecordReplayArgsObj;
+static v8::Eternal<v8::Object>* gRecordReplayObj;
+static v8::Eternal<v8::Object>* gRecordReplayArgsObj;
 
 static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* localFrame) {
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
@@ -2355,16 +2355,17 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
   SetFunctionProperty(isolate, context->Global(), AnnotationHookJSName,
                       InvokeOnAnnotation);
 
-  if (gRecordReplayObj->IsEmpty()) {
-    gRecordReplayObj.Set(isolate, v8::Object::New(isolate));
+  if (gRecordReplayObj == nullptr) {
+    gRecordReplayObj =
+        new v8::Eternal<v8::Object>(isolate, v8::Object::New(isolate));
   }
   DefineProperty(isolate, context->Global(), "__RECORD_REPLAY__",
-                 gRecordReplayObj.Get(isolate));
+                 gRecordReplayObj->Get(isolate));
 
-  if (gRecordReplayArgsObj != nullptr) {
+  if (gRecordReplayArgsObj == nullptr) {
     v8::Local<v8::Object> args = v8::Object::New(isolate);
-    gRecordReplayArgsObj.Set(isolate, args);
-    
+    gRecordReplayArgsObj = new v8::Eternal<v8::Object>(isolate, args);
+
     DefineProperty(isolate, args, "REPLAY_CDT_PAUSE_OBJECT_GROUP",
                    ToV8String(isolate, REPLAY_CDT_PAUSE_OBJECT_GROUP));
 
@@ -2478,7 +2479,7 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
                         ForTestingSerializeValueToArray);
   }
   DefineProperty(isolate, context->Global(), "__RECORD_REPLAY_ARGUMENTS__",
-                 gRecordReplayArgsObj.Get(isolate));
+                 gRecordReplayArgsObj->Get(isolate));
 }
 
 void InitializeRecordReplay(
