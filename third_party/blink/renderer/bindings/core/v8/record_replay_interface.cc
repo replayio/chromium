@@ -2478,7 +2478,7 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
                         ForTestingSerializeValueToArray);
   }
   DefineProperty(isolate, context->Global(), "__RECORD_REPLAY_ARGUMENTS__",
-                 gRecordReplayArgsObj->Get(isolate););
+                 gRecordReplayArgsObj->Get(isolate));
 }
 
 void InitializeRecordReplay(
