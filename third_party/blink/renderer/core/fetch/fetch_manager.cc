@@ -85,6 +85,8 @@
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "v8/include/v8.h"
 
+#include "base/json/json_writer.h"
+
 using network::mojom::CredentialsMode;
 using network::mojom::FetchResponseType;
 using network::mojom::RedirectMode;
