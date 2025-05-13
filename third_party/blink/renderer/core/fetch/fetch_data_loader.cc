@@ -27,7 +27,9 @@
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_utf8_adaptor.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
+
 #include "base/record_replay.h"
+#include "base/json/json_writer.h"
 
 namespace blink {
 
