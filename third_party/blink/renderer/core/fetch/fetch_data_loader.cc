@@ -36,18 +36,17 @@ namespace blink {
 namespace {
 
 static void ReportFetchFailed(const char* reason) {
-  if (recordreplay::IsRecordingOrReplaying()) {
-    recordreplay::Print("FetchFailed: %s", reason);
-    if (v8::IsMainThread()) {
-      std::string annotationContents;
-      if (recordreplay::IsReplaying()) {
-        base::Value::Dict info;
-        info.Set("reason", reason);
-        base::JSONWriter::Write(info, &annotationContents);
-      }
-      recordreplay::OnAnnotation("FetchFailed", annotationContents.c_str());
-    }
+  if (!recordreplay::IsRecordingOrReplaying() || !v8::IsMainThread()) {
+    return;
   }
+
+  std::string annotationContents;
+  if (recordreplay::IsReplaying()) {
+    base::Value::Dict info;
+    info.Set("reason", reason);
+    base::JSONWriter::Write(info, &annotationContents);
+  }
+  recordreplay::OnAnnotation("FetchFailed", annotationContents.c_str());
 }
 
 class FetchDataLoaderAsBlobHandle final : public FetchDataLoader,
