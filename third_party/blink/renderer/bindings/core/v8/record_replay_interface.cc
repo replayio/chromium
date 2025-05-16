@@ -144,7 +144,7 @@ static LocalFrame* GetLocalFrameRoot(v8::Isolate* isolate) {
     recordreplay::Print(
         "[RuntimeError] GetLocalFrameRoot: root is detached or provisional "
         "frame=%d.",
-        root->RecordReplayId());
+        root.RecordReplayId());
     return nullptr;
   }
 
