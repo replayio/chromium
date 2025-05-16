@@ -877,6 +877,7 @@ static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
       // Construct our error result.
       std::unique_ptr<base::DictionaryValue> error(new base::DictionaryValue);
       error->SetStringKey("message", "[RUN-2600] No context group available for Isolate.");
+      error->SetStringKey("method", messageDict->FindString("method"));
       error->SetIntKey("code", CDPERROR_MISSINGCONTEXT);
 
       base::DictionaryValue result;
