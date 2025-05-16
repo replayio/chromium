@@ -123,16 +123,28 @@ static LocalFrame* GetLocalFrameRoot(v8::Isolate* isolate) {
     return nullptr;
   }
 
-  LocalFrame *f = currentWindow->GetFrame();
+  LocalFrame* f = currentWindow->GetFrame();
   if (!f || f->IsDetached() || f->IsProvisional()) {
-    recordreplay::Print("[RuntimeError] GetLocalFrameRoot: window has no frame.");
+    recordreplay::Print(
+        "[RuntimeError] GetLocalFrameRoot: window has no usable frame. "
+        "win=%d frame=%d isDetached=%d isProvisional=%d "
+        "isMainFrame=%d isLocalRoot=%d url=%s",
+        currentWindow->RecordReplayId(), (f ? f->RecordReplayId() : -1),
+        f ? f->IsDetached() : -1, f ? f->IsProvisional() : -1,
+        f ? f->IsMainFrame() : -1, f ? f->IsLocalRoot() : -1,
+        (f && f->GetDocument())
+            ? f->GetDocument()->Url().GetString().Utf8().c_str()
+            : "<no-doc>");
     return nullptr;
   }
 
   LocalFrame& root = f->LocalFrameRoot();
 
   if (root.IsDetached() || root.IsProvisional()) {
-    recordreplay::Print("[RuntimeError] GetLocalFrameRoot: root is detached or provisional.");
+    recordreplay::Print(
+        "[RuntimeError] GetLocalFrameRoot: root is detached or provisional "
+        "frame=%d.",
+        root->RecordReplayId());
     return nullptr;
   }
 
