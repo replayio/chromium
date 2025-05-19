@@ -2620,7 +2620,13 @@ void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame
         nullptr, localFrame->GetDocument()->Url().GetString().Utf8().c_str());
   }
 
-  // 2. Initialize React and Redux Devtools stubs.
+  // 2. Initialize registered root frame scripts
+  for (const auto& script : GetRegisteredRootFrameScripts()) {
+    recordreplay::AutoDisallowEvents disallow("RunRegisteredRootFrameScripts");
+    RunScript(isolate, context, script.c_str(), kInternalScriptURL);
+  }
+
+  // 3. Initialize React and Redux Devtools stubs.
   if (recordreplay::FeatureEnabled("react-devtools-backend") &&
       !TestEnv("RECORD_REPLAY_DISABLE_REACT_DEVTOOLS")) {
     // Note: We use a special URL for the react devtools as this script needs
@@ -2628,11 +2634,6 @@ void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame
     // its frames.
     RunScript(isolate, context, gReactDevtoolsScript, "record-replay-react-devtools");
     RunScript(isolate, context, gReduxDevtoolsScript, "record-replay-redux-devtools");
-  }
-
-  for (const auto& script : GetRegisteredRootFrameScripts()) {
-    recordreplay::AutoDisallowEvents disallow("RunRegisteredRootFrameScripts");
-    blink::RunScript(isolate, context, script.c_str(), kInternalScriptURL);
   }
 }
 
