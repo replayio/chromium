@@ -128,7 +128,7 @@ String StorageArea::getItem(const String& key,
     recordreplay::OnAnnotation("StorageArea", annotationContents.c_str());
   }
 
-  return std::move(rval);
+  return rval;
 }
 
 NamedPropertySetterResult StorageArea::setItem(
