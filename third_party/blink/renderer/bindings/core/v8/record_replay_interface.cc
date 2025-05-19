@@ -47,6 +47,7 @@
 #include <array>
 #include <fstream>
 #include <string>
+#include <vector>
 #include "crypto/secure_hash.h"
 #include "crypto/sha2.h"
 
@@ -622,6 +623,7 @@ const char* gOnNewWindowScript = R""""(
   //      __RECORD_REPLAY__?
   window.__RECORD_REPLAY__ = window.top.__RECORD_REPLAY__;
   window.__RECORD_REPLAY_ARGUMENTS__ = window.top.__RECORD_REPLAY_ARGUMENTS__;
+  window.__RECORD_REPLAY_ETERNAL_STATE__ = window.top.__RECORD_REPLAY_ETERNAL_STATE__;
 })()
 )"""";
 
@@ -889,9 +891,6 @@ static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
       // Construct our error result.
       std::unique_ptr<base::DictionaryValue> error(new base::DictionaryValue);
       error->SetStringKey("message", "[RUN-2600] No context group available for Isolate.");
-      if (auto* method = messageDict->FindString("method")) {
-        error->SetStringKey("method", *method);
-      }
       error->SetIntKey("code", CDPERROR_MISSINGCONTEXT);
 
       base::DictionaryValue result;
@@ -1044,6 +1043,33 @@ static void fromJsCheckPersistentId(const v8::FunctionCallbackInfo<v8::Value>& a
                                                  args.GetIsolate()->GetCurrentContext(),
                                                  args[0]);
   }
+}
+
+static std::vector<std::string> gRegisteredRootFrameScripts;
+
+static void fromJsRegisterRootFrameScript(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsString() &&
+        "must be called with a single string");
+
+  v8::Isolate* isolate = args.GetIsolate();
+
+  auto contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
+
+  if (!contextGroupId.has_value()) {
+    recordreplay::Warning(
+        "fromJsRegisterRootFrameScript - no valid context id");
+    args.GetReturnValue().Set(v8::Boolean::New(isolate, false));
+    return;
+  }
+
+  auto context = isolate->GetCurrentContext();
+
+  v8::String::Utf8Value script(args.GetIsolate(), args[0]);
+  RunScript(isolate, context, *script, InternalScriptURL);
+
+  gRootFrameScripts.emplace_back(*script);
+  args.GetReturnValue().Set(v8::Boolean::New(isolate, true));
 }
 
 static void GetCurrentError(const v8::FunctionCallbackInfo<v8::Value>& args);
@@ -2360,8 +2386,7 @@ static bool TestEnv(const char* env) {
   return v && v[0] && v[0] != '0';
 }
 
-static v8::Eternal<v8::Object>* gRecordReplayObj;
-static v8::Eternal<v8::Object>* gRecordReplayArgsObj;
+static v8::Eternal<v8::Object>* gRecordReplayEternalState;
 
 static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* localFrame) {
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
@@ -2370,131 +2395,132 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
   SetFunctionProperty(isolate, context->Global(), AnnotationHookJSName,
                       InvokeOnAnnotation);
 
-  if (gRecordReplayObj == nullptr) {
-    gRecordReplayObj =
+  v8::Local<v8::Object> jsrrApi = v8::Object::New(isolate);
+  DefineProperty(isolate, context->Global(), "__RECORD_REPLAY__", jsrrApi);
+
+  v8::Local<v8::Object> args = v8::Object::New(isolate);
+  DefineProperty(isolate, context->Global(), "__RECORD_REPLAY_ARGUMENTS__",
+                 args);
+
+  DefineProperty(isolate, args, "REPLAY_CDT_PAUSE_OBJECT_GROUP",
+                 ToV8String(isolate, REPLAY_CDT_PAUSE_OBJECT_GROUP));
+
+  DefineProperty(
+      isolate, args, "RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE",
+      v8::Boolean::New(isolate,
+                       TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE")));
+
+  DefineProperty(isolate, args, "CDPERROR_MISSINGCONTEXT",
+                 v8::Number::New(isolate, (double)CDPERROR_MISSINGCONTEXT));
+
+  DefineProperty(isolate, args, "CDPERROR_NOTALIVE",
+                 v8::Number::New(isolate, (double)CDPERROR_NOTALIVE));
+
+  SetFunctionProperty(isolate, args, "log", LogCallback);
+  SetFunctionProperty(isolate, args, "logTrace", LogTraceCallback);
+  SetFunctionProperty(isolate, args, "warning", LogWarningCallback);
+
+  // CDP debugger functionality
+  SetFunctionProperty(isolate, args, "fromJsIsReplayScriptAlive",
+                      fromJsIsReplayScriptAlive);
+  SetFunctionProperty(isolate, args, "hasDiverged",
+                      fromJsHasDiverged);
+  SetFunctionProperty(isolate, args, "setCDPMessageCallback",
+                      SetCDPMessageCallback);
+  SetFunctionProperty(isolate, args, "sendCDPMessage", SendCDPMessage);
+  SetFunctionProperty(isolate, args, "setCommandCallback",
+                      v8::FunctionCallbackRecordReplaySetCommandCallback);
+
+  SetFunctionProperty(isolate, args, "layoutDom", LayoutDom);
+
+  // Object Util
+  SetFunctionProperty(isolate, args, "fromJsMakeDebuggeeValue",
+                      fromJsMakeDebuggeeValue);
+  SetFunctionProperty(isolate, args, "fromJsGetArgumentsInFrame",
+                      fromJsGetArgumentsInFrame);
+  SetFunctionProperty(isolate, args, "fromJsGetObjectByCdpId",
+                      fromJsGetObjectByCdpId);
+  SetFunctionProperty(isolate, args, "fromJsIsBlinkObject",
+                      fromJsIsBlinkObject);
+  SetFunctionProperty(isolate, args, "fromJsHasReturnValue",
+                      fromJsHasReturnValue);
+  SetFunctionProperty(isolate, args, "fromJsGetReturnValue",
+                      fromJsGetReturnValue);
+
+  // networking
+  SetFunctionProperty(isolate, args, "getCurrentNetworkRequestEvent",
+                      GetCurrentNetworkRequestEvent);
+  SetFunctionProperty(isolate, args, "getCurrentNetworkStreamData",
+                      GetCurrentNetworkStreamData);
+
+  // DOM, blink, API stuff
+  // SetFunctionProperty(isolate, args, "jsGetObjectIdForAnyObject",
+  //                     jsGetObjectIdForAnyObject);
+  // SetFunctionProperty(isolate, args, "jsPreviewBlinkObjectForObjectId",
+  // jsPreviewBlinkObjectForObjectId);
+  SetFunctionProperty(isolate, args, "fromJsGetNodeIdByCpdId", fromJsGetNodeIdByCpdId);
+  SetFunctionProperty(isolate, args, "fromJsGetBoxModel", fromJsGetBoxModel);
+  SetFunctionProperty(isolate, args, "fromJsGetMatchedStylesForElement",
+                      fromJsGetMatchedStylesForElement);
+  SetFunctionProperty(isolate, args, "fromJsCssGetStylesheetByCpdId",
+                      fromJsCssGetStylesheetByCpdId);
+  SetFunctionProperty(isolate, args, "fromJsCollectEventListeners",
+                      fromJsCollectEventListeners);
+  SetFunctionProperty(isolate, args, "fromJsDomPerformSearch",
+                      fromJsDomPerformSearch);
+  SetFunctionProperty(isolate, args, "getFunctionBytecode",
+                      fromJsGetFunctionBytecode);
+
+  // Replay meta.
+  DefineProperty(isolate, args, "IsReplaying",
+                 v8::Boolean::New(isolate, recordreplay::IsReplaying()));
+  SetFunctionProperty(isolate, args, "beginReplayCode",
+                      fromJsBeginReplayCode);
+  SetFunctionProperty(isolate, args, "endReplayCode",
+                      fromJsEndReplayCode);
+
+  // Graphics.
+  SetFunctionProperty(isolate, args, "getCurrentViewportPixelSize",
+                      fromJsGetCurrentViewportPixelSize);
+
+  // unsorted Replay stuff
+  SetFunctionProperty(
+      isolate, args, "setClearPauseDataCallback",
+      v8::FunctionCallbackRecordReplaySetClearPauseDataCallback);
+  SetFunctionProperty(isolate, args, "getCurrentError", GetCurrentError);
+  SetFunctionProperty(isolate, args, "getRecordingId", GetRecordingId);
+  SetFunctionProperty(isolate, args, "sha256DigestHex", SHA256DigestHex);
+  SetFunctionProperty(isolate, args, "writeToRecordingDirectory",
+                      WriteToRecordingDirectory);
+  SetFunctionProperty(isolate, args, "addRecordingEvent", AddRecordingEvent);
+  SetFunctionProperty(isolate, args, "addNewScriptHandler",
+                      v8::FunctionCallbackRecordReplayAddNewScriptHandler);
+  SetFunctionProperty(isolate, args, "getScriptSource",
+                      v8::FunctionCallbackRecordReplayGetScriptSource);
+
+  SetFunctionProperty(isolate, args, "recordingDirectoryFileExists",
+                      RecordingDirectoryFileExists);
+  SetFunctionProperty(isolate, args, "readFromRecordingDirectory",
+                      ReadFromRecordingDirectory);
+  SetFunctionProperty(isolate, args, "getRecordingFilePath",
+                      GetRecordingFilePath);
+  SetFunctionProperty(isolate, args, "getPersistentId", fromJsGetPersistentId);
+  SetFunctionProperty(isolate, args, "checkPersistentId", fromJsCheckPersistentId);
+  SetFunctionProperty(isolate, args, "getProgressCounter", fromJsGetProgressCounter);
+  SetFunctionProperty(isolate, args, "registerRootFrameScript",
+                      fromJsRegisterRootFrameScript);
+
+  // exported for tests
+  SetFunctionProperty(
+    isolate, args, "forTestingSerializeValueToArray",
+    ForTestingSerializeValueToArray);
+
+  if (gRecordReplayEternalState == nullptr) {
+    gRecordReplayEternalState =
         new v8::Eternal<v8::Object>(isolate, v8::Object::New(isolate));
   }
-  DefineProperty(isolate, context->Global(), "__RECORD_REPLAY__",
-                 gRecordReplayObj->Get(isolate));
-
-  if (gRecordReplayArgsObj == nullptr) {
-    v8::Local<v8::Object> args = v8::Object::New(isolate);
-    gRecordReplayArgsObj = new v8::Eternal<v8::Object>(isolate, args);
-
-    DefineProperty(isolate, args, "REPLAY_CDT_PAUSE_OBJECT_GROUP",
-                   ToV8String(isolate, REPLAY_CDT_PAUSE_OBJECT_GROUP));
-
-    DefineProperty(
-        isolate, args, "RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE",
-        v8::Boolean::New(isolate,
-                         TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE")));
-
-    DefineProperty(isolate, args, "CDPERROR_MISSINGCONTEXT",
-                   v8::Number::New(isolate, (double)CDPERROR_MISSINGCONTEXT));
-
-    DefineProperty(isolate, args, "CDPERROR_NOTALIVE",
-                   v8::Number::New(isolate, (double)CDPERROR_NOTALIVE));
-
-    SetFunctionProperty(isolate, args, "log", LogCallback);
-    SetFunctionProperty(isolate, args, "logTrace", LogTraceCallback);
-    SetFunctionProperty(isolate, args, "warning", LogWarningCallback);
-
-    // CDP debugger functionality
-    SetFunctionProperty(isolate, args, "fromJsIsReplayScriptAlive",
-                        fromJsIsReplayScriptAlive);
-    SetFunctionProperty(isolate, args, "hasDiverged", fromJsHasDiverged);
-    SetFunctionProperty(isolate, args, "setCDPMessageCallback",
-                        SetCDPMessageCallback);
-    SetFunctionProperty(isolate, args, "sendCDPMessage", SendCDPMessage);
-    SetFunctionProperty(isolate, args, "setCommandCallback",
-                        v8::FunctionCallbackRecordReplaySetCommandCallback);
-
-    SetFunctionProperty(isolate, args, "layoutDom", LayoutDom);
-
-    // Object Util
-    SetFunctionProperty(isolate, args, "fromJsMakeDebuggeeValue",
-                        fromJsMakeDebuggeeValue);
-    SetFunctionProperty(isolate, args, "fromJsGetArgumentsInFrame",
-                        fromJsGetArgumentsInFrame);
-    SetFunctionProperty(isolate, args, "fromJsGetObjectByCdpId",
-                        fromJsGetObjectByCdpId);
-    SetFunctionProperty(isolate, args, "fromJsIsBlinkObject",
-                        fromJsIsBlinkObject);
-    SetFunctionProperty(isolate, args, "fromJsHasReturnValue",
-                        fromJsHasReturnValue);
-    SetFunctionProperty(isolate, args, "fromJsGetReturnValue",
-                        fromJsGetReturnValue);
-
-    // networking
-    SetFunctionProperty(isolate, args, "getCurrentNetworkRequestEvent",
-                        GetCurrentNetworkRequestEvent);
-    SetFunctionProperty(isolate, args, "getCurrentNetworkStreamData",
-                        GetCurrentNetworkStreamData);
-
-    // DOM, blink, API stuff
-    // SetFunctionProperty(isolate, args, "jsGetObjectIdForAnyObject",
-    //                     jsGetObjectIdForAnyObject);
-    // SetFunctionProperty(isolate, args, "jsPreviewBlinkObjectForObjectId",
-    // jsPreviewBlinkObjectForObjectId);
-    SetFunctionProperty(isolate, args, "fromJsGetNodeIdByCpdId",
-                        fromJsGetNodeIdByCpdId);
-    SetFunctionProperty(isolate, args, "fromJsGetBoxModel", fromJsGetBoxModel);
-    SetFunctionProperty(isolate, args, "fromJsGetMatchedStylesForElement",
-                        fromJsGetMatchedStylesForElement);
-    SetFunctionProperty(isolate, args, "fromJsCssGetStylesheetByCpdId",
-                        fromJsCssGetStylesheetByCpdId);
-    SetFunctionProperty(isolate, args, "fromJsCollectEventListeners",
-                        fromJsCollectEventListeners);
-    SetFunctionProperty(isolate, args, "fromJsDomPerformSearch",
-                        fromJsDomPerformSearch);
-    SetFunctionProperty(isolate, args, "getFunctionBytecode",
-                        fromJsGetFunctionBytecode);
-
-    // Replay meta.
-    DefineProperty(isolate, args, "IsReplaying",
-                   v8::Boolean::New(isolate, recordreplay::IsReplaying()));
-    SetFunctionProperty(isolate, args, "beginReplayCode",
-                        fromJsBeginReplayCode);
-    SetFunctionProperty(isolate, args, "endReplayCode", fromJsEndReplayCode);
-
-    // Graphics.
-    SetFunctionProperty(isolate, args, "getCurrentViewportPixelSize",
-                        fromJsGetCurrentViewportPixelSize);
-
-    // unsorted Replay stuff
-    SetFunctionProperty(
-        isolate, args, "setClearPauseDataCallback",
-        v8::FunctionCallbackRecordReplaySetClearPauseDataCallback);
-    SetFunctionProperty(isolate, args, "getCurrentError", GetCurrentError);
-    SetFunctionProperty(isolate, args, "getRecordingId", GetRecordingId);
-    SetFunctionProperty(isolate, args, "sha256DigestHex", SHA256DigestHex);
-    SetFunctionProperty(isolate, args, "writeToRecordingDirectory",
-                        WriteToRecordingDirectory);
-    SetFunctionProperty(isolate, args, "addRecordingEvent", AddRecordingEvent);
-    SetFunctionProperty(isolate, args, "addNewScriptHandler",
-                        v8::FunctionCallbackRecordReplayAddNewScriptHandler);
-    SetFunctionProperty(isolate, args, "getScriptSource",
-                        v8::FunctionCallbackRecordReplayGetScriptSource);
-
-    SetFunctionProperty(isolate, args, "recordingDirectoryFileExists",
-                        RecordingDirectoryFileExists);
-    SetFunctionProperty(isolate, args, "readFromRecordingDirectory",
-                        ReadFromRecordingDirectory);
-    SetFunctionProperty(isolate, args, "getRecordingFilePath",
-                        GetRecordingFilePath);
-    SetFunctionProperty(isolate, args, "getPersistentId",
-                        fromJsGetPersistentId);
-    SetFunctionProperty(isolate, args, "checkPersistentId",
-                        fromJsCheckPersistentId);
-    SetFunctionProperty(isolate, args, "getProgressCounter",
-                        fromJsGetProgressCounter);
-
-    // exported for tests
-    SetFunctionProperty(isolate, args, "forTestingSerializeValueToArray",
-                        ForTestingSerializeValueToArray);
-  }
-  DefineProperty(isolate, context->Global(), "__RECORD_REPLAY_ARGUMENTS__",
-                 gRecordReplayArgsObj->Get(isolate));
+  DefineProperty(isolate, context->Global(), "__RECORD_REPLAY_ETERNAL_STATE__",
+                 gRecordReplayEternalState->Get(isolate));
 }
 
 void InitializeRecordReplay(
@@ -2598,6 +2624,10 @@ void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame
     // its frames.
     RunScript(isolate, context, gReactDevtoolsScript, "record-replay-react-devtools");
     RunScript(isolate, context, gReduxDevtoolsScript, "record-replay-redux-devtools");
+  }
+
+  for (const auto& script : gRegisteredRootFrameScripts) {
+    blink::RunScript(isolate, context, script.c_str(), InternalScriptURL);
   }
 }
 
