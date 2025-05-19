@@ -1054,31 +1054,6 @@ static std::vector<std::string>& GetRegisteredRootFrameScripts() {
   return *scripts;
 }
 
-static void fromJsRegisterRootFrameScript(
-    const v8::FunctionCallbackInfo<v8::Value>& args) {
-  CHECK(args.Length() == 1 && args[0]->IsString() &&
-        "must be called with a single string");
-
-  v8::Isolate* isolate = args.GetIsolate();
-
-  auto contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
-
-  if (!contextGroupId.has_value()) {
-    recordreplay::Warning(
-        "fromJsRegisterRootFrameScript - no valid context id");
-    args.GetReturnValue().Set(v8::Boolean::New(isolate, false));
-    return;
-  }
-
-  auto context = isolate->GetCurrentContext();
-
-  v8::String::Utf8Value script(args.GetIsolate(), args[0]);
-  RunScript(isolate, context, *script, kInternalScriptURL);
-
-  GetRegisteredRootFrameScripts().emplace_back(*script);
-  args.GetReturnValue().Set(v8::Boolean::New(isolate, true));
-}
-
 static void GetCurrentError(const v8::FunctionCallbackInfo<v8::Value>& args);
 
 
@@ -2386,6 +2361,31 @@ static void RunScript(v8::Isolate* isolate, v8::Local<v8::Context> context, cons
     recordreplay::Crash("Replay RunScript INIT failed: %s",
       GetStackTrace(isolate, try_catch).c_str());
   }
+}
+
+static void fromJsRegisterRootFrameScript(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsString() &&
+        "must be called with a single string");
+
+  v8::Isolate* isolate = args.GetIsolate();
+
+  auto contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
+
+  if (!contextGroupId.has_value()) {
+    recordreplay::Warning(
+        "fromJsRegisterRootFrameScript - no valid context id");
+    args.GetReturnValue().Set(v8::Boolean::New(isolate, false));
+    return;
+  }
+
+  auto context = isolate->GetCurrentContext();
+
+  v8::String::Utf8Value script(args.GetIsolate(), args[0]);
+  RunScript(isolate, context, *script, kInternalScriptURL);
+
+  GetRegisteredRootFrameScripts().emplace_back(*script);
+  args.GetReturnValue().Set(v8::Boolean::New(isolate, true));
 }
 
 static bool TestEnv(const char* env) {
