@@ -84,6 +84,10 @@ extern v8::Local<v8::Object> RecordReplayGetBytecode(
 #define CDPERROR_NOTALIVE 1002
 
 namespace blink {
+
+// This URL will prevent the script from being reported to the recorder.
+constexpr const char* kInternalScriptURL = "record-replay-internal";
+
 // using RemoteObjectIdTypeRaw = v8_inspector::String16;
 // The actual type for RemoteObjectId
 using RemoteObjectIdTypeRaw = std::u16string;
@@ -1045,7 +1049,10 @@ static void fromJsCheckPersistentId(const v8::FunctionCallbackInfo<v8::Value>& a
   }
 }
 
-static std::vector<std::string> gRegisteredRootFrameScripts;
+static std::vector<std::string>& GetRegisteredRootFrameScripts() {
+  static std::vector<std::string>* scripts = new std::vector<std::string>();
+  return *scripts;
+}
 
 static void fromJsRegisterRootFrameScript(
     const v8::FunctionCallbackInfo<v8::Value>& args) {
@@ -1066,9 +1073,9 @@ static void fromJsRegisterRootFrameScript(
   auto context = isolate->GetCurrentContext();
 
   v8::String::Utf8Value script(args.GetIsolate(), args[0]);
-  RunScript(isolate, context, *script, InternalScriptURL);
+  RunScript(isolate, context, *script, kInternalScriptURL);
 
-  gRootFrameScripts.emplace_back(*script);
+  GetRegisteredRootFrameScripts().emplace_back(*script);
   args.GetReturnValue().Set(v8::Boolean::New(isolate, true));
 }
 
@@ -2552,13 +2559,10 @@ static void InitializeReplayScripts(v8::Isolate* isolate, LocalFrame* localFrame
   // Initialize __RECORD_REPLAY__ things.
   InitializeRecordReplayApiObjects(isolate, localFrame);
 
-  // This URL will prevent the script from being reported to the recorder.
-  const char* InternalScriptURL = "record-replay-internal";
-
   if (recordreplay::FeatureEnabled("collect-source-maps") &&
       !TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_COLLECTION")) {
     recordreplay::AutoMarkReplayCode amrc;
-    RunScript(isolate, context, ReadReplaySourcemapHandlerScript().Utf8().c_str(), InternalScriptURL);
+    RunScript(isolate, context, ReadReplaySourcemapHandlerScript().Utf8().c_str(), kInternalScriptURL);
   }
 
   if (recordreplay::FeatureEnabled("force-main-world-initialization")) {
@@ -2574,7 +2578,7 @@ static void InitializeReplayScripts(v8::Isolate* isolate, LocalFrame* localFrame
       recordreplay::AutoDisallowEvents disallow("InitializeReplayScripts");
 
       // Run `commandHandlerScript`.
-      RunScript(isolate, context, commandHandlerScript.Utf8().c_str(), InternalScriptURL);
+      RunScript(isolate, context, commandHandlerScript.Utf8().c_str(), kInternalScriptURL);
     }
   }
 }
@@ -2626,8 +2630,8 @@ void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame
     RunScript(isolate, context, gReduxDevtoolsScript, "record-replay-redux-devtools");
   }
 
-  for (const auto& script : gRegisteredRootFrameScripts) {
-    blink::RunScript(isolate, context, script.c_str(), InternalScriptURL);
+  for (const auto& script : GetRegisteredRootFrameScripts()) {
+    blink::RunScript(isolate, context, script.c_str(), kInternalScriptURL);
   }
 }
 
