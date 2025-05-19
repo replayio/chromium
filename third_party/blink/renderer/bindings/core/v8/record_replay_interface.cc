@@ -875,7 +875,7 @@ static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
   CHECK(args.Length() == 1 && args[0]->IsString() &&
         "must be called with a single string");
 
-  recordreplay::AutoDisallowEvents disallow("SendCDPMessage");;
+  recordreplay::AutoDisallowEvents disallow("SendCDPMessage");
 
   v8::Isolate* isolate = args.GetIsolate();
   absl::optional<int> contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
@@ -2631,6 +2631,7 @@ void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame
   }
 
   for (const auto& script : GetRegisteredRootFrameScripts()) {
+    recordreplay::AutoDisallowEvents disallow("RunRegisteredRootFrameScripts");
     blink::RunScript(isolate, context, script.c_str(), kInternalScriptURL);
   }
 }
