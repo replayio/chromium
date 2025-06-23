@@ -40,6 +40,11 @@ bool PathProviderPosix(int key, FilePath* result) {
     case FILE_MODULE: {  // TODO(evanm): is this correct?
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
       FilePath bin_dir;
+      const char* env = getenv("CHROMIUM_EXE_PATH_OVERRIDE");
+      if (env) {
+        *result = FilePath(env);
+        return true;
+      }
       if (!ReadSymbolicLink(FilePath(kProcSelfExe), &bin_dir)) {
         NOTREACHED() << "Unable to resolve " << kProcSelfExe << ".";
         return false;
