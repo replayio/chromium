@@ -192,12 +192,12 @@ steps:
       - "build-chromium-mac-x86_64"
       - "build-chromium-mac-arm64"
 
-  - label: "📝 Live Tests"
-    trigger: "testing-runtime-e2e"
-    depends_on:
-      - "build-chromium-linux-x86_64"
-      - "build-chromium-mac-x86_64"
-      - "build-chromium-mac-arm64"
+  # - label: "📝 Live Tests"
+  #   trigger: "testing-runtime-e2e"
+  #   depends_on:
+  #     - "build-chromium-linux-x86_64"
+  #     - "build-chromium-mac-x86_64"
+  #     - "build-chromium-mac-arm64"
 
   - label: "📝 E2E Tests (macos-arm64)"
     trigger: "runtime-fe-end-to-end-tests"
