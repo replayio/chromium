@@ -5,6 +5,7 @@
 #include "base/task/common/lazy_now.h"
 
 #include "base/check.h"
+#include "base/record_replay.h"
 #include "base/time/tick_clock.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 

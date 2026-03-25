@@ -149,6 +149,9 @@ class BASE_EXPORT ThreadPoolImpl : public ThreadPoolInstance,
   std::unique_ptr<ThreadGroup> foreground_thread_group_;
   std::unique_ptr<ThreadGroup> background_thread_group_;
 
+  // Group used for tasks posted non-deterministically when recording/replaying.
+  std::unique_ptr<ThreadGroup> record_replay_unordered_thread_group_;
+
   // Whether this TaskScheduler was started.
   bool started_ GUARDED_BY_CONTEXT(sequence_checker_) = false;
 

@@ -15,6 +15,7 @@
 #include "base/message_loop/message_pump.h"
 #include "base/metrics/histogram.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/record_replay.h"
 #include "base/task/sequence_manager/tasks.h"
 #include "base/task/task_features.h"
 #include "base/threading/hang_watcher.h"
@@ -85,6 +86,7 @@ void ThreadControllerWithMessagePumpImpl::ResetFeatures() {
 ThreadControllerWithMessagePumpImpl::ThreadControllerWithMessagePumpImpl(
     const SequenceManager::Settings& settings)
     : ThreadController(settings.clock),
+      task_runner_lock_("ThreadControllerWithMessagePumpImpl.task_runner_lock_"),
       work_deduplicator_(associated_thread_) {}
 
 ThreadControllerWithMessagePumpImpl::ThreadControllerWithMessagePumpImpl(
@@ -179,6 +181,10 @@ void ThreadControllerWithMessagePumpImpl::SetNextDelayedDoWork(
   TimeTicks run_time =
       wake_up.has_value() ? WakeUpRunTime(*wake_up) : TimeTicks::Max();
   DCHECK_LT(lazy_now->Now(), run_time);
+
+  recordreplay::Assert(
+    "[RUN-2801-2978] ThreadControllerWithMessagePumpImpl::SetNextDelayedDoWork A %d",
+    main_thread_only().next_delayed_do_work == run_time);
 
   if (main_thread_only().next_delayed_do_work == run_time)
     return;
@@ -354,6 +360,7 @@ ThreadControllerWithMessagePumpImpl::DoWork() {
       main_thread_only().quit_runloop_after) {
     main_thread_only().next_delayed_do_work =
         main_thread_only().quit_runloop_after;
+
     // If we've passed |quit_runloop_after| there's no more work to do.
     if (continuation_lazy_now.Now() >= main_thread_only().quit_runloop_after) {
       next_work_info.delayed_run_time = TimeTicks::Max();
@@ -401,6 +408,8 @@ WorkDetails ThreadControllerWithMessagePumpImpl::DoWorkImpl(
        (batch_duration.is_zero() &&
         num_tasks_executed < main_thread_only().work_batch_size);
        ++num_tasks_executed) {
+    recordreplay::Assert("[RUN-1124] ThreadControllerWithMessagePumpImpl::DoWorkImpl #5");
+
     LazyNow lazy_now_select_task(recent_time, time_source_);
     // Include SelectNextTask() in the scope of the work item. This ensures
     // it's covered in tracing and hang reports. This is particularly
@@ -422,10 +431,18 @@ WorkDetails ThreadControllerWithMessagePumpImpl::DoWorkImpl(
             ? selected_task->task.queue_time
             : TimeTicks(),
         lazy_now_task_selected);
+
+    recordreplay::Assert("[RUN-1124] ThreadControllerWithMessagePumpImpl::DoWorkImpl #6 %d %d %d",
+                         selected_task ? selected_task->task.RecordReplayId() : 0,
+                         selected_task ? selected_task->task.IsCanceled() : -1,
+                         selected_task ? (int)selected_task->task_queue_name : -1);
+
     if (!selected_task) {
       OnEndWorkItemImpl(lazy_now_task_selected);
       break;
     }
+
+    recordreplay::NewCheckpoint();
 
     // Execute the task and assume the worst: it is probably not reentrant.
     AutoReset<bool> ban_nested_application_tasks(
@@ -465,11 +482,18 @@ WorkDetails ThreadControllerWithMessagePumpImpl::DoWorkImpl(
     } else {
       recent_time.reset();
     }
+
+    recordreplay::Assert("[RUN-1124] ThreadControllerWithMessagePumpImpl::DoWorkImpl #7 %d",
+                         main_thread_only().quit_pending);
+
     // When Quit() is called we must stop running the batch because the
     // caller expects per-task granularity.
     if (main_thread_only().quit_pending)
       break;
   }
+
+  recordreplay::Assert("[RUN-1124] ThreadControllerWithMessagePumpImpl::DoWorkImpl #8 %d",
+                       main_thread_only().quit_pending);
 
   if (main_thread_only().quit_pending)
     return {absl::nullopt, Nanoseconds(0)};
@@ -516,7 +540,11 @@ bool ThreadControllerWithMessagePumpImpl::DoIdleWork() {
   hang_watch_scope_.emplace();
 
 #if BUILDFLAG(IS_WIN)
+  recordreplay::Assert(
+      "[RUN-1916-2636] ThreadControllerWithMessagePumpImpl::Run A");
   if (!power_monitor_.IsProcessInPowerSuspendState()) {
+    recordreplay::Assert(
+        "[RUN-1916-2636] ThreadControllerWithMessagePumpImpl::Run B");
     // Avoid calling Time::ActivateHighResolutionTimer() between
     // suspend/resume as the system hangs if we do (crbug.com/1074028).
     // OnResume() will generate a task on this thread per the
@@ -526,6 +554,11 @@ bool ThreadControllerWithMessagePumpImpl::DoIdleWork() {
 
     const bool need_high_res_mode =
         main_thread_only().task_source->HasPendingHighResolutionTasks();
+
+    recordreplay::Assert(
+        "[RUN-1916-2636] ThreadControllerWithMessagePumpImpl::Run C %d %d",
+        main_thread_only().in_high_res_mode, need_high_res_mode);
+
     if (main_thread_only().in_high_res_mode != need_high_res_mode) {
       // On Windows we activate the high resolution timer so that the wait
       // _if_ triggered by the timer happens with good resolution. If we don't
