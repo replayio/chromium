@@ -11,6 +11,7 @@
 #include "base/debug/leak_annotations.h"
 #include "base/feature_list.h"
 #include "base/metrics/field_trial.h"
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "content/public/common/content_descriptors.h"
 #include "content/public/common/content_switch_dependent_feature_overrides.h"
