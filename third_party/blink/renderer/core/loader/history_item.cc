@@ -35,6 +35,8 @@
 #include "third_party/blink/renderer/platform/weborigin/security_policy.h"
 #include "third_party/blink/renderer/platform/wtf/uuid.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 static int64_t GenerateSequenceNumber() {
@@ -136,6 +138,12 @@ void HistoryItem::ClearDocumentState() {
 }
 
 void HistoryItem::SetStateObject(scoped_refptr<SerializedScriptValue> object) {
+  if (object) {
+    REPLAY_ASSERT(
+      "[TT-492-1184] HistoryItem::SetStateObject %s",
+      object->ToWireString().Utf8().c_str()
+    );
+  }
   state_object_ = std::move(object);
 }
 

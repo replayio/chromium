@@ -85,6 +85,8 @@
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "v8/include/v8.h"
 
+#include "base/json/json_writer.h"
+
 using network::mojom::CredentialsMode;
 using network::mojom::FetchResponseType;
 using network::mojom::RedirectMode;
@@ -515,12 +517,35 @@ void FetchManager::Loader::DidFinishLoading(uint64_t) {
   NotifyFinished();
 }
 
+static void ReportFetchFailed(const ResourceError& error) {
+  if (!recordreplay::IsRecordingOrReplaying() || !v8::IsMainThread()) {
+    return;
+  }
+
+  std::string annotationContents;
+  if (recordreplay::IsReplaying()) {
+    base::Value::Dict info;
+    info.Set("error_code", error.ErrorCode());
+    info.Set("failing_url", error.FailingURL().Utf8());
+    info.Set("error_message", error.LocalizedDescription().Utf8());
+    if (error.CorsErrorStatus()) {
+      std::ostringstream oss;
+      oss << *error.CorsErrorStatus();
+      info.Set("cors_error_status", oss.str());
+    }
+    base::JSONWriter::Write(info, &annotationContents);
+  }
+  recordreplay::OnAnnotation("FetchManagerFailed", annotationContents.c_str());
+}
+
 void FetchManager::Loader::DidFail(uint64_t identifier,
                                    const ResourceError& error) {
   if (fetch_request_data_ && fetch_request_data_->TrustTokenParams()) {
     HistogramNetErrorForTrustTokensOperation(
         fetch_request_data_->TrustTokenParams()->type, error.ErrorCode());
   }
+
+  ReportFetchFailed(error);
 
   if (error.TrustTokenOperationError() !=
       network::mojom::blink::TrustTokenOperationStatus::kOk) {
@@ -578,6 +603,12 @@ void FetchManager::Loader::Start() {
   }
 
   const KURL& url = fetch_request_data_->Url();
+
+  if (recordreplay::IsInReplayCode()) {
+    // [TT-1422] Always allow |fetch| from Replay code.
+    PerformSchemeFetch();
+    return;
+  }
   // "- |request|'s url's origin is same origin with |request|'s origin,
   //    |request|'s tainted origin flag is unset, and the CORS flag is unset"
   // Note tainted origin flag is always unset here.
@@ -923,6 +954,8 @@ void FetchManager::Loader::Failed(
       resolver_->Reject(value);
     }
   }
+
+  recordreplay::Assert("[TT-187-819] Loader::Failed B");
   NotifyFinished();
 }
 

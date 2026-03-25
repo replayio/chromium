@@ -42,6 +42,8 @@
 #include "third_party/blink/renderer/platform/scheduler/public/task_attribution_tracker.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
 
+#include "base/json/json_writer.h"
+
 namespace blink {
 
 namespace {
@@ -69,7 +71,11 @@ PendingScript::PendingScript(ScriptElementBase* element,
       original_element_document_(&element->GetDocument()),
       original_execution_context_(element->GetExecutionContext()),
       created_during_document_write_(
-          element->GetDocument().IsInDocumentWrite()) {}
+          element->GetDocument().IsInDocumentWrite()) {
+  record_replay_dependency_node_ids_.push_back(
+    recordreplay::NewDependencyGraphNode("{\"kind\":\"pendingScriptCreated\"}")
+  );
+}
 
 PendingScript::~PendingScript() {}
 
@@ -182,6 +188,23 @@ void PendingScript::ExecuteScriptBlock() {
   const bool is_controlled_by_script_runner = IsControlledByScriptRunner();
   ScriptElementBase* element = element_;
   Dispose();
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "executeScriptBlock");
+    if (script)
+      info.Set("url", script->SourceUrl().GetString().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
+    for (int other_node_id : record_replay_dependency_node_ids_) {
+      recordreplay::AddDependencyGraphEdge(
+        other_node_id, node_id, "{\"kind\":\"pendingScript\"}"
+      );
+    }
+    execute.emplace(node_id);
+  }
 
   // ExecuteScriptBlockInternal() is split just in order to prevent accidential
   // access to |this| after Dispose().

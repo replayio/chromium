@@ -382,6 +382,14 @@ LocalFrame::~LocalFrame() {
   // the frame owner.
   DCHECK(!view_);
   DCHECK(!frame_color_overlay_);
+
+  if (!IsA<LocalFrame>(Tree().Parent())) {
+    recordreplay::CommandDiagnostic(
+        "[RUN-2486-2577] ~LocalFrame %d",
+        WeakIdentifierMap<LocalFrame>::HasIdentifier(this)
+            ? WeakIdentifierMap<LocalFrame>::ExistingIdentifier(this)
+            : -1);
+  }
   if (IsAdFrame())
     InstanceCounters::DecrementCounter(InstanceCounters::kAdSubframeCounter);
 }
@@ -610,6 +618,14 @@ bool LocalFrame::DetachImpl(FrameDetachType type) {
   supplements_.clear();
   frame_scheduler_.reset();
   mojo_handler_->DidDetachFrame();
+
+  if (!IsA<LocalFrame>(Tree().Parent())) {
+    recordreplay::CommandDiagnosticTrace(
+        "[RUN-2486-2577] LocalFrame::DetachImpl %d",
+        WeakIdentifierMap<LocalFrame>::HasIdentifier(this)
+            ? WeakIdentifierMap<LocalFrame>::ExistingIdentifier(this)
+            : -1);
+  }
   WeakIdentifierMap<LocalFrame>::NotifyObjectDestroyed(this);
 
   return true;
@@ -1606,6 +1622,9 @@ scoped_refptr<base::SingleThreadTaskRunner> LocalFrame::GetTaskRunner(
 void LocalFrame::ScheduleVisualUpdateUnlessThrottled() {
   if (ShouldThrottleRendering())
     return;
+
+  recordreplay::Assert("[RUN-1436] LocalFrame::ScheduleVisualUpdateUnlessThrottled #1");
+
   GetPage()->Animator().ScheduleVisualUpdate(this);
 }
 
@@ -2613,7 +2632,7 @@ void LocalFrame::DidResume() {
   TRACE_EVENT0("blink", "LocalFrame::DidResume");
   DCHECK(IsAttached());
   const base::TimeTicks resume_event_start = base::TimeTicks::Now();
-  GetDocument()->DispatchEvent(*Event::Create(event_type_names::kResume));
+  GetDocument()->DispatchEvent(*Event::Create(event_type_names::kResume), "LocalFrame::DidResume");
   const base::TimeTicks resume_event_end = base::TimeTicks::Now();
   base::UmaHistogramMicrosecondsTimes("DocumentEventTiming.ResumeDuration",
                                       resume_event_end - resume_event_start);
@@ -3297,6 +3316,10 @@ bool LocalFrame::HasBlockingReasonsHelper(
     return false;
   }
   return false;
+}
+
+void LocalFrame::RegisterRecordReplayAuthTokenObserver() {
+  mojo_handler_->RegisterRecordReplayAuthTokenObserver();
 }
 
 }  // namespace blink

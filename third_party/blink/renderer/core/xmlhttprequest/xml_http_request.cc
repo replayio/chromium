@@ -26,6 +26,8 @@
 #include <memory>
 #include <utility>
 
+#include "base/record_replay.h"
+
 #include "base/auto_reset.h"
 #include "base/feature_list.h"
 #include "base/metrics/histogram_macros.h"
@@ -102,6 +104,8 @@
 #include "third_party/blink/renderer/platform/wtf/shared_buffer.h"
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
+
+#include "base/json/json_writer.h"
 
 namespace blink {
 
@@ -295,9 +299,12 @@ XMLHttpRequest::XMLHttpRequest(ExecutionContext* context,
       isolated_world_security_origin_(world_ && world_->IsIsolatedWorld()
                                           ? world_->IsolatedWorldSecurityOrigin(
                                                 context->GetAgentClusterID())
-                                          : nullptr) {}
+                                          : nullptr) {
+  recordreplay::RegisterPointer("XMLHttpRequest", this);
+}
 
 XMLHttpRequest::~XMLHttpRequest() {
+  recordreplay::UnregisterPointer(this);
   binary_response_builder_ = nullptr;
   length_downloaded_to_blob_ = 0;
   ReportMemoryUsageToV8();
@@ -565,6 +572,19 @@ void XMLHttpRequest::DispatchReadyStateChangeEvent() {
     return;
 
   ScopedEventDispatchProtect protect(&event_dispatch_recursion_level_);
+  recordreplay::Assert(
+      "[RUN-1126] XMLHttpRequest::DispatchReadyStateChangeEvent %d %d", state_, async_);
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "xhrReadyStateChangeEvent");
+    info.Set("url", Url().GetString().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
+
   if (async_ || (state_ <= kOpened || state_ == kDone)) {
     DEVTOOLS_TIMELINE_TRACE_EVENT("XHRReadyStateChange",
                                   inspector_xhr_ready_state_change_event::Data,
@@ -828,16 +848,54 @@ void XMLHttpRequest::send(Document* document, ExceptionState& exception_state) {
 }
 
 void XMLHttpRequest::send(const String& body, ExceptionState& exception_state) {
-  DVLOG(1) << this << " send() String " << body;
+  // RUN-1350: Use the recording stream to adjust the string value here to
+  // meet expectations.  Sometimes divergences in elsewhere will cause
+  // the sent data to be slightly different.  This will lead to spurious
+  // mmap-related asserts down the line.  To avoid this, massage the
+  // string value here (to a limit) to match the recorded value.
+  std::optional<String> adj_body;
+  if (recordreplay::IsRecordingOrReplaying("values", "XMLHttpRequest::send")) {
+    size_t length = body.length();
+    size_t recorded_length =
+      recordreplay::RecordReplayValue("XMLHttpRequest::send", body.length());
+    if (length != recorded_length) {
+      bool mismatch_too_large =
+        (length < recorded_length * 0.95 || length > recorded_length * 1.05) &&
+        (length < recorded_length - 2 || length > recorded_length + 2);
+      recordreplay::Warning(
+        "XMLHttpRequest::Send length mismatch recorded(%zu) != replayed(%zu) toolarge=%s",
+        recorded_length, length,
+        mismatch_too_large ? "yes" : "no"
+      );
+      // If the difference in strings is too big (off by more than 5 percent
+      // or so, then don't adjust the string).
+      if (mismatch_too_large) {
+        recordreplay::Warning(
+          "XMLHttpRequest::Send length mismatch too large, not adjusting"
+        );
+      } else if (length < recorded_length) {
+        size_t padding = recorded_length - length;
+        std::unique_ptr<char[]> buffer(new char[padding + 1]);
+        memset(buffer.get(), ' ', padding);
+        buffer[padding] = '\0';
+        adj_body = body + String(buffer.get());
+      } else {
+        adj_body = body.Substring(0, (unsigned int) recorded_length);
+      }
+    }
+  }
+  const String& use_body = adj_body.value_or(body);
+
+  DVLOG(1) << this << " send() String " << use_body;
 
   if (!InitSend(exception_state))
     return;
 
   scoped_refptr<EncodedFormData> http_body;
 
-  if (!body.IsNull() && AreMethodAndURLValidForSend()) {
+  if (!use_body.IsNull() && AreMethodAndURLValidForSend()) {
     http_body = EncodedFormData::Create(
-        UTF8Encoding().Encode(body, WTF::kNoUnencodables));
+        UTF8Encoding().Encode(use_body, WTF::kNoUnencodables));
     UpdateContentTypeAndCharset("text/plain;charset=UTF-8", "UTF-8");
   }
 
@@ -1026,7 +1084,7 @@ void XMLHttpRequest::CreateRequest(scoped_refptr<EncodedFormData> http_body,
     if (http_body && upload_) {
       upload_events = upload_->HasEventListeners();
       upload_->DispatchEvent(*ProgressEvent::Create(
-          event_type_names::kLoadstart, true, 0, http_body->SizeInBytes()));
+          event_type_names::kLoadstart, true, 0, http_body->SizeInBytes()), "XMLHttpRequest::CreateRequest");
       // See above.
       if (!send_flag_ || loader_)
         return;
@@ -1766,6 +1824,16 @@ void XMLHttpRequest::NotifyParserStopped() {
 
 void XMLHttpRequest::EndLoading() {
   probe::DidFinishXHR(GetExecutionContext(), this);
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "xhrEndLoading");
+    info.Set("url", Url().GetString().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
 
   if (loader_) {
     // Set |m_error| in order to suppress the cancel notification (see

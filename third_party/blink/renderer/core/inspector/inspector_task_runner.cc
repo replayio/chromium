@@ -9,11 +9,13 @@
 #include "third_party/blink/renderer/platform/wtf/cross_thread_copier_base.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 InspectorTaskRunner::InspectorTaskRunner(
     scoped_refptr<base::SingleThreadTaskRunner> isolate_task_runner)
-    : isolate_task_runner_(isolate_task_runner) {}
+    : lock_("InspectorTaskRunner.lock_"), isolate_task_runner_(isolate_task_runner) {}
 
 InspectorTaskRunner::~InspectorTaskRunner() = default;
 
@@ -23,7 +25,7 @@ void InspectorTaskRunner::InitIsolate(v8::Isolate* isolate) {
 }
 
 void InspectorTaskRunner::Dispose() {
-  base::AutoLock locker(lock_);
+  recordreplay::AutoLockMaybeEventsDisallowed locker(lock_);
   disposed_ = true;
   isolate_ = nullptr;
   isolate_task_runner_ = nullptr;

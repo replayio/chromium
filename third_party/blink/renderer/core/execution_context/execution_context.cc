@@ -63,6 +63,8 @@
 #include "third_party/blink/renderer/platform/weborigin/scheme_registry.h"
 #include "third_party/blink/renderer/platform/weborigin/security_policy.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
+
 namespace blink {
 
 ExecutionContext::ExecutionContext(v8::Isolate* isolate, Agent* agent)
@@ -78,7 +80,14 @@ ExecutionContext::ExecutionContext(v8::Isolate* isolate, Agent* agent)
   DCHECK(agent_);
 }
 
-ExecutionContext::~ExecutionContext() = default;
+ExecutionContext::~ExecutionContext() {
+  // Leak the policy container if we are being destroyed at a non-deterministic
+  // point while recording/replaying, as this releases mojo resources which must
+  // happen at specific points.
+  if (recordreplay::AreEventsDisallowed("~ExecutionContext")) {
+    policy_container_.release();
+  }
+}
 
 // static
 ExecutionContext* ExecutionContext::From(const ScriptState* script_state) {
@@ -171,8 +180,13 @@ void ExecutionContext::SetLifecycleState(mojom::FrameLifecycleState state) {
         DCHECK_EQ(state_observer->GetExecutionContext(), this);
         DCHECK(state_observer->UpdateStateIfNeededCalled());
 #endif
+        recordreplay::Assert(
+            "[RUN-1716] ExecutionContext::SetLifecycleState A %d",
+            recordreplay::PointerId(state_observer));
         state_observer->ContextLifecycleStateChanged(state);
       });
+
+  recordreplay::Assert("[RUN-1716] ExecutionContext::SetLifecycleState B");
 }
 
 void ExecutionContext::NotifyContextDestroyed() {
@@ -295,6 +309,8 @@ void ExecutionContext::AddConsoleMessageImpl(
 void ExecutionContext::DispatchErrorEvent(
     ErrorEvent* error_event,
     SanitizeScriptErrors sanitize_script_errors) {
+  RecordReplayOnErrorEvent(error_event);
+
   if (in_dispatch_error_event_) {
     pending_exceptions_.push_back(error_event);
     return;
@@ -325,7 +341,7 @@ bool ExecutionContext::DispatchErrorEventInternal(
 
   DCHECK(!in_dispatch_error_event_);
   in_dispatch_error_event_ = true;
-  target->DispatchEvent(*error_event);
+  target->DispatchEvent(*error_event, "ExecutionContext::DispatchErrorEventInternal");
   in_dispatch_error_event_ = false;
   return error_event->defaultPrevented();
 }

@@ -290,14 +290,14 @@ void HTMLLinkElement::LinkLoaded() {
   if (rel_attribute_.IsLinkPrefetch()) {
     UseCounter::Count(GetDocument(), WebFeature::kLinkPrefetchLoadEvent);
   }
-  DispatchEvent(*Event::Create(event_type_names::kLoad));
+  DispatchEvent(*Event::Create(event_type_names::kLoad), "HTMLLinkElement::LinkLoaded");
 }
 
 void HTMLLinkElement::LinkLoadingErrored() {
   if (rel_attribute_.IsLinkPrefetch()) {
     UseCounter::Count(GetDocument(), WebFeature::kLinkPrefetchErrorEvent);
   }
-  DispatchEvent(*Event::Create(event_type_names::kError));
+  DispatchEvent(*Event::Create(event_type_names::kError), "HTMLLinkElement::LinkLoadingErrored");
 }
 
 bool HTMLLinkElement::SheetLoaded() {
@@ -321,6 +321,10 @@ void HTMLLinkElement::DispatchPendingEvent(
 
   // Checks Document's load event synchronously here for performance.
   // This is safe because dispatchPendingEvent() is called asynchronously.
+  recordreplay::AutoMarkerDependencyExecution execute(
+    "LoadEventDelay",
+    "HTMLLinkElement::DispatchPendingEvent"
+  );
   count->ClearAndCheckLoadEvent();
 }
 

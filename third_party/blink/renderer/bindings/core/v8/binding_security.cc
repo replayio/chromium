@@ -123,6 +123,9 @@ bool CanAccessWindowInternal(
   DCHECK_EQ(DOMWindow::CrossDocumentAccessPolicy::kAllowed,
             *cross_document_access);
 
+  if (recordreplay::IsInReplayCode())
+    return true;
+
   // It's important to check that target_window is a LocalDOMWindow: it's
   // possible for a remote frame and local frame to have the same security
   // origin, depending on the model being used to allocate Frames between
@@ -253,6 +256,9 @@ bool BindingSecurity::ShouldAllowAccessTo(
     ErrorReportOption reporting_option) {
   DCHECK(target);
 
+  if (recordreplay::IsInReplayCode())
+    return true;
+
   // TODO(https://crbug.com/723057): This is intended to match the legacy
   // behavior of when access checks revolved around Frame pointers rather than
   // DOMWindow pointers. This prevents web-visible behavior changes, since the
@@ -382,6 +388,9 @@ bool ShouldAllowAccessToV8ContextInternal(
     ExceptionStateOrErrorReportOption& error_report) {
   // Workers and worklets do not support multiple contexts, so both of
   // |accessing_context| and |target_context| must be windows at this point.
+
+  if (recordreplay::IsInReplayCode())
+    return true;
 
   // remote_object->GetCreationContext() returns the empty handle. Remote
   // contexts are unconditionally treated as cross origin.

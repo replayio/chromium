@@ -14,6 +14,8 @@
 #include "third_party/blink/public/platform/child_url_loader_factory_bundle.h"
 #include "third_party/blink/public/platform/web_common.h"
 
+#include "base/deterministic_containers.h"
+
 namespace blink {
 
 class HostChildURLLoaderFactoryBundle;
@@ -124,8 +126,8 @@ class BLINK_PLATFORM_EXPORT HostChildURLLoaderFactoryBundle
       std::pair<base::WeakPtr<TrackedChildURLLoaderFactoryBundle>,
                 scoped_refptr<base::SequencedTaskRunner>>;
   using ObserverList =
-      std::unordered_map<TrackedChildURLLoaderFactoryBundle*,
-                         std::unique_ptr<ObserverPtrAndTaskRunner>>;
+      base::deterministic_unordered_map<TrackedChildURLLoaderFactoryBundle*,
+                                        std::unique_ptr<ObserverPtrAndTaskRunner>>;
 
   explicit HostChildURLLoaderFactoryBundle(
       scoped_refptr<base::SequencedTaskRunner> task_runner);

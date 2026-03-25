@@ -250,8 +250,19 @@ void V8Window::NamedPropertyGetterCustom(
     return;
   }
 
+  auto* base_doc = To<LocalFrame>(frame)->GetDocument();
+
+  // LocalFrame document pointers can be invalid and lead to crashes while replaying
+  // and inspecting the current state. The underlying reason here is unknown,
+  // for now we workaround the problem by watching for invalid document pointers.
+  // Documents register themselves so we can test for a pointer ID.
+  if (recordreplay::IsInReplayCode() && base_doc && !recordreplay::PointerId(base_doc)) {
+    recordreplay::Warning("V8Window::NamedPropertyGetterCustom invalid document %p", base_doc);
+    return;
+  }
+
   // Search named items in the document.
-  auto* doc = DynamicTo<HTMLDocument>(To<LocalFrame>(frame)->GetDocument());
+  auto* doc = DynamicTo<HTMLDocument>(base_doc);
   if (!doc)
     return;
 

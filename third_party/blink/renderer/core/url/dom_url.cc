@@ -67,6 +67,7 @@ DOMURL::~DOMURL() = default;
 
 void DOMURL::Trace(Visitor* visitor) const {
   visitor->Trace(search_params_);
+  visitor->Trace(replay_strong_search_params_);
   ScriptWrappable::Trace(visitor);
 }
 
@@ -94,8 +95,17 @@ String DOMURL::CreatePublicURL(ExecutionContext* execution_context,
 }
 
 URLSearchParams* DOMURL::searchParams() {
-  if (!search_params_)
+  if (!search_params_) {
+    if (recordreplay::IsRecordingOrReplaying() && !recordreplay::AreAssertsDisabled()) {
+      recordreplay::Assert("[RUN-2324-2325] DOMURL::searchParams %s",
+                           Url().GetString().Utf8().c_str());
+    }
+
     search_params_ = URLSearchParams::Create(Url().Query(), this);
+    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "DOMURL::searchParams_")) {
+      replay_strong_search_params_ = search_params_;
+    }
+  }
 
   return search_params_;
 }

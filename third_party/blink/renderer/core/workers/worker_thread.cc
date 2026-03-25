@@ -81,7 +81,7 @@ constexpr base::TimeDelta kForcibleTerminationDelay = base::Seconds(2);
 }  // namespace
 
 base::Lock& WorkerThread::ThreadSetLock() {
-  DEFINE_THREAD_SAFE_STATIC_LOCAL(base::Lock, lock, ());
+  DEFINE_THREAD_SAFE_STATIC_LOCAL(base::Lock, lock, ("WorkerThread::ThreadSetLock"));
   return lock;
 }
 
@@ -153,6 +153,12 @@ class WorkerThread::InterruptData {
 };
 
 WorkerThread::~WorkerThread() {
+  recordreplay::Assert(
+      "[RUN-1537-1689] WorkerThread::~WorkerThread %d %d (%d %d %d)",
+      recordreplay::PointerId(this), worker_thread_id_, requested_to_terminate_,
+      (int)exit_code_, (int)thread_state_);
+
+  recordreplay::UnregisterPointer(this);
   DCHECK_CALLED_ON_VALID_THREAD(parent_thread_checker_);
   base::AutoLock locker(ThreadSetLock());
   DCHECK(InitializingWorkerThreads().Contains(this) ||
@@ -274,6 +280,8 @@ void WorkerThread::Resume() {
 }
 
 void WorkerThread::Terminate() {
+  CHECK(!recordreplay::AreEventsDisallowed());
+
   DCHECK_CALLED_ON_VALID_THREAD(parent_thread_checker_);
   {
     base::AutoLock locker(lock_);
@@ -288,6 +296,9 @@ void WorkerThread::Terminate() {
   ScheduleToTerminateScriptExecution();
 
   inspector_task_runner_->Dispose();
+
+  recordreplay::Assert("[RUN-1537-1689] WorkerThread::Terminate %d",
+                       recordreplay::PointerId(this));
 
   scoped_refptr<base::SingleThreadTaskRunner> task_runner =
       GetWorkerBackingThread().BackingThread().GetTaskRunner();
@@ -455,7 +466,10 @@ void WorkerThread::ChildThreadTerminatedOnWorkerThread(WorkerThread* child) {
 
 WorkerThread::WorkerThread(WorkerReportingProxy& worker_reporting_proxy)
     : WorkerThread(worker_reporting_proxy,
-                   Thread::Current()->GetDeprecatedTaskRunner()) {}
+                   Thread::Current()->GetDeprecatedTaskRunner()) {
+  // Pointer registration is needed for sorting in CallOnAllWorkerThreads.
+  recordreplay::RegisterPointer("WorkerThread", this);
+}
 
 WorkerThread::WorkerThread(WorkerReportingProxy& worker_reporting_proxy,
                            scoped_refptr<base::SingleThreadTaskRunner>
@@ -467,6 +481,9 @@ WorkerThread::WorkerThread(WorkerReportingProxy& worker_reporting_proxy,
       parent_thread_default_task_runner_(
           std::move(parent_thread_default_task_runner)),
       shutdown_event_(RefCountedWaitableEvent::Create()) {
+  // Pointer registration is needed for sorting in CallOnAllWorkerThreads.
+  recordreplay::RegisterPointer("WorkerThread", this);
+
   DCHECK_CALLED_ON_VALID_THREAD(parent_thread_checker_);
   base::AutoLock locker(ThreadSetLock());
   InitializingWorkerThreads().insert(this);
@@ -512,6 +529,8 @@ WorkerThread::TerminationState WorkerThread::ShouldTerminateScriptExecution() {
 void WorkerThread::EnsureScriptExecutionTerminates(ExitCode exit_code) {
   DCHECK_CALLED_ON_VALID_THREAD(parent_thread_checker_);
   base::AutoLock locker(lock_);
+  recordreplay::Assert(
+      "[RUN-1537-1779] WorkerThread::EnsureScriptExecutionTerminates %d %d", (int)ShouldTerminateScriptExecution(), (int)exit_code);
   switch (ShouldTerminateScriptExecution()) {
     case TerminationState::kTerminationUnnecessary:
       return;
@@ -604,12 +623,17 @@ void WorkerThread::InitializeOnWorkerThread(
     base::AutoLock locker(lock_);
     DCHECK_EQ(ThreadState::kNotStarted, thread_state_);
 
+    if (!recordreplay::AreEventsDisallowed())
+      recordreplay::Assert("[RUN-1691] WorkerThread::InitializeOnWorkerThread A %d",
+                           IsOwningBackingThread());
     if (IsOwningBackingThread()) {
       DCHECK(thread_startup_data.has_value());
       GetWorkerBackingThread().InitializeOnBackingThread(*thread_startup_data);
     } else {
       DCHECK(!thread_startup_data.has_value());
     }
+    if (!recordreplay::AreEventsDisallowed())
+      recordreplay::Assert("[RUN-1691] WorkerThread::InitializeOnWorkerThread B");
     GetWorkerBackingThread().BackingThread().AddTaskObserver(this);
 
     // TODO(crbug.com/866666): Ideally this URL should be the response URL of
@@ -653,6 +677,10 @@ void WorkerThread::InitializeOnWorkerThread(
 
   {
     base::AutoLock locker(ThreadSetLock());
+
+    recordreplay::Assert("[RUN-1537-1689] InitializeOnWorkerThread %d",
+                         recordreplay::PointerId(this));
+
     DCHECK(InitializingWorkerThreads().Contains(this));
     DCHECK(!WorkerThreads().Contains(this));
     InitializingWorkerThreads().erase(this);
@@ -747,6 +775,10 @@ void WorkerThread::PrepareForShutdownOnWorkerThread() {
 
   if (WorkerThreadDebugger* debugger = WorkerThreadDebugger::From(GetIsolate()))
     debugger->WorkerThreadDestroyed(this);
+
+  recordreplay::Assert(
+      "[RUN-1537-1689] WorkerThread::PrepareForShutdownOnWorkerThread %d",
+      recordreplay::PointerId(this));
 
   GetWorkerReportingProxy().WillDestroyWorkerGlobalScope();
 

@@ -27,6 +27,7 @@
 
 #include "third_party/blink/renderer/core/html/parser/html_tokenizer.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/html/parser/html_entity_parser.h"
 #include "third_party/blink/renderer/core/html/parser/html_parser_idioms.h"
 #include "third_party/blink/renderer/core/html/parser/html_tree_builder.h"
@@ -144,10 +145,13 @@ static inline bool VectorEqualsString(const LCharLiteralBuffer<32>& vector,
 
 HTMLTokenizer::HTMLTokenizer(const HTMLParserOptions& options)
     : input_stream_preprocessor_(this), options_(options) {
+  recordreplay::RegisterPointer("HTMLTokenizer", this);
   Reset();
 }
 
-HTMLTokenizer::~HTMLTokenizer() = default;
+HTMLTokenizer::~HTMLTokenizer() {
+  recordreplay::UnregisterPointer(this);
+}
 
 void HTMLTokenizer::Reset() {
   state_ = HTMLTokenizer::kDataState;

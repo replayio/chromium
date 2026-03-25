@@ -76,6 +76,7 @@
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_linked_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/heap_observer_set.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cancellable_task.h"
@@ -2122,6 +2123,8 @@ class CORE_EXPORT Document : public ContainerNode,
                                    mojom::blink::FocusType focus_type);
   void DisplayNoneChangedForFrame();
 
+  void RecordReplayOnRemoveLoadEventDelay();
+
   // Handles a connection error to |trust_token_query_answerer_| by rejecting
   // all pending promises created by |hasTrustToken| and |hasRedemptionRecord|.
   void TrustTokenQueryAnswererConnectionError();
@@ -2220,6 +2223,8 @@ class CORE_EXPORT Document : public ContainerNode,
   bool compatibility_mode_locked_;
 
   TaskHandle execute_scripts_waiting_for_resources_task_handle_;
+  int record_replay_execute_scripts_waiting_for_resources_node_id_ = 0;
+
   TaskHandle javascript_url_task_handle_;
   struct PendingJavascriptUrl {
    public:
@@ -2407,6 +2412,9 @@ class CORE_EXPORT Document : public ContainerNode,
 
   int load_event_delay_count_;
 
+  // IDs for dependency graph nodes which the load event depends on.
+  Vector<int> record_replay_load_event_dependency_nodes_;
+
   // Objects and embeds depend on "being rendered" for delaying the load event.
   // This is a document-wide flag saying that we have incremented the
   // load_event_delay_count_ to wait for the next layout tree update. On the
@@ -2447,7 +2455,7 @@ class CORE_EXPORT Document : public ContainerNode,
 
   HeapTaskRunnerTimer<Document> did_associate_form_controls_timer_;
 
-  HeapHashSet<Member<SVGUseElement>> use_elements_needing_update_;
+  HeapHashSet<Member<SVGUseElement>, WTF::MemberHashRecordReplayId<SVGUseElement>> use_elements_needing_update_;
 
   ParserSynchronizationPolicy parser_sync_policy_;
 

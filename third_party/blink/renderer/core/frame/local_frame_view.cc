@@ -300,6 +300,9 @@ LocalFrameView::LocalFrameView(LocalFrame& frame, gfx::Rect frame_rect)
       is_updating_layout_(false)
 #endif
 {
+  // https://linear.app/replay/issue/RUN-966
+  recordreplay::RegisterPointer("LocalFrameView", this);
+
   // Propagate the marginwidth/height and scrolling modes to the view.
   if (frame_->Owner() && frame_->Owner()->ScrollbarMode() ==
                              mojom::blink::ScrollbarMode::kAlwaysOff)
@@ -307,6 +310,9 @@ LocalFrameView::LocalFrameView(LocalFrame& frame, gfx::Rect frame_rect)
 }
 
 LocalFrameView::~LocalFrameView() {
+  // https://linear.app/replay/issue/RUN-966
+  recordreplay::UnregisterPointer(this);
+
 #if DCHECK_IS_ON()
   DCHECK(has_been_disposed_);
 #endif
@@ -1706,6 +1712,9 @@ void LocalFrameView::SetBaseBackgroundColor(const Color& background_color) {
 
 void LocalFrameView::SetUseColorAdjustBackground(UseColorAdjustBackground use,
                                                  bool color_scheme_changed) {
+  recordreplay::Assert("[RUN-1436] LocalFrameView::SetUseColorAdjustBackground %d",
+                       recordreplay::PointerId(this));
+
   if (use_color_adjust_background_ == use && !color_scheme_changed)
     return;
 
@@ -2149,6 +2158,8 @@ void LocalFrameView::ScheduleVisualUpdateForPaintInvalidationIfNeeded() {
   // We need a full lifecycle update to clear pending paint invalidations.
   if (local_frame_root.View()->target_state_ < DocumentLifecycle::kPaintClean ||
       Lifecycle().GetState() >= DocumentLifecycle::kPrePaintClean) {
+    recordreplay::Assert("[RUN-1436] LocalFrameView::ScheduleVisualUpdateForPaintInvalidationIfNeeded #1");
+
     // Schedule visual update to process the paint invalidation in the next
     // cycle.
     local_frame_root.ScheduleVisualUpdateUnlessThrottled();
@@ -2587,8 +2598,9 @@ bool LocalFrameView::RunStyleAndLayoutLifecyclePhases(
   UpdateStyleAndLayoutIfNeededRecursive();
   DCHECK(ShouldThrottleRendering() ||
          Lifecycle().GetState() >= DocumentLifecycle::kLayoutClean);
-  if (Lifecycle().GetState() < DocumentLifecycle::kLayoutClean)
+  if (Lifecycle().GetState() < DocumentLifecycle::kLayoutClean) {
     return false;
+  }
 
   // PerformRootScrollerSelection can dirty layout if an effective root
   // scroller is changed so make sure we get back to LayoutClean.
@@ -2599,8 +2611,9 @@ bool LocalFrameView::RunStyleAndLayoutLifecyclePhases(
     UpdateStyleAndLayoutIfNeededRecursive();
   }
 
-  if (target_state == DocumentLifecycle::kLayoutClean)
+  if (target_state == DocumentLifecycle::kLayoutClean) {
     return false;
+  }
 
   // Now we can run post layout steps in preparation for further phases.
   ForAllNonThrottledLocalFrameViews([](LocalFrameView& frame_view) {
@@ -3647,6 +3660,8 @@ void LocalFrameView::ServiceScriptedAnimations(base::TimeTicks start_time) {
 
 void LocalFrameView::ScheduleAnimation(base::TimeDelta delay,
                                        base::Location location) {
+  recordreplay::Assert("[RUN-1641] LocalFrameView::ScheduleAnimation");
+
   TRACE_EVENT("cc", "LocalFrameView::ScheduleAnimation", "frame", GetFrame(),
               "delay", delay, "location", location);
   if (auto* client = GetChromeClient())
@@ -3732,6 +3747,9 @@ void LocalFrameView::DetachFromLayout() {
   CHECK(IsAttached());
   SetParentVisible(false);
   SetAttached(false);
+
+  recordreplay::AssertMaybeEventsDisallowed(
+      "[RUN-2104-2296] LocalFrameView::DetachFromLayout");
 
   // We may need update paint properties in detached frame subtree for printing.
   // See UpdateLifecyclePhasesForPrinting().

@@ -115,6 +115,8 @@ void ImageResourceContent::Trace(Visitor* visitor) const {
   visitor->Trace(info_);
   visitor->Trace(observers_);
   visitor->Trace(finished_observers_);
+  visitor->Trace(replay_strong_observers_);
+  visitor->Trace(replay_strong_finished_observers_);
   ImageObserver::Trace(visitor);
   MediaTiming::Trace(visitor);
 }
@@ -128,6 +130,11 @@ void ImageResourceContent::HandleObserverFinished(
     if (it != observers_.end()) {
       observers_.erase(it);
       finished_observers_.insert(observer);
+      if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+                                               "ImageResourceContent")) {
+        replay_strong_observers_.erase(replay_strong_observers_.find(observer));
+        replay_strong_finished_observers_.insert(observer);
+      }
     }
   }
   observer->ImageNotifyFinished(this);
@@ -143,6 +150,11 @@ void ImageResourceContent::AddObserver(ImageResourceObserver* observer) {
     ProhibitAddRemoveObserverInScope prohibit_add_remove_observer_in_scope(
         this);
     observers_.insert(observer);
+    
+    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+                                              "ImageResourceContent")) {
+      replay_strong_observers_.insert(observer);
+    }
   }
 
   if (info_->IsCacheValidator())
@@ -166,10 +178,20 @@ void ImageResourceContent::RemoveObserver(ImageResourceObserver* observer) {
   if (it != observers_.end()) {
     fully_erased = observers_.erase(it) && finished_observers_.find(observer) ==
                                                finished_observers_.end();
+    
+    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+                                              "ImageResourceContent")) {
+      replay_strong_observers_.erase(replay_strong_observers_.find(observer));
+    }
   } else {
     it = finished_observers_.find(observer);
     DCHECK(it != finished_observers_.end());
     fully_erased = finished_observers_.erase(it);
+    
+    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+                                              "ImageResourceContent")) {
+      replay_strong_finished_observers_.erase(replay_strong_finished_observers_.find(observer));
+    }
   }
   DidRemoveObserver();
   if (fully_erased)
@@ -260,6 +282,8 @@ void ImageResourceContent::NotifyObservers(
       ProhibitAddRemoveObserverInScope prohibit_add_remove_observer_in_scope(
           this);
       CopyToVector(finished_observers_, finished_observers_as_vector);
+      std::sort(finished_observers_as_vector.begin(), finished_observers_as_vector.end(),
+                recordreplay::CompareMemberByPointerId<Member<ImageResourceObserver>>());
     }
 
     for (ImageResourceObserver* observer : finished_observers_as_vector) {
@@ -273,6 +297,8 @@ void ImageResourceContent::NotifyObservers(
       ProhibitAddRemoveObserverInScope prohibit_add_remove_observer_in_scope(
           this);
       CopyToVector(observers_, observers_as_vector);
+      std::sort(observers_as_vector.begin(), observers_as_vector.end(),
+                recordreplay::CompareMemberByPointerId<Member<ImageResourceObserver>>());
     }
 
     for (ImageResourceObserver* observer : observers_as_vector) {

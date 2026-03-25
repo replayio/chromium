@@ -23,6 +23,8 @@
 
 #include "base/compiler_specific.h"
 #include "base/feature_list.h"
+#include "base/record_replay.h"
+#include "base/record_replay_paint_surface.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/mojom/frame/lifecycle.mojom-blink-forward.h"
 #include "third_party/blink/public/platform/platform.h"
@@ -81,6 +83,7 @@
 #include "third_party/blink/renderer/core/page/validation_message_client_impl.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
 #include "third_party/blink/renderer/core/probe/core_probes.h"
+#include "third_party/blink/renderer/core/record_replay/lifecycle.h"
 #include "third_party/blink/renderer/core/scroll/scrollbar_theme.h"
 #include "third_party/blink/renderer/core/scroll/scrollbar_theme_overlay_mobile.h"
 #include "third_party/blink/renderer/core/scroll/smooth_scroll_sequencer.h"
@@ -224,7 +227,8 @@ Page::Page(base::PassKey<Page>,
       next_related_page_(this),
       prev_related_page_(this),
       autoplay_flags_(0),
-      web_text_autosizer_page_info_({0, 0, 1.f}) {
+      web_text_autosizer_page_info_({0, 0, 1.f}),
+      record_replay_id_(recordreplay::NewIdMainThread("Page")) {
   DCHECK(!AllPages().Contains(this));
   AllPages().insert(this);
 
@@ -538,13 +542,23 @@ void Page::SetVisibilityState(
     return;
   lifecycle_state_->visibility = visibility_state;
 
+  // ideally we could use an observer for this (and we might eventually find that we can),
+  // but in the interest of always getting paints, we need do this even if
+  // is_initial_state == true.
+  recordreplay::NotifyPageVisibilityStateChanged(this);
+
   if (is_initial_state)
     return;
 
+  HeapVector<Member<PageVisibilityObserver>> observers;
   page_visibility_observer_set_.ForEachObserver(
-      [](PageVisibilityObserver* observer) {
-        observer->PageVisibilityChanged();
+      [&](PageVisibilityObserver* observer) {
+        observers.push_back(observer);
       });
+  std::sort(observers.begin(), observers.end(),
+            recordreplay::CompareMemberByPointerId<Member<PageVisibilityObserver>>());
+  for (PageVisibilityObserver* observer : observers)
+    observer->PageVisibilityChanged();
 
   if (main_frame_) {
     if (lifecycle_state_->visibility ==
@@ -1015,6 +1029,21 @@ void Page::WillBeDestroyed() {
       });
   page_visibility_observer_set_.Clear();
 
+  if (recordreplay::AreEventsDisallowed("Page::WillBeDestroyed")) {
+    // If the dtor is called during GC (usually from |~SVGImage|),
+    // we leak the scheduler, so the finalizer does not touch the recording
+    // stream.
+    // https://linear.app/replay/issue/RUN-1347#comment-bc4e3f9d
+    PageScheduler* s = page_scheduler_.release();
+
+    // We're about to destroy this page, which acts as the page scheduler's
+    // delegate.  Make sure we break that linkage before we go away.
+    // https://linear.app/replay/issue/RUN-2733
+    s->BreakLinkages();
+  }
+
+  recordreplay::NotifyPageWillBeDestroyed(this);
+
   page_scheduler_ = nullptr;
 }
 
@@ -1055,6 +1084,12 @@ void Page::ReportIntervention(const String& text) {
 }
 
 bool Page::RequestBeginMainFrameNotExpected(bool new_state) {
+  REPLAY_ASSERT(
+      "[TT-1367-1371] Page::RequestBeginMainFrameNotExpected %d %d %d",
+      RecordReplayId(),
+      !!main_frame_,
+      main_frame_ ? !!main_frame_->IsLocalFrame() : -1);
+
   if (!main_frame_ || !main_frame_->IsLocalFrame())
     return false;
 
