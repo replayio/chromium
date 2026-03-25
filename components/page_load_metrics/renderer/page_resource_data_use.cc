@@ -24,11 +24,18 @@ PageResourceDataUse::PageResourceDataUse()
       proxy_used_(false),
       is_primary_frame_resource_(false),
       completed_before_fcp_(false),
-      cache_type_(mojom::CacheType::kNotCached) {}
+      cache_type_(mojom::CacheType::kNotCached) {
+  // Pointer registration is needed for sorting in PageTimingMetricsSender.modified_resources_
+  recordreplay::RegisterPointer("PageResourceDataUse", this);
+}
 
-PageResourceDataUse::PageResourceDataUse(const PageResourceDataUse& other) =
-    default;
-PageResourceDataUse::~PageResourceDataUse() = default;
+PageResourceDataUse::PageResourceDataUse(const PageResourceDataUse& other) {
+  recordreplay::RegisterPointer("PageResourceDataUse", this);
+}
+
+PageResourceDataUse::~PageResourceDataUse() {
+  recordreplay::UnregisterPointer(this);
+}
 
 void PageResourceDataUse::DidStartResponse(
     const url::SchemeHostPort& final_response_url,
