@@ -13,6 +13,7 @@
 #include "base/check_op.h"
 #include "base/containers/stack_container.h"
 #include "base/memory/ptr_util.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "base/synchronization/waitable_event.h"
 #include "mojo/public/cpp/system/trap.h"
@@ -22,7 +23,8 @@ namespace mojo {
 class WaitSet::State : public base::RefCountedThreadSafe<State> {
  public:
   State()
-      : handle_event_(base::WaitableEvent::ResetPolicy::MANUAL,
+      : lock_("WaitSet::State.lock_"),
+        handle_event_(base::WaitableEvent::ResetPolicy::MANUAL,
                       base::WaitableEvent::InitialState::NOT_SIGNALED) {
     MojoResult rv = CreateTrap(&Context::OnNotification, &trap_handle_);
     DCHECK_EQ(MOJO_RESULT_OK, rv);
@@ -135,6 +137,9 @@ class WaitSet::State : public base::RefCountedThreadSafe<State> {
             Handle* ready_handles,
             MojoResult* ready_results,
             MojoHandleSignalsState* signals_states) {
+    // https://linear.app/replay/issue/RUN-551
+    recordreplay::Assert("WaitSet::State::Wait Start");
+
     DCHECK(trap_handle_.is_valid());
     DCHECK(num_ready_handles);
     DCHECK(ready_handles);
@@ -142,6 +147,8 @@ class WaitSet::State : public base::RefCountedThreadSafe<State> {
     {
       base::AutoLock lock(lock_);
       if (ready_handles_.empty()) {
+        // https://linear.app/replay/issue/RUN-551
+        recordreplay::Assert("WaitSet::State::Wait #1");
         // No handles are currently in the ready set. Make sure the event is
         // reset and try to arm the watcher.
         handle_event_.Reset();
@@ -170,6 +177,9 @@ class WaitSet::State : public base::RefCountedThreadSafe<State> {
             const auto& event = blocking_events.container()[i];
             auto it = contexts_.find(event.trigger_context);
             DCHECK(it != contexts_.end());
+            // https://linear.app/replay/issue/RUN-551
+            recordreplay::Assert("WaitSet::State::Wait #2 %u %u %d",
+                                 it->second->handle().value(), event.result, event.signals_state);
             ready_handles_[it->second->handle()] = {event.result,
                                                     event.signals_state};
           }
@@ -221,10 +231,11 @@ class WaitSet::State : public base::RefCountedThreadSafe<State> {
 
     // If the caller cares, let them know which user event unblocked us, if any.
     if (ready_event) {
-      if (events.container()[index] == &handle_event_)
+      if (events.container()[index] == &handle_event_) {
         *ready_event = nullptr;
-      else
+      } else {
         *ready_event = events.container()[index];
+      }
     }
   }
 
@@ -321,7 +332,7 @@ class WaitSet::State : public base::RefCountedThreadSafe<State> {
   std::map<Handle, scoped_refptr<Context>> handle_to_context_;
   std::map<Handle, ReadyState> ready_handles_;
   std::vector<scoped_refptr<Context>> cancelled_contexts_;
-  std::set<base::WaitableEvent*> user_events_;
+  std::set<base::WaitableEvent*, recordreplay::CompareByPointerId> user_events_;
 
   // Event signaled any time a handle notification is received.
   base::WaitableEvent handle_event_;

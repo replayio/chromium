@@ -6,6 +6,7 @@
 
 #include "base/check.h"
 #include "base/lazy_instance.h"
+#include "base/record_replay.h"
 #include "base/threading/thread_local.h"
 
 namespace mojo {

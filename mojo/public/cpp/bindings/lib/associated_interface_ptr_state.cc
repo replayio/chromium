@@ -4,6 +4,7 @@
 
 #include "mojo/public/cpp/bindings/lib/associated_interface_ptr_state.h"
 
+#include "base/record_replay.h"
 #include "mojo/public/cpp/bindings/lib/task_runner_helper.h"
 
 namespace mojo {
@@ -11,7 +12,13 @@ namespace internal {
 
 AssociatedInterfacePtrStateBase::AssociatedInterfacePtrStateBase() = default;
 
-AssociatedInterfacePtrStateBase::~AssociatedInterfacePtrStateBase() = default;
+AssociatedInterfacePtrStateBase::~AssociatedInterfacePtrStateBase() {
+  // Endpoint clients must be destroyed at deterministic points, so leak the endpoint
+  // if this state is destroyed during a GC.
+  if (recordreplay::AreEventsDisallowed("~AssociatedInterfacePtrStateBase")) {
+    endpoint_client_.release();
+  }
+}
 
 void AssociatedInterfacePtrStateBase::QueryVersion(
     base::OnceCallback<void(uint32_t)> callback) {

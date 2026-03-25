@@ -9,17 +9,26 @@
 namespace mojo {
 namespace core {
 
-WatcherSet::WatcherSet(Dispatcher* owner) : owner_(owner) {}
+WatcherSet::WatcherSet(Dispatcher* owner) : owner_(owner) {
+}
 
-WatcherSet::~WatcherSet() = default;
+WatcherSet::~WatcherSet() {
+}
 
 void WatcherSet::NotifyState(const HandleSignalsState& state) {
+  recordreplay::Assert(
+      "[RUN-1307-1812] WatcherSet::NotifyState %d %d",
+      last_known_state_.has_value(),
+      last_known_state_.has_value() && state.equals(last_known_state_.value()));
+
   // Avoid notifying watchers if they have already seen this state.
-  if (last_known_state_.has_value() && state.equals(last_known_state_.value()))
+  if (last_known_state_.has_value() && state.equals(last_known_state_.value())) {
     return;
+  }
   last_known_state_ = state;
-  for (const auto& entry : watchers_)
+  for (const auto& entry : watchers_) {
     entry.first->NotifyHandleState(owner_, state);
+  }
 }
 
 void WatcherSet::NotifyClosed() {

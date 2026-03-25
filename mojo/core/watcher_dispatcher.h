@@ -11,6 +11,7 @@
 
 #include "base/containers/flat_map.h"
 #include "base/memory/ref_counted.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "mojo/core/dispatcher.h"
 #include "mojo/core/handle_signals_state.h"
@@ -58,7 +59,7 @@ class WatcherDispatcher : public Dispatcher {
  private:
   friend class Watch;
 
-  using WatchSet = std::set<const Watch*>;
+  using WatchSet = std::set<const Watch*, recordreplay::CompareByPointerId>;
 
   ~WatcherDispatcher() override;
 

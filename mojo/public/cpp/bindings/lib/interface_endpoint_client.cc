@@ -34,6 +34,8 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/perfetto/protos/perfetto/trace/track_event/chrome_mojo_event_info.pbzero.h"
 
+#include "base/record_replay.h"
+
 namespace mojo {
 
 // ----------------------------------------------------------------------------
@@ -455,6 +457,8 @@ InterfaceEndpointClient::InterfaceEndpointClient(
       interface_name_(interface_name),
       method_info_callback_(method_info_callback),
       method_name_callback_(method_name_callback) {
+  recordreplay::RegisterPointer("InterfaceEndpointClient", this);
+
   DCHECK(handle_.is_valid());
   DETACH_FROM_SEQUENCE(sequence_checker_);
 
@@ -483,6 +487,7 @@ InterfaceEndpointClient::~InterfaceEndpointClient() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (controller_)
     handle_.group_controller()->DetachEndpointClient(handle_);
+  recordreplay::UnregisterPointer(this);
 }
 
 AssociatedGroup* InterfaceEndpointClient::associated_group() {
@@ -563,8 +568,30 @@ bool InterfaceEndpointClient::AcceptWithResponder(
                                   std::move(responder));
 }
 
+// Check that IPC messages are the same size when replaying, but if they
+// aren't resize the message to its size when recording so that we are
+// more likely to be able to continue replaying.
+static void RecordReplayEnsureConsistentMessageSize(Message* message) {
+  recordreplay::Assert("EnsureConsistentMessageSize %zu",
+                       message->data_num_bytes());
+
+  size_t recorded_bytes =
+    recordreplay::RecordReplayValue("EnsureConsistentMessageSize",
+                                    message->data_num_bytes());
+
+  if (recorded_bytes != message->data_num_bytes()) {
+    char* new_payload = new char[recorded_bytes];
+    memset(new_payload, 0, recorded_bytes);
+    memcpy(new_payload, message->data(),
+           std::min<size_t>(recorded_bytes, message->data_num_bytes()));
+    *message->payload_buffer() = internal::Buffer(new_payload, recorded_bytes, recorded_bytes);
+  }
+}
+
 bool InterfaceEndpointClient::SendMessage(Message* message,
                                           bool is_control_message) {
+  RecordReplayEnsureConsistentMessageSize(message);
+
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!message->has_flag(Message::kFlagExpectsResponse));
   DCHECK(!handle_.pending_association());
@@ -601,6 +628,10 @@ bool InterfaceEndpointClient::SendMessageWithResponder(
     bool is_control_message,
     SyncSendMode sync_send_mode,
     std::unique_ptr<MessageReceiver> responder) {
+  RecordReplayEnsureConsistentMessageSize(message);
+  recordreplay::Assert(
+      "[RUN-1307-1773] InterfaceEndpointClient::SendMessageWithResponder");
+
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(message->has_flag(Message::kFlagExpectsResponse));
   DCHECK(!handle_.pending_association());
@@ -686,11 +717,21 @@ bool InterfaceEndpointClient::HandleIncomingMessage(Message* message) {
   // members we need for logging in case of an error.
   const char* interface_name = interface_name_;
   uint32_t name = message->name();
+
+  recordreplay::Assert(
+      "[RUN-2229-2231] InterfaceEndpointClient::HandleIncomingMessage A %u",
+      name);
   if (!dispatcher_.Accept(message)) {
+    recordreplay::Assert(
+        "[RUN-2229-2231] InterfaceEndpointClient::HandleIncomingMessage B %u",
+        name);
     LOG(ERROR) << "Message " << name << " rejected by interface "
                << interface_name;
     return false;
   }
+  recordreplay::Assert(
+      "[RUN-2229-2231] InterfaceEndpointClient::HandleIncomingMessage C %u",
+      name);
 
   return true;
 }
@@ -704,6 +745,9 @@ void InterfaceEndpointClient::NotifyError(
               });
 
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  // https://linear.app/replay/issue/RUN-965
+  recordreplay::Assert("InterfaceEndpointClient::NotifyError %d", encountered_error_);
 
   if (encountered_error_)
     return;
@@ -915,6 +959,10 @@ bool InterfaceEndpointClient::HandleValidatedMessage(Message* message) {
                 perfetto::Flow::Global(message->GetTraceId())(ctx);
               });
 
+  recordreplay::Assert("[RUN-2229-2231] InterfaceEndpointClient::HandleValidatedMessage A %lu %lu %lu %lu",
+                       handle_.id(), message->interface_id(),
+                       message->header()->flags, message->header()->name);
+
   DCHECK_EQ(handle_.id(), message->interface_id());
 
   if (encountered_error_) {
@@ -931,10 +979,13 @@ bool InterfaceEndpointClient::HandleValidatedMessage(Message* message) {
   bool accepted_interface_message = false;
   bool has_response = false;
   if (message->has_flag(Message::kFlagExpectsResponse)) {
+    recordreplay::Assert("[RUN-2229-2231] InterfaceEndpointClient::HandleValidatedMessage B");
     has_response = true;
     auto responder = std::make_unique<ResponderThunk>(
         weak_ptr_factory_.GetWeakPtr(), task_runner_);
     if (mojo::internal::ControlMessageHandler::IsControlMessage(message)) {
+      recordreplay::Assert(
+          "[RUN-2229-2231] InterfaceEndpointClient::HandleValidatedMessage C");
       return control_message_handler_.AcceptWithResponder(message,
                                                           std::move(responder));
     } else {
@@ -945,19 +996,31 @@ bool InterfaceEndpointClient::HandleValidatedMessage(Message* message) {
     }
   } else if (message->has_flag(Message::kFlagIsResponse)) {
     uint64_t request_id = message->request_id();
+    recordreplay::Assert(
+        "[RUN-2229-2231] InterfaceEndpointClient::HandleValidatedMessage D %llu", request_id);
 
     if (message->has_flag(Message::kFlagIsSync)) {
       auto it = sync_responses_.find(request_id);
+      recordreplay::Assert(
+          "[RUN-2229-2231] InterfaceEndpointClient::HandleValidatedMessage E %d",
+          it == sync_responses_.end());
       if (it == sync_responses_.end())
         return false;
 
       if (it->second) {
+        recordreplay::Assert(
+            "[RUN-2229-2231] InterfaceEndpointClient::HandleValidatedMessage F %u",
+            message->name());
         if (message->name() != it->second->request_message_name) {
+          recordreplay::Assert(
+              "[RUN-2229-2231] InterfaceEndpointClient::HandleValidatedMessage G");
           return false;
         }
 
         it->second->response = std::move(*message);
         *it->second->response_received = true;
+        recordreplay::Assert(
+            "[RUN-2229-2231] InterfaceEndpointClient::HandleValidatedMessage H");
         return true;
       }
 
@@ -977,16 +1040,24 @@ bool InterfaceEndpointClient::HandleValidatedMessage(Message* message) {
     }
 
     if (message->name() != pending_response->request_message_name) {
+      recordreplay::Assert(
+          "[RUN-2229-2231] InterfaceEndpointClient::HandleValidatedMessage I");
       return false;
     }
 
     internal::MessageDispatchContext dispatch_context(message);
+    recordreplay::Assert(
+        "[RUN-2229-2231] InterfaceEndpointClient::HandleValidatedMessage J");
     return pending_response->responder->Accept(message);
   } else {
-    if (mojo::internal::ControlMessageHandler::IsControlMessage(message))
+    if (mojo::internal::ControlMessageHandler::IsControlMessage(message)) {
+      recordreplay::Assert(
+          "[RUN-2229-2231] InterfaceEndpointClient::HandleValidatedMessage K");
       return control_message_handler_.Accept(message);
+    }
 
-    accepted_interface_message = incoming_receiver_->Accept(message);
+    // If this has been leaked instead of destroyed the receiver can no longer be used.
+    accepted_interface_message = record_replay_leaked_ || incoming_receiver_->Accept(message);
   }
 
   if (weak_self && accepted_interface_message &&
@@ -996,6 +1067,8 @@ bool InterfaceEndpointClient::HandleValidatedMessage(Message* message) {
       MaybeStartIdleTimer();
   }
 
+  recordreplay::Assert(
+      "[RUN-2229-2231] InterfaceEndpointClient::HandleValidatedMessage L");
   return accepted_interface_message;
 }
 

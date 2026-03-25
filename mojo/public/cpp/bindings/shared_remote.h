@@ -19,6 +19,8 @@
 #include "mojo/public/cpp/bindings/message.h"
 #include "mojo/public/cpp/bindings/remote.h"
 
+#include "base/record_replay.h"
+
 namespace mojo {
 
 namespace internal {
@@ -182,6 +184,13 @@ class SharedRemoteBase
 
     void DeleteOnCorrectThread() const {
       if (!task_runner_->RunsTasksInCurrentSequence()) {
+        // Sequenced task runners don't support posting tasks at non-deterministic
+        // points when recording/replaying, so leak the remote instead.
+        if (recordreplay::AreEventsDisallowed() &&
+            recordreplay::FeatureEnabled("leak-references", "RemoteWrapper::DeleteOnCorrectThread")) {
+          return;
+        }
+
         // NOTE: This is only called when there are no more references to
         // |this|, so binding it unretained is both safe and necessary.
         task_runner_->PostTask(

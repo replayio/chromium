@@ -27,6 +27,8 @@
 #include "base/task/current_thread.h"
 #include "base/trace_event/typed_macros.h"
 
+#include "base/record_replay.h"
+
 extern "C" {
 kern_return_t fileport_makeport(int fd, mach_port_t*);
 int fileport_makefd(mach_port_t);
@@ -52,7 +54,8 @@ class ChannelMac : public Channel,
       : Channel(delegate, handle_policy, DispatchBufferPolicy::kUnmanaged),
         self_(this),
         io_task_runner_(io_task_runner),
-        watch_controller_(FROM_HERE) {
+        watch_controller_(FROM_HERE),
+        write_lock_("ChannelMac.write_lock_") {
     PlatformHandle channel_handle;
     if (connection_params.server_endpoint().is_valid()) {
       channel_handle =
@@ -244,6 +247,7 @@ class ChannelMac : public Channel,
   // soon as the Channel establishes both the send and receive ports.
   bool RequestSendDeadNameNotification() {
     base::mac::ScopedMachSendRight previous;
+
     kern_return_t kr = mach_port_request_notification(
         mach_task_self(), send_port_.get(), MACH_NOTIFY_DEAD_NAME, 0,
         receive_port_.get(), MACH_MSG_TYPE_MAKE_SEND_ONCE,
@@ -647,12 +651,23 @@ class ChannelMac : public Channel,
         return;
       }
 
+      // When replaying the raw address used when recording will be replayed,
+      // which we can't dereference. Allocate a new block of memory and copy
+      // in its contents from the recording.
+      void* address = descriptor->address;
+      if (recordreplay::IsReplaying()) {
+        address = nullptr;
+        kr = vm_allocate(mach_task_self(), (vm_address_t*)&address, descriptor->size, true);
+        CHECK(kr == KERN_SUCCESS);
+      }
+      recordreplay::RecordReplayBytes("ChannelMac::OnMachMessageReceived", address, descriptor->size);
+
       payload = base::span<const char>(
-          reinterpret_cast<const char*>(descriptor->address), descriptor->size);
+          reinterpret_cast<const char*>(address), descriptor->size);
       // The kernel page-aligns the OOL memory when performing the mach_msg on
       // the send side, but it preserves the original size in the descriptor.
       ool_memory.reset_unaligned(
-          reinterpret_cast<vm_address_t>(descriptor->address),
+          reinterpret_cast<vm_address_t>(address),
           descriptor->size);
     } else {
       auto* data_size_ptr = buffer.Object<uint64_t>();

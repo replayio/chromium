@@ -17,6 +17,7 @@
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/rand_util.h"
+#include "base/record_replay.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
@@ -162,8 +163,15 @@ Connector::Connector(ScopedMessagePipeHandle message_pipe,
           base::JoinString({interface_name ? interface_name : "Generic",
                             "MessageHeaderValidator"},
                            "")) {
+  // https://linear.app/replay/issue/RUN-999
+  CHECK(!recordreplay::AreEventsDisallowed() ||
+        recordreplay::HasDivergedFromRecording() ||
+        recordreplay::HasDisabledFeatures());
+
+  recordreplay::RegisterPointer("Connector", this);
+
   if (config == MULTI_THREADED_SEND)
-    lock_.emplace();
+    lock_.emplace("Connector.lock_");
 
 #if defined(ENABLE_IPC_FUZZER)
   if (!MessageDumper::GetMessageDumpDirectory().empty())
@@ -193,6 +201,8 @@ Connector::~Connector() {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
     CancelWait();
   }
+
+  recordreplay::UnregisterPointer(this);
 }
 
 void Connector::SetOutgoingSerializationMode(OutgoingSerializationMode mode) {
@@ -320,6 +330,8 @@ bool Connector::PrefersSerializedMessages() {
 }
 
 bool Connector::Accept(Message* message) {
+  recordreplay::Assert("[RUN-1209-1800] Connector::Accept A %d %d %d",
+                       !!lock_, !!task_runner_, !!error_);
   if (!lock_ && task_runner_)
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
@@ -328,6 +340,9 @@ bool Connector::Accept(Message* message) {
 
   internal::MayAutoLock locker(&lock_);
 
+  recordreplay::Assert("[RUN-1209-1800] Connector::Accept B %d %d %d",
+                       message_pipe_.is_valid(), drop_writes_,
+                       message->is_serialized());
   if (!message_pipe_.is_valid() || drop_writes_)
     return true;
 
@@ -557,8 +572,19 @@ bool Connector::DispatchMessage(ScopedMessageHandle handle) {
 
   if (connection_group_)
     message.set_receiver_connection_group(&connection_group_);
-  bool receiver_result =
-      incoming_receiver_ && incoming_receiver_->Accept(&message);
+
+  // Whether there is a receiver or not can vary when replaying due to different
+  // MessagePort GC behavior. For now we hack around this by only notifying the
+  // receiver if it was present while recording.
+  bool recorded_has_receiver =
+    recordreplay::RecordReplayValue("Connector::DispatchMessage has_receiver", !!incoming_receiver_);
+
+  bool receiver_result = false;
+  if (recorded_has_receiver) {
+    recordreplay::Assert("Connector::DispatchMessage has_receiver %d", !!incoming_receiver_);
+    receiver_result = incoming_receiver_ && incoming_receiver_->Accept(&message);
+  }
+
   if (!weak_self)
     return receiver_result;
 
@@ -604,8 +630,9 @@ void Connector::ScheduleDispatchOfPendingMessagesOrWaitForMore(
 }
 
 void Connector::ReadAllAvailableMessages() {
-  if (paused_ || error_)
+  if (paused_ || error_) {
     return;
+  }
 
   base::WeakPtr<Connector> weak_self = weak_self_;
 
@@ -615,9 +642,8 @@ void Connector::ReadAllAvailableMessages() {
 
     switch (rv) {
       case MOJO_RESULT_OK:
-        if (!DispatchMessage(std::move(message)) || !weak_self || paused_) {
+        if (!DispatchMessage(std::move(message)) || !weak_self || paused_)
           return;
-        }
         break;
 
       case MOJO_RESULT_SHOULD_WAIT:
@@ -656,6 +682,7 @@ void Connector::CancelWait() {
 }
 
 void Connector::HandleError(bool force_pipe_reset, bool force_async_handler) {
+  recordreplay::Assert("[RUN-1209-1900] Connector::HandleError A %d", !!paused_);
   if (error_ || !message_pipe_.is_valid())
     return;
 
@@ -683,6 +710,7 @@ void Connector::HandleError(bool force_pipe_reset, bool force_async_handler) {
     if (!paused_)
       WaitToReadMore();
   } else {
+    recordreplay::Assert("[RUN-1209-1900] Connector::HandleError B");
     error_ = true;
     if (connection_error_handler_)
       std::move(connection_error_handler_).Run();

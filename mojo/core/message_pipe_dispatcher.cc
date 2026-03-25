@@ -9,6 +9,7 @@
 
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
+#include "base/record_replay.h"
 #include "base/trace_event/trace_event.h"
 #include "mojo/core/core.h"
 #include "mojo/core/node_controller.h"
@@ -95,12 +96,15 @@ MessagePipeDispatcher::MessagePipeDispatcher(NodeController* node_controller,
       port_(port),
       pipe_id_(pipe_id),
       endpoint_(endpoint),
+      signal_lock_("MessagePipeDispatcher.signal_lock_"),
       watchers_(this) {
   DVLOG(2) << "Creating new MessagePipeDispatcher for port " << port.name()
            << " [pipe_id=" << pipe_id << "; endpoint=" << endpoint << "]";
 
   node_controller_->SetPortObserver(
       port_, base::MakeRefCounted<PortObserverThunk>(this));
+
+  recordreplay::RegisterPointer("MessagePipeDispatcher", this);
 }
 
 bool MessagePipeDispatcher::Fuse(MessagePipeDispatcher* other) {
@@ -133,7 +137,7 @@ Dispatcher::Type MessagePipeDispatcher::GetType() const {
 }
 
 MojoResult MessagePipeDispatcher::Close() {
-  base::AutoLock lock(signal_lock_);
+  recordreplay::AutoLockMaybeEventsDisallowed lock(signal_lock_);
   DVLOG(2) << "Closing message pipe " << pipe_id_ << " endpoint " << endpoint_
            << " [port=" << port_.name() << "]";
   return CloseNoLock();
@@ -384,10 +388,16 @@ scoped_refptr<Dispatcher> MessagePipeDispatcher::Deserialize(
                                    state->pipe_id, state->endpoint);
 }
 
-MessagePipeDispatcher::~MessagePipeDispatcher() = default;
+MessagePipeDispatcher::~MessagePipeDispatcher() {
+  recordreplay::UnregisterPointer(this);
+}
 
 MojoResult MessagePipeDispatcher::CloseNoLock() {
   signal_lock_.AssertAcquired();
+
+  recordreplay::Assert(
+      "[RUN-1307-1773] MessagePipeDispatcher::CloseNoLock %d %d %d",
+      (int)port_closed_, (int)in_transit_, (int)port_transferred_);
   if (port_closed_ || in_transit_)
     return MOJO_RESULT_INVALID_ARGUMENT;
 
@@ -395,7 +405,7 @@ MojoResult MessagePipeDispatcher::CloseNoLock() {
   watchers_.NotifyClosed();
 
   if (!port_transferred_) {
-    base::AutoUnlock unlock(signal_lock_);
+    recordreplay::AutoUnlockMaybeEventsDisallowed unlock(signal_lock_);
     node_controller_->ClosePort(port_);
 
 #if BUILDFLAG(MOJO_TRACE_ENABLED)

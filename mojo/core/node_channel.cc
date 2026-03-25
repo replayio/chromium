@@ -19,6 +19,8 @@
 #include "mojo/core/core.h"
 #include "mojo/core/request_context.h"
 
+#include "base/record_replay.h"
+
 namespace mojo {
 namespace core {
 
@@ -542,7 +544,8 @@ NodeChannel::NodeChannel(
     const ProcessErrorCallback& process_error_callback)
     : base::RefCountedDeleteOnSequence<NodeChannel>(io_task_runner),
       delegate_(delegate),
-      process_error_callback_(process_error_callback)
+      process_error_callback_(process_error_callback),
+      channel_lock_("NodeChannel.channel_lock_")
 #if !BUILDFLAG(IS_NACL)
       ,
       channel_(Channel::Create(this,
@@ -868,6 +871,13 @@ void NodeChannel::OfferChannelUpgrade() {
   base::AutoLock lock(channel_lock_);
   channel_->OfferChannelUpgrade();
 #endif
+}
+
+void NodeChannel::Release() {
+  recordreplay::Assert("[RUN-1307-1830] NodeChannel::Release %d %d",
+                       HasOneRef(),
+                       owning_task_runner()->RunsTasksInCurrentSequence());
+  base::RefCountedDeleteOnSequence<NodeChannel>::Release();
 }
 
 uint64_t NodeChannel::RemoteCapabilities() const {

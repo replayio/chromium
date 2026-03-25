@@ -10,18 +10,38 @@
 #include "base/compiler_specific.h"
 #include "base/debug/alias.h"
 #include "base/memory/ptr_util.h"
+#include "base/record_replay.h"
 #include "mojo/core/watch.h"
 
 namespace mojo {
 namespace core {
 
 WatcherDispatcher::WatcherDispatcher(MojoTrapEventHandler handler)
-    : handler_(handler) {}
+    : handler_(handler),
+      lock_("WatcherDispatcher.lock_") {
+  // Registering dispatchers is needed for deterministic sort order in WatcherSets.
+  recordreplay::RegisterPointer("WatcherDispatcher", this);
+
+  // https://linear.app/replay/issue/RUN-999
+  CHECK(!recordreplay::AreEventsDisallowed() ||
+        recordreplay::HasDivergedFromRecording() ||
+        recordreplay::HasDisabledFeatures());
+  if (recordreplay::IsRecordingOrReplaying("pointer-ids")) {
+    CHECK(recordreplay::PointerId(this) ||
+          recordreplay::HasDivergedFromRecording() ||
+          recordreplay::HasDisabledFeatures());
+  }
+}
 
 void WatcherDispatcher::NotifyHandleState(Dispatcher* dispatcher,
                                           const HandleSignalsState& state) {
   base::AutoLock lock(lock_);
   auto it = watched_handles_.find(dispatcher);
+
+  recordreplay::Assert(
+      "[RUN-1307-1812] WatcherDispatcher::NotifyHandleState %d %d",
+      it == watched_handles_.end(), recordreplay::PointerId(this));
+
   if (it == watched_handles_.end())
     return;
 
@@ -86,8 +106,9 @@ void WatcherDispatcher::InvokeWatchCallback(uintptr_t context,
     // This guarantee is sufficient to make safe, synchronized, per-context
     // state management possible in user code.
     base::AutoLock lock(lock_);
-    if (closed_ && result != MOJO_RESULT_CANCELLED)
+    if (closed_ && result != MOJO_RESULT_CANCELLED) {
       return;
+    }
   }
 
   handler_(&event);
@@ -210,13 +231,16 @@ MojoResult WatcherDispatcher::CancelWatch(uintptr_t context) {
 MojoResult WatcherDispatcher::Arm(uint32_t* num_blocking_events,
                                   MojoTrapEvent* blocking_events) {
   base::AutoLock lock(lock_);
-  if (num_blocking_events && !blocking_events)
+  if (num_blocking_events && !blocking_events) {
     return MOJO_RESULT_INVALID_ARGUMENT;
-  if (closed_)
+  }
+  if (closed_) {
     return MOJO_RESULT_INVALID_ARGUMENT;
+  }
 
-  if (watched_handles_.empty())
+  if (watched_handles_.empty()) {
     return MOJO_RESULT_NOT_FOUND;
+  }
 
   if (ready_watches_.empty()) {
     // Fast path: No watches are ready to notify, so we're done.
@@ -233,8 +257,25 @@ MojoResult WatcherDispatcher::Arm(uint32_t* num_blocking_events,
     if (last_watch_to_block_arming_) {
       // Find the next watch to notify in simple round-robin order on the
       // |ready_watches_| map, wrapping around to the beginning if necessary.
-      next_ready_iter = ready_watches_.find(
-          reinterpret_cast<const Watch*>(last_watch_to_block_arming_));
+      if (recordreplay::IsRecordingOrReplaying("pointer-ids")) {
+        // When recording/replaying the ready_watches_ set is sorted by pointer ID,
+        // and since last_watch_to_block_arming_ may be an invalid pointer we can't
+        // determine the ID it originally had and use it for indexing. Scan the map
+        // for the desired entry instead. This O(N) traversal could be avoided by
+        // using a separate map when recording/replaying, indexing it by the pointer
+        // ID and using the ID itself for last_watch_to_block_arming_.
+        for (WatchSet::const_iterator search_iter = ready_watches_.begin();
+             search_iter != ready_watches_.end();
+             ++search_iter) {
+          if (*search_iter == reinterpret_cast<const Watch*>(last_watch_to_block_arming_)) {
+            next_ready_iter = search_iter;
+            break;
+          }
+        }
+      } else {
+        next_ready_iter = ready_watches_.find(
+            reinterpret_cast<const Watch*>(last_watch_to_block_arming_));
+      }
       if (next_ready_iter != ready_watches_.end())
         ++next_ready_iter;
       if (next_ready_iter == ready_watches_.end())
@@ -261,7 +302,9 @@ MojoResult WatcherDispatcher::Arm(uint32_t* num_blocking_events,
   return MOJO_RESULT_FAILED_PRECONDITION;
 }
 
-WatcherDispatcher::~WatcherDispatcher() = default;
+WatcherDispatcher::~WatcherDispatcher() {
+  recordreplay::UnregisterPointer(this);
+}
 
 }  // namespace core
 }  // namespace mojo
