@@ -18,6 +18,8 @@
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/tick_clock.h"
 
+#include "base/record_replay.h"
+
 namespace base {
 namespace internal {
 

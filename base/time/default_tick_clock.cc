@@ -6,6 +6,8 @@
 
 #include "base/no_destructor.h"
 
+#include "base/record_replay.h"
+
 namespace base {
 
 DefaultTickClock::~DefaultTickClock() = default;

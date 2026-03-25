@@ -48,6 +48,8 @@
 #include "base/trace_event/address_space_dump_provider.h"
 #endif
 
+#include "base/record_replay.h"
+
 namespace base {
 namespace trace_event {
 
@@ -347,6 +349,13 @@ void MemoryDumpManager::ContinueAsyncProcessDump(
   // skip the hop and move on. Hence the manual naked -> unique ptr juggling.
   auto pmd_async_state = WrapUnique(owned_pmd_async_state);
   owned_pmd_async_state = nullptr;
+
+  // Don't generate process dumps when recording/replaying, to avoid mismatched
+  // behavior issues when accessing memory dump state.
+  if (recordreplay::IsRecordingOrReplaying("gc-changes", "MemoryDumpManager::ContinueAsyncProcessDump")) {
+    FinishAsyncProcessDump(std::move(pmd_async_state));
+    return;
+  }
 
   while (!pmd_async_state->pending_dump_providers.empty()) {
     // Read MemoryDumpProviderInfo thread safety considerations in
