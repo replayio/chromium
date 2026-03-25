@@ -153,8 +153,15 @@ scoped_refptr<FontDataForRangeSet> FontFallbackIterator::Next(
 
   if (fallback_stage_ == kFirstCandidateForNotdefGlyph) {
     fallback_stage_ = kOutOfLuck;
-    if (!first_candidate_)
-      FontCache::CrashWithFontInfo(&font_description_);
+    if (!first_candidate_) {
+      // [replay] hackfix: try not to crash if a font symbol cannot be found
+      scoped_refptr<SimpleFontData> system_font = UniqueSystemFontForHintList(hint_list);
+      if (system_font) {
+        // Fallback fonts are not retained in the FontDataCache.
+        return UniqueOrNext(base::AdoptRef(new FontDataForRangeSet(system_font)),
+                            hint_list);
+      }
+    }
     return first_candidate_;
   }
 
@@ -266,6 +273,14 @@ scoped_refptr<SimpleFontData> FontFallbackIterator::UniqueSystemFontForHintList(
   // already.
   if (!hint_list.size())
     return nullptr;
+
+  if (recordreplay::IsReplaying() && recordreplay::HasDivergedFromRecording()) {
+    // If we've run out of recording data, then following this chain of logic will lead to
+    // hangs, as we await conditional vars on epoll waiters that don't actually exist, held
+    // by threads that are dead (waiting forever.)  Luckily, it seems we can just early out 
+    // and have Chromium use some defaults for us.
+    return nullptr;
+  }
 
   FontCache& font_cache = FontCache::Get();
   UChar32 hint = hint_list[ChooseHintIndex(hint_list)];

@@ -40,6 +40,8 @@
 #include "third_party/blink/renderer/platform/wtf/type_traits.h"
 #include "v8/include/v8.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 class ScriptState;
@@ -207,8 +209,16 @@ class PLATFORM_EXPORT ScriptWrappable
 
   bool ContainsWrapper() const { return !main_world_wrapper_.IsEmpty(); }
 
+  int RecordReplayId() const { return record_replay_id_; }
+
+  // Avoid pointer-based hashes for ScriptWrappable.
+  // TODO: [RUN-1741] Remove this.
+  unsigned GetHash() const { return (unsigned)record_replay_id_; }
+
  protected:
-  ScriptWrappable() = default;
+  ScriptWrappable() {
+    record_replay_id_ = recordreplay::NewIdAnyThread("ScriptWrappable");
+  }
 
  private:
   v8::Local<v8::Object> MainWorldWrapper(v8::Isolate* isolate) const {
@@ -225,6 +235,10 @@ class PLATFORM_EXPORT ScriptWrappable
       "TraceWrapperV8Reference<v8::Object> should be trivially destructible.");
 
   TraceWrapperV8Reference<v8::Object> main_world_wrapper_;
+
+  // A deterministic ID is used for deterministically iterating collections of
+  // ScriptWrappables in many places.
+  int record_replay_id_ = 0;
 
   // These classes are exceptionally allowed to directly interact with the main
   // world wrapper.

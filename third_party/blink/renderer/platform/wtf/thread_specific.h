@@ -40,6 +40,8 @@
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
 #include "third_party/blink/renderer/platform/wtf/wtf_export.h"
 
+#include "base/record_replay.h"
+
 namespace WTF {
 
 template <typename T>
@@ -86,6 +88,14 @@ inline void ThreadSpecific<T>::Destroy(void* ptr) {
   // (which can be re-entrant) while the pointer is still set, to avoid lazily
   // allocating Threading after it is destroyed.
   if (IsMainThread())
+    return;
+
+  // Thread local value destructors do not run consistently when recording/replaying.
+  // When recording the current thread is no longer known and calls/locks/etc.
+  // made by the destructors cannot be recorded, and when replaying the destructor
+  // does not run at all. To avoid these problems we skip running the destructors
+  // for now and let associated resources leak.
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "ThreadSpecific::Destroy"))
     return;
 
   // The memory was allocated via Partitions::FastZeroedMalloc, and then the

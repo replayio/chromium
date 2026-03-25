@@ -100,6 +100,7 @@ AudioDestination::AudioDestination(AudioIOCallback& callback,
           AudioBus::Create(number_of_output_channels, render_quantum_frames)),
       callback_(callback),
       frames_elapsed_(0),
+      state_change_lock_("AudioDestination"),
       device_state_(DeviceState::kStopped) {
   SendLogMessage(String::Format("%s({output_channels=%u})", __func__,
                                 number_of_output_channels));
@@ -112,6 +113,9 @@ AudioDestination::AudioDestination(AudioIOCallback& callback,
   DCHECK(web_audio_device_);
 
   callback_buffer_size_ = web_audio_device_->FramesPerBuffer();
+  
+  recordreplay::Assert("[RUN-1345] callback_buffer_size_ is big: %d", (callback_buffer_size_ > RenderQuantumFrames() * 2));
+  
   SendLogMessage(String::Format("%s => (device callback buffer size=%u frames)",
                                 __func__, callback_buffer_size_));
   SendLogMessage(String::Format("%s => (device sample rate=%.0f Hz)", __func__,
