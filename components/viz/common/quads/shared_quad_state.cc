@@ -4,6 +4,7 @@
 
 #include "components/viz/common/quads/shared_quad_state.h"
 
+#include "base/record_replay.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/traced_value.h"
 #include "base/values.h"
