@@ -174,6 +174,11 @@ PageSchedulerImpl::PageSchedulerImpl(
           base::FeatureList::IsEnabled(features::kThrottleForegroundTimers)),
       foreground_timers_throttled_wake_up_interval_(
           GetForegroundTimersThrottledWakeUpInterval()) {
+  // Pointer registration is needed for sorting in MainThreadSchedulerImpl.
+  recordreplay::RegisterPointer("PageSchedulerImpl", this);
+
+  REPLAY_ASSERT("[TT-1367-1386] PageSchedulerImpl::PageSchedulerImpl %d", !!delegate_);
+
   current_lifecycle_state_ =
       (kDefaultPageVisibility == PageVisibilityState::kVisible
            ? PageLifecycleState::kActive
@@ -193,12 +198,20 @@ PageSchedulerImpl::PageSchedulerImpl(
 }
 
 PageSchedulerImpl::~PageSchedulerImpl() {
+  recordreplay::UnregisterPointer(this);
+
   // TODO(alexclarke): Find out why we can't rely on the web view outliving the
   // frame.
   for (FrameSchedulerImpl* frame_scheduler : frame_schedulers_) {
     frame_scheduler->DetachFromPageScheduler();
   }
   main_thread_scheduler_->RemovePageScheduler(this);
+}
+
+void
+PageSchedulerImpl::BreakLinkages() {
+  REPLAY_ASSERT("[TT-1367-1386] PageSchedulerImpl::BreakLinkages %d", !!delegate_);
+  delegate_ = nullptr;
 }
 
 // static
@@ -438,6 +451,10 @@ bool PageSchedulerImpl::OptedOutFromAggressiveThrottling() const {
 }
 
 bool PageSchedulerImpl::RequestBeginMainFrameNotExpected(bool new_state) {
+  REPLAY_ASSERT(
+      "[TT-1367-1371] "
+      "PageSchedulerImpl::RequestBeginMainFrameNotExpected %d",
+      !!delegate_);
   if (!delegate_)
     return false;
   return delegate_->RequestBeginMainFrameNotExpected(new_state);
@@ -771,7 +788,14 @@ void PageSchedulerImpl::UpdateWakeUpBudgetPools(base::LazyNow* lazy_now) {
 }
 
 void PageSchedulerImpl::NotifyFrames() {
+  std::vector<FrameSchedulerImpl*> frame_scheduler_vector;
   for (FrameSchedulerImpl* frame_scheduler : frame_schedulers_) {
+    frame_scheduler_vector.push_back(frame_scheduler);
+  }
+  std::sort(frame_scheduler_vector.begin(), frame_scheduler_vector.end(),
+            recordreplay::CompareByPointerId());
+
+  for (FrameSchedulerImpl* frame_scheduler : frame_scheduler_vector) {
     frame_scheduler->UpdatePolicy();
   }
 }
@@ -824,9 +848,17 @@ void PageSchedulerImpl::SetPageLifecycleState(PageLifecycleState new_state) {
 }
 
 FrameSchedulerImpl* PageSchedulerImpl::SelectFrameForUkmAttribution() {
+  std::vector<FrameSchedulerImpl*> frame_scheduler_vector;
   for (FrameSchedulerImpl* frame_scheduler : frame_schedulers_) {
-    if (frame_scheduler->GetUkmRecorder())
+    frame_scheduler_vector.push_back(frame_scheduler);
+  }
+  std::sort(frame_scheduler_vector.begin(), frame_scheduler_vector.end(),
+            recordreplay::CompareByPointerId());
+
+  for (FrameSchedulerImpl* frame_scheduler : frame_scheduler_vector) {
+    if (frame_scheduler->GetUkmRecorder()) {
       return frame_scheduler;
+    }
   }
   return nullptr;
 }
@@ -844,7 +876,14 @@ bool PageSchedulerImpl::HasWakeUpBudgetPools() const {
 }
 
 void PageSchedulerImpl::MoveTaskQueuesToCorrectWakeUpBudgetPoolAndUpdate() {
-  for (FrameSchedulerImpl* frame_scheduler : frame_schedulers_)
+  std::vector<FrameSchedulerImpl*> frame_scheduler_vector;
+  for (FrameSchedulerImpl* frame_scheduler : frame_schedulers_) {
+    frame_scheduler_vector.push_back(frame_scheduler);
+  }
+  std::sort(frame_scheduler_vector.begin(), frame_scheduler_vector.end(),
+            recordreplay::CompareByPointerId());
+
+  for (FrameSchedulerImpl* frame_scheduler : frame_scheduler_vector)
     frame_scheduler->MoveTaskQueuesToCorrectWakeUpBudgetPool();
 
   // Update the WakeUpBudgetPools' interval everytime task queues change their

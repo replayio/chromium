@@ -9,6 +9,8 @@
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_scheduler_impl.h"
 #include "third_party/blink/renderer/platform/scheduler/public/dummy_schedulers.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 namespace scheduler {
 
@@ -49,7 +51,9 @@ AgentGroupSchedulerImpl::AgentGroupSchedulerImpl(
       main_thread_scheduler_(main_thread_scheduler) {
   DCHECK(!default_task_queue_->GetFrameScheduler());
   DCHECK_EQ(default_task_queue_->GetAgentGroupScheduler(), this);
-  agents_ = MakeGarbageCollected<HeapHashSet<WeakMember<Agent>>>();
+  agents_ = MakeGarbageCollected<HeapHashSet<WeakMember<Agent>, WTF::MemberHashRecordReplayId<Agent>>>();
+  replay_agents_strong_ = MakeGarbageCollected<HeapHashSet<Member<Agent>>>();
+  record_replay_id_ = recordreplay::NewIdAnyThread("AgentGroupSchedulerImpl");
 }
 
 AgentGroupSchedulerImpl::~AgentGroupSchedulerImpl() {
@@ -120,17 +124,28 @@ v8::Isolate* AgentGroupSchedulerImpl::Isolate() {
 void AgentGroupSchedulerImpl::AddAgent(Agent* agent) {
   DCHECK(agents_->find(agent) == agents_->end());
   agents_->insert(agent);
+  
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "AgentGroupSchedulerImpl"))
+    replay_agents_strong_->insert(agent);
 }
 
 void AgentGroupSchedulerImpl::RemoveAgent(Agent* agent) {
   DCHECK(agents_->find(agent) != agents_->end());
   agents_->erase(agent);
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "AgentGroupSchedulerImpl"))
+    replay_agents_strong_->erase(agent);
 }
 
 void AgentGroupSchedulerImpl::PerformMicrotaskCheckpoint() {
   for (Agent* agent : *agents_) {
+    recordreplay::Assert(
+        "[RUN-2056-2365] AgentGroupSchedulerImpl::PerformMicrotaskCheckpoint "
+        "%d %d %d",
+        RecordReplayId(), (int)agents_->size(), agent->RecordReplayId());
     agent->PerformMicrotaskCheckpoint();
   }
+
+  recordreplay::Assert("[RUN-2056-2211] AgentGroupSchedulerImpl::PerformMicrotaskCheckpoint Done");
 }
 
 }  // namespace scheduler
