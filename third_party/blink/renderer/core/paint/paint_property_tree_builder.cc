@@ -1154,8 +1154,14 @@ void FragmentPaintPropertyTreeBuilder::UpdateIndividualTransform(
         state.rendering_context_id = context_.rendering_context_id;
         if (handling_transform_property && style.Preserves3D() &&
             !state.rendering_context_id) {
-          state.rendering_context_id =
-              PtrHash<const LayoutObject>::GetHash(&object_);
+          // When recording/replaying we need a consistent context ID, so use
+          // the pointer ID of the object instead of its hash.
+          if (recordreplay::IsRecordingOrReplaying("pointer-ids")) {
+            state.rendering_context_id = object_.RecordReplayId();
+          } else {
+            state.rendering_context_id =
+                PtrHash<const LayoutObject>::GetHash(&object_);
+          }
         }
 
         // TODO(crbug.com/1185254): Make this work correctly for block
