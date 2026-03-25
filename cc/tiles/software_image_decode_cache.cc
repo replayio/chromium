@@ -27,6 +27,8 @@
 #include "cc/tiles/mipmap_util.h"
 #include "ui/gfx/geometry/skia_conversions.h"
 
+#include "base/record_replay.h"
+
 using base::trace_event::MemoryAllocatorDump;
 using base::trace_event::MemoryDumpLevelOfDetail;
 
@@ -95,6 +97,7 @@ class SoftwareImageDecodeTaskImpl : public TileTask {
         devtools_instrumentation::ScopedImageDecodeTask::kSoftware,
         ImageDecodeCache::ToScopedTaskType(tracing_info_.task_type),
         ImageDecodeCache::ToScopedImageType(image_type));
+    recordreplay::Assert("[RUN-593-1824] RunOnWorkerThread %s", image_key_.ToString().c_str());
     SoftwareImageDecodeCache::TaskProcessingResult result =
         cache_->DecodeImageInTask(image_key_, paint_image_, task_type_);
 
@@ -155,7 +158,8 @@ PaintFlags::FilterQuality GetDecodedFilterQuality(
 SoftwareImageDecodeCache::SoftwareImageDecodeCache(
     SkColorType color_type,
     size_t locked_memory_limit_bytes)
-    : decoded_images_(ImageLRUCache::NO_AUTO_EVICT),
+    : lock_("SoftwareImageDecodeCache.lock_"),
+      decoded_images_(ImageLRUCache::NO_AUTO_EVICT),
       locked_images_budget_(locked_memory_limit_bytes),
       color_type_(color_type),
       generator_client_id_(PaintImage::GetNextGeneratorClientId()),
@@ -206,13 +210,15 @@ SoftwareImageDecodeCache::GetTaskForImageAndRefInternal(
 
   // If the target size is empty, we can skip this image during draw (and thus
   // we don't need to decode it or ref it).
-  if (key.target_size().IsEmpty())
+  if (key.target_size().IsEmpty()) {
     return TaskResult(/*need_unref=*/false, /*is_at_raster_decode=*/false,
                       /*can_do_hardware_accelerated_decode=*/false);
+  }
 
-  if (!UseCacheForDrawImage(image))
+  if (!UseCacheForDrawImage(image)) {
     return TaskResult(/*need_unref=*/false, /*is_at_raster_decode=*/false,
                       /*can_do_hardware_accelerated_decode=*/false);
+  }
 
   base::AutoLock lock(lock_);
 
@@ -252,9 +258,10 @@ SoftwareImageDecodeCache::GetTaskForImageAndRefInternal(
 
   // If we already have a locked entry, then we can just use that. Otherwise
   // we'll have to create a task.
-  if (cache_entry->is_locked)
+  if (cache_entry->is_locked) {
     return TaskResult(/*need_unref=*/true, /*is_at_raster_decode=*/false,
                       /*can_do_hardware_accelerated_decode=*/false);
+  }
 
   scoped_refptr<TileTask>& task =
       task_type == DecodeTaskType::USE_IN_RASTER_TASKS
@@ -266,6 +273,7 @@ SoftwareImageDecodeCache::GetTaskForImageAndRefInternal(
     task = base::MakeRefCounted<SoftwareImageDecodeTaskImpl>(
         this, key, image.paint_image(), task_type, tracing_info);
   }
+
   return TaskResult(task, /*can_do_hardware_accelerated_decode=*/false);
 }
 
@@ -351,6 +359,10 @@ SoftwareImageDecodeCache::DecodeImageIfNecessary(const CacheKey& key,
   if (key.target_size().IsEmpty())
     entry->decode_failed = true;
 
+  recordreplay::Assert(
+      "[RUN-593-1824] SoftwareImageDecodeCache::DecodeImageIfNecessary A %d %d %d",
+      entry->decode_failed, !!entry->memory, !!entry->is_locked);
+
   if (entry->decode_failed)
     return TaskProcessingResult::kCancelled;
 
@@ -362,6 +374,10 @@ SoftwareImageDecodeCache::DecodeImageIfNecessary(const CacheKey& key,
     if (lock_succeeded)
       return TaskProcessingResult::kLockOnly;
   }
+
+  recordreplay::Assert(
+      "[RUN-593-1824] SoftwareImageDecodeCache::DecodeImageIfNecessary B %d",
+      (int)key.type());
 
   std::unique_ptr<CacheEntry> local_cache_entry;
   // If we can use the original decode, we'll definitely need a decode.
@@ -437,10 +453,19 @@ SoftwareImageDecodeCache::DecodeImageIfNecessary(const CacheKey& key,
           GetColorTypeForPaintImage(key.target_color_params(), paint_image)));
     }
 
+    recordreplay::Assert(
+        "[RUN-593-1824] SoftwareImageDecodeCache::DecodeImageIfNecessary C %d %s",
+        !!candidate_key, candidate_key ? candidate_key->ToString().c_str() : "");
+
     if (candidate_key) {
       CHECK(*candidate_key != key) << key.ToString();
       auto decoded_draw_image =
           GetDecodedImageForDrawInternal(*candidate_key, paint_image);
+
+      recordreplay::Assert(
+          "[RUN-593-1824] SoftwareImageDecodeCache::DecodeImageIfNecessary D %d %d",
+          !!decoded_draw_image.image(), (int)key.type());
+
       if (!decoded_draw_image.image()) {
         local_cache_entry = nullptr;
       } else {

@@ -15,6 +15,8 @@
 #include "cc/input/snap_selection_strategy.h"
 #include "ui/gfx/geometry/vector2d_f.h"
 
+#include "base/record_replay.h"
+
 namespace cc {
 namespace {
 
@@ -234,6 +236,7 @@ bool SnapContainerData::FindSnapPosition(
   }
 
   *snap_position = strategy.current_position();
+
   if (selected_x.has_value()) {
     snap_position->set_x(selected_x.value().snap_offset());
     target_element_ids->x = selected_x.value().element_id();

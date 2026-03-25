@@ -30,7 +30,10 @@
 #include "cc/trees/render_frame_metadata_observer.h"
 #include "cc/trees/scoped_abort_remaining_swap_promises.h"
 #include "cc/trees/swap_promise.h"
+#include "components/viz/service/display/record_replay_render.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
+
+#include "base/record_replay.h"
 
 namespace cc {
 
@@ -49,9 +52,16 @@ ProxyMain::ProxyMain(LayerTreeHost* layer_tree_host,
   TRACE_EVENT0("cc", "ProxyMain::ProxyMain");
   DCHECK(task_runner_provider_);
   DCHECK(IsMainThread());
+  
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    recordreplay::InitPaintCallback();
+    recordreplay::SetCompositorProxy(this);
+  }
 }
 
 ProxyMain::~ProxyMain() {
+  recordreplay::CompositorProxyDestroyed(this);
+
   TRACE_EVENT0("cc", "ProxyMain::~ProxyMain");
   DCHECK(IsMainThread());
   DCHECK(!started_);
@@ -62,12 +72,19 @@ void ProxyMain::InitializeOnImplThread(
     int id,
     const LayerTreeSettings* settings,
     RenderingStatsInstrumentation* rendering_stats_instrumentation) {
+  recordreplay::Assert("[RUN-1881] ProxyMain::InitializeOnImplThread");
+
   DCHECK(task_runner_provider_->IsImplThread());
   DCHECK(!proxy_impl_);
   proxy_impl_ = std::make_unique<ProxyImpl>(
       weak_factory_.GetWeakPtr(), layer_tree_host_, id, settings,
       rendering_stats_instrumentation, task_runner_provider_);
+
+  recordreplay::Assert("[RUN-1881] ProxyMain::InitializeOnImplThread #1");
+
   completion_event->Signal();
+
+  recordreplay::Assert("[RUN-1881] ProxyMain::InitializeOnImplThread Done");
 }
 
 void ProxyMain::DestroyProxyImplOnImplThread(
@@ -128,6 +145,17 @@ void ProxyMain::DidCompletePageScaleAnimation() {
 
 void ProxyMain::BeginMainFrame(
     std::unique_ptr<BeginMainFrameAndCommitState> begin_main_frame_state) {
+  
+  BeginMainFrameWithBlocking(std::move(begin_main_frame_state), false);
+}
+
+void ProxyMain::BeginMainFrameWithBlocking(
+    std::unique_ptr<BeginMainFrameAndCommitState> begin_main_frame_state,
+    bool force_blocking) {
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    recordreplay::SetCompositorProxy(this);
+  }
+
   DCHECK(IsMainThread());
   DCHECK_EQ(NO_PIPELINE_STAGE, current_pipeline_stage_);
 
@@ -343,7 +371,13 @@ void ProxyMain::BeginMainFrame(
   bool updated = should_update_layers && layer_tree_host_->UpdateLayers();
 
   // If updating the layers resulted in a content update, we need a commit.
-  if (updated)
+  //
+  // [RecordReplay] Scroll events do not always perform a paint commit, however
+  // one is necessary for paint events to be properly collected during scrolling.
+  // Force commits if we're recording or replaying.
+  //
+  // See #RUN-2434 (https://linear.app/replay/issue/RUN-2434)
+  if (updated || recordreplay::IsRecordingOrReplaying("notify-paints"))
     final_pipeline_stage_ = COMMIT_PIPELINE_STAGE;
 
   commit_trace_ = std::make_unique<devtools_instrumentation::ScopedCommitTrace>(
@@ -413,7 +447,7 @@ void ProxyMain::BeginMainFrame(
   // point of view, but asynchronously performed on the impl thread,
   // coordinated by the Scheduler.
   CommitTimestamps commit_timestamps;
-  bool blocking = !base::FeatureList::IsEnabled(features::kNonBlockingCommit);
+  bool blocking = force_blocking || !base::FeatureList::IsEnabled(features::kNonBlockingCommit);
   {
     TRACE_EVENT_WITH_FLOW0("viz,benchmark",
                            "MainFrame.NotifyReadyToCommitOnMain",
@@ -429,6 +463,10 @@ void ProxyMain::BeginMainFrame(
     absl::optional<DebugScopedSetMainThreadBlocked> main_thread_blocked;
     if (blocking)
       main_thread_blocked.emplace(task_runner_provider_);
+
+    if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+      recordreplay::OnCommitPaint();
+    }
 
     ImplThreadTaskRunner()->PostTask(
         FROM_HERE,
@@ -454,6 +492,7 @@ void ProxyMain::BeginMainFrame(
       begin_main_frame_state->active_sequence_trackers);
   if (blocking)
     commit_trace_.reset();
+  recordreplay::Assert("[RUN-1675-1826] ProxyMain::BeginMainFrame");
 }
 
 void ProxyMain::DidCompleteCommit(CommitTimestamps commit_timestamps) {
@@ -468,6 +507,10 @@ void ProxyMain::DidPresentCompositorFrame(
     uint32_t frame_token,
     std::vector<PresentationTimeCallbackBuffer::MainCallback> callbacks,
     const gfx::PresentationFeedback& feedback) {
+
+  recordreplay::Assert(
+      "[RUN-2317-2366] ProxyMain::DidPresentCompositorFrame %u", frame_token);
+
   layer_tree_host_->DidPresentCompositorFrame(frame_token, std::move(callbacks),
                                               feedback);
 }
@@ -836,6 +879,12 @@ void ProxyMain::SetRenderFrameObserver(
 double ProxyMain::GetPercentDroppedFrames() const {
   NOTIMPLEMENTED();
   return 0.0;
+}
+
+void ProxyMain::RecordReplayRepaint() {
+  ImplThreadTaskRunner()->PostTask(
+      FROM_HERE, base::BindOnce(&ProxyImpl::RecordReplayRepaint,
+                                base::Unretained(proxy_impl_.get())));
 }
 
 }  // namespace cc
