@@ -6,6 +6,7 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
+#include "base/check.h"
 #include "base/command_line.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -24,6 +25,7 @@
 #if BUILDFLAG(IS_MAC)
 #include "chrome/app/chrome_main_mac.h"
 #include "chrome/app/notification_metrics.h"
+#include <dlfcn.h>
 #endif
 
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX)
@@ -67,6 +69,20 @@ ChromeMain(int argc, const char** argv);
 #error Unknown platform.
 #endif
 
+extern "C" void V8SetRecordingOrReplaying(void* handle);
+extern "C" void V8InitializeNotRecordingOrReplaying();
+
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
+#include "./record_replay_main.cc"
+#endif
+
+#if BUILDFLAG(IS_WIN)
+namespace recordreplay { extern void InitBindings(); }
+#endif
+
+#include "base/power_monitor/power_monitor.h"
+#include "base/record_replay.h"
+
 #if BUILDFLAG(IS_WIN)
 DLLEXPORT int __cdecl ChromeMain(HINSTANCE instance,
                                  sandbox::SandboxInterfaceInfo* sandbox_info,
@@ -77,6 +93,47 @@ int ChromeMain(int argc, const char** argv) {
 #else
 #error Unknown platform.
 #endif
+
+#if BUILDFLAG(IS_LINUX)
+  // On linux ChromeMain is the process entry point, and we need to start
+  // recording/replaying.
+  void* handle = RecordReplayAttach(&argc, &argv);
+  if (handle) {
+    V8SetRecordingOrReplaying(handle);
+  } else {
+    V8InitializeNotRecordingOrReplaying();
+  }
+#elif BUILDFLAG(IS_MAC)
+  // On macOS the main function is in a different binary in chrome_exe_main_mac.cc.
+  // When we get to ChromeMain we've already started recording/replaying, but still
+  // need to initialize V8's record/replay bindings.
+  //
+  // Note: On macOS the library handle doesn't need to be specified when using dlsym.
+  void* sym = dlsym(nullptr, "RecordReplayAttach");
+  if (sym) {
+    V8SetRecordingOrReplaying(nullptr);
+  }
+#elif BUILDFLAG(IS_WIN)
+  // On windows the main function is in a different binary in chrome_exe_main_win.cc.
+  // As for macOS we have already started recording/replaying but initialize V8's
+  // record/replay bindings here. Also make sure we update the command line used in
+  // chrome.dll.
+  if (RecordReplayShouldRecord(nullptr, nullptr)) {
+    HMODULE module = GetModuleHandleA("windows-recordreplay.dll");
+    CHECK(module);
+    V8SetRecordingOrReplaying((void*)module);
+    recordreplay::InitBindings();
+  }
+  // Fix warning.
+  (void)RecordReplayAttach;
+#else // !BUILDFLAG(IS_WIN)
+#error Unknown platform
+#endif // !BUILDFLAG(IS_WIN)
+
+  if (recordreplay::IsRecordingOrReplaying("eager-initialization", "ChromeMain")) {
+    // Force initialization that can otherwise happen at non-deterministic points.
+    base::PowerMonitor::GetInstance();
+  }
 
 #if BUILDFLAG(IS_WIN)
 #if BUILDFLAG(USE_ALLOCATOR_SHIM) && BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
