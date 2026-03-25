@@ -228,7 +228,13 @@ RTCDataChannel::Observer::Observer(
     scoped_refptr<webrtc::DataChannelInterface> channel)
     : main_thread_(main_thread),
       blink_channel_(blink_channel),
-      webrtc_channel_(channel) {}
+      webrtc_channel_(channel) {
+  // Because we avoid unregistering this observer non-deterministically,
+  // we also leak a reference to the observer to ensure it isn't destroyed
+  // without having been unregistered first.
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "RTCDataChannel::Observer::Observer"))
+    AddRef();
+}
 
 RTCDataChannel::Observer::~Observer() {
   DCHECK(!blink_channel_) << "Reference to blink channel hasn't been released.";
@@ -243,6 +249,11 @@ RTCDataChannel::Observer::channel() const {
 void RTCDataChannel::Observer::Unregister() {
   DCHECK(main_thread_->BelongsToCurrentThread());
   blink_channel_ = nullptr;
+
+  // Avoid changing channel observers non-deterministically.
+  if (recordreplay::AreEventsDisallowed("RTCDataChannel::Observer::Unregister"))
+    (void)webrtc_channel_.release();
+
   if (webrtc_channel_.get()) {
     webrtc_channel_->UnregisterObserver();
     // Now that we're guaranteed to not get further OnStateChange callbacks,
@@ -593,7 +604,7 @@ void RTCDataChannel::SetStateToOpenWithoutEvent() {
 }
 
 void RTCDataChannel::DispatchOpenEvent() {
-  DispatchEvent(*Event::Create(event_type_names::kOpen));
+  DispatchEvent(*Event::Create(event_type_names::kOpen), "RTCDataChannel::DispatchOpenEvent");
 }
 
 void RTCDataChannel::OnStateChange(
@@ -618,11 +629,11 @@ void RTCDataChannel::OnStateChange(
     case webrtc::DataChannelInterface::kOpen:
       IncrementCounter(DataChannelCounters::kOpened);
       CreateFeatureHandleForScheduler();
-      DispatchEvent(*Event::Create(event_type_names::kOpen));
+      DispatchEvent(*Event::Create(event_type_names::kOpen), "RTCDataChannel::OnStateChange #1");
       break;
     case webrtc::DataChannelInterface::kClosing:
       if (!closed_from_owner_) {
-        DispatchEvent(*Event::Create(event_type_names::kClosing));
+        DispatchEvent(*Event::Create(event_type_names::kClosing), "RTCDataChannel::OnStateChange #2");
       }
       break;
     case webrtc::DataChannelInterface::kClosed: {
@@ -633,9 +644,9 @@ void RTCDataChannel::OnStateChange(
                    << ", code: " << error.sctp_cause_code().value_or(-1);
         IncrementErrorCounter(error);
         DispatchEvent(*MakeGarbageCollected<RTCErrorEvent>(
-            event_type_names::kError, error));
+            event_type_names::kError, error), "RTCDataChannel::OnStateChange");
       }
-      DispatchEvent(*Event::Create(event_type_names::kClose));
+      DispatchEvent(*Event::Create(event_type_names::kClose), "RTCDataChannel::OnStateChange #4");
       break;
     }
     default:
@@ -707,7 +718,7 @@ void RTCDataChannel::ScheduledEventTimerFired(TimerBase*) {
 
   HeapVector<Member<Event>>::iterator it = events.begin();
   for (; it != events.end(); ++it)
-    DispatchEvent(*it->Release());
+    DispatchEvent(*it->Release(), "RTCDataChannel::ScheduledEventTimerFired");
 
   events.clear();
 }

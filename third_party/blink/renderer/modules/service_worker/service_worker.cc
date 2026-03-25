@@ -131,7 +131,7 @@ ScriptPromise ServiceWorker::InternalsTerminate(ScriptState* script_state) {
 
 void ServiceWorker::StateChanged(mojom::blink::ServiceWorkerState new_state) {
   state_ = new_state;
-  DispatchEvent(*Event::Create(event_type_names::kStatechange));
+  DispatchEvent(*Event::Create(event_type_names::kStatechange), "ServiceWorker::StateChanged");
 }
 
 String ServiceWorker::scriptURL() const {

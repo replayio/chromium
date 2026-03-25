@@ -488,7 +488,7 @@ void MediaRecorder::DispatchScheduledEvent() {
   events.swap(scheduled_events_);
 
   for (const auto& event : events)
-    DispatchEvent(*event);
+    DispatchEvent(*event, "MediaRecorder::DispatchScheduledEvent");
 }
 
 void MediaRecorder::Trace(Visitor* visitor) const {
