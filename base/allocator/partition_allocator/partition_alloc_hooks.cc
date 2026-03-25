@@ -4,6 +4,8 @@
 
 #include "base/allocator/partition_allocator/partition_alloc_hooks.h"
 
+#include "base/record_replay.h"
+
 #include <ostream>
 
 #include "base/allocator/partition_allocator/partition_alloc_check.h"
@@ -52,6 +54,11 @@ void PartitionAllocHooks::SetObserverHooks(AllocationObserverHook* alloc_hook,
 void PartitionAllocHooks::SetOverrideHooks(AllocationOverrideHook* alloc_hook,
                                            FreeOverrideHook* free_hook,
                                            ReallocOverrideHook realloc_hook) {
+  if (recordreplay::IsRecordingOrReplaying()) {
+    // Always use the default allocators when recording/replaying.
+    return;
+  }
+
   internal::ScopedGuard guard(GetHooksLock());
 
   PA_CHECK((!allocation_override_hook_ && !free_override_hook_ &&
