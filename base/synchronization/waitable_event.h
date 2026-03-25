@@ -231,6 +231,7 @@ class BASE_EXPORT WaitableEvent {
     const bool manual_reset_;
     bool signaled_;
     std::list<Waiter*> waiters_;
+    bool record_replay_unordered_;
 
    private:
     friend class RefCountedThreadSafe<WaitableEventKernel>;
@@ -257,6 +258,9 @@ class BASE_EXPORT WaitableEvent {
   // Whether a thread invoking Wait() on this WaitableEvent should be considered
   // blocked as opposed to idle (and potentially replaced if part of a pool).
   bool waiting_is_blocking_ = true;
+
+  // When recording/replaying, this is used to order wait/signal calls.
+  int record_replay_ordered_lock_id_ = 0;
 };
 
 }  // namespace base
