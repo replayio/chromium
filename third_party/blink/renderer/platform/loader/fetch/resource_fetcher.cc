@@ -97,6 +97,8 @@
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
+
 namespace blink {
 
 constexpr uint32_t ResourceFetcher::kKeepaliveInflightBytesQuota;
@@ -611,6 +613,12 @@ void ResourceFetcher::DidLoadResourceFromMemoryCache(
   resource_load_observer_->DidReceiveResponse(
       request.InspectorId(), request, resource->GetResponse(), resource,
       ResourceLoadObserver::ResponseSource::kFromMemoryCache);
+
+  recordreplay::OnNetworkReceiveResponse(resource->InspectorId(), resource->GetResponse());
+  recordreplay::OnNetworkFinishLoading(resource->InspectorId(),
+                                       resource->GetResponse().EncodedBodyLength(),
+                                       resource->GetResponse().DecodedBodyLength());
+
   if (resource->EncodedSize() > 0) {
     resource_load_observer_->DidReceiveData(
         request.InspectorId(),
@@ -800,6 +808,8 @@ absl::optional<ResourceRequestBlockedReason> ResourceFetcher::PrepareRequest(
     FetchParameters& params,
     const ResourceFactory& factory,
     WebScopedVirtualTimePauser& virtual_time_pauser) {
+  recordreplay::Assert("[RUN-749] ResourceFetcher::PrepareRequest Start");
+
   ResourceRequest& resource_request = params.MutableResourceRequest();
   ResourceType resource_type = factory.GetType();
   const ResourceLoaderOptions& options = params.Options();
@@ -1035,6 +1045,10 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
   resource_request.SetInspectorId(identifier);
   resource_request.SetFromOriginDirtyStyleSheet(
       params.IsFromOriginDirtyStyleSheet());
+
+  recordreplay::Assert("[RUN-658-1381] ResourceFetcher::RequestResource %s",
+                       params.Url().ElidedString().Utf8().c_str());
+
   TRACE_EVENT_NESTABLE_ASYNC_BEGIN1(
       TRACE_DISABLED_BY_DEFAULT("network"), "ResourceLoad",
       TRACE_ID_WITH_SCOPE("BlinkResourceID", TRACE_ID_LOCAL(identifier)), "url",
@@ -1105,6 +1119,7 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
 
   if (!is_stale_revalidation && !resource) {
     resource = MatchPreload(params, resource_type);
+
     if (resource) {
       policy = RevalidationPolicy::kUse;
       // If |params| is for a blocking resource and a preloaded resource is
@@ -1117,6 +1132,17 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
       } else {
         resource = MemoryCache::Get()->ResourceForURL(
             params.Url(), GetCacheIdentifier(params.Url()));
+
+        // Whether there is a resource can vary when replaying due to different memory
+        // cache behavior. For now we deal with this by ignoring the resource if it
+        // is present when replaying but wasn't when recording.
+        bool recorded_has_resource =
+          recordreplay::RecordReplayValue("ResourceFetcher::RequestResource has_cached_resource", !!resource);
+
+        if (!recorded_has_resource)
+          resource = nullptr;
+
+        recordreplay::Assert("[RUN-1333] ResourceFetcher::RequestResource has_cached_resource %d", !!resource);
       }
       if (resource) {
         policy = DetermineRevalidationPolicy(resource_type, params, *resource,
@@ -1334,6 +1360,9 @@ Resource* ResourceFetcher::CreateResourceForLoading(
 
   RESOURCE_LOADING_DVLOG(1) << "Loading Resource for "
                             << params.GetResourceRequest().Url().ElidedString();
+
+  // https://linear.app/replay/issue/RUN-820
+  recordreplay::Assert("[RUN-820] ResourceFetcher::CreateResourceForLoading #1");
 
   Resource* resource = factory.Create(
       params.GetResourceRequest(), params.Options(), params.DecoderOptions());
@@ -2171,8 +2200,15 @@ void ResourceFetcher::UpdateAllImageResourcePriorities() {
       "blink",
       "ResourceLoadPriorityOptimizer::updateAllImageResourcePriorities");
 
-  HeapVector<Member<Resource>> to_be_removed;
+  HeapVector<Member<Resource>> entries;
   for (Resource* resource : not_loaded_image_resources_) {
+    entries.push_back(resource);
+  }
+  std::sort(entries.begin(), entries.end(),
+            recordreplay::CompareMemberByPointerId<Member<Resource>>());
+
+  HeapVector<Member<Resource>> to_be_removed;
+  for (Resource* resource : entries) {
     DCHECK_EQ(resource->GetType(), ResourceType::kImage);
     if (resource->IsLoaded()) {
       to_be_removed.push_back(resource);
@@ -2322,6 +2358,9 @@ void ResourceFetcher::StopFetchingInternal(StopFetchingTarget target) {
     }
   }
 
+  std::sort(loaders_to_cancel.begin(), loaders_to_cancel.end(),
+            recordreplay::CompareMemberByPointerId<Member<ResourceLoader>>());
+
   for (const auto& loader : loaders_to_cancel) {
     if (loaders_.Contains(loader) || non_blocking_loaders_.Contains(loader))
       loader->Cancel();
@@ -2336,13 +2375,26 @@ void ResourceFetcher::ScheduleStaleRevalidate(Resource* stale_resource) {
   if (stale_resource->StaleRevalidationStarted())
     return;
   stale_resource->SetStaleRevalidationStarted();
+
+  int node_id = recordreplay::NewDependencyGraphNode("{\"kind\":\"scheduleRevalidateStaleResource\"}");
   freezable_task_runner_->PostTask(
       FROM_HERE,
       WTF::BindOnce(&ResourceFetcher::RevalidateStaleResource,
-                    WrapWeakPersistent(this), WrapPersistent(stale_resource)));
+                    WrapWeakPersistent(this), WrapPersistent(stale_resource), node_id));
 }
 
-void ResourceFetcher::RevalidateStaleResource(Resource* stale_resource) {
+void ResourceFetcher::RevalidateStaleResource(Resource* stale_resource,
+                                              int record_replay_scheduled_node_id) {
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    int node_id = recordreplay::NewDependencyGraphNode("{\"kind\":\"revalidateStaleResource\"}");
+    recordreplay::AddDependencyGraphEdge(
+      record_replay_scheduled_node_id, node_id,
+      "{\"kind\":\"scheduler\"}"
+    );
+    execute.emplace(node_id);
+  }
+
   // Creating FetchParams from Resource::GetResourceRequest doesn't create
   // the exact same request as the original one, while for revalidation
   // purpose this is probably fine.

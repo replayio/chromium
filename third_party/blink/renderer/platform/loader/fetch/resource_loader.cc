@@ -32,6 +32,7 @@
 #include <algorithm>
 #include <utility>
 
+#include "base/base64.h"
 #include "base/bind.h"
 #include "base/feature_list.h"
 #include "base/metrics/histogram_functions.h"
@@ -94,6 +95,9 @@
 #include "third_party/blink/renderer/platform/wtf/shared_buffer.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 #include "url/url_constants.h"
+
+#include "net/base/net_errors.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
 
 namespace blink {
 
@@ -455,6 +459,8 @@ ResourceLoader::ResourceLoader(ResourceFetcher* fetcher,
       cancel_timer_(fetcher_->GetTaskRunner(),
                     this,
                     &ResourceLoader::CancelTimerFired) {
+  // Pointer registration is needed for sorting in ResourceFetcher.
+  recordreplay::RegisterPointer("ResourceLoader", this);
   DCHECK(resource_);
   DCHECK(fetcher_);
 
@@ -482,7 +488,9 @@ ResourceLoader::ResourceLoader(ResourceFetcher* fetcher,
   resource_->SetLoader(this);
 }
 
-ResourceLoader::~ResourceLoader() = default;
+ResourceLoader::~ResourceLoader() {
+  recordreplay::UnregisterPointer(this);
+}
 
 void ResourceLoader::Trace(Visitor* visitor) const {
   visitor->Trace(fetcher_);
@@ -934,6 +942,9 @@ bool ResourceLoader::WillFollowRedirect(
     return false;
   }
 
+  recordreplay::OnNetworkResourceRedirect(resource_->InspectorId(),
+                                          new_request->Url(), new_request.get());
+
   has_devtools_request_id = new_request->GetDevToolsId().has_value();
   return true;
 }
@@ -1130,6 +1141,8 @@ void ResourceLoader::DidReceiveResponseInternal(
 
   resource_->ResponseReceived(response);
 
+  recordreplay::OnNetworkReceiveResponse(resource_->InspectorId(), response);
+
   if (resource_->Loader() && fetcher_->GetProperties().IsDetached()) {
     // If the fetch context is already detached, we don't need further signals,
     // so let's cancel the request.
@@ -1199,6 +1212,10 @@ void ResourceLoader::DidStartLoadingResponseBody(
 void ResourceLoader::DidReceiveData(const char* data, int length) {
   CHECK_GE(length, 0);
 
+  recordreplay::Assert("[RUN-1436] ResourceLoader::DidReceiveData %d", length);
+
+  recordreplay::OnNetworkReceiveData(resource_->InspectorId(), data, length);
+
   if (auto* observer = fetcher_->GetResourceLoadObserver()) {
     observer->DidReceiveData(resource_->InspectorId(),
                              base::make_span(data, length));
@@ -1235,6 +1252,8 @@ void ResourceLoader::DidFinishLoading(
   resource_->SetEncodedDataLength(encoded_data_length);
   resource_->SetEncodedBodyLength(encoded_body_length);
   resource_->SetDecodedBodyLength(decoded_body_length);
+
+  recordreplay::OnNetworkFinishLoading(resource_->InspectorId(), encoded_body_length, decoded_body_length);
 
   if (pervasive_payload_requested.has_value()) {
     ukm::SourceId ukm_source_id =
@@ -1288,6 +1307,8 @@ void ResourceLoader::DidFail(const WebURLError& error,
                              int64_t decoded_body_length) {
   const ResourceRequestHead& request = resource_->GetResourceRequest();
   response_end_time_for_error_cases_ = response_end_time;
+
+  recordreplay::OnNetworkFail(resource_->InspectorId(), error);
 
   if (request.IsAutomaticUpgrade()) {
     LogMixedAutoupgradeMetrics(MixedContentAutoupgradeStatus::kFailed,
@@ -1438,6 +1459,10 @@ void ResourceLoader::RequestSynchronously(const ResourceRequestHead& request) {
 }
 
 void ResourceLoader::RequestAsynchronously(const ResourceRequestHead& request) {
+  // After diverging from the recording we can't access system resources anymore.
+  if (recordreplay::HasDivergedFromRecording())
+    return;
+
   DCHECK(loader_);
   if (CanHandleDataURLRequestLocally(request)) {
     DCHECK(!code_cache_request_);
@@ -1455,6 +1480,18 @@ void ResourceLoader::RequestAsynchronously(const ResourceRequestHead& request) {
   scoped_refptr<EncodedFormData> form_body = request_body_.FormBody();
   PopulateResourceRequest(request, std::move(request_body_),
                           network_resource_request.get());
+
+  recordreplay::Assert(
+      "[RUN-1725-1852] ResourceLoader::RequestAsynchronously %zu %zu %zu %zu",
+      network_resource_request->method.size(),
+      network_resource_request->fetch_integrity.size(),
+      network_resource_request->devtools_request_id
+          ? network_resource_request->devtools_request_id->size()
+          : 0,
+      network_resource_request->devtools_stack_id
+          ? network_resource_request->devtools_stack_id->size()
+          : 0);
+
   if (form_body)
     request_body_ = ResourceRequestBody(std::move(form_body));
   loader_->LoadAsynchronously(
