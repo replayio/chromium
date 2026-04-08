@@ -2206,6 +2206,42 @@ static void fromJsGetFunctionBytecode(
   args.GetReturnValue().Set(rv);
 }
 
+static void fromJsGetFunctionLocation(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 && args[0]->IsFunction() &&
+        "[RuntimeError] must be called with a single function");
+
+  v8::Isolate* isolate = args.GetIsolate();
+  v8::Local<v8::Function> function = args[0].As<v8::Function>();
+
+  for (;;) {
+    v8::Local<v8::Value> bound_function = function->GetBoundFunction();
+    if (!bound_function->IsFunction()) {
+      break;
+    }
+    function = bound_function.As<v8::Function>();
+  }
+
+  const int script_id = function->ScriptId();
+  const int line_number = function->GetScriptLineNumber();
+  const int column_number = function->GetScriptColumnNumber();
+
+  if (script_id < 0 || line_number == v8::Function::kLineOffsetNotFound ||
+      column_number == v8::Function::kLineOffsetNotFound) {
+    args.GetReturnValue().SetNull();
+    return;
+  }
+
+  v8::Local<v8::Object> location = v8::Object::New(isolate);
+  SetDataProperty(isolate, location, "sourceId",
+                  ToV8String(isolate, std::to_string(script_id).c_str()));
+  SetDataProperty(isolate, location, "line",
+                  v8::Integer::New(isolate, line_number + 1));
+  SetDataProperty(isolate, location, "column",
+                  v8::Integer::New(isolate, column_number));
+  args.GetReturnValue().Set(location);
+}
+
 static void fromJsBeginReplayCode(
     const v8::FunctionCallbackInfo<v8::Value>& args) {
   CHECK(args.Length() == 1 && args[0]->IsString() &&
@@ -2461,6 +2497,8 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
                       fromJsDomPerformSearch);
   SetFunctionProperty(isolate, args, "getFunctionBytecode",
                       fromJsGetFunctionBytecode);
+  SetFunctionProperty(isolate, args, "getFunctionLocation",
+                      fromJsGetFunctionLocation);
 
   // Replay meta.
   DefineProperty(isolate, args, "IsReplaying",
