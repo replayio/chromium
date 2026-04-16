@@ -242,7 +242,7 @@ int main() {
   HINSTANCE instance = GetModuleHandle(nullptr);
 #endif  // !defined(WIN_CONSOLE_APP)
 
-  RecordReplayAttach(nullptr, nullptr);
+  RecordReplayAttach(nullptr);
 
 #if defined(ARCH_CPU_32_BITS)
   enum class FiberStatus { kConvertFailed, kCreateFiberFailed, kSuccess };

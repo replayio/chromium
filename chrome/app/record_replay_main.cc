@@ -45,8 +45,7 @@ static void ReportFailure(const char* format, ...) {
 #endif
 }
 
-static void (*gRecordReplayAttach)(const char* dispatchAddress, const char* buildId);
-static void (*gRecordReplaySetApiKey)(const char* apiKey);
+static void (*gRecordReplayAttach)(const char* buildId);
 static void (*gRecordReplayProfileExecution)(const char* path);
 static void (*gRecordReplayRecordCommandLineArguments)(int*, char***);
 static void (*gRecordReplaySaveRecording)(const char* dir);
@@ -354,41 +353,18 @@ static void* RecordReplayAttach(int* pargc, const char*** pargv) {
   if (getenv("RECORDING_WAIT_AT_ATTACH"))
     BusyWait();
 
-  std::string apiKey;
-  const char* val = getenv("RECORD_REPLAY_API_KEY");
-  if (val) {
-    apiKey = val;
-    // Unsetting the env var will make the variable unavailable via
-    // getenv and such, and also mutates the 'environ' global, so
-    // by the time gRecordReplayAttach runs, it will have no idea that
-    // this value existed and won't capture it in the recording itself,
-    // which is ideal for security.
-#if BUILDFLAG(IS_WIN)
-    _putenv("RECORD_REPLAY_API_KEY=");
-#else
-    unsetenv("RECORD_REPLAY_API_KEY");
-#endif
-  }
-
   void* handle = OpenDriverHandle();
   if (!handle) {
     return nullptr;
   }
 
   RecordReplayLoadSymbol(handle, "RecordReplayAttach", gRecordReplayAttach);
-  RecordReplayLoadSymbol(handle, "RecordReplaySetApiKey", gRecordReplaySetApiKey);
   RecordReplayLoadSymbol(handle, "RecordReplayProfileExecution", gRecordReplayProfileExecution);
   RecordReplayLoadSymbol(handle, "RecordReplaySaveRecording", gRecordReplaySaveRecording);
   RecordReplayLoadSymbol(handle, "RecordReplayRecordCommandLineArguments",
                          gRecordReplayRecordCommandLineArguments);
 
-  if (apiKey.length()) {
-    gRecordReplaySetApiKey(apiKey.c_str());
-  }
-
-  const char* dispatchAddress = getenv("RECORD_REPLAY_SERVER");
-
-  gRecordReplayAttach(dispatchAddress, recordreplay::gBuildId);
+  gRecordReplayAttach(recordreplay::gBuildId);
   gRecordReplaySaveRecording(nullptr);
 
 #if BUILDFLAG(IS_WIN)
