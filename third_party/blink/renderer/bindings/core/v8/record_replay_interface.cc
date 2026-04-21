@@ -782,6 +782,21 @@ struct InspectorChannel final : public v8_inspector::V8Inspector::Channel {
   void flushProtocolNotifications() final {}
 };
 
+static absl::optional<int> gContextGroupIdForSendCDPMessage;
+
+extern "C" void SetContextGroupIdForSendCDPMessage(int contextGroupId) {
+  CHECK(v8::IsMainThread());
+  CHECK_GT(contextGroupId, 0);
+  CHECK(!gContextGroupIdForSendCDPMessage.has_value());
+  gContextGroupIdForSendCDPMessage = contextGroupId;
+}
+
+extern "C" void ClearContextGroupIdForSendCDPMessage() {
+  CHECK(v8::IsMainThread());
+  CHECK(gContextGroupIdForSendCDPMessage.has_value());
+  gContextGroupIdForSendCDPMessage.reset();
+}
+
 absl::optional<int> GetCurrentContextGroupIdForIsolate(v8::Isolate* isolate) {
   LocalFrame* local_frame_root = GetLocalFrameRoot(isolate);
 
@@ -878,7 +893,10 @@ static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
   recordreplay::AutoDisallowEvents disallow("SendCDPMessage");
 
   v8::Isolate* isolate = args.GetIsolate();
-  absl::optional<int> contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
+  absl::optional<int> contextGroupId = gContextGroupIdForSendCDPMessage;
+  if (!contextGroupId.has_value()) {
+    contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
+  }
 
   // It can be the case that we simply don't have a context group id (a local frame) at this
   // time; just log it and inform the client.
