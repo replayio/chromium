@@ -136,6 +136,7 @@ void Scheduler::SetShouldWarmUp() {
 
 void Scheduler::SetCanDraw(bool can_draw) {
   state_machine_->SetCanDraw(can_draw);
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::SetCanDraw");
   ProcessScheduledActions();
 }
 
@@ -155,6 +156,7 @@ bool Scheduler::IsReadyToActivate() {
 void Scheduler::NotifyReadyToDraw() {
   // Future work might still needed for crbug.com/352894.
   state_machine_->NotifyReadyToDraw();
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::NotifyReadyToDraw");
   ProcessScheduledActions();
 }
 
@@ -173,32 +175,38 @@ void Scheduler::SetBeginFrameSource(viz::BeginFrameSource* source) {
 void Scheduler::NotifyAnimationWorkletStateChange(AnimationWorkletState state,
                                                   TreeType tree) {
   state_machine_->NotifyAnimationWorkletStateChange(state, tree);
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::NotifyAnimationWorkletStateChange");
   ProcessScheduledActions();
 }
 
 void Scheduler::NotifyPaintWorkletStateChange(PaintWorkletState state) {
   state_machine_->NotifyPaintWorkletStateChange(state);
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::NotifyPaintWorkletStateChange");
   ProcessScheduledActions();
 }
 
 void Scheduler::SetNeedsBeginMainFrame(bool now) {
   state_machine_->SetNeedsBeginMainFrame(now);
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::SetNeedsBeginMainFrame");
   ProcessScheduledActions();
 }
 
 void Scheduler::SetNeedsOneBeginImplFrame() {
   state_machine_->SetNeedsOneBeginImplFrame();
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::SetNeedsOneBeginImplFrame");
   ProcessScheduledActions();
 }
 
 void Scheduler::SetNeedsRedraw() {
   state_machine_->SetNeedsRedraw();
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::SetNeedsRedraw");
   ProcessScheduledActions();
 }
 
 void Scheduler::SetNeedsPrepareTiles() {
   DCHECK(!IsInsideAction(SchedulerStateMachine::Action::PREPARE_TILES));
   state_machine_->SetNeedsPrepareTiles();
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::SetNeedsPrepareTiles");
   ProcessScheduledActions();
 }
 
@@ -229,6 +237,7 @@ void Scheduler::DidReceiveCompositorFrameAck() {
     DCHECK_GT(state_machine_->pending_submit_frames(), 0);
   }
   state_machine_->DidReceiveCompositorFrameAck();
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::DidReceiveCompositorFrameAck");
   ProcessScheduledActions();
 }
 
@@ -238,6 +247,7 @@ void Scheduler::SetTreePrioritiesAndScrollState(
     bool is_current_scroll_main_painted) {
   state_machine_->SetTreePrioritiesAndScrollState(
       tree_priority, scroll_handler_state, is_current_scroll_main_painted);
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::SetTreePrioritiesAndScrollState");
   ProcessScheduledActions();
 }
 
@@ -490,6 +500,7 @@ bool Scheduler::OnBeginFrameDerivedImpl(const viz::BeginFrameArgs& args) {
 
 void Scheduler::SetVideoNeedsBeginFrames(bool video_needs_begin_frames) {
   state_machine_->SetVideoNeedsBeginFrames(video_needs_begin_frames);
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::SetVideoNeedsBeginFrames");
   ProcessScheduledActions();
 }
 
@@ -519,6 +530,7 @@ void Scheduler::OnDrawForLayerTreeFrameSink(bool resourceless_software_draw,
   OnBeginImplFrameDeadline();
 
   state_machine_->OnBeginImplFrameIdle();
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::OnDrawForLayerTreeFrameSink");
   ProcessScheduledActions();
   state_machine_->SetResourcelessSoftwareDraw(false);
 }
@@ -946,6 +958,7 @@ void Scheduler::SetPauseRendering(bool pause_rendering) {
 void Scheduler::SetMainThreadWantsBeginMainFrameNotExpected(bool new_state) {
   state_machine_->SetMainThreadWantsBeginMainFrameNotExpectedMessages(
       new_state);
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::SetMainThreadWantsBeginMainFrameNotExpected");
   ProcessScheduledActions();
 }
 
