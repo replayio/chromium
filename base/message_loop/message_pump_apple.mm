@@ -405,7 +405,11 @@ void MessagePumpCFRunLoopBase::RunDelayedWorkTimer(CFRunLoopTimerRef timer,
   MessagePumpCFRunLoopBase* self = static_cast<MessagePumpCFRunLoopBase*>(info);
   // The timer fired, assume we have work and let RunWork() figure out what to
   // do and what to schedule after.
-  base::apple::CallWithEHFrame(^{
+  // For now CallWithEHFrame is disabled in this file to avoid crashes when
+  // replaying. These calls are only used to ensure the process terminates if
+  // an exception is thrown, but it would be nice to figure out what's going on
+  // sometime and restore these calls.
+  //base::apple::CallWithEHFrame(^{
     // It would be incorrect to expect that `self->delayed_work_scheduled_at_`
     // is smaller than or equal to `TimeTicks::Now()` because the fire date of a
     // CFRunLoopTimer can be adjusted slightly.
@@ -423,7 +427,7 @@ void MessagePumpCFRunLoopBase::RunWorkSource(void* info) {
   recordreplay::NewCheckpoint();
 
   MessagePumpCFRunLoopBase* self = static_cast<MessagePumpCFRunLoopBase*>(info);
-  base::apple::CallWithEHFrame(^{
+  //base::apple::CallWithEHFrame(^{
     self->RunWork();
   //});
 }
@@ -490,7 +494,7 @@ void MessagePumpCFRunLoopBase::RunIdleWork() {
 // static
 void MessagePumpCFRunLoopBase::RunNestingDeferredWorkSource(void* info) {
   MessagePumpCFRunLoopBase* self = static_cast<MessagePumpCFRunLoopBase*>(info);
-  base::apple::CallWithEHFrame(^{
+  //base::apple::CallWithEHFrame(^{
     self->RunNestingDeferredWork();
   //});
 }
@@ -540,7 +544,7 @@ void MessagePumpCFRunLoopBase::PreWaitObserver(CFRunLoopObserverRef observer,
                                                CFRunLoopActivity activity,
                                                void* info) {
   MessagePumpCFRunLoopBase* self = static_cast<MessagePumpCFRunLoopBase*>(info);
-  base::apple::CallWithEHFrame(^{
+  //base::apple::CallWithEHFrame(^{
     // Current work item tracking needs to go away since execution will stop.
     // Matches the PushWorkItemScope() in AfterWaitObserver() (with an arbitrary
     // amount of matching Pop/Push in between when running work items).
@@ -568,7 +572,7 @@ void MessagePumpCFRunLoopBase::AfterWaitObserver(CFRunLoopObserverRef observer,
                                                  CFRunLoopActivity activity,
                                                  void* info) {
   MessagePumpCFRunLoopBase* self = static_cast<MessagePumpCFRunLoopBase*>(info);
-  base::apple::CallWithEHFrame(^{
+  //base::apple::CallWithEHFrame(^{
     // Emerging from sleep, any work happening after this (outside of a
     // RunWork()) should be considered native work. Matching PopWorkItemScope()
     // is in BeforeWait().
@@ -593,7 +597,7 @@ void MessagePumpCFRunLoopBase::PreSourceObserver(CFRunLoopObserverRef observer,
   // level did not sleep or exit, nesting-deferred work may have accumulated
   // if a nested loop ran.  Schedule nesting-deferred work for processing if
   // appropriate.
-  base::apple::CallWithEHFrame(^{
+  //base::apple::CallWithEHFrame(^{
     self->MaybeScheduleNestingDeferredWork();
   //});
 }
@@ -634,7 +638,7 @@ void MessagePumpCFRunLoopBase::EnterExitObserver(CFRunLoopObserverRef observer,
       // to sleep or exiting.  It must be called before decrementing the
       // value so that the value still corresponds to the level of the exiting
       // loop.
-      base::apple::CallWithEHFrame(^{
+      //base::apple::CallWithEHFrame(^{
         self->MaybeScheduleNestingDeferredWork();
       //});
 
@@ -654,7 +658,7 @@ void MessagePumpCFRunLoopBase::EnterExitObserver(CFRunLoopObserverRef observer,
       break;
   }
 
-  base::apple::CallWithEHFrame(^{
+  //base::apple::CallWithEHFrame(^{
     self->EnterExitRunLoop(activity);
   //});
 }
