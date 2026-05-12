@@ -1015,9 +1015,11 @@ void ThreadGroupImpl::EnsureEnoughWorkersLockRequired(
   // Wake up the appropriate number of workers.
   for (size_t i = 0; i < num_workers_to_wake_up; ++i) {
     MaintainAtLeastOneIdleWorkerLockRequired(executor);
-    WorkerThread* worker_to_wakeup = idle_workers_set_.Take();
-    DCHECK(worker_to_wakeup);
-    executor->ScheduleWakeUp(worker_to_wakeup);
+    if (!idle_workers_set_.IsEmpty()) {
+      WorkerThread* worker_to_wakeup = idle_workers_set_.Take();
+      DCHECK(worker_to_wakeup);
+      executor->ScheduleWakeUp(worker_to_wakeup);
+    }
   }
 
   // In the case where the loop above didn't wake up any worker and we don't
