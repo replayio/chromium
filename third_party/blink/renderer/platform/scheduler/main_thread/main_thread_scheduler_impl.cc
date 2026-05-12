@@ -2319,7 +2319,17 @@ void MainThreadSchedulerImpl::DispatchRequestBeginMainFrameNotExpected(
       "has_tasks", has_tasks);
   // If idle tasks are posted before compositing is initialized, the scheduler
   // will request these signals as soon as it is.
+  std::vector<WidgetSchedulerImpl*> widget_schedulers;
   for (auto& widget_scheduler : main_thread_only().widget_schedulers) {
+    widget_schedulers.push_back(widget_scheduler.get());
+  }
+  std::sort(widget_schedulers.begin(), widget_schedulers.end(),
+            recordreplay::CompareByPointerId());
+  for (WidgetSchedulerImpl* widget_scheduler : widget_schedulers) {
+    REPLAY_ASSERT(
+        "[TT-1367-1371] MainThreadSchedulerImpl::DispatchRequestBeginMainFrameNotExpected B %d",
+        recordreplay::PointerId(widget_scheduler));
+
     widget_scheduler->RequestBeginMainFrameNotExpected(has_tasks);
   }
   main_thread_only().compositor_will_send_main_frame_not_expected = has_tasks;
