@@ -11764,6 +11764,14 @@ CSSStyleDeclaration* Element::style() {
   if (!IsStyledElement()) {
     return nullptr;
   }
+
+  if (recordreplay::IsInReplayCode() &&
+      !recordreplay::HasDivergedFromRecording()) {
+    // [RUN-1764] Do not try to create blink API objects in our Replay-only
+    // scripts, unless explicitly diverged.
+    return EnsureRareData().GetInlineCSSStyleDeclaration();
+  }
+
   return &UnpackAndRefresh(
       EnsureRareData().EnsureInlineCSSStyleDeclaration(this));
 }
