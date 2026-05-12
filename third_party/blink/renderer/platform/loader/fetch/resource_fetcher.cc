@@ -3135,7 +3135,7 @@ void ResourceFetcher::ScheduleStaleRevalidate(Resource* stale_resource) {
   freezable_task_runner_->PostTask(
       FROM_HERE, blink::BindOnce(&ResourceFetcher::RevalidateStaleResource,
                                  WrapWeakPersistent(this),
-                                 WrapPersistent(stale_resource)));
+                                 WrapPersistent(stale_resource), node_id));
 }
 
 void ResourceFetcher::RevalidateStaleResource(Resource* stale_resource,
