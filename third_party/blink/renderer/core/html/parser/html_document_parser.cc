@@ -463,6 +463,9 @@ HTMLDocumentParser::HTMLDocumentParser(Document& document,
 HTMLDocumentParser::~HTMLDocumentParser() {
   TRACE_EVENT("blink", "HTMLDocumentParser::~HTMLDocumentParser",
               perfetto::TerminatingFlow::FromPointer(this));
+  if (recordreplay::IsRecordingOrReplaying("notify-html-parse")) {
+    V8RecordReplayHTMLParseFinish(this);
+  }
 }
 
 void HTMLDocumentParser::Trace(Visitor* visitor) const {
