@@ -1163,4 +1163,10 @@ void ProxyMain::NotifyNewLocalSurfaceIdExpectedWhilePaused() {
                      base::Unretained(proxy_impl_.get())));
 }
 
+void ProxyMain::RecordReplayRepaint() {
+  ImplThreadTaskRunner()->PostTask(
+      FROM_HERE, base::BindOnce(&ProxyImpl::RecordReplayRepaint,
+                                base::Unretained(proxy_impl_.get())));
+}
+
 }  // namespace cc
