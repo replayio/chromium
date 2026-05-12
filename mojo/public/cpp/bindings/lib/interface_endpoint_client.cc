@@ -1085,6 +1085,9 @@ bool InterfaceEndpointClient::HandleValidatedMessage(Message* message) {
 
     if (message->has_flag(Message::kFlagIsSync)) {
       auto it = sync_responses_.find(request_id);
+      recordreplay::Assert(
+          "[RUN-2229-2231] InterfaceEndpointClient::HandleValidatedMessage E %d",
+          it == sync_responses_.end());
       if (it == sync_responses_.end()) {
         return false;
       }
@@ -1134,6 +1137,8 @@ bool InterfaceEndpointClient::HandleValidatedMessage(Message* message) {
     return pending_response->responder->Accept(message);
   } else {
     if (mojo::internal::ControlMessageHandler::IsControlMessage(message)) {
+      recordreplay::Assert(
+          "[RUN-2229-2231] InterfaceEndpointClient::HandleValidatedMessage K");
       return control_message_handler_.Accept(message);
     }
 
