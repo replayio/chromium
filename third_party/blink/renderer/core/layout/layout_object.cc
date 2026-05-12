@@ -329,6 +329,7 @@ struct SameSizeAsLayoutObject : public GarbageCollected<SameSizeAsLayoutObject>,
   unsigned bitfields2_;
   unsigned bitfields3_;
   Member<void*> members[6];
+  int record_replay_id_;
 #if DCHECK_IS_ON()
   bool is_destroyed_;
 #endif
