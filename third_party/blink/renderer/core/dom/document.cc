@@ -2774,6 +2774,17 @@ void Document::UpdateStyle() {
   RUNTIME_CALL_TIMER_SCOPE(GetAgent().isolate(),
                            RuntimeCallStats::CounterId::kUpdateStyle);
 
+  // Updating style can trigger network requests, so keep track of execution.
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "documentUpdateStyle");
+    info.Set("url", Url().GetString().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
+
   StyleEngine& style_engine = GetStyleEngine();
   unsigned initial_element_count = style_engine.StyleForElementCount();
 
