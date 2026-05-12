@@ -9,6 +9,7 @@
 
 #include "base/metrics/histogram_macros.h"
 #include "base/profiler/thread_group_profiler.h"
+#include "base/record_replay.h"
 #include "base/sequence_token.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/common/checked_lock.h"
