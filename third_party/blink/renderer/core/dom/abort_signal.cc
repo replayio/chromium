@@ -335,7 +335,9 @@ void AbortSignal::RunAbortSteps() {
     handle->GetAlgorithm()->Run();
   }
 
-  DispatchEvent(*Event::Create(event_type_names::kAbort));
+  recordreplay::Assert("[RUN-1182] AbortSignal::SignalAbort Done");
+
+  DispatchEvent(*Event::Create(event_type_names::kAbort), "AbortSignal::SignalAbort");
 }
 
 void AbortSignal::Trace(Visitor* visitor) const {
