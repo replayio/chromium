@@ -5084,6 +5084,7 @@ void Element::RecalcStyle(const StyleRecalcChange change,
     if (HasCustomStyleCallbacks()) {
       DidRecalcStyle(child_change);
     }
+    recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle B");
     return;
   }
 
@@ -5110,6 +5111,7 @@ void Element::RecalcStyle(const StyleRecalcChange change,
       if (!change.IsSuppressed()) {
         if (SkipStyleRecalcForContainer(*style, child_change,
                                         style_recalc_context)) {
+          recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle C");
           return;
         }
       }
@@ -5193,6 +5195,7 @@ void Element::RecalcStyle(const StyleRecalcChange change,
     UpdatePseudoElement(kPseudoIdBefore, child_change, child_recalc_context);
   }
 
+  recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle D %d", !!GetShadowRoot());
   if (child_change.TraverseChildren(*this)) {
     if (ShadowRoot* root = GetShadowRoot()) {
       root->RecalcDescendantStyles(child_change, child_recalc_context, *this);
@@ -5792,6 +5795,8 @@ StyleRecalcChange Element::RecalcOwnStyle(
       layout_object->Remove();
     }
     layout_object->SetStyle(layout_style, apply_changes);
+    recordreplay::Assert("[RUN-3109-3242] Element::RecalcOwnStyle B %d",
+                         !!layout_style);
     if (needs_reinsert) {
       LayoutTreeBuilderTraversal::ParentLayoutObject(*this)->AddChild(
           layout_object,
@@ -5800,6 +5805,8 @@ StyleRecalcChange Element::RecalcOwnStyle(
     }
   }
 
+  recordreplay::Assert("[RUN-3109-3242] Element::RecalcOwnStyle C %d %d",
+                       !!new_style, !!old_style);
   return child_change;
 }
 
@@ -10957,8 +10964,14 @@ Element* Element::closest(const AtomicString& selectors) {
 }
 
 DOMTokenList& Element::classList() {
+  // https://linear.app/replay/issue/RUN-1040
+  recordreplay::Assert("Element::classList %d", RecordReplayId());
+
   ElementRareDataVector* rare_data = &EnsureRareData();
   if (!rare_data->GetClassList()) {
+    // https://linear.app/replay/issue/RUN-1040
+    recordreplay::Assert("Element::classList #1");
+
     auto* class_list =
         MakeGarbageCollected<DOMTokenList>(*this, html_names::kClassAttr);
     class_list->DidUpdateAttributeValue(g_null_atom,
