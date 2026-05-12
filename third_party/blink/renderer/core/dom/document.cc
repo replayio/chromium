@@ -4255,6 +4255,17 @@ void Document::close() {
   CheckCompleted();
 }
 
+void Document::RecordReplayOnRemoveLoadEventDelay() {
+  if (recordreplay::DependencyGraphEnabled()) {
+    int node_id = V8RecordReplayDependencyGraphExecutionNode();
+    if (node_id) {
+      record_replay_load_event_dependency_nodes_.push_back(node_id);
+    } else {
+      recordreplay::Warning("DependencyGraph load event delay unknown node");
+    }
+  }
+}
+
 namespace {
 bool NeedsStyleAndLayoutUpdateAtClose(Document& document) {
   if (!document.HaveRenderBlockingStylesheetsLoaded()) {
