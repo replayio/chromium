@@ -512,6 +512,11 @@ size_t ThreadGroup::NumberOfIdleWorkersForTesting() const {
 }
 
 size_t ThreadGroup::GetDesiredNumAwakeWorkersLockRequired() const {
+  // Unordered thread groups can't create new workers on demand, so we use
+  // a fixed size thread pool for unordered tasks.
+  if (record_replay_unordered_)
+    return 4;
+
   // Number of BEST_EFFORT task sources that are running or queued and allowed
   // to run by the CanRunPolicy.
   const size_t num_running_or_queued_can_run_best_effort_task_sources =
