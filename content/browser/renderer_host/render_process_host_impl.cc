@@ -5234,9 +5234,13 @@ RenderProcessHost* RenderProcessHostImpl::GetProcessHostForSiteInstance(
     }
   }
 
+  // [RecordReplay] NOTE: When spawning processes for recording, we need
+  // to make sure we skip the next logic for selecting existing process.
+
   // If not (or if none found), see if the process limit was reached, in which
   // case an existing process should be used if possible."
-  if (!render_process_host && IsProcessLimitReached()) {
+  if (!render_process_host && !record_replay_is_for_recording &&
+      IsProcessLimitReached()) {
     render_process_host = GetExistingProcessHost(site_instance);
     if (render_process_host) {
       site_instance->set_process_assignment(
