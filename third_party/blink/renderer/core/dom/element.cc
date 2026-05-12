@@ -4834,8 +4834,9 @@ const ComputedStyle* Element::StyleForLayoutObject(
   }
 
   new_style_recalc_context.old_style = PostStyleUpdateScope::GetOldStyle(*this);
+  bool has_custom_style_callbacks = HasCustomStyleCallbacks();
   const ComputedStyle* style =
-      HasCustomStyleCallbacks()
+      has_custom_style_callbacks
           ? CustomStyleForLayoutObject(new_style_recalc_context)
           : OriginalStyleForLayoutObject(new_style_recalc_context);
   if (!style) {
@@ -4848,7 +4849,7 @@ const ComputedStyle* Element::StyleForLayoutObject(
     // style with @starting-style applied.
     new_style_recalc_context.old_style =
         style->Display() == EDisplay::kNone ? nullptr : style;
-    style = HasCustomStyleCallbacks()
+    style = has_custom_style_callbacks
                 ? CustomStyleForLayoutObject(new_style_recalc_context)
                 : OriginalStyleForLayoutObject(new_style_recalc_context);
     if (!style) {
