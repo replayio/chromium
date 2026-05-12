@@ -3042,6 +3042,11 @@ void LayoutObject::SetStyle(const ComputedStyle* style,
   // invalidate paints.
   StyleDifference updated_diff = AdjustStyleDifference(diff);
 
+  recordreplay::Assert("[RUN-2300] LayoutObject::SetStyle #9 %d %d %d",
+                       diff.NeedsNormalPaintInvalidation(),
+                       updated_diff.NeedsNormalPaintInvalidation(),
+                       IsSVGRoot());
+
   if (updated_diff.NeedsSimplePaintInvalidation()) {
     DCHECK(!diff.NeedsNormalPaintInvalidation());
     constexpr int kMaxDepth = 5;
@@ -3120,6 +3125,8 @@ void LayoutObject::SetStyle(const ComputedStyle* style,
        diff.compositing_reasons_changed)) {
     SetNeedsPaintPropertyUpdate();
   }
+
+  recordreplay::Assert("[RUN-2300] LayoutObject::SetStyle Done");
 }
 
 void LayoutObject::UpdateFirstLineImageObservers(
@@ -4025,11 +4032,17 @@ void LayoutObject::WillBeDestroyed() {
 
   Remove();
 
+  recordreplay::AssertMaybeEventsDisallowed(
+      "[RUN-2300] LayoutObject::WillBeDestroyed A %d %d", RecordReplayId(),
+      GetNode() ? GetNode()->RecordReplayId() : -1);
+
   // Remove the handler if node had touch-action set. Handlers are not added
   // for text nodes so don't try removing for one too. Need to check if
   // m_style is null in cases of partial construction. Any handler we added
   // previously may have already been removed by the Document independently.
   if (GetNode() && style_ && style_->GetTouchAction() != TouchAction::kAuto) {
+    recordreplay::AssertMaybeEventsDisallowed(
+        "[RUN-2300] LayoutObject::WillBeDestroyed B %d", RecordReplayId());
     EventHandlerRegistry& registry =
         GetDocument().GetFrame()->GetEventHandlerRegistry();
     if (registry.EventHandlerTargets(EventHandlerRegistry::kTouchAction)
@@ -4041,6 +4054,9 @@ void LayoutObject::WillBeDestroyed() {
                                      EventHandlerRegistry::kTouchAction);
     }
   }
+
+  recordreplay::AssertMaybeEventsDisallowed(
+      "[RUN-2300] LayoutObject::WillBeDestroyed D", RecordReplayId());
 
   // Remove this object as ImageResourceObserver.
   if (style_) {
@@ -4938,6 +4954,9 @@ void LayoutObject::SetShouldDoFullPaintInvalidationWithoutLayoutChangeInternal(
   NOT_DESTROYED();
   // Only full invalidation reasons are allowed.
   DCHECK(IsFullPaintInvalidationReason(reason));
+
+  recordreplay::Assert("[RUN-2300] LayoutObject::SetShouldDoFullPaintInvalidationWithoutLayoutChangeInternal #1");
+
   const bool was_delayed = bitfields_.ShouldDelayFullPaintInvalidation();
   bitfields_.SetShouldDelayFullPaintInvalidation(false);
   const bool should_upgrade_reason =
@@ -4991,6 +5010,9 @@ void LayoutObject::SetShouldCheckForPaintInvalidation() {
 }
 
 void LayoutObject::SetShouldCheckForPaintInvalidationWithoutLayoutChange() {
+  recordreplay::Assert("[RUN-2300] LayoutObject::SetShouldCheckForPaintInvalidationWithoutLayoutChange %d",
+                       RecordReplayId());
+
   NOT_DESTROYED();
   if (ShouldCheckForPaintInvalidation()) {
     return;
@@ -5003,6 +5025,9 @@ void LayoutObject::SetShouldCheckForPaintInvalidationWithoutLayoutChange() {
        ancestor = ancestor->Parent()) {
     ancestor->bitfields_.SetShouldCheckForPaintInvalidation(true);
   }
+
+  recordreplay::Assert("[RUN-2300] LayoutObject::SetShouldCheckForPaintInvalidationWithoutLayoutChange #1 %d",
+                       RecordReplayId());
 }
 
 void LayoutObject::SetSubtreeShouldCheckForPaintInvalidation() {
