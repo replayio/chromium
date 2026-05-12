@@ -397,7 +397,8 @@ inline void ImageLoader::QueuePendingErrorEvent() {
       FROM_HERE,
       BindOnce(&ImageLoader::DispatchPendingErrorEvent, WrapPersistent(this),
                std::make_unique<IncrementLoadEventDelayCount>(
-                   GetElement()->GetDocument())));
+                   GetElement()->GetDocument()),
+               record_replay_scheduled_node_id));
 }
 
 inline void ImageLoader::CrossSiteOrCSPViolationOccurred(
@@ -1090,7 +1091,28 @@ void ImageLoader::DispatchPendingLoadEvent(
 }
 
 void ImageLoader::DispatchPendingErrorEvent(
-    std::unique_ptr<IncrementLoadEventDelayCount> count) {
+    std::unique_ptr<IncrementLoadEventDelayCount> count,
+    int record_replay_scheduled_node_id) {
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    recordreplay::AutoDisallowEvents disallow("ImageLoader::DispatchPendingErrorEvent");
+    base::Value::Dict info;
+    info.Set("kind", "imageError");
+    info.Set("url", element_->ImageSourceURL().GetString().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
+    recordreplay::AddDependencyGraphEdge(
+      record_replay_created_node_id_, node_id,
+      "{\"kind\":\"imageLoader\"}"
+    );
+    recordreplay::AddDependencyGraphEdge(
+      record_replay_scheduled_node_id, node_id,
+      "{\"kind\":\"scheduler\"}"
+    );
+    execute.emplace(node_id);
+  }
+
   DispatchErrorEvent();
 
   // Checks Document's load event synchronously here for performance.
