@@ -410,6 +410,9 @@ inline void ImageLoader::EnqueueImageLoadingMicroTask(
     UpdateFromElementBehavior update_behavior) {
   auto task = std::make_unique<Task>(this, update_behavior);
   pending_task_ = task->GetWeakPtr();
+  recordreplay::Assert(
+      "[RUN-1333] ImageLoader::EnqueueImageLoadingMicroTask %d",
+      element_->RecordReplayId());
   element_->GetDocument().GetAgent().event_loop()->EnqueueMicrotask(
       BindOnce(&Task::Run, std::move(task)));
   delay_until_do_update_from_element_ =
@@ -727,6 +730,8 @@ void ImageLoader::UpdateFromElement(UpdateFromElementBehavior update_behavior,
   const KURL image_source_kurl = ImageSourceToKURL(image_source_url);
   if (ShouldLoadImmediately(image_source_kurl) &&
       update_behavior != kUpdateFromMicrotask) {
+    recordreplay::Assert("[Run-1333] ImageLoader::UpdateFromElement %d",
+                         element_->RecordReplayId());
     DoUpdateFromElement(element_->GetExecutionContext()->GetCurrentWorld(),
                         update_behavior, &image_source_kurl, UpdateType::kSync,
                         force_blocking);
