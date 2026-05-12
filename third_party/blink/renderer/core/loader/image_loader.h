@@ -175,6 +175,7 @@ class CORE_EXPORT ImageLoader : public GarbageCollected<ImageLoader>,
                            UpdateFromElementBehavior,
                            const KURL* source_url = nullptr,
                            UpdateType = UpdateType::kAsync,
+                           int record_replay_scheduled_node_id = 0,
                            bool force_blocking = false);
 
   virtual void DispatchLoadEvent() = 0;

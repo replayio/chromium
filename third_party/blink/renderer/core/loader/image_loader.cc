@@ -134,7 +134,10 @@ class ImageLoader::Task {
                          element->RecordReplayId());
     ExecutionContext* context = element->GetExecutionContext();
     probe::AsyncTask async_task(context, &async_task_context_);
-    loader_->DoUpdateFromElement(world_.Get(), update_behavior_);
+    loader_->DoUpdateFromElement(world_.Get(), update_behavior_,
+                                 /* source_url */ nullptr,
+                                 UpdateType::kAsync,
+                                 record_replay_scheduled_node_id_);
   }
 
   void ClearLoader() {
@@ -448,7 +451,32 @@ void ImageLoader::DoUpdateFromElement(const DOMWrapperWorld* world,
                                       UpdateFromElementBehavior update_behavior,
                                       const KURL* source_url,
                                       UpdateType update_type,
+                                      int record_replay_scheduled_node_id,
                                       bool force_blocking) {
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    std::string json;
+    {
+      recordreplay::AutoDisallowEvents disallow("ImageLoader::DoUpdateFromElement");
+      base::Value::Dict info;
+      info.Set("kind", "imageUpdateFromElement");
+      info.Set("url", element_->ImageSourceURL().GetString().Utf8());
+      base::JSONWriter::Write(info, &json);
+    }
+    int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
+    recordreplay::AddDependencyGraphEdge(
+      record_replay_created_node_id_, node_id,
+      "{\"kind\":\"imageLoader\"}"
+    );
+    if (record_replay_scheduled_node_id) {
+      recordreplay::AddDependencyGraphEdge(
+        record_replay_scheduled_node_id, node_id,
+        "{\"kind\":\"scheduler\"}"
+      );
+    }
+    execute.emplace(node_id);
+  }
+
   // FIXME: According to
   // http://www.whatwg.org/specs/web-apps/current-work/multipage/embedded-content.html#the-img-element:the-img-element-55
   // When "update image" is called due to environment changes and the load
@@ -734,6 +762,7 @@ void ImageLoader::UpdateFromElement(UpdateFromElementBehavior update_behavior,
                          element_->RecordReplayId());
     DoUpdateFromElement(element_->GetExecutionContext()->GetCurrentWorld(),
                         update_behavior, &image_source_kurl, UpdateType::kSync,
+                        /* record_replay_scheduled_node_id */ 0,
                         force_blocking);
     return;
   }
