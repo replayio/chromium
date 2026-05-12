@@ -1045,6 +1045,11 @@ Document::Document(const DocumentInit& initializer,
       data_(MakeGarbageCollected<DocumentData>(GetExecutionContext())) {
   TRACE_EVENT("blink", "Document::Document", perfetto::Flow::FromPointer(this));
   DCHECK(agent_);
+  // Documents are registered so that we can test the validity of document
+  // pointers while replaying to avoid crashes.
+  // See V8Window::NamedPropertyGetterCustom
+  recordreplay::RegisterPointer("Document", this);
+
   if (base::FeatureList::IsEnabled(features::kDelayAsyncScriptExecution) &&
       features::kDelayAsyncScriptExecutionDelayByDefaultParam.Get()) {
     script_runner_delayer_->Activate();
