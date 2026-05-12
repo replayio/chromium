@@ -421,6 +421,10 @@ HTMLDocumentParser::HTMLDocumentParser(Document& document,
                      : nullptr) {
   TRACE_EVENT("blink", "HTMLDocumentParser::HTMLDocumentParser",
               perfetto::Flow::FromPointer(this));
+  if (recordreplay::IsRecordingOrReplaying("notify-html-parse")) {
+    V8RecordReplayHTMLParseStart(this, document.Url().GetString().Utf8().c_str());
+  }
+
   // Make sure the preload scanner thread will be ready when needed.
   if (ThreadedPreloadScannerEnabled() && !task_runner_state_->IsSynchronous()) {
     GetPreloadScannerThread();
