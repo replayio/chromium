@@ -36,10 +36,12 @@ namespace {
 class BodyConsumerBase : public GarbageCollected<BodyConsumerBase>,
                          public FetchDataLoader::Client {
  public:
-  explicit BodyConsumerBase(ScriptPromiseResolverBase* resolver)
+  explicit BodyConsumerBase(ScriptPromiseResolverBase* resolver,
+                            const std::string& url)
       : resolver_(resolver),
         task_runner_(ExecutionContext::From(resolver_->GetScriptState())
                          ->GetTaskRunner(TaskType::kNetworking)) {
+    url_ = url;
   }
   BodyConsumerBase(const BodyConsumerBase&) = delete;
   BodyConsumerBase& operator=(const BodyConsumerBase&) = delete;
@@ -252,7 +254,7 @@ ScriptPromise<typename Consumer::ResolveType> Body::LoadAndConvertBody(
   auto promise = resolver->Promise();
   if (auto* body_buffer = BodyBuffer()) {
     body_buffer->StartLoading(create_loader(),
-                              MakeGarbageCollected<Consumer>(resolver),
+                              MakeGarbageCollected<Consumer>(resolver, GetUrl()),
                               exception_state);
     if (exception_state.HadException()) {
       resolver->Detach();
