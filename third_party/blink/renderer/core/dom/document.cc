@@ -1855,7 +1855,7 @@ void Document::SetReadyState(DocumentReadyState ready_state) {
                  TaskType::kInternalDefault);
   } else {
     // Synchronously dispatch event when the page is not in back/forward cache.
-    DispatchEvent(*Event::Create(event_type_names::kReadystatechange));
+    DispatchEvent(*Event::Create(event_type_names::kReadystatechange), "Document::SetReadyState");
   }
 }
 
@@ -4691,7 +4691,7 @@ void Document::DispatchUnloadEvents(UnloadEventTimingInfo* unload_timing_info) {
   if (page_visible) {
     // Dispatch visibilitychange event, but don't bother doing
     // other notifications as we're about to be unloaded.
-    DispatchEvent(*Event::CreateBubble(event_type_names::kVisibilitychange));
+    DispatchEvent(*Event::CreateBubble(event_type_names::kVisibilitychange), "Document::DispatchUnloadEvents #1");
     DispatchEvent(
         *Event::CreateBubble(event_type_names::kWebkitvisibilitychange),
         "Document::DispatchUnloadEvents #2");
@@ -8032,7 +8032,7 @@ void Document::FinishedParsing() {
   if (document_timing_.DomContentLoadedEventStart().is_null())
     document_timing_.MarkDomContentLoadedEventStart();
   if (!ScriptForbiddenScope::IsScriptForbidden()) {
-    DispatchEvent(*Event::CreateBubble(event_type_names::kDOMContentLoaded));
+    DispatchEvent(*Event::CreateBubble(event_type_names::kDOMContentLoaded), "Document::FinishedParsing");
 
     if (LocalFrame* frame = GetFrame()) {
       if (frame->IsAttached()) {
@@ -9950,7 +9950,7 @@ void Document::ActivateForPrerendering(
 
   // https://wicg.github.io/nav-speculation/prerendering.html#prerendering-browsing-context-activate
   // Step 8.3.4 "Fire an event named prerenderingchange at doc."
-  DispatchEvent(*Event::Create(event_type_names::kPrerenderingchange));
+  DispatchEvent(*Event::Create(event_type_names::kPrerenderingchange), "Document::ActivateForPrerendering");
 
   // Step 8.3.5 "For each steps in doc’s post-prerendering activation steps
   // list:"
