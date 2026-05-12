@@ -945,6 +945,12 @@ void ResourceFetcher::DidLoadResourceFromMemoryCache(
     resource_load_observer_->DidReceiveResponse(
         request.InspectorId(), request, resource->GetResponse(), resource,
         ResourceLoadObserver::ResponseSource::kFromMemoryCache);
+
+    recordreplay::OnNetworkReceiveResponse(resource->InspectorId(), resource->GetResponse());
+    recordreplay::OnNetworkFinishLoading(resource->InspectorId(),
+                                         resource->GetResponse().EncodedBodyLength(),
+                                         resource->GetResponse().DecodedBodyLength());
+
     if (resource->EncodedSize() > 0) {
       resource_load_observer_->DidReceiveData(
           request.InspectorId(),
