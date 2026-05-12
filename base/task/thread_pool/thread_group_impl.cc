@@ -924,6 +924,10 @@ ThreadGroupImpl::CreateAndRegisterWorkerLockRequired(
   DCHECK_LT(workers_.size(), kMaxNumberOfWorkers);
   DCHECK(idle_workers_set_.IsEmpty());
 
+  absl::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (record_replay_unordered_)
+    disallow.emplace("ThreadGroupImpl::CreateAndRegisterWorkerLockRequired");
+
   // WorkerThread needs |lock_| as a predecessor for its thread lock because in
   // GetWork(), |lock_| is first acquired and then the thread lock is acquired
   // when GetLastUsedTime() is called on the worker by CanGetWorkLockRequired().
