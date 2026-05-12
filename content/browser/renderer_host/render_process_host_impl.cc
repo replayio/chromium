@@ -53,6 +53,7 @@
 #include "base/observer_list.h"
 #include "base/process/process_handle.h"
 #include "base/rand_util.h"
+#include "base/record_replay.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
@@ -286,6 +287,8 @@
 #include "content/browser/renderer_host/p2p/socket_dispatcher_host.h"
 #endif  // BUILDFLAG(IS_P2P_ENABLED)
 
+#include "base/values.h"
+
 // VLOG additional statements in Fuchsia release builds.
 #if BUILDFLAG(IS_FUCHSIA)
 #define MAYBEVLOG VLOG
@@ -442,6 +445,10 @@ SiteProcessMap* GetSiteProcessMapForBrowserContext(BrowserContext* context) {
   auto* new_map_ptr = new_map.get();
   context->SetUserData(kSiteProcessMapKeyName, std::move(new_map));
   return new_map_ptr;
+}
+
+static inline bool MaybeRecordingOrReplaying() {
+  return true;
 }
 
 class RenderProcessHostIsReadyObserver : public RenderProcessHostObserver {
@@ -2637,6 +2644,14 @@ void RenderProcessHostImpl::WriteIntoTrace(
   // Can be null in the unittests.
   if (ChildProcessSecurityPolicyImpl::GetInstance())
     dict.Add("process_lock", GetProcessLock().ToString());
+}
+
+void RenderProcessHostImpl::SendRecordReplayBrowserEvent(
+    const std::string& name,
+    base::Value&& value) {
+  fprintf(stderr, "SendRecordReplayBrowserEvent CRASH\n");
+  CHECK(0);
+  //GetRendererInterface()->RecordReplayBrowserEvent(name, std::move(value));
 }
 
 void RenderProcessHostImpl::CreateEmbeddedFrameSinkProvider(
