@@ -412,8 +412,9 @@ MainThreadSchedulerImpl::MainThreadSchedulerImpl(
       main_thread_only_(this, helper_.GetClock(), helper_.NowTicks()),
       any_thread_lock_("MainThreadSchedulerImpl.any_thread_lock_"),
       any_thread_(this),
-      policy_may_need_update_(&any_thread_lock_) {
+      policy_may_need_update_(&any_thread_lock_, "MainThreadSchedulerImpl.policy_may_need_update_") {
   MaybeUpdateThreadTypeLease();
+  recordreplay::RegisterPointer("MainThreadSchedulerImpl", this);
   helper_.AttachToCurrentThread();
 
   // Compositor task queue and default task queue should be managed by
