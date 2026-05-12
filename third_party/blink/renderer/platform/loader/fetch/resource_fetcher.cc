@@ -1267,6 +1267,8 @@ void ResourceFetcher::RemovePreload(Resource* resource) {
 std::optional<ResourceRequestBlockedReason>
 ResourceFetcher::UpdateRequestForTransparentPlaceholderImage(
     FetchParameters& params) {
+  recordreplay::Assert("[RUN-749] ResourceFetcher::PrepareRequest Start");
+
   ResourceRequest& resource_request = params.MutableResourceRequest();
   // Should only be called if request has transparent-placholder-image.
   DCHECK_NE(resource_request.GetKnownTransparentPlaceholderImageIndex(),
@@ -1369,6 +1371,10 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
   resource_request.SetInspectorId(identifier);
   resource_request.SetFromOriginDirtyStyleSheet(
       params.IsFromOriginDirtyStyleSheet());
+
+  recordreplay::Assert("[RUN-658-1381] ResourceFetcher::RequestResource %s",
+                       params.Url().ElidedString().Utf8().c_str());
+
   TRACE_EVENT_BEGIN(TRACE_DISABLED_BY_DEFAULT("network"), "ResourceLoad",
                     perfetto::Track(identifier), "url", resource_request.Url());
   absl::Cleanup record_times = [start = base::TimeTicks::Now(), &params] {
