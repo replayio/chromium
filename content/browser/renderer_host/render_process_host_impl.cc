@@ -5126,6 +5126,9 @@ void RenderProcessHostImpl::RegisterSoleProcessHostForSite(
 RenderProcessHost* RenderProcessHostImpl::GetProcessHostForSiteInstance(
     SiteInstanceImpl* site_instance,
     const ProcessAllocationContext& allocation_context) {
+  bool record_replay_is_for_recording =
+      site_instance->RecordReplayIsForRecording();
+
   const SiteInfo& site_info = site_instance->GetSiteInfo();
   ProcessReusePolicy process_reuse_policy =
       site_instance->process_reuse_policy();
@@ -5184,7 +5187,10 @@ RenderProcessHost* RenderProcessHostImpl::GetProcessHostForSiteInstance(
         UnmatchedServiceWorkerProcessTracker::MatchWithSite(site_instance);
   }
 
-  if (!render_process_host && IsEmptyRendererProcessesReuseAllowed()) {
+  // [RecordReplay] NOTE: When spawning processes for recording, we need
+  // to make sure we skip the following logic.
+  if (!render_process_host && !record_replay_is_for_recording &&
+      IsEmptyRendererProcessesReuseAllowed()) {
     // If not (or if none found), see if an empty host can be used.
     render_process_host =
         FindEmptyBackgroundHostForReuse(browser_context, site_instance);
