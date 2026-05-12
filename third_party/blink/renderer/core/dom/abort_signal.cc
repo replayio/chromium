@@ -204,6 +204,9 @@ ExecutionContext* AbortSignal::GetExecutionContext() const {
 }
 
 AbortSignal::AlgorithmHandle* AbortSignal::AddAlgorithm(Algorithm* algorithm) {
+  recordreplay::Assert("[RUN-1182] AbortSignal::AddAlgorithm v1 %d %d",
+                       recordreplay::PointerId(this), aborted());
+
   if (aborted() || composition_manager_->IsSettled()) {
     return nullptr;
   }
@@ -217,6 +220,9 @@ AbortSignal::AlgorithmHandle* AbortSignal::AddAlgorithm(Algorithm* algorithm) {
 
 AbortSignal::AlgorithmHandle* AbortSignal::AddAlgorithm(
     base::OnceClosure algorithm) {
+  recordreplay::Assert("[RUN-1182] AbortSignal::AddAlgorithm v2 %d %d",
+                       recordreplay::PointerId(this), aborted());
+
   if (aborted() || composition_manager_->IsSettled()) {
     return nullptr;
   }
@@ -243,7 +249,11 @@ void AbortSignal::SignalAbort(ScriptState* script_state,
                               ScriptValue reason,
                               SignalAbortPassKey) {
   DCHECK(!reason.IsEmpty());
+
+  recordreplay::Assert("[RUN-1182] AbortSignal::SignalAbort %d", recordreplay::PointerId(this));
+
   if (aborted()) {
+    recordreplay::Assert("[RUN-1182] AbortSignal::SignalAbort #1");
     return;
   }
 
@@ -313,6 +323,7 @@ void AbortSignal::RunAbortSteps() {
                             static_cast<int>(abort_algorithms_.size()));
     CHECK(handle);
     CHECK(handle->GetAlgorithm());
+    recordreplay::Assert("[RUN-1182] AbortSignal::SignalAbort #4");
     handle->GetAlgorithm()->Run();
   }
 
