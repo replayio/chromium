@@ -891,11 +891,15 @@ void HTMLDocumentParser::SchedulePumpTokenizer(bool from_finish_append) {
   if (RuntimeEnabledFeatures::HTMLParserYieldAndDelayOftenForTestingEnabled()) {
     delay = base::Milliseconds(10);
   }
+  int record_replay_scheduled_node_id = recordreplay::NewDependencyGraphNode(
+    "{\"kind\":\"documentSchedulePumpTokenizer\"}"
+  );
   loading_task_runner_->PostDelayedTask(
       FROM_HERE,
       blink::BindOnce(&HTMLDocumentParser::DeferredPumpTokenizerIfPossible,
                       WrapPersistent(this), from_finish_append,
-                      base::TimeTicks::Now()),
+                      base::TimeTicks::Now(),
+                      record_replay_scheduled_node_id),
       delay);
   task_runner_state_->SetState(
       HTMLDocumentParserState::DeferredParserState::kScheduled);
@@ -919,7 +923,8 @@ void HTMLDocumentParser::ScheduleEndIfDelayed() {
         FROM_HERE,
         blink::BindOnce(&HTMLDocumentParser::DeferredPumpTokenizerIfPossible,
                         WrapPersistent(this),
-                        /*from_finish_append=*/false, base::TimeTicks::Now()));
+                        /*from_finish_append=*/false, base::TimeTicks::Now(),
+                        record_replay_scheduled_node_id));
     yield_timer_ = std::make_unique<base::ElapsedTimer>();
   }
   // If a pump is already scheduled, it's OK to just upgrade it to one
@@ -1271,11 +1276,22 @@ void HTMLDocumentParser::AppendCurrentInputStreamToPreloadScannerAndScan() {
   }
 }
 
-void HTMLDocumentParser::NotifyScriptLoaded() {
+void HTMLDocumentParser::NotifyScriptLoaded(int record_replay_scheduled_node_id) {
   TRACE_EVENT("blink", "HTMLDocumentParser::NotifyScriptLoaded",
               perfetto::Flow::FromPointer(this), "parser", (void*)this);
   DCHECK(script_runner_);
   DCHECK(!IsExecutingScript());
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    int node_id = recordreplay::NewDependencyGraphNode(
+      "{\"kind\":\"documentNotifyScriptLoaded\"}"
+    );
+    recordreplay::AddDependencyGraphEdge(
+      record_replay_scheduled_node_id, node_id, "{\"kind\":\"scheduler\"}"
+    );
+    execute.emplace(node_id);
+  }
 
   if (IsStopped()) {
     return;
