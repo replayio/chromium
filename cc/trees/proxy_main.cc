@@ -82,11 +82,16 @@ ProxyMain::~ProxyMain() {
 void ProxyMain::InitializeOnImplThread(CompletionEvent* completion_event,
                                        int id,
                                        const LayerTreeSettings* settings) {
+  recordreplay::Assert("[RUN-1881] ProxyMain::InitializeOnImplThread");
+
   DCHECK(task_runner_provider_->IsImplThread());
   DCHECK(!proxy_impl_);
   proxy_impl_ =
       std::make_unique<ProxyImpl>(weak_factory_.GetWeakPtr(), layer_tree_host_,
                                   id, settings, task_runner_provider_);
+
+  recordreplay::Assert("[RUN-1881] ProxyMain::InitializeOnImplThread #1");
+
   completion_event->Signal();
 
   recordreplay::Assert("[RUN-1881] ProxyMain::InitializeOnImplThread Done");
@@ -570,6 +575,7 @@ void ProxyMain::BeginMainFrameWithBlocking(
   layer_tree_host_->RecordEndOfFrameMetrics(
       begin_main_frame_start_time,
       begin_main_frame_state->active_sequence_trackers);
+  recordreplay::Assert("[RUN-1675-1826] ProxyMain::BeginMainFrame");
 }
 
 void ProxyMain::DidChangeBeginFrameSourcePaused(bool paused) {
@@ -603,6 +609,10 @@ void ProxyMain::DidPresentCompositorFrame(
     std::vector<PresentationTimeCallbackBuffer::SuccessfulCallbackWithDetails>
         sucessful_presentation_callbacks,
     const viz::FrameTimingDetails& frame_timing_details) {
+
+  recordreplay::Assert(
+      "[RUN-2317-2366] ProxyMain::DidPresentCompositorFrame %u", frame_token);
+
   layer_tree_host_->DidPresentCompositorFrame(
       frame_token, std::move(presentation_callbacks),
       std::move(sucessful_presentation_callbacks), frame_timing_details);
