@@ -668,6 +668,31 @@ void DOMWebSocket::DidReceiveTextMessage(const String& msg) {
   if (common_.GetState() != kOpen)
     return;
 
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "websocketNewMessage");
+    info.Set("socketId", record_replay_id_);
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
+
+  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+    std::string annotationContents;
+    if (recordreplay::IsReplaying()) {
+      std::string text = msg.Utf8();
+      base::Value::Dict info;
+      info.Set("kind", "newMessage");
+      info.Set("socketId", record_replay_id_);
+      info.Set("binary", false);
+      info.Set("text", text);
+      info.Set("encodedLength", (int)text.length());
+      base::JSONWriter::Write(info, &annotationContents);
+    }
+    recordreplay::OnAnnotation("DOMWebSocket", annotationContents.c_str());
+  }
+
   DCHECK(origin_);
   event_queue_->Dispatch(MessageEvent::Create(msg, origin_));
   NotifyWebSocketActivity();
