@@ -1584,6 +1584,9 @@ RenderProcessHost* RenderProcessHostImpl::CreateRenderProcessHost(
     if (site_instance->AreV8OptimizationsDisabled()) {
       flags |= RenderProcessFlags::kV8OptimizationsDisabled;
     }
+    if (site_instance->RecordReplayIsForRecording()) {
+      flags |= RenderProcessFlags::kRecordReplayForRecording;
+    }
   }
 
   if (site_instance &&
