@@ -489,6 +489,8 @@ InterfaceEndpointClient::InterfaceEndpointClient(
       method_name_callback_(method_name_callback) {
   DCHECK(interface_name_);
   DCHECK(handle_.is_valid());
+  recordreplay::RegisterPointer("InterfaceEndpointClient", this);
+
   sequence_checker_.DetachFromSequence();
 
   // TODO(yzshen): the way to use validator (or message filter in general)
@@ -518,6 +520,7 @@ InterfaceEndpointClient::~InterfaceEndpointClient() {
   if (controller_) {
     handle_.group_controller()->DetachEndpointClient(handle_);
   }
+  recordreplay::UnregisterPointer(this);
 }
 
 AssociatedGroup* InterfaceEndpointClient::associated_group() {
