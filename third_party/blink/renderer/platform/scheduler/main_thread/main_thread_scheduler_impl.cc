@@ -2501,6 +2501,9 @@ void MainThreadSchedulerImpl::RemoveAgentGroupScheduler(
   DCHECK(main_thread_only().agent_group_schedulers);
   DCHECK(main_thread_only().agent_group_schedulers->Contains(
       agent_group_scheduler));
+  REPLAY_ASSERT(
+      "[RUN-2056-2316] MainThreadSchedulerImpl::RemoveAgentGroupScheduler %d",
+      agent_group_scheduler->RecordReplayId());
   main_thread_only().agent_group_schedulers->erase(agent_group_scheduler);
 }
 
