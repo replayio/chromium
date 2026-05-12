@@ -1707,6 +1707,16 @@ void Element::setAriaOwnsElements(
 NamedNodeMap* Element::attributesForBindings() const {
   ElementRareDataVector* rare_data =
       &const_cast<Element*>(this)->EnsureRareData();
+
+  if (recordreplay::IsInReplayCode() &&
+      !recordreplay::HasDivergedFromRecording()) {
+    if (!rare_data->AttributeMap()) {
+      // [RUN-1764] Do not try to create blink API objects in our Replay-only
+      // scripts, unless explicitly diverged. Creating rare data is fine.
+      return nullptr;
+    }
+  }
+
   if (NamedNodeMap* attribute_map = rare_data->AttributeMap()) {
     return attribute_map;
   }
