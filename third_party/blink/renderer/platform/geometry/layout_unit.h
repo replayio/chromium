@@ -43,6 +43,7 @@
 #include "base/logging.h"
 #include "base/numerics/clamped_math.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"

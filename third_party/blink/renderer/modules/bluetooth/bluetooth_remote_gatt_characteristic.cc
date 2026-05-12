@@ -58,7 +58,7 @@ void BluetoothRemoteGATTCharacteristic::RemoteCharacteristicValueChanged(
             value_, /*promise=*/nullptr));
   } else {
     DispatchEvent(
-        *Event::Create(event_type_names::kCharacteristicvaluechanged));
+        *Event::Create(event_type_names::kCharacteristicvaluechanged), "BluetoothRemoteGATTCharacteristic::RemoteCharacteristicValueChanged");
   }
 }
 

@@ -39,6 +39,7 @@ ImageResourceContent* StyleImageCache::CacheImageContent(
 
 void StyleImageCache::Trace(Visitor* visitor) const {
   visitor->Trace(fetched_image_map_);
+  visitor->Trace(fetched_image_map_strong_);
 }
 
 }  // namespace blink

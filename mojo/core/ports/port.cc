@@ -6,6 +6,8 @@
 
 #include <utility>
 
+#include "base/record_replay.h"
+
 namespace mojo {
 namespace core {
 namespace ports {
@@ -30,9 +32,15 @@ Port::Port(uint64_t next_sequence_num_to_send,
       message_queue(next_sequence_num_to_receive),
       remove_proxy_on_last_message(false),
       peer_closed(false),
-      peer_lost_unexpectedly(false) {}
+      peer_lost_unexpectedly(false),
+      lock_("Port.lock_") {
+  // Registering new ports is needed for sorting, see port_locker.cc
+  recordreplay::RegisterPointer("Port", this);
+}
 
-Port::~Port() = default;
+Port::~Port() {
+  recordreplay::UnregisterPointer(this);
+}
 
 bool Port::IsNextEvent(const NodeName& from_node, const Event& event) {
   if (from_node != prev_node_name) {

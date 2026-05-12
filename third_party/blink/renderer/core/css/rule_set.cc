@@ -1125,6 +1125,9 @@ void RuleSet::AddChildRules(StyleRule* parent_rule,
           style_scope, apply_mixins_stack);
     }
   }
+
+  // https://linear.app/replay/issue/RUN-968
+  recordreplay::Assert("RuleSet::AddChildRules Done");
 }
 
 void RuleSet::FlattenMixinLocals(

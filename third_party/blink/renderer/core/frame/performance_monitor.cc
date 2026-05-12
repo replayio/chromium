@@ -321,15 +321,18 @@ void PerformanceMonitor::DidProcessTask(base::TimeTicks start_time,
       auto subscriptions_it = subscriptions_.find(kLongTask);
       if (subscriptions_it != subscriptions_.end()) {
         ClientThresholds* client_thresholds = subscriptions_it->value;
-        DCHECK(client_thresholds);
-
+        HeapVector<Member<Client>> client_thresholds_vector;
         for (const auto& it : *client_thresholds) {
-          if (it.value < task_time) {
-            it.key->ReportLongTask(
-                start_time, end_time,
-                task_has_multiple_contexts_ ? nullptr : task_execution_context_,
-                task_has_multiple_contexts_);
-          }
+          if (it.value < task_time)
+            client_thresholds_vector.push_back(it.key);
+        }
+        std::sort(client_thresholds_vector.begin(), client_thresholds_vector.end(),
+                  recordreplay::CompareMemberByPointerId<Member<Client>>());
+        for (const auto& client : client_thresholds_vector) {
+          client->ReportLongTask(
+              start_time, end_time,
+              task_has_multiple_contexts_ ? nullptr : task_execution_context_,
+              task_has_multiple_contexts_);
         }
       }
     }
@@ -343,9 +346,16 @@ void PerformanceMonitor::DidProcessTask(base::TimeTicks start_time,
   if (!layout_threshold.is_zero() && layout_time > layout_threshold) {
     ClientThresholds* client_thresholds = subscriptions_.at(kLongLayout);
     DCHECK(client_thresholds);
+    HeapVector<Member<Client>> client_thresholds_vector;
     for (const auto& it : *client_thresholds) {
-      if (it.value < layout_time)
-        it.key->ReportLongLayout(layout_time);
+      if (it.value < layout_time) {
+        client_thresholds_vector.push_back(it.key);
+      }
+    }
+    std::sort(client_thresholds_vector.begin(), client_thresholds_vector.end(),
+              recordreplay::CompareMemberByPointerId<Member<Client>>());
+    for (const auto& client : client_thresholds_vector) {
+      client->ReportLongLayout(layout_time);
     }
   }
 }

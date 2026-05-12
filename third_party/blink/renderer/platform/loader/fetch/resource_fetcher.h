@@ -570,7 +570,7 @@ class PLATFORM_EXPORT ResourceFetcher
                               bool is_static_data) const;
 
   void ScheduleStaleRevalidate(Resource* stale_resource);
-  void RevalidateStaleResource(Resource* stale_resource);
+  void RevalidateStaleResource(Resource* stale_resource, int record_replay_scheduled_node_id);
 
   void WarnUnusedPreloads(
       base::OnceCallback<void(Vector<KURL> unused_preloads)> callback);
@@ -671,8 +671,8 @@ class PLATFORM_EXPORT ResourceFetcher
 
   Vector<ScheduledResourceTimingInfo> scheduled_resource_timing_reports_;
 
-  HeapHashSet<Member<ResourceLoader>> loaders_;
-  HeapHashSet<Member<ResourceLoader>> non_blocking_loaders_;
+  HeapHashSet<Member<ResourceLoader>, WTF::MemberHashRecordReplayRegisteredPointerId<ResourceLoader>> loaders_;
+  HeapHashSet<Member<ResourceLoader>, WTF::MemberHashRecordReplayRegisteredPointerId<ResourceLoader>> non_blocking_loaders_;
 
   HashMap<KURL, EarlyHintsPreloadEntry> unused_early_hints_preloaded_resources_;
 

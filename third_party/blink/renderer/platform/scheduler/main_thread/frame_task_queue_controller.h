@@ -123,7 +123,8 @@ class PLATFORM_EXPORT FrameTaskQueueController {
 
   using TaskQueueEnabledVoterMap = HashMap<
       scoped_refptr<MainThreadTaskQueue>,
-      std::unique_ptr<base::sequence_manager::TaskQueue::QueueEnabledVoter>>;
+      std::unique_ptr<base::sequence_manager::TaskQueue::QueueEnabledVoter>,
+      WTF::RecordReplayRefPtrPointerIdHash<MainThreadTaskQueue>>;
 
   // QueueEnabledVoters for the task queues we've created.
   TaskQueueEnabledVoterMap task_queue_enabled_voters_;

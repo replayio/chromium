@@ -87,6 +87,10 @@ int64_t ComputeCurrentTicks() {
   return MachTimeToMicroseconds(mach_absolute_time());
 }
 
+static inline bool MaybeRecordingOrReplaying() {
+  return true;
+}
+
 int64_t ComputeThreadTicks() {
   struct timespec ts = {};
   CHECK(clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts) == 0);

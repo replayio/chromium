@@ -42,6 +42,12 @@ void ChromeCrashReporterClient::InitializeCrashReportingForProcess() {
     return;
   }
 
+  // Don't initialize the crash reporter when replaying. This happens during
+  // initialization and isn't supported before calling RecordReplayAttach,
+  // and isn't relevant when replaying anyways.
+  if (RecordReplayIsReplaying())
+    return;
+
   instance = new ChromeCrashReporterClient();
   ANNOTATE_LEAKING_OBJECT_PTR(instance);
 

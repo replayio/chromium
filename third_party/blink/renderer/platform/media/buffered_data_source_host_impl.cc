@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/platform/media/buffered_data_source_host_impl.h"
 
+#include "base/record_replay.h"
 #include "media/base/timestamp_constants.h"
 
 namespace blink {

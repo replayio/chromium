@@ -20,7 +20,8 @@ RasterQuery::~RasterQuery() = default;
 
 RasterQueryQueue::RasterQueryQueue(
     viz::RasterContextProvider* const worker_context_provider)
-    : worker_context_provider_(worker_context_provider) {}
+    : worker_context_provider_(worker_context_provider),
+      pending_raster_queries_lock_("RasterQueryQueue.pending_raster_queries_lock_") {}
 
 RasterQueryQueue::~RasterQueryQueue() = default;
 

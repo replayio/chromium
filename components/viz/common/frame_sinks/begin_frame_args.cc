@@ -121,7 +121,8 @@ BeginFrameArgs::BeginFrameArgs(uint64_t source_id,
       unthrottled_interval(
           unthrottled_interval.is_positive() ? unthrottled_interval : interval),
       frame_id(BeginFrameId(source_id, sequence_number)),
-      type(type) {
+      type(type),
+      replay_force_draw(force_draw) {
   DCHECK_LE(kStartingFrameNumber, sequence_number);
 #if !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_ANDROID)
   // TODO(crbug.com/477242770): Re-enable on Mac. Changing the system display

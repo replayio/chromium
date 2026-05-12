@@ -213,7 +213,7 @@ void XRReferenceSpace::OnReset() {
     // DispatchEvent inherited from core/dom/events/event_target.h isn't const.
     XRReferenceSpace* mutable_this = const_cast<XRReferenceSpace*>(this);
     mutable_this->DispatchEvent(
-        *XRReferenceSpaceEvent::Create(event_type_names::kReset, mutable_this));
+        *XRReferenceSpaceEvent::Create(event_type_names::kReset, mutable_this), "XRReferenceSpace::OnReset");
   }
 }
 

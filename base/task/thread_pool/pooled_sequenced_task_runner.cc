@@ -19,7 +19,9 @@ PooledSequencedTaskRunner::PooledSequencedTaskRunner(
                                          TaskSourceExecutionMode::kSequenced,
                                          GetCurrentTaskImportance())) {}
 
-PooledSequencedTaskRunner::~PooledSequencedTaskRunner() = default;
+PooledSequencedTaskRunner::~PooledSequencedTaskRunner() {
+  recordreplay::UnregisterPointer(this);
+}
 
 bool PooledSequencedTaskRunner::PostDelayedTask(const Location& from_here,
                                                 OnceClosure closure,

@@ -121,6 +121,7 @@ LayerImpl::LayerImpl(LayerTreeImpl* tree_impl, int id)
 }
 
 LayerImpl::~LayerImpl() {
+  recordreplay::UnregisterPointer(this);
   layer_tree_impl_->UnregisterLayer(this);
   TRACE_EVENT_OBJECT_DELETED_WITH_ID(
       TRACE_DISABLED_BY_DEFAULT("cc.debug"), "cc::LayerImpl", this);
@@ -923,7 +924,11 @@ gfx::Transform LayerImpl::ScreenSpaceTransform() const {
 }
 
 int LayerImpl::GetSortingContextId() const {
-  return GetTransformTree().Node(transform_tree_index())->sorting_context_id;
+  int rv = GetTransformTree().Node(transform_tree_index())->sorting_context_id;
+
+  recordreplay::Assert("[RUN-550] LayerImpl::GetSortingContextId %d %d", transform_tree_index(), rv);
+
+  return rv;
 }
 
 Region LayerImpl::GetInvalidationRegionForDebugging() {

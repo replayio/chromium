@@ -33,6 +33,8 @@ int __attribute__((weak)) pthread_mutexattr_setprotocol(
 }
 #endif
 
+#include <dlfcn.h>
+
 namespace base {
 
 namespace internal {
@@ -98,7 +100,22 @@ void dcheck_unlock_result(int rv) {
 #define PRIORITY_INHERITANCE_LOCKS_POSSIBLE() 1
 #endif
 
-LockImpl::LockImpl() {
+static void (*gAddOrderedPthreadMutexFn)(const char*, pthread_mutex_t*);
+
+static void RecordReplayAddOrderedPthreadMutex(const char* name,
+                                               pthread_mutex_t* mutex) {
+  if (!gAddOrderedPthreadMutexFn) {
+    void* fnptr = dlsym(RTLD_DEFAULT, "RecordReplayAddOrderedPthreadMutex");
+    if (!fnptr) {
+      return;
+    }
+    gAddOrderedPthreadMutexFn = reinterpret_cast<void(*)(const char*, pthread_mutex_t*)>(fnptr);
+  }
+
+  gAddOrderedPthreadMutexFn(name, mutex);
+}
+
+LockImpl::LockImpl(const char* ordered_name) {
   pthread_mutexattr_t mta;
   int rv = pthread_mutexattr_init(&mta);
   DCHECK_EQ(rv, 0) << ". " << SystemErrorCodeToString(rv);
@@ -120,6 +137,10 @@ LockImpl::LockImpl() {
   DCHECK_EQ(rv, 0) << ". " << SystemErrorCodeToString(rv);
   rv = pthread_mutexattr_destroy(&mta);
   DCHECK_EQ(rv, 0) << ". " << SystemErrorCodeToString(rv);
+
+  if (ordered_name) {
+    RecordReplayAddOrderedPthreadMutex(ordered_name, &native_handle_);
+  }
 }
 
 LockImpl::~LockImpl() {

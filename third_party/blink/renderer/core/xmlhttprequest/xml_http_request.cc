@@ -27,6 +27,8 @@
 #include <optional>
 #include <utility>
 
+#include "base/record_replay.h"
+
 #include "base/auto_reset.h"
 #include "base/containers/span.h"
 #include "base/feature_list.h"
@@ -108,6 +110,8 @@
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 #include "third_party/blink/renderer/platform/wtf/text/strcat.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
+
+#include "base/json/json_writer.h"
 
 namespace blink {
 
@@ -285,9 +289,12 @@ XMLHttpRequest::XMLHttpRequest(ExecutionContext* context,
       isolated_world_security_origin_(world_ && world_->IsIsolatedWorld()
                                           ? world_->IsolatedWorldSecurityOrigin(
                                                 context->GetAgentClusterID())
-                                          : nullptr) {}
+                                          : nullptr) {
+  recordreplay::RegisterPointer("XMLHttpRequest", this);
+}
 
 XMLHttpRequest::~XMLHttpRequest() {
+  recordreplay::UnregisterPointer(this);
   binary_response_builder_ = nullptr;
   length_downloaded_to_blob_ = 0;
   response_text_.Clear();
@@ -845,7 +852,7 @@ void XMLHttpRequest::send(const String& body, ExceptionState& exception_state) {
 
   scoped_refptr<EncodedFormData> http_body;
 
-  if (!body.IsNull() && AreMethodAndURLValidForSend()) {
+  if (!use_body.IsNull() && AreMethodAndURLValidForSend()) {
     http_body = EncodedFormData::Create(
         Utf8Encoding().Encode(body, UnencodableHandling::kNoUnencodables));
     UpdateContentTypeAndCharset(AtomicString("text/plain;charset=UTF-8"),
@@ -1027,7 +1034,7 @@ void XMLHttpRequest::CreateRequest(scoped_refptr<EncodedFormData> http_body,
     if (http_body && upload_) {
       upload_events = upload_->HasEventListeners();
       upload_->DispatchEvent(*ProgressEvent::Create(
-          event_type_names::kLoadstart, true, 0, http_body->SizeInBytes()));
+          event_type_names::kLoadstart, true, 0, http_body->SizeInBytes()), "XMLHttpRequest::CreateRequest");
       // See above.
       if (!send_flag_ || loader_)
         return;
@@ -1775,6 +1782,16 @@ void XMLHttpRequest::NotifyParserStopped() {
 
 void XMLHttpRequest::EndLoading() {
   probe::DidFinishXHR(GetExecutionContext(), this);
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "xhrEndLoading");
+    info.Set("url", Url().GetString().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
 
   if (loader_) {
     // Set |m_error| in order to suppress the cancel notification (see

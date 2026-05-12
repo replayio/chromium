@@ -548,7 +548,7 @@ class CC_EXPORT LayerTreeImpl {
 
   void AddLayerShouldPushProperties(LayerImpl* layer);
   void ClearLayersThatShouldPushProperties();
-  const base::flat_set<LayerImpl*>& LayersThatShouldPushProperties() const {
+  const LayerImplSet& LayersThatShouldPushProperties() const {
     return layers_that_should_push_properties_;
   }
 

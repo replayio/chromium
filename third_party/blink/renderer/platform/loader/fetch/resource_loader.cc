@@ -106,6 +106,9 @@
 #include "third_party/perfetto/include/perfetto/tracing/track.h"
 #include "url/url_constants.h"
 
+#include "net/base/net_errors.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
+
 namespace blink {
 
 namespace {
@@ -225,6 +228,8 @@ ResourceLoader::ResourceLoader(ResourceFetcher* fetcher,
       cancel_timer_(fetcher_->GetUnfreezableTaskRunner(),
                     this,
                     &ResourceLoader::CancelTimerFired) {
+  // Pointer registration is needed for sorting in ResourceFetcher.
+  recordreplay::RegisterPointer("ResourceLoader", this);
   DCHECK(resource_);
   DCHECK(fetcher_);
 
@@ -251,7 +256,9 @@ ResourceLoader::ResourceLoader(ResourceFetcher* fetcher,
   resource_->SetLoader(this);
 }
 
-ResourceLoader::~ResourceLoader() = default;
+ResourceLoader::~ResourceLoader() {
+  recordreplay::UnregisterPointer(this);
+}
 
 void ResourceLoader::Trace(Visitor* visitor) const {
   visitor->Trace(fetcher_);
@@ -980,6 +987,8 @@ void ResourceLoader::DidReceiveResponseInternal(
   }
 
   resource_->ResponseReceived(response);
+
+  recordreplay::OnNetworkReceiveResponse(resource_->InspectorId(), response);
 
   if (resource_->Loader() && fetcher_->GetProperties().IsDetached()) {
     // If the fetch context is already detached, we don't need further signals,

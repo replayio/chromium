@@ -266,6 +266,7 @@ const LayoutResult* LayoutBox::CachedLayoutResult(
     if (!is_new_formatting_context &&
         (!are_bfc_offsets_equal || !is_exclusion_space_equal ||
          !is_margin_strut_equal || !is_clearance_offset_equal)) {
+
       DCHECK(!CreatesNewFormattingContext());
 
       // If we have a different BFC offset, or exclusion space we can't perform
@@ -327,6 +328,7 @@ const LayoutResult* LayoutBox::CachedLayoutResult(
       // be sure that this is the case, we need to miss the cache.
       if (new_space.IsInitialColumnBalancingPass()) {
         if (!old_space.IsInitialColumnBalancingPass()) {
+
           // If the previous result was generated with a known fragmentainer
           // size (i.e. not in the initial column balancing pass),
           // TallestUnbreakableBlockSize() won't be stored in the layout result,
@@ -351,6 +353,7 @@ const LayoutResult* LayoutBox::CachedLayoutResult(
                      old_space.FragmentainerBlockSize() ||
                  new_space.FragmentainerOffset() !=
                      old_space.FragmentainerOffset()) {
+
         // The fragment block-offset will either change, or the fragmentainer
         // block-size has changed. If the node is fragmented, we're going to
         // have to refragment, since the fragmentation line has moved,
@@ -414,6 +417,7 @@ const LayoutResult* LayoutBox::CachedLayoutResult(
         };
 
         if (!bfc_block_offset && cached_layout_result->IsSelfCollapsing()) {
+
           // Self-collapsing blocks may have floats and OOF descendants.
           // Checking if floats cross the fragmentation line is easy enough
           // (check the exclusion space), but we currently have no way of
@@ -432,6 +436,7 @@ const LayoutResult* LayoutBox::CachedLayoutResult(
           // fragmentation calculation above, unlike block formatting contexts).
           if (physical_fragment.IsInlineFormattingContext() &&
               !is_new_formatting_context) {
+
             if (DoFloatsCrossFragmentationLine())
               return nullptr;
           }
@@ -549,6 +554,7 @@ const LayoutResult* LayoutBox::CachedLayoutResult(
   // were equal.
   if (are_bfc_offsets_equal && is_exclusion_space_equal &&
       is_margin_strut_equal && !needs_cached_result_update) {
+
     // In order not to rebuild the internal derived-geometry "cache" of float
     // data, we need to move this to the new "output" exclusion space.
     cached_layout_result->GetExclusionSpace().MoveAndUpdateDerivedGeometry(

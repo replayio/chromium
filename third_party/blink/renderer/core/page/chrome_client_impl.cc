@@ -446,10 +446,28 @@ void ChromeClientImpl::AddMessageToConsole(LocalFrame* local_frame,
                                            unsigned line_number,
                                            const String& source_id,
                                            const String& stack_trace) {
+  // [RUN-2387] Make sure that stack_trace is consistent, despite some
+  // "negligible" frames diverging.
+  std::string stack_trace_str = stack_trace.Ascii();
+  recordreplay::RecordReplayString(
+      "ChromeClientImpl::AddMessageToConsole stack_trace", stack_trace_str);
+  const String new_stack_trace =
+      String::FromUTF8(&stack_trace_str[0], stack_trace_str.length());
+
+  // [RUN-2650] source_id is sometimes a divergent URL.
+  std::string source_id_str = source_id.Ascii();
+  recordreplay::RecordReplayString(
+      "ChromeClientImpl::AddMessageToConsole source_id", source_id_str);
+  const String new_source_id =
+      String::FromUTF8(&stack_trace_str[0], stack_trace_str.length());
+
   if (!message.IsNull()) {
+    recordreplay::Assert(
+        "[PRO-1150] ChromeClientImpl::AddMessageToConsole message %s",
+        message.Utf8().c_str());
     local_frame->GetLocalFrameHostRemote().DidAddMessageToConsole(
-        level, message, static_cast<int32_t>(line_number), source_id,
-        stack_trace);
+        level, message, static_cast<int32_t>(line_number), new_source_id,
+        new_stack_trace);
   }
 
   WebLocalFrameImpl* frame = WebLocalFrameImpl::FromFrame(local_frame);
@@ -457,7 +475,7 @@ void ChromeClientImpl::AddMessageToConsole(LocalFrame* local_frame,
     frame->Client()->DidAddMessageToConsole(
         WebConsoleMessage(static_cast<mojom::ConsoleMessageLevel>(level),
                           message),
-        source_id, line_number, stack_trace);
+        new_source_id, line_number, new_stack_trace);
   }
 }
 

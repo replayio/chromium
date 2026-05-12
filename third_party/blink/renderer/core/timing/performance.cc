@@ -309,7 +309,9 @@ Performance::Performance(
   }
 }
 
-Performance::~Performance() = default;
+Performance::~Performance() {
+  recordreplay::UnregisterPointer(this);
+}
 
 const AtomicString& Performance::InterfaceName() const {
   return event_target_names::kPerformance;
@@ -686,7 +688,7 @@ void Performance::FireResourceTimingBufferFull(TimerBase*) {
     int excess_entries_before = resource_timing_secondary_buffer_.size();
     if (!CanAddResourceTimingEntry()) {
       DispatchEvent(
-          *Event::Create(event_type_names::kResourcetimingbufferfull));
+          *Event::Create(event_type_names::kResourcetimingbufferfull), "Performance::FireResourceTimingBufferFull");
     }
     CopySecondaryBuffer();
     int excess_entries_after = resource_timing_secondary_buffer_.size();
@@ -1276,6 +1278,7 @@ DOMHighResTimeStamp Performance::MonotonicTimeToDOMHighResTimeStamp(
 }
 
 DOMHighResTimeStamp Performance::now() const {
+  recordreplay::Assert("[RUN-2860-2933] Performance::now");
   return MonotonicTimeToDOMHighResTimeStamp(tick_clock_->NowTicks());
 }
 

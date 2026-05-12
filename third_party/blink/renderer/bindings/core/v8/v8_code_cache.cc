@@ -401,6 +401,14 @@ V8CodeCache::GetCompileOptionsInternal(
       break;
   }
 
+  // The code cache doesn't behave correctly when scripts have record/replay
+  // instrumentation.
+  if (recordreplay::IsRecordingOrReplaying("no-compile-cache", "V8CodeCache::GetCompileOptions")) {
+    return std::make_tuple(v8::ScriptCompiler::kNoCompileOptions,
+                           ProduceCacheOptions::kNoProduceCache,
+                           no_cache_reason);
+  }
+
   if (!cache_handler) {
     return std::make_tuple(no_code_cache_compile_options,
                            ProduceCacheOptions::kNoProduceCache,

@@ -34,6 +34,8 @@
 #include "partition_alloc/stack/stack.h"
 #endif
 
+#include "base/record_replay.h"
+
 namespace base {
 
 namespace {
@@ -70,6 +72,23 @@ void SetNameInternal(PlatformThreadId thread_id, const char* name) {
                    reinterpret_cast<ULONG_PTR*>(&info));
   } __except (EXCEPTION_EXECUTE_HANDLER) {
   }
+}
+
+// On windows the WaitForSingleObject calls done on thread handles will not be
+// ordered when replaying wrt the associated thread exiting. For now we workaround
+// this by using an ordered lock to explicitly enforce this ordering constraint.
+static std::atomic<int> g_record_replay_thread_join_ordered_lock_id = 0;
+
+static int GetRecordReplayThreadJoinOrderedLockId() {
+  if (!g_record_replay_thread_join_ordered_lock_id) {
+    g_record_replay_thread_join_ordered_lock_id = recordreplay::CreateOrderedLock("ThreadJoin");
+  }
+  return g_record_replay_thread_join_ordered_lock_id;
+}
+
+static void RecordReplayThreadJoinFence() {
+  int id = GetRecordReplayThreadJoinOrderedLockId();
+  recordreplay::AutoOrderedLock ordered(id);
 }
 
 struct ThreadParams {
@@ -127,6 +146,8 @@ DWORD __stdcall ThreadFunc(void* params) {
   if (::GetThreadPriority(::GetCurrentThread()) < THREAD_PRIORITY_NORMAL) {
     PlatformThread::SetCurrentThreadType(ThreadType::kDefault);
   }
+
+  RecordReplayThreadJoinFence();
 
   return 0;
 }
@@ -268,10 +289,18 @@ void PlatformThread::Sleep(TimeDelta duration) {
 void PlatformThread::SetName(const std::string& name) {
   SetNameCommon(name);
 
+  // Only set the thread name while recording. It can be useful when debugging
+  // recording processes but isn't used when replaying, and the static initializer
+  // below can run non-deterministically.
+  if (recordreplay::IsReplaying())
+    return;
+  recordreplay::AutoPassThroughEvents pt;
+
   // The SetThreadDescription API works even if no debugger is attached.
   static auto set_thread_description_func =
       reinterpret_cast<SetThreadDescription>(::GetProcAddress(
           ::GetModuleHandle(L"Kernel32.dll"), "SetThreadDescription"));
+
   if (set_thread_description_func) {
     set_thread_description_func(::GetCurrentThread(),
                                 base::UTF8ToWide(name).c_str());
@@ -338,6 +367,8 @@ void PlatformThread::Join(PlatformThreadHandle thread_handle) {
   CHECK_EQ(WAIT_OBJECT_0,
            WaitForSingleObject(thread_handle.platform_handle(), INFINITE));
   CloseHandle(thread_handle.platform_handle());
+
+  RecordReplayThreadJoinFence();
 }
 
 // static

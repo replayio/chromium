@@ -867,7 +867,7 @@ FormData* HTMLFormElement::ConstructEntryList(
       }
     }
   }
-  DispatchEvent(*MakeGarbageCollected<FormDataEvent>(form_data));
+  DispatchEvent(*MakeGarbageCollected<FormDataEvent>(form_data), "HTMLFormElement::ConstructEntryList");
 
   if (submit_button)
     submit_button->SetActivatedSubmit(false);
@@ -881,7 +881,7 @@ void HTMLFormElement::reset() {
 
   is_in_reset_function_ = true;
 
-  if (DispatchEvent(*Event::CreateCancelableBubble(event_type_names::kReset)) !=
+  if (DispatchEvent(*Event::CreateCancelableBubble(event_type_names::kReset), "HTMLFormElement::reset") !=
       DispatchEventResult::kNotCanceled) {
     is_in_reset_function_ = false;
     return;

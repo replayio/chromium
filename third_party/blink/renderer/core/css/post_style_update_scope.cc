@@ -71,7 +71,7 @@ void PostStyleUpdateScope::ApplyAnimations() {
   StyleEngine::InApplyAnimationUpdateScope in_apply_animation_update_scope(
       document_.GetStyleEngine());
 
-  HeapHashSet<Member<Element>> pending;
+  HeapHashSet<Member<Element>, WTF::MemberHashRecordReplayId<Element>> pending;
   std::swap(pending, animation_data_.elements_with_pending_updates_);
 
   for (auto& element : pending) {

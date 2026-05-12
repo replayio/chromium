@@ -46,6 +46,8 @@
 #include "third_party/boringssl/src/pki/parse_values.h"
 #include "third_party/boringssl/src/pki/signature_algorithm.h"
 
+#include "base/record_replay.h"
+
 namespace net::x509_util {
 
 namespace {
@@ -420,6 +422,7 @@ CRYPTO_BUFFER_POOL* GetBufferPool() {
 
 bssl::UniquePtr<CRYPTO_BUFFER> CreateCryptoBuffer(
     base::span<const uint8_t> data) {
+  recordreplay::Assert("[RUN-1489-1494] CreateCryptoBuffer A %zu", data.size());
   return bssl::UniquePtr<CRYPTO_BUFFER>(
       CRYPTO_BUFFER_new(data.data(), data.size(), GetBufferPool()));
 }
@@ -430,6 +433,7 @@ bssl::UniquePtr<CRYPTO_BUFFER> CreateCryptoBuffer(std::string_view data) {
 
 bssl::UniquePtr<CRYPTO_BUFFER> CreateCryptoBufferFromStaticDataUnsafe(
     base::span<const uint8_t> data) {
+  recordreplay::Assert("[RUN-1489-1494] CreateCryptoBuffer C %zu", data.size());
   return bssl::UniquePtr<CRYPTO_BUFFER>(
       CRYPTO_BUFFER_new_from_static_data_unsafe(data.data(), data.size(),
                                                 GetBufferPool()));

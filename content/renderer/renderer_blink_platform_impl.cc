@@ -340,7 +340,10 @@ uint64_t RendererBlinkPlatformImpl::PartitionedVisitedLinkFingerprint(
 }
 
 bool RendererBlinkPlatformImpl::IsLinkVisited(uint64_t link_hash) {
-  return GetContentClient()->renderer()->IsLinkVisited(link_hash);
+  // Link status is something we want to record, to match playback.  See RUN-1442
+  // for details.
+  return (bool)recordreplay::RecordReplayValue("RendererBlinkPlatformImpl::IsLinkVisited", 
+    GetContentClient()->renderer()->IsLinkVisited(link_hash));
 }
 
 void RendererBlinkPlatformImpl::AddOrUpdateVisitedLinkSalt(

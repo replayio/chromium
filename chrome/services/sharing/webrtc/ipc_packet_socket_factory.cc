@@ -26,6 +26,8 @@
 #include "third_party/webrtc/rtc_base/async_packet_socket.h"
 #include "third_party/webrtc/rtc_base/network/received_packet.h"
 
+#include "base/record_replay.h"
+
 namespace sharing {
 
 namespace {

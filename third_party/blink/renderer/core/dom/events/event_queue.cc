@@ -65,6 +65,10 @@ bool EventQueue::EnqueueEvent(const base::Location& from_here, Event& event) {
   scoped_refptr<base::SingleThreadTaskRunner> task_runner =
       GetExecutionContext()->GetTaskRunner(task_type_);
 
+  int node_id = recordreplay::NewDependencyGraphNode(
+    "{\"kind\":\"eventQueueSchedule\"}"
+  );
+
   // Pass the event as a weak persistent so that GC can collect an event-related
   // object like IDBTransaction as soon as possible.
   task_runner->PostTask(
@@ -90,19 +94,30 @@ bool EventQueue::RemoveEvent(Event& event) {
   return true;
 }
 
-void EventQueue::DispatchEvent(Event* event) {
+void EventQueue::DispatchEvent(Event* event, int record_replay_scheduled_node_id) {
   if (!event || !RemoveEvent(*event))
     return;
 
   DCHECK(GetExecutionContext());
 
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    int node_id = recordreplay::NewDependencyGraphNode(
+      "{\"kind\":\"eventQueueDispatch\"}"
+    );
+    recordreplay::AddDependencyGraphEdge(
+      record_replay_scheduled_node_id, node_id, "{\"kind\":\"scheduler\"}"
+    );
+    execute.emplace(node_id);
+  }
+
   probe::AsyncTask async_task(GetExecutionContext(),
                               event->async_task_context());
   EventTarget* target = event->RawTarget();
   if (LocalDOMWindow* window = target->ToLocalDOMWindow())
-    window->DispatchEvent(*event, nullptr);
+    window->DispatchEvent(*event, (EventTarget*)nullptr);
   else
-    target->DispatchEvent(*event);
+    target->DispatchEvent(*event, "EventQueue::DispatchEvent");
 }
 
 void EventQueue::ContextDestroyed() {

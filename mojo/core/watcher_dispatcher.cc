@@ -10,13 +10,28 @@
 #include "base/compiler_specific.h"
 #include "base/debug/alias.h"
 #include "base/memory/ptr_util.h"
+#include "base/record_replay.h"
 #include "mojo/core/watch.h"
 
 namespace mojo {
 namespace core {
 
 WatcherDispatcher::WatcherDispatcher(MojoTrapEventHandler handler)
-    : handler_(handler) {}
+    : handler_(handler),
+      lock_("WatcherDispatcher.lock_") {
+  // Registering dispatchers is needed for deterministic sort order in WatcherSets.
+  recordreplay::RegisterPointer("WatcherDispatcher", this);
+
+  // https://linear.app/replay/issue/RUN-999
+  CHECK(!recordreplay::AreEventsDisallowed() ||
+        recordreplay::HasDivergedFromRecording() ||
+        recordreplay::HasDisabledFeatures());
+  if (recordreplay::IsRecordingOrReplaying("pointer-ids")) {
+    CHECK(recordreplay::PointerId(this) ||
+          recordreplay::HasDivergedFromRecording() ||
+          recordreplay::HasDisabledFeatures());
+  }
+}
 
 void WatcherDispatcher::NotifyHandleState(Dispatcher* dispatcher,
                                           const HandleSignalsState& state) {
@@ -281,7 +296,9 @@ MojoResult WatcherDispatcher::Arm(uint32_t* num_blocking_events,
   return MOJO_RESULT_FAILED_PRECONDITION;
 }
 
-WatcherDispatcher::~WatcherDispatcher() = default;
+WatcherDispatcher::~WatcherDispatcher() {
+  recordreplay::UnregisterPointer(this);
+}
 
 }  // namespace core
 }  // namespace mojo

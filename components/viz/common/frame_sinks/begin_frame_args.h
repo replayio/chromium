@@ -257,6 +257,8 @@ struct VIZ_COMMON_EXPORT BeginFrameArgs {
   // `frame_time`.
   std::optional<PossibleDeadlines> possible_deadlines;
 
+  bool replay_force_draw = false;
+
  private:
   BeginFrameArgs(uint64_t source_id,
                  uint64_t sequence_number,

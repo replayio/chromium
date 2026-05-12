@@ -29,6 +29,7 @@
 #include "third_party/blink/renderer/platform/fonts/font_fallback_list.h"
 
 #include "base/timer/elapsed_timer.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/platform/font_family_names.h"
 #include "third_party/blink/renderer/platform/fonts/alternate_font_family.h"
 #include "third_party/blink/renderer/platform/fonts/font_cache.h"
@@ -124,15 +125,17 @@ const SimpleFontData* FontFallbackList::DeterminePrimarySimpleFontDataCore(
     // When a custom font is loading, we should use the correct fallback font to
     // layout the text.  Here skip the temporary font for the loading custom
     // font which may not act as the correct fallback font.
-    if (!font_data_for_space->IsLoadingFallback())
+    if (!font_data_for_space->IsLoadingFallback()) {
       return font_data_for_space;
+    }
 
     if (segmented) {
       for (unsigned i = 0; i < segmented->NumFaces(); i++) {
         const SimpleFontData* range_font_data =
             segmented->FaceAt(i)->FontData();
-        if (!range_font_data->IsLoadingFallback())
+        if (!range_font_data->IsLoadingFallback()) {
           return range_font_data;
+        }
       }
       if (font_data->IsLoading())
         should_load_custom_font = false;
@@ -206,6 +209,13 @@ const FontData* FontFallbackList::FontDataAt(
 
   if (family_index_ == kCAllFamiliesScanned)
     return nullptr;
+
+  // RUN-2625: We cannot (yet) make up font data if its not loaded already.
+  if (recordreplay::IsInReplayCode() &&
+      recordreplay::FeatureEnabled("replay-code",
+                                   "FontFallbackList::FontDataAt")) {
+    return nullptr;
+  }
 
   // Ask the font cache for the font data.
   // We are obtaining this font for the first time.  We keep track of the

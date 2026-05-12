@@ -82,6 +82,10 @@ struct BASE_EXPORT TaskMetadata {
   int sequence_num = 0;
 
   bool task_backtrace_overflow = false;
+
+  int record_replay_id = 0;
+
+  int RecordReplayId() const { return record_replay_id; }
 };
 
 // Contains data about a pending task. Stored in TaskQueue and DelayedTaskQueue

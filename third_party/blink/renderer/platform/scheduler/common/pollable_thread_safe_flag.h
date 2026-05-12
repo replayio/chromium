@@ -21,7 +21,7 @@ class PollableThreadSafeFlag {
   DISALLOW_NEW();
 
  public:
-  explicit PollableThreadSafeFlag(base::Lock* write_lock);
+  explicit PollableThreadSafeFlag(base::Lock* write_lock, const char* ordered_name = nullptr);
   PollableThreadSafeFlag(const PollableThreadSafeFlag&) = delete;
   PollableThreadSafeFlag& operator=(const PollableThreadSafeFlag&) = delete;
 

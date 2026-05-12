@@ -32,6 +32,7 @@
 #include "third_party/blink/renderer/core/svg_names.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
 
@@ -140,7 +141,7 @@ class CORE_EXPORT SVGElement : public Element {
     EnsureUniqueElementData().SetPresentationAttributeStyleIsDirty(true);
   }
 
-  const HeapHashSet<WeakMember<SVGElement>>& InstancesForElement() const;
+  const HeapHashSet<WeakMember<SVGElement>, WTF::MemberHashRecordReplayId<SVGElement>>& InstancesForElement() const;
   void AddInstance(SVGElement*);
   void RemoveInstance(SVGElement*);
 

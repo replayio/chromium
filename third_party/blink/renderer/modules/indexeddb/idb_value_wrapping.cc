@@ -101,7 +101,7 @@ IDBValueWrapper::IDBValueWrapper(
   options.wasm_policy = wasm_policy;
 
   serialized_value_ = SerializedScriptValue::Serialize(isolate, value, options,
-                                                       exception_state);
+                                                        exception_state);
   if (serialized_value_) {
     original_data_length_ = serialized_value_->DataLengthInBytes();
   }

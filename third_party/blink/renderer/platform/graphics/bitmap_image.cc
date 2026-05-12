@@ -140,8 +140,14 @@ PaintImage BitmapImage::CreatePaintImage(
     ImageNodeAnimationInfo* image_node_animation_info) {
   sk_sp<PaintImageGenerator> generator =
       decoder_ ? decoder_->CreateGenerator() : nullptr;
+
+  recordreplay::Assert("[RUN-1975-2036] BitmapImage::CreatePaintImage B");
+
   if (!generator)
     return PaintImage();
+
+  recordreplay::Assert("[RUN-1975-2036] BitmapImage::CreatePaintImage C %d",
+                       all_data_received_);
 
   auto completion_state = all_data_received_
                               ? PaintImage::CompletionState::kDone

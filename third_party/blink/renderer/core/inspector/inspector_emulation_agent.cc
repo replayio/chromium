@@ -514,6 +514,7 @@ protocol::Response InspectorEmulationAgent::setFocusEmulationEnabled(
   protocol::Response response = AssertPage();
   if (!response.IsSuccess())
     return response;
+
   emulate_focus_.Set(enabled);
   if (const Page* page = GetWebViewImpl()->GetPage()) {
     page->GetFocusController().SetFocusEmulationEnabled(enabled);

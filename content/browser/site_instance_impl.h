@@ -405,6 +405,12 @@ class CONTENT_EXPORT SiteInstanceImpl final : public SiteInstance {
   // - SiteInstanceImpl::CanAssociateWithSpareProcess().
   void PreventAssociationWithSpareProcess();
 
+  // RecordReplay [RUN-2762]
+  // Mark this site-instance as being for a recorded tab.
+  void RecordReplaySetForRecording();
+  // Check if this site-instance is for a recorded tab.
+  bool RecordReplayIsForRecording();
+
   // Returns the special site URL used by the default SiteInstance.
   static const GURL& GetDefaultSiteURL();
 

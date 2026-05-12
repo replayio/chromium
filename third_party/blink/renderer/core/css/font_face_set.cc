@@ -49,7 +49,7 @@ void FontFaceSet::FireLoadingEvent() {
   if (should_fire_loading_event_) {
     should_fire_loading_event_ = false;
     DispatchEvent(
-        *FontFaceSetLoadEvent::CreateForFontFaces(event_type_names::kLoading));
+        *FontFaceSetLoadEvent::CreateForFontFaces(event_type_names::kLoading), "FontFaceSet::FireLoadingEvent");
   }
 }
 

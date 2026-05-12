@@ -2859,7 +2859,7 @@ void RTCPeerConnection::CloseInternal() {
 void RTCPeerConnection::MaybeDispatchEvent(Event* event) {
   if (suppress_events_)
     return;
-  DispatchEvent(*event);
+  DispatchEvent(*event, "RTCPeerConnection::MaybeDispatchEvent");
 }
 
 void RTCPeerConnection::ScheduleDispatchEvent(Event* event) {

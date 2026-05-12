@@ -294,6 +294,7 @@ component("base") {
     "debug/profiler.h",
     "debug/task_trace.cc",
     "debug/task_trace.h",
+    "deterministic_containers.h",
     "environment.cc",
     "environment.h",
     "export_template.h",

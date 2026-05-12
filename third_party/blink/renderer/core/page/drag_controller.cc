@@ -587,7 +587,7 @@ DispatchEventResult DragController::DispatchTextInputEventFor(
   if (!target)
     return DispatchEventResult::kNotCanceled;
   return target->DispatchEvent(
-      *TextEvent::CreateForDrop(inner_frame->DomWindow(), text));
+      *TextEvent::CreateForDrop(inner_frame->DomWindow(), text), "DragController::DispatchTextInputEventFor");
 }
 
 bool DragController::ConcludeEditDrag(DragData* drag_data) {

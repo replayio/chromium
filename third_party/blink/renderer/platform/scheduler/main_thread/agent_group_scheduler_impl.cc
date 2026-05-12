@@ -13,6 +13,8 @@
 #include "third_party/blink/renderer/platform/scheduler/main_thread/policy_updater.h"
 #include "third_party/blink/renderer/platform/scheduler/public/dummy_schedulers.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 namespace scheduler {
 

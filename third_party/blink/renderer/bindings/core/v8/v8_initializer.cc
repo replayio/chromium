@@ -238,6 +238,8 @@ void SetCrashKeyString(v8::CrashKey key, std::string_view value) {
 
 }  // namespace
 
+extern "C" int V8GetMessageRecordReplayBookmark(v8::Local<v8::Message> message);
+
 void V8Initializer::MessageHandlerInMainThread(v8::Local<v8::Message> message,
                                                v8::Local<v8::Value> data) {
   DCHECK(IsMainThread());
@@ -273,6 +275,11 @@ void V8Initializer::MessageHandlerInMainThread(v8::Local<v8::Message> message,
   ErrorEvent* event = ErrorEvent::Create(
       ToCoreStringWithNullCheck(isolate, message->Get()), location,
       ScriptValue(isolate, data), &script_state->World());
+
+  int bookmark = V8GetMessageRecordReplayBookmark(message);
+  if (bookmark) {
+    event->set_record_replay_bookmark(bookmark);
+  }
 
   String message_for_console = ExtractMessageForConsole(isolate, data);
   if (!message_for_console.empty())

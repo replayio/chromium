@@ -41,6 +41,9 @@ ZygoteCommunication* RendererSandboxedProcessLauncherDelegate::GetZygote() {
       browser_command_line.GetSwitchValueNative(switches::kRendererCmdPrefix);
   if (!renderer_prefix.empty())
     return nullptr;
+  // Zygotes are not used to spawn recording processes.
+  if (MaybeRecordingOrReplaying())
+    return nullptr;
   return GetGenericZygote();
 }
 #endif  // BUILDFLAG(USE_ZYGOTE)

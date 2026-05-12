@@ -69,6 +69,8 @@
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
+#include "base/json/json_writer.h"
+
 namespace blink {
 
 namespace {
@@ -163,6 +165,7 @@ Resource::Resource(const ResourceRequestHead& request,
 
 Resource::~Resource() {
   InstanceCounters::DecrementCounter(InstanceCounters::kResourceCounter);
+  recordreplay::UnregisterPointer(this);
 }
 
 void Resource::Trace(Visitor* visitor) const {
@@ -335,6 +338,16 @@ void Resource::TriggerNotificationForFinishObservers(
   if (finish_observers_.empty())
     return;
 
+  // RUN-1724
+  // [RUN-1457 cleanup]
+  HeapVector<Member<ResourceFinishObserver>>* new_collections_strong =
+      MakeGarbageCollected<HeapVector<Member<ResourceFinishObserver>>>();
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "Resource")) {
+    new_collections_strong->AppendRange(replay_finish_observers_strong_.begin(), replay_finish_observers_strong_.end());
+    replay_finish_observers_strong_.clear();
+  }
+
+
   auto* new_collections =
       MakeGarbageCollected<GCedHeapHashSet<WeakMember<ResourceFinishObserver>>>(
           std::move(finish_observers_));
@@ -506,6 +519,9 @@ base::TimeDelta Resource::FreshnessLifetime() const {
 static bool CanUseResponse(const ResourceResponse& response,
                            bool allow_stale,
                            base::Time response_timestamp) {
+  // https://linear.app/replay/issue/RUN-820
+  recordreplay::Assert("CanUseResponse Start");
+
   if (response.IsNull())
     return false;
 
@@ -530,6 +546,9 @@ static bool CanUseResponse(const ResourceResponse& response,
   base::TimeDelta max_life = FreshnessLifetime(response, response_timestamp);
   if (allow_stale)
     max_life += response.CacheControlStaleWhileRevalidate();
+
+  // https://linear.app/replay/issue/RUN-820
+  recordreplay::Assert("CanUseResponse Done");
 
   return CurrentAge(response, response_timestamp) <= max_life;
 }
@@ -632,6 +651,22 @@ void Resource::DidAddClient(ResourceClient* client) {
   if (!HasClient(client))
     return;
   if (IsLoaded()) {
+    absl::optional<recordreplay::AutoDependencyExecution> execute;
+    if (recordreplay::DependencyGraphEnabled()) {
+      base::Value::Dict info;
+      info.Set("kind", "resourceAlreadyLoaded");
+      info.Set("url", Url().GetString().Utf8());
+      std::string json;
+      base::JSONWriter::Write(info, &json);
+      int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
+      for (int other_node_id : record_replay_dependency_node_ids_) {
+        recordreplay::AddDependencyGraphEdge(
+          other_node_id, node_id, "{\"kind\":\"loadResource\"}"
+        );
+      }
+      execute.emplace(node_id);
+    }
+
     client->SetHasFinishedFromMemoryCache();
     client->NotifyFinished(this);
     if (clients_.Contains(client)) {
@@ -655,6 +690,8 @@ void Resource::AddClient(ResourceClient* client,
 
   if (IsCacheValidator()) {
     clients_.insert(client);
+    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "Resource"))
+      replay_clients_strong_.insert(client);
     return;
   }
 
@@ -663,6 +700,8 @@ void Resource::AddClient(ResourceClient* client,
   if ((ErrorOccurred() || !GetResponse().IsNull()) &&
       !NeedsSynchronousCacheHit(GetType(), options_)) {
     clients_awaiting_callback_.insert(client);
+    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "Resource"))
+        replay_clients_strong_.insert(client);
     if (!async_finish_pending_clients_task_.IsActive()) {
       async_finish_pending_clients_task_ =
           PostCancellableTask(*task_runner, FROM_HERE,
@@ -673,6 +712,8 @@ void Resource::AddClient(ResourceClient* client,
   }
 
   clients_.insert(client);
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "Resource"))
+    replay_clients_strong_.insert(client);
   DidAddClient(client);
   return;
 }
@@ -686,6 +727,8 @@ void Resource::RemoveClient(ResourceClient* client) {
     clients_awaiting_callback_.erase(client);
   else
     clients_.erase(client);
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "Resource"))
+    replay_clients_strong_.erase(client);
 
   if (clients_awaiting_callback_.empty() &&
       async_finish_pending_clients_task_.IsActive()) {
@@ -702,6 +745,8 @@ void Resource::AddFinishObserver(ResourceFinishObserver* client,
 
   WillAddClientOrObserver();
   finish_observers_.insert(client);
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "Resource"))
+    replay_finish_observers_strong_.insert(client);
   if (IsLoaded())
     TriggerNotificationForFinishObservers(task_runner);
 }
@@ -710,6 +755,8 @@ void Resource::RemoveFinishObserver(ResourceFinishObserver* client) {
   CHECK(!is_add_remove_client_prohibited_);
 
   finish_observers_.erase(client);
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "Resource"))
+    replay_finish_observers_strong_.erase(client);
   DidRemoveClientOrObserver();
 }
 

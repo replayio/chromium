@@ -68,8 +68,9 @@ void MediaLog::OnWebMediaPlayerDestroyed() {
   AddEvent<MediaLogEvent::kWebMediaPlayerDestroyed>();
   base::AutoLock auto_lock(parent_log_record_->lock);
   // Forward to the parent log's implementation.
-  if (parent_log_record_->media_log)
+  if (parent_log_record_->media_log) {
     parent_log_record_->media_log->OnWebMediaPlayerDestroyedLocked();
+  }
 }
 
 std::string MediaLog::GetErrorMessage() {
@@ -113,7 +114,8 @@ void MediaLog::InvalidateLog() {
   // Keep |parent_log_record_| around, since the lock must keep working.
 }
 
-MediaLog::ParentLogRecord::ParentLogRecord(MediaLog* log) : media_log(log) {}
+MediaLog::ParentLogRecord::ParentLogRecord(MediaLog* log)
+  : lock("ParentLogRecord.lock"), media_log(log) {}
 MediaLog::ParentLogRecord::~ParentLogRecord() = default;
 
 LogHelper::LogHelper(MediaLogMessageLevel level,

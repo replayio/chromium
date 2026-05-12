@@ -67,6 +67,10 @@ JobTaskSource::State::Value JobTaskSource::State::Load() const {
   return {value_.load(std::memory_order_relaxed)};
 }
 
+JobTaskSource::State::Value JobTaskSource::State::RecordReplayLoadUnordered() const {
+  return {value_.load_unordered(std::memory_order_relaxed)};
+}
+
 JobTaskSource::JoinFlag::JoinFlag() = default;
 JobTaskSource::JoinFlag::~JoinFlag() = default;
 

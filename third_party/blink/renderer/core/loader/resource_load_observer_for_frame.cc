@@ -45,6 +45,8 @@
 #include "third_party/blink/renderer/platform/loader/fetch/resource_request.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_response.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
+
 namespace blink {
 namespace {
 
@@ -109,7 +111,12 @@ ResourceLoadObserverForFrame::ResourceLoadObserverForFrame(
     : document_loader_(loader),
       document_(document),
       fetcher_properties_(fetcher_properties) {}
-ResourceLoadObserverForFrame::~ResourceLoadObserverForFrame() = default;
+ResourceLoadObserverForFrame::~ResourceLoadObserverForFrame() {
+  // Avoid destroying power mode voters at non-deterministic points, as their
+  // vote will affect the arbiter's behavior.
+  if (recordreplay::AreEventsDisallowed("~ResourceLoadObserverForFrame"))
+    power_mode_voter_.release();
+}
 
 void ResourceLoadObserverForFrame::DidStartRequest(
     const FetchParameters& params,
@@ -161,6 +168,7 @@ void ResourceLoadObserverForFrame::WillSendRequest(
       fetcher_properties_->GetFetchClientSettingsObject().GlobalObjectUrl(),
       request, redirect_response, options, resource_type,
       render_blocking_behavior, base::TimeTicks::Now());
+  recordreplay::OnNetworkPrepareRequest(document_, resource, request);
   if (auto* idleness_detector = frame->GetIdlenessDetector())
     idleness_detector->OnWillSendRequest(document_->Fetcher());
   if (auto* interactive_detector = InteractiveDetector::From(*document_))

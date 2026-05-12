@@ -52,6 +52,8 @@
 #include "gpu/command_buffer/client/raster_interface.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
 
+#include "base/record_replay.h"
+
 namespace cc {
 
 namespace {
@@ -665,6 +667,10 @@ void ProxyImpl::DidPresentCompositorFrameOnImplThread(
       frame_token, std::move(activated.compositor_successful_callbacks),
       details);
 
+  recordreplay::Assert(
+      "[RUN-2317-2366] ProxyImpl::DidPresentCompositorFrameOnImplThread %u",
+      frame_token);
+
   MainThreadTaskRunner()->PostTask(
       FROM_HERE,
       base::BindOnce(&ProxyMain::DidPresentCompositorFrame,
@@ -814,6 +820,7 @@ void ProxyImpl::ScheduledActionCommit() {
 
   auto* commit_state = data_for_commit_->commit_state.get();
   auto* unsafe_state = data_for_commit_->unsafe_state.get();
+
   host_impl_->BeginCommit(commit_state->source_frame_number,
                           commit_state->trace_id);
   host_impl_->FinishCommit(*commit_state, *unsafe_state);
@@ -823,6 +830,9 @@ void ProxyImpl::ScheduledActionCommit() {
   data_for_commit_->commit_completion_event->SetFinishTime(finish_time);
 
   if (commit_state->commit_waits_for_activation) {
+    recordreplay::CommandDiagnosticTrace(
+      "[RUN-2110-2761] ProxyImpl::ScheduledActionCommit 1");
+
     // For some layer types in impl-side painting, the commit is held until the
     // sync tree is activated.  It's also possible that the sync tree has
     // already activated if there was no work to be done.
@@ -1074,6 +1084,29 @@ void ProxyImpl::SetRequestHighFramerate(bool flag) {
 
 void ProxyImpl::NotifyNewLocalSurfaceIdExpectedWhilePaused() {
   host_impl_->NotifyNewLocalSurfaceIdExpectedWhilePaused();
+}
+
+// Sequence number used for frames triggered while repainting when replaying.
+static const uint64_t RepaintSequenceNumber = UINT32_MAX;
+
+void ProxyImpl::RecordReplayRepaint() {
+  // When repainting, the main thread has already updated the layout tree and committed
+  // any changes, but the OnBeginFrame IPC message instructing the compositor to do
+  // the resulting paint will not be received, because we're diverged from the recording
+  // and won't get any IPC messages triggered by activity in this process. So, we trigger
+  // a new frame in the scheduler directly, which will hopefully be sufficient to perform
+  // a paint shortly with the special repaint sequence number that will cause the main
+  // thread to be notified about the repaint result.
+  base::TimeTicks now = base::TimeTicks::Now();
+  viz::BeginFrameArgs args = viz::BeginFrameArgs::Create(BEGINFRAME_FROM_HERE,
+                                                         viz::BeginFrameArgs::kManualSourceId,
+                                                         RepaintSequenceNumber,
+                                                         now,
+                                                         now,
+                                                         viz::BeginFrameArgs::DefaultInterval(),
+                                                         viz::BeginFrameArgs::NORMAL, 
+                                                         true /*replay_force_draw*/);
+  scheduler_->OnBeginFrameDerivedImpl(args);
 }
 
 }  // namespace cc

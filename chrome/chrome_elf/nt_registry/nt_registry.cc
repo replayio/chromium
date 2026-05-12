@@ -567,6 +567,10 @@ NTSTATUS CreateKeyWrapper(const std::wstring& key_path,
 
 namespace nt {
 
+void RecordReplayResetRegApiInitialization() {
+  g_initialized = false;
+}
+
 //------------------------------------------------------------------------------
 // Create, open, delete, close functions
 //------------------------------------------------------------------------------
@@ -852,6 +856,10 @@ bool QueryRegValueSZ(ROOT_KEY root,
                      const wchar_t* key_path,
                      const wchar_t* value_name,
                      std::wstring* out_sz) {
+  // Avoid complex interactions with the system during static initializers.
+  if (RecordReplayIsReplaying())
+    return true;
+
   HANDLE key = INVALID_HANDLE_VALUE;
 
   if (!OpenRegKey(root, key_path, KEY_QUERY_VALUE | wow64_override, &key, NULL))

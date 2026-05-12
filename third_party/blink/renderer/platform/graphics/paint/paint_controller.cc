@@ -394,6 +394,11 @@ bool PaintController::UseCachedSubsequenceIfPossible(
     return false;
 
   num_cached_new_items_ += end_item_index - start_item_index;
+
+  recordreplay::AssertMaybeEventsDisallowed(
+      "[RUN-2104-2296] PaintController::UseCachedSubsequenceIfPossible %u %u",
+      (unsigned)num_cached_new_items_, (unsigned)num_cached_new_subsequences_);
+
   ++num_cached_new_subsequences_;
 
   if (RuntimeEnabledFeatures::PaintUnderInvalidationCheckingEnabled()) {

@@ -78,6 +78,7 @@ DOMOrigin* DOMURL::GetDOMOrigin(LocalDOMWindow*) const {
 
 void DOMURL::Trace(Visitor* visitor) const {
   visitor->Trace(search_params_);
+  visitor->Trace(replay_strong_search_params_);
   ScriptWrappable::Trace(visitor);
 }
 

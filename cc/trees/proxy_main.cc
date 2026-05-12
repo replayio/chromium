@@ -44,6 +44,8 @@
 #include "third_party/abseil-cpp/absl/cleanup/cleanup.h"
 #include "third_party/perfetto/include/perfetto/tracing/track.h"
 
+#include "base/record_replay.h"
+
 namespace cc {
 
 ProxyMain::ProxyMain(LayerTreeHost* layer_tree_host,
@@ -61,9 +63,16 @@ ProxyMain::ProxyMain(LayerTreeHost* layer_tree_host,
   TRACE_EVENT0("cc", "ProxyMain::ProxyMain");
   DCHECK(task_runner_provider_);
   DCHECK(IsMainThread());
+  
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    recordreplay::InitPaintCallback();
+    recordreplay::SetCompositorProxy(this);
+  }
 }
 
 ProxyMain::~ProxyMain() {
+  recordreplay::CompositorProxyDestroyed(this);
+
   TRACE_EVENT0("cc", "ProxyMain::~ProxyMain");
   DCHECK(IsMainThread());
   DCHECK(!started_);
@@ -78,6 +87,8 @@ void ProxyMain::InitializeOnImplThread(CompletionEvent* completion_event,
       std::make_unique<ProxyImpl>(weak_factory_.GetWeakPtr(), layer_tree_host_,
                                   id, settings, task_runner_provider_);
   completion_event->Signal();
+
+  recordreplay::Assert("[RUN-1881] ProxyMain::InitializeOnImplThread Done");
 }
 
 void ProxyMain::DestroyProxyImplOnImplThread(
@@ -139,6 +150,17 @@ void ProxyMain::DidCompletePageScaleAnimation() {
 
 void ProxyMain::BeginMainFrame(
     std::unique_ptr<BeginMainFrameAndCommitState> begin_main_frame_state) {
+  
+  BeginMainFrameWithBlocking(std::move(begin_main_frame_state), false);
+}
+
+void ProxyMain::BeginMainFrameWithBlocking(
+    std::unique_ptr<BeginMainFrameAndCommitState> begin_main_frame_state,
+    bool force_blocking) {
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    recordreplay::SetCompositorProxy(this);
+  }
+
   DCHECK(IsMainThread());
   DCHECK_EQ(NO_PIPELINE_STAGE, current_pipeline_stage_);
   // Record the final status, subsampled. Use an RAII object as this function
@@ -417,7 +439,13 @@ void ProxyMain::BeginMainFrame(
   }
 
   // If updating the layers resulted in a content update, we need a commit.
-  if (updated)
+  //
+  // [RecordReplay] Scroll events do not always perform a paint commit, however
+  // one is necessary for paint events to be properly collected during scrolling.
+  // Force commits if we're recording or replaying.
+  //
+  // See #RUN-2434 (https://linear.app/replay/issue/RUN-2434)
+  if (updated || recordreplay::IsRecordingOrReplaying("notify-paints"))
     final_pipeline_stage_ = COMMIT_PIPELINE_STAGE;
 
   auto completion_event_ptr = std::make_unique<CompletionEvent>(
@@ -512,6 +540,10 @@ void ProxyMain::BeginMainFrame(
     std::optional<DebugScopedSetMainThreadBlocked> main_thread_blocked;
     if (blocking)
       main_thread_blocked.emplace(task_runner_provider_);
+
+    if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+      recordreplay::OnCommitPaint();
+    }
 
     ImplThreadTaskRunner()->PostTask(
         FROM_HERE, base::BindOnce(&ProxyImpl::NotifyReadyToCommitOnImpl,

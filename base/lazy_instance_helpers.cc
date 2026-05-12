@@ -32,6 +32,10 @@ bool NeedsLazyInstance(std::atomic<uintptr_t>& state) {
   // the associated data (buf_). Pairing Release_Store is in
   // CompleteLazyInstance().
   if (state.load(std::memory_order_acquire) == kLazyInstanceStateCreating) {
+    // Don't interact with the recording while we get the current time or sleep
+    // in non-deterministic ways.
+    RecordReplayAutoPassThroughEvents pt;
+
     const base::TimeTicks start = base::TimeTicks::Now();
     do {
       const base::TimeDelta elapsed = base::TimeTicks::Now() - start;

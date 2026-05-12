@@ -29,6 +29,7 @@
 #include "base/memory/stack_allocated.h"
 #include "base/metrics/histogram_samples.h"
 #include "base/notreached.h"
+#include "base/record_replay.h"
 #include "base/run_loop.h"
 #include "base/task/task_features.h"
 #include "base/threading/platform_thread.h"
@@ -413,16 +414,18 @@ void MessagePumpCFRunLoopBase::RunDelayedWorkTimer(CFRunLoopTimerRef timer,
 
     self->delayed_work_scheduled_at_ = base::TimeTicks::Max();
     self->RunWork();
-  });
+  //});
 }
 
 // Called from the run loop.
 // static
 void MessagePumpCFRunLoopBase::RunWorkSource(void* info) {
+  recordreplay::NewCheckpoint();
+
   MessagePumpCFRunLoopBase* self = static_cast<MessagePumpCFRunLoopBase*>(info);
   base::apple::CallWithEHFrame(^{
     self->RunWork();
-  });
+  //});
 }
 
 // Called by MessagePumpCFRunLoopBase::RunWorkSource and RunDelayedWorkTimer.
@@ -489,7 +492,7 @@ void MessagePumpCFRunLoopBase::RunNestingDeferredWorkSource(void* info) {
   MessagePumpCFRunLoopBase* self = static_cast<MessagePumpCFRunLoopBase*>(info);
   base::apple::CallWithEHFrame(^{
     self->RunNestingDeferredWork();
-  });
+  //});
 }
 
 // Called by MessagePumpCFRunLoopBase::RunNestingDeferredWorkSource.
@@ -556,7 +559,7 @@ void MessagePumpCFRunLoopBase::PreWaitObserver(CFRunLoopObserverRef observer,
 
     // Notify the delegate that the loop is about to sleep.
     self->BeforeWait();
-  });
+  //});
 }
 
 // Called from the run loop.
@@ -575,7 +578,7 @@ void MessagePumpCFRunLoopBase::AfterWaitObserver(CFRunLoopObserverRef observer,
     }
     self->sleeping_nesting_levels_.pop();
     self->PushWorkItemScope();
-  });
+  //});
 }
 
 // Called from the run loop.
@@ -592,7 +595,7 @@ void MessagePumpCFRunLoopBase::PreSourceObserver(CFRunLoopObserverRef observer,
   // appropriate.
   base::apple::CallWithEHFrame(^{
     self->MaybeScheduleNestingDeferredWork();
-  });
+  //});
 }
 
 // Called from the run loop.
@@ -633,7 +636,7 @@ void MessagePumpCFRunLoopBase::EnterExitObserver(CFRunLoopObserverRef observer,
       // loop.
       base::apple::CallWithEHFrame(^{
         self->MaybeScheduleNestingDeferredWork();
-      });
+      //});
 
       // Current work item tracking needs to go away since execution will stop.
       self->PopWorkItemScope();
@@ -653,7 +656,7 @@ void MessagePumpCFRunLoopBase::EnterExitObserver(CFRunLoopObserverRef observer,
 
   base::apple::CallWithEHFrame(^{
     self->EnterExitRunLoop(activity);
-  });
+  //});
 }
 
 // Called by MessagePumpCFRunLoopBase::EnterExitRunLoop.  The default

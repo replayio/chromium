@@ -8,6 +8,8 @@
 
 #include "base/check.h"
 
+#include "base/record_replay.h"
+
 namespace mojo {
 
 MessageDispatcher::MessageDispatcher(MessageReceiver* sink) : sink_(sink) {}
@@ -32,6 +34,10 @@ void MessageDispatcher::SetSink(MessageReceiver* sink) {
 
 bool MessageDispatcher::Accept(Message* message) {
   internal::MessageDispatchContext dispatch_context(message);
+
+  recordreplay::Assert(
+      "[RUN-2229-2231] MessageDispatcher::Accept A %d %d",
+      !!validator_, !!filter_);
 
   DCHECK(sink_);
   if (validator_) {

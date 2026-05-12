@@ -13,6 +13,10 @@
 #include "base/numerics/safe_conversions.h"
 #include "mojo/public/cpp/bindings/lib/bindings_internal.h"
 
+namespace recordreplay {
+extern bool IsMainThread();
+}
+
 namespace mojo {
 namespace internal {
 
@@ -51,8 +55,32 @@ Buffer& Buffer::operator=(Buffer&& other) {
   return *this;
 }
 
+// Buffer allocations are frequent while constructing messages, so asserts are
+// only added in certain places when tracking down the reason for different
+// message sizes.
+static int gRecordReplayAssertAllocations = 0;
+static const char* gRecordReplayAssertLabel = "";
+
+AutoRecordReplayAssertBufferAllocations::AutoRecordReplayAssertBufferAllocations(const char* issueLabel) {
+  if (recordreplay::IsMainThread()) {
+    if (!gRecordReplayAssertAllocations)
+      gRecordReplayAssertLabel = issueLabel;
+    ++gRecordReplayAssertAllocations;
+  }
+}
+
+AutoRecordReplayAssertBufferAllocations::~AutoRecordReplayAssertBufferAllocations() {
+  if (recordreplay::IsMainThread())
+    --gRecordReplayAssertAllocations;
+}
+
 size_t Buffer::Allocate(size_t num_bytes) {
   const size_t aligned_num_bytes = Align(num_bytes);
+
+  if (gRecordReplayAssertAllocations && recordreplay::IsMainThread())
+    recordreplay::Assert("[%s] Buffer::Allocate %zu", gRecordReplayAssertLabel,
+                         aligned_num_bytes);
+
   const size_t new_cursor = cursor_ + aligned_num_bytes;
   if (new_cursor < cursor_ || (new_cursor > size_ && !message_.is_valid())) {
     // Either we've overflowed or exceeded a fixed capacity.

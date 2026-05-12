@@ -22,6 +22,8 @@
 #include "base/win/scoped_handle.h"
 #include "base/win/windows_types.h"
 
+#include "base/record_replay_ordered_atomic.h"
+
 namespace base {
 
 // MessagePumpWin serves as the base for specialized versions of the MessagePump

@@ -99,6 +99,9 @@ v8::Local<v8::Object> WindowProxy::ReleaseGlobalProxy() {
 }
 
 void WindowProxy::SetGlobalProxy(v8::Local<v8::Object> global_proxy) {
+  // https://linear.app/replay/issue/RUN-749
+  recordreplay::Assert("WindowProxy::SetGlobalProxy");
+
   DCHECK_EQ(lifecycle_, Lifecycle::kContextIsUninitialized);
 
   CHECK(global_proxy_.IsEmpty());
@@ -151,6 +154,7 @@ void WindowProxy::SetGlobalProxy(v8::Local<v8::Object> global_proxy) {
 void WindowProxy::InitializeIfNeeded() {
   if (lifecycle_ == Lifecycle::kContextIsUninitialized ||
       lifecycle_ == Lifecycle::kGlobalObjectIsDetached) {
+
     Initialize();
   }
 }

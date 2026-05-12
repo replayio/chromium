@@ -22,6 +22,8 @@
 #include "third_party/skia/include/core/SkPictureRecorder.h"
 #include "ui/gfx/geometry/rect_conversions.h"
 
+#include "base/record_replay.h"
+
 namespace cc {
 
 scoped_refptr<PictureLayer> PictureLayer::Create(ContentLayerClient* client) {

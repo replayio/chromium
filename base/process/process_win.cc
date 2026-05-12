@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "base/process/process.h"
+#include "base/record_replay.h"
 
 #include <windows.h>
 

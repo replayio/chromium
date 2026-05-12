@@ -785,6 +785,8 @@ RTCPeerConnectionHandler::RTCPeerConnectionHandler(
       task_runner_(std::move(task_runner)) {
   CHECK(client_);
 
+  INIT_RECORD_REPLAY_ID(RTCPeerConnectionHandler);
+
   GetPeerConnectionHandlers()->insert(this);
 }
 

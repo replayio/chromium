@@ -54,6 +54,8 @@
 #include "base/time/time_override.h"
 #include "build/build_config.h"
 
+#include "base/record_replay.h"
+
 namespace base {
 
 namespace {
@@ -117,7 +119,7 @@ TimeDelta g_high_res_timer_usage;
 TimeTicks g_high_res_timer_last_activation;
 // The lock to control access to the above set of variables.
 Lock* GetHighResLock() {
-  static auto* lock = new Lock();
+  static auto* lock = new Lock("Time::GetHighResLock");
   return lock;
 }
 
@@ -172,6 +174,10 @@ void UpdateTimerIntervalLocked() {
 
 // Returns the current value of the performance counter.
 int64_t QPCNowRaw() {
+  if (!recordreplay::AreEventsDisallowed() && !recordreplay::AreEventsPassedThrough()) {
+    recordreplay::Assert("[RUN-1916] QPCNowRaw");
+  }
+
   LARGE_INTEGER perf_counter_now = {};
   // According to the MSDN documentation for QueryPerformanceCounter(), this
   // will never fail on systems that run XP or later.
@@ -293,6 +299,7 @@ bool Time::ActivateHighResolutionTimer(bool activating) {
   const uint32_t max = std::numeric_limits<uint32_t>::max();
 
   AutoLock lock(*GetHighResLock());
+  recordreplay::Assert("[RUN-1916-2726] Time::ActivateHighResolutionTimer %d %u", activating, g_high_res_timer_count);
   if (activating) {
     DCHECK_NE(g_high_res_timer_count, max);
     ++g_high_res_timer_count;
@@ -750,6 +757,9 @@ TimeTicks::TickFunctionType TimeTicks::SetMockTickFunction(
 
 namespace subtle {
 TimeTicks TimeTicksNowIgnoringOverride() {
+  recordreplay::AssertMaybeEventsDisallowed("[RUN-1916] TimeTicksNowIgnoringOverride %d",
+                                            g_time_ticks_now_ignoring_override_function == &QPCNow);
+
   return g_time_ticks_now_ignoring_override_function.load(
       std::memory_order_relaxed)();
 }

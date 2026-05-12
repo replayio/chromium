@@ -193,6 +193,8 @@ protocol::Response InspectorAnimationAgent::disable() {
 }
 
 void InspectorAnimationAgent::DidCommitLoadForLocalFrame(LocalFrame* frame) {
+  recordreplay::Assert("[RUN-1641] InspectorAnimationAgent::DidCommitLoadForLocalFrame");
+
   if (frame == inspected_frames_->Root()) {
     InvalidateInternalState();
   }

@@ -41,6 +41,16 @@ void FontFallbackMap::InvalidateInternal(Predicate predicate) {
       entry.value->MarkInvalid();
     }
   }
+
+  if (recordreplay::IsRecordingOrReplaying() && !recordreplay::AreAssertsDisabled()) {
+    std::ostringstream ss;
+    for (auto& entry : invalidated) {
+      ss << entry.GetHash() << ",";
+    }
+    recordreplay::Assert(
+      "[RUN-3109-3229] FontFallbackMap::InvalidateInternal %s", ss.str().c_str());
+  }
+
   fallback_list_for_description_.RemoveAll(invalidated);
 }
 

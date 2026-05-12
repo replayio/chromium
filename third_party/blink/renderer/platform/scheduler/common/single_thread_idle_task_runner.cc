@@ -119,7 +119,11 @@ void SingleThreadIdleTaskRunner::RunTask(IdleTask idle_task) {
                "allotted_time_ms",
                (deadline - base::TimeTicks::Now()).InMillisecondsF());
   std::move(idle_task).Run(deadline);
-  delegate_->DidProcessIdleTask();
+
+  if (!recordreplay::AreEventsDisallowed("SingleThreadIdleTaskRunner::RunTask")) {
+    recordreplay::Assert("[RUN-1335-1336] SingleThreadIdleTaskRunner::RunTask");
+    delegate_->DidProcessIdleTask();
+  }
 }
 
 }  // namespace blink::scheduler

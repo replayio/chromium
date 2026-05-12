@@ -140,6 +140,8 @@
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "url/url_features.h"
 
+#include "base/json/json_writer.h"
+
 namespace blink {
 
 namespace {
@@ -1107,6 +1109,25 @@ static void AssertCanNavigate(WebNavigationParams* params, LocalFrame* frame) {
       params->response.HttpHeaderField(http_names::kContentDisposition)));
 }
 
+static void ReportCommitNavigation(const WebNavigationParams* navigation_params,
+                                   CommitReason commit_reason) {
+  if (!recordreplay::IsRecordingOrReplaying() || !v8::IsMainThread()) {
+    return;
+  }
+
+  std::string annotationContents;
+  if (recordreplay::IsReplaying()) {
+    base::Value::Dict info;
+    info.Set("commit_reason", (int)commit_reason);
+    info.Set("url", navigation_params->url.GetString().Utf8());
+    info.Set("http_method", navigation_params->http_method.Utf8());
+    info.Set("referrer", navigation_params->referrer.Utf8());
+    info.Set("referrer_policy", (int)navigation_params->referrer_policy);
+    base::JSONWriter::Write(info, &annotationContents);
+  }
+  recordreplay::OnAnnotation("CommitNavigation", annotationContents.c_str());
+}
+
 void FrameLoader::CommitNavigation(
     std::unique_ptr<WebNavigationParams> navigation_params,
     std::unique_ptr<WebDocumentLoader::ExtraData> extra_data,
@@ -1129,6 +1150,8 @@ void FrameLoader::CommitNavigation(
     // call in this case instead.
     return;
   }
+
+  ReportCommitNavigation(navigation_params.get(), commit_reason);
 
   // The encoding may be inherited from the parent frame if the security context
   // allows it, but we don't have the frame's security context set up yet. In
@@ -1810,7 +1833,17 @@ void FrameLoader::DispatchDidClearDocumentOfWindowObject() {
 
   Settings* settings = frame_->GetSettings();
   LocalDOMWindow* window = frame_->DomWindow();
-  if (settings && settings->GetForceMainWorldInitialization()) {
+  recordreplay::Assert(
+      "[RUN-2351-2355] FrameLoader::DispatchDidClearDocumentOfWindowObject %d "
+      "%d %d",
+      !!settings, !!settings->GetForceMainWorldInitialization(),
+      recordreplay::IsRecordingOrReplaying("initialize-window-proxy"));
+  if ((settings && settings->GetForceMainWorldInitialization()) ||
+      // When replaying the ForceMainWorldInitialization may be set even
+      // if it wasn't when recording, as additional CDP inspector features
+      // are enabled when replaying. Do the initialization when recording
+      // as well for consistency.
+      recordreplay::IsRecordingOrReplaying("initialize-window-proxy")) {
     // Forcibly instantiate WindowProxy, even if script is disabled.
     window->GetScriptController().WindowProxy(
         DOMWrapperWorld::MainWorld(window->GetIsolate()));

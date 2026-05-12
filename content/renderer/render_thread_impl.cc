@@ -13,6 +13,7 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+#include <cstdio>
 
 #include "base/allocator/partition_alloc_support.h"
 #include "base/at_exit.h"
@@ -37,6 +38,7 @@
 #include "base/path_service.h"
 #include "base/process/process.h"
 #include "base/process/process_metrics.h"
+#include "base/record_replay.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
@@ -220,6 +222,8 @@
 #if BUILDFLAG(CLANG_PROFILING_INSIDE_SANDBOX)
 #include "base/test/clang_profiling.h"
 #endif
+
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
 
 namespace content {
 

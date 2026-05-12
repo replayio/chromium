@@ -21,6 +21,8 @@
 #include "third_party/blink/renderer/platform/loader/fetch/fetch_client_settings_object_snapshot.h"
 #include "v8/include/v8.h"
 
+#include "base/json/json_writer.h"
+
 namespace blink {
 
 namespace {

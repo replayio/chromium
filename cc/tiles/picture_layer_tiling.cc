@@ -28,6 +28,10 @@
 #include "ui/gfx/geometry/rect_f.h"
 #include "ui/gfx/geometry/size_conversions.h"
 
+#include "base/record_replay.h"
+
+static int tile_id_ = 1;
+
 namespace cc {
 
 PictureLayerTiling::PictureLayerTiling(
@@ -45,6 +49,9 @@ PictureLayerTiling::PictureLayerTiling(
       min_preraster_distance_(min_preraster_distance),
       max_preraster_distance_(max_preraster_distance),
       can_use_lcd_text_(can_use_lcd_text) {
+  record_replay_id_ = recordreplay::NewIdAnyThread("PictureLayerTiling");
+  tile_id = tile_id_++;
+  
   DCHECK(!raster_source->IsSolidColor());
   DCHECK_GE(raster_transform.translation().x(), 0.f);
   DCHECK_LT(raster_transform.translation().x(), 1.f);
@@ -127,6 +134,7 @@ void PictureLayerTiling::CreateMissingTilesInLiveTilesRect() {
             invalid_content_rect.Intersect(tile_rect);
             invalidated.Union(invalid_content_rect);
           }
+
           tile->SetInvalidated(invalidated, old_tile->id());
         }
       }
@@ -170,6 +178,10 @@ void PictureLayerTiling::TakeTilesAndPropertiesFrom(
 
 bool PictureLayerTiling::SetRasterSourceAndResize(
     scoped_refptr<RasterSource> raster_source) {
+  // https://linear.app/replay/issue/RUN-885
+  recordreplay::Assert("PictureLayerTiling::SetRasterSourceAndResize %d %d",
+                       raster_source->GetSize().width(), raster_source->GetSize().height());
+
   DCHECK(!raster_source->IsSolidColor());
   raster_source_ = std::move(raster_source);
   gfx::Rect tiling_rect = ComputeTilingRect();
@@ -323,6 +335,7 @@ void PictureLayerTiling::RemoveTilesInRegion(const Region& layer_invalidation,
       Tile::CreateInfo info = CreateInfoForTile(index.i, index.j);
       if (Tile* tile = CreateTile(info))
         tile->SetInvalidated(invalid_content_rect, old_tile->id());
+      }
     }
   }
 }
@@ -352,26 +365,30 @@ bool PictureLayerTiling::ShouldCreateTileAt(
   // the tile for instance). Pending tree, on the other hand, should only be
   // creating tiles that are different from the current active tree, which is
   // represented by the logic in the rest of the function.
-  if (tree_ == ACTIVE_TREE)
+  if (tree_ == ACTIVE_TREE) {
     return true;
+  }
 
   // If the pending tree has no active twin, then it needs to create all tiles.
   const PictureLayerTiling* active_twin =
       client_->GetPendingOrActiveTwinTiling(this);
-  if (!active_twin)
+  if (!active_twin) {
     return true;
+  }
 
   // Pending tree will override the entire active tree if indices don't match.
-  if (!TilingMatchesTileIndices(active_twin))
+  if (!TilingMatchesTileIndices(active_twin)) {
     return true;
+  }
 
   // If our settings don't match the active twin, it means that the active
   // tiles will all be removed when we activate. So we need all the tiles on the
   // pending tree to be created. See
   // PictureLayerTilingSet::CopyTilingsAndPropertiesFromPendingTwin.
   if (can_use_lcd_text() != active_twin->can_use_lcd_text() ||
-      raster_transform() != active_twin->raster_transform())
+      raster_transform() != active_twin->raster_transform()) {
     return true;
+  }
 
   // If the active tree can't create a tile, because of its raster source, then
   // the pending tree should create one.
@@ -388,8 +405,9 @@ bool PictureLayerTiling::ShouldCreateTileAt(
   for (gfx::Rect layer_rect : *layer_invalidation) {
     gfx::Rect invalid_content_rect =
         EnclosingContentsRectFromLayerRect(layer_rect);
-    if (invalid_content_rect.Intersects(info.content_rect))
+    if (invalid_content_rect.Intersects(info.content_rect)) {
       return true;
+    }
   }
   // If the active tree doesn't have a tile here, but it's in the pending tree's
   // visible rect, then the pending tree should create a tile. This can happen
@@ -397,8 +415,9 @@ bool PictureLayerTiling::ShouldCreateTileAt(
   // rect. In those situations, we need to block activation until we're ready to
   // display content, which will have to come from the pending tree.
   if (!active_twin->TileAt(i, j) &&
-      current_visible_rect_.Intersects(info.content_rect))
+      current_visible_rect_.Intersects(info.content_rect)) {
     return true;
+  }
 
   // In all other cases, the pending tree doesn't need to create a tile.
   return false;

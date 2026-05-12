@@ -164,7 +164,9 @@ int64_t IDBDatabase::NextTransactionId() {
   // Only keep a 32-bit counter to allow ports to use the other 32
   // bits of the id.
   static base::AtomicSequenceNumber current_transaction_id;
-  return current_transaction_id.GetNext() + 1;
+
+  // Record/replay the transaction ID as accesses on the atomic are unordered.
+  return recordreplay::RecordReplayValue("IDBDatabase::NextTransactionId", current_transaction_id.GetNext()) + 1;
 }
 
 void IDBDatabase::SetMetadata(const IDBDatabaseMetadata& metadata) {
@@ -215,6 +217,10 @@ void IDBDatabase::TransactionWillFinish(const IDBTransaction* transaction) {
 }
 
 void IDBDatabase::TransactionFinished(const IDBTransaction* transaction) {
+  // https://linear.app/replay/issue/RUN-969
+  recordreplay::Assert("IDBDatabase::TransactionFinished %d",
+                       (int)transaction->Id());
+
   DCHECK(transaction);
   DCHECK(transactions_.Contains(transaction->Id()));
   DCHECK_EQ(transactions_.at(transaction->Id()), transaction);
@@ -273,6 +279,10 @@ void IDBDatabase::Abort(int64_t transaction_id,
 }
 
 void IDBDatabase::Complete(int64_t transaction_id) {
+  // https://linear.app/replay/issue/RUN-969
+  recordreplay::Assert("IDBDatabase::Complete %d %d",
+                       (int)transaction_id, transactions_.Contains(transaction_id));
+
   DCHECK(transactions_.Contains(transaction_id));
   transactions_.at(transaction_id)->OnComplete();
 }

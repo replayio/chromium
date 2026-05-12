@@ -36,6 +36,9 @@ void AnimationTimeline::AnimationAttached(Animation* animation) {
 void AnimationTimeline::AnimationDetached(Animation* animation) {
   DCHECK(!in_trigger_attachments_update_);
   animations_.erase(animation);
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "AnimationTimeline"))
+    record_replay_animations_strong_.erase(animation);
+
   animations_needing_update_.erase(animation);
   if (animation->Outdated())
     outdated_animation_count_--;
@@ -210,6 +213,8 @@ void AnimationTimeline::MarkAnimationsCompositorPending(bool source_changed) {
   for (const auto& animation : animations_) {
     animation->SetCompositorPending(reason);
   }
+
+  recordreplay::Assert("[RUN-1641] AnimationTimeline::MarkAnimationsCompositorPending Done");
 }
 
 void AnimationTimeline::MarkPendingIfCompositorPropertyAnimationChanges(

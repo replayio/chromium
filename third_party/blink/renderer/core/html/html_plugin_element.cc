@@ -375,6 +375,9 @@ void HTMLPlugInElement::ResetInstance() {
 
 v8::Local<v8::Object> HTMLPlugInElement::PluginWrapper() {
   LocalFrame* frame = GetDocument().GetFrame();
+  recordreplay::Assert(
+      "[RUN-1492-2299] HTMLPlugInElement::PluginWrapper A %d %d %d",
+      RecordReplayId(), !!frame, plugin_wrapper_.IsEmpty());
   if (!frame)
     return v8::Local<v8::Object>();
 
@@ -410,6 +413,9 @@ v8::Local<v8::Object> HTMLPlugInElement::PluginWrapper() {
           isolate, frame->Client()->GetScriptableObject(*this, isolate));
     }
   }
+  recordreplay::Assert(
+      "[RUN-1492-2299] HTMLPlugInElement::PluginWrapper C %d",
+      RecordReplayId());
   return plugin_wrapper_.Get(isolate);
 }
 
@@ -816,9 +822,9 @@ void HTMLPlugInElement::DispatchErrorEvent() {
   ReportFallbackResourceTimingIfNeeded();
   if (IsA<PluginDocument>(GetDocument()) && GetDocument().LocalOwner()) {
     GetDocument().LocalOwner()->DispatchEvent(
-        *Event::Create(event_type_names::kError));
+        *Event::Create(event_type_names::kError), "HTMLPlugInElement::DispatchErrorEvent #1");
   } else {
-    DispatchEvent(*Event::Create(event_type_names::kError));
+    DispatchEvent(*Event::Create(event_type_names::kError), "HTMLPlugInElement::DispatchErrorEvent #2");
   }
 }
 

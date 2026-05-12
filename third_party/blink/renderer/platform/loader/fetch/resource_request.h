@@ -545,7 +545,11 @@ class PLATFORM_EXPORT ResourceRequestHead {
     return recursive_prefetch_token_;
   }
 
-  void SetInspectorId(uint64_t inspector_id) { inspector_id_ = inspector_id; }
+  void SetInspectorId(uint64_t inspector_id) {
+    inspector_id_ = inspector_id;
+    recordreplay::Assert("[RUN-1725-1923] ResourceRequest::SetInspectorId %llu",
+                         inspector_id);
+  }
   uint64_t InspectorId() const { return inspector_id_; }
 
   bool IsFromOriginDirtyStyleSheet() const {
@@ -943,6 +947,7 @@ class PLATFORM_EXPORT ResourceRequest final : public ResourceRequestHead {
   const scoped_refptr<EncodedFormData>& HttpBody() const;
   void SetHttpBody(scoped_refptr<EncodedFormData>);
 
+  const ResourceRequestBody& Body() const { return body_; }
   ResourceRequestBody& MutableBody() { return body_; }
 
   // `PermissionsPolicy` is in blink/public and hence cannot access

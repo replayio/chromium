@@ -40,6 +40,8 @@
 #include "third_party/blink/renderer/platform/scheduler/worker/worker_scheduler_proxy.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 namespace scheduler {
@@ -259,6 +261,7 @@ FrameSchedulerImpl::FrameSchedulerImpl()
                          FrameType::kSubframe) {}
 
 FrameSchedulerImpl::~FrameSchedulerImpl() {
+  recordreplay::UnregisterPointer(this);
   weak_factory_.InvalidateWeakPtrs();
 
   TRACE_EVENT_END(TRACE_DISABLED_BY_DEFAULT("renderer.scheduler"), url_track_);
@@ -846,6 +849,9 @@ base::WeakPtr<const FrameSchedulerImpl> FrameSchedulerImpl::GetWeakPtr() const {
 }
 
 void FrameSchedulerImpl::ReportActiveSchedulerTrackedFeatures() {
+  // https://linear.app/replay/issue/RUN-825
+  recordreplay::Assert("FrameSchedulerImpl::ReportActiveSchedulerTrackedFeatures");
+
   back_forward_cache_disabling_feature_tracker_.ReportFeaturesToDelegate();
 }
 

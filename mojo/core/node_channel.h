@@ -182,6 +182,8 @@ class MOJO_SYSTEM_IMPL_EXPORT NodeChannel
 
   void OfferChannelUpgrade();
 
+  void Release();
+
  private:
   friend class base::RefCountedDeleteOnSequence<NodeChannel>;
   friend class base::DeleteHelper<NodeChannel>;

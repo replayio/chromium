@@ -121,6 +121,8 @@ MainThreadTaskQueue::MainThreadTaskQueue(
 }
 
 MainThreadTaskQueue::~MainThreadTaskQueue() {
+  recordreplay::UnregisterPointer(this);
+
   DCHECK(!wake_up_budget_pool_);
 }
 

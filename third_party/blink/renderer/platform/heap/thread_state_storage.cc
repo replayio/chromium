@@ -13,6 +13,36 @@ namespace blink {
 constinit thread_local ThreadStateStorage* g_thread_specific_
     __attribute__((tls_model(BLINK_HEAP_THREAD_LOCAL_MODEL))) = nullptr;
 
+#else // !BUILDFLAG(IS_WIN)
+
+template <typename T>
+class ThreadLocal {
+  T default_value_;
+  pthread_key_t key_;
+
+ public:
+  ThreadLocal(const T& default_value) : default_value_(default_value) {
+    int rv = pthread_key_create(&key_, nullptr);
+    CHECK(rv == 0);
+  }
+
+  T& get() {
+    T* v = (T*)pthread_getspecific(key_);
+    if (!v) {
+      v = new T(default_value_);
+      pthread_setspecific(key_, v);
+    }
+    return *v;
+  }
+};
+
+ThreadStateStorage*& GetThreadStateStorage() {
+  static ThreadLocal<ThreadStateStorage*> instance(nullptr);
+  return instance.get();
+}
+
+#endif // !BUILDFLAG(IS_WIN)
+
 // static
 ThreadStateStorage ThreadStateStorage::main_thread_state_storage_;
 

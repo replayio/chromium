@@ -161,6 +161,22 @@ namespace chrome::internal {
 
 namespace {
 
+void BindRecordReplayAuthTokenStore(
+    content::RenderFrameHost* frame_host,
+    mojo::PendingReceiver<auth_token::mojom::RecordReplayAuthTokenStore> receiver) {
+
+  // we only bind the receiver if the frame's origin is app.replay.io
+  if (frame_host->GetLastCommittedOrigin().host() != "app.replay.io") {
+    return;
+  }
+
+  content::BrowserContext* browser_context =
+      frame_host->GetProcess()->GetBrowserContext();
+
+  auth_token::RecordReplayAuthTokenServiceFactory::GetForBrowserContext(browser_context)
+      ->BindAuthTokenStore(std::move(receiver));
+}
+
 #if BUILDFLAG(ENABLE_UNHANDLED_TAP)
 void BindUnhandledTapWebContentsObserver(
     content::RenderFrameHost* const host,

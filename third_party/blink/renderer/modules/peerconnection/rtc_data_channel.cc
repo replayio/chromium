@@ -642,7 +642,7 @@ void RTCDataChannel::SetStateToOpenWithoutEvent() {
 }
 
 void RTCDataChannel::DispatchOpenEvent() {
-  DispatchEvent(*Event::Create(event_type_names::kOpen));
+  DispatchEvent(*Event::Create(event_type_names::kOpen), "RTCDataChannel::DispatchOpenEvent");
 }
 
 void RTCDataChannel::OnStateChange(
@@ -667,11 +667,11 @@ void RTCDataChannel::OnStateChange(
     case webrtc::DataChannelInterface::kOpen:
       IncrementCounter(DataChannelCounters::kOpened);
       CreateFeatureHandleForScheduler();
-      DispatchEvent(*Event::Create(event_type_names::kOpen));
+      DispatchEvent(*Event::Create(event_type_names::kOpen), "RTCDataChannel::OnStateChange #1");
       break;
     case webrtc::DataChannelInterface::kClosing:
       if (!closed_from_owner_) {
-        DispatchEvent(*Event::Create(event_type_names::kClosing));
+        DispatchEvent(*Event::Create(event_type_names::kClosing), "RTCDataChannel::OnStateChange #2");
       }
       break;
     case webrtc::DataChannelInterface::kClosed: {
@@ -688,9 +688,9 @@ void RTCDataChannel::OnStateChange(
 
         IncrementErrorCounter(error);
         DispatchEvent(*MakeGarbageCollected<RTCErrorEvent>(
-            event_type_names::kError, error));
+            event_type_names::kError, error), "RTCDataChannel::OnStateChange");
       }
-      DispatchEvent(*Event::Create(event_type_names::kClose));
+      DispatchEvent(*Event::Create(event_type_names::kClose), "RTCDataChannel::OnStateChange #4");
       break;
     }
     default:

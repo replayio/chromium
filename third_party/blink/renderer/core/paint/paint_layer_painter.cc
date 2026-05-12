@@ -591,6 +591,7 @@ PaintResult PaintLayerPainter::PaintChildren(
     GraphicsContext& context,
     PaintFlags paint_flags) {
   PaintResult result = kFullyPainted;
+  recordreplay::Assert("[RUN-1975-2008] PaintLayerPainter::PaintChildren A");
   if (!paint_layer_.HasSelfPaintingLayerDescendant())
     return result;
 
@@ -659,6 +660,8 @@ PaintResult PaintLayerPainter::PaintChildren(
       layout_object.GetFrameView()->DidPaintCanvasChild(*canvas, *child_el);
     }
   }
+  recordreplay::Assert(
+      "[RUN-1975-2008] PaintLayerPainter::PaintChildren C");
 
   return result;
 }

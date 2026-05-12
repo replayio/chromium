@@ -464,7 +464,7 @@ void ClipboardCommands::PasteAsPlainTextFromClipboard(
     return;
   target->DispatchEvent(*TextEvent::CreateForPlainTextPaste(
       frame.DomWindow(), frame.GetSystemClipboard()->ReadPlainText(),
-      CanSmartReplaceInClipboard(frame)));
+      CanSmartReplaceInClipboard(frame)), "ClipboardCommands::PasteAsPlainTextFromClipboard");
 }
 
 ClipboardCommands::FragmentAndPlainText

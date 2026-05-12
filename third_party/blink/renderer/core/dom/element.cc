@@ -5038,6 +5038,10 @@ void Element::RecalcStyle(const StyleRecalcChange change,
          this == GetDocument().documentElement())
       << "No recalc for Elements outside flat tree";
 
+  recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle A %d %d", 
+                       RecordReplayId(),
+                       HasCustomStyleCallbacks());
+
   DisplayLockStyleScope display_lock_style_scope(this);
   if (HasCustomStyleCallbacks()) {
     WillRecalcStyle(change);
@@ -5202,6 +5206,7 @@ void Element::RecalcStyle(const StyleRecalcChange change,
       RecalcDescendantStyles(child_change, child_recalc_context, *this);
     }
   }
+  recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle E");
 
   if (child_change.TraversePseudoElements(*this)) {
     UpdatePseudoElement(kPseudoIdAfter, child_change, child_recalc_context);
@@ -9135,7 +9140,7 @@ bool Element::DispatchFocusEvent(Element* old_focused_element,
   Document& document = GetDocument();
   if (DispatchEvent(*FocusEvent::Create(
           event_type_names::kFocus, Event::Bubbles::kNo, document.domWindow(),
-          0, old_focused_element, source_capabilities)) !=
+          0, old_focused_element, source_capabilities), "Element::DispatchFocusEvent") !=
       DispatchEventResult::kNotCanceled) {
     return false;
   }
@@ -9147,7 +9152,7 @@ void Element::DispatchBlurEvent(Element* new_focused_element,
                                 InputDeviceCapabilities* source_capabilities) {
   DispatchEvent(*FocusEvent::Create(
       event_type_names::kBlur, Event::Bubbles::kNo, GetDocument().domWindow(),
-      0, new_focused_element, source_capabilities));
+      0, new_focused_element, source_capabilities), "Element::DispatchBlurEvent");
 }
 
 void Element::DispatchFocusInEvent(
@@ -9767,6 +9772,9 @@ const ComputedStyle* Element::EnsureComputedStyle(
   // because there is always a possibility that it could allocate something on
   // the V8 heap.
   DCHECK(ThreadState::Current()->IsAllocationAllowed());
+
+  recordreplay::Assert("[RUN-2424-3227] Element::EnsureComputedStyle %d",
+    RecordReplayId());
 
   StyleEngine::InEnsureComputedStyleScope ensure_scope(
       GetDocument().GetStyleEngine());

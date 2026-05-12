@@ -14,6 +14,9 @@
 #include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/wtf/hash_counted_set.h"
 
+// Used for replay_strong_targets_.
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_counted_set.h"
+
 namespace blink {
 
 class AddEventListenerOptions;
@@ -23,7 +26,7 @@ class LocalFrame;
 class Page;
 
 // We use UntracedMember<> here to do custom weak processing.
-typedef HashCountedSet<UntracedMember<EventTarget>> EventTargetSet;
+typedef HashCountedSet<UntracedMember<EventTarget>, WTF::MemberHashRecordReplayId<EventTarget>> EventTargetSet;
 
 // Registry for keeping track of event handlers. Note that only handlers on
 // documents that can be rendered or can receive input (i.e., are attached to a

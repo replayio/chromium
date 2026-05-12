@@ -46,6 +46,8 @@
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
+#include "base/json/json_writer.h"
+
 namespace blink {
 
 // static
@@ -85,6 +87,8 @@ StorageArea::StorageArea(LocalDOMWindow* window,
       cached_area_(std::move(storage_area)),
       storage_type_(storage_type),
       should_enqueue_events_(should_enqueue_events) {
+  // Pointer registration is needed for sorting in CachedStorageArea::EnqueueStorageEvent.
+  recordreplay::RegisterPointer("StorageArea", static_cast<CachedStorageArea::Source*>(this));
   DCHECK(window);
   DCHECK(cached_area_);
   cached_area_->RegisterSource(this);
@@ -93,6 +97,10 @@ StorageArea::StorageArea(LocalDOMWindow* window,
         BindOnce(&StorageArea::OnDocumentActivatedForPrerendering,
                  WrapWeakPersistent(this)));
   }
+}
+
+StorageArea::~StorageArea() {
+  recordreplay::UnregisterPointer(static_cast<CachedStorageArea::Source*>(this));
 }
 
 unsigned StorageArea::length(ExceptionState& exception_state) const {
@@ -117,13 +125,42 @@ String StorageArea::getItem(const String& key,
     exception_state.ThrowSecurityError(StorageArea::kAccessDeniedMessage);
     return String();
   }
-  return cached_area_->GetItem(key);
+  String rval = cached_area_->GetItem(key);
+
+  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+    std::string annotationContents;
+    if (recordreplay::IsReplaying()) {
+      base::Value::Dict info;
+      info.Set("kind", "getItem");
+      info.Set("type", (int)storage_type_);
+      info.Set("key", key.Utf8());
+      info.Set("result", rval.Utf8());
+      base::JSONWriter::Write(info, &annotationContents);
+    }
+    recordreplay::OnAnnotation("StorageArea", annotationContents.c_str());
+  }
+
+  return rval;
 }
 
 NamedPropertySetterResult StorageArea::setItem(
     const String& key,
     const String& value,
     ExceptionState& exception_state) {
+  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+    std::string annotationContents;
+    if (recordreplay::IsReplaying()) {
+      base::Value::Dict info;
+      info.Set("kind", "setItem");
+      info.Set("type", (int)storage_type_);
+      info.Set("key", key.Utf8());
+      info.Set("value", value.Utf8());
+      base::JSONWriter::Write(info, &annotationContents);
+    }
+    recordreplay::OnAnnotation("StorageArea", annotationContents.c_str());
+  }
+
+  recordreplay::Assert("[RUN-1307-1773] StorageArea::setItem A %s", key.Utf8().c_str());
   if (!CanAccessStorage()) {
     exception_state.ThrowSecurityError(StorageArea::kAccessDeniedMessage);
     return NamedPropertySetterResult::kIntercepted;
@@ -140,6 +177,18 @@ NamedPropertySetterResult StorageArea::setItem(
 NamedPropertyDeleterResult StorageArea::removeItem(
     const String& key,
     ExceptionState& exception_state) {
+  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+    std::string annotationContents;
+    if (recordreplay::IsReplaying()) {
+      base::Value::Dict info;
+      info.Set("kind", "removeItem");
+      info.Set("type", (int)storage_type_);
+      info.Set("key", key.Utf8());
+      base::JSONWriter::Write(info, &annotationContents);
+    }
+    recordreplay::OnAnnotation("StorageArea", annotationContents.c_str());
+  }
+
   if (!CanAccessStorage()) {
     exception_state.ThrowSecurityError(StorageArea::kAccessDeniedMessage);
     return NamedPropertyDeleterResult::kDidNotDelete;
@@ -149,6 +198,17 @@ NamedPropertyDeleterResult StorageArea::removeItem(
 }
 
 void StorageArea::clear(ExceptionState& exception_state) {
+  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+    std::string annotationContents;
+    if (recordreplay::IsReplaying()) {
+      base::Value::Dict info;
+      info.Set("kind", "clear");
+      info.Set("type", (int)storage_type_);
+      base::JSONWriter::Write(info, &annotationContents);
+    }
+    recordreplay::OnAnnotation("StorageArea", annotationContents.c_str());
+  }
+
   if (!CanAccessStorage()) {
     exception_state.ThrowSecurityError(StorageArea::kAccessDeniedMessage);
     return;
@@ -167,6 +227,13 @@ bool StorageArea::Contains(const String& key,
 
 void StorageArea::NamedPropertyEnumerator(Vector<String>& names,
                                           ExceptionState& exception_state) {
+  if (!cached_area_->memory_used() &&  // This means either empty or not loaded
+      recordreplay::IsInReplayCode()) {
+    // This ignores crash-inducing side effects observed during interceptor key collection
+    // when handling commands.
+    // See: https://linear.app/replay/issue/RUN-1315#comment-26f96699
+    return;
+  }
   unsigned length = this->length(exception_state);
   if (exception_state.HadException())
     return;
@@ -202,6 +269,12 @@ bool StorageArea::CanAccessStorage() const {
 
   if (did_check_can_access_storage_)
     return can_access_storage_cached_result_;
+
+  // We can't perform synchronous IPC calls after diverging from the recording,
+  // as the calls will never complete.
+  if (recordreplay::HasDivergedFromRecording())
+    return false;
+
   can_access_storage_cached_result_ = StorageController::CanAccessStorageArea(
       DomWindow()->GetFrame(), storage_type_);
   did_check_can_access_storage_ = true;

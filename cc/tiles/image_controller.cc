@@ -53,7 +53,9 @@ ImageController::~ImageController() {
 ImageController::WorkerState::WorkerState(
     scoped_refptr<base::SequencedTaskRunner> origin_task_runner,
     base::WeakPtr<ImageController> weak_ptr)
-    : origin_task_runner(std::move(origin_task_runner)), weak_ptr(weak_ptr) {}
+    : lock("ImageController::WorkerState.lock_"),
+      origin_task_runner(std::move(origin_task_runner)),
+      weak_ptr(weak_ptr) {}      
 ImageController::WorkerState::~WorkerState() = default;
 
 void ImageController::ForEachDecodeRequest(

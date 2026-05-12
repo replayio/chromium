@@ -39,6 +39,8 @@
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
+#include "base/json/json_writer.h"
+
 namespace blink {
 
 namespace {
@@ -77,14 +79,17 @@ class LockManager::LockRequestImpl final
       mojom::blink::LockMode mode,
       mojo::PendingAssociatedReceiver<mojom::blink::LockRequest> receiver,
       mojo::PendingRemote<mojom::blink::ObservedFeature> lock_lifetime,
-      LockManager* manager)
+      LockManager* manager,
+      int record_replay_dependency_graph_node_id)
       : callback_(callback),
         resolver_(resolver),
         name_(name),
         mode_(mode),
         receiver_(this, manager->GetExecutionContext()),
         lock_lifetime_(std::move(lock_lifetime)),
-        manager_(manager) {
+        manager_(manager),
+        record_replay_dependency_graph_node_id_(
+            record_replay_dependency_graph_node_id) {
     receiver_.Bind(
         std::move(receiver),
         manager->GetExecutionContext()->GetTaskRunner(TaskType::kWebLocks));
@@ -423,7 +428,7 @@ void LockManager::RequestImpl(const LockOptions* options,
   LockRequestImpl* request = MakeGarbageCollected<LockRequestImpl>(
       callback, resolver, name, mode,
       request_remote.InitWithNewEndpointAndPassReceiver(),
-      std::move(lock_lifetime), this);
+      std::move(lock_lifetime), this, record_replay_dependency_graph_node_id);
   AddPendingRequest(request);
 
   // 11.2. If options’ signal dictionary member is present, then add the

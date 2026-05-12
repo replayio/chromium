@@ -182,6 +182,8 @@ Connector::~Connector() {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
     CancelWait();
   }
+
+  recordreplay::UnregisterPointer(this);
 }
 
 void Connector::SetOutgoingSerializationMode(OutgoingSerializationMode mode) {
@@ -626,9 +628,8 @@ void Connector::ReadAllAvailableMessages() {
 
     switch (rv) {
       case MOJO_RESULT_OK:
-        if (!DispatchMessage(std::move(message)) || !weak_self || paused_) {
+        if (!DispatchMessage(std::move(message)) || !weak_self || paused_)
           return;
-        }
         break;
 
       case MOJO_RESULT_SHOULD_WAIT:
@@ -697,6 +698,7 @@ void Connector::HandleError(bool force_pipe_reset, bool force_async_handler) {
       WaitToReadMore();
     }
   } else {
+    recordreplay::Assert("[RUN-1209-1900] Connector::HandleError B");
     error_ = true;
     if (connection_error_handler_) {
       std::move(connection_error_handler_).Run();

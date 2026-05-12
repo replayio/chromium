@@ -54,6 +54,15 @@ static MultiBuffer::BlockId ClosestNextEntry(
   return i->first;
 }
 
+MultiBuffer::Reader::Reader() {
+  // Registration is needed for sorting in NotifyAvailableRange.
+  recordreplay::RegisterPointer("MultiBuffer::Reader", this);
+}
+
+MultiBuffer::Reader::~Reader() {
+  recordreplay::UnregisterPointer(this);
+}
+
 //
 // MultiBuffer::GlobalLRU
 //
@@ -269,7 +278,7 @@ MultiBufferBlockId MultiBuffer::FindNextUnavailable(const BlockId& pos) const {
 void MultiBuffer::NotifyAvailableRange(
     const Interval<MultiBufferBlockId>& observer_range,
     const Interval<MultiBufferBlockId>& new_range) {
-  std::set<Reader*> tmp;
+  std::set<Reader*, recordreplay::CompareByPointerId> tmp;
   for (auto i = readers_.lower_bound(observer_range.begin);
        i != readers_.end() && i->first < observer_range.end; ++i) {
     tmp.insert(i->second.begin(), i->second.end());

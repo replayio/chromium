@@ -75,6 +75,8 @@
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
+
 namespace blink {
 
 namespace {
@@ -120,8 +122,12 @@ void MainThreadDebugger::SetClientMessageLoop(
 
 void MainThreadDebugger::DidClearContextsForFrame(LocalFrame* frame) {
   DCHECK(IsMainThread());
-  if (frame->LocalFrameRoot() == frame)
+  if (frame->LocalFrameRoot() == frame) {
+    if (recordreplay::IsRecordingOrReplaying("DidClearContextsForFrame")) {
+      RecordReplayClearContexts("MainThreadDebugger::DidClearContextsForFrame", frame);
+    }
     GetV8Inspector()->resetContextGroup(ContextGroupId(frame));
+  }
 }
 
 void MainThreadDebugger::ContextCreated(ScriptState* script_state,
@@ -209,6 +215,13 @@ void MainThreadDebugger::ExceptionThrown(ExecutionContext* context,
 
 int MainThreadDebugger::ContextGroupId(LocalFrame* frame) {
   LocalFrame& local_frame_root = frame->LocalFrameRoot();
+
+  if (!WeakIdentifierMap<LocalFrame>::HasIdentifier(&local_frame_root)) {
+    int newId = WeakIdentifierMap<LocalFrame>::Identifier(&local_frame_root);
+    recordreplay::CommandDiagnosticTrace(
+        "[RUN-2486-2577] WeakIdentifierMap<LocalFrame>::Put %d", newId);
+  }
+
   return WeakIdentifierMap<LocalFrame>::Identifier(&local_frame_root);
 }
 
@@ -317,12 +330,16 @@ v8::Local<v8::Context> MainThreadDebugger::ensureDefaultContextInGroup(
 
 void MainThreadDebugger::beginEnsureAllContextsInGroup(int context_group_id) {
   LocalFrame* frame = WeakIdentifierMap<LocalFrame>::Lookup(context_group_id);
-  frame->GetSettings()->SetForceMainWorldInitialization(true);
+  if (frame) {
+    frame->GetSettings()->SetForceMainWorldInitialization(true);
+  }
 }
 
 void MainThreadDebugger::endEnsureAllContextsInGroup(int context_group_id) {
   LocalFrame* frame = WeakIdentifierMap<LocalFrame>::Lookup(context_group_id);
-  frame->GetSettings()->SetForceMainWorldInitialization(false);
+  if (frame) {
+    frame->GetSettings()->SetForceMainWorldInitialization(false);
+  }
 }
 
 bool MainThreadDebugger::canExecuteScripts(int context_group_id) {

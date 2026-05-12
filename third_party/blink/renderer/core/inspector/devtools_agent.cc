@@ -96,9 +96,16 @@ class DevToolsAgent::IOAgent : public mojom::blink::DevToolsAgent {
   }
 
   // May be called from any thread.
-  void DeleteSoon() { io_task_runner_->DeleteSoon(FROM_HERE, this); }
+  void DeleteSoon() {
+    recordreplay::Assert("[RUN-1124-1785] DevToolsAgent::IOAgent::DeleteSoon %d", receiver_.is_bound());
+    io_task_runner_->DeleteSoon(FROM_HERE, this);
+  }
 
-  ~IOAgent() override = default;
+  ~IOAgent() override {
+    recordreplay::Assert(
+        "[RUN-1124-1902] DevToolsAgent::IOAgent::~IOAgent %d",
+        receiver_.internal_state()->RouterForTesting()->HasOneRef());
+  }
 
   // mojom::blink::DevToolsAgent implementation.
   void AttachDevToolsSession(
@@ -190,7 +197,9 @@ void DevToolsAgent::Trace(Visitor* visitor) const {
 }
 
 void DevToolsAgent::Dispose() {
-  HeapHashSet<Member<DevToolsSession>> copy(sessions_);
+  HeapHashSet<Member<DevToolsSession>,
+              WTF::MemberHashRecordReplayId<DevToolsSession>>
+      copy(sessions_);
   for (auto& session : copy)
     session->Detach();
   CleanupConnection();

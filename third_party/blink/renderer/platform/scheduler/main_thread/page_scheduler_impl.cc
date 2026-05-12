@@ -186,6 +186,8 @@ PageSchedulerImpl::PageSchedulerImpl(
 }
 
 PageSchedulerImpl::~PageSchedulerImpl() {
+  recordreplay::UnregisterPointer(this);
+
   // TODO(alexclarke): Find out why we can't rely on the web view outliving the
   // frame.
   {
@@ -197,6 +199,12 @@ PageSchedulerImpl::~PageSchedulerImpl() {
   }
 
   main_thread_scheduler_->RemovePageScheduler(this);
+}
+
+void
+PageSchedulerImpl::BreakLinkages() {
+  REPLAY_ASSERT("[TT-1367-1386] PageSchedulerImpl::BreakLinkages %d", !!delegate_);
+  delegate_ = nullptr;
 }
 
 // static
@@ -775,6 +783,12 @@ void PageSchedulerImpl::UpdateWakeUpBudgetPools(base::LazyNow* lazy_now) {
 
 void PageSchedulerImpl::UpdatePolicy() {
   for (FrameSchedulerImpl* frame_scheduler : frame_schedulers_) {
+    frame_scheduler_vector.push_back(frame_scheduler);
+  }
+  std::sort(frame_scheduler_vector.begin(), frame_scheduler_vector.end(),
+            recordreplay::CompareByPointerId());
+
+  for (FrameSchedulerImpl* frame_scheduler : frame_scheduler_vector) {
     frame_scheduler->UpdatePolicy();
   }
 

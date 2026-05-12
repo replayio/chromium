@@ -28,6 +28,8 @@
 #include "mojo/public/cpp/bindings/lib/message_fragment.h"
 #include "mojo/public/cpp/bindings/lib/unserialized_message_context.h"
 
+#include "base/record_replay.h"
+
 namespace mojo {
 
 namespace {
@@ -506,6 +508,8 @@ void Message::NotifyBadMessage(std::string_view error) {
 }
 
 void Message::SerializeHandles(AssociatedGroupController* group_controller) {
+  recordreplay::Assert("[RUN-1569] Message::SerializeHandles Start");
+
   if (mutable_handles()->empty() &&
       mutable_associated_endpoint_handles()->empty()) {
     // No handles attached, so no extra serialization work.
@@ -591,6 +595,10 @@ bool Message::DeserializeAssociatedEndpointHandles(
       // deserialization as failed but continue to deserialize the rest of
       // handles.
       result = false;
+
+      // https://linear.app/replay/issue/RUN-1228
+      recordreplay::Assert("[RUN-1228] MessageWrapper::DeserializeAssociatedEndpointHandles %u id=%u",
+        i, ids[i]);
     }
 
     endpoint_handles.push_back(std::move(handle));

@@ -180,6 +180,8 @@ DevToolsSession::DevToolsSession(
     for (wtf_size_t i = 0; i < agents_.size(); i++)
       agents_[i]->Restore();
   }
+
+  record_replay_id_ = recordreplay::NewIdAnyThread("DevToolsSession");
 }
 
 DevToolsSession::~DevToolsSession() {
@@ -382,8 +384,19 @@ void DevToolsSession::flushProtocolNotifications() {
 void DevToolsSession::FlushProtocolNotifications() {
   if (IsDetached())
     return;
+
+  recordreplay::Assert(
+      "[RUN-1515-1924] DevToolsSession::FlushProtocolNotifications A %d %s %d "
+      "%d",
+      record_replay_id_, session_id_.Utf8().c_str(), (int)agents_.size(),
+      (int)notification_queue_.size());
+
   for (wtf_size_t i = 0; i < agents_.size(); i++)
     agents_[i]->FlushPendingProtocolNotifications();
+
+  recordreplay::Assert("[RUN-1515-1924] DevToolsSession::FlushProtocolNotifications B %d",
+                       (int)notification_queue_.size());
+
   if (!notification_queue_.size())
     return;
   if (v8_session_)
@@ -431,6 +444,19 @@ blink::mojom::blink::DevToolsMessagePtr DevToolsSession::FinalizeMessage(
     CHECK(status.ok()) << status.ToASCIIString();
     message_to_send = std::move(json);
   }
+
+  // Devtools message contents can vary when replaying due to different
+  // behavior handling messages from the record/replay driver using the
+  // devtools protocol. We don't want this to influence Mojo, so force
+  // the message contents to match up.
+  if (recordreplay::IsRecordingOrReplaying("values", "DevToolsSession::FinalizeMessage")) {
+    size_t nbytes = recordreplay::RecordReplayValue("DevToolsSession::FinalizeMessage",
+                                                    message_to_send.size());
+    message_to_send.resize(nbytes);
+    recordreplay::RecordReplayBytes("DevToolsSession::FinalizeMessage",
+                                    &message_to_send[0], message_to_send.size());
+  }
+
   auto mojo_msg = mojom::blink::DevToolsMessage::New();
   mojo_msg->data = {message_to_send};
   return mojo_msg;

@@ -13,6 +13,8 @@
 #include "mojo/core/handle_signals_state.h"
 #include "mojo/core/watcher_dispatcher.h"
 
+#include "base/record_replay.h"
+
 namespace mojo {
 namespace core {
 

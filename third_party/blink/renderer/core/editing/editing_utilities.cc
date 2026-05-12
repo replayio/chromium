@@ -1708,7 +1708,7 @@ DispatchEventResult DispatchBeforeInputInsertText(
   InputEvent* before_input_event = InputEvent::CreateBeforeInput(
       input_type, data, InputEvent::EventIsComposing::kNotComposing,
       ranges ? ranges : TargetRangesForInputEvent(*target));
-  return target->DispatchEvent(*before_input_event);
+  return target->DispatchEvent(*before_input_event, "DispatchBeforeInputInsertText");
 }
 
 DispatchEventResult DispatchBeforeInputEditorCommand(
@@ -1750,7 +1750,7 @@ DispatchEventResult DispatchBeforeInputDataTransfer(
         input_type, data, InputEvent::EventIsComposing::kNotComposing,
         TargetRangesForInputEvent(*target));
   }
-  return target->DispatchEvent(*before_input_event);
+  return target->DispatchEvent(*before_input_event, "DispatchBeforeInputDataTransfer");
 }
 
 void InsertTextAndSendInputEventsOfTypeInsertReplacementText(

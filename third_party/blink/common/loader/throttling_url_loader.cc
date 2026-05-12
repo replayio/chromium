@@ -30,6 +30,8 @@
 #include "third_party/blink/public/mojom/origin_trials/origin_trial_feature.mojom-shared.h"
 #include "third_party/perfetto/include/perfetto/tracing/track_event_args.h"
 
+#include "base/json/json_writer.h"
+
 namespace blink {
 
 namespace {
@@ -727,6 +729,19 @@ void ThrottlingURLLoader::OnReceiveRedirect(
   DCHECK(deferring_throttles_.empty());
   if (start_info_ && start_info_->url_request.keepalive) {
     base::UmaHistogramBoolean("FetchKeepAlive.Renderer.Total.Redirected", true);
+  }
+
+  // Keep track of network requests triggered by the download message we are
+  // handling from the browser process.
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "receivedRedirect");
+    info.Set("original_url", original_url_.spec());
+    info.Set("new_url", redirect_info.new_url.spec());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
   }
 
   if (!throttles_.empty()) {

@@ -21,6 +21,8 @@
 
 namespace blink {
 
+extern bool LocalDOMWindowPointerIsValid(LocalDOMWindow* window);
+
 namespace {
 
 void MeasureFetchProperties(ExecutionContext* execution_context,

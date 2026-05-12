@@ -64,6 +64,8 @@ void OverlayInterstitialAdDetector::MaybeFireDetection(
     LocalFrame* outermost_main_frame) {
   DCHECK(outermost_main_frame);
   DCHECK(outermost_main_frame->IsOutermostMainFrame());
+  recordreplay::Assert(
+      "[RUN-1675-1826] OverlayInterstitialAdDetector::MaybeFireDetection A %d", popup_ad_detected_);
   if (popup_ad_detected_)
     return;
 
@@ -74,8 +76,13 @@ void OverlayInterstitialAdDetector::MaybeFireDetection(
   if (PaintTiming::From(*outermost_main_frame->GetDocument())
           .FirstContentfulPaint()
           .is_null()) {
+    recordreplay::Assert(
+        "[RUN-1675-1826] OverlayInterstitialAdDetector::MaybeFireDetection B");
     return;
   }
+
+  recordreplay::Assert(
+      "[RUN-1675-1826] OverlayInterstitialAdDetector::MaybeFireDetection C");
 
   base::Time current_time = base::Time::Now();
   if (started_detection_ &&

@@ -44,6 +44,9 @@ static void ToResourceTypeStat(const MemoryCache::TypeStatistic& from,
 }
 
 void WebCache::Clear() {
+  // https://linear.app/replay/issue/RUN-821
+  recordreplay::Assert("WebCache::Clear");
+
   MemoryCache* cache = MemoryCache::Get();
   if (cache)
     cache->EvictResources();

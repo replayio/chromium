@@ -437,6 +437,9 @@ void PropertyTreeManager::SetCurrentEffectState(
 int PropertyTreeManager::EnsureCompositorTransformNode(
     const TransformPaintPropertyNode& transform_node) {
   int id = transform_node.CcNodeId(new_sequence_number_);
+  recordreplay::Assert(
+      "[RUN-550-1536] PropertyTreeManager::EnsureCompositorTransformNode A %d %d",
+      id, new_sequence_number_);
   if (id != cc::kInvalidPropertyNodeId) {
     DCHECK(transform_tree_.Node(id));
     return id;

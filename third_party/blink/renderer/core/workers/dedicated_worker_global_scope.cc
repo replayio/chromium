@@ -429,6 +429,7 @@ void DedicatedWorkerGlobalScope::postMessage(ScriptState* script_state,
   transferable_message.message = serialized_message;
   transferable_message.sender_origin =
       GetExecutionContext()->GetSecurityOrigin()->IsolatedCopy();
+
   // Disentangle the port in preparation for sending it to the remote context.
   transferable_message.ports = MessagePort::DisentanglePorts(
       ExecutionContext::From(script_state), transferables.message_ports,

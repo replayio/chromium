@@ -16,6 +16,8 @@
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
 
+#include "third_party/blink/renderer/platform/heap/member.h"
+
 namespace base {
 class LazyNow;
 namespace trace_event {

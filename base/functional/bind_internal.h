@@ -1994,7 +1994,10 @@ struct CallbackCancellationTraits<Functor, std::tuple<BoundArgs...>> {
   static bool IsCancelled(const Functor&,
                           const Receiver& receiver,
                           const Args&...) {
-    return !receiver;
+    // Weak pointers can be cleared non-deterministically when recording/replaying,
+    // so record/replay whether they are present so that callers checking the status
+    // like TaskQueueImpl behave consistently.
+    return CallbackRecordReplayValue("WeakMethodIsCancelled", !receiver);
   }
 
   template <typename Receiver, typename... Args>

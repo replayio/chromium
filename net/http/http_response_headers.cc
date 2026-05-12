@@ -42,6 +42,8 @@
 #include "third_party/abseil-cpp/absl/container/flat_hash_set.h"
 #include "third_party/abseil-cpp/absl/strings/ascii.h"
 
+#include "base/record_replay.h"
+
 using base::Time;
 
 namespace net {

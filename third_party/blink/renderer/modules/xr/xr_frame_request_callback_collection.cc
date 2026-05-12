@@ -13,6 +13,8 @@
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "third_party/perfetto/include/perfetto/tracing/track.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_events.h"
+
 namespace blink {
 
 XRFrameRequestCallbackCollection::XRFrameRequestCallbackCollection(

@@ -45,6 +45,8 @@
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/point_conversions.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 namespace {
@@ -232,6 +234,12 @@ void HistoryItem::ClearDocumentState() {
 }
 
 void HistoryItem::SetStateObject(scoped_refptr<SerializedScriptValue> object) {
+  if (object) {
+    REPLAY_ASSERT(
+      "[TT-492-1184] HistoryItem::SetStateObject %s",
+      object->ToWireString().Utf8().c_str()
+    );
+  }
   state_object_ = std::move(object);
 }
 

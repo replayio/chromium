@@ -1211,6 +1211,10 @@ void HTMLMediaElement::LoadInternal() {
 void HTMLMediaElement::SelectMediaResource() {
   DVLOG(3) << "selectMediaResource(" << *this << ")";
 
+  recordreplay::AutoMarkerDependencyExecution execute(
+    "LoadEventDelay", "HTMLMediaElement::SelectMediaResource"
+  );
+
   enum Mode { kObject, kAttribute, kChildren, kNothing };
   Mode mode = kNothing;
 
@@ -5027,7 +5031,11 @@ void HTMLMediaElement::DidPlayerMediaPositionStateChange(
     base::TimeDelta duration,
     base::TimeDelta position,
     bool end_of_media) {
+  // https://linear.app/replay/issue/RUN-616
+  recordreplay::Assert("HTMLMediaElement::DidPlayerMediaPositionStateChange");
   for (auto& observer : media_player_observer_remote_set_->Value()) {
+    // https://linear.app/replay/issue/RUN-616
+    recordreplay::Assert("HTMLMediaElement::DidPlayerMediaPositionStateChange #1");
     observer->OnMediaPositionStateChanged(
         media_session::mojom::blink::MediaPosition::New(
             playback_rate, duration, position, base::TimeTicks::Now(),

@@ -255,6 +255,11 @@ class CORE_EXPORT MessageEvent final : public Event {
     return origin_;
   }
 
+  // Dependency graph node ID for when this event was created.
+  int RecordReplayDependencyGraphNodeId() const {
+    return record_replay_dependency_graph_node_id_;
+  }
+
  private:
   enum DataType {
     kDataTypeNull,  // For "messageerror" events.

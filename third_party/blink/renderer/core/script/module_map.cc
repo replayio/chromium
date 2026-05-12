@@ -93,6 +93,7 @@ void ModuleMap::Entry::NotifyNewSingleModuleFinished(
   module_script_ = module_script;
   is_fetching_ = false;
 
+  HeapVector<Member<SingleModuleClient>> clients_vector;
   for (const auto& client : clients_) {
     DispatchFinishedNotificationAsync(client, import_phase);
   }

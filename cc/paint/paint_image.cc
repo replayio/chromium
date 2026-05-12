@@ -227,6 +227,8 @@ void PaintImage::CreateSkImage() {
                                                   kDefaultFrameIndex,
                                                   kDefaultGeneratorClientId));
   }
+  recordreplay::Assert("[RUN-1975-2225] PaintImage::CreateSkImage %d",
+                       !!cached_sk_image_);
 }
 
 SkISize PaintImage::GetSupportedDecodeSize(const SkISize& requested_size,

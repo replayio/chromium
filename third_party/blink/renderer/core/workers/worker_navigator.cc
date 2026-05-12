@@ -64,7 +64,7 @@ void WorkerNavigator::NotifyUpdate() {
   }
   SetLanguagesDirty();
   global_scope->DispatchEvent(
-      *Event::Create(event_type_names::kLanguagechange));
+      *Event::Create(event_type_names::kLanguagechange), "WorkerNavigator::NotifyUpdate");
 }
 
 void WorkerNavigator::Trace(Visitor* visitor) const {

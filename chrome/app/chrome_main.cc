@@ -73,6 +73,20 @@ NO_STACK_PROTECTOR __attribute__((visibility("default"))) int ChromeMain(
 #error Unknown platform.
 #endif
 
+extern "C" void V8SetRecordingOrReplaying(void* handle);
+extern "C" void V8InitializeNotRecordingOrReplaying();
+
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
+#include "./record_replay_main.cc"
+#endif
+
+#if BUILDFLAG(IS_WIN)
+namespace recordreplay { extern void InitBindings(); }
+#endif
+
+#include "base/power_monitor/power_monitor.h"
+#include "base/record_replay.h"
+
 #if BUILDFLAG(IS_WIN)
 DLLEXPORT int __cdecl ChromeMain(HINSTANCE instance,
                                  sandbox::SandboxInterfaceInfo* sandbox_info,

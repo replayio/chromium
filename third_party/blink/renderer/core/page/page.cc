@@ -24,6 +24,8 @@
 #include "base/check.h"
 #include "base/compiler_specific.h"
 #include "base/feature_list.h"
+#include "base/record_replay.h"
+#include "base/record_replay_paint_surface.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/page/color_provider_color_maps.h"
 #include "third_party/blink/public/mojom/frame/lifecycle.mojom-blink-forward.h"
@@ -89,6 +91,7 @@
 #include "third_party/blink/renderer/core/preferences/preference_manager.h"
 #include "third_party/blink/renderer/core/preferences/preference_overrides.h"
 #include "third_party/blink/renderer/core/probe/core_probes.h"
+#include "third_party/blink/renderer/core/record_replay/lifecycle.h"
 #include "third_party/blink/renderer/core/scroll/scrollbar_theme.h"
 #include "third_party/blink/renderer/core/scroll/scrollbar_theme_overlay_mobile.h"
 #include "third_party/blink/renderer/core/svg/graphics/svg_image_chrome_client.h"
@@ -826,6 +829,11 @@ void Page::SetVisibilityState(
 
   lifecycle_state_->visibility = visibility_state;
 
+  // ideally we could use an observer for this (and we might eventually find that we can),
+  // but in the interest of always getting paints, we need do this even if
+  // is_initial_state == true.
+  recordreplay::NotifyPageVisibilityStateChanged(this);
+
   if (is_initial_state)
     return;
 
@@ -1422,6 +1430,21 @@ void Page::WillBeDestroyed() {
     observer->ObserverSetWillBeCleared();
   }
   page_visibility_observer_set_.clear();
+
+  if (recordreplay::AreEventsDisallowed("Page::WillBeDestroyed")) {
+    // If the dtor is called during GC (usually from |~SVGImage|),
+    // we leak the scheduler, so the finalizer does not touch the recording
+    // stream.
+    // https://linear.app/replay/issue/RUN-1347#comment-bc4e3f9d
+    PageScheduler* s = page_scheduler_.release();
+
+    // We're about to destroy this page, which acts as the page scheduler's
+    // delegate.  Make sure we break that linkage before we go away.
+    // https://linear.app/replay/issue/RUN-2733
+    s->BreakLinkages();
+  }
+
+  recordreplay::NotifyPageWillBeDestroyed(this);
 
   page_scheduler_ = nullptr;
 

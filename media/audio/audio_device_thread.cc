@@ -87,6 +87,7 @@ void AudioDeviceThread::ThreadMain() {
   base::PlatformThread::SetName(thread_name_);
   callback_->InitializeOnAudioThread();
 
+  uint32_t record_replay_iteration_idx = 0;
   uint32_t buffer_index = 0;
   while (true) {
     uint32_t pending_data = 0;

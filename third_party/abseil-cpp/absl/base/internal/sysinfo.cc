@@ -70,6 +70,40 @@
 #include "absl/base/internal/unscaledcycleclock.h"
 #include "absl/base/thread_annotations.h"
 
+#ifndef _WIN32
+#include <dlfcn.h>
+#endif
+
+static void* LookupRecordReplaySymbol(const char* name) {
+#ifndef _WIN32
+  void* fnptr = dlsym(RTLD_DEFAULT, name);
+#else
+  HMODULE module = GetModuleHandleA("windows-recordreplay.dll");
+  void* fnptr = module ? (void*)GetProcAddress(module, name) : nullptr;
+#endif
+  return fnptr ? fnptr : reinterpret_cast<void*>(1);
+}
+
+static void RecordReplayBeginDisallowEventsWithLabel(const char* label) {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayBeginDisallowEventsWithLabel");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    reinterpret_cast<void(*)(const char*)>(fnptr)(label);
+  }
+}
+
+static void RecordReplayEndDisallowEvents() {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayEndDisallowEvents");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    reinterpret_cast<void(*)()>(fnptr)();
+  }
+}
+
 namespace absl {
 ABSL_NAMESPACE_BEGIN
 namespace base_internal {
@@ -368,7 +402,12 @@ ABSL_CONST_INIT static int num_cpus = 0;
 // initialized, therefore this must not allocate memory.
 int NumCPUs() {
   base_internal::LowLevelCallOnce(
-      &init_num_cpus_once, []() { num_cpus = GetNumCPUs(); });
+      &init_num_cpus_once, []() {
+        // The thread which ends up calling this can vary when replaying.
+        RecordReplayBeginDisallowEventsWithLabel("NumCPUs");
+        num_cpus = GetNumCPUs();
+        RecordReplayEndDisallowEvents();
+      });
   return num_cpus;
 }
 

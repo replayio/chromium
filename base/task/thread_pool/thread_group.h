@@ -32,6 +32,8 @@
 #include "base/win/scoped_windows_thread_environment.h"
 #endif
 
+#include "base/record_replay_ordered_atomic.h"
+
 namespace base {
 
 class WorkerThreadObserver;
@@ -479,7 +481,7 @@ class BASE_EXPORT ThreadGroup {
   // released. It is annotated as GUARDED_BY(lock_) because it is always updated
   // under the lock (to avoid races with other state during the update) but it
   // is nonetheless always safe to read it without the lock (since it's atomic).
-  std::atomic<YieldSortKey> max_allowed_sort_key_ GUARDED_BY(lock_){
+  recordreplay::OrderedAtomic<YieldSortKey> max_allowed_sort_key_ GUARDED_BY(lock_){
       kMaxYieldSortKey};
 
   const std::string unnecessary_wakeup_histogram_label_;

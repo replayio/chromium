@@ -17,9 +17,9 @@ namespace page_load_metrics {
 PageResourceDataUse::PageResourceDataUse(int resource_id)
     : resource_id_(resource_id) {}
 
-PageResourceDataUse::PageResourceDataUse(const PageResourceDataUse& other) =
-    default;
-PageResourceDataUse::~PageResourceDataUse() = default;
+PageResourceDataUse::~PageResourceDataUse() {
+  recordreplay::UnregisterPointer(this);
+}
 
 void PageResourceDataUse::DidStartResponse(
     const url::SchemeHostPort& final_response_url,

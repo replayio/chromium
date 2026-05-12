@@ -393,6 +393,13 @@ void PatchServiceManagerCalls() {
 
   is_patched = true;
 
+  // Skip patching when replaying, we aren't working with real DLLs and will crash
+  // if we try to patch them.
+  if (recordreplay::IsReplaying())
+    return;
+
+  recordreplay::AutoPassThroughEvents pt;
+
   static base::NoDestructor<base::win::IATPatchFunction> patch_open_sc_manager;
   patch_open_sc_manager->Patch(L"dwrite.dll", service_provider_dll,
                                "OpenSCManagerW",

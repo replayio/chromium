@@ -192,7 +192,7 @@ void EventSource::NetworkRequestEnded() {
 void EventSource::ScheduleReconnect() {
   state_ = kConnecting;
   connect_timer_.StartOneShot(base::Milliseconds(reconnect_delay_), FROM_HERE);
-  DispatchEvent(*Event::Create(event_type_names::kError));
+  DispatchEvent(*Event::Create(event_type_names::kError), "EventSource::ScheduleReconnect");
 }
 
 void EventSource::ConnectTimerFired(TimerBase*) {
@@ -297,7 +297,7 @@ void EventSource::DidReceiveResponse(uint64_t identifier,
                 response.GetType());
     }
     parser_ = MakeGarbageCollected<EventSourceParser>(last_event_id, this);
-    DispatchEvent(*Event::Create(event_type_names::kOpen));
+    DispatchEvent(*Event::Create(event_type_names::kOpen), "EventSource::DidReceiveResponse");
   } else {
     loader_->Cancel();
   }
@@ -357,7 +357,7 @@ void EventSource::OnMessageEvent(const AtomicString& event_type,
   probe::WillDispatchEventSourceEvent(GetExecutionContext(),
                                       resource_identifier_, event_type,
                                       last_event_id, data);
-  DispatchEvent(*e);
+  DispatchEvent(*e, "EventSource::OnMessageEvent");
 }
 
 void EventSource::OnReconnectionTimeSet(uint64_t reconnection_time) {
@@ -371,7 +371,7 @@ void EventSource::AbortConnectionAttempt() {
   state_ = kClosed;
   NetworkRequestEnded();
 
-  DispatchEvent(*Event::Create(event_type_names::kError));
+  DispatchEvent(*Event::Create(event_type_names::kError), "EventSource::AbortConnectionAttempt");
 }
 
 void EventSource::ContextDestroyed() {

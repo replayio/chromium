@@ -43,6 +43,8 @@
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 #include "ui/base/ui_base_features.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 static inline String LanguageFromLocale(const String& locale) {
@@ -198,7 +200,9 @@ NSDateFormatter* LocaleMac::DateTimeFormatterWithoutSeconds() {
 }
 
 String LocaleMac::DateFormat() {
-  if (!date_format_.IsNull())
+  if (!date_format_.IsNull()) {
+    recordreplay::Assert("[RUN-1548] LocaleMac::DateFormat #1 %s",
+                         date_format_.Utf8().c_str());
     return date_format_;
   date_format_ = ShortDateFormatter().dateFormat;
   return date_format_;

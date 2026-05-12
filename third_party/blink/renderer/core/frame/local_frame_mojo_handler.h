@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_FRAME_LOCAL_FRAME_MOJO_HANDLER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_FRAME_LOCAL_FRAME_MOJO_HANDLER_H_
 
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "cc/input/browser_controls_offset_tag_modifications.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
@@ -84,6 +85,7 @@ class LocalFrameMojoHandler
       mojom::blink::DevicePostureType device_posture_param);
   void DisableDevicePostureOverrideForEmulation();
 
+  void RegisterRecordReplayAuthTokenObserver();
  private:
   Page* GetPage() const;
   LocalDOMWindow* DomWindow() const;
@@ -96,6 +98,9 @@ class LocalFrameMojoHandler
   void BindFullscreenVideoElementReceiver(
       mojo::PendingAssociatedReceiver<
           mojom::blink::FullscreenVideoElementHandler> receiver);
+  void BindRecordReplayAuthTokenStoreObserver(
+      mojo::PendingReceiver<
+          auth_token::mojom::blink::RecordReplayAuthTokenStoreObserver> receiver);
 
   // blink::mojom::LocalFrame overrides:
   void GetTextSurroundingSelection(
@@ -283,6 +288,9 @@ class LocalFrameMojoHandler
 #if BUILDFLAG(IS_ANDROID)
   void PerformFullContentSpellCheck() final;
 #endif
+
+  // RecordReplayAuthTokenStoreObserver implementation:
+  void OnRecordReplayAuthTokenChanged(const WTF::String& token) final;
 
   Member<blink::LocalFrame> frame_;
 

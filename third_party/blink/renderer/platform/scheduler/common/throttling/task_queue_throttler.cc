@@ -16,6 +16,8 @@
 #include "third_party/blink/renderer/platform/scheduler/common/throttling/budget_pool.h"
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 namespace scheduler {
 
@@ -25,7 +27,10 @@ using base::sequence_manager::TaskQueue;
 TaskQueueThrottler::TaskQueueThrottler(
     base::sequence_manager::TaskQueue* task_queue,
     const base::TickClock* tick_clock)
-    : task_queue_(task_queue), tick_clock_(tick_clock) {}
+    : task_queue_(task_queue), tick_clock_(tick_clock) {
+  // Pointer registration is needed for sorting in BudgetPool::UpdateThrottlingStateForAllQueues
+  recordreplay::RegisterPointer("TaskQueueThrottler", this);
+}
 
 TaskQueueThrottler::~TaskQueueThrottler() {
   if (IsThrottled())
@@ -34,6 +39,8 @@ TaskQueueThrottler::~TaskQueueThrottler() {
   for (BudgetPool* budget_pool : budget_pools_) {
     budget_pool->UnregisterThrottler(this);
   }
+
+  recordreplay::UnregisterPointer(this);
 }
 
 void TaskQueueThrottler::IncreaseThrottleRefCount() {

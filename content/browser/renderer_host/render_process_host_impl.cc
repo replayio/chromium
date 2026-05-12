@@ -1821,8 +1821,9 @@ bool RenderProcessHostImpl::Init() {
 #endif
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-  int flags = renderer_prefix.empty() ? ChildProcessHost::CHILD_ALLOW_SELF
-                                      : ChildProcessHost::CHILD_NORMAL;
+  int flags = (renderer_prefix.empty() && !MaybeRecordingOrReplaying())
+    ? ChildProcessHost::CHILD_ALLOW_SELF
+    : ChildProcessHost::CHILD_NORMAL;
 #elif BUILDFLAG(IS_MAC)
   int flags = ChildProcessHost::CHILD_RENDERER;
 #else
@@ -3595,6 +3596,10 @@ void RenderProcessHostImpl::AppendRendererCommandLine(
   if (IsPdf())
     command_line->AppendSwitch(switches::kPdfRenderer);
 
+  if (IsRecordReplayForRecording()) {
+    command_line->AppendSwitch("--record-replay-for-recording");
+  }
+
 #if BUILDFLAG(IS_WIN)
   if (command_line->HasSwitch(kExtensionProcess)) {
     command_line->AppendArgNative(app_launch_prefetch::GetPrefetchSwitch(
@@ -3618,7 +3623,8 @@ void RenderProcessHostImpl::AppendRendererCommandLine(
   // A non-empty RendererCmdPrefix implies that Zygote is disabled.
   if (!base::CommandLine::ForCurrentProcess()
            ->GetSwitchValueNative(switches::kRendererCmdPrefix)
-           .empty()) {
+           .empty() ||
+      MaybeRecordingOrReplaying()) {
     command_line->AppendSwitch(switches::kNoZygote);
   }
 

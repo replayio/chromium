@@ -65,6 +65,9 @@ class SVGUseElement final : public SVGGraphicsElement,
 
   void Trace(Visitor*) const override;
 
+  // Disambiguate between base classes.
+  int RecordReplayId() const { return ResourceClient::RecordReplayId(); }
+
  private:
   gfx::RectF GetBBox() override;
 

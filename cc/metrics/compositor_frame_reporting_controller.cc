@@ -229,6 +229,9 @@ void CompositorFrameReportingController::BeginMainFrameAborted(
     const viz::BeginFrameId& id,
     CommitEarlyOutReason reason) {
   auto& reporter = reporters_[PipelineStage::kBeginMainFrame];
+  // The reporter can be missing while repainting when replaying.
+  if (!reporter)
+    return;
   DCHECK(reporter);
   DCHECK_EQ(reporter->frame_id(), id);
   reporter->OnAbortBeginMainFrame(Now());
@@ -239,12 +242,18 @@ void CompositorFrameReportingController::BeginMainFrameAborted(
 }
 
 void CompositorFrameReportingController::WillCommit() {
+  // The reporter can be missing while repainting when replaying.
+  if (!reporters_[PipelineStage::kReadyToCommit])
+    return;
   DCHECK(reporters_[PipelineStage::kReadyToCommit]);
   reporters_[PipelineStage::kReadyToCommit]->StartStage(StageType::kCommit,
                                                         Now());
 }
 
 void CompositorFrameReportingController::DidCommit() {
+  // The reporter can be missing while repainting when replaying.
+  if (!reporters_[PipelineStage::kReadyToCommit])
+    return;
   DCHECK(reporters_[PipelineStage::kReadyToCommit]);
   reporters_[PipelineStage::kReadyToCommit]->StartStage(
       StageType::kEndCommitToActivation, Now());
@@ -750,6 +759,9 @@ void CompositorFrameReportingController::OnStoppedRequestingBeginFrames() {
 
 void CompositorFrameReportingController::NotifyReadyToCommit(
     std::unique_ptr<BeginMainFrameMetrics> details) {
+  // The reporter can be missing while repainting when replaying.
+  if (!reporters_[PipelineStage::kBeginMainFrame])
+    return;
   DCHECK(reporters_[PipelineStage::kBeginMainFrame]);
   reporters_[PipelineStage::kBeginMainFrame]->SetBlinkBreakdown(
       std::move(details), begin_main_frame_start_time_);

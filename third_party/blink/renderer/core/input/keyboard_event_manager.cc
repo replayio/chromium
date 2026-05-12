@@ -416,6 +416,16 @@ void KeyboardEventManager::KeyEventModifierMayHaveChanged(int modifiers) {
 void KeyboardEventManager::DefaultKeyboardEventHandler(
     KeyboardEvent* event,
     Node* possible_focused_node) {
+
+  // [replay] capture keyboard events
+  if (event->type() == event_type_names::kKeydown ||
+      event->type() == event_type_names::kKeyup ||
+      event->type() == event_type_names::kKeypress) {
+    recordreplay::OnKeyEvent(event->type().Utf8().c_str(),
+                             event->key().Utf8().c_str(),
+                             false);
+  }
+
   if (event->type() == event_type_names::kKeydown) {
     frame_->GetEditor().HandleKeyboardEvent(event);
     if (event->DefaultHandled())

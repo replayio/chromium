@@ -183,6 +183,10 @@ void NetworkInformation::ConnectionChange(
     bool save_data) {
   DCHECK(GetExecutionContext()->IsContextThread());
 
+  recordreplay::AutoDependencyExecution execute(
+    recordreplay::NewDependencyGraphNode("{\"kind\":\"networkConnectionChange\"}")
+  );
+
   const String host = Host();
   uint32_t new_http_rtt_msec =
       GetNetworkStateNotifier().RoundRtt(host, http_rtt);
@@ -227,8 +231,8 @@ void NetworkInformation::ConnectionChange(
   save_data_ = save_data;
 
   if (type_changed)
-    DispatchEvent(*Event::Create(event_type_names::kTypechange));
-  DispatchEvent(*Event::Create(event_type_names::kChange));
+    DispatchEvent(*Event::Create(event_type_names::kTypechange), "NetworkInformation::ConnectionChange #1");
+  DispatchEvent(*Event::Create(event_type_names::kChange), "NetworkInformation::ConnectionChange #2");
 }
 
 const AtomicString& NetworkInformation::InterfaceName() const {

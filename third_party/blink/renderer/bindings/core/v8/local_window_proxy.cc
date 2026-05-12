@@ -78,10 +78,14 @@
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 #include "v8/include/v8.h"
 
+#include "base/record_replay.h"
+#include "third_party/blink/renderer/controller/dev_tools_frontend_impl.h"
+
 namespace blink {
 
 void LocalWindowProxy::Trace(Visitor* visitor) const {
   visitor->Trace(script_state_);
+  visitor->Trace(record_replay_listener_);
   WindowProxy::Trace(visitor);
 }
 
@@ -97,6 +101,9 @@ void LocalWindowProxy::DisposeContext(Lifecycle next_status,
   // If the former, |global_proxy_| should become weak, and if the latter, the
   // necessary operations are already done so can return here.
   if (lifecycle_ == Lifecycle::kV8MemoryIsForciblyPurged) {
+    // https://linear.app/replay/issue/RUN-749
+    recordreplay::Assert("LocalWindowProxy::DisposeContext #1 %d", (int)next_status);
+
     DCHECK(next_status == Lifecycle::kGlobalObjectIsDetached ||
            next_status == Lifecycle::kFrameIsDetachedAndV8MemoryIsPurged);
     lifecycle_ = next_status;
@@ -150,11 +157,43 @@ void LocalWindowProxy::DisposeContext(Lifecycle next_status,
       script_state_->GetIsolate(), GetFrame()->IsMainFrame(),
       frame_reuse_status);
 
+  // https://linear.app/replay/issue/RUN-749
+  recordreplay::Assert("LocalWindowProxy::DisposeContext Done %d", (int)next_status);
+
   DCHECK_EQ(lifecycle_, Lifecycle::kContextIsInitialized);
   lifecycle_ = next_status;
 }
 
+static const char* RecordReplayGetProcessType(
+  LocalFrame* frame,
+  scoped_refptr<DOMWrapperWorld> world
+) {
+  bool isExtension = frame->GetDocument()->Url().Protocol().Utf8() == "chrome-extension";
+  bool isRoot = frame->IsOutermostMainFrame();
+  bool isDevtools = !!DevToolsFrontendImpl::From(frame);
+  if (isExtension) {
+    return "extension";
+  }
+  if (isDevtools) {
+    return "devtools";
+  }
+  if (isRoot) {
+    return "root";
+  }
+  return "iframe";
+}
+
+// Record/replay state is initialized along with the first LocalWindowProxy.
+static bool gRecordReplayStateInitialized;
+
 void LocalWindowProxy::Initialize() {
+  // https://linear.app/replay/issue/RUN-749
+  recordreplay::Assert("LocalWindowProxy::Initialize Start");
+
+  recordreplay::AutoMarkerDependencyExecution execute(
+    "ScriptExecution", "LocalWindowProxy::Initialize"
+  );
+
   TRACE_EVENT2("v8", "LocalWindowProxy::Initialize", "IsMainFrame",
                GetFrame()->IsMainFrame(), "IsOutermostMainFrame",
                GetFrame()->IsOutermostMainFrame());
@@ -206,6 +245,58 @@ void LocalWindowProxy::Initialize() {
     SetSecurityToken(origin.get());
   }
 
+  if (recordreplay::IsRecordingOrReplaying("commands") &&
+      origin && !origin->Host().empty()) {
+    bool initGlobally = !gRecordReplayStateInitialized;
+
+    // Whether this is the relative root frame of this process.
+    bool isMainFrame = GetFrame()->IsLocalRoot() && world_->IsMainWorld();
+    if (initGlobally) {
+      gRecordReplayStateInitialized = true;
+
+      if (!isMainFrame) {
+        recordreplay::Warning(
+            "LocalWindowProxy::Initialize Called on non-root frame first: %d %d origin=%s url=%s",
+            GetFrame()->IsLocalRoot(),
+            world_->IsMainWorld(),
+            origin->ToRawString().Utf8().c_str(),
+            GetFrame()->GetDocument()->Url().GetString().Utf8().c_str());
+      }
+
+      // After creating the first context that is associated with a non-empty
+      // origin, we are ready to set up the state used to process driver
+      // commands when recording/replaying, and to create checkpoints.
+      InitializeRecordReplay(
+        RecordReplayGetProcessType(
+          GetFrame(),
+          world_
+        ),
+        GetIsolate(), GetFrame(), context
+      );
+    }
+
+    if (isMainFrame) {
+      // Root-level navigation event, initially happens before
+      // first checkpoint.
+      OnRootFrameInit(GetIsolate(), GetFrame(), context);
+    }
+
+    if (initGlobally) {
+      // Create the first checkpoint at which execution can pause.
+      recordreplay::NewCheckpoint();
+      // Initialize some more.
+      InitializeRecordReplayAfterCheckpoint();
+    }
+    
+    if (isMainFrame) {
+      // Root-level navigation event, after first checkpoint.
+      OnRootFrameInitAfterCheckpoint(GetIsolate(), GetFrame(), context);
+    }
+
+    // Event for all new windows.
+    OnNewWindowAfterCheckpoint(GetIsolate(), GetFrame(), context);
+  }
+
   {
     TRACE_EVENT2("v8", "ContextCreatedNotification", "IsMainFrame",
                  GetFrame()->IsMainFrame(), "IsOutermostMainFrame",
@@ -217,6 +308,12 @@ void LocalWindowProxy::Initialize() {
 
   InstallConditionalFeatures();
 
+  // Add an event listener for the dispatched custom event the devtools uses to register
+  // its listener.  Do this outside the recording.
+  if (getenv("CHROMIUM_UI")) {
+    SetupRecordReplayWebChannel();
+  }
+
   if (World().IsMainWorld()) {
     probe::DidCreateMainWorldContext(GetFrame());
     GetFrame()->Loader().DispatchDidClearWindowObjectInMainWorld();
@@ -224,6 +321,17 @@ void LocalWindowProxy::Initialize() {
   base::UmaHistogramTimes("V8.LocalWindowProxy.InitializeTime",
                           timer.Elapsed());
 }
+
+void LocalWindowProxy::SetupRecordReplayWebChannel() {
+  LocalFrame* localFrame = GetFrame();
+
+  record_replay_listener_ = RecordReplayEventListener::Create(GetIsolate(), localFrame);
+
+  bool added = localFrame->DomWindow()->addEventListener("WebChannelMessageToChrome", record_replay_listener_.Get());
+
+  DCHECK(added);
+}
+
 
 void LocalWindowProxy::CreateContext() {
   TRACE_EVENT2("v8", "LocalWindowProxy::CreateContext", "IsMainFrame",
@@ -270,6 +378,9 @@ void LocalWindowProxy::CreateContext() {
 #endif
 
   script_state_ = ScriptState::Create(context, world_, GetFrame()->DomWindow());
+
+  // https://linear.app/replay/issue/RUN-749
+  recordreplay::Assert("LocalWindowProxy::CreateContext Done");
 
   DCHECK(lifecycle_ == Lifecycle::kContextIsUninitialized ||
          lifecycle_ == Lifecycle::kGlobalObjectIsDetached);
@@ -432,6 +543,9 @@ void LocalWindowProxy::SetSecurityToken(const SecurityOrigin* origin) {
 }
 
 void LocalWindowProxy::UpdateDocument() {
+  // https://linear.app/replay/issue/RUN-965
+  recordreplay::Assert("LocalWindowProxy::UpdateDocument %d", (int)lifecycle_);
+
   // For an uninitialized main window proxy, there's nothing we need
   // to update. The update is done when the window proxy gets initialized later.
   if (lifecycle_ == Lifecycle::kContextIsUninitialized)
@@ -614,6 +728,11 @@ void LocalWindowProxy::SetAbortScriptExecution(
 
   script_state_->GetContext()->SetAbortScriptExecution(callback);
 }
+
+// We keep track of the most recently created local window proxy
+// for ensuring that record/replay state is initialized when
+// the first paint is triggered. FIXME clean up reference.
+static LocalWindowProxy* gLatestLocalWindowProxy;
 
 LocalWindowProxy::LocalWindowProxy(v8::Isolate* isolate,
                                    LocalFrame& frame,

@@ -51,6 +51,8 @@
 #include "partition_alloc/stack/stack.h"  // nogncheck
 #endif
 
+#include "base/record_replay.h"
+
 namespace base {
 
 void InitThreading();
@@ -172,7 +174,7 @@ bool CreateThread(size_t stack_size,
 
 // Store the thread ids in local storage since calling the SWI can be
 // expensive and PlatformThread::CurrentId is used liberally.
-thread_local pid_t g_thread_id = -1;
+//thread_local pid_t g_thread_id = -1;
 
 // A boolean value that indicates that the value stored in |g_thread_id| on the
 // main thread is invalid, because it hasn't been updated since the process
@@ -190,7 +192,7 @@ std::atomic<bool> g_main_thread_tid_cache_valid = false;
 // Tracks whether the current thread is the main thread, and therefore whether
 // |g_main_thread_tid_cache_valid| is relevant for the current thread. This is
 // also updated by PlatformThread::CurrentId().
-thread_local bool g_is_main_thread = true;
+//thread_local bool g_is_main_thread = true;
 
 class InitAtFork {
  public:
@@ -224,6 +226,10 @@ PlatformThreadId PlatformThreadBase::CurrentId() {
   CHECK_EQ(pthread_threadid_np(nullptr, &tid), 0);
   return PlatformThreadId(tid);
 #elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+  // Always use gettid() here to workaround bug where g_thread_id doesn't work
+  // properly when replaying.
+  return (PlatformThreadId)syscall(__NR_gettid);
+  /*
   // Workaround false-positive MSAN use-of-uninitialized-value on
   // thread_local storage for loaded libraries:
   // https://github.com/google/sanitizers/issues/1265

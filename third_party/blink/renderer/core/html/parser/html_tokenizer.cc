@@ -158,7 +158,9 @@ HTMLTokenizer::HTMLTokenizer(const HTMLParserOptions& options)
   Reset();
 }
 
-HTMLTokenizer::~HTMLTokenizer() = default;
+HTMLTokenizer::~HTMLTokenizer() {
+  recordreplay::UnregisterPointer(this);
+}
 
 void HTMLTokenizer::Reset() {
   token_.Clear();

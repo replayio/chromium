@@ -1183,6 +1183,15 @@ CSSStyleSheet* StyleEngine::CreateSheet(
 
   auto result = text_to_sheet_cache_.insert(key, nullptr);
   StyleSheetContents* contents = result.stored_value->value;
+
+  // Divergence is between a call to ParseSheet and a call to
+  // CreateInline within this method. Assert the values that
+  // introduce the codepath divergence.
+  recordreplay::Assert("[RUN-1065-1390] StyleEngine::CreateSheet %d %d %d %lu",
+                       result.is_new_entry, !!contents,
+                       contents && contents->IsCacheableForStyleElement(),
+                       AtomicStringHash::GetHash(text_content));
+
   if (result.is_new_entry || !contents ||
       !contents->IsCacheableForStyleElement() ||
       contents->BaseURL() != GetDocument().BaseURL()) {
@@ -2233,6 +2242,7 @@ void StyleEngine::ScheduleCustomElementInvalidations(
     invalidation_set->AddTagName(tag_name);
   }
   invalidation_set->SetTreeBoundaryCrossing();
+
   InvalidationLists invalidation_lists;
   invalidation_lists.descendants.push_back(invalidation_set);
   pending_invalidations_.ScheduleInvalidationSetsForNode(invalidation_lists,
@@ -4122,6 +4132,10 @@ void StyleEngine::UpdateStyleAndLayoutTree() {
   DCHECK(!NeedsLayoutTreeRebuild());
 
   UpdateViewportStyle();
+
+  recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle A %d %d",
+                       !!GetDocument().documentElement(),
+                       NeedsStyleRecalc());
 
   if (GetDocument().documentElement()) {
     UpdateViewportSize();

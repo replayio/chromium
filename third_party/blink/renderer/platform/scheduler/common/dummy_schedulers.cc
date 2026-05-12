@@ -173,6 +173,7 @@ class DummyPageScheduler : public PageScheduler {
     return CreateDummyFrameScheduler(agent_group_scheduler_->Isolate());
   }
 
+  void BreakLinkages() override {}
   void OnTitleOrFaviconUpdated() override {}
   void SetPageVisible(bool) override {}
   bool IsPageVisible() const override { return true; }

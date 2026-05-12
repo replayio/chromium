@@ -113,6 +113,35 @@ typedef FILE* FileHandle;
 #include "base/fuchsia/scoped_fx_logger.h"
 #endif
 
+#if !BUILDFLAG(IS_WIN)
+#include <dlfcn.h>
+#else
+#include <windows.h>
+#endif
+
+static void* LookupRecordReplaySymbol(const char* name) {
+#if !BUILDFLAG(IS_WIN)
+  void* fnptr = dlsym(RTLD_DEFAULT, name);
+#else
+  HMODULE module = GetModuleHandleA("windows-recordreplay.dll");
+  void* fnptr = module ? (void*)GetProcAddress(module, name) : nullptr;
+#endif
+  return fnptr ? fnptr : reinterpret_cast<void*>(1);
+}
+
+static void RecordReplayPrint(const char* aFormat, ...) {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayPrint");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    va_list ap;
+    va_start(ap, aFormat);
+    reinterpret_cast<void(*)(const char*, va_list)>(fnptr)(aFormat, ap);
+    va_end(ap);
+  }
+}
+
 namespace logging {
 
 namespace {

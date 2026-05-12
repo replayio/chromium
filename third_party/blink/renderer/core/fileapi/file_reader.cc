@@ -488,16 +488,16 @@ void FileReader::FireEvent(const AtomicString& type,
       SetCurrentTaskStateIfTopLevel(task_state, GetExecutionContext(),
                                     TaskScopeType::kMiscEvent));
   if (!loader_) {
-    DispatchEvent(*ProgressEvent::Create(type, false, 0, 0));
+    DispatchEvent(*ProgressEvent::Create(type, false, 0, 0), "FileReader::FireEvent #1");
     return;
   }
 
   if (loader_->TotalBytes()) {
     DispatchEvent(*ProgressEvent::Create(type, true, loader_->BytesLoaded(),
-                                         *loader_->TotalBytes()));
+                                         *loader_->TotalBytes()), "FileReader::FireEvent #2");
   } else {
     DispatchEvent(
-        *ProgressEvent::Create(type, false, loader_->BytesLoaded(), 0));
+        *ProgressEvent::Create(type, false, loader_->BytesLoaded(), 0), "FileReader::FireEvent #3");
   }
 }
 

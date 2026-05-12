@@ -1892,6 +1892,8 @@ void BoxFragmentPainter::PaintInlineItems(const PaintInfo& paint_info,
     if (item->IsLayoutObjectDestroyedOrMoved()) [[unlikely]] {
       // TODO(crbug.com/1099613): This should not happen, as long as it is
       // really layout-clean.
+      recordreplay::Assert(
+          "[RUN-1975-2008] NGBoxFragmentPainter::PaintInlineItems B %d", (int)item->Type());
       NOTREACHED();
     }
     switch (item->Type()) {
@@ -1918,6 +1920,8 @@ void BoxFragmentPainter::PaintInlineItems(const PaintInfo& paint_info,
         NOTREACHED();
     }
   }
+  recordreplay::Assert(
+      "[RUN-1975-2008] NGBoxFragmentPainter::PaintInlineItems C");
 }
 
 // Paint a line box. This function records hit test data of the line box in

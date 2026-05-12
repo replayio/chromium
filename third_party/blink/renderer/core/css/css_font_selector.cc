@@ -26,6 +26,7 @@
 
 #include "third_party/blink/renderer/core/css/css_font_selector.h"
 
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "third_party/blink/renderer/core/animation/interpolable_color.h"
 #include "third_party/blink/renderer/core/css/css_segmented_font_face.h"
@@ -138,11 +139,17 @@ void CSSFontSelector::RegisterForInvalidationCallbacks(
     FontSelectorClient* client) {
   CHECK(client);
   clients_.insert(client);
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "CSSFontSelector")) {
+    record_replay_strong_clients_.insert(client);
+  }
 }
 
 void CSSFontSelector::UnregisterForInvalidationCallbacks(
     FontSelectorClient* client) {
   clients_.erase(client);
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "CSSFontSelector")) {
+    record_replay_strong_clients_.erase(client);
+  }
 }
 
 void CSSFontSelector::DispatchInvalidationCallbacks(
@@ -284,6 +291,7 @@ bool CSSFontSelector::IsAlive() const {
 void CSSFontSelector::Trace(Visitor* visitor) const {
   visitor->Trace(tree_scope_);
   visitor->Trace(clients_);
+  visitor->Trace(record_replay_strong_clients_);
   CSSFontSelectorBase::Trace(visitor);
 }
 

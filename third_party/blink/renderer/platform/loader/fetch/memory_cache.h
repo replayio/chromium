@@ -58,7 +58,13 @@ class KURL;
 // when the prefinalizer is executed.
 class MemoryCacheEntry final : public GarbageCollected<MemoryCacheEntry> {
  public:
-  explicit MemoryCacheEntry(Resource* resource) : resource_(resource) {}
+  explicit MemoryCacheEntry(Resource* resource) {
+    if (recordreplay::IsRecordingOrReplaying("leak-references", "MemoryCacheEntry")) {
+      strong_resource_ = resource;
+    } else {
+      resource_ = resource;
+    }
+  }
 
   void Trace(Visitor*) const;
   Resource* GetResource() const { return resource_.Get(); }
@@ -68,6 +74,10 @@ class MemoryCacheEntry final : public GarbageCollected<MemoryCacheEntry> {
 
   // We use UntracedMember<> here to do custom weak processing.
   UntracedMember<Resource> resource_;
+  
+  // Replay uses Member<> here to maintain a strong ref to avoid non-deterministic
+  // GC of resources.
+  Member<Resource> strong_resource_;
 };
 
 // This cache holds subresources used by Web pages: images, scripts,

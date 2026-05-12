@@ -330,7 +330,7 @@ void USB::OnDeviceAdded(UsbDeviceInfoPtr device_info) {
     return;
 
   DispatchEvent(*USBConnectionEvent::Create(
-      event_type_names::kConnect, GetOrCreateDevice(std::move(device_info))));
+      event_type_names::kConnect, GetOrCreateDevice(std::move(device_info))), "USB::OnDeviceAdded");
 }
 
 void USB::OnDeviceRemoved(UsbDeviceInfoPtr device_info) {
@@ -345,7 +345,7 @@ void USB::OnDeviceRemoved(UsbDeviceInfoPtr device_info) {
                                              GetExecutionContext());
   }
   DispatchEvent(
-      *USBConnectionEvent::Create(event_type_names::kDisconnect, device));
+      *USBConnectionEvent::Create(event_type_names::kDisconnect, device), "USB::OnDeviceRemoved");
   device_cache_.erase(guid);
 }
 

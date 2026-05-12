@@ -9,6 +9,7 @@
 
 #include "base/check.h"
 #include "base/memory/ptr_util.h"
+#include "base/record_replay.h"
 #include "base/system/sys_info.h"
 #include "base/task/thread_pool/thread_pool_impl.h"
 #include "base/threading/platform_thread.h"

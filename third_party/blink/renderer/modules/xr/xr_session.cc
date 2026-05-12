@@ -1616,7 +1616,7 @@ void XRSession::HandleShutdown() {
     end_session_resolver_ = nullptr;
   }
 
-  DispatchEvent(*XRSessionEvent::Create(event_type_names::kEnd, this));
+  DispatchEvent(*XRSessionEvent::Create(event_type_names::kEnd, this), "XRSession::HandleShutdown");
   DVLOG(3) << __func__ << ": session end event dispatched";
 
   // Now that we've notified the page that we've ended, try to restart the non-
@@ -1740,7 +1740,7 @@ void XRSession::UpdateVisibilityState() {
     MaybeRequestFrame();
 
     DispatchEvent(
-        *XRSessionEvent::Create(event_type_names::kVisibilitychange, this));
+        *XRSessionEvent::Create(event_type_names::kVisibilitychange, this), "XRSession::UpdateVisibilityState");
   }
 }
 
@@ -2520,7 +2520,7 @@ void XRSession::OnInputStateChangeInternal(
   // If there have been any changes, fire the input sources change event.
   if (!added.empty() || !removed.empty()) {
     DispatchEvent(*XRInputSourcesChangeEvent::Create(
-        event_type_names::kInputsourceschange, this, added, removed));
+        event_type_names::kInputsourceschange, this, added, removed), "XRSession::OnInputStateChangeInternal");
   }
 }
 
@@ -2551,7 +2551,7 @@ void XRSession::AddTransientInputSource(XRInputSource* input_source) {
   input_sources_->SetWithSourceId(input_source->source_id(), input_source);
 
   DispatchEvent(*XRInputSourcesChangeEvent::Create(
-      event_type_names::kInputsourceschange, this, {input_source}, {}));
+      event_type_names::kInputsourceschange, this, {input_source}, {}), "XRSession::AddTransientInputSource");
 }
 
 void XRSession::RemoveTransientInputSource(XRInputSource* input_source) {
@@ -2561,7 +2561,7 @@ void XRSession::RemoveTransientInputSource(XRInputSource* input_source) {
   input_sources_->RemoveWithSourceId(input_source->source_id());
 
   DispatchEvent(*XRInputSourcesChangeEvent::Create(
-      event_type_names::kInputsourceschange, this, {}, {input_source}));
+      event_type_names::kInputsourceschange, this, {}, {input_source}), "XRSession::RemoveTransientInputSource");
 }
 
 void XRSession::OnMojoSpaceReset() {

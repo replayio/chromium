@@ -133,7 +133,7 @@ class PLATFORM_EXPORT EventLoop final : public RefCounted<EventLoop> {
   const raw_ptr<v8::Isolate> isolate_;
   int microtasks_pause_count_ = 0;
   bool loop_enabled_ = true;
-  Deque<base::OnceClosure> pending_microtasks_;
+  Deque<std::pair<base::OnceClosure, int>> pending_microtasks_;
   Vector<base::OnceClosure> end_of_checkpoint_tasks_;
   std::unique_ptr<v8::MicrotaskQueue> microtask_queue_;
   HashSet<FrameOrWorkerScheduler*> schedulers_;

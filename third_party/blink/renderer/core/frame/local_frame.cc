@@ -520,6 +520,14 @@ LocalFrame::~LocalFrame() {
   // the frame owner.
   DCHECK(!view_);
   DCHECK(!frame_color_overlay_);
+
+  if (!IsA<LocalFrame>(Tree().Parent())) {
+    recordreplay::CommandDiagnostic(
+        "[RUN-2486-2577] ~LocalFrame %d",
+        WeakIdentifierMap<LocalFrame>::HasIdentifier(this)
+            ? WeakIdentifierMap<LocalFrame>::ExistingIdentifier(this)
+            : -1);
+  }
   if (IsAdFrame())
     InstanceCounters::DecrementCounter(InstanceCounters::kAdSubframeCounter);
 
@@ -849,6 +857,14 @@ bool LocalFrame::DetachImpl(FrameDetachType type) {
   supplements_.clear();
   frame_scheduler_.reset();
   mojo_handler_->DidDetachFrame();
+
+  if (!IsA<LocalFrame>(Tree().Parent())) {
+    recordreplay::CommandDiagnosticTrace(
+        "[RUN-2486-2577] LocalFrame::DetachImpl %d",
+        WeakIdentifierMap<LocalFrame>::HasIdentifier(this)
+            ? WeakIdentifierMap<LocalFrame>::ExistingIdentifier(this)
+            : -1);
+  }
   WeakIdentifierMap<LocalFrame>::NotifyObjectDestroyed(this);
 
   LocalFramesByTokenMap& local_frames_map = GetLocalFramesMap();
@@ -2097,6 +2113,9 @@ scoped_refptr<base::SingleThreadTaskRunner> LocalFrame::GetTaskRunner(
 void LocalFrame::ScheduleVisualUpdateUnlessThrottled() {
   if (ShouldThrottleRendering())
     return;
+
+  recordreplay::Assert("[RUN-1436] LocalFrame::ScheduleVisualUpdateUnlessThrottled #1");
+
   GetPage()->Animator().ScheduleVisualUpdate(this);
 }
 
@@ -4302,5 +4321,9 @@ void LocalFrame::PerformFullContentSpellCheck() {
       /*request_num=*/0, /*should_force_refresh=*/false);
 }
 #endif  // BUILDFLAG(IS_ANDROID)
+
+void LocalFrame::RegisterRecordReplayAuthTokenObserver() {
+  mojo_handler_->RegisterRecordReplayAuthTokenObserver();
+}
 
 }  // namespace blink

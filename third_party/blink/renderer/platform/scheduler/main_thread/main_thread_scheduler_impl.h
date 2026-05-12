@@ -21,6 +21,7 @@
 #include "base/metrics/single_sample_metrics.h"
 #include "base/observer_list.h"
 #include "base/profiler/sample_metadata.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "base/task/sequence_manager/task_queue.h"
 #include "base/task/sequence_manager/task_time_observer.h"

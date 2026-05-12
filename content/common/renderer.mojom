@@ -4,6 +4,7 @@
 
 module content.mojom;
 
+import "mojo/public/mojom/base/values.mojom";
 import "content/common/agent_scheduling_group.mojom";
 import "ipc/ipc.mojom";
 import "mojo/public/mojom/base/generic_pending_receiver.mojom";

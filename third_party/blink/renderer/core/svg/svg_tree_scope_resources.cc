@@ -18,7 +18,9 @@ LocalSVGResource* SVGTreeScopeResources::ResourceForId(const AtomicString& id) {
   if (id.empty())
     return nullptr;
   auto& entry = resources_.insert(id, nullptr).stored_value->value;
-  if (!entry)
+  recordreplay::Assert("[RUN-2424-3227] SVGTreeScopeResources::ResourceForId %d",
+    !!entry);
+  if (!entry) {
     entry = MakeGarbageCollected<LocalSVGResource>(*tree_scope_, id);
   return entry.Get();
 }

@@ -75,6 +75,7 @@ void HTMLStyleElement::FinishParsingChildren() {
 
 Node::InsertionNotificationRequest HTMLStyleElement::InsertedInto(
     ContainerNode& insertion_point) {
+  recordreplay::Assert("[RUN-1116] HTMLStyleElement::InsertedInto FunctionEntry");
   HTMLElement::InsertedInto(insertion_point);
   if (isConnected()) {
     if (StyleElement::ProcessStyleSheet(GetDocument(), *this) ==
@@ -92,6 +93,7 @@ void HTMLStyleElement::RemovedFrom(ContainerNode& insertion_point) {
 }
 
 void HTMLStyleElement::ChildrenChanged(const ChildrenChange& change) {
+  recordreplay::Assert("[RUN-1116] HTMLStyleElement::ChildrenChanged FunctionEntry");
   HTMLElement::ChildrenChanged(change);
   if (StyleElement::ChildrenChanged(*this) ==
       StyleElement::kProcessingFatalError)
@@ -113,10 +115,22 @@ void HTMLStyleElement::DispatchPendingEvent(
   if (is_load_event) {
     if (GetDocument().HasListenerType(
             Document::kLoadListenerAtCapturePhaseOrAtStyleElement))
-      DispatchEvent(*Event::Create(event_type_names::kLoad));
+      DispatchEvent(*Event::Create(event_type_names::kLoad), "HTMLStyleElement::DispatchPendingEvent #1");
   } else {
-    DispatchEvent(*Event::Create(event_type_names::kError));
+    DispatchEvent(*Event::Create(event_type_names::kError), "HTMLStyleElement::DispatchPendingEvent #2");
   }
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    int node_id = recordreplay::NewDependencyGraphNode(
+      "{\"kind\":\"styleSheetLoaded\"}"
+    );
+    recordreplay::AddDependencyGraphEdge(
+      record_replay_load_task_scheduled_node_id_, node_id, "{\"kind\":\"scheduler\"}"
+    );
+    execute.emplace(node_id);
+  }
+
   // Checks Document's load event synchronously here for performance.
   // This is safe because dispatchPendingEvent() is called asynchronously.
   count->ClearAndCheckLoadEvent();
@@ -125,6 +139,9 @@ void HTMLStyleElement::DispatchPendingEvent(
 void HTMLStyleElement::NotifyLoadedSheetAndAllCriticalSubresources(
     LoadedSheetErrorStatus error_status) {
   bool is_load_event = error_status == kNoErrorLoadingSubresource;
+  record_replay_load_task_scheduled_node_id_ = recordreplay::NewDependencyGraphNode(
+    "{\"kind\":\"scheduleStyleSheetLoadedTask\"}"
+  );
   // Per the spec this should post on the network task source.
   // https://html.spec.whatwg.org/multipage/semantics.html#the-style-element
   // This guarantees that the <style> will be applied before the next <script>

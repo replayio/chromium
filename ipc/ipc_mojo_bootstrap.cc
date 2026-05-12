@@ -55,6 +55,8 @@
 #include "mojo/public/cpp/bindings/sequence_local_sync_event_watcher.h"
 #include "mojo/public/cpp/bindings/tracing_helpers.h"
 
+#include "base/record_replay.h"
+
 namespace IPC {
 
 class ChannelAssociatedGroupController;
@@ -1162,12 +1164,14 @@ class ChannelAssociatedGroupController
 
     base::AutoLock locker(lock_);
     Endpoint* endpoint = FindEndpoint(id);
-    if (!endpoint)
+    if (!endpoint) {
       return;
+    }
 
     mojo::InterfaceEndpointClient* client = endpoint->client();
-    if (!client)
+    if (!client) {
       return;
+    }
 
     if (!endpoint->task_runner()->RunsTasksInCurrentSequence() &&
         !proxy_task_runner_->RunsTasksInCurrentSequence()) {

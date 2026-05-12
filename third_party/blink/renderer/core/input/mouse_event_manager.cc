@@ -216,6 +216,17 @@ MouseEventManager::DispatchMouseEvent(
          mouse_event_type == event_type_names::kClick ||
          mouse_event_type == event_type_names::kAuxclick);
 
+  if (recordreplay::IsRecordingOrReplaying() && (
+    mouse_event_type == event_type_names::kMouseup ||
+    mouse_event_type == event_type_names::kMousedown ||
+    mouse_event_type == event_type_names::kMousemove)) {
+
+    auto pos = mouse_event.PositionInRootFrame();
+    auto x = (size_t)pos.x();
+    auto y = (size_t)pos.y();
+    recordreplay::OnMouseEvent(mouse_event_type.Utf8().c_str(), x, y, false);
+  }
+  
   WebInputEventResult input_event_result = WebInputEventResult::kNotHandled;
 
   if (target && target->ToNode()) {

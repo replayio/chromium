@@ -75,6 +75,17 @@ DispatchEventResult EventDispatcher::DispatchEvent(Node& node, Event& event) {
 #if DCHECK_IS_ON()
   DCHECK(!EventDispatchForbiddenScope::IsEventDispatchForbidden());
 #endif
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "dispatchEvent");
+    info.Set("type", event.type().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
+
   EventDispatcher dispatcher(node, event);
   return event.DispatchEvent(dispatcher);
 }

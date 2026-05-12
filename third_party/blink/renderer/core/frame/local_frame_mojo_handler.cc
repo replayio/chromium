@@ -37,6 +37,7 @@
 #include "third_party/blink/renderer/core/dom/element_traversal.h"
 #include "third_party/blink/renderer/core/dom/focus_params.h"
 #include "third_party/blink/renderer/core/dom/ignore_opens_during_unload_count_incrementer.h"
+#include "third_party/blink/renderer/core/dom/events/custom_event.h"
 #include "third_party/blink/renderer/core/editing/editing_utilities.h"
 #include "third_party/blink/renderer/core/editing/frame_selection.h"
 #include "third_party/blink/renderer/core/editing/surrounding_text.h"
@@ -366,6 +367,8 @@ void LocalFrameMojoHandler::Trace(Visitor* visitor) const {
   visitor->Trace(main_frame_receiver_);
   visitor->Trace(fullscreen_video_receiver_);
   visitor->Trace(device_posture_receiver_);
+  visitor->Trace(auth_token_store_);
+  visitor->Trace(auth_token_store_observer_receiver_);
 }
 
 void LocalFrameMojoHandler::WasAttachedAsLocalMainFrame() {

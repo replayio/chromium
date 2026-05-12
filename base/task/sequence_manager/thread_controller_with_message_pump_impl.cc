@@ -424,6 +424,8 @@ std::optional<WakeUp> ThreadControllerWithMessagePumpImpl::DoWorkImpl(
        (batch_duration.is_zero() &&
         num_tasks_executed < main_thread_only().work_batch_size);
        ++num_tasks_executed) {
+    recordreplay::Assert("[RUN-1124] ThreadControllerWithMessagePumpImpl::DoWorkImpl #5");
+
     LazyNow lazy_now_select_task(recent_time, time_source_);
     // Include SelectNextTask() in the scope of the work item. This ensures
     // it's covered in tracing and hang reports. This is particularly
@@ -446,10 +448,18 @@ std::optional<WakeUp> ThreadControllerWithMessagePumpImpl::DoWorkImpl(
             ? selected_task->task.queue_time
             : TimeTicks(),
         lazy_now_task_selected);
+
+    recordreplay::Assert("[RUN-1124] ThreadControllerWithMessagePumpImpl::DoWorkImpl #6 %d %d %d",
+                         selected_task ? selected_task->task.RecordReplayId() : 0,
+                         selected_task ? selected_task->task.IsCanceled() : -1,
+                         selected_task ? (int)selected_task->task_queue_name : -1);
+
     if (!selected_task) {
       OnEndWorkItemImpl(lazy_now_task_selected, run_depth);
       break;
     }
+
+    recordreplay::NewCheckpoint();
 
     // Execute the task and assume the worst: it is probably not reentrant.
     AutoReset<bool> ban_nested_application_tasks(
@@ -555,7 +565,11 @@ void ThreadControllerWithMessagePumpImpl::DoIdleWork() {
   TRACE_EVENT0("sequence_manager", "SequenceManager::DoIdleWork");
 
 #if BUILDFLAG(IS_WIN)
+  recordreplay::Assert(
+      "[RUN-1916-2636] ThreadControllerWithMessagePumpImpl::Run A");
   if (!power_monitor_.IsProcessInPowerSuspendState()) {
+    recordreplay::Assert(
+        "[RUN-1916-2636] ThreadControllerWithMessagePumpImpl::Run B");
     // Avoid calling Time::ActivateHighResolutionTimer() between
     // suspend/resume as the system hangs if we do (crbug.com/1074028).
     // OnResume() will generate a task on this thread per the

@@ -47,6 +47,11 @@ struct ThreadingTrait {
 // doesn't apply to it (otherwise, clang-cl complains).
 extern constinit thread_local ThreadStateStorage* g_thread_specific_
     __attribute__((tls_model(BLINK_HEAP_THREAD_LOCAL_MODEL)));
+#else
+// Workaround thread_local not working right when replaying.
+extern ThreadStateStorage*& GetThreadStateStorage();
+#define g_thread_specific_ GetThreadStateStorage()
+#endif
 
 // ThreadStateStorage is the explicitly managed TLS- and global-backed storage
 // for ThreadState.

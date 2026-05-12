@@ -1910,7 +1910,7 @@ void PaymentRequest::DispatchPaymentRequestUpdateEvent(
   // within 60 seconds, abort payment.
   update_payment_details_timer_.StartOneShot(base::Seconds(60), FROM_HERE);
 
-  event_target->DispatchEvent(*event);
+  event_target->DispatchEvent(*event, "PaymentRequest::DispatchPaymentRequestUpdateEvent");
   // Check whether the execution context still exists, because DispatchEvent()
   // could have destroyed it.
   if (GetExecutionContext() && !event->is_waiting_for_update()) {

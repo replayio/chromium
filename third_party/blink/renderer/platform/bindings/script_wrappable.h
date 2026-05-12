@@ -39,6 +39,8 @@
 #include "third_party/blink/renderer/platform/wtf/type_traits.h"
 #include "v8/include/v8.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 class DOMDataStore;
@@ -129,7 +131,9 @@ class PLATFORM_EXPORT ScriptWrappable : public v8::Object::Wrappable {
       v8::Local<v8::Object> wrapper);
 
  protected:
-  ScriptWrappable() = default;
+  ScriptWrappable() {
+    record_replay_id_ = recordreplay::NewIdAnyThread("ScriptWrappable");
+  }
 
  private:
   static_assert(

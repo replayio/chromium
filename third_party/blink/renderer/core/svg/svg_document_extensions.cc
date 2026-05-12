@@ -49,8 +49,7 @@ bool SVGDocumentExtensions::ServiceSmilOnAnimationFrame(Document& document) {
 
 bool SVGDocumentExtensions::ServiceSmilAnimations() {
   bool did_schedule_animation_frame = false;
-  HeapVector<Member<SVGSVGElement>> time_containers(time_containers_);
-  for (const auto& container : time_containers) {
+  for (const auto& container : time_containers_) {
     did_schedule_animation_frame |=
         container->TimeContainer()->ServiceAnimations();
   }
@@ -64,8 +63,7 @@ void SVGDocumentExtensions::StartAnimations() {
   // FIXME: We hold a ref pointers to prevent a shadow tree from getting removed
   // out from underneath us.  In the future we should refactor the use-element
   // to avoid this. See https://webkit.org/b/53704
-  HeapVector<Member<SVGSVGElement>> time_containers(time_containers_);
-  for (const auto& container : time_containers) {
+  for (const auto& container : time_containers_) {
     SMILTimeContainer* time_container = container->TimeContainer();
     if (!time_container->IsStarted())
       time_container->Start();
@@ -86,8 +84,7 @@ bool SVGDocumentExtensions::HasSmilAnimations() const {
 }
 
 void SVGDocumentExtensions::DispatchSVGLoadEventToOutermostSVGElements() {
-  HeapVector<Member<SVGSVGElement>> time_containers(time_containers_);
-  for (const auto& container : time_containers) {
+  for (const auto& container : time_containers_) {
     SVGSVGElement* outer_svg = container.Get();
     if (!outer_svg->IsOutermostSVGSVGElement())
       continue;

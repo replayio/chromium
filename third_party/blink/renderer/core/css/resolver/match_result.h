@@ -239,6 +239,18 @@ class CORE_EXPORT MatchResult {
     return matched_properties_hashes_;
   }
 
+  RecordReplayMatchedPropertiesVector GetRecordReplayMatchedProperties() const {
+    RecordReplayMatchedPropertiesVector result;
+    result.resize(matched_properties_.size());
+
+    for (WTF::wtf_size_t i = 0; i < matched_properties_.size(); ++i) {
+      memcpy(&result[i].types_, &matched_properties_[i].types_, sizeof(MatchedProperties::Data));
+      result[i].record_replay_id_properties = recordreplay::PointerId(matched_properties_[i].properties.Get());
+    }
+
+    return result;
+  }
+
   // Reset the MatchResult to its initial state, as if no MatchedProperties
   // objects were added.
   void Reset();

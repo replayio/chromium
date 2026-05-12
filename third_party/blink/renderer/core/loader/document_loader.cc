@@ -194,6 +194,8 @@
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
+
 namespace blink {
 namespace {
 
@@ -1399,6 +1401,7 @@ void DocumentLoader::BodyLoadingFinished(
   probe::DidFailLoading(probe::ToCoreProbeSink(GetFrame()),
                         main_resource_identifier_, this, resource_error,
                         frame_->GetDevToolsFrameToken());
+  recordreplay::OnNetworkFail(main_resource_identifier_, *error);
   GetFrame()->Console().DidFailLoading(this, main_resource_identifier_,
                                        resource_error);
   LoadFailed(resource_error);
@@ -1503,6 +1506,7 @@ void DocumentLoader::HandleRedirect(
   probe::WillSendNavigationRequest(
       probe::ToCoreProbeSink(GetFrame()), main_resource_identifier_, this,
       url_after_redirect, http_method_, http_body_.get());
+  recordreplay::OnNetworkResourceRedirect(main_resource_identifier_, url_after_redirect, nullptr);
 
   DCHECK(!GetTiming().FetchStart().is_null());
   GetTiming().AddRedirect(url_before_redirect, url_after_redirect);
@@ -2053,6 +2057,7 @@ void DocumentLoader::StartLoadingInternal() {
   probe::DidReceiveResourceResponse(probe::ToCoreProbeSink(GetFrame()),
                                     main_resource_identifier_, this, response_,
                                     nullptr /* resource */);
+  recordreplay::OnNetworkReceiveResponse(main_resource_identifier_, response_);
 
   HandleResponse();
 
@@ -2106,6 +2111,14 @@ void DocumentLoader::StartLoadingResponse() {
   CHECK_GE(state_, kCommitted);
 
   CreateParserPostCommit();
+
+  // The above call will initialize the LocalWindowProxy for the initial
+  // document which creates the first record/replay checkpoint. Nodes/edges
+  // we create before this point will be ignored so we indicate the document
+  // is starting to load right afterwards.
+  recordreplay::AutoDependencyExecution execute(
+    recordreplay::NewDependencyGraphNode("{\"kind\":\"documentStartLoadingResponse\"}")
+  );
 
   // The main document from an MHTML archive is not loaded from its HTTP
   // response, but from the main resource within the archive (in the response).

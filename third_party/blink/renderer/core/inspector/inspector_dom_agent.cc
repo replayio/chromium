@@ -523,6 +523,10 @@ void InspectorDOMAgent::ReleaseDanglingNodes() {
   dangling_node_to_id_maps_.clear();
 }
 
+int InspectorDOMAgent::BindDocumentNode(Node* node) {
+  return Bind(node, document_node_to_id_map_);
+}
+
 int InspectorDOMAgent::Bind(Node* node, NodeToIdMap* nodes_map) {
   if (!nodes_map)
     return 0;
@@ -1017,9 +1021,15 @@ int InspectorDOMAgent::PushNodePathToFrontend(Node* node_to_push,
   // InspectorDOMAgent might have been resetted already. See crbug.com/450491
   if (!document_)
     return 0;
-  if (!BoundNodeId(document_))
-    return 0;
 
+  if (!enabled_.Get() && recordreplay::IsInReplayCode()) {
+    // [replay] hackfix: track node if `DevToolsSession` is not active
+    //    TODO: This might not handle dangling nodes properly - https://linear.app/replay/issue/RUN-1005/
+    return BindDocumentNode(node_to_push);
+  }
+
+  if (!document_node_to_id_map_->Contains(document_))
+    return 0;
   // Return id in case the node is known.
   if (auto it = node_map->find(node_to_push); it != node_map->end())
     return it->value;
@@ -1588,7 +1598,7 @@ protocol::Response InspectorDOMAgent::getSearchResults(
     return protocol::Response::ServerError("Invalid search result range");
 
   *node_ids = std::make_unique<protocol::Array<int>>();
-  for (int i = from_index; i < to_index; ++i)
+  for (int i = from_index; i < to_index; ++i) {
     (*node_ids)->emplace_back(PushNodePathToFrontend((*it->value)[i].Get()));
   return protocol::Response::Success();
 }

@@ -41,6 +41,8 @@
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
 
+#include "base/record_replay_atomic_sequence_num.h"
+
 namespace blink {
 
 namespace {

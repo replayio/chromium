@@ -31,6 +31,8 @@
 #include "gpu/command_buffer/common/capabilities.h"
 #include "gpu/command_buffer/common/mailbox.h"
 
+#include "base/record_replay.h"
+
 using base::trace_event::MemoryAllocatorDump;
 using base::trace_event::MemoryDumpLevelOfDetail;
 
@@ -345,6 +347,11 @@ ResourcePool::TryAcquireResourceForPartialRaster(
     DCHECK_GE(unused_memory_usage_bytes_, resource->memory_usage());
     unused_memory_usage_bytes_ -= resource->memory_usage();
     *total_invalidated_rect = resource->invalidated_rect();
+
+    // https://linear.app/replay/issue/RUN-464
+    recordreplay::Assert("ResourcePool::TryAcquireResourceForPartialRaster #5 %d %d %d %d",
+                         total_invalidated_rect->x(), total_invalidated_rect->y(),
+                         total_invalidated_rect->width(), total_invalidated_rect->height());
 
     // Clear the invalidated rect and content ID on the resource being returned.
     // These will be updated when raster completes successfully.

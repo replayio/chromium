@@ -31,6 +31,8 @@
 #include "base/synchronization/lock.h"
 #include "base/system/sys_info_internal.h"
 
+#include "base/record_replay.h"
+
 namespace base {
 
 namespace {

@@ -10,6 +10,7 @@ PollableThreadSafeFlag::PollableThreadSafeFlag(base::Lock* write_lock_)
     : flag_(false), write_lock_(write_lock_) {}
 
 void PollableThreadSafeFlag::SetWhileLocked(bool value) {
+  recordreplay::AutoOrderedLock ordered(ordered_lock_id_);
   write_lock_->AssertAcquired();
   flag_.store(value, std::memory_order_release);
 }

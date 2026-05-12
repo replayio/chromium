@@ -108,7 +108,7 @@ class SMILTimeContainer::TimingUpdate {
     return time_container_->should_dispatch_events_;
   }
 
-  using UpdatedElementsMap = HeapHashMap<Member<SVGSMILElement>, SMILInterval>;
+  using UpdatedElementsMap = HeapHashMap<Member<SVGSMILElement>, SMILInterval, WTF::MemberHashRecordReplayId<SVGSMILElement>>;
   UpdatedElementsMap& UpdatedElements() { return updated_elements_; }
 
   TimingUpdate(const TimingUpdate&) = delete;

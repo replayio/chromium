@@ -89,6 +89,8 @@ class CC_EXPORT ProxyMain : public Proxy {
     return final_pipeline_stage_;
   }
 
+  void RecordReplayRepaint();
+
  private:
   // Proxy implementation.
   bool IsStarted() const override;

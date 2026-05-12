@@ -1747,8 +1747,9 @@ void Node::SetNeedsStyleRecalc(StyleChangeType change_type,
       change_type, reason);
 
   StyleChangeType existing_change_type = GetStyleChangeType();
-  if (change_type > existing_change_type)
+  if (change_type > existing_change_type) {
     SetStyleChange(change_type);
+  }
 
   if (existing_change_type == kNoStyleChange)
     MarkAncestorsWithChildNeedsStyleRecalc();
@@ -2477,7 +2478,23 @@ void Node::setTextContentForBinding(const V8UnionStringOrTrustedScript* value,
   NOTREACHED();
 }
 
-void Node::setTextContent(const String& text) {
+void Node::setTextContent(const String& text_arg) {
+  String text = text_arg;
+
+  // Force the text length to match when replaying, as a workaround for
+  // differences in the assigned text which cause the replay to fail as
+  // layout behavior diverges afterwards. See also Text::Create.
+  if (recordreplay::IsRecordingOrReplaying("values", "Node::setTextContent")) {
+    std::string contents = text.Utf8();
+    size_t recordedLength = recordreplay::RecordReplayValue("Node::setTextContent length", contents.length());
+    contents.resize(recordedLength, ' ');
+    recordreplay::RecordReplayBytes("Node::setTextContent string", &contents[0], recordedLength);
+    text = String::FromUTF8(&contents[0], recordedLength);
+
+    // https://linear.app/replay/issue/RUN-809
+    recordreplay::Assert("Node::setTextContent %zu", text.length());
+  }
+
   switch (getNodeType()) {
     case kAttributeNode:
     case kTextNode:

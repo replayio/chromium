@@ -19,6 +19,8 @@
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
 #include "v8/include/v8.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 namespace probe {
@@ -61,6 +63,10 @@ class CORE_EXPORT PerformanceMonitor final
 
   class CORE_EXPORT Client : public GarbageCollectedMixin {
    public:
+    // Pointer registration is needed for sorting keys in ClientThresholds maps.
+    Client() { recordreplay::RegisterPointer("PerformanceMonitor::Client", this); }
+    ~Client() { recordreplay::UnregisterPointer(this); }
+
     virtual void ReportLongTask(base::TimeTicks start_time,
                                 base::TimeTicks end_time,
                                 ExecutionContext* task_context,

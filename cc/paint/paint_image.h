@@ -28,6 +28,8 @@
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/hdr_metadata.h"
 
+#include "base/record_replay.h"
+
 class SkBitmap;
 class SkColorSpace;
 struct SkISize;

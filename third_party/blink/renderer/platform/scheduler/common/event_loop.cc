@@ -110,7 +110,8 @@ std::unique_ptr<EventLoop::PauseMicrotasksHandle> EventLoop::PauseMicrotasks() {
 void EventLoop::RunPendingMicrotask(void* data) {
   TRACE_EVENT0("renderer.scheduler", "RunPendingMicrotask");
   auto* self = static_cast<EventLoop*>(data);
-  base::OnceClosure task = std::move(self->pending_microtasks_.front());
+  base::OnceClosure task = std::move(self->pending_microtasks_.front().first);
+  int record_replay_scheduled_node_id = self->pending_microtasks_.front().second;
   self->pending_microtasks_.pop_front();
   TaskAttributionTracker::MicrotaskTraceScope scope(self->isolate_);
   std::move(task).Run();

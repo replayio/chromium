@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/traced_value.h"
 #include "cc/base/math_util.h"
@@ -35,6 +36,7 @@ Tile::Tile(TileManager* tile_manager,
       tiling_j_index_(info.tiling_j_index),
       can_use_lcd_text_(info.can_use_lcd_text),
       id_(tile_manager->GetUniqueTileId()) {
+  recordreplay::RegisterPointer("Tile", this);
   raster_rects_.emplace_back(info.content_rect, info.raster_transform);
 }
 

@@ -674,6 +674,9 @@ void ImageResource::UpdateImage(
   auto result = GetContent()->UpdateImage(std::move(shared_buffer), GetStatus(),
                                           update_image_option,
                                           all_data_received, is_multipart);
+
+  recordreplay::Assert("[RUN-1436] ImageResource::UpdateImage #1 %d", (int)result);
+
   if (result == ImageResourceContent::UpdateImageResult::kShouldDecodeError) {
     // In case of decode error, we call imageNotifyFinished() iff we don't
     // initiate reloading:

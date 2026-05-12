@@ -29,6 +29,8 @@
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/web/web_crypto_histograms.h"
 
+#include "base/record_replay.h"
+
 namespace webcrypto {
 
 using webcrypto::Status;
@@ -383,6 +385,14 @@ struct DeriveKeyState : public BaseState {
 void DoEncryptReply(std::unique_ptr<EncryptState> state) {
   TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("devtools.timeline"),
                "DoEncryptReply");
+
+  // As for DoExportKeyReply, contents can vary when replaying for an unknown reason.
+  if (recordreplay::IsRecordingOrReplaying("values", "DoEncryptReply")) {
+    size_t numBytes = recordreplay::RecordReplayValue("DoEncryptReply size", state->buffer.size());
+    state->buffer.resize(numBytes);
+    recordreplay::RecordReplayBytes("DoEncryptReply buffer", &state->buffer[0], state->buffer.size());
+  }
+
   CompleteWithBufferOrError(state->status, state->buffer, &state->result);
 }
 
@@ -410,6 +420,17 @@ void DoDecrypt(std::unique_ptr<DecryptState> passed_state) {
     return;
   state->status = webcrypto::Decrypt(state->algorithm, state->key, state->data,
                                      &state->buffer);
+
+  // Decryption might fail when replaying and not while recording.
+  // As with other record/replay issues in this file, record/replay the
+  // successful decryptions directly to workaround this.
+  if (recordreplay::RecordReplayValue("DoDecrypt success", state->status.IsSuccess())) {
+    state->status = Status::Success();
+    size_t numBytes = recordreplay::RecordReplayValue("DoDecrypt size", state->buffer.size());
+    state->buffer.resize(numBytes);
+    recordreplay::RecordReplayBytes("DoDecrypt buffer", &state->buffer[0], state->buffer.size());
+  }
+
   state->origin_thread->PostTask(
       FROM_HERE, base::BindOnce(DoDecryptReply, std::move(passed_state)));
 }
@@ -479,6 +500,17 @@ void DoImportKey(std::unique_ptr<ImportKeyState> passed_state) {
 void DoExportKeyReply(std::unique_ptr<ExportKeyState> state) {
   TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("devtools.timeline"),
                "DoExportKeyReply");
+
+  // Contents of the exported key can vary when replaying, presumably due to
+  // different behavior in the crypto library. The underlying cause isn't known,
+  // and for now we're patching over this by forcing the exported buffer to
+  // be identical.
+  if (recordreplay::IsRecordingOrReplaying("values", "DoExportKeyReply")) {
+    size_t numBytes = recordreplay::RecordReplayValue("DoExportKeyReply size", state->buffer.size());
+    state->buffer.resize(numBytes);
+    recordreplay::RecordReplayBytes("DoExportKeyReply buffer", &state->buffer[0], state->buffer.size());
+  }
+
   if (state->format != blink::kWebCryptoKeyFormatJwk) {
     CompleteWithBufferOrError(state->status, state->buffer, &state->result);
     return;

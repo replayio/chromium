@@ -124,7 +124,7 @@ void DeferredTaskHandler::HandleDirtyAudioSummingJunctions() {
 void DeferredTaskHandler::HandleDirtyAudioNodeOutputs() {
   AssertGraphOwner();
 
-  HashSet<AudioNodeOutput*> dirty_outputs;
+  HashSet<AudioNodeOutput*, recordreplay::ReplayPointerIdHash<AudioNodeOutput>> dirty_outputs;
   dirty_audio_node_outputs_.swap(dirty_outputs);
 
   // Note: the updating of rendering state may cause output nodes
@@ -443,6 +443,14 @@ void DeferredTaskHandler::ClearHandlersToBeDeleted() {
 
 void DeferredTaskHandler::ClearContextFromOrphanHandlers() {
   DCHECK(IsMainThread());
+
+  if (recordreplay::AreEventsDisallowed() && recordreplay::IsRecordingOrReplaying(
+          "leak-references",
+          "DeferredTaskHandler::ClearContextFromOrphanHandlers")) {
+    // This is called during GC.
+    // → Don't take the lock.
+    return;
+  }
 
   // `rendering_orphan_handlers_` and `deletable_orphan_handlers_` can
   // be modified on the audio thread.

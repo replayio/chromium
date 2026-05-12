@@ -24,6 +24,8 @@
 #include "ui/gfx/geometry/size_conversions.h"
 #include "ui/gfx/geometry/vector2d_conversions.h"
 
+#include "cc/trees/layer_tree_host.h"
+
 namespace blink {
 
 namespace {

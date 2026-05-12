@@ -254,6 +254,9 @@ class CONTENT_EXPORT RenderProcessHostImpl
   bool AreV8OptimizationsDisabled() override;
   bool DisallowV8FeatureFlagOverrides() override;
   bool IsPdf() override;
+  bool IsRecordReplayForRecording() {
+    return !!(flags_ & RenderProcessFlags::kRecordReplayForRecording);
+  }
   StoragePartitionImpl* GetStoragePartition() override;
   bool Shutdown(int exit_code) override;
   bool ShutdownRequested() override;
@@ -367,6 +370,9 @@ class CONTENT_EXPORT RenderProcessHostImpl
   void ForceCrash() override;
   std::string GetInfoForBrowserContextDestructionCrashReporting() override;
   void WriteIntoTrace(perfetto::TracedProto<TraceProto> proto) const override;
+  void SendRecordReplayBrowserEvent(
+      const std::string& name,
+      base::Value&& value) override;
 #if BUILDFLAG(CLANG_PROFILING_INSIDE_SANDBOX)
   void DumpProfilingData(base::OnceClosure callback) override;
 #endif

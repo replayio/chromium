@@ -492,6 +492,15 @@ LayoutObject::~LayoutObject() {
   DCHECK(is_destroyed_);
 #endif
   InstanceCounters::DecrementCounter(InstanceCounters::kLayoutObjectCounter);
+
+  // If recording/replaying and in a nondeterministic execution, allow
+  // style_ to leak, since it may otherwise get destroyed in a
+  // non-deterministic fashion and remove itself from font-fallback-maps
+  // that are accessed deterministically.
+  // See https://linear.app/replay/issue/RUN-1758/fontfallbackmap-items-getting-removed-non-deterministically
+  if (recordreplay::AreEventsDisallowed("~LayoutObject")) {
+    (void) style_.release();
+  }
 }
 
 bool LayoutObject::IsDescendantOf(const LayoutObject* obj) const {
@@ -2912,6 +2921,9 @@ void LayoutObject::SetPseudoElementStyle(const LayoutObject& owner,
 DISABLE_CFI_PERF
 void LayoutObject::SetStyle(const ComputedStyle* style,
                             ApplyStyleChanges apply_changes) {
+  recordreplay::Assert("[RUN-2300] LayoutObject::SetStyle %d %d %d",
+                       RecordReplayId(), style_ == style, (int)apply_changes);
+
   NOT_DESTROYED();
   if (style_ == style)
     return;
@@ -3075,6 +3087,8 @@ void LayoutObject::SetStyle(const ComputedStyle* style,
       // LayoutSVGRoot::LocalVisualRect() depends on some styles.
       SetShouldDoFullPaintInvalidation();
     } else {
+      recordreplay::Assert("[RUN-2300] LayoutObject::SetStyle #10");
+
       // We'll set needing geometry change later if the style change does cause
       // possible layout change or visual overflow change.
       SetShouldDoFullPaintInvalidationWithoutLayoutChange(
@@ -4018,6 +4032,9 @@ void LayoutObject::WillBeDestroyed() {
         GetDocument().GetFrame()->GetEventHandlerRegistry();
     if (registry.EventHandlerTargets(EventHandlerRegistry::kTouchAction)
             ->Contains(GetNode())) {
+      recordreplay::AssertMaybeEventsDisallowed(
+          "[RUN-2300] LayoutObject::WillBeDestroyed C %d %d", RecordReplayId(),
+          GetNode()->RecordReplayId());
       registry.DidRemoveEventHandler(*GetNode(),
                                      EventHandlerRegistry::kTouchAction);
     }
@@ -5000,6 +5017,9 @@ void LayoutObject::SetMayNeedPaintInvalidationAnimatedBackgroundImage() {
   NOT_DESTROYED();
   if (MayNeedPaintInvalidationAnimatedBackgroundImage())
     return;
+
+  recordreplay::Assert("[RUN-1641] LayoutObject::SetMayNeedPaintInvalidationAnimatedBackgroundImage #1");
+
   bitfields_.SetMayNeedPaintInvalidationAnimatedBackgroundImage(true);
   SetShouldCheckForPaintInvalidationWithoutLayoutChange();
 }
@@ -5015,6 +5035,8 @@ void LayoutObject::SetShouldDelayFullPaintInvalidation() {
 
   bitfields_.SetShouldDelayFullPaintInvalidation(true);
   if (!ShouldCheckForPaintInvalidation()) {
+    recordreplay::Assert("[RUN-2300] LayoutObject::SetShouldDelayFullPaintInvalidation #1");
+
     // This will also schedule a visual update.
     SetShouldCheckForPaintInvalidationWithoutLayoutChange();
   } else {

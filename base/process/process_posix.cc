@@ -244,6 +244,7 @@ void Process::TerminateCurrentProcessImmediately(int exit_code) {
 #if BUILDFLAG(CLANG_PROFILING)
   WriteClangProfilingProfile();
 #endif
+  recordreplay::FinishRecording();
   _exit(exit_code);
 }
 

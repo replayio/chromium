@@ -144,7 +144,23 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
   void CloseSoon();
   bool IsClosing() const { return is_closing_; }
 
-  using PageSet = HeapHashSet<WeakMember<Page>>;
+  // recordreplay stable hasher for the page set.
+  struct PageHash {
+    static unsigned GetHash(const WeakMember<Page>& key) {
+      // Hash the record replay id for the pointer.
+      Page* ptr = key.Get();
+      int record_replay_id = ptr ? ptr->RecordReplayId() : -1;
+      return DefaultHash<int>::Hash::GetHash(record_replay_id);
+    }
+
+    static bool Equal(const WeakMember<Page>& a, const WeakMember<Page>& b) {
+      return a == b;
+    }
+
+    static const bool safe_to_compare_to_empty_or_deleted = true;
+  };
+
+  using PageSet = HeapHashSet<WeakMember<Page>, PageHash>;
 
   // Return the current set of full-fledged, ordinary pages.
   // Each created and owned by a WebView.
@@ -535,6 +551,8 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
   // e.g. the close task will still be processed after the swap, the list of
   // related pages will include the new page instead of the old page, etc.
   void TakePropertiesForLocalMainFrameSwap(Page* old_page);
+
+  int RecordReplayId() const { return record_replay_id_; }
 
  private:
   friend class ScopedPagePauser;

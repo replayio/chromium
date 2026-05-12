@@ -19,6 +19,8 @@
 #include "cc/raster/raster_source.h"
 #include "ui/gfx/geometry/rect_conversions.h"
 
+#include "base/record_replay.h"
+
 namespace cc {
 
 namespace {
@@ -69,7 +71,9 @@ PictureLayerTilingSet::PictureLayerTilingSet(
           skewport_extrapolation_limit_in_screen_pixels),
       tree_(tree),
       client_(client),
-      max_preraster_distance_(max_preraster_distance) {}
+      max_preraster_distance_(max_preraster_distance) {
+  recordreplay::RegisterPointer("PictureLayerTilingSet", this);
+}
 
 PictureLayerTilingSet::~PictureLayerTilingSet() = default;
 
@@ -124,6 +128,9 @@ void PictureLayerTilingSet::UpdateTilingsToCurrentRasterSourceForActivation(
     const Region& layer_invalidation,
     float minimum_contents_scale,
     float maximum_contents_scale) {
+  // https://linear.app/replay/issue/RUN-465
+  recordreplay::Assert("PictureLayerTilingSet::UpdateTilingsToCurrentRasterSourceForActivation");
+
   RemoveTilingsBelowScaleKey(minimum_contents_scale);
   RemoveTilingsAboveScaleKey(maximum_contents_scale);
 
@@ -156,6 +163,9 @@ void PictureLayerTilingSet::UpdateTilingsToCurrentRasterSourceForActivation(
   }
 
   VerifyTilings(pending_twin_set);
+
+  // https://linear.app/replay/issue/RUN-465
+  recordreplay::Assert("PictureLayerTilingSet::UpdateTilingsToCurrentRasterSourceForActivation Done");
 }
 
 void PictureLayerTilingSet::UpdateTilingsToCurrentRasterSourceForCommit(
@@ -163,6 +173,10 @@ void PictureLayerTilingSet::UpdateTilingsToCurrentRasterSourceForCommit(
     const Region& layer_invalidation,
     float minimum_contents_scale,
     float maximum_contents_scale) {
+  // https://linear.app/replay/issue/RUN-885
+  recordreplay::Assert("PictureLayerTilingSet::UpdateTilingsToCurrentRasterSourceForCommit %d %d",
+                       raster_source->GetSize().width(), raster_source->GetSize().height());
+
   RemoveTilingsBelowScaleKey(minimum_contents_scale);
   RemoveTilingsAboveScaleKey(maximum_contents_scale);
 
@@ -271,6 +285,8 @@ PictureLayerTiling* PictureLayerTilingSet::AddTiling(
   PictureLayerTiling* appended = tilings_.back().get();
   state_since_last_tile_priority_update_.added_tilings = true;
 
+  recordreplay::Assert("[RUN-550] PictureLayerTilingSet::AddTiling %.2f", appended->contents_scale_key());
+
   std::sort(tilings_.begin(), tilings_.end(), LargestToSmallestScaleFunctor());
   return appended;
 }
@@ -282,6 +298,8 @@ int PictureLayerTilingSet::NumHighResTilings() const {
 
 PictureLayerTiling* PictureLayerTilingSet::FindTilingWithScaleKey(
     float scale_key) const {
+  recordreplay::Assert("[RUN-550] PictureLayerImpl::FindTilingWithScaleKey %.2f", scale_key);
+
   for (const auto& tiling : tilings_) {
     if (tiling->contents_scale_key() == scale_key)
       return tiling.get();

@@ -27,6 +27,8 @@
 #include "third_party/blink/renderer/platform/network/parsed_content_type.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
+#include "base/json/json_writer.h"
+
 namespace blink {
 
 namespace {
@@ -53,6 +55,8 @@ class BodyConsumerBase : public GarbageCollected<BodyConsumerBase>,
   }
 
   void Abort() override {
+    recordreplay::Assert("[RUN-1182] BodyConsumerBase::Abort");
+
     resolver_->Reject(
         MakeGarbageCollected<DOMException>(DOMExceptionCode::kAbortError));
   }
@@ -62,6 +66,14 @@ class BodyConsumerBase : public GarbageCollected<BodyConsumerBase>,
   // TODO(yhirano): Fix this problem in a more sophisticated way.
   template <typename IDLType, typename T>
   void ResolveLater(const T& object) {
+    if (recordreplay::DependencyGraphEnabled()) {
+      base::Value::Dict info;
+      info.Set("kind", "scheduleResolveBodyConsumer");
+      info.Set("url", url_);
+      std::string json;
+      base::JSONWriter::Write(info, &json);
+      record_replay_scheduled_node_id_ = recordreplay::NewDependencyGraphNode(json.c_str());
+    }
     task_runner_->PostTask(FROM_HERE,
                            BindOnce(&BodyConsumerBase::ResolveNow<IDLType, T>,
                                     WrapPersistent(this), object));
@@ -103,6 +115,9 @@ class BodyConsumerBase : public GarbageCollected<BodyConsumerBase>,
 
   const Member<ScriptPromiseResolverBase> resolver_;
   const scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
+
+  std::string url_;
+  int record_replay_scheduled_node_id_ = 0;
 };
 class BodyBlobConsumer final : public BodyConsumerBase {
  public:

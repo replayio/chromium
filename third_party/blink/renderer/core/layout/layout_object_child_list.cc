@@ -37,6 +37,8 @@
 #include "third_party/blink/renderer/core/layout/layout_view.h"
 #include "third_party/blink/renderer/core/paint/object_paint_invalidator.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 namespace {

@@ -354,6 +354,11 @@ class CORE_EXPORT LayoutObject : public GarbageCollected<LayoutObject>,
 
   // End of DisplayItemClient methods.
 
+  int RecordReplayId() const {
+    NOT_DESTROYED();
+    return record_replay_id_;
+  }
+
   LayoutObject* Parent() const {
     NOT_DESTROYED();
     return parent_.Get();

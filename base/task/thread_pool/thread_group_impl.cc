@@ -634,6 +634,9 @@ bool ThreadGroupImpl::WorkerDelegate::CanCleanupLockRequired(
     return false;
   }
 
+  if (worker->RecordReplayUnordered())
+    return false;
+
   const TimeTicks last_used_time = worker->GetLastUsedTime();
   if (last_used_time.is_null() ||
       subtle::TimeTicksNowIgnoringOverride() - last_used_time <
@@ -898,6 +901,10 @@ void ThreadGroupImpl::MaintainAtLeastOneIdleWorkerLockRequired(
   if (workers_.size() >= max_tasks_) {
     return;
   }
+
+  // Workers can't be created / started non-deterministically.
+  if (recordreplay::AreEventsDisallowed("ThreadGroupImpl::MaintainAtLeastOneIdleWorkerLockRequired"))
+    return;
 
   scoped_refptr<WorkerThread> new_worker =
       CreateAndRegisterWorkerLockRequired(executor);

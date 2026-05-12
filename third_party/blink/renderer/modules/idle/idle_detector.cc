@@ -306,13 +306,13 @@ void IdleDetector::Update(mojom::blink::IdleStatePtr state,
   }
 
   if (fire_event) {
-    DispatchEvent(*Event::Create(event_type_names::kChange));
+    DispatchEvent(*Event::Create(event_type_names::kChange), "IdleDetector::Update");
   }
 }
 
 void IdleDetector::DispatchUserIdleEvent(TimerBase*) {
   user_idle_ = true;
-  DispatchEvent(*Event::Create(event_type_names::kChange));
+  DispatchEvent(*Event::Create(event_type_names::kChange), "IdleDetector::DispatchUserIdleEvent");
 }
 
 void IdleDetector::Trace(Visitor* visitor) const {

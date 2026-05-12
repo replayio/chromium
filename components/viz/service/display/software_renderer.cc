@@ -11,6 +11,7 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/process/memory.h"
+#include "base/record_replay.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "cc/base/math_util.h"
@@ -264,6 +265,11 @@ void SoftwareRenderer::BeginDrawingRenderPass(
 }
 
 bool SoftwareRenderer::IsSoftwareResource(ResourceId resource_id) {
+  // When rendering in a recording/replaying process there is no resource
+  // provider, and all resources use software rendering.
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    return true;
+  }
   return resource_provider()->IsResourceSoftwareBacked(resource_id);
 }
 

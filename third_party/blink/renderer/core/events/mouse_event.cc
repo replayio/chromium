@@ -22,6 +22,8 @@
 
 #include "third_party/blink/renderer/core/events/mouse_event.h"
 
+#include "base/record_replay.h"
+
 #include "third_party/blink/public/common/input/web_pointer_properties.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_mouse_event_init.h"
 #include "third_party/blink/renderer/core/dom/element.h"
@@ -442,6 +444,7 @@ DispatchEventResult MouseEvent::DispatchEvent(EventDispatcher& dispatcher) {
   double_click_event.SetTrusted(isTrusted());
   if (DefaultHandled())
     double_click_event.SetDefaultHandled();
+
   DispatchEventResult double_click_dispatch_result =
       EventDispatcher::DispatchEvent(dispatcher.GetNode(), double_click_event);
   if (double_click_dispatch_result != DispatchEventResult::kNotCanceled)

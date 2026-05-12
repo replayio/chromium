@@ -70,6 +70,8 @@ MessagePipeReader::MessagePipeReader(
     : delegate_(delegate),
       sender_(std::move(sender), task_runner),
       receiver_(this, std::move(receiver), task_runner) {
+  recordreplay::RegisterPointer("MessagePipeReader", this);
+
   thread_safe_sender_ =
       std::make_unique<mojo::ThreadSafeForwarder<mojom::Channel>>(
           base::MakeRefCounted<ThreadSafeProxy>(
@@ -82,6 +84,8 @@ MessagePipeReader::MessagePipeReader(
 }
 
 MessagePipeReader::~MessagePipeReader() {
+  recordreplay::UnregisterPointer(this);
+
   DCHECK(thread_checker_.CalledOnValidThread());
   // The pipe should be closed before deletion.
 }

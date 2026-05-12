@@ -329,6 +329,7 @@ component("core") {
   sources += rebase_path(blink_core_sources_overscroll, "", "overscroll")
   sources += rebase_path(blink_core_sources_page, "", "page")
   sources += rebase_path(blink_core_sources_paint, "", "paint")
+  sources += rebase_path(blink_core_sources_record_replay, "", "record_replay")
   sources +=
       rebase_path(blink_core_sources_resize_observer, "", "resize_observer")
   sources +=

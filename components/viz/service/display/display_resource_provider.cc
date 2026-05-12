@@ -21,6 +21,8 @@
 #include "ui/gfx/geometry/size.h"
 #include "ui/gl/trace_util.h"
 
+#include "base/record_replay.h"
+
 namespace viz {
 
 namespace {

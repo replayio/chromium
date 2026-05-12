@@ -35,7 +35,7 @@ class ScopedInterfaceEndpointHandle::State
     DCHECK(!lock_);
     DCHECK(!pending_association_);
 
-    lock_.emplace();
+    lock_.emplace("ScopedInterfaceEndpointHandle::State.lock_");
     pending_association_ = true;
     peer_state_ = std::move(peer);
   }

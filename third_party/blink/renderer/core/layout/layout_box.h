@@ -1429,6 +1429,9 @@ class CORE_EXPORT LayoutBox : public LayoutBoxModelObject {
 
   Member<BoxOverflowModel> overflow_;
   Member<LayoutBoxRareData> rare_data_;
+
+  // A deterministic ID is needed for sorting in various SnapCoordinator methods.
+  int record_replay_id_ = 0;
 };
 
 template <>

@@ -699,7 +699,7 @@ class ChannelMac : public Channel,
       // The kernel page-aligns the OOL memory when performing the mach_msg on
       // the send side, but it preserves the original size in the descriptor.
       ool_memory.reset_unaligned(
-          reinterpret_cast<vm_address_t>(descriptor->address),
+          reinterpret_cast<vm_address_t>(address),
           descriptor->size);
     } else {
       // Mach message structs are all 4-byte aligned, but `uint64_t` is 8-byte

@@ -20,6 +20,8 @@
 #include "base/threading/threading_features.h"
 #endif
 
+#include "base/record_replay.h"
+
 namespace base {
 
 MessagePumpDefault::MessagePumpDefault()
@@ -37,6 +39,10 @@ void MessagePumpDefault::Run(Delegate* delegate) {
   for (;;) {
 #if BUILDFLAG(IS_APPLE)
     apple::ScopedNSAutoreleasePool autorelease_pool;
+#endif
+
+#if BUILDFLAG(IS_WIN)
+    recordreplay::Assert("[RUN-2214] MessagePumpDefault::Run #1");
 #endif
 
     Delegate::NextWorkInfo next_work_info = delegate->DoWork();

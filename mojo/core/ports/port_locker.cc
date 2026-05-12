@@ -26,6 +26,18 @@ constinit thread_local const PortLocker* port_locker = nullptr;
 }  // namespace
 #endif
 
+static uintptr_t GetPortId(Port* port) {
+  // When recording/replaying the sorted order of ports need to be consistent,
+  // so we use the ID associated with the port via RegisterPointer for sorting.
+  if (recordreplay::IsRecordingOrReplaying("pointer-ids")) {
+    uintptr_t id = recordreplay::PointerId(port);
+    CHECK(id);
+    return id;
+  } else {
+    return (uintptr_t)port;
+  }
+}
+
 PortLocker::PortLocker(const PortRef** port_refs, size_t num_ports)
     :
 #if DCHECK_IS_ON()

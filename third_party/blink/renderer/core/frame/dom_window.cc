@@ -229,7 +229,13 @@ String CoopReportOnlyErrorMessage(const String& property_name) {
 DOMWindow::DOMWindow(Frame& frame)
     : frame_(frame),
       window_proxy_manager_(frame.GetWindowProxyManager()),
-      window_is_closing_(false) {}
+      window_is_closing_(false) {
+  // The window location can be accessed by replaying specific scripts when
+  // events are disallowed. To ensure this doesn't interact with the recording,
+  // eagerly instantiate the window location.
+  if (recordreplay::IsRecordingOrReplaying("disallow-events", "DOMWindow"))
+    location_ = MakeGarbageCollected<Location>(const_cast<DOMWindow*>(this));
+}
 
 DOMWindow::~DOMWindow() {
   // The frame must be disconnected before finalization.

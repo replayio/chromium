@@ -306,6 +306,13 @@ void FontResource::StartLoadLimitTimersIfNecessary(
       blink::BindOnce(&FontResource::FontLoadLongLimitCallback,
                       WrapWeakPersistent(this)),
       kFontLoadWaitLong);
+
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "FontResource")) {
+    POST_TIMER_TASKS(WrapPersistent(this))
+  } else {
+    POST_TIMER_TASKS(WrapWeakPersistent(this))
+  }
+#undef POST_TIMER_TASKS
 }
 
 const FontCustomPlatformData* FontResource::GetCustomFontData() {

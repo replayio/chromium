@@ -2581,6 +2581,8 @@ class CORE_EXPORT Document : public ContainerNode,
                                    mojom::blink::FocusType focus_type);
   void DisplayNoneChangedForFrame();
 
+  void RecordReplayOnRemoveLoadEventDelay();
+
   // Handles a connection error to |trust_token_query_answerer_| by rejecting
   // all pending promises created by |hasPrivateToken| and
   // |hasRedemptionRecord|.
@@ -2721,6 +2723,8 @@ class CORE_EXPORT Document : public ContainerNode,
   bool compatibility_mode_locked_ = false;
 
   TaskHandle execute_scripts_waiting_for_resources_task_handle_;
+  int record_replay_execute_scripts_waiting_for_resources_node_id_ = 0;
+
   TaskHandle javascript_url_task_handle_;
   class PendingJavascriptUrl final
       : public GarbageCollected<PendingJavascriptUrl> {
@@ -2984,6 +2988,9 @@ class CORE_EXPORT Document : public ContainerNode,
   bool has_capture_listener_ = false;
 
   int load_event_delay_count_ = 0;
+
+  // IDs for dependency graph nodes which the load event depends on.
+  Vector<int> record_replay_load_event_dependency_nodes_;
 
   // Objects and embeds depend on "being rendered" for delaying the load event.
   // This is a document-wide flag saying that we have incremented the

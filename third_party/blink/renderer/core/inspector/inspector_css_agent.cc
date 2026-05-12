@@ -856,6 +856,17 @@ InspectorCSSAgent::InspectorCSSAgent(
       local_fonts_enabled_(&agent_state_, /*default_value=*/true) {
   DCHECK(dom_agent);
   DCHECK(network_agent);
+
+  if (recordreplay::IsInReplayCode()) {
+    // RUN-2521: Make sure documents are registered.
+    // This is partial copy-and-paste from |CompleteEnabled|
+    dom_agent_->AddDOMListener(this);
+    HeapVector<Member<Document>> documents = dom_agent_->Documents();
+    for (Document* document : documents) {
+      UpdateActiveStyleSheets(document);
+    }
+    enable_completed_ = true;
+  }
 }
 
 InspectorCSSAgent::~InspectorCSSAgent() = default;
@@ -4142,6 +4153,7 @@ protocol::Response InspectorCSSAgent::AssertInspectorStyleSheetForId(
   protocol::Response response = AssertEnabled();
   if (!response.IsSuccess())
     return response;
+
   IdToInspectorStyleSheet::iterator it =
       id_to_inspector_style_sheet_.find(style_sheet_id);
   if (it == id_to_inspector_style_sheet_.end()) {

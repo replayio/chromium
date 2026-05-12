@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <memory>
 #include <utility>
+#include <sstream>
 
 #include "base/compiler_specific.h"
 #include "base/debug/crash_logging.h"
@@ -1160,9 +1161,14 @@ void PaintArtifactCompositor::Update(
           CompositorElementIdFromDOMNodeId(effect.CanvasChildId()));
     }
 
+    recordreplay::Assert("[RUN-1470-1471] PaintArtifactCompositor::Update %d",
+                         layer.subtree_property_changed());
+
     if (layer.subtree_property_changed())
       root_layer_->SetNeedsCommit();
   }
+
+  recordreplay::Assert("[RUN-657-1540] PaintArtifactCompositor::Update");
 
   root_layer_->layer_tree_host()->RegisterSelection(layer_selection);
 

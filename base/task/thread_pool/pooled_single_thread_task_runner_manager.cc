@@ -110,7 +110,8 @@ class WorkerThreadDelegate : public WorkerThread::Delegate {
   WorkerThreadDelegate(const std::string& thread_name,
                        WorkerThread::ThreadLabel thread_label,
                        TrackedRef<TaskTracker> task_tracker)
-      : task_tracker_(std::move(task_tracker)),
+      : lock_("WorkerThreadDelegate.lock_"),
+        task_tracker_(std::move(task_tracker)),
         thread_name_(thread_name),
         thread_label_(thread_label) {}
   WorkerThreadDelegate(const WorkerThreadDelegate&) = delete;
@@ -605,7 +606,8 @@ PooledSingleThreadTaskRunnerManager::PooledSingleThreadTaskRunnerManager(
     TrackedRef<TaskTracker> task_tracker,
     DelayedTaskManager* delayed_task_manager)
     : task_tracker_(std::move(task_tracker)),
-      delayed_task_manager_(delayed_task_manager) {
+      delayed_task_manager_(delayed_task_manager),
+      lock_("PooledSingleThreadTaskRunnerManager.lock_") {
   DCHECK(task_tracker_);
   DCHECK(delayed_task_manager_);
 #if BUILDFLAG(IS_WIN)

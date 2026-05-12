@@ -4,6 +4,8 @@
 
 #include "services/network/proxy_config_service_mojo.h"
 
+#include "base/record_replay.h"
+
 #include <utility>
 
 #include "base/observer_list.h"
@@ -15,6 +17,7 @@ ProxyConfigServiceMojo::ProxyConfigServiceMojo(
         proxy_config_client_receiver,
     std::optional<net::ProxyConfigWithAnnotation> initial_proxy_config,
     mojo::PendingRemote<mojom::ProxyConfigPollerClient> proxy_poller_client) {
+  recordreplay::RegisterPointer("ProxyConfigServiceMojo", this);
   DCHECK(initial_proxy_config || proxy_config_client_receiver.is_valid());
 
   if (initial_proxy_config)
@@ -33,7 +36,9 @@ ProxyConfigServiceMojo::ProxyConfigServiceMojo(
   }
 }
 
-ProxyConfigServiceMojo::~ProxyConfigServiceMojo() {}
+ProxyConfigServiceMojo::~ProxyConfigServiceMojo() {
+  recordreplay::UnregisterPointer(this);
+}
 
 void ProxyConfigServiceMojo::OnProxyConfigUpdated(
     const net::ProxyConfigWithAnnotation& proxy_config) {

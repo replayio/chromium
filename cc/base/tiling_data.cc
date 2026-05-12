@@ -12,6 +12,8 @@
 #include "ui/gfx/geometry/rect_f.h"
 #include "ui/gfx/geometry/vector2d.h"
 
+#include "base/record_replay.h"
+
 namespace cc {
 
 namespace {
@@ -218,6 +220,12 @@ gfx::Rect TilingData::TileBounds(int i, int j) const {
 }
 
 gfx::Rect TilingData::TileBoundsWithBorder(int i, int j) const {
+  // https://linear.app/replay/issue/RUN-465
+  recordreplay::Assert("TilingData::TileBoundsWithBorder %d %d %d %d %d %d %d",
+                       i, j,
+                       max_texture_size_.width(), max_texture_size_.height(), border_texels_,
+                       tiling_size_.width(), tiling_size_.height());
+
   AssertTile(i, j);
   int max_texture_size_x = max_texture_size_.width() - 2 * border_texels_;
   int max_texture_size_y = max_texture_size_.height() - 2 * border_texels_;

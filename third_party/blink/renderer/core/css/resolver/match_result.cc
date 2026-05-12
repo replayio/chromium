@@ -90,6 +90,10 @@ void MatchResult::BeginAddingAuthorRulesForTreeScope(
 }
 
 void MatchResult::Reset() {
+  REPLAY_ASSERT("[RUN-2424-3053] MatchResult::Reset %u",
+    (unsigned)current_tree_order_
+  );
+
   matched_properties_.clear();
   matched_properties_hashes_.clear();
   is_cacheable_ = true;

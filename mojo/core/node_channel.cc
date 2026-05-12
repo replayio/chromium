@@ -26,6 +26,8 @@
 #include "mojo/core/ipcz_driver/envelope.h"
 #include "mojo/core/request_context.h"
 
+#include "base/record_replay.h"
+
 namespace mojo {
 namespace core {
 
@@ -893,6 +895,13 @@ void NodeChannel::WriteChannelMessage(Channel::MessagePtr message) {
 void NodeChannel::OfferChannelUpgrade() {
   base::AutoLock lock(channel_lock_);
   channel_->OfferChannelUpgrade();
+}
+
+void NodeChannel::Release() {
+  recordreplay::Assert("[RUN-1307-1830] NodeChannel::Release %d %d",
+                       HasOneRef(),
+                       owning_task_runner()->RunsTasksInCurrentSequence());
+  base::RefCountedDeleteOnSequence<NodeChannel>::Release();
 }
 
 uint64_t NodeChannel::RemoteCapabilities() const {

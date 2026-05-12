@@ -49,7 +49,11 @@ namespace base {
 // -----------------------------------------------------------------------------
 WaitableEvent::WaitableEvent(ResetPolicy reset_policy,
                              InitialState initial_state)
-    : kernel_(new WaitableEventKernel(reset_policy, initial_state)) {}
+    : kernel_(new WaitableEventKernel(reset_policy, initial_state)) {
+  // Pointer registration is needed for sorting in WaitSet.user_events_
+  if (!recordreplay::AreEventsDisallowed() || recordreplay::HasDivergedFromRecording())
+    recordreplay::RegisterPointer("WaitableEvent", this);
+}
 
 void WaitableEvent::Reset() {
   base::AutoLock locked(kernel_->lock_);
@@ -245,7 +249,7 @@ size_t WaitableEvent::WaitManyImpl(base::span<WaitableEvent*> raw_waitables)
     DCHECK(waitables[i].first != waitables[i + 1].first);
   }
 
-  SyncWaiter sw;
+  SyncWaiter sw(record_replay_unordered);
 
   const size_t r = EnqueueMany(waitables, &sw);
   if (r < waitables.size()) {
@@ -356,8 +360,10 @@ size_t WaitableEvent::EnqueueMany(base::span<WaiterAndIndex> waitables,
 WaitableEvent::WaitableEventKernel::WaitableEventKernel(
     ResetPolicy reset_policy,
     InitialState initial_state)
-    : manual_reset_(reset_policy == ResetPolicy::MANUAL),
-      signaled_(initial_state == InitialState::SIGNALED) {}
+    : lock_(recordreplay::AreEventsDisallowed() ? nullptr : "WaitableEventKernel.lock_"),
+      manual_reset_(reset_policy == ResetPolicy::MANUAL),
+      signaled_(initial_state == InitialState::SIGNALED),
+      record_replay_unordered_(recordreplay::AreEventsDisallowed()) {}
 
 WaitableEvent::WaitableEventKernel::~WaitableEventKernel() = default;
 

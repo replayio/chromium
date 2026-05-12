@@ -11,6 +11,7 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/rand_util.h"
+#include "base/record_replay.h"
 #include "base/time/default_tick_clock.h"
 #include "cc/metrics/begin_main_frame_metrics.h"
 #include "cc/metrics/frame_sequence_tracker_collection.h"

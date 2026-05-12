@@ -388,7 +388,7 @@ void InputMethodController::DispatchCompositionUpdateEvent(LocalFrame& frame,
 
   auto* event = MakeGarbageCollected<CompositionEvent>(
       event_type_names::kCompositionupdate, frame.DomWindow(), text);
-  target->DispatchEvent(*event);
+  target->DispatchEvent(*event, "InputMethodController::DispatchCompositionUpdateEvent");
 }
 
 void InputMethodController::DispatchCompositionEndEvent(LocalFrame& frame,
@@ -991,7 +991,7 @@ bool InputMethodController::DispatchCompositionStartEvent(const String& text) {
 
   auto* event = MakeGarbageCollected<CompositionEvent>(
       event_type_names::kCompositionstart, GetFrame().DomWindow(), text);
-  target->DispatchEvent(*event);
+  target->DispatchEvent(*event, "InputMethodController::DispatchCompositionStartEvent");
 
   return IsAvailable();
 }

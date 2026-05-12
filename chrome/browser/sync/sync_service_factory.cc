@@ -487,6 +487,8 @@ std::unique_ptr<KeyedService> BuildSyncService(
     groups_updater_service->OnSyncServiceInitialized(sync_service.get());
   }
 
+  recordreplay::Diagnostic("[TT-198] BuildSyncService returning a non-null service");
+
   return sync_service;
 }
 

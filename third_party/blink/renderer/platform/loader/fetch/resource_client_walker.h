@@ -58,7 +58,9 @@ class ResourceClientWalker {
   }
 
  private:
-  const HeapHashCountedSet<WeakMember<ResourceClient>>& client_set_;
+  const HeapHashCountedSet<WeakMember<ResourceClient>,
+                           WTF::MemberHashRecordReplayId<ResourceClient>>&
+      client_set_;
   HeapVector<Member<ResourceClient>> client_vector_;
   wtf_size_t index_ = 0;
 };
