@@ -1495,6 +1495,17 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
 
       resource =
           MemoryCache::Get()->ResourceForURL(params.Url(), cache_identifier);
+
+      // Whether there is a resource can vary when replaying due to different memory
+      // cache behavior. For now we deal with this by ignoring the resource if it
+      // is present when replaying but wasn't when recording.
+      bool recorded_has_resource =
+        recordreplay::RecordReplayValue("ResourceFetcher::RequestResource has_cached_resource", !!resource);
+
+      if (!recorded_has_resource)
+        resource = nullptr;
+
+      recordreplay::Assert("[RUN-1333] ResourceFetcher::RequestResource has_cached_resource %d", !!resource);
       if (resource) {
         policy = DetermineRevalidationPolicy(resource_type, params, *resource,
                                              is_static_data);
