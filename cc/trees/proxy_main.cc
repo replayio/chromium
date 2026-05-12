@@ -40,6 +40,7 @@
 #include "cc/trees/swap_promise.h"
 #include "cc/trees/trace_utils.h"
 #include "components/viz/common/view_transition_element_resource_id.h"
+#include "components/viz/service/display/record_replay_render.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
 #include "third_party/abseil-cpp/absl/cleanup/cleanup.h"
 #include "third_party/perfetto/include/perfetto/tracing/track.h"
