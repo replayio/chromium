@@ -274,6 +274,8 @@ TaskQueueImpl::TaskQueueImpl(SequenceManagerImpl* sequence_manager,
       delayed_fence_allowed_(spec.delayed_fence_allowed),
       scoped_execution_fence_allowed_(spec.scoped_execution_fence_allowed),
       default_task_runner_(CreateTaskRunner(kTaskTypeNone)) {
+  // Pointer registration is needed for sorting in SequenceManagerImpl queues.
+  recordreplay::RegisterPointer("TaskQueueImpl", this);
   UpdateCrossThreadQueueStateLocked();
   // SequenceManager can't be set later, so we need to prevent task runners
   // from posting any tasks.
