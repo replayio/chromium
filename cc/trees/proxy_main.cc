@@ -322,7 +322,7 @@ void ProxyMain::BeginMainFrameWithBlocking(
     commit_timeout = true;
   }
 
-  bool blocking = block_on_next_commit_;
+  bool blocking = force_blocking || block_on_next_commit_;
   block_on_next_commit_ = false;
 
   bool scroll_and_viewport_changes_synced = false;
