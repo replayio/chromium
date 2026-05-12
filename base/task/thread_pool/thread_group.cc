@@ -44,6 +44,7 @@ void ThreadGroup::BaseScopedCommandsExecutor::ScheduleAdjustMaxTasks() {
 
 void ThreadGroup::BaseScopedCommandsExecutor::ScheduleStart(
     scoped_refptr<WorkerThread> worker) {
+  CHECK(outer_->RecordReplayUnordered() == worker->RecordReplayUnordered());
   workers_to_start_.emplace_back(std::move(worker));
 }
 

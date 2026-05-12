@@ -58,7 +58,9 @@ class ThreadGroupImpl::ScopedCommandsExecutor
     : public ThreadGroup::BaseScopedCommandsExecutor {
  public:
   explicit ScopedCommandsExecutor(ThreadGroupImpl* outer)
-      : BaseScopedCommandsExecutor(outer) {}
+      : BaseScopedCommandsExecutor(outer) {
+    DCHECK(!recordreplay::AreEventsDisallowed() || outer_->RecordReplayUnordered());
+  }
 
   ScopedCommandsExecutor(const ScopedCommandsExecutor&) = delete;
   ScopedCommandsExecutor& operator=(const ScopedCommandsExecutor&) = delete;
@@ -72,6 +74,7 @@ class ThreadGroupImpl::ScopedCommandsExecutor
   }
 
   void ScheduleWakeUp(scoped_refptr<WorkerThread> worker) {
+    CHECK(outer_->RecordReplayUnordered() == worker->RecordReplayUnordered());
     workers_to_wake_up_.emplace_back(std::move(worker));
   }
 
