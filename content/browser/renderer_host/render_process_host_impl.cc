@@ -5212,10 +5212,13 @@ RenderProcessHost* RenderProcessHostImpl::GetProcessHostForSiteInstance(
     }
   }
 
+  // [RecordReplay] NOTE: When spawning processes for recording, we need
+  // to make sure we skip the next logic for selecting spare process.
+
   // If not (or if none found), see if the spare RenderProcessHost can be used.
   auto& spare_process_manager = SpareRenderProcessHostManagerImpl::Get();
   bool spare_was_taken = false;
-  if (!render_process_host) {
+  if (!render_process_host && !record_replay_is_for_recording) {
     render_process_host = spare_process_manager.MaybeTakeSpare(
         browser_context, site_instance, allocation_context);
     if (render_process_host) {
