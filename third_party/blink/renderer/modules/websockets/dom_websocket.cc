@@ -398,6 +398,30 @@ void DOMWebSocket::send(DOMArrayBuffer* binary_data,
     UpdateBufferedAmountAfterClose(binary_data->ByteLength());
     return;
   }
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "websocketSendMessage");
+    info.Set("socketId", record_replay_id_);
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
+
+  if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
+    std::string annotationContents;
+    if (recordreplay::IsReplaying()) {
+      base::Value::Dict info;
+      info.Set("kind", "send");
+      info.Set("socketId", record_replay_id_);
+      info.Set("binary", true);
+      info.Set("encodedLength", (int)binary_data->ByteLength());
+      base::JSONWriter::Write(info, &annotationContents);
+    }
+    recordreplay::OnAnnotation("DOMWebSocket", annotationContents.c_str());
+  }
+
   DCHECK(channel_);
   buffered_amount_ += binary_data->ByteLength();
   channel_->Send(*binary_data, 0, binary_data->ByteLength(),
