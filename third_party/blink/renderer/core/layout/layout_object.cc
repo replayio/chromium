@@ -481,6 +481,7 @@ LayoutObject::LayoutObject(Node* node)
 #if DCHECK_IS_ON()
   fragment_->SetIsFirst();
 #endif
+  record_replay_id_ = recordreplay::NewIdMainThread("LayoutObject");
 
   InstanceCounters::IncrementCounter(InstanceCounters::kLayoutObjectCounter);
   if (node_)
