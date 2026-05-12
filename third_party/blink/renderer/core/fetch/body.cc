@@ -100,18 +100,51 @@ class BodyConsumerBase : public GarbageCollected<BodyConsumerBase>,
     requires(!std::is_same<IDLType, IDLAny>::value &&
              !IsNotShared<IDLType>::value)
   void ResolveNow(const T& object) {
+    absl::optional<recordreplay::AutoDependencyExecution> execute;
+    if (recordreplay::DependencyGraphEnabled()) {
+      int node_id = recordreplay::NewDependencyGraphNode(
+        "{\"kind\":\"resolveBodyConsumer\"}"
+      );
+      recordreplay::AddDependencyGraphEdge(
+        record_replay_scheduled_node_id_, node_id, "{\"kind\":\"scheduler\"}"
+      );
+      execute.emplace(node_id);
+    }
+
     resolver_->DowncastTo<IDLType>()->Resolve(object);
   }
 
   template <typename IDLType, typename T>
     requires std::is_same<IDLType, IDLAny>::value
   void ResolveNow(const Persistent<DisallowNewWrapper<ScriptValue>>& object) {
+    absl::optional<recordreplay::AutoDependencyExecution> execute;
+    if (recordreplay::DependencyGraphEnabled()) {
+      int node_id = recordreplay::NewDependencyGraphNode(
+        "{\"kind\":\"resolveBodyConsumer\"}"
+      );
+      recordreplay::AddDependencyGraphEdge(
+        record_replay_scheduled_node_id_, node_id, "{\"kind\":\"scheduler\"}"
+      );
+      execute.emplace(node_id);
+    }
+
     resolver_->DowncastTo<IDLType>()->Resolve(object->Value());
   }
 
   template <typename IDLType, typename T>
     requires IsNotShared<IDLType>::value
   void ResolveNow(const T& object) {
+    absl::optional<recordreplay::AutoDependencyExecution> execute;
+    if (recordreplay::DependencyGraphEnabled()) {
+      int node_id = recordreplay::NewDependencyGraphNode(
+        "{\"kind\":\"resolveBodyConsumer\"}"
+      );
+      recordreplay::AddDependencyGraphEdge(
+        record_replay_scheduled_node_id_, node_id, "{\"kind\":\"scheduler\"}"
+      );
+      execute.emplace(node_id);
+    }
+
     resolver_->DowncastTo<IDLType>()->Resolve(NotShared<DOMUint8Array>(object));
   }
 
