@@ -505,7 +505,11 @@ void TaskQueueImpl::PostImmediateTaskImpl(PostedTask task,
 
   bool add_queue_time_to_tasks = sequence_manager_->GetAddQueueTimeToTasks();
   TimeTicks queue_time;
-  
+
+  recordreplay::Assert(
+      "[RUN-1126] TaskQueueImpl::PostImmediateTaskImpl 1 %d",
+      add_queue_time_to_tasks || delayed_fence_allowed_);
+
   if (add_queue_time_to_tasks || delayed_fence_allowed_)
     queue_time = sequence_manager_->any_thread_clock_maybe_events_disallowed()->NowTicks();
 
@@ -767,6 +771,8 @@ void TaskQueueImpl::MoveReadyDelayedTasksToWorkQueue(
 
     // Leave the top task alone if it hasn't been canceled and it is not ready.
     const bool is_cancelled = task.task.IsCancelled();
+    recordreplay::Assert("[RUN-1916] TaskQueueImpl::MoveReadyDelayedTasksToWorkQueue #2 %d %d",
+                         is_cancelled, lazy_now->has_value());
     if (!is_cancelled && task.earliest_delayed_run_time() > lazy_now->Now()) {
       break;
     }
@@ -1242,6 +1248,11 @@ void TaskQueueImpl::ReclaimMemory(TimeTicks now) {
   if (main_thread_only().delayed_incoming_queue.empty()) {
     return;
   }
+
+  recordreplay::Assert(
+    "[RUN-2801-2978] TaskQueueImpl::ReclaimMemory %d %d",
+    1,
+    !!main_thread_only().delayed_work_queue);
 
   main_thread_only().delayed_incoming_queue.SweepCancelledTasks(
       sequence_manager_);
