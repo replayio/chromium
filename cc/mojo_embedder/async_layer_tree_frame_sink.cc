@@ -29,6 +29,10 @@
 #include "third_party/perfetto/include/perfetto/tracing/track.h"
 #include "third_party/perfetto/include/perfetto/tracing/track_event_args.h"
 
+#include "components/viz/service/display/record_replay_render.h"
+
+#include "base/record_replay.h"
+
 namespace cc {
 namespace mojo_embedder {
 
