@@ -16,6 +16,7 @@
 #include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/record_replay.h"
 #include "base/message_loop/message_pump.h"
 #include "base/strings/stringprintf.h"
 #include "base/synchronization/atomic_flag.h"
@@ -499,6 +500,10 @@ class PooledSingleThreadTaskRunnerManager::PooledSingleThreadTaskRunner
   bool PostDelayedTask(const Location& from_here,
                        OnceClosure closure,
                        TimeDelta delay) override {
+    // https://linear.app/replay/issue/RUN-756
+    recordreplay::Assert("PooledSingleThreadTaskRunner::PostDelayedTask %d",
+                         recordreplay::PointerId(this));
+
     if (!g_manager_is_alive) {
       return false;
     }
