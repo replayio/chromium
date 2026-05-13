@@ -374,6 +374,16 @@ void DevToolsSession::sendNotification(
     std::unique_ptr<v8_inspector::StringBuffer> notification) {
   if (IsDetached())
     return;
+
+  if (recordreplay::AreEventsDisallowed() &&
+      recordreplay::IsRecordingOrReplaying(
+          "leak-references", "DevToolsSession::sendNotification")) {
+    // RUN-1515: Don't send notifications during GC.
+    return;
+  }
+
+  recordreplay::Assert("[RUN-1515] DevToolsSession::sendNotification");
+
   notification_queue_.push_back(BindOnce(
       [](std::unique_ptr<v8_inspector::StringBuffer> notification) {
         return Get8BitStringFrom(notification.get());
