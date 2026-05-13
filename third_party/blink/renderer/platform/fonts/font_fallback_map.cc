@@ -32,6 +32,13 @@ FontFallbackList* FontFallbackMap::Get(
 }
 
 void FontFallbackMap::InvalidateAll() {
+    if (recordreplay::AreEventsDisallowed("leak-references")) {
+    // Leak fallback_list_for_description_ contents.
+    return;
+  }
+
+  recordreplay::Assert("[RUN-3109-3229] FontFallbackMap::InvalidateAll");
+
   for (auto& entry : fallback_list_for_description_)
     entry.value->MarkInvalid();
   fallback_list_for_description_.clear();
