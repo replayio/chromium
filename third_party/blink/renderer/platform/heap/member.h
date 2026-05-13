@@ -310,4 +310,14 @@ class ConstructTraits<WeakMember<T>, Traits, Allocator> final
 
 }  // namespace blink
 
+namespace WTF {
+
+template <typename T>
+struct IsPointerType<blink::WeakMember<T>> : std::true_type {};
+
+template <typename T>
+struct IsPointerType<blink::Member<T>> : std::true_type {};
+
+}  // namespace WTF
+
 #endif  // THIRD_PARTY_BLINK_RENDERER_PLATFORM_HEAP_MEMBER_H_
