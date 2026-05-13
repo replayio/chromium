@@ -569,6 +569,9 @@ SequenceManagerImpl::SelectNextTaskImpl(LazyNow& lazy_now,
       continue;
     }
 
+    recordreplay::Assert(
+        "[RUN-1124-1803] SequenceManagerImpl::SelectNextTaskImpl B");
+
     if (work_queue->GetFrontTask()->nestable == Nestable::kNonNestable &&
         main_thread_only().nesting_depth > 0) [[unlikely]] {
       // Defer non-nestable work. NOTE these tasks can be arbitrarily delayed so
@@ -582,6 +585,9 @@ SequenceManagerImpl::SelectNextTaskImpl(LazyNow& lazy_now,
           std::move(deferred_task));
       continue;
     }
+
+    recordreplay::Assert(
+        "[RUN-1124-1803] SequenceManagerImpl::SelectNextTaskImpl C");
 
     main_thread_only().task_execution_stack.emplace_back(
         work_queue->TakeTaskFromWorkQueue(), work_queue->task_queue(),
