@@ -421,6 +421,7 @@ class CONTENT_EXPORT RenderThreadImpl
       WriteClangProfilingProfileCallback callback) override;
 #endif
   void SetIsWebSecurityDisabled(bool value) override;
+  void RecordReplayBrowserEvent(const std::string& name, base::Value::Dict value) override;
   void SetIsIsolatedContext(bool value) override;
   void SetWebUIResourceUrlToCodeCacheMap(
       const base::flat_map<GURL, int>& resource_map) override;
