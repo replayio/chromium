@@ -1682,6 +1682,9 @@ void WebFrameWidgetImpl::DidBeginMainFrame() {
   LocalFrame* local_root_frame = LocalRootImpl()->GetFrame();
   CHECK(local_root_frame);
 
+  recordreplay::Assert(
+    "[RUN-1675-1826] WebFrameWidgetImpl::DidBeginMainFrame %d", !!local_root_frame->View());
+
   if (LocalFrameView* frame_view = local_root_frame->View()) {
     frame_view->DidBeginMainFrame();
   }
@@ -3622,6 +3625,8 @@ class ReportTimeSwapPromise : public cc::SwapPromise {
         frame_timing_details.presentation_feedback.timestamp;
     bool presentation_time_is_valid =
         !presentation_time.is_null() && (presentation_time > swap_time);
+    recordreplay::Assert(
+      "[RUN-2317-2570] ReportTimeSwapPromise::RunCallbackAfterPresentation A %d",presentation_time_is_valid);
     if (presentation_time_is_valid) {
       ReportPresentationTime(std::move(presentation_callback),
                              frame_timing_details);
@@ -3630,6 +3635,8 @@ class ReportTimeSwapPromise : public cc::SwapPromise {
           frame_timing_details;
       frame_timing_details_with_swap_time.presentation_feedback.timestamp =
           swap_time;
+      recordreplay::Assert(
+          "[RUN-2317-2570] ReportTimeSwapPromise::RunCallbackAfterPresentation B");
       ReportPresentationTime(std::move(presentation_callback),
                              frame_timing_details_with_swap_time);
     }
