@@ -1224,6 +1224,10 @@ void Performance::DeliverObservationsTimerFired(TimerBase*) {
   if (HasObserverFor(PerformanceEntry::kContainer)) {
     PopulateContainerTimingEntries();
   }
+  recordreplay::AutoMarkerDependencyExecution execute(
+    "ScriptExecution", "Performance::DeliverObservationsTimerFired"
+  );
+
   decltype(active_observers_) observers;
   active_observers_.Swap(observers);
   for (const auto& observer : observers) {
