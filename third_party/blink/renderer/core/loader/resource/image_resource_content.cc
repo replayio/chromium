@@ -178,6 +178,11 @@ void ImageResourceContent::AddObserver(ImageResourceObserver* observer) {
           observer->CachedSpeculativeDecodeSize(),
           observer->CachedSpeculativeDecodeQuality());
     }
+
+    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+                                              "ImageResourceContent")) {
+      replay_strong_observers_.insert(observer);
+    }
   }
 
   if (info_->IsCacheValidator())
