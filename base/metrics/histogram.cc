@@ -176,6 +176,7 @@ class Histogram::Factory {
 };
 
 HistogramBase* Histogram::Factory::Build() {
+  // recordreplay::Assert("[RUN-1217]-1310 Histogram::Factory::Build");
   uint64_t name_hash = HashMetricName(name_);
   HistogramBase* histogram =
       StatisticsRecorder::FindHistogram(name_hash, name_);
