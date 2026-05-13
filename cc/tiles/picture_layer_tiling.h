@@ -260,6 +260,10 @@ class CC_EXPORT PictureLayerTiling {
   // this tiling to cover `rect`, which has been pre-scaled by `scale`.
   CoverageIterator Cover(const gfx::Rect& rect, float scale) const;
 
+  // Used to track down Tiling divergences.
+  // See https://linear.app/replay/issue/RUN-550#comment-60ba884e
+  int record_replay_id_ = 0;
+
  protected:
   friend class PrioritizedTile;
   friend class TileIterator;
