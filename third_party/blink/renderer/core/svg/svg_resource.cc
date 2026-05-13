@@ -125,6 +125,8 @@ void SVGResource::NotifyContentChanged() {
   InvalidateCycleCache();
 
   HeapVector<Member<SVGResourceClient>> clients(clients_.Keys());
+  std::sort(clients.begin(), clients.end(),
+            recordreplay::CompareMemberByPointerId<Member<SVGResourceClient>>());
   for (SVGResourceClient* client : clients)
     client->ResourceContentChanged(this);
 }
