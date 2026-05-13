@@ -299,6 +299,8 @@ std::unique_ptr<ThrottlingURLLoader> ThrottlingURLLoader::CreateLoaderAndStart(
 ThrottlingURLLoader::~ThrottlingURLLoader() {
   TRACE_EVENT("loading", "ThrottlingURLLoader::~ThrottlingURLLoader",
               perfetto::TerminatingFlow::FromPointer(this));
+  recordreplay::UnregisterPointer(this);
+
   if (inside_delegate_calls_ > 0) {
     // A throttle is calling into this object. In this case, delay destruction
     // of the throttles, so that throttles don't need to worry about any
@@ -412,6 +414,7 @@ ThrottlingURLLoader::ThrottlingURLLoader(
       traffic_annotation_(traffic_annotation) {
   TRACE_EVENT("loading", "ThrottlingURLLoader::ThrottlingURLLoader",
               perfetto::Flow::FromPointer(this));
+  recordreplay::RegisterPointer("ThrottlingURLLoader", this);
   throttles_.reserve(throttles.size());
   for (auto& throttle : throttles)
     throttles_.emplace_back(this, std::move(throttle));
