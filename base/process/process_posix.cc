@@ -20,6 +20,7 @@
 #include "base/notimplemented.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/process/kill.h"
+#include "base/record_replay.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
@@ -286,6 +287,10 @@ void Process::Close() {
   // if the process wasn't terminated (so we waited) or the state
   // wasn't already collected w/ a wait from process_utils, we're gonna
   // end up w/ a zombie when it does finally exit.
+}
+
+static inline bool MaybeRecordingOrReplaying() {
+  return true;
 }
 
 #if !BUILDFLAG(IS_IOS)
