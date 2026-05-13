@@ -7,10 +7,24 @@
 
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ui/webui/record_replay/record_replay_manager.mojom-forward.h"
+#include "chrome/common/webui_url_constants.h"
 #include "content/public/browser/web_ui_data_source.h"
+#include "content/public/browser/webui_config.h"
+#include "content/public/common/url_constants.h"
 #include "ui/webui/mojo_web_ui_controller.h"
 
 class RecordReplayManagerHandler;
+class RecordReplayUI;
+
+// recordreplay
+// WebUIConfig for chrome://recordreplay/.
+class RecordReplayUIConfig : public content::DefaultWebUIConfig<RecordReplayUI> {
+ public:
+  RecordReplayUIConfig()
+      : DefaultWebUIConfig(content::kChromeUIScheme,
+                           chrome::kChromeUIRecordReplayHost) {}
+};
+// /recordreplay
 
 // WebUIController for chrome://recordreplay/.
 class RecordReplayUI : public ui::MojoWebUIController {
