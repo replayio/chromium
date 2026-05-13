@@ -14,6 +14,7 @@
 #include "base/location.h"
 #include "base/memory/stack_allocated.h"
 #include "base/no_destructor.h"
+#include "base/record_replay.h"
 #include "base/system/sys_info.h"
 #include "base/task/post_job.h"
 #include "base/task/task_traits.h"
