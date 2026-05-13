@@ -769,6 +769,9 @@ void PaintArtifactCompositor::Layerizer::LayerizeGroup(
     if (&chunk_effect == &current_group) {
       compositor_.UpdatePaintedScrollTranslationsBeforeLayerization(
           artifact_, chunk_cursor_);
+#if !BUILDFLAG(IS_WIN) // RUN-2115
+      recordreplay::Assert("[RUN-1470-1471] PaintArtifactCompositor::LayerizeGroup %d", chunk_cursor_->id);
+#endif
       pending_layers_.emplace_back(
           artifact_, *chunk_cursor_,
           compositor_.ChunkCompositingType(artifact_, *chunk_cursor_));
