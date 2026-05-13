@@ -20,6 +20,7 @@
 #include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "base/numerics/byte_conversions.h"
+#include "base/record_replay.h"
 #include "base/strings/stringprintf.h"
 
 namespace base {
