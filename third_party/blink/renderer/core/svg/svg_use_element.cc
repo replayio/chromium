@@ -493,6 +493,8 @@ void SVGUseElement::AttachShadowTree(SVGElement& target) {
   // Set up root SVG element in shadow tree.
   // Clone the target subtree into the shadow tree, not handling <use> and
   // <symbol> yet.
+  recordreplay::Assert("[RUN-2313] SVGUseElement::AttachShadowTree B %d",
+                       UseShadowRoot().RecordReplayId());
   UseShadowRoot().AppendChild(CreateInstanceTree(target));
 
   // Assure shadow tree building was successful.
