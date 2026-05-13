@@ -1037,6 +1037,12 @@ void ResourceLoader::DidReceiveResponseInternal(
 }
 
 void ResourceLoader::DidReceiveData(base::span<const char> data) {
+  recordreplay::Assert("[RUN-1436] ResourceLoader::DidReceiveData %zu",
+                       data.size());
+
+  recordreplay::OnNetworkReceiveData(resource_->InspectorId(), data.data(),
+                                     data.size());
+
   DidReceiveDataImpl(data);
 }
 
