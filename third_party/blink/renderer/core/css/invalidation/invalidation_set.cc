@@ -115,7 +115,10 @@ bool InvalidationSet::operator==(const InvalidationSet& other) const {
 InvalidationSet::InvalidationSet(InvalidationType type)
     : type_(static_cast<unsigned>(type)),
       invalidates_self_(false),
-      invalidates_nth_(false) {}
+      invalidates_nth_(false) {
+  // Pointer IDs are used in recording assertions.
+  recordreplay::RegisterPointer("InvalidationSet", this);
+}
 
 bool InvalidationSet::InvalidatesElement(Element& element) const {
   if (invalidation_flags_.WholeSubtreeInvalid()) {
