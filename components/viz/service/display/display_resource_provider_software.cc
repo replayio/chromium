@@ -185,6 +185,9 @@ DisplayResourceProviderSoftware::ScopedReadLockSkImage::ScopedReadLockSkImage(
 
 DisplayResourceProviderSoftware::ScopedReadLockSkImage::
     ~ScopedReadLockSkImage() {
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    return;
+  }
   resource_provider_->UnlockForRead(resource_id_, sk_image_.get());
 }
 
