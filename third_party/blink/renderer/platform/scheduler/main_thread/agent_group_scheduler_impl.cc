@@ -106,6 +106,9 @@ v8::Isolate* AgentGroupSchedulerImpl::Isolate() {
 void AgentGroupSchedulerImpl::AddAgent(Agent* agent) {
   DCHECK(!agents_.Contains(agent));
   agents_.insert(agent);
+
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "AgentGroupSchedulerImpl"))
+    replay_agents_strong_.insert(agent);
 }
 
 void AgentGroupSchedulerImpl::PerformMicrotaskCheckpoint() {
