@@ -346,6 +346,8 @@ IntersectionObserver::IntersectionObserver(
           .AddObserver(*this);
     }
   }
+  // Pointer registration is needed for sorting in IntersectionObserverController::ComputeIntersections.
+  recordreplay::RegisterPointer("IntersectionObserver", this);
 }
 
 void IntersectionObserver::ProcessCustomWeakness(const LivenessBroker& info) {
