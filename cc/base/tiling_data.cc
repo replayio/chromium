@@ -41,6 +41,10 @@ TilingData::TilingData(const gfx::Size& max_texture_size,
                        const gfx::Rect& tiling_rect,
                        int border_texels)
     : max_texture_size_(max_texture_size), border_texels_(border_texels) {
+  // https://linear.app/replay/issue/RUN-885
+  recordreplay::Assert("TilingData::TilingData %d %d",
+                       tiling_rect.width(), tiling_rect.height());
+
   SetTilingRect(tiling_rect);
 }
 
@@ -48,6 +52,11 @@ void TilingData::SetTilingRect(const gfx::Rect& tiling_rect) {
   DCHECK_GE(tiling_rect.x(), 0);
   DCHECK_GE(tiling_rect.y(), 0);
   tiling_rect_ = tiling_rect;
+
+  // https://linear.app/replay/issue/RUN-885
+  recordreplay::Assert("TilingData::SetTilingRect %d %d",
+                       tiling_rect_.width(), tiling_rect_.height());
+
   RecomputeNumTiles();
 }
 
