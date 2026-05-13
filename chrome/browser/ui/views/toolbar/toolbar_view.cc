@@ -94,6 +94,7 @@
 #include "chrome/browser/ui/views/toolbar/home_button.h"
 #include "chrome/browser/ui/views/toolbar/live_toolbar_background.h"
 #include "chrome/browser/ui/views/toolbar/pinned_toolbar_actions_container.h"
+#include "chrome/browser/ui/views/toolbar/record_replay_toolbar_button.h"
 #include "chrome/browser/ui/views/toolbar/reload_button.h"
 #include "chrome/browser/ui/views/toolbar/split_tabs_button.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_button.h"
@@ -463,6 +464,14 @@ void ToolbarView::Init() {
       std::make_unique<MediaToolbarButtonContextualMenu>(browser_));
 #endif
 
+  // RecordReplay: #RUN-2762
+  // Only show the record-button if our chromium UI is enabled.
+  std::unique_ptr<RecordReplayToolbarButton> record_replay_button;
+  if (getenv("CHROMIUM_UI")) {
+    record_replay_button =
+      std::make_unique<RecordReplayToolbarButton>(browser_);
+  }
+
   // Always add children in order from left to right, for accessibility.
   if (!features::IsWebUIBackForwardButtonEnabled()) {
     back_ = AddChildView(std::make_unique<BackForwardButton>(
@@ -592,6 +601,9 @@ void ToolbarView::Init() {
 
   performance_intervention_button_ = AddChildView(
       std::make_unique<PerformanceInterventionButton>(browser_view_));
+
+  if (record_replay_button)
+    record_replay_button_ = AddChildView(std::move(record_replay_button));
 
   if (media_button) {
     media_button_ = AddChildView(std::move(media_button));
