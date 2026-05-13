@@ -22,7 +22,10 @@ namespace blink {
 
 IntersectionObservation::IntersectionObservation(IntersectionObserver& observer,
                                                  Element& target)
-    : observer_(observer), target_(&target) {}
+    : observer_(observer), target_(&target) {
+  // Pointer registration is needed for sorting in IntersectionObserverController::ComputeIntersections.
+  recordreplay::RegisterPointer("IntersectionObservation", this);
+}
 
 int64_t IntersectionObservation::ComputeIntersection(
     unsigned compute_flags,
