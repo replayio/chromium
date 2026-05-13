@@ -158,8 +158,14 @@ void BodyStreamBuffer::Init() {
     if (signal_->aborted()) {
       Abort();
     } else {
-      stream_buffer_abort_handle_ = signal_->AddAlgorithm(
-          BindOnce(&BodyStreamBuffer::Abort, WrapWeakPersistent(this)));
+      if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "BodyStreamBuffer")) {
+        // Abort() interacts with the recording so we need it to run consistently.
+        stream_buffer_abort_handle_ = signal_->AddAlgorithm(
+            BindOnce(&BodyStreamBuffer::Abort, WrapPersistent(this)));
+      } else {
+        stream_buffer_abort_handle_ = signal_->AddAlgorithm(
+            BindOnce(&BodyStreamBuffer::Abort, WrapWeakPersistent(this)));
+      }
     }
   }
   OnStateChange();
