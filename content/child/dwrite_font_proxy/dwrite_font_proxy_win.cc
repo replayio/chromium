@@ -188,6 +188,7 @@ std::optional<UINT32> DWriteFontCollectionProxy::FindFamilyIndex(
       recordreplay::Assert("[RUN-2116] DWriteFontCollectionProxy::FindFamilyIndex #1");
       if (iter->second != kFamilyNotFound)
         return iter->second;
+      recordreplay::Assert("[RUN-2116] DWriteFontCollectionProxy::FindFamilyIndex #3");
       return std::nullopt;
     }
 
@@ -214,6 +215,7 @@ std::optional<UINT32> DWriteFontCollectionProxy::FindFamilyIndex(
            family_names_[family_name] == family_index);
     family_names_[family_name] = family_index;
     if (family_index == kFamilyNotFound) [[unlikely]] {
+      recordreplay::Assert("[RUN-2116] DWriteFontCollectionProxy::FindFamilyIndex #4");
       return std::nullopt;
     }
     DCHECK(IsValidFamilyIndex(family_index));
@@ -227,6 +229,7 @@ std::optional<UINT32> DWriteFontCollectionProxy::FindFamilyIndex(
 
     if (hresult_out)
       *hresult_out = E_FAIL;
+    recordreplay::Assert("[RUN-2116] DWriteFontCollectionProxy::FindFamilyIndex #6");
     return std::nullopt;
   }
 }
