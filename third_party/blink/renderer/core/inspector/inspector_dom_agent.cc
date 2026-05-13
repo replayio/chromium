@@ -3183,8 +3183,12 @@ protocol::Response InspectorDOMAgent::scrollIntoViewIfNeeded(
   LayoutObject* layout_object = node->GetLayoutObject();
   if (!layout_object) {
     node = LayoutTreeBuilderTraversal::FirstLayoutChild(*node);
-    if (node)
-      layout_object = node->GetLayoutObject();
+
+    // Sometimes node is null when recording/replaying for an unknown reason.
+    if (!node)
+      return protocol::Response::ServerError("Node does not have a layout child");
+
+    layout_object = node->GetLayoutObject();
   }
   if (!layout_object) {
     return protocol::Response::ServerError(
