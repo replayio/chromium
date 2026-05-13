@@ -112,7 +112,7 @@ class CORE_EXPORT IntersectionObserverController
 
   // IntersectionObservers for which this is the execution context of the
   // callback, and with unsent notifications.
-  HeapHashSet<Member<IntersectionObserver>> pending_intersection_observers_;
+  HeapHashSet<Member<IntersectionObserver>, WTF::MemberHashRecordReplayRegisteredPointerId<IntersectionObserver>> pending_intersection_observers_;
   // This is 'true' if any observation tracked by this controller is able to
   // compute geometry (i.e., observation->CanCompute() is true).
   bool has_active_observations_ = false;
