@@ -179,6 +179,7 @@ class CONTENT_EXPORT SiteInstanceImpl final : public SiteInstance {
   size_t GetRelatedActiveContentsCount() override;
   bool RequiresDedicatedProcess() override;
   bool IsSameSiteWithURL(const GURL& url) override;
+  bool RecordReplayForRecording() override;
   SiteInstanceProcessAssignment GetLastProcessAssignmentOutcome() override;
   void WriteIntoTrace(perfetto::TracedProto<TraceProto> context) override;
   int EstimateOriginAgentClusterOverheadForMetrics() override;
@@ -683,6 +684,10 @@ class CONTENT_EXPORT SiteInstanceImpl final : public SiteInstance {
 
   // Test-only callback to run when this SiteInstance is destroyed.
   base::OnceClosure destruction_callback_for_testing_;
+
+  // RecordReplay [RUN-2762]
+  // Indicates if this site-instance was created for a recorded tab.
+  bool record_replay_for_recording_ = false;
 };
 
 }  // namespace content
