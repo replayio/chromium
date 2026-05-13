@@ -176,6 +176,8 @@ PageSchedulerImpl::PageSchedulerImpl(
   // Pointer registration is needed for sorting in MainThreadSchedulerImpl.
   recordreplay::RegisterPointer("PageSchedulerImpl", this);
 
+  REPLAY_ASSERT("[TT-1367-1386] PageSchedulerImpl::PageSchedulerImpl %d", !!delegate_);
+
   do_throttle_cpu_time_callback_.Reset(base::BindRepeating(
       &PageSchedulerImpl::DoThrottleCPUTime, base::Unretained(this)));
   do_intensively_throttle_wake_ups_callback_.Reset(
