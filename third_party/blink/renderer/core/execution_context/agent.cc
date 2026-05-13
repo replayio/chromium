@@ -125,6 +125,9 @@ void Agent::PerformMicrotaskCheckpoint() {
     (int) RecordReplayId());
 
   event_loop_->PerformMicrotaskCheckpoint();
+
+  recordreplay::Assert("[RUN-2056-2211] Agent::PerformMicrotaskCheckpoint %d Done",
+    (int) RecordReplayId());
 }
 
 void Agent::Dispose() {
