@@ -175,6 +175,9 @@ DOMWindow* FindWindow(v8::Isolate* isolate,
 bool BindingSecurity::ShouldAllowAccessTo(
     const LocalDOMWindow* accessing_window,
     const DOMWindow* target) {
+  if (recordreplay::IsInReplayCode())
+    return true;
+
   DCHECK(target);
   bool can_access = CanAccessWindow(accessing_window, target);
 
