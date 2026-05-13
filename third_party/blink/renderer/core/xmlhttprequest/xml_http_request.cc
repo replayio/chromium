@@ -860,6 +860,44 @@ void XMLHttpRequest::send(Document* document, ExceptionState& exception_state) {
 }
 
 void XMLHttpRequest::send(const String& body, ExceptionState& exception_state) {
+  // RUN-1350: Use the recording stream to adjust the string value here to
+  // meet expectations.  Sometimes divergences in elsewhere will cause
+  // the sent data to be slightly different.  This will lead to spurious
+  // mmap-related asserts down the line.  To avoid this, massage the
+  // string value here (to a limit) to match the recorded value.
+  std::optional<String> adj_body;
+  if (recordreplay::IsRecordingOrReplaying("values", "XMLHttpRequest::send")) {
+    size_t length = body.length();
+    size_t recorded_length =
+      recordreplay::RecordReplayValue("XMLHttpRequest::send", body.length());
+    if (length != recorded_length) {
+      bool mismatch_too_large =
+        (length < recorded_length * 0.95 || length > recorded_length * 1.05) &&
+        (length < recorded_length - 2 || length > recorded_length + 2);
+      recordreplay::Warning(
+        "XMLHttpRequest::Send length mismatch recorded(%zu) != replayed(%zu) toolarge=%s",
+        recorded_length, length,
+        mismatch_too_large ? "yes" : "no"
+      );
+      // If the difference in strings is too big (off by more than 5 percent
+      // or so, then don't adjust the string).
+      if (mismatch_too_large) {
+        recordreplay::Warning(
+          "XMLHttpRequest::Send length mismatch too large, not adjusting"
+        );
+      } else if (length < recorded_length) {
+        size_t padding = recorded_length - length;
+        std::unique_ptr<char[]> buffer(new char[padding + 1]);
+        memset(buffer.get(), ' ', padding);
+        buffer[padding] = '\0';
+        adj_body = body + String(buffer.get());
+      } else {
+        adj_body = body.Substring(0, (unsigned int) recorded_length);
+      }
+    }
+  }
+  const String& use_body = adj_body.value_or(body);
+
   if (!InitSend(exception_state))
     return;
 
@@ -867,7 +905,7 @@ void XMLHttpRequest::send(const String& body, ExceptionState& exception_state) {
 
   if (!use_body.IsNull() && AreMethodAndURLValidForSend()) {
     http_body = EncodedFormData::Create(
-        Utf8Encoding().Encode(body, UnencodableHandling::kNoUnencodables));
+        Utf8Encoding().Encode(use_body, UnencodableHandling::kNoUnencodables));
     UpdateContentTypeAndCharset(AtomicString("text/plain;charset=UTF-8"),
                                 "UTF-8");
   }
