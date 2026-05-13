@@ -160,6 +160,9 @@ class CreateSessionDescriptionRequest
 
   void OnSuccessUniquePtr(
       std::unique_ptr<webrtc::SessionDescriptionInterface> desc) {
+    // https://linear.app/replay/issue/RUN-547
+    recordreplay::Assert("CreateSessionDescriptionRequest::OnSuccess %d", !!desc);
+
     if (!main_thread_->BelongsToCurrentThread()) {
       PostCrossThreadTask(
           *main_thread_.get(), FROM_HERE,
