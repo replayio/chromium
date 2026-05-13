@@ -81,7 +81,7 @@ class BASE_EXPORT MessagePumpWin : public MessagePump {
   //
   // Note that this should not be used for memory ordering. It is accessed via
   // `memory_order_relaxed` in all cases.
-  std::atomic_bool native_msg_scheduled_{false};
+  recordreplay::OrderedAtomic<bool> native_msg_scheduled_{false};
 
   raw_ptr<RunState> run_state_ = nullptr;
 
