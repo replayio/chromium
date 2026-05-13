@@ -5060,7 +5060,7 @@ void WebFrameWidgetImpl::DidUpdateSurfaceAndScreen(
         CoreInitializer::GetInstance().DidUpdateScreens(
             *local_frame->GetFrame(), original_screen_infos);
         if (window_screen_has_changed)
-          screen->DispatchEvent(*Event::Create(event_type_names::kChange));
+          screen->DispatchEvent(*Event::Create(event_type_names::kChange), "WebFrameWidgetImpl::DidUpdateSurfaceAndScreen");
         if (color_gamut_changed) {
           local_frame->GetFrame()
               ->GetDocument()
