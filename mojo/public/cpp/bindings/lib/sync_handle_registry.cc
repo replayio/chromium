@@ -167,6 +167,12 @@ bool SyncHandleRegistry::Wait(base::span<const bool*> should_stop) {
     wait_set_.Wait(&ready_event, &num_ready_handles,
                    base::span_from_ref(ready_handle),
                    base::span_from_ref(ready_handle_result));
+
+    // We've just woken up, so maybe we have to terminate.
+    if (quitEvent.IsSignaled()) {
+      recordreplay::MaybeTerminate(nullptr, nullptr);
+    }
+
     if (num_ready_handles) {
       DCHECK_EQ(1u, num_ready_handles);
       const auto iter = handles_.find(ready_handle);
