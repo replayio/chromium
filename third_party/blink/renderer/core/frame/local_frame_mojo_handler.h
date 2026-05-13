@@ -8,6 +8,7 @@
 #include "base/record_replay.h"
 #include "build/build_config.h"
 #include "cc/input/browser_controls_offset_tag_modifications.h"
+#include "components/record_replay/services/auth_token/public/mojom/auth_token.mojom-blink.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/blink/public/mojom/confidence_level.mojom-blink.h"
 #include "third_party/blink/public/mojom/device_posture/device_posture_provider.mojom-blink.h"
@@ -56,7 +57,8 @@ class LocalFrameMojoHandler
       public mojom::blink::LocalFrame,
       public mojom::blink::LocalMainFrame,
       public mojom::blink::FullscreenVideoElementHandler,
-      public mojom::blink::DevicePostureClient {
+      public mojom::blink::DevicePostureClient,
+      public auth_token::mojom::blink::RecordReplayAuthTokenStoreObserver {
  public:
   explicit LocalFrameMojoHandler(blink::LocalFrame& frame);
   void Trace(Visitor* visitor) const;
@@ -308,6 +310,11 @@ class LocalFrameMojoHandler
   HeapMojoRemote<mojom::blink::DevicePostureProvider>
       device_posture_provider_service_{nullptr};
   // LocalFrameMojoHandler can be reused by multiple ExecutionContext.
+  HeapMojoReceiver<auth_token::mojom::blink::RecordReplayAuthTokenStoreObserver,
+                   LocalFrameMojoHandler>
+      auth_token_store_observer_receiver_{this, nullptr};
+
+  // LocalFrameMojoHandler can be reused by multiple ExecutionContext.
   HeapMojoReceiver<mojom::blink::DevicePostureClient, LocalFrameMojoHandler>
       device_posture_receiver_{this, nullptr};
   mojom::blink::DevicePostureType current_device_posture_ =
@@ -315,6 +322,9 @@ class LocalFrameMojoHandler
 
   HeapMojoAssociatedRemote<mojom::blink::LocalFrameHost>
       local_frame_host_remote_{nullptr};
+
+  HeapMojoRemote<auth_token::mojom::blink::RecordReplayAuthTokenStore>
+      auth_token_store_{nullptr};
 
   HeapMojoRemote<mojom::blink::NonAssociatedLocalFrameHost>
       non_associated_local_frame_host_remote_{nullptr};
