@@ -172,6 +172,7 @@ MessageEvent::MessageEvent(scoped_refptr<SerializedScriptValue> data,
   DCHECK(IsValidSource(source_.Get()));
   serialized_data_memory_accounter_.Increase(v8::Isolate::GetCurrent(),
                                              SizeOfExternalMemoryInBytes());
+  RecordReplayInitDependencyGraphNodeId();
 }
 
 MessageEvent::MessageEvent(
