@@ -42,6 +42,8 @@
 #include "partition_alloc/thread_cache.h"  // nogncheck
 #endif
 
+#include "base/record_replay.h"
+
 namespace base::internal {
 
 constexpr TimeDelta WorkerThread::Delegate::kPurgeThreadCacheIdleDelay;
