@@ -76,6 +76,10 @@ const LayoutResult* LayoutBox::CachedLayoutResult(
     const ColumnSpannerPath* column_spanner_path,
     std::optional<FragmentGeometry>* initial_fragment_geometry,
     LayoutCacheStatus* out_cache_status) {
+  recordreplay::Assert("[RUN-1855-1862] LayoutBox::CachedLayoutResult %d new(%s)",
+    RecordReplayId(),
+    new_space.ToString().Ascii().c_str()
+  );
   NOT_DESTROYED();
   *out_cache_status = LayoutCacheStatus::kNeedsLayout;
 
