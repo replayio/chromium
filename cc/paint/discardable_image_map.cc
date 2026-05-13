@@ -357,11 +357,15 @@ class DiscardableImageMap::Generator {
   bool collect_invisible_images_ = false;
 };  // DiscardableImageMap::Generator
 
-DiscardableImageMap::DiscardableImageMap() = default;
+DiscardableImageMap::DiscardableImageMap() {
+  recordreplay::RegisterPointer("DiscardableImageMap", this);
+}
 
 // Once a DiscardableImage is generated, it's hold in a ref-counted
 // DisplayItemList which may be destructed from any thread.
-DiscardableImageMap::~DiscardableImageMap() = default;
+DiscardableImageMap::~DiscardableImageMap() {
+  recordreplay::UnregisterPointer(this);
+}
 
 scoped_refptr<DiscardableImageMap> DiscardableImageMap::Generate(
     const PaintOpBuffer& paint_op_buffer,
