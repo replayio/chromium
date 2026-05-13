@@ -17,6 +17,7 @@
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
+#include "base/record_replay.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
@@ -157,7 +158,7 @@ Connector::Connector(ScopedMessagePipeHandle message_pipe,
                             "MessageHeaderValidator"},
                            "")) {
   if (config == MULTI_THREADED_SEND) {
-    lock_.emplace();
+    lock_.emplace("Connector.lock_");
   }
 
 #if defined(ENABLE_IPC_FUZZER)
