@@ -387,7 +387,7 @@ WebInputEventResult KeyboardEventManager::KeyEvent(
       event->SetTarget(node);
       event->SetStopPropagation(!send_key_event);
 
-      dispatch_result = node->DispatchEvent(*event);
+      dispatch_result = node->DispatchEvent(*event, "KeyboardEventManager::KeyEvent #3");
       break;
     }
     default:
