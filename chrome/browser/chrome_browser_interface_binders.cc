@@ -457,6 +457,11 @@ void BindCredentialManager(
 void PopulateChromeFrameBinders(
     mojo::BinderMapWithContext<content::RenderFrameHost*>* map,
     content::RenderFrameHost* render_frame_host) {
+  if (getenv("CHROMIUM_UI")) {
+    map->Add<auth_token::mojom::RecordReplayAuthTokenStore>(
+        base::BindRepeating(&BindRecordReplayAuthTokenStore));
+  }
+
   map->Add<image_annotation::mojom::Annotator>(&BindImageAnnotator);
 
   map->Add<blink::mojom::ScriptToolHost>(
