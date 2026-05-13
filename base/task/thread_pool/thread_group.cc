@@ -104,11 +104,19 @@ ThreadGroup::ThreadGroup(std::string_view histogram_label,
                          TrackedRef<Delegate> delegate)
     : task_tracker_(std::move(task_tracker)),
       delegate_(std::move(delegate)),
+      lock_(recordreplay::AreEventsDisallowed() ? nullptr : "ThreadGroup.lock_"
+            // We ought to have a CheckedLock ctor that takes both an ordered
+            // name and a predecessor, but since we don't support debug builds
+            // when recording/replaying currently it doesn't seem worth the
+            // hassle.
+            /*predecessor_thread_group ? &predecessor_thread_group->lock_
+                                       : nullptr*/),
       unnecessary_wakeup_histogram_label_(
           StringPrintf("ThreadPool.UnnecessaryWakeup.%s", histogram_label)),
       thread_group_label_(thread_group_label),
       thread_type_hint_(thread_type_hint),
-      idle_workers_set_cv_for_testing_(lock_.CreateConditionVariable()) {
+      idle_workers_set_cv_for_testing_(lock_.CreateConditionVariable()),
+      record_replay_unordered_(recordreplay::AreEventsDisallowed()) {
   DCHECK(!thread_group_label_.empty());
 }
 
