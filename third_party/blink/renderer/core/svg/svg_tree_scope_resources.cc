@@ -22,6 +22,8 @@ LocalSVGResource* SVGTreeScopeResources::ResourceForId(const AtomicString& id) {
     !!entry);
   if (!entry) {
     entry = MakeGarbageCollected<LocalSVGResource>(*tree_scope_, id);
+    replay_strong_resources_.insert(id, entry);
+  }
   return entry.Get();
 }
 
@@ -52,6 +54,7 @@ void SVGTreeScopeResources::Trace(Visitor* visitor) const {
       SVGTreeScopeResources, &SVGTreeScopeResources::ProcessCustomWeakness>(
       this);
   visitor->Trace(tree_scope_);
+  visitor->Trace(replay_strong_resources_);
 }
 
 }  // namespace blink
