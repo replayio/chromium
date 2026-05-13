@@ -297,6 +297,8 @@ Performance::Performance(
           &Performance::FireResourceTimingBufferFull) {
   unix_at_zero_monotonic_ =
       GetUnixAtZeroMonotonic(base::DefaultClock::GetInstance(), tick_clock_);
+  recordreplay::RegisterPointer("Performance", this);
+
   // |context| may be null in tests.
   if (context) {
     background_tracing_helper_ =
