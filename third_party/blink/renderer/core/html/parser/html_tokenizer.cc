@@ -156,6 +156,7 @@ HTMLTokenizer::HTMLTokenizer(const HTMLParserOptions& options)
     : track_attributes_ranges_(options.track_attributes_ranges),
       input_stream_preprocessor_(this),
       options_(options) {
+  recordreplay::RegisterPointer("HTMLTokenizer", this);
   Reset();
 }
 
