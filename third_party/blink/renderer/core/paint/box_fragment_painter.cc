@@ -528,6 +528,9 @@ InlinePaintContext& BoxFragmentPainter::EnsureInlineContext() {
 
 void BoxFragmentPainter::PaintFragment(const PhysicalBoxFragment& fragment,
                                        const PaintInfo& paint_info) {
+  recordreplay::Assert(
+      "[RUN-1975-2008] NgBoxFragmentPainter::PaintFragment A %llu %d",
+      (uint64_t)paint_info.FragmentID(), fragment.GetNode() ? fragment.GetNode()->RecordReplayId() : -1);
   if (fragment.CanTraverse()) {
     BoxFragmentPainter(fragment).Paint(paint_info);
     return;
@@ -1889,6 +1892,9 @@ void BoxFragmentPainter::PaintInlineItems(const PaintInfo& paint_info,
   while (*cursor) {
     const FragmentItem* item = cursor->CurrentItem();
     DCHECK(item);
+    recordreplay::Assert(
+        "[RUN-1975-2008] NGBoxFragmentPainter::PaintInlineItems A %llu %d %d",
+        (uint64_t)item->FragmentId(), (int)item->Type(), item->GetNode() ? item->GetNode()->RecordReplayId() : -1);
     if (item->IsLayoutObjectDestroyedOrMoved()) [[unlikely]] {
       // TODO(crbug.com/1099613): This should not happen, as long as it is
       // really layout-clean.
