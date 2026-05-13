@@ -8,6 +8,7 @@
 
 #include "base/compiler_specific.h"
 #include "base/logging.h"
+#include "base/record_replay.h"
 #include "partition_alloc/page_allocator.h"
 
 namespace base {
