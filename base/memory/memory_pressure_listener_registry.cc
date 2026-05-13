@@ -7,6 +7,7 @@
 #include "base/feature_list.h"
 #include "base/memory/memory_pressure_level.h"
 #include "base/metrics/field_trial_params.h"
+#include "base/record_replay.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/interned_args_helper.h"
 #include "base/trace_event/memory_dump_manager.h"
@@ -74,6 +75,9 @@ MemoryPressureListenerRegistry::~MemoryPressureListenerRegistry() {
 // static
 void MemoryPressureListenerRegistry::NotifyMemoryPressure(
     MemoryPressureLevel memory_pressure_level) {
+  recordreplay::AutoDisallowEvents disallow(
+      "MemoryPressureListenerRegistry::NotifyMemoryPressure");
+
   CHECK(
       !SingleThreadTaskRunner::HasMainThreadDefault() ||
       SingleThreadTaskRunner::GetMainThreadDefault()->BelongsToCurrentThread());
