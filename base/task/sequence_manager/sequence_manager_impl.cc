@@ -26,6 +26,7 @@
 #include "base/notreached.h"
 #include "base/observer_list.h"
 #include "base/rand_util.h"
+#include "base/record_replay.h"
 #include "base/task/execution_fence.h"
 #include "base/task/sequence_manager/enqueue_order.h"
 #include "base/task/sequence_manager/task_queue_impl.h"
