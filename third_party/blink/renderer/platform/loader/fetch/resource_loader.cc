@@ -708,6 +708,9 @@ bool ResourceLoader::WillFollowRedirect(
     return false;
   }
 
+  recordreplay::OnNetworkResourceRedirect(resource_->InspectorId(),
+                                          new_request->Url(), new_request.get());
+
   has_devtools_request_id = !new_request->GetDevToolsId().IsNull();
   return true;
 }
