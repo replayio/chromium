@@ -44,7 +44,9 @@ Agent::Agent(v8::Isolate* isolate,
           new scheduler::EventLoop(this, isolate, std::move(microtask_queue)))),
       cluster_id_(cluster_id),
       agent_cluster_key_(agent_cluster_key),
-      agent_type_(agent_type) {}
+      agent_type_(agent_type) {
+  record_replay_id_ = recordreplay::NewIdAnyThread("blink::Agent");
+}
 
 Agent::~Agent() = default;
 
