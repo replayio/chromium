@@ -259,6 +259,7 @@ class CORE_EXPORT MessageEvent final : public Event {
   int RecordReplayDependencyGraphNodeId() const {
     return record_replay_dependency_graph_node_id_;
   }
+  void RecordReplayInitDependencyGraphNodeId();
 
  private:
   enum DataType {
