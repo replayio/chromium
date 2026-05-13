@@ -1163,6 +1163,8 @@ void ResourceLoader::DidFail(const WebURLError& error,
                              int64_t decoded_body_length) {
   response_end_time_for_error_cases_ = response_end_time;
 
+  recordreplay::OnNetworkFail(resource_->InspectorId(), error);
+
   resource_->SetEncodedDataLength(encoded_data_length);
   resource_->SetEncodedBodyLength(encoded_body_length);
   resource_->SetDecodedBodyLength(decoded_body_length);
