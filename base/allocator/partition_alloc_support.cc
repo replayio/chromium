@@ -244,7 +244,13 @@ void MemoryReclaimerSupport::Run() {
   TRACE_EVENT0("base", "partition_alloc::MemoryReclaimer::Reclaim()");
   has_pending_task_ = false;
 
-  ::partition_alloc::MemoryReclaimer::Instance()->ReclaimFast();
+  {
+    // The memory reclaimer runs at consistent points when recording vs. replaying,
+    // but can behave differently.
+    recordreplay::AutoDisallowEvents disallow("RunMemoryReclaimer");
+
+    ::partition_alloc::MemoryReclaimer::Instance()->ReclaimFast();
+  }
   MaybeScheduleTask();
 }
 
