@@ -198,6 +198,10 @@ void MultiBufferDataSource::Initialize(InitializeCB init_cb) {
 
   // We're not allowed to call Wait() if data is already available.
   if (reader_->Available()) {
+    // https://linear.app/replay/issue/RUN-468
+    recordreplay::Assert("MultibufferDataSource::Initialize #1 %lu",
+                         recordreplay::PointerId(this));
+
     PostCrossThreadTask(
         *render_task_runner_, FROM_HERE,
         CrossThreadBindOnce(&MultiBufferDataSource::StartCallback, weak_ptr_));
@@ -226,6 +230,10 @@ void MultiBufferDataSource::OnRedirected(
     // A failure occurred.
     failed_ = true;
     if (init_cb_) {
+      // https://linear.app/replay/issue/RUN-468
+      recordreplay::Assert("MultibufferDataSource::OnRedirected #1 %lu",
+                           recordreplay::PointerId(this));
+
       PostCrossThreadTask(
           *render_task_runner_, FROM_HERE,
           CrossThreadBindOnce(&MultiBufferDataSource::StartCallback,
@@ -250,6 +258,10 @@ void MultiBufferDataSource::OnRedirected(
   if (init_cb_) {
     CreateResourceLoader(0, kPositionNotSpecified);
     if (reader_->Available()) {
+      // https://linear.app/replay/issue/RUN-468
+      recordreplay::Assert("MultibufferDataSource::OnRedirected #2 %lu",
+                           recordreplay::PointerId(this));
+
       PostCrossThreadTask(
           *render_task_runner_, FROM_HERE,
           CrossThreadBindOnce(&MultiBufferDataSource::StartCallback,
@@ -607,6 +619,10 @@ void MultiBufferDataSource::SetBitrateTask(int bitrate) {
 // BufferedResourceLoader callback methods.
 void MultiBufferDataSource::StartCallback() {
   DCHECK(render_task_runner_->BelongsToCurrentThread());
+
+  // https://linear.app/replay/issue/RUN-468
+  recordreplay::Assert("MultibufferDataSource::StartCallback %lu",
+                       recordreplay::PointerId(this));
 
   // TODO(crbug.com/40724615): we shouldn't have to lock to signal host().
   base::AutoLock auto_lock(lock_);
