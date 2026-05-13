@@ -8,8 +8,13 @@
 
 #include "base/record_replay.h"
 
-PollableThreadSafeFlag::PollableThreadSafeFlag(base::Lock* write_lock_)
-    : flag_(false), write_lock_(write_lock_) {}
+PollableThreadSafeFlag::PollableThreadSafeFlag(base::Lock* write_lock_, const char* ordered_name)
+  : ordered_lock_id_(0), flag_(false), write_lock_(write_lock_)
+{
+  if (ordered_name) {
+    ordered_lock_id_ = recordreplay::CreateOrderedLock(ordered_name);
+  }
+}
 
 void PollableThreadSafeFlag::SetWhileLocked(bool value) {
   recordreplay::AutoOrderedLock ordered(ordered_lock_id_);
@@ -18,5 +23,6 @@ void PollableThreadSafeFlag::SetWhileLocked(bool value) {
 }
 
 bool PollableThreadSafeFlag::IsSet() const {
+  recordreplay::AutoOrderedLock ordered(ordered_lock_id_);
   return flag_.load(std::memory_order_acquire);
 }
