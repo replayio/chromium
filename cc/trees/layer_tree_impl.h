@@ -995,8 +995,7 @@ class CC_EXPORT LayerTreeImpl {
 
   // Set of layers that need to push properties.
   // RAW_PTR_EXCLUSION: Performance reasons (based on analysis of MotionMark).
-  RAW_PTR_EXCLUSION base::flat_set<LayerImpl*>
-      layers_that_should_push_properties_;
+  RAW_PTR_EXCLUSION LayerImplSet layers_that_should_push_properties_;
 
   struct ScrollbarLayerIds {
     int horizontal = Layer::INVALID_ID;
