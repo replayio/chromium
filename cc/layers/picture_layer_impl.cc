@@ -139,6 +139,9 @@ std::unique_ptr<LayerImpl> PictureLayerImpl::CreateLayerImpl(
 }
 
 void PictureLayerImpl::PushPropertiesTo(LayerImpl* base_layer) {
+  // https://linear.app/replay/issue/RUN-465
+  recordreplay::Assert("PictureLayerImpl::PushPropertiesTo");
+
   PictureLayerImpl* layer_impl = static_cast<PictureLayerImpl*>(base_layer);
 
   layer_impl->has_animated_image_update_rect_ = has_animated_image_update_rect_;
@@ -221,6 +224,9 @@ void PictureLayerImpl::PushPropertiesTo(LayerImpl* base_layer) {
   }
 
   layer_impl->SanityCheckTilingState();
+
+  // https://linear.app/replay/issue/RUN-465
+  recordreplay::Assert("PictureLayerImpl::PushPropertiesTo Done");
 }
 
 void PictureLayerImpl::AppendQuadsForResourcelessSoftwareDraw(
@@ -313,6 +319,7 @@ void PictureLayerImpl::ComputeCheckerboardedNeedsRecord(
 
 std::unique_ptr<AppendQuadsCustomSharedData> PictureLayerImpl::WillAppendQuads(
     float max_contents_scale) {
+  recordreplay::Assert("[RUN-550-1536] PictureLayerImpl::AppendQuads A");
   produced_tile_last_append_quads_ = false;
 
   auto custom_data = std::make_unique<AppendQuadsCustomSharedDataImpl>();
@@ -438,6 +445,10 @@ bool PictureLayerImpl::UpdateTiles() {
   // only have the high-res tiling, so only clean up the active layer. This
   // cleans it up here in case AppendQuads didn't run.  If it did run, this
   // would not remove any additional tilings.
+
+  // https://linear.app/replay/issue/RUN-550
+  recordreplay::Assert("[RUN-550-1409] PictureLayerImpl::UpdateTiles #2 %d",
+    (int) layer_tree_impl()->IsActiveTree());
   if (layer_tree_impl()->IsActiveTree()) {
     CleanUpTilingsOnActiveLayer();
   }
