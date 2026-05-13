@@ -120,8 +120,14 @@ void AgentGroupSchedulerImpl::PerformMicrotaskCheckpoint() {
   }
   for (Agent* agent : agents) {
     DCHECK(agents_.Contains(agent));
+    recordreplay::Assert(
+        "[RUN-2056-2365] AgentGroupSchedulerImpl::PerformMicrotaskCheckpoint "
+        "%d %d %d",
+        RecordReplayId(), (int)agents_.size(), agent->RecordReplayId());
     agent->PerformMicrotaskCheckpoint();
   }
+
+  recordreplay::Assert("[RUN-2056-2211] AgentGroupSchedulerImpl::PerformMicrotaskCheckpoint Done");
 }
 
 void AgentGroupSchedulerImpl::Trace(Visitor* visitor) const {
