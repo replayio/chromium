@@ -361,6 +361,8 @@ void PictureLayerTilingSet::RemoveAllTilings() {
 }
 
 void PictureLayerTilingSet::Remove(PictureLayerTiling* tiling) {
+  recordreplay::Assert("[RUN-550] PictureLayerTilingSet::Remove %.2f", tiling->contents_scale_key());
+
   auto iter = std::ranges::find(tilings_, tiling,
                                 &std::unique_ptr<PictureLayerTiling>::get);
   if (iter == tilings_.end())
