@@ -40,6 +40,7 @@
 #include "base/pending_task.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/process/process_handle.h"
+#include "base/record_replay.h"
 #include "base/scoped_clear_last_error.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
