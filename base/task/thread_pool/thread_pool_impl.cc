@@ -779,6 +779,9 @@ void ThreadPoolImpl::UpdateCanRunPolicy(CanRunPolicy can_run_policy) {
   if (audio_thread_group_) {
     audio_thread_group_->DidUpdateCanRunPolicy();
   }
+  if (record_replay_unordered_thread_group_) {
+    record_replay_unordered_thread_group_->DidUpdateCanRunPolicy();
+  }
   single_thread_task_runner_manager_.DidUpdateCanRunPolicy();
 }
 
