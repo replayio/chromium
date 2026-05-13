@@ -1414,7 +1414,7 @@ void LocalDOMWindow::DispatchMessageEventWithOriginCheck(
     // restore.
     EnqueueEvent(*event, TaskType::kInternalDefault);
   } else {
-    DispatchEvent(*event);
+    DispatchEvent(*event, "LocalDOMWindow::DispatchMessageEventWithOriginCheck");
   }
 }
 
