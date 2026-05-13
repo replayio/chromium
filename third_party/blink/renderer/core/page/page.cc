@@ -291,7 +291,8 @@ Page::Page(base::PassKey<Page>,
       v8_compile_hints_consumer_(
           MakeGarbageCollected<
               v8_compile_hints::V8CrowdsourcedCompileHintsConsumer>()),
-      browsing_context_group_token_(browsing_context_group_token) {
+      browsing_context_group_token_(browsing_context_group_token),
+      record_replay_id_(recordreplay::NewIdMainThread("Page")) {
   DCHECK(!AllPages().Contains(this));
   AllPages().insert(this);
 
