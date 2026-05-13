@@ -1982,6 +1982,8 @@ struct CallbackCancellationTraits {
   static constexpr bool is_cancellable = false;
 };
 
+extern uintptr_t CallbackRecordReplayValue(const char* why, uintptr_t value);
+
 // Specialization for a weak receiver.
 template <typename Functor, typename... BoundArgs>
   requires internal::kIsWeakMethod<
