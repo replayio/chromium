@@ -59,9 +59,21 @@ int64_t IntersectionObservation::ComputeIntersection(
     needs_update_ = true;
   }
 
+  REPLAY_ASSERT("[TT-1483-1499] IntersectionObservation::ComputeIntersection A %d %u %d %d",
+    needs_update_,
+    compute_flags,
+    ShouldCompute(compute_flags),
+    !context.GetMonotonicTime().is_null());
+
   if (!CanCompute() || !ShouldCompute(compute_flags)) {
     return 0;
   }
+
+  REPLAY_ASSERT("[TT-1483-1499] IntersectionObservation::ComputeIntersection B %d %u %d %d",
+    needs_update_,
+    compute_flags,
+    ShouldCompute(compute_flags),
+    !context.GetMonotonicTime().is_null());
   if (MaybeDelayAndReschedule(compute_flags, context)) {
     return 0;
   }
@@ -197,6 +209,8 @@ bool IntersectionObservation::ShouldCompute(unsigned flags) const {
 bool IntersectionObservation::MaybeDelayAndReschedule(
     unsigned flags,
     ComputeIntersectionsContext& context) {
+  REPLAY_ASSERT("[TT-1483-1499] IntersectionObservation::MaybeDelayAndReschedule %d",
+    last_run_time_.is_null());
   if (flags & kIgnoreDelay) {
     return false;
   }
