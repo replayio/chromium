@@ -1748,7 +1748,7 @@ void InspectorNetworkAgent::DidReceiveData(uint64_t identifier,
   double timestamp = base::TimeTicks::Now().since_origin().InSecondsF();
 
   GetFrontend()->dataReceived(
-      request_id, base::TimeTicks::Now().since_origin().InSecondsF(),
+      request_id, timestamp,
       static_cast<int>(data.size()),
       static_cast<int>(
           resources_data_->GetAndClearPendingEncodedDataLength(request_id)),
