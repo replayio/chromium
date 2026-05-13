@@ -1415,6 +1415,9 @@ void FrameSchedulerImpl::OnWebSchedulingTaskQueuePriorityChanged(
 
 void FrameSchedulerImpl::OnWebSchedulingTaskQueueDestroyed(
     MainThreadTaskQueue* queue) {
+  REPLAY_ASSERT("[TT-1465] FrameSchedulerImpl::OnWebSchedulingTaskQueueDestroyed %d",
+    recordreplay::PointerId(queue));
+
   if (queue->CanBeThrottled()) {
     RemoveThrottleableQueueFromBudgetPools(queue);
   }
