@@ -244,7 +244,15 @@ class PLATFORM_EXPORT Resource : public GarbageCollected<Resource>,
   bool IsUnusedPreload() const { return is_unused_preload_; }
 
   ResourceStatus GetStatus() const { return status_; }
-  void SetStatus(ResourceStatus status) { status_ = status; }
+  void SetStatus(ResourceStatus status) {
+    status_ = status;
+
+    if (IsLoaded()) {
+      record_replay_dependency_node_ids_.push_back(
+        recordreplay::NewDependencyGraphNode("{\"kind\":\"resourceFinished\"}")
+      );
+    }
+  }
   virtual ResourceStatus GetContentStatus() const { return status_; }
 
   size_t size() const { return EncodedSize() + DecodedSize() + OverheadSize(); }
@@ -650,6 +658,8 @@ class PLATFORM_EXPORT Resource : public GarbageCollected<Resource>,
   WebScopedVirtualTimePauser virtual_time_pauser_;
 
   MemoryPressureListenerRegistration memory_pressure_listener_registration_;
+
+  Vector<int> record_replay_dependency_node_ids_;
 };
 
 class ResourceFactory {
