@@ -299,7 +299,9 @@ bool WorkQueue::RemoveCancelledTasks(RemoveCancelledTasksPolicy policy) {
     if (queue_type_ == QueueType::kImmediate) {
       // Short-circuit the queue reload so that OnPopMinQueueInSet does the
       // right thing.
-      task_queue_->TakeImmediateIncomingQueueTasks(&tasks_);
+      TaskQueueImpl::TaskDeque record_replay_unordered_queue;
+      task_queue_->TakeImmediateIncomingQueueTasks(&tasks_, &record_replay_unordered_queue);
+      RecordReplayRunUnorderedTasks(&record_replay_unordered_queue);
     }
   }
 
