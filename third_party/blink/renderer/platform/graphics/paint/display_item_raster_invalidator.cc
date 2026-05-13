@@ -139,6 +139,11 @@ void DisplayItemRasterInvalidator::AddRasterInvalidation(
     RasterInvalidator::ClientIsOldOrNew old_or_new,
     const char* why) {
   gfx::Rect r = invalidator_.ClipByLayerBounds(mapper_.MapVisualRect(rect));
+
+  // https://linear.app/replay/issue/RUN-657
+  recordreplay::Assert("[RUN-657] DisplayItemRasterInvalidator::AddRasterInvalidation %s %d %d %d %d %d",
+                       why, r.x(), r.y(), r.width(), r.height(), r.IsEmpty());
+
   invalidator_.AddRasterInvalidation(r, client_id, reason, old_or_new);
 }
 
