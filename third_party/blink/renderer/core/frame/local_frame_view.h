@@ -1145,7 +1145,8 @@ class CORE_EXPORT LocalFrameView final
 
   void RunCanvasOnpaintSteps();
 
-  typedef HeapHashSet<Member<LayoutEmbeddedContent>> EmbeddedContentSet;
+  typedef HeapHashSet<Member<LayoutEmbeddedContent>,
+                      WTF::MemberHashRecordReplayId<LayoutEmbeddedContent>> EmbeddedContentSet;
   EmbeddedContentSet part_update_set_;
 
   Member<LocalFrame> frame_;
