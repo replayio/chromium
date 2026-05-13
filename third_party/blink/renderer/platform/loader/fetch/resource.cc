@@ -161,6 +161,8 @@ Resource::Resource(const ResourceRequestHead& request,
           FROM_HERE,
           base::MemoryPressureListenerTag::kResource,
           this) {
+  // Pointer registration is needed for sorting in ResourceFetcher.
+  recordreplay::RegisterPointer("Resource", this);
   InstanceCounters::IncrementCounter(InstanceCounters::kResourceCounter);
 }
 
