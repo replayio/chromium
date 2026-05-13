@@ -288,7 +288,7 @@ TaskSource::RunStatus JobTaskSource::WillRunTask() {
 size_t JobTaskSource::GetRemainingConcurrency() const {
   // It is safe to read |state_| without a lock since this variable is atomic,
   // and no other state is synchronized with GetRemainingConcurrency().
-  const auto state = TS_UNCHECKED_READ(state_).Load();
+  const auto state = TS_UNCHECKED_READ(state_).RecordReplayLoadUnordered();
   if (state.is_canceled()) {
     return 0;
   }
