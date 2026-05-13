@@ -337,6 +337,7 @@ double V8Platform::MonotonicallyIncreasingTime() {
 extern "C" void V8RecordReplayAssert(const char* format, ...);
 
 double V8Platform::CurrentClockTimeMillis() {
+  V8RecordReplayAssert("[RUN-1348-2017] V8Platform::CurrentClockTimeMillis");
   return static_cast<double>(time_clamper_.ClampToMillis(base::Time::Now()));
 }
 
