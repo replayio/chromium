@@ -3268,6 +3268,9 @@ void DocumentLoader::CreateParserPostCommit() {
   TRACE_EVENT("loading", "DocumentLoader::CreateParserPostCommit",
               perfetto::Flow::FromPointer(this));
   base::ElapsedTimer timer;
+  // https://linear.app/replay/issue/BAC-2424
+  recordreplay::Assert("DocumentLoader::CreateParserPostCommit");
+
   SpeculationRulesHeader::ProcessHeadersForDocumentResponse(
       response_, *frame_->DomWindow());
 
