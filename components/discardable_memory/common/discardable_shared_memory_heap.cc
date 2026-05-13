@@ -41,7 +41,16 @@ DiscardableSharedMemoryHeap::Span::Span(
     : memory_segment_(memory_segment),
       shared_memory_(shared_memory),
       first_block_(first_block),
-      num_blocks_(num_blocks) {}
+      num_blocks_(num_blocks) {
+  INIT_RECORD_REPLAY_ID(DiscardableSharedMemoryHeap::Span);
+  recordreplay::Assert(
+    "[TT-1252-1255] ClientDiscardableSharedMemoryManager::DiscardableMemoryImpl::Purge %d %d",
+      record_replay_id_,
+      shared_memory_ ?
+        recordreplay::PointerId(shared_memory_) :
+        -1
+  );
+}
 
 DiscardableSharedMemoryHeap::ScopedMemorySegment::ScopedMemorySegment(
     DiscardableSharedMemoryHeap* heap,
@@ -426,6 +435,12 @@ void DiscardableSharedMemoryHeap::RegisterSpan(Span* span) {
 
 void DiscardableSharedMemoryHeap::UnregisterSpan(Span* span) {
   CHECK_EQ(spans_[SpanBeginKey(*span)], span);
+
+  recordreplay::Assert(
+    "[TT-1252-1255] DiscardableSharedMemoryHeap::UnregisterSpan %d",
+      span->RecordReplayId()
+  );
+
   spans_.erase(SpanBeginKey(*span));
   if (span->num_blocks_ > 1u) {
     CHECK_EQ(spans_[SpanEndKey(*span)], span);
@@ -453,6 +468,11 @@ void DiscardableSharedMemoryHeap::ReleaseMemory(
     size_t size) {
   size_t offset = 0u;
   size_t end = size / block_size_;
+
+  recordreplay::Assert(
+      "[TT-1252-1255] DiscardableSharedMemoryHeap::ReleaseMemory A %zu %d",
+      end - offset, recordreplay::PointerId(shared_memory));
+
   while (offset < end) {
     Span* span = spans_[{shared_memory, offset}];
     UnregisterSpan(span);
