@@ -14,6 +14,7 @@
 #include "base/check_op.h"
 #include "base/containers/adapters.h"
 #include "base/memory/stack_allocated.h"
+#include "base/record_replay.h"
 #include "base/synchronization/condition_variable.h"
 #include "base/synchronization/lock.h"
 #include "base/threading/scoped_blocking_call.h"
