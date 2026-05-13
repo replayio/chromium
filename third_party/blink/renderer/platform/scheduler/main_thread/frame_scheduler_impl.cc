@@ -245,6 +245,9 @@ FrameSchedulerImpl::FrameSchedulerImpl(
               *tracing_track_),
           &tracing_controller_,
           YesNoStateToString) {
+  // Pointer registration is needed for sorting in PageSchedulerImpl.
+  recordreplay::RegisterPointer("FrameSchedulerImpl", this);
+
   frame_task_queue_controller_ = base::WrapUnique(
       new FrameTaskQueueController(main_thread_scheduler_, this, this));
   back_forward_cache_disabling_feature_tracker_.SetDelegate(delegate_);
