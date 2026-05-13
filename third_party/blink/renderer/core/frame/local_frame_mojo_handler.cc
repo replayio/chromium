@@ -33,6 +33,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/script_controller.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_evaluation_result.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_function.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_custom_event_init.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_fullscreen_options.h"
 #include "third_party/blink/renderer/core/dom/element_traversal.h"
 #include "third_party/blink/renderer/core/dom/focus_params.h"
@@ -351,6 +352,9 @@ LocalFrameMojoHandler::LocalFrameMojoHandler(blink::LocalFrame& frame)
   registry->AddAssociatedInterface(
       BindRepeating(&LocalFrameMojoHandler::BindFullscreenVideoElementReceiver,
                     WrapWeakPersistent(this)));
+  registry->AddInterface(BindRepeating(
+      &LocalFrameMojoHandler::BindRecordReplayAuthTokenStoreObserver,
+      WrapWeakPersistent(this)));
 }
 
 void LocalFrameMojoHandler::Trace(Visitor* visitor) const {
@@ -490,6 +494,17 @@ void LocalFrameMojoHandler::BindFullscreenVideoElementReceiver(
       std::move(receiver), frame_->GetTaskRunner(TaskType::kInternalDefault));
   fullscreen_video_receiver_.SetFilter(
       std::make_unique<ActiveURLMessageFilter>(frame_));
+}
+
+void LocalFrameMojoHandler::BindRecordReplayAuthTokenStoreObserver(
+    mojo::PendingReceiver<
+        auth_token::mojom::blink::RecordReplayAuthTokenStoreObserver>
+        receiver) {
+  if (frame_->IsDetached())
+    return;
+
+  auth_token_store_observer_receiver_.Bind(
+      std::move(receiver), frame_->GetTaskRunner(TaskType::kInternalDefault));
 }
 
 void LocalFrameMojoHandler::GetTextSurroundingSelection(
