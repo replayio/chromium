@@ -507,6 +507,19 @@ void LocalFrameMojoHandler::BindRecordReplayAuthTokenStoreObserver(
       std::move(receiver), frame_->GetTaskRunner(TaskType::kInternalDefault));
 }
 
+void LocalFrameMojoHandler::RegisterRecordReplayAuthTokenObserver() {
+  if (auth_token_store_.is_bound()) {
+    return;
+  }
+
+  auto task_runner = frame_->GetTaskRunner(TaskType::kInternalDefault);
+  frame_->GetBrowserInterfaceBroker().GetInterface(
+      auth_token_store_.BindNewPipeAndPassReceiver(task_runner));
+
+  auth_token_store_->AddObserver(
+      auth_token_store_observer_receiver_.BindNewPipeAndPassRemote(task_runner));
+}
+
 void LocalFrameMojoHandler::GetTextSurroundingSelection(
     uint32_t max_length,
     GetTextSurroundingSelectionCallback callback) {
@@ -1494,6 +1507,57 @@ void LocalFrameMojoHandler::RequestFullscreenVideoElement() {
       return;
     }
   }
+}
+
+void LocalFrameMojoHandler::OnRecordReplayAuthTokenChanged(const WTF::String& token) {
+  v8::Isolate* isolate = ToIsolate(frame_);
+  v8::HandleScope handle_scope(isolate);
+
+  recordreplay::AutoMarkerDependencyExecution execute(
+    "ScriptExecution", "LocalFrameMojoHandler::OnRecordReplayAuthTokenChanged"
+  );
+
+  ScriptState* script_state = ToScriptStateForMainWorld(frame_);
+  v8::Local<v8::Context> context = script_state->GetContext();
+  v8::Context::Scope context_scope(context);
+
+  // build up a JS object corresponding to the structure the devtools
+  // expects to receive:
+  //
+  // detail = {
+  //   message: {
+  //     token: "...",
+  //     error?: "...",
+  //   }
+  // }
+  //
+  // we don't currently receive an error from the auth token service, so we don't fill it in.
+  // if there was an error, presumably we wouldn't be called here.
+
+  v8::Local<v8::Object> message = v8::Object::New(isolate);
+  message->Set(context, V8String(isolate, "token"),
+               V8String(isolate, token))
+      .Check();
+
+  v8::Local<v8::Object> detail = v8::Object::New(isolate);
+  detail->Set(context, V8String(isolate, "message"), message)
+      .Check();
+
+
+  ExceptionState exception_state(isolate, ExceptionState::kExecutionContext,
+                                 "LocalFrameMojoHandler", "OnTokenChanged");
+
+  CustomEventInit* ev_init = CustomEventInit::Create(isolate, v8::Null(isolate), exception_state);
+  // bail if the creator of the event threw an exception
+  if (exception_state.HadException()) {
+    return;
+  }
+
+  ev_init->setDetail(ScriptValue::From(script_state, detail));
+
+  frame_->DomWindow()->DispatchEvent(
+    *CustomEvent::Create(script_state, "WebChannelMessageToContent", ev_init)
+  );
 }
 
 void LocalFrameMojoHandler::UpdatePrerenderURL(
