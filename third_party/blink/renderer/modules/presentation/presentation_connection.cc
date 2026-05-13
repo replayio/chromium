@@ -556,7 +556,7 @@ void PresentationConnection::DidReceiveBinaryMessage(
       blob_data->AppendBytes(data);
       auto* blob = MakeGarbageCollected<Blob>(
           BlobDataHandle::Create(std::move(blob_data), data.size()));
-      DispatchEvent(*MessageEvent::Create(blob));
+      DispatchEvent(*MessageEvent::Create(blob), "PresentationConnection::DidReceiveBinaryMessage #1");
       return;
     }
     case V8BinaryType::Enum::kArraybuffer:
