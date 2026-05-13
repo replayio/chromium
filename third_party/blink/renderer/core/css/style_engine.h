@@ -125,7 +125,7 @@ using ScrollTargetGroupScopeTree = OrderedScopeTree<HTMLAnchorElement>;
 enum InvalidationScope { kInvalidateCurrentScope, kInvalidateAllScopes };
 
 using StyleSheetKey = AtomicString;
-using UnorderedTreeScopeSet = HeapHashSet<Member<TreeScope>>;
+using UnorderedTreeScopeSet = HeapHashSet<Member<TreeScope>, WTF::MemberHashRecordReplayId<TreeScope>>;
 
 // The StyleEngine class manages style-related state for the document. There is
 // a 1-1 relationship of Document to StyleEngine. The document calls the
