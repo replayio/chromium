@@ -236,6 +236,7 @@ MessageEvent::MessageEvent(Blob* data,
       origin_(std::move(origin)) {
   serialized_data_memory_accounter_.Increase(v8::Isolate::GetCurrent(),
                                              SizeOfExternalMemoryInBytes());
+  RecordReplayInitDependencyGraphNodeId();
 }
 
 MessageEvent::MessageEvent(DOMArrayBuffer* data,
