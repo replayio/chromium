@@ -1976,6 +1976,10 @@ void CSSAnimations::CalculateAnimationUpdate(
           CSSAnimationProxy animation_proxy(timeline, trigger_attachments,
                                             animation, !will_be_playing,
                                             range_start, range_end, timing);
+
+          // https://linear.app/replay/issue/RUN-1046
+          recordreplay::Assert("[RUN-1046] CSSAnimations::CalculateAnimationUpdate #10");
+
           update.UpdateAnimation(
               existing_animation_index, animation,
               *MakeGarbageCollected<InertEffect>(
@@ -2003,6 +2007,10 @@ void CSSAnimations::CalculateAnimationUpdate(
         CSSAnimationProxy animation_proxy(timeline, trigger_attachments,
                                           /* animation */ nullptr, is_paused,
                                           range_start, range_end, timing);
+
+        // https://linear.app/replay/issue/RUN-1046
+        recordreplay::Assert("[RUN-1046] CSSAnimations::CalculateAnimationUpdate #15");
+
         update.StartAnimation(
             name, name_index, i,
             *MakeGarbageCollected<InertEffect>(
@@ -2749,6 +2757,10 @@ void CSSAnimations::CalculateTransitionUpdateForPropertyHandle(
   }
 
   auto* model = MakeGarbageCollected<TransitionKeyframeEffectModel>(keyframes);
+
+  // https://linear.app/replay/issue/RUN-1046
+  recordreplay::Assert("[RUN-1046] CSSAnimations::CalculateTransitionUpdateForPropertyHandle #10");
+
   state.update.StartTransition(
       property, state.before_change_style, &after_change_style,
       reversing_adjusted_start_value, reversing_shortening_factor,
