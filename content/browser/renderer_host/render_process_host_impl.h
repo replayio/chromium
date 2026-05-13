@@ -989,6 +989,10 @@ class CONTENT_EXPORT RenderProcessHostImpl
     // Indicates that this RenderProcessHost is hosting a Top Chrome WebUI.
     // Only used on desktop.
     kForTopChromeWebUI = 1 << 5,
+
+    // Indicates whether the render process backing this host should
+    // be recorded using the RecordReplay infrastructure.
+    kRecordReplayForRecording = 1 << 6,
   };
 
 #if BUILDFLAG(IS_ANDROID)
