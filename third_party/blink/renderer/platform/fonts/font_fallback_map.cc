@@ -68,6 +68,12 @@ void FontFallbackMap::InvalidateInternal(Predicate predicate) {
 
 void FontFallbackMap::FontsNeedUpdate(FontSelector*,
                                       FontInvalidationReason reason) {
+  if (recordreplay::AreEventsDisallowed("leak-references")) {
+    // Leak fallback_list_for_description_ contents to avoid divergence down the
+    // road.
+    return;
+  }
+
   switch (reason) {
     case FontInvalidationReason::kFontFaceLoaded:
       InvalidateInternal([](const FontFallbackList& fallback_list) {
