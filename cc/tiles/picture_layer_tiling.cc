@@ -294,12 +294,6 @@ void PictureLayerTiling::Invalidate(const Region& layer_invalidation) {
 
 void PictureLayerTiling::RemoveTilesInRegion(const Region& layer_invalidation,
                                              bool recreate_tiles) {
-  // We only invalidate the active tiling when it's orphaned: it has no pending
-  // twin, so it's slated for removal in the future.
-  if (current_eventually_rect_.IsEmpty()) {
-    return;
-  }
-
   base::flat_map<TileIndex, gfx::Rect> remove_tiles;
   gfx::Rect expanded_eventually_rect =
       tiling_data_.ExpandRectToTileBounds(current_eventually_rect_);
