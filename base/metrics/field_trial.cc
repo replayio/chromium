@@ -593,6 +593,13 @@ void FieldTrialList::GetActiveFieldTrialGroups(
 
 // static
 std::set<std::string> FieldTrialList::GetActiveTrialsOfParentProcess() {
+  // Field trials are disabled when recording/replaying. The set of trials are
+  // read from shared memory and won't be consistent when replaying, and there
+  // isn't much point getting them working.
+  if (recordreplay::IsRecordingOrReplaying("no-field-trials")) {
+    return {};
+  }
+
   CHECK(global_);
   CHECK(global_->create_trials_in_child_process_called_);
 
