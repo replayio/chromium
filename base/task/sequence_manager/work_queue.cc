@@ -227,6 +227,10 @@ Task WorkQueue::TakeTaskFromWorkQueue() {
       task_queue_->TakeImmediateIncomingQueueTasks(&tasks_, &record_replay_unordered_queue);
       RecordReplayRunUnorderedTasks(&record_replay_unordered_queue);
     }
+
+    // https://linear.app/replay/issue/RUN-1150
+    recordreplay::Assert("[RUN-1150] WorkQueue::TakeTaskFromWorkQueue #2 %zu",
+                         tasks_.size());
   }
 
   DCHECK(work_queue_sets_);
