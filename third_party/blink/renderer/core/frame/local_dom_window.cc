@@ -1031,7 +1031,11 @@ void LocalDOMWindow::DispatchPopstateEvent(
   NavigationEventTiming event_timing_scope(GetFrame(), *event, this);
   DispatchEvent(*event, "LocalDOMWindow::DispatchPopstateEvent");
 }
-LocalDOMWindow::~LocalDOMWindow() = default;
+LocalDOMWindow::~LocalDOMWindow() {
+  CHECK(IsMainThread());
+  CHECK(gValidDOMWindowPointers);
+  gValidDOMWindowPointers->erase(this);
+}
 
 void LocalDOMWindow::Dispose() {
   BackForwardCacheBufferLimitTracker::Get()
