@@ -372,6 +372,13 @@ void MemoryDumpManager::ContinueAsyncProcessDump(
   // allows us to retain a reference until we know the PostTask succeeded. If
   // not we can skip the hop and move on.
 
+  // Don't generate process dumps when recording/replaying, to avoid mismatched
+  // behavior issues when accessing memory dump state.
+  if (recordreplay::IsRecordingOrReplaying("gc-changes", "MemoryDumpManager::ContinueAsyncProcessDump")) {
+    FinishAsyncProcessDump(std::move(pmd_async_state));
+    return;
+  }
+
   auto get_effective_task_runner = [&](const MeasuredMemoryDumpProviderInfo&
                                            mdpinfo) {
     if (mdpinfo.provider_info()->task_runner) {
