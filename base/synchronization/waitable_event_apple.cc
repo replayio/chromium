@@ -90,7 +90,13 @@ void WaitableEvent::SignalImpl() {
 }
 
 bool WaitableEvent::IsSignaled() const {
-  return PeekPort(receive_right_->Name(), policy_ == ResetPolicy::AUTOMATIC);
+  absl::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (!record_replay_ordered_lock_id_)
+    disallow.emplace("WaitableEvent::IsSignaled");
+
+  bool rv = PeekPort(receive_right_->Name(), policy_ == ResetPolicy::AUTOMATIC);
+  RecordReplayEnsureOrdered(record_replay_ordered_lock_id_);
+  return rv;
 }
 
 bool WaitableEvent::TimedWaitImpl(TimeDelta wait_delta) {
