@@ -388,6 +388,8 @@ void ImageResourceContent::NotifyObservers(
       ProhibitAddRemoveObserverInScope prohibit_add_remove_observer_in_scope(
           this);
       observers_as_vector.assign(observers_.Values());
+      std::sort(observers_as_vector.begin(), observers_as_vector.end(),
+                recordreplay::CompareMemberByPointerId<Member<ImageResourceObserver>>());
     }
 
     for (ImageResourceObserver* observer : observers_as_vector) {
