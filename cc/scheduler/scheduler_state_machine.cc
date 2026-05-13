@@ -1355,7 +1355,8 @@ bool SchedulerStateMachine::ProactiveBeginFrameWanted() const {
   return false;
 }
 
-void SchedulerStateMachine::OnBeginImplFrame(const viz::BeginFrameArgs& args) {
+void SchedulerStateMachine::OnBeginImplFrame(const viz::BeginFrameArgs& args,
+                                             bool replay_force_draw) {
   begin_impl_frame_state_ = BeginImplFrameState::INSIDE_BEGIN_FRAME;
   current_frame_number_++;
   begin_frame_is_animate_only_ = args.animate_only;
@@ -1387,6 +1388,8 @@ void SchedulerStateMachine::OnBeginImplFrame(const viz::BeginFrameArgs& args) {
     UMA_HISTOGRAM_BOOLEAN("Compositing.Scheduler.HighFramerateRequested",
                           high_framerate_requests_count_ > 0);
   }
+
+  replay_force_draw_ = replay_force_draw;
 }
 
 void SchedulerStateMachine::OnBeginImplFrameDeadline() {
