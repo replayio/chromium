@@ -350,7 +350,9 @@ bool ChromeWebUIControllerFactory::IsWebUIAllowedToMakeNetworkRequests(
       // https://crbug.com/859345
       origin.host() == chrome::kChromeUIDownloadsHost ||
       // https://crbug.com/376417346
-      origin.host() == chrome::kChromeUIExtensionsHost;
+      origin.host() == chrome::kChromeUIExtensionsHost ||
+      // recordreplay
+      origin.host() == chrome::kChromeUIRecordReplayHost;
 }
 
 ChromeWebUIControllerFactory::ChromeWebUIControllerFactory() = default;
