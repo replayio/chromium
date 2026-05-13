@@ -89,6 +89,8 @@
 #include <sys/system_properties.h>
 #endif
 
+#include "base/record_replay.h"
+
 namespace base::allocator {
 
 namespace {
