@@ -213,6 +213,8 @@ void LocalSVGResource::NotifyFilterPrimitiveChanged(
     SVGFilterPrimitiveStandardAttributes& primitive,
     const QualifiedName& attribute) {
   HeapVector<Member<SVGResourceClient>> clients(clients_.Keys());
+  std::sort(clients.begin(), clients.end(),
+            recordreplay::CompareMemberByPointerId<Member<SVGResourceClient>>());
   for (SVGResourceClient* client : clients)
     client->FilterPrimitiveChanged(this, primitive, attribute);
 }
