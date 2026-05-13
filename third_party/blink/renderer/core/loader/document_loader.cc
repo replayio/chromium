@@ -1356,6 +1356,9 @@ void DocumentLoader::BodyLoadingFinished(
     probe::DidFinishLoading(
         probe::ToCoreProbeSink(GetFrame()), main_resource_identifier_, this,
         completion_time, total_encoded_data_length, total_decoded_body_length);
+    recordreplay::OnNetworkFinishLoading(main_resource_identifier_,
+                                         total_encoded_data_length,
+                                         total_decoded_body_length);
 
     if (response_.WasFetchedViaServiceWorker()) {
       // See https://w3c.github.io/ServiceWorker/#dom-fetchevent-respondwith
