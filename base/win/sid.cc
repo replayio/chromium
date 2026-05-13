@@ -28,6 +28,8 @@
 #include "base/win/windows_version.h"
 #include "third_party/boringssl/src/include/openssl/sha.h"
 
+#include "base/record_replay.h"
+
 namespace base::win {
 
 namespace {
