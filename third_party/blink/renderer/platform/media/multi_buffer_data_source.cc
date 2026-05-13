@@ -121,6 +121,7 @@ MultiBufferDataSource::MultiBufferDataSource(
     DownloadingCB downloading_cb)
     : render_task_runner_(task_runner),
       url_data_(std::move(url_data_arg)),
+      lock_("MultibufferDataSource.lock_"),
       media_log_(media_log->Clone()),
       host_(host),
       downloading_cb_(std::move(downloading_cb)) {
