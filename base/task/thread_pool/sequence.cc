@@ -12,6 +12,7 @@
 #include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/stack_allocated.h"
+#include "base/record_replay.h"
 #include "base/task/task_features.h"
 #include "base/time/time.h"
 
