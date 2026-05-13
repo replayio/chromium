@@ -434,6 +434,18 @@ void Resource::FinishAsError(const ResourceError& error,
 
 void Resource::Finish(base::TimeTicks load_response_end,
                       base::SingleThreadTaskRunner* task_runner) {
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "resourceFinished");
+    info.Set("url", Url().GetString().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
+    record_replay_dependency_node_ids_.push_back(node_id);
+    execute.emplace(node_id);
+  }
+
   DCHECK(!IsCacheValidator());
   load_response_end_ = load_response_end;
   if (!ErrorOccurred())
