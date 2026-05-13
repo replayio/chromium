@@ -209,6 +209,7 @@ ClientDiscardableSharedMemoryManager::ClientDiscardableSharedMemoryManager(
     : RefCountedDeleteOnSequence<ClientDiscardableSharedMemoryManager>(
           base::SingleThreadTaskRunner::GetCurrentDefault()),
       task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
+      lock_("ClientDiscardableSharedMemoryManager.lock_"),
       heap_(std::make_unique<DiscardableSharedMemoryHeap>()),
       io_task_runner_(std::move(io_task_runner)),
       manager_mojo_(nullptr),
