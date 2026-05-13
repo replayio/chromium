@@ -20,6 +20,7 @@
 #include "cc/base/switches.h"
 #include "components/language_detection/content/common/language_detection.mojom.h"
 #include "components/optimization_guide/public/mojom/model_broker.mojom.h"
+#include "components/record_replay/services/auth_token/public/mojom/auth_token.mojom-blink.h"
 #include "components/viz/host/gpu_client.h"
 #include "content/browser/attribution_reporting/attribution_internals.mojom.h"
 #include "content/browser/attribution_reporting/attribution_internals_ui.h"
@@ -734,6 +735,9 @@ void PopulateBinderMapWithContext(
   // production embedder (such as in tests).
   map->Add<blink::mojom::NoStatePrefetchProcessor>(
       &EmptyBinderForFrame<blink::mojom::NoStatePrefetchProcessor>);
+  map->Add<auth_token::mojom::blink::RecordReplayAuthTokenStore>(
+      &EmptyBinderForFrame<
+          auth_token::mojom::blink::RecordReplayAuthTokenStore>);
   map->Add<payments::mojom::PaymentRequest>(
       &EmptyBinderForFrame<payments::mojom::PaymentRequest>);
   map->Add<blink::mojom::AnchorElementMetricsHost>(
