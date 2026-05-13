@@ -787,6 +787,7 @@ void PageSchedulerImpl::UpdateWakeUpBudgetPools(base::LazyNow* lazy_now) {
 }
 
 void PageSchedulerImpl::UpdatePolicy() {
+  std::vector<FrameSchedulerImpl*> frame_scheduler_vector;
   for (FrameSchedulerImpl* frame_scheduler : frame_schedulers_) {
     frame_scheduler_vector.push_back(frame_scheduler);
   }
