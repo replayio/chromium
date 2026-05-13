@@ -5,6 +5,9 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_HEAP_MEMBER_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_HEAP_MEMBER_H_
 
+#include "base/check_op.h"
+#include "base/record_replay.h"
+#include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/heap/persistent.h"
 #include "third_party/blink/renderer/platform/heap/thread_state_storage.h"
 #include "third_party/blink/renderer/platform/heap/write_barrier.h"
