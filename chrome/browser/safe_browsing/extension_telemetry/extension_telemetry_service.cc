@@ -533,6 +533,8 @@ void ExtensionTelemetryService::SetEnabledForESB(bool enable) {
     return;
   }
 
+  recordreplay::Diagnostic("[TT-198] ExtensionTelemetryService::SetEnabledForESB %s",
+                           enable ? "true" : "false");
   esb_enabled_ = enable;
   if (esb_enabled_) {
     SetUpSignalProcessorsAndSubscribersForESB();
@@ -820,6 +822,8 @@ void ExtensionTelemetryService::CreateAndSendEnterpriseReport() {
 void ExtensionTelemetryService::OnUploadComplete(
     bool success,
     base::optional_ref<std::string> response_data) {
+  recordreplay::Diagnostic("[TT-198] ExtensionTelemetryService::OnUploadComplete() %s", success ? "succeeded" : "failed");
+
   // TODO(crbug.com/40253384): Add `config_manager_` implementation
   // to check server response and update config.
   if (success) {
