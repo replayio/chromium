@@ -351,9 +351,11 @@ class BASE_EXPORT SequenceManagerImpl
 
     // RAW_PTR_EXCLUSION: Performance reasons (based on analysis of
     // speedometer3).
-    RAW_PTR_EXCLUSION std::set<internal::TaskQueueImpl*> active_queues;
+    RAW_PTR_EXCLUSION std::set<internal::TaskQueueImpl*,
+                               recordreplay::CompareByPointerId> active_queues;
 
-    std::map<internal::TaskQueueImpl*, std::unique_ptr<internal::TaskQueueImpl>>
+    std::map<internal::TaskQueueImpl*, std::unique_ptr<internal::TaskQueueImpl>,
+             recordreplay::CompareByPointerId>
         queues_to_delete;
 
     bool task_was_run_on_quiescence_monitored_queue = false;
