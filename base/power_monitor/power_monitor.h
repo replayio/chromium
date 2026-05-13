@@ -28,6 +28,8 @@ class PowerMonitorSource;
 // of test contexts where the PowerMonitor global is never created.
 class BASE_EXPORT PowerMonitor : public perfetto::TrackEventSessionObserver {
  public:
+  // Note: This is public so that it can be called when eagerly initializing
+  // state while recording/replaying.
   static PowerMonitor* GetInstance();
 
   // Initializes global PowerMonitor state. Takes ownership of `source`, which
