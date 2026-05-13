@@ -18,7 +18,9 @@ PooledSequencedTaskRunner::PooledSequencedTaskRunner(
       sequence_(MakeRefCounted<Sequence>(traits,
                                          this,
                                          TaskSourceExecutionMode::kSequenced,
-                                         GetCurrentTaskImportance())) {}
+                                         GetCurrentTaskImportance())) {
+  recordreplay::RegisterPointer("PooledSequencedTaskRunner", this);
+}
 
 PooledSequencedTaskRunner::~PooledSequencedTaskRunner() {
   recordreplay::UnregisterPointer(this);
