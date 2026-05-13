@@ -169,7 +169,7 @@ struct CC_EXPORT CommitState {
   base::flat_map<UIResourceId, gfx::Size> ui_resource_sizes;
   PropertyTreesChangeState property_trees_change_state;
   // RAW_PTR_EXCLUSION: Performance reasons (based on analysis of speedometer3).
-  RAW_PTR_EXCLUSION base::flat_set<Layer*> layers_that_should_push_properties;
+  RAW_PTR_EXCLUSION base::flat_set<Layer*, CompareLayersById> layers_that_should_push_properties;
 
   // Specific scrollers may request clobbering the active delta value on the
   // compositor when committing the current scroll offset to ensure the scroll
