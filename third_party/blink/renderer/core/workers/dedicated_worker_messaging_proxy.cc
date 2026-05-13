@@ -297,9 +297,9 @@ void DedicatedWorkerMessagingProxy::PostMessageToWorkerObject(
               std::move(context), GetExecutionContext(), *event);
         },
         perfetto::Flow::Global(event->GetTraceId()));
-    worker_object_->DispatchEvent(*event);
+    worker_object_->DispatchEvent(*event, "DedicatedWorkerMessagingProxy::PostMessageToWorkerObject");
   } else {
-    worker_object_->DispatchEvent(*MessageEvent::CreateError());
+    worker_object_->DispatchEvent(*MessageEvent::CreateError(), "DedicatedWorkerMessagingProxy::PostMessageToWorkerObject");
   }
   debugger->ExternalAsyncTaskFinished(message.sender_stack_trace_id);
 }
@@ -323,7 +323,7 @@ void DedicatedWorkerMessagingProxy::DispatchErrorEvent(
   // been terminated and garbage collected."
   // https://html.spec.whatwg.org/C/#runtime-script-errors-2
   ErrorEvent* event = ErrorEvent::Create(error_message, location, nullptr);
-  if (worker_object_->DispatchEvent(*event) !=
+  if (worker_object_->DispatchEvent(*event, "DedicatedWorkerMessagingProxy::DispatchErrorEvent") !=
       DispatchEventResult::kNotCanceled)
     return;
 
