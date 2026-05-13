@@ -34,6 +34,7 @@
 #include <array>
 #include <utility>
 
+#include "base/record_replay.h"
 #include "base/types/zip.h"
 #include "third_party/blink/renderer/core/css/css_property_value_set.h"
 #include "third_party/blink/renderer/core/css/properties/css_property_ref.h"
@@ -80,11 +81,18 @@ CachedMatchedProperties::CachedMatchedProperties(
         new_matched_properties.properties,
         new_matched_properties.mixin_parameter_bindings,
         new_matched_properties.data_);
+
+    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+                                             "CachedMatchedProperties")) {
+      replay_matched_properties_strong_.push_back(
+          new_matched_properties.properties);
+    }
   }
 }
 
 void CachedMatchedProperties::Clear() {
   matched_properties.clear();
+  replay_matched_properties_strong_.clear();
   entries.clear();
 }
 
