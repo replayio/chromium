@@ -934,6 +934,11 @@ bool MainThreadEventQueue::HandleEventOnMainThread(
 }
 
 void MainThreadEventQueue::SetNeedsMainFrame(bool urgent) {
+  recordreplay::AssertMaybeEventsDisallowed(
+    "[TT-1179-1180] MainThreadEventQueue::SetNeedsMainFrame %d %d",
+    main_task_runner_->BelongsToCurrentThread(),
+    !!client_
+  );
   if (main_task_runner_->BelongsToCurrentThread()) {
     if (raf_fallback_timer_) {
       raf_fallback_timer_->Start(
