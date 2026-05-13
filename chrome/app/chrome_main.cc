@@ -105,6 +105,47 @@ int ChromeMain(int argc, const char** argv) {
   PossiblyDetermineFallbackChromeChannel(argv[0]);
 #endif
 
+#if BUILDFLAG(IS_LINUX)
+  // On linux ChromeMain is the process entry point, and we need to start
+  // recording/replaying.
+  void* handle = RecordReplayAttach(&argc, &argv);
+  if (handle) {
+    V8SetRecordingOrReplaying(handle);
+  } else {
+    V8InitializeNotRecordingOrReplaying();
+  }
+#elif BUILDFLAG(IS_MAC)
+  // On macOS the main function is in a different binary in chrome_exe_main_mac.cc.
+  // When we get to ChromeMain we've already started recording/replaying, but still
+  // need to initialize V8's record/replay bindings.
+  //
+  // Note: On macOS the library handle doesn't need to be specified when using dlsym.
+  void* sym = dlsym(nullptr, "RecordReplayAttach");
+  if (sym) {
+    V8SetRecordingOrReplaying(nullptr);
+  }
+#elif BUILDFLAG(IS_WIN)
+  // On windows the main function is in a different binary in chrome_exe_main_win.cc.
+  // As for macOS we have already started recording/replaying but initialize V8's
+  // record/replay bindings here. Also make sure we update the command line used in
+  // chrome.dll.
+  if (RecordReplayShouldRecord(nullptr, nullptr)) {
+    HMODULE module = GetModuleHandleA("windows-recordreplay.dll");
+    CHECK(module);
+    V8SetRecordingOrReplaying((void*)module);
+    recordreplay::InitBindings();
+  }
+  // Fix warning.
+  (void)RecordReplayAttach;
+#else // !BUILDFLAG(IS_WIN)
+#error Unknown platform
+#endif // !BUILDFLAG(IS_WIN)
+
+  if (recordreplay::IsRecordingOrReplaying("eager-initialization", "ChromeMain")) {
+    // Force initialization that can otherwise happen at non-deterministic points.
+    base::PowerMonitor::GetInstance();
+  }
+
 #if BUILDFLAG(IS_WIN)
   install_static::InitializeFromPrimaryModule();
 #if !defined(COMPONENT_BUILD) && DCHECK_IS_ON()
