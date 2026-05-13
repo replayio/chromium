@@ -176,6 +176,8 @@ void LayerImpl::SetTransformTreeIndex(int index) {
 
   transform_tree_index_ = index;
   SetNeedsPushProperties(LayerImpl::kChangedPropertyTreeIndex);
+  recordreplay::Assert("[RUN-550-1329] LayerImpl::SetTransformTreeIndex %d %d",
+                       layer_id_, index);
 }
 
 void LayerImpl::SetClipTreeIndex(int index) {
@@ -428,6 +430,9 @@ bool LayerImpl::IsSnappedToPixelGridInTarget() {
 
 void LayerImpl::PushPropertiesTo(LayerImpl* layer) {
   DCHECK(layer->IsActive());
+
+  recordreplay::Assert("[RUN-550-1329] LayerImpl::PushPropertiesTo %d %d %llu",
+                       transform_tree_index_, layer_id_, element_id_.GetStableId());
 
   if (GetChangeFlag(kChangedPropertyTreeIndex)) {
     layer->transform_tree_index_ = transform_tree_index_;
