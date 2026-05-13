@@ -205,6 +205,11 @@ RTCDataChannel::Observer::Observer(
       blink_channel_(blink_channel),
       webrtc_channel_(std::move(channel)) {
   CHECK(webrtc_channel_.get());
+  // Because we avoid unregistering this observer non-deterministically,
+  // we also leak a reference to the observer to ensure it isn't destroyed
+  // without having been unregistered first.
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "RTCDataChannel::Observer::Observer"))
+    AddRef();
 }
 
 RTCDataChannel::Observer::~Observer() {
@@ -223,7 +228,9 @@ bool RTCDataChannel::Observer::is_registered() const {
 
 void RTCDataChannel::Observer::Unregister() {
   DCHECK(main_thread_->BelongsToCurrentThread());
-  webrtc_channel_->UnregisterObserver();
+  // Avoid changing channel observers non-deterministically.
+  if (!recordreplay::AreEventsDisallowed("RTCDataChannel::Observer::Unregister"))
+    webrtc_channel_->UnregisterObserver();
   blink_channel_ = nullptr;
 }
 
