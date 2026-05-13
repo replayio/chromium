@@ -59,6 +59,10 @@ bool WaitableEvent::TimedWait(TimeDelta wait_delta, const Location& location) {
     return IsSignaled();
   }
 
+  absl::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (!record_replay_ordered_lock_id_)
+    disallow.emplace("WaitableEvent::TimedWait");
+
   // Consider this thread blocked unless the event is already signaled. Ignore
   // this for non-blocking WaitableEvents.
   std::optional<internal::ScopedBlockingCallWithBaseSyncPrimitives>
