@@ -326,6 +326,10 @@ void WidgetBase::Shutdown(bool delay_release) {
             [](scoped_refptr<scheduler::WidgetScheduler> scheduler,
                scoped_refptr<WidgetInputHandlerManager> manager,
                std::unique_ptr<LayerTreeView> view) {
+              recordreplay::Assert(
+                  "[RUN-2224-2323] WidgetBase::Shutdown %d:%d %d:%d",
+                  manager->HasOneRef(), manager->HasAtLeastOneRef(),
+                  scheduler->HasOneRef(), scheduler->HasAtLeastOneRef());
               view.reset();
               manager.reset();
               scheduler->Shutdown();
@@ -1658,6 +1662,11 @@ void WidgetBase::OnImeEventGuardFinish(ImeEventGuard* guard) {
 
 void WidgetBase::RequestAnimationAfterDelay(const base::TimeDelta& delay,
                                             bool urgent) {
+  recordreplay::AssertMaybeEventsDisallowed(
+    "[TT-1179-1180] WidgetBase::RequestAnimationAfterDelay %d %d",
+    delay.is_zero(),
+    request_animation_after_delay_timer_.IsActive()
+  );
   if (delay.is_zero()) {
     // See the comment in MainThreadEventQueue::QueueEvent() explaining why we
     // use "IsEligibleForThrottleMainFrameTo60Hz()".
