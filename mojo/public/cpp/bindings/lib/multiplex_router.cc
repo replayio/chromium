@@ -427,7 +427,7 @@ MultiplexRouter::MultiplexRouter(
   recordreplay::RegisterPointer("MultiplexRouter", this);
 
   if (config_ == MULTI_INTERFACE) {
-    lock_.emplace();
+    lock_.emplace("MultiplexRouter.lock_");
   }
 
   connector_.set_incoming_receiver(&dispatcher_);
