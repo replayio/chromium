@@ -37,6 +37,17 @@ Only one build configuration is currently supported.
 Learn how to [Get Around the Chromium Source Code Directory
 Structure](https://www.chromium.org/developers/how-tos/getting-around-the-chrome-source-code).
 
+4. Gen + Configure your build:
+   * If you are using Linux, see [Troubleshooting](#troubleshooting) first.
+   ```
+   cd /path/to/src
+   gn gen out/Release
+   gn args out/Release # opens args.gn config file
+   ```
+5. Add the following settings to `out/Release/args.gn`:
+   ```ini
+   # src/out/Release/args.gn
+
    use_remoteexec = true
    is_debug = false # we can't really use most debugging symbols right now
    dcheck_always_on = false # disable dchecks
