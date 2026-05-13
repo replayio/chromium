@@ -635,7 +635,7 @@ void SVGUseElement::QueueOrDispatchPendingEvent(
     // Queue the event if the page is in back/forward cache.
     EnqueueEvent(*Event::Create(event_name), TaskType::kDOMManipulation);
   } else {
-    DispatchEvent(*Event::Create(event_name));
+    DispatchEvent(*Event::Create(event_name), "SVGUseElement::QueueOrDispatchPendingEvent");
   }
 }
 
