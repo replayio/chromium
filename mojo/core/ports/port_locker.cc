@@ -49,7 +49,9 @@ PortLocker::PortLocker(const PortRef** port_refs, size_t num_ports)
   // Sort the ports by address to lock them in a globally consistent order.
   std::sort(
       port_refs_, UNSAFE_TODO(port_refs_ + num_ports_),
-      [](const PortRef* a, const PortRef* b) { return a->port() < b->port(); });
+      [](const PortRef* a, const PortRef* b) {
+        return GetPortId(a->port()) < GetPortId(b->port());
+      });
 
   for (size_t i = 0; i < num_ports_; ++i) {
     // TODO(crbug.com/40522227): Remove this CHECK.
