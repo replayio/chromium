@@ -40,6 +40,8 @@
 #include "base/win/scoped_com_initializer.h"
 #endif  // BUILDFLAG(IS_WIN)
 
+#include "base/record_replay.h"
+
 namespace base::internal {
 
 namespace {
