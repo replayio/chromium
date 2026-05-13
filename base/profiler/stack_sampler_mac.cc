@@ -12,6 +12,10 @@
 
 namespace base {
 
+static inline bool MaybeRecordingOrReplaying() {
+  return true;
+}
+
 // static
 std::unique_ptr<StackSampler> StackSampler::Create(
     SamplingProfilerThreadToken thread_token,
@@ -19,6 +23,11 @@ std::unique_ptr<StackSampler> StackSampler::Create(
     UnwindersFactory core_unwinders_factory,
     RepeatingClosure record_sample_callback,
     StackSamplerTestDelegate* test_delegate) {
+  if (MaybeRecordingOrReplaying()) {
+    // Stack sampling is disabled when recording/replaying, APIs used to inspect
+    // thread state are not currently supported when replaying.
+    return nullptr;
+  }
   return base::WrapUnique(new StackSampler(
       std::make_unique<StackCopierSuspend>(
           std::make_unique<SuspendableThreadDelegateMac>(thread_token)),
