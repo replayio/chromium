@@ -31,6 +31,9 @@ void AnimationTimeline::AnimationAttached(Animation* animation) {
   DCHECK(!in_trigger_attachments_update_);
   animations_.insert(animation);
   animation->ResolveTimelineOffsets(GetTimelineRange());
+
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "AnimationTimeline"))
+    record_replay_animations_strong_.insert(animation);
 }
 
 void AnimationTimeline::AnimationDetached(Animation* animation) {
