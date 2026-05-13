@@ -132,9 +132,9 @@ void Serial::OnPortConnectedStateChanged(
   SerialPort* port = GetOrCreatePort(std::move(port_info));
   port->set_connected(connected);
   if (connected) {
-    port->DispatchEvent(*Event::CreateBubble(event_type_names::kConnect));
+    port->DispatchEvent(*Event::CreateBubble(event_type_names::kConnect), "Serial::OnPortConnectedStateChanged(connected)");
   } else {
-    port->DispatchEvent(*Event::CreateBubble(event_type_names::kDisconnect));
+    port->DispatchEvent(*Event::CreateBubble(event_type_names::kDisconnect), "Serial::OnPortConnectedStateChanged(disconnected)");
   }
 }
 
