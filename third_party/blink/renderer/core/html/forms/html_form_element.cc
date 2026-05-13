@@ -557,7 +557,7 @@ void HTMLFormElement::PrepareForSubmission(
                     "' was implicitly closed by reaching the end of the "
                     "file. Please add an explicit end tag ('</",
                     tag_name, ">')"})));
-        DispatchEvent(*Event::Create(event_type_names::kError));
+        DispatchEvent(*Event::Create(event_type_names::kError), "HTMLFormElement::PrepareForSubmission #1");
         return;
       }
     }
