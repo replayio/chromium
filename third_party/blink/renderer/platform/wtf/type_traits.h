@@ -23,6 +23,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_WTF_TYPE_TRAITS_H_
 
 #include <cstddef>
+#include <memory>
 #include <optional>
 #include <type_traits>
 #include <utility>
