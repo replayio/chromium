@@ -210,6 +210,14 @@ void IntersectionObserverController::ComputeIntersections(
                  observer->root()->GetDocument().GetFrame() !=
                      &frame_view.GetFrame();
         });
+    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "IntersectionObserverController")) {
+      replay_strong_tracked_explicit_root_observers_.erase_if(
+          [&frame_view](const auto& observer) {
+            return !observer->HasObservations() || !observer->root() ||
+                   observer->root()->GetDocument().GetFrame() !=
+                       &frame_view.GetFrame();
+          });
+    }
   }
   for (auto& observer : tracked_explicit_root_observers_) {
     DCHECK(!observer->RootIsImplicit());
