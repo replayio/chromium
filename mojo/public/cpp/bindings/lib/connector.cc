@@ -162,6 +162,8 @@ Connector::Connector(ScopedMessagePipeHandle message_pipe,
         recordreplay::HasDivergedFromRecording() ||
         recordreplay::HasDisabledFeatures());
 
+  recordreplay::RegisterPointer("Connector", this);
+
   if (config == MULTI_THREADED_SEND) {
     lock_.emplace("Connector.lock_");
   }
