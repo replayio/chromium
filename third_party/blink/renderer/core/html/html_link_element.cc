@@ -407,7 +407,11 @@ void HTMLLinkElement::DispatchEventWithTaskState(
       SetCurrentTaskStateIfTopLevel(task_state,
                                     GetDocument().GetExecutionContext(),
                                     TaskScopeType::kMiscEvent));
-  DispatchEvent(*Event::Create(type));
+  if (type == event_type_names::kLoad) {
+    DispatchEvent(*Event::Create(type), "HTMLLinkElement::LinkLoaded");
+  } else {
+    DispatchEvent(*Event::Create(type));
+  }
 }
 
 bool HTMLLinkElement::SheetLoaded() {
