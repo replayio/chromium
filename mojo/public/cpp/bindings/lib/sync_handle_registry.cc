@@ -153,6 +153,9 @@ bool SyncHandleRegistry::Wait(base::span<const bool*> should_stop) {
   while (true) {
     for (const bool* flag : should_stop) {
       if (*flag) {
+        wait_set_.RemoveEvent(&quitEvent);
+        // Don't forget to clear the wait handler.
+        recordreplay::MaybeTerminate(nullptr, nullptr);
         return true;
       }
     }
