@@ -44,6 +44,8 @@
 #include "content/common/features.h"
 #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 
+#include "base/record_replay.h"
+
 namespace content {
 
 ChildProcessHost::~ChildProcessHost() = default;
