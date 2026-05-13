@@ -437,6 +437,11 @@ void LayerTreeView::DidCompletePageScaleAnimation(int source_frame_number) {
 void LayerTreeView::DidPresentCompositorFrame(
     uint32_t frame_token,
     const viz::FrameTimingDetails& frame_timing_details) {
+
+  recordreplay::Assert(
+      "[RUN-2317-2366] LayerTreeView::DidPresentCompositorFrame A %u %d %d",
+      frame_token, !!delegate_, frame_timing_details.presentation_feedback.failed());
+
   if (!delegate_)
     return;
   DCHECK(layer_tree_host_->GetTaskRunnerProvider()
@@ -460,6 +465,9 @@ void LayerTreeView::DidPresentCompositorFrame(
       std::move(callback).Run(frame_timing_details);
     presentation_callbacks_.erase(front);
   }
+
+  recordreplay::Assert(
+      "[RUN-2317-2570] LayerTreeView::DidPresentCompositorFrame C");
 
 #if BUILDFLAG(IS_APPLE)
   while (!core_animation_error_code_callbacks_.empty()) {
