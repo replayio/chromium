@@ -521,6 +521,8 @@ void Message::SerializeHandles(AssociatedGroupController* group_controller) {
     // modify the message header. Faster path for that.
     bool attached = payload_buffer_.AttachHandles(mutable_handles());
 
+    recordreplay::Assert("[RUN-1569] Message::SerializeHandles #2 %d", attached);
+
     // TODO(crbug.com/40785088): Relax this assertion or fail more gracefully.
     CHECK(attached);
 
