@@ -1755,7 +1755,10 @@ void FrameLoader::DidDropNavigation() {
   // that breaks extensions abusing SetForceMainWorldInitialization setting
   // and relying on the number of created window proxies.
   Settings* settings = frame_->GetSettings();
-  if (settings && settings->GetForceMainWorldInitialization()) {
+  if ((settings && settings->GetForceMainWorldInitialization()) ||
+      // Always instantiate the WindowProxy when recording/replaying.
+      // See DispatchDidClearDocumentOfWindowObject.
+      recordreplay::IsRecordingOrReplaying("initialize-window-proxy")) {
     auto* window = frame_->DomWindow();
     // Forcibly instantiate WindowProxy.
     window->GetScriptController().WindowProxy(
