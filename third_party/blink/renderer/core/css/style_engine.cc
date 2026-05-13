@@ -1200,6 +1200,10 @@ CSSStyleSheet* StyleEngine::CreateSheet(
         ParseSheet(element, text, start_position, render_blocking_behavior);
     if (style_sheet->Contents()->IsCacheableForStyleElement()) {
       result.stored_value->value = style_sheet->Contents();
+
+      if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "StyleEngine")) {
+        style_sheet_contents_strong_.insert(style_sheet->Contents());
+      }
     }
   } else {
     DCHECK(contents);
@@ -4779,6 +4783,7 @@ void StyleEngine::Trace(Visitor* visitor) const {
   visitor->Trace(functional_media_query_results_);
   visitor->Trace(random_base_value_cache_);
   visitor->Trace(element_keeps_random_caching_key_alive_);
+  visitor->Trace(style_sheet_contents_strong_);
   FontSelectorClient::Trace(visitor);
 }
 
