@@ -176,6 +176,21 @@ void MessagePort::postMessage(ScriptState* script_state,
     }
   }
 
+  if (recordreplay::IsRecordingOrReplaying() && IsMainThread()) {
+    msg.record_replay_message_id = recordreplay::NewIdMainThread("MessagePort::postMessage");
+    msg.record_replay_process_id = (int)base::GetCurrentProcId();
+
+    if (recordreplay::DependencyGraphEnabled()) {
+      base::Value::Dict info;
+      info.Set("kind", "postMessage");
+      info.Set("messageId", msg.record_replay_message_id);
+      info.Set("processId", msg.record_replay_process_id);
+      std::string json;
+      base::JSONWriter::Write(info, &json);
+      recordreplay::NewDependencyGraphNode(json.c_str());
+    }
+  }
+
   mojo::Message mojo_message =
       mojom::blink::TransferableMessage::WrapAsMessage(std::move(msg));
   connector_->Accept(&mojo_message);
