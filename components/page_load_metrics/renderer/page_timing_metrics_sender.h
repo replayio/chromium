@@ -164,7 +164,8 @@ class PageTimingMetricsSender {
 
   // Set of all resources that have completed or received a transfer
   // size update since the last timimg update.
-  base::flat_set<raw_ptr<PageResourceDataUse, CtnExperimental>>
+  base::flat_set<raw_ptr<PageResourceDataUse, CtnExperimental>,
+                 recordreplay::CompareByPointerId>
       modified_resources_;
 
   // Field trial for alternating page timing metrics sender buffer timer delay.
