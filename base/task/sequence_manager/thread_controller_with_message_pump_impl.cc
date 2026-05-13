@@ -516,10 +516,16 @@ std::optional<WakeUp> ThreadControllerWithMessagePumpImpl::DoWorkImpl(
 
     // When Quit() is called we must stop running the batch because the
     // caller expects per-task granularity.
+    recordreplay::Assert("[RUN-1124] ThreadControllerWithMessagePumpImpl::DoWorkImpl #7 %d",
+                         main_thread_only().quit_pending);
+
     if (main_thread_only().quit_pending) {
       break;
     }
   }
+
+  recordreplay::Assert("[RUN-1124] ThreadControllerWithMessagePumpImpl::DoWorkImpl #8 %d",
+                       main_thread_only().quit_pending);
 
   if (main_thread_only().quit_pending) {
     return std::nullopt;
@@ -581,6 +587,11 @@ void ThreadControllerWithMessagePumpImpl::DoIdleWork() {
 
     const bool need_high_res_mode =
         main_thread_only().task_source->NextWakeUpNeedsHighRes();
+
+    recordreplay::Assert(
+        "[RUN-1916-2636] ThreadControllerWithMessagePumpImpl::Run C %d %d",
+        main_thread_only().in_high_res_mode, need_high_res_mode);
+
     if (main_thread_only().in_high_res_mode != need_high_res_mode) {
       // On Windows we activate the high resolution timer so that the wait
       // _if_ triggered by the timer happens with good resolution. If we don't
