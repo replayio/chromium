@@ -4,6 +4,7 @@
 
 #include "base/pending_task.h"
 
+#include "base/record_replay.h"
 #include "base/task/task_features.h"
 
 namespace base {
