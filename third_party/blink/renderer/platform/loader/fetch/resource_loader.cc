@@ -1118,6 +1118,8 @@ void ResourceLoader::DidFinishLoading(base::TimeTicks response_end_time,
   resource_->SetEncodedBodyLength(encoded_body_length);
   resource_->SetDecodedBodyLength(decoded_body_length);
 
+  recordreplay::OnNetworkFinishLoading(resource_->InspectorId(), encoded_body_length, decoded_body_length);
+
   response_end_time_for_error_cases_ = response_end_time;
 
   if ((response_body_loader_ && !has_seen_end_of_body_ &&
