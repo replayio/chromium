@@ -368,16 +368,17 @@ bool HandleCreditsSwitch(const base::CommandLine& command_line) {
 bool HandleVersionSwitches(const base::CommandLine& command_line) {
 #if !BUILDFLAG(IS_MAC)
   if (command_line.HasSwitch(switches::kProductVersion)) {
-    UNSAFE_TODO(printf("%s\n", version_info::GetVersionNumber().data()));
+    UNSAFE_TODO(printf("%s (replay.io build %s)\n", version_info::GetVersionNumber().data(), RECORD_REPLAY_BUILD_ID));
     return true;
   }
 #endif
 
   if (command_line.HasSwitch(switches::kVersion)) {
     UNSAFE_TODO(printf(
-        "%s %s %s\n", version_info::GetProductName().data(),
+        "%s %s %s (replay.io build %s)\n", version_info::GetProductName().data(),
         version_info::GetVersionNumber().data(),
-        chrome::GetChannelName(chrome::WithExtendedStable(true)).c_str()));
+        chrome::GetChannelName(chrome::WithExtendedStable(true)).c_str(),
+        RECORD_REPLAY_BUILD_ID));
     return true;
   }
 
