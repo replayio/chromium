@@ -56,6 +56,7 @@ AgentGroupSchedulerImpl::AgentGroupSchedulerImpl(
       main_thread_scheduler_(main_thread_scheduler) {
   DCHECK(!default_task_queue_->GetFrameScheduler());
   DCHECK_EQ(default_task_queue_->GetAgentGroupScheduler(), this);
+  record_replay_id_ = recordreplay::NewIdAnyThread("AgentGroupSchedulerImpl");
 }
 
 AgentGroupSchedulerImpl::~AgentGroupSchedulerImpl() {

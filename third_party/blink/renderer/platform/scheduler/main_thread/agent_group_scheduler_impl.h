@@ -85,6 +85,8 @@ class PLATFORM_EXPORT AgentGroupSchedulerImpl : public AgentGroupScheduler {
   // Update policy for all frames.
   void UpdatePolicy();
 
+  int RecordReplayId() const { return record_replay_id_; }
+
  private:
   scoped_refptr<MainThreadTaskQueue> default_task_queue_;
   scoped_refptr<base::SingleThreadTaskRunner> default_task_runner_;
@@ -92,13 +94,15 @@ class PLATFORM_EXPORT AgentGroupSchedulerImpl : public AgentGroupScheduler {
   scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner_;
   const raw_ref<MainThreadSchedulerImpl, DanglingUntriaged>
       main_thread_scheduler_;  // Not owned.
-  HeapHashSet<WeakMember<Agent>> agents_;
+  HeapHashSet<WeakMember<Agent>, WTF::MemberHashRecordReplayId<Agent>> agents_;
+  HeapHashSet<Member<Agent>> replay_agents_strong_;
   HashSet<PageSchedulerImpl*> page_schedulers_;
   std::map<base::UnguessableToken, int> num_visible_frames_per_agent_
       ALLOW_DISCOURAGED_TYPE(
           "There is no compelling reason to make base::UnguessableToken "
           "compatible with blink::HashMap");
   bool is_updating_policy_ = false;
+  int record_replay_id_ = 0;
 };
 
 }  // namespace scheduler
