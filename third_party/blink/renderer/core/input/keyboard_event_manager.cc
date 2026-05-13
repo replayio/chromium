@@ -304,7 +304,7 @@ WebInputEventResult KeyboardEventManager::KeyEvent(
       event->SetTarget(node);
       event->SetStopPropagation(!send_key_event);
 
-      dispatch_result = node->DispatchEvent(*event);
+      dispatch_result = node->DispatchEvent(*event, "KeyboardEventManager::KeyEvent #1");
       break;
     }
     case WebInputEvent::Type::kRawKeyDown:
@@ -337,7 +337,7 @@ WebInputEventResult KeyboardEventManager::KeyEvent(
         node->UpdateHadKeyboardEvent(*event);
       }
 
-      if (dispatch_result = node->DispatchEvent(*event);
+      if (dispatch_result = node->DispatchEvent(*event, "KeyboardEventManager::KeyEvent #2");
           dispatch_result != DispatchEventResult::kNotCanceled) {
         break;
       }
