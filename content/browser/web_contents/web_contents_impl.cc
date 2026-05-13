@@ -4179,6 +4179,13 @@ void WebContentsImpl::Init(const WebContents::CreateParams& params,
     last_active_time_ = params.last_active_time;
   }
 
+  // RecordReplay [RUN-2762]
+  // If the `record_replay_for_recording` flag is set on the params, then
+  // `site_instance` on params should be null.
+  if (params.record_replay_for_recording) {
+    CHECK(params.site_instance.get() == nullptr);
+  }
+
   scoped_refptr<SiteInstanceImpl> site_instance =
       static_cast<SiteInstanceImpl*>(params.site_instance.get());
   if (!site_instance) {
