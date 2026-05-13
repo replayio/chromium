@@ -9,6 +9,7 @@
 
 #include "base/check_op.h"
 #include "base/containers/span.h"
+#include "base/record_replay.h"
 #include "base/system/sys_info.h"
 #include "build/build_config.h"
 #include "media/base/media_switches.h"
