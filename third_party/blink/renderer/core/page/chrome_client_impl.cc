@@ -572,6 +572,8 @@ void ChromeClientImpl::InvalidateContainer() {
 void ChromeClientImpl::ScheduleAnimation(const LocalFrameView* frame_view,
                                          base::TimeDelta delay,
                                          bool urgent) {
+  recordreplay::Assert("[RUN-1641] ChromeClientImpl::ScheduleAnimation");
+
   LocalFrame& frame = frame_view->GetFrame();
   // If the frame is still being created, it might not yet have a WebWidget.
   // TODO(dcheng): Is this the right thing to do? Is there a way to avoid having
@@ -1083,6 +1085,8 @@ void ChromeClientImpl::NotifyPresentationTime(LocalFrame& frame,
   FrameWidget* widget = frame.GetWidgetForLocalRoot();
   if (!widget)
     return;
+  recordreplay::Assert(
+      "[RUN-2317-2316] ChromeClientImpl::NotifyPresentationTime %d", frame.RecordReplayId());
   widget->NotifyPresentationTime(std::move(callback));
 }
 
