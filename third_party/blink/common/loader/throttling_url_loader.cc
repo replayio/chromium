@@ -501,6 +501,11 @@ void ThrottlingURLLoader::Start(
     url_request->allows_device_bound_session_registration = true;
   }
 
+  if (recordreplay::IsInReplayCode()) {
+    // [TT-1422] Special treatment for Replay-only requests.
+    options |= network::mojom::kURLLoadOptionReplayRequest;
+  }
+
   start_info_ = std::make_unique<StartInfo>(factory, request_id, options,
                                             url_request, std::move(task_runner),
                                             std::move(cors_exempt_header_list));
