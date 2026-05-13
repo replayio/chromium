@@ -185,6 +185,14 @@ class CreateSessionDescriptionRequest
           json->SetString("sdp", String::FromUTF8(value));
         }
         json->WriteJSON(&result);
+
+        // The descriptor string can differ when replaying for unknown reasons,
+        // so for now we force it to match.
+        std::string result_utf8 = result.ToString().Utf8();
+        result_utf8.resize(recordreplay::RecordReplayValue("CreateSessionDescriptionRequest::OnSuccess value length", result_utf8.length()));
+        recordreplay::RecordReplayBytes("CreateSessionDescriptionRequest::OnSuccess value contents", &result_utf8[0], result_utf8.length());
+        result.Clear();
+        result.Append(String::FromUTF8(result_utf8));
       }
       tracker->TrackSessionDescriptionCallback(handler_.get(), action_,
                                                "OnSuccess", result.ToString());
