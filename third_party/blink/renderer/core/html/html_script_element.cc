@@ -441,7 +441,7 @@ void HTMLScriptElement::DispatchLoadEvent() {
 
 void HTMLScriptElement::DispatchErrorEvent() {
   probe::AsyncTask async_task(GetExecutionContext(), &async_task_context_);
-  DispatchEvent(*Event::Create(event_type_names::kError));
+  DispatchEvent(*Event::Create(event_type_names::kError), "HTMLScriptElement::DispatchErrorEvent");
 }
 
 ScriptElementBase::Type HTMLScriptElement::GetScriptElementType() {
