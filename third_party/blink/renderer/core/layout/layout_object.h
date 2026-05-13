@@ -4248,6 +4248,11 @@ class CORE_EXPORT LayoutObject : public GarbageCollected<LayoutObject>,
   Member<LayoutObject> next_;
   Member<FragmentDataList> fragment_;
 
+  // A deterministic ID is needed for hashing in the following places:
+  // FragmentPaintPropertyTreeBuilder::UpdateTransform
+  // LayoutObjectWithDepth ordering
+  int record_replay_id_ = 0;
+
 #if DCHECK_IS_ON()
   friend class CachedTextInputInfo;
   bool is_destroyed_ = false;
