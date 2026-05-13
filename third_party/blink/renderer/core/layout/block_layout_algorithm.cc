@@ -2353,6 +2353,9 @@ LayoutResult::EStatus BlockLayoutAlgorithm::HandleInflow(
       /* is_new_fc */ false, forced_bfc_block_offset,
       has_clearance_past_adjoining_floats,
       previous_inflow_position->block_end_annotation_space);
+  recordreplay::Assert("[RUN-1855-1856] BlockLayoutAlgorithm::HandleInflow (%s)",
+    child_space.ToString().Ascii().c_str()
+  );
   const LayoutResult* layout_result =
       LayoutInflow(child_space, child_break_token, early_break_,
                    column_spanner_path_, &child, inline_child_layout_context);
@@ -2578,6 +2581,10 @@ LayoutResult::EStatus BlockLayoutAlgorithm::FinishInflow(
       const ConstraintSpace final_child_space = CreateConstraintSpaceForChild(
           child, child_break_token, *child_data, ChildAvailableSize(),
           /* is_new_fc */ false, child_bfc_block_offset);
+      recordreplay::Assert(
+        "[RUN-1855-1862] BlockLayoutAlgorithm::FinishInflow space(%s)",
+        final_child_space.ToString().Ascii().c_str()
+      );
       layout_result = LayoutInflow(final_child_space, child_break_token,
                                    early_break_, column_spanner_path_, &child,
                                    inline_child_layout_context);
