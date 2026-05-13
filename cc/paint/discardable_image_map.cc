@@ -15,6 +15,7 @@
 #include "base/memory/stack_allocated.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/no_destructor.h"
+#include "base/record_replay.h"
 #include "base/sequence_checker.h"
 #include "base/trace_event/trace_event.h"
 #include "cc/base/features.h"
