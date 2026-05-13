@@ -18,6 +18,8 @@
 #include "base/types/expected.h"
 #include "build/build_config.h"
 
+#include "base/record_replay.h"
+
 namespace base::subtle {
 
 namespace {
