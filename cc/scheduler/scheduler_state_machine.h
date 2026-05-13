@@ -187,7 +187,8 @@ class CC_EXPORT SchedulerStateMachine {
   // Indicates that the system has entered and left a BeginImplFrame callback.
   // The scheduler will not draw more than once in a given BeginImplFrame
   // callback nor send more than one BeginMainFrame message.
-  void OnBeginImplFrame(const viz::BeginFrameArgs& args);
+  void OnBeginImplFrame(const viz::BeginFrameArgs& args,
+      bool replay_force_draw = false);
   // Indicates that the scheduler has entered the draw phase. The scheduler
   // will not draw more than once in a single draw phase.
   // TODO(sunnyps): Rename OnBeginImplFrameDeadline to OnDraw or similar.
@@ -394,6 +395,12 @@ class CC_EXPORT SchedulerStateMachine {
   void SetShouldThrottleFrameRate(bool flag);
   void SetRequestHighFramerate(bool flag);
 
+  bool ClearReplayForceDraw() {
+    bool result = replay_force_draw_;
+    replay_force_draw_ = false;
+    return result;
+  }
+
  protected:
   bool BeginFrameRequiredForAction() const;
   bool BeginFrameNeededForVideo() const;
@@ -562,6 +569,8 @@ class CC_EXPORT SchedulerStateMachine {
 
   bool throttle_frame_rate_ = false;
   uint64_t high_framerate_requests_count_ = 0;
+
+  bool replay_force_draw_ = false;
 };
 
 }  // namespace cc
