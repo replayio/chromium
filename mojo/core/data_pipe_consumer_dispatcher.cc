@@ -248,6 +248,9 @@ MojoResult DataPipeConsumerDispatcher::BeginReadData(
   *buffer_num_bytes = bytes_to_read;
   two_phase_max_bytes_read_ = bytes_to_read;
 
+  recordreplay::RecordReplayBytes("DataPipeConsumerDispatcher::BeginReadData",
+                                  (void*)*buffer, *buffer_num_bytes);
+
   if (had_new_data) {
     watchers_.NotifyState(GetHandleSignalsStateNoLock());
   }
