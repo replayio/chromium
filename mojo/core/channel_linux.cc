@@ -48,6 +48,8 @@
 #include "mojo/buildflags.h"
 #include "mojo/core/embedder/features.h"
 
+#include "base/record_replay.h"
+
 namespace mojo::core {
 
 // DataAvailableNotifier is a simple interface which allows us to
