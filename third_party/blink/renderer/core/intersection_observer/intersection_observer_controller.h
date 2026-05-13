@@ -104,7 +104,7 @@ class CORE_EXPORT IntersectionObserverController
   // IntersectionObservations with an implicit root and connected target in this
   // document, grouped by IntersectionObservers.
   HeapHashMap<Member<IntersectionObserver>,
-              HeapHashSet<Member<IntersectionObservation>>>
+              HeapHashSet<Member<IntersectionObservation>, WTF::MemberHashRecordReplayRegisteredPointerId<IntersectionObservation>>>
       tracked_implicit_root_observations_;
 
   HeapHashSet<Member<IntersectionObserver>> replay_strong_tracked_explicit_root_observers_;
