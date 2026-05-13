@@ -352,6 +352,7 @@ MainThreadEventQueue::MainThreadEventQueue(
     bool allow_raf_aligned_input)
     : client_(client),
       allow_raf_aligned_input_(allow_raf_aligned_input),
+      shared_state_lock_("MainThreadEventQueue.shared_state_lock_"),
       main_task_runner_(std::move(main_task_runner)),
       widget_scheduler_(std::move(widget_scheduler)) {
   DCHECK(widget_scheduler_);
