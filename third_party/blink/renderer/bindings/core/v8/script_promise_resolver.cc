@@ -16,6 +16,8 @@
 #include "third_party/blink/renderer/platform/bindings/v8_throw_exception.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
+#include "base/record_replay.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if DCHECK_IS_ON()
 #include "base/debug/alias.h"
@@ -200,17 +202,31 @@ void ScriptPromiseResolverBase::ResolveOrRejectImmediately() {
 }
 
 void ScriptPromiseResolverBase::ScheduleResolveOrReject() {
+  int record_replay_scheduled_node_id = recordreplay::NewDependencyGraphNode(
+    "{\"kind\":\"scheduleSettleScriptPromise\"}"
+  );
   GetExecutionContext()
       ->GetTaskRunner(TaskType::kMicrotask)
       ->PostTask(FROM_HERE,
                  BindOnce(&ScriptPromiseResolverBase::ResolveOrRejectDeferred,
-                          WrapPersistent(this)));
+                          WrapPersistent(this), record_replay_scheduled_node_id));
 }
 
-void ScriptPromiseResolverBase::ResolveOrRejectDeferred() {
+void ScriptPromiseResolverBase::ResolveOrRejectDeferred(int record_replay_scheduled_node_id) {
   DCHECK(state_ == kResolving || state_ == kRejecting);
   if (!GetExecutionContext()) {
     return;
+  }
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    int node_id = recordreplay::NewDependencyGraphNode(
+      "{\"kind\":\"settleScriptPromise\"}"
+    );
+    recordreplay::AddDependencyGraphEdge(
+      record_replay_scheduled_node_id, node_id, "{\"kind\":\"scheduler\"}"
+    );
+    execute.emplace(node_id);
   }
 
   ScriptState::Scope scope(script_state_.Get());
