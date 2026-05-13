@@ -19,6 +19,11 @@ FontFallbackList* FontFallbackMap::Get(
     const FontDescription& font_description) {
   auto add_result =
       fallback_list_for_description_.insert(font_description, nullptr);
+  recordreplay::Assert("[RUN-3109-3229] FontFallbackMap::Get %d %d %d %u",
+                       !add_result.is_new_entry,
+                       !add_result.is_new_entry ? add_result.stored_value->value->RecordReplayId() : -1,
+                       !add_result.is_new_entry ? add_result.stored_value->value->IsValid() : -1,
+                       font_description.GetHash());
   if (add_result.is_new_entry) {
     add_result.stored_value->value =
         MakeGarbageCollected<FontFallbackList>(font_selector_);
