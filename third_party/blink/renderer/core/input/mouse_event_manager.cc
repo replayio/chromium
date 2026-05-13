@@ -279,7 +279,7 @@ MouseEventManager::DispatchMouseEvent(
       UIEventTiming event_timing(frame_, *event, target);
       if (should_dispatch) {
         input_event_result = event_handling_util::ToWebInputEventResult(
-            target->DispatchEvent(*event));
+            target->DispatchEvent(*event, "MouseEventManager::DispatchMouseEvent #1"));
         return {event, input_event_result};
       }
     } else {
@@ -295,7 +295,7 @@ MouseEventManager::DispatchMouseEvent(
       UIEventTiming event_timing(frame_, *event, target);
       if (should_dispatch) {
         input_event_result = event_handling_util::ToWebInputEventResult(
-            target->DispatchEvent(*event));
+            target->DispatchEvent(*event, "MouseEventManager::DispatchMouseEvent #2"));
         return {event, input_event_result};
       }
     }
@@ -1154,7 +1154,7 @@ WebInputEventResult MouseEventManager::DispatchDragEvent(
                                         : MouseEvent::kRealOrIndistinguishable);
 
   const auto event_result = event_handling_util::ToWebInputEventResult(
-      drag_target->DispatchEvent(*me));
+      drag_target->DispatchEvent(*me, "MouseEventManager::DispatchDragEvent"));
   // If the drop effect was overridden to none for a dragLeave, reset it to
   // an uninitialized state. In cases where a drag leaves a target, having
   // dropEffect explicitly set to none would be incorrect and may
