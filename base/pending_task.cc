@@ -43,7 +43,12 @@ PendingTask::PendingTask(const Location& posted_from,
                    delayed_run_time,
                    leeway,
                    delay_policy),
-      task(std::move(task)) {}
+      task(std::move(task)) {
+  if (!recordreplay::AreEventsDisallowed() && !recordreplay::AreEventsPassedThrough()) {
+    // We use these for Asserts.
+    record_replay_id = recordreplay::NewIdAnyThread("PendingTask");
+  }
+}
 
 PendingTask::PendingTask(const TaskMetadata& metadata, OnceClosure task)
     : TaskMetadata(metadata), task(std::move(task)) {}
