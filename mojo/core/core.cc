@@ -610,10 +610,14 @@ MojoResult Core::WriteMessage(MojoHandle message_pipe_handle,
   auto message_event = base::WrapUnique(
       reinterpret_cast<ports::UserMessageEvent*>(message_handle));
   auto* message = message_event->GetMessage<UserMessageImpl>();
+  recordreplay::Assert("[RUN-1647-2207] Core::WriteMessage B msg=%d txable=%d",
+    (int) !!message, (int) (message && message->IsTransmittable()));
   if (!message || !message->IsTransmittable()) {
     return MOJO_RESULT_INVALID_ARGUMENT;
   }
   auto dispatcher = GetDispatcher(message_pipe_handle);
+  recordreplay::Assert("[RUN-1647-2207] Core::WriteMessage C dispatcher=%d",
+    (int) !!dispatcher);
   if (!dispatcher) {
     return MOJO_RESULT_INVALID_ARGUMENT;
   }
