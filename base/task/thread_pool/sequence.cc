@@ -347,7 +347,13 @@ Sequence::Sequence(const TaskTraits& traits,
                    TaskSourceExecutionMode execution_mode,
                    ThreadType originating_thread_type)
     : TaskSource(traits, execution_mode, originating_thread_type),
-      task_runner_(task_runner) {}
+      task_runner_(task_runner) {
+  // Leak sequences when recording/replaying to avoid problems with destructor
+  // behavior running at non-deterministic points due to the threadsafe refcount.
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "Sequence::Sequence")) {
+    AddRef();
+  }
+}
 
 Sequence::~Sequence() = default;
 
