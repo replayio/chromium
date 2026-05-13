@@ -732,6 +732,9 @@ void NodeController::DropPeer(const ports::NodeName& node_name,
     base::AutoLock lock(reserved_ports_lock_);
     auto it = reserved_ports_.find(name);
     if (it != reserved_ports_.end()) {
+      // https://linear.app/replay/issue/RUN-1050
+      recordreplay::Assert("[RUN-1050] NodeController::DropPeer #2");
+
       for (auto& entry : it->second) {
         ports_to_close.emplace_back(entry.second);
       }
@@ -777,6 +780,8 @@ void NodeController::DropPeer(const ports::NodeName& node_name,
 void NodeController::SendPeerEvent(const ports::NodeName& name,
                                    ports::ScopedEvent event) {
   Channel::MessagePtr event_message = SerializeEventMessage(std::move(event));
+  recordreplay::Assert("[RUN-1307-1773] NodeController::SendPeerEvent A %d",
+                       !!event_message);
   if (!event_message) {
     return;
   }
@@ -833,11 +838,14 @@ void NodeController::SendPeerEvent(const ports::NodeName& name,
       peer = it->second;
     }
   }
+  recordreplay::Assert("[RUN-1307-1773] NodeController::SendPeerEvent D %d %d",
+                       !!needs_introduction, !!peer);
   if (needs_introduction) {
     broker->RequestIntroduction(name);
   } else if (peer) {
     peer->SendChannelMessage(std::move(event_message));
   }
+  recordreplay::Assert("[RUN-1307-1773] NodeController::SendPeerEvent E");
 }
 
 void NodeController::DropAllPeers() {
@@ -884,6 +892,9 @@ void NodeController::DropAllPeers() {
 void NodeController::ForwardEvent(const ports::NodeName& node,
                                   ports::ScopedEvent event) {
   DCHECK(event);
+
+  recordreplay::Assert("[RUN-1307-1773] NodeController::ForwardEvent A %d",
+                       node == name_);
   if (node == name_) {
     node_->AcceptEvent(name_, std::move(event));
   } else {
