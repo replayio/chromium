@@ -225,6 +225,9 @@ bool BindingSecurity::ShouldAllowAccessToV8ContextInternal(
   // Workers and worklets do not support multiple contexts, so both of
   // |accessing_context| and |target_context| must be windows at this point.
 
+  if (recordreplay::IsInReplayCode())
+    return true;
+
   const DOMWrapperWorld& accessing_world = accessing_script_state->World();
   const DOMWrapperWorld& target_world = target_script_state->World();
   CHECK_EQ(accessing_world.GetWorldId(), target_world.GetWorldId());
