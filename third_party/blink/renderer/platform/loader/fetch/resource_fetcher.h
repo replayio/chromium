@@ -647,8 +647,8 @@ class PLATFORM_EXPORT ResourceFetcher
   // document where |Resource::IsLoaded| might be false. The is used for
   // performance optimizations and might still contain images which are actually
   // loaded.
-  HeapHashSet<WeakMember<Resource>> not_loaded_image_resources_;
-  HeapHashSet<WeakMember<Resource>> speculative_decode_candidate_images_;
+  HeapHashSet<WeakMember<Resource>, WTF::MemberHashRecordReplayRegisteredPointerId<Resource>> not_loaded_image_resources_;
+  HeapHashSet<WeakMember<Resource>, WTF::MemberHashRecordReplayRegisteredPointerId<Resource>> speculative_decode_candidate_images_;
 
   HeapHashMap<PreloadKey, Member<Resource>> preloads_;
   HeapVector<Member<Resource>> matched_preloads_;
@@ -666,7 +666,7 @@ class PLATFORM_EXPORT ResourceFetcher
   TaskHandle unused_preloads_timer_;
 
   using PendingResourceTimingInfoMap =
-      HeapHashMap<Member<Resource>, PendingResourceTimingInfo>;
+      HeapHashMap<Member<Resource>, PendingResourceTimingInfo, WTF::MemberHashRecordReplayRegisteredPointerId<Resource>>;
   PendingResourceTimingInfoMap resource_timing_info_map_;
 
   Vector<ScheduledResourceTimingInfo> scheduled_resource_timing_reports_;
