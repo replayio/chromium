@@ -360,6 +360,9 @@ void DevToolsSession::SendProtocolNotification(
     std::unique_ptr<protocol::Serializable> notification) {
   if (IsDetached())
     return;
+
+  recordreplay::Assert("[RUN-1515] DevToolsSession::SendProtocolNotification");
+
   notification_queue_.push_back(BindOnce(
       [](std::unique_ptr<protocol::Serializable> notification) {
         return notification->Serialize();
