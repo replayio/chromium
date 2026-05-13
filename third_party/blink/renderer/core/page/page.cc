@@ -838,9 +838,14 @@ void Page::SetVisibilityState(
   if (is_initial_state)
     return;
 
+  HeapVector<Member<PageVisibilityObserver>> observers;
   for (auto& observer : page_visibility_observer_set_) {
-    observer->PageVisibilityChanged();
+    observers.push_back(observer);
   }
+  std::sort(observers.begin(), observers.end(),
+            recordreplay::CompareMemberByPointerId<Member<PageVisibilityObserver>>());
+  for (PageVisibilityObserver* observer : observers)
+    observer->PageVisibilityChanged();
 
   if (main_frame_) {
     if (lifecycle_state_->visibility ==
