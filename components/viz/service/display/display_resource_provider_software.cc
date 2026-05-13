@@ -8,6 +8,8 @@
 #include <vector>
 
 #include "base/functional/callback_helpers.h"
+#include "base/record_replay.h"
+#include "components/viz/service/display/record_replay_render.h"
 #include "gpu/command_buffer/service/scheduler.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_manager.h"
 #include "third_party/skia/include/core/SkImage.h"
