@@ -210,6 +210,7 @@ bool Syncer::ConfigureSyncShare(const DataTypeSet& request_types,
 bool Syncer::PollSyncShare(DataTypeSet request_types, SyncCycle* cycle) {
   base::AutoReset<bool> is_syncing(&is_syncing_, true);
   VLOG(1) << "Polling types " << DataTypeSetToDebugString(request_types);
+  recordreplay::Diagnostic("[TT-198] Syncer::PollSyncShare: %s", DataTypeSetToDebugString(request_types).c_str());
   HandleCycleBegin(cycle);
   DownloadAndApplyUpdates(&request_types, cycle, PollGetUpdatesDelegate());
   return HandleCycleEnd(cycle, sync_pb::SyncEnums::PERIODIC);
