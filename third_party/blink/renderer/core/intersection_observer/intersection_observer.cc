@@ -377,6 +377,9 @@ void IntersectionObserver::observe(Element* target,
       MakeGarbageCollected<IntersectionObservation>(*this, *target);
   target->EnsureIntersectionObserverData().AddObservation(*observation);
   observations_.insert(observation);
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "IntersectionObserver")) {
+    replay_strong_observations_.insert(observation);
+  }
   if (root()) {
     root()
         ->GetDocument()
