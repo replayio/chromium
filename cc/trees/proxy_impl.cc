@@ -374,6 +374,10 @@ void ProxyImpl::NotifyReadyToCommitOnImpl(
                         READY_TO_COMMIT_ON_IMPL);
               });
 
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    recordreplay::OnReadyToCommit();
+  }
+
   DCHECK(!data_for_commit_.get());
   DCHECK(IsImplThread());
   DCHECK(scheduler_);
