@@ -254,6 +254,8 @@ void DirectRenderer::DrawFrame(
   output_surface_->SetNeedsMeasureNextDrawLatency();
   BeginDrawingFrame();
 
+  recordreplay::AssertMaybeEventsDisallowed("[RUN-2847-3001] DirectRenderer::DrawFrame A");
+
   if (!base::FeatureList::IsEnabled(features::kRpdqFilterLookupOptimizations)) {
     // Determine the output rects for render passes with pixel-moving backdrop
     // filters.
@@ -281,6 +283,8 @@ void DirectRenderer::DrawFrame(
       }
     }
   }
+
+  recordreplay::AssertMaybeEventsDisallowed("[RUN-2847-3001] DirectRenderer::DrawFrame B");
 
   gfx::ColorSpace frame_color_space =
       RenderPassColorSpace(current_frame()->root_render_pass);
@@ -406,6 +410,8 @@ void DirectRenderer::DrawFrame(
 #endif
   DecideRenderPassAllocationsForFrame(*render_passes_in_draw_order,
                                       skip_root_render_pass_allocation);
+
+  recordreplay::AssertMaybeEventsDisallowed("[RUN-2847-3001] DirectRenderer::DrawFrame C");
 
   // Draw all non-root render passes except for the root render pass.
   total_pixels_rendered_this_frame_ = 0;
