@@ -2166,6 +2166,10 @@ void Mutex::LockSlowLoop(SynchWaitParams* waitp, int flags) {
 // or it is in the process of blocking on a condition variable; it must requeue
 // itself on the mutex/condvar to wait for its condition to become true.
 ABSL_ATTRIBUTE_NOINLINE void Mutex::UnlockSlow(SynchWaitParams* waitp) {
+  // The current time can be read a non-deterministic number of times while unlocking.
+  // Note that currently absl mutexes don't support ordering.
+  RecordReplayAutoDisallowEvents disallow("absl::Mutex::UnlockSlow");
+
   SchedulingGuard::ScopedDisable disable_rescheduling;
   intptr_t v = mu_.load(std::memory_order_relaxed);
   this->AssertReaderHeld();
