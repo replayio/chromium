@@ -2,11 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <dlfcn.h>
 #include <stdint.h>
 
 #include <iostream>
 #include <memory>
 
+#include "base/check.h"
 #include "base/command_line.h"
 #include "base/environment.h"
 #include "base/functional/bind.h"
