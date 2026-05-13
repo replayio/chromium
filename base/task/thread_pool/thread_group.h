@@ -215,6 +215,10 @@ class BASE_EXPORT ThreadGroup {
 
   class ThreadGroupWorkerDelegate;
 
+  bool RecordReplayUnordered() const {
+    return record_replay_unordered_;
+  }
+
  protected:
   static constexpr size_t kMaxNumberOfWorkers = 256;
 
@@ -548,6 +552,9 @@ class BASE_EXPORT ThreadGroup {
 
   // Set at the start of JoinForTesting().
   bool join_for_testing_started_ GUARDED_BY(lock_) = false;
+
+  // Whether operations on this thread group may be unordered when recording/replaying.
+  bool record_replay_unordered_ = false;
 };
 
 }  // namespace internal
