@@ -454,9 +454,10 @@ void SVGElement::RemoveInstance(SVGElement* instance) {
     EnsureSVGRareData()->ReplayStrongElementInstances().erase(instance);
 }
 
-static HeapHashSet<WeakMember<SVGElement>>& EmptyInstances() {
-  using EmptyInstanceHolder =
-      DisallowNewWrapper<HeapHashSet<WeakMember<SVGElement>>>;
+using ReplaySVGElementSet = HeapHashSet<WeakMember<SVGElement>, WTF::MemberHashRecordReplayId<SVGElement>>;
+
+static ReplaySVGElementSet& EmptyInstances() {
+  using EmptyInstanceHolder = DisallowNewWrapper<ReplaySVGElementSet>;
   DEFINE_STATIC_LOCAL(Persistent<EmptyInstanceHolder>, empty_instances,
                       (MakeGarbageCollected<EmptyInstanceHolder>()));
   return empty_instances->Value();
@@ -934,7 +935,7 @@ void SVGElement::InvalidateStyleAttribute(
 }
 
 void SVGElement::InvalidateInstances() {
-  const HeapHashSet<WeakMember<SVGElement>>& set = InstancesForElement();
+  const HeapHashSet<WeakMember<SVGElement>, WTF::MemberHashRecordReplayId<SVGElement>>& set = InstancesForElement();
   if (set.empty())
     return;
 
