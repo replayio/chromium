@@ -319,6 +319,9 @@ void IntersectionObserverController::AddTrackedObservation(
   tracked_implicit_root_observations_
       .insert(observer, HeapHashSet<Member<IntersectionObservation>>())
       .stored_value->value.insert(&observation);
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "IntersectionObserverController")) {
+    replay_strong_tracked_implicit_root_observations_.insert(&observation);
+  }
   if (observer->trackVisibility()) {
     if (LocalFrameView* frame_view =
             observation.Target()->GetDocument().View()) {
@@ -341,6 +344,9 @@ void IntersectionObserverController::RemoveTrackedObservation(
     if (it->value.empty()) {
       tracked_implicit_root_observations_.erase(it);
     }
+  }
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "IntersectionObserverController")) {
+    replay_strong_tracked_implicit_root_observations_.erase(&observation);
   }
 }
 
