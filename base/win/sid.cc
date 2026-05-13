@@ -226,6 +226,19 @@ std::optional<Sid> Sid::FromPSID(PSID sid) {
   if (!sid || !::IsValidSid(sid)) {
     return std::nullopt;
   }
+
+  // When replaying the sid pointer can't be dereferenced,
+  // so we record/replay its contents.
+  if (recordreplay::IsRecordingOrReplaying("values", "Sid")) {
+    uint32_t length = ::GetLengthSid(sid);
+    std::unique_ptr<char[]> buffer = std::make_unique<char[]>(length);
+    if (recordreplay::IsRecording()) {
+      memcpy(buffer.get(), sid, length);
+    }
+    recordreplay::RecordReplayBytes("Sid::FromPSID", buffer.get(), length);
+    return Sid(buffer.get(), length);
+  }
+
   return Sid(sid, ::GetLengthSid(sid));
 }
 
