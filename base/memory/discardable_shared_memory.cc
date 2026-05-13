@@ -241,6 +241,10 @@ bool DiscardableSharedMemory::Unmap() {
 DiscardableSharedMemory::LockResult DiscardableSharedMemory::Lock(
     size_t offset,
     size_t length) {
+  recordreplay::Assert("[RUN-1877-3208] DiscardableSharedMemory::Lock Start %d %zu",
+                       recordreplay::PointerId(this),
+                       locked_page_count_);
+
   DCHECK_EQ(AlignToPageSize(offset), offset);
   DCHECK_EQ(AlignToPageSize(length), length);
 
@@ -307,8 +311,11 @@ DiscardableSharedMemory::LockResult DiscardableSharedMemory::Lock(
 
   // Always behave as if memory was purged when trying to lock a 0 byte segment.
   if (!length) {
+    // https://linear.app/replay/issue/BAC-2426
     return PURGED;
   }
+
+  recordreplay::Assert("[RUN-1877-2453] DiscardableSharedMemory::Lock Done");
 
 #if BUILDFLAG(IS_ANDROID)
   // Ensure that the platform won't discard the required pages.
