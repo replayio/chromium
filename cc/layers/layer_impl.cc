@@ -46,6 +46,8 @@
 #include "ui/gfx/geometry/transform_util.h"
 #include "ui/gfx/geometry/vector2d_conversions.h"
 
+#include "base/record_replay.h"
+
 namespace cc {
 
 namespace {
