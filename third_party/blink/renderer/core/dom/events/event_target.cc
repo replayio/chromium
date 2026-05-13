@@ -1248,7 +1248,7 @@ void EventTarget::DispatchEnqueuedEvent(
   NavigationEventTiming event_timing_scope(
       ExecutingWindow() ? ExecutingWindow()->GetFrame() : nullptr, *event,
       this);
-  DispatchEvent(*event);
+  DispatchEvent(*event, "EventTarget::DispatchEnqueuedEvent");
 }
 
 void EventTarget::Trace(Visitor* visitor) const {
