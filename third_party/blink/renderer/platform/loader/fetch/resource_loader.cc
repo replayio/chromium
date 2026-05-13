@@ -1360,6 +1360,17 @@ void ResourceLoader::RequestAsynchronously() {
   bool no_mime_sniffing = resource_->GetResourceRequest().GetRequestContext() ==
                           blink::mojom::blink::RequestContextType::FETCH;
 
+  recordreplay::Assert(
+      "[RUN-1725-1852] ResourceLoader::RequestAsynchronously %zu %zu %zu %zu",
+      network_resource_request_->method.size(),
+      network_resource_request_->fetch_integrity.size(),
+      network_resource_request_->devtools_request_id
+          ? network_resource_request_->devtools_request_id->size()
+          : 0,
+      network_resource_request_->devtools_stack_id
+          ? network_resource_request_->devtools_stack_id->size()
+          : 0);
+
   // Don't pass a CodeCacheHost when DownloadToBlob is true. The detailed
   // decision logic for whether or not to fetch code cache from the isolated
   // code cache is implemented in ResourceRequestSender::CodeCacheFetcher. We
