@@ -503,7 +503,10 @@ void WorkerThread::ChildThreadTerminatedOnWorkerThread(WorkerThread* child) {
 
 WorkerThread::WorkerThread(WorkerReportingProxy& worker_reporting_proxy)
     : WorkerThread(worker_reporting_proxy,
-                   ThreadScheduler::Current()->CleanupTaskRunner()) {}
+                   ThreadScheduler::Current()->CleanupTaskRunner()) {
+  // Pointer registration is needed for sorting in CallOnAllWorkerThreads.
+  recordreplay::RegisterPointer("WorkerThread", this);
+}
 
 WorkerThread::WorkerThread(WorkerReportingProxy& worker_reporting_proxy,
                            scoped_refptr<base::SingleThreadTaskRunner>
