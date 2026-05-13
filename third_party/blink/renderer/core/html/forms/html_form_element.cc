@@ -604,7 +604,7 @@ void HTMLFormElement::PrepareForSubmission(
       SubmitEvent* submit_event = MakeGarbageCollected<SubmitEvent>(
           event_type_names::kSubmit, submit_event_init);
       should_submit =
-          DispatchEvent(*submit_event) == DispatchEventResult::kNotCanceled;
+          DispatchEvent(*submit_event, "HTMLFormElement::PrepareForSubmission #2") == DispatchEventResult::kNotCanceled;
       if (declarative_webmcp_call) {
         if (auto promise = submit_event->TakeRespondWithPromise()) {
           // Since we have a promise, respondWith() was called. That should only
