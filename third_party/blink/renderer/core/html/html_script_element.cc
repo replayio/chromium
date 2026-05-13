@@ -433,6 +433,9 @@ DOMNodeId HTMLScriptElement::GetDOMNodeId() {
 
 void HTMLScriptElement::DispatchLoadEvent() {
   probe::AsyncTask async_task(GetExecutionContext(), &async_task_context_);
+  // https://linear.app/replay/issue/RUN-822
+  recordreplay::Assert("HTMLScriptElement::DispatchLoadEvent");
+
   DispatchEvent(*Event::Create(event_type_names::kLoad));
 }
 
