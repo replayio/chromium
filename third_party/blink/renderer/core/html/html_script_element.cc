@@ -436,7 +436,7 @@ void HTMLScriptElement::DispatchLoadEvent() {
   // https://linear.app/replay/issue/RUN-822
   recordreplay::Assert("HTMLScriptElement::DispatchLoadEvent");
 
-  DispatchEvent(*Event::Create(event_type_names::kLoad));
+  DispatchEvent(*Event::Create(event_type_names::kLoad), "HTMLScriptElement::DispatchLoadEvent");
 }
 
 void HTMLScriptElement::DispatchErrorEvent() {
