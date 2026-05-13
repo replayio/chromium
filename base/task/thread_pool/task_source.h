@@ -207,6 +207,10 @@ class BASE_EXPORT TaskSource : public RefCountedThreadSafe<TaskSource> {
 
   HeapHandle delayed_heap_handle() const { return delayed_pq_heap_handle_; }
 
+  // Returns a racy priority of the TaskSource. Can be accessed without a
+  // Transaction but may return an outdated result.
+  TaskPriority priority_racy() const;
+
   // Returns a racy thread_type of the TaskSource. Can be accessed without a
   // Transaction but may return an outdated result.
   ThreadType thread_type_racy() const {
