@@ -7,6 +7,7 @@
 #include "base/check.h"
 #include "base/compiler_specific.h"
 #include "base/functional/bind.h"
+#include "base/record_replay.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/trace_event/trace_event.h"
@@ -15,6 +16,7 @@
 namespace base {
 
 WaitableEvent::~WaitableEvent() {
+  recordreplay::UnregisterPointer(this);
   // As requested in the documentation of perfetto::Flow::FromPointer, we should
   // emit a TerminatingFlow(this) from our destructor if we ever emitted a
   // Flow(this) which may be unmatched since the ptr value of `this` may be
