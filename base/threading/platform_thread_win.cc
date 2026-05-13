@@ -159,6 +159,9 @@ bool CreateThreadInternal(size_t stack_size,
                           PlatformThread::Delegate* delegate,
                           PlatformThreadHandle* out_thread_handle,
                           ThreadType thread_type) {
+  // Make sure we instantiate this now so we don't race to create it later.
+  GetRecordReplayThreadJoinOrderedLockId();
+
   unsigned int flags = 0;
   if (stack_size > 0) {
     flags = STACK_SIZE_PARAM_IS_A_RESERVATION;
