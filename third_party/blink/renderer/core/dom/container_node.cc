@@ -399,6 +399,8 @@ void ContainerNode::InsertNodeVector(
       Node& child = *target_node;
       mutator(*this, child, next);
       ChildListMutationScope(*this).ChildAdded(child);
+      recordreplay::Assert("[1436-1922] ContainerNode::InsertNodeVector %d %d",
+                           RecordReplayId(), child.RecordReplayId());
       if (RuntimeEnabledFeatures::
               SendSlotChangeSignalAfterNodeInsertedEnabled()) {
         probe::DidInsertDOMNode(&child);
@@ -1632,12 +1634,19 @@ void ContainerNode::RecalcDescendantStyles(
   DCHECK(GetDocument().InStyleRecalc());
   DCHECK(!NeedsStyleRecalc());
 
+  recordreplay::Assert("[RUN-1436-1437] ContainerNode::RecalcDescendantStyles %d",
+                       RecordReplayId());
+
   bool seen_any_child_elements = false;
   SelectorFilter& selector_filter =
       GetDocument().GetStyleResolver().GetSelectorFilter();
   SelectorFilter::Mark mark;
 
   for (Node* child = firstChild(); child; child = child->nextSibling()) {
+    recordreplay::Assert(
+        "[RUN-1436] ContainerNode::RecalcDescendantStyles #1 %d",
+        child->RecordReplayId());
+
     if (!change.TraverseChild(*child)) {
       continue;
     }
