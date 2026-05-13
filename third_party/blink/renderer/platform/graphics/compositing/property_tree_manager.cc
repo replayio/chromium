@@ -451,6 +451,10 @@ int PropertyTreeManager::EnsureCompositorTransformNode(
       EnsureCompositorTransformNode(transform_node.Parent()->Unalias());
   id = transform_tree_.Insert(cc::TransformNode(), parent_id);
 
+  recordreplay::Assert(
+      "[RUN-550-1536] PropertyTreeManager::EnsureCompositorTransformNode B %d %d",
+      id, parent_id);
+
   if (auto* scroll_translation_for_fixed =
           transform_node.ScrollTranslationForFixed()) {
     // Fixed-position can cause different topologies of the transform tree and
