@@ -410,7 +410,7 @@ void HTMLLinkElement::DispatchEventWithTaskState(
   if (type == event_type_names::kLoad) {
     DispatchEvent(*Event::Create(type), "HTMLLinkElement::LinkLoaded");
   } else {
-    DispatchEvent(*Event::Create(type));
+    DispatchEvent(*Event::Create(type), "HTMLLinkElement::LinkLoadingErrored");
   }
 }
 
