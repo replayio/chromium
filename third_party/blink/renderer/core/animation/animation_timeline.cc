@@ -245,6 +245,7 @@ void AnimationTimeline::Trace(Visitor* visitor) const {
   visitor->Trace(animations_needing_update_);
   visitor->Trace(animations_);
   visitor->Trace(triggers_);
+  visitor->Trace(record_replay_animations_strong_);
   ScriptWrappable::Trace(visitor);
 }
 
