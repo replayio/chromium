@@ -51,6 +51,8 @@ void PictureLayer::PushDirtyPropertiesTo(
                                unsafe_state);
 
   if (dirty_flag & kChangedGeneralProperty) {
+    recordreplay::Assert(
+        "[RUN-2104-2296] PictureLayer::PushPropertiesTo A");
     TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("cc.debug"),
                  "PictureLayer::PushPropertiesTo");
     DropRecordingSourceContentIfInvalid(
@@ -66,8 +68,11 @@ void PictureLayer::PushDirtyPropertiesTo(
         commit_state.device_viewport_rect.size());
     layer_impl->SetIsBackdropFilterMask(is_backdrop_filter_mask());
 
+    recordreplay::Assert("[RUN-2104-2296] PictureLayer::PushPropertiesTo B");
     layer_impl->UpdateRasterSource(CreateRasterSource(),
                                    &last_updated_invalidation_.Write(*this));
+    recordreplay::Assert("[RUN-2104-2296] PictureLayer::PushPropertiesTo C");
+
     layer_impl->set_should_batch_updated_tiles();
   }
 
@@ -238,6 +243,10 @@ void PictureLayer::CaptureContent(const gfx::Rect& rect,
 
 void PictureLayer::DropRecordingSourceContentIfInvalid(
     int source_frame_number) {
+  // https://linear.app/replay/issue/RUN-885
+  recordreplay::Assert("PictureLayer::DropRecordingSourceContentIfInvalid %d %d",
+                       this->id(), source_frame_number);
+
   gfx::Size recording_source_size = recording_source_.Read(*this).size();
 
   gfx::Size layer_bounds = bounds();
