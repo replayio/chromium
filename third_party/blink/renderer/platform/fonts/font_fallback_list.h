@@ -171,6 +171,8 @@ class PLATFORM_EXPORT FontFallbackList
   // primary font.
   Member<const ShapeResult> emphasis_mark_shape_;
   AtomicString emphasis_mark_text_;
+
+  HAS_RECORD_REPLAY_ID();
 };
 
 }  // namespace blink
