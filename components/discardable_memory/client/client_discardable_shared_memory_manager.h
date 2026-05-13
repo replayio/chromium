@@ -15,6 +15,8 @@
 #include "base/memory/memory_pressure_listener.h"
 #include "base/memory/post_delayed_memory_reduction_task.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
+#include "base/record_replay.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/ref_counted_delete_on_sequence.h"
 #include "base/memory/unsafe_shared_memory_region.h"
@@ -206,8 +208,11 @@ class DISCARDABLE_MEMORY_EXPORT ClientDiscardableSharedMemoryManager
       manager_mojo_;
 
   // Holds all locked and unlocked instances which have not yet been purged.
-  std::set<raw_ptr<DiscardableMemoryImpl, SetExperimental>> allocated_memory_
-      GUARDED_BY(lock_);
+  // RAW_PTR_EXCLUSION: Replay determinism requires bare pointer for use with
+  // recordreplay::CompareByPointerId comparator.
+  RAW_PTR_EXCLUSION std::set<DiscardableMemoryImpl*,
+                             recordreplay::CompareByPointerId>
+      allocated_memory_ GUARDED_BY(lock_);
   size_t bytes_allocated_limit_for_testing_ = 0;
 
   // Used in metrics to distinguish in-use consumers from background ones. We
