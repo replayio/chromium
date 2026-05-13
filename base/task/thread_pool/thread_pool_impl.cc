@@ -36,6 +36,8 @@
 #include "base/time/time.h"
 #include "build/build_config.h"
 
+#include "base/record_replay.h"
+
 namespace base::internal {
 
 namespace {
@@ -144,6 +146,7 @@ ThreadPoolImpl::~ThreadPoolImpl() {
   background_thread_group_.reset();
   presentation_thread_group_.reset();
   audio_thread_group_.reset();
+  record_replay_unordered_thread_group_.reset();
 }
 
 void ThreadPoolImpl::Start(const ThreadPoolInstance::InitParams& init_params,
