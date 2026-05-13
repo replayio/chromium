@@ -204,6 +204,7 @@ MessageEvent::MessageEvent(
   DCHECK(IsValidSource(source_.Get()));
   serialized_data_memory_accounter_.Increase(v8::Isolate::GetCurrent(),
                                              SizeOfExternalMemoryInBytes());
+  RecordReplayInitDependencyGraphNodeId();
 }
 
 MessageEvent::MessageEvent(scoped_refptr<const SecurityOrigin> origin,
