@@ -76,7 +76,8 @@ namespace blink {
 namespace {
 
 void NotifyFinishObservers(
-    GCedHeapHashSet<WeakMember<ResourceFinishObserver>>* observers) {
+    GCedHeapHashSet<WeakMember<ResourceFinishObserver>, WTF::MemberHashRecordReplayId<ResourceFinishObserver>>* observers,
+    HeapVector<Member<ResourceFinishObserver>>* observers_strong) {
   for (const auto& observer : *observers)
     observer->NotifyFinished();
 }
@@ -174,6 +175,8 @@ void Resource::Trace(Visitor* visitor) const {
   visitor->Trace(clients_awaiting_callback_);
   visitor->Trace(finished_clients_);
   visitor->Trace(finish_observers_);
+  visitor->Trace(replay_clients_strong_);
+  visitor->Trace(replay_finish_observers_strong_);
   visitor->Trace(options_);
 }
 
@@ -349,12 +352,14 @@ void Resource::TriggerNotificationForFinishObservers(
 
 
   auto* new_collections =
-      MakeGarbageCollected<GCedHeapHashSet<WeakMember<ResourceFinishObserver>>>(
+      MakeGarbageCollected<GCedHeapHashSet<WeakMember<ResourceFinishObserver>, WTF::MemberHashRecordReplayId<ResourceFinishObserver>>>(
           std::move(finish_observers_));
   finish_observers_.clear();
 
-  task_runner->PostTask(FROM_HERE, BindOnce(&NotifyFinishObservers,
-                                            WrapPersistent(new_collections)));
+  task_runner->PostTask(FROM_HERE,
+                        BindOnce(&NotifyFinishObservers,
+                                 WrapPersistent(new_collections),
+                                 WrapPersistent(new_collections_strong)));
 
   DidRemoveClientOrObserver();
 }
