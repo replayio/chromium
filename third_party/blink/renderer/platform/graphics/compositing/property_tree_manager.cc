@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/platform/graphics/compositing/property_tree_manager.h"
 
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "cc/base/features.h"
 #include "cc/input/overscroll_behavior.h"
