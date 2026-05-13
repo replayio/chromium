@@ -14,6 +14,7 @@
 #include "base/check_op.h"
 #include "base/dcheck_is_on.h"
 #include "base/debug/stack_trace.h"
+#include "base/deterministic_containers.h"
 #include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
