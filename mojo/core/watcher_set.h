@@ -67,7 +67,8 @@ class WatcherSet {
   };
 
   const raw_ptr<Dispatcher> owner_;
-  base::flat_map<WatcherDispatcher*, Entry> watchers_;
+  base::flat_map<WatcherDispatcher*, Entry, recordreplay::CompareByPointerId>
+      watchers_;
   std::optional<HandleSignalsState> last_known_state_;
 };
 
