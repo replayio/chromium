@@ -268,8 +268,14 @@ void BodyStreamBuffer::StartLoading(FetchDataLoader* loader,
       client->Abort();
       return;
     }
-    loader_client_abort_handle_ = signal_->AddAlgorithm(
-        BindOnce(&FetchDataLoader::Client::Abort, WrapWeakPersistent(client)));
+    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "BodyStreamBuffer")) {
+      // Client aborts can interact with the recording, so we want them to run consistently.
+      loader_client_abort_handle_ = signal_->AddAlgorithm(
+          BindOnce(&FetchDataLoader::Client::Abort, WrapPersistent(client)));
+    } else {
+      loader_client_abort_handle_ = signal_->AddAlgorithm(
+          BindOnce(&FetchDataLoader::Client::Abort, WrapWeakPersistent(client)));
+    }
   }
   loader_ = loader;
   auto* handle = ReleaseHandle(exception_state);
