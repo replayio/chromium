@@ -843,7 +843,7 @@ HRESULT FontFileStream::RuntimeClassInitialize(HANDLE handle) {
     return E_FAIL;
   }
 
-  if (!data_.Initialize(base::File(duplicate_handle))) {
+  if (!data_->Initialize(base::File(duplicate_handle))) {
     return E_FAIL;
   }
   return S_OK;
