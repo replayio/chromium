@@ -232,7 +232,8 @@ void ScriptRunner::RemoveDelayReasonFromScript(PendingScript* pending_script,
   pending_async_scripts_.erase(it);
   base::OnceClosure task = blink::BindOnce(
       &ScriptRunner::ExecuteAsyncPendingScript, WrapWeakPersistent(this),
-      WrapPersistent(pending_script), base::TimeTicks::Now());
+      WrapPersistent(pending_script), base::TimeTicks::Now(),
+      record_replay_scheduled_node_id);
   if (pending_script->IsEligibleForLowPriorityAsyncScriptExecution()) {
     PostTaskWithLowPriorityUntilTimeout(
         FROM_HERE, std::move(task),
@@ -245,7 +246,17 @@ void ScriptRunner::RemoveDelayReasonFromScript(PendingScript* pending_script,
 
 void ScriptRunner::ExecuteAsyncPendingScript(
     PendingScript* pending_script,
-    base::TimeTicks ready_to_evaluate_time) {
+    base::TimeTicks ready_to_evaluate_time,
+    int record_replay_scheduled_node_id) {
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    int node_id = recordreplay::NewDependencyGraphNode("{\"kind\":\"executeAsyncScript\"}");
+    recordreplay::AddDependencyGraphEdge(
+      record_replay_scheduled_node_id, node_id, "{\"kind\":\"scheduler\"}"
+    );
+    execute.emplace(node_id);
+  }
+
   base::UmaHistogramMediumTimes(
       "Blink.Script.AsyncScript.FromReadyToStartExecution.Time",
       base::TimeTicks::Now() - ready_to_evaluate_time);
