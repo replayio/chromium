@@ -161,6 +161,7 @@ struct SameSizeAsLayoutBox : public LayoutBoxModelObject {
   HeapVector<Member<const LayoutResult>, 1> layout_results;
   wtf_size_t first_fragment_item_index_;
   Member<void*> members[2];
+  int record_replay_id;
 };
 
 ASSERT_SIZE(LayoutBox, SameSizeAsLayoutBox);
@@ -484,6 +485,7 @@ void LayoutBoxRareData::Trace(Visitor* visitor) const {
 }
 
 LayoutBox::LayoutBox(ContainerNode* node) : LayoutBoxModelObject(node) {
+  record_replay_id_ = recordreplay::NewIdMainThread("LayoutBox");
   if (blink::IsA<HTMLLegendElement>(node))
     SetIsHTMLLegendElement();
 }
