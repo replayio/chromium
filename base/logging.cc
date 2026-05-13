@@ -764,6 +764,8 @@ void LogMessage::Flush() {
   std::string str_newline(stream_.str());
   TraceLogMessage(file_, line_, str_newline.substr(message_start_));
 
+  RecordReplayPrint("LogMessage %s", str_newline.c_str());
+
   // FATAL messages should always run the assert handler and crash, even if a
   // message handler marks them as otherwise handled.
   absl::Cleanup handle_fatal_message = [&] {
@@ -960,6 +962,8 @@ std::string LogMessage::BuildCrashString() const {
 
 // writes the common header info to the stream
 void LogMessage::Init(const char* file, int line) {
+  RecordReplayPrint("LogMessage::Init %s:%d", file, line);
+
   // Don't let actions from this method affect the system error after returning.
   base::ScopedClearLastError scoped_clear_last_error;
 
@@ -1072,6 +1076,9 @@ void LogMessage::HandleFatal(size_t stack_start,
     // make sure it runs unconditionally. Currently LogAssertHandlers can abort
     // a FATAL message and tests rely on this. HandleFatal() should be
     // [[noreturn]].
+    // Replace this with an API call to `RecordReplaySetCrashReasonCallback`
+    // See RUN-1562: https://linear.app/replay/issue/RUN-1562
+    RecordReplayPrint("ErrorFatal %s:%d %s", file_, line_, str_newline.c_str());
     base::ImmediateCrash();
   }
 }
