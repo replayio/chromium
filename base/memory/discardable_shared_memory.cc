@@ -150,11 +150,17 @@ bool UseAshmemUnpinningForDiscardableMemory() {
 
 }  // namespace
 
-DiscardableSharedMemory::DiscardableSharedMemory() = default;
+DiscardableSharedMemory::DiscardableSharedMemory() {
+  // https://linear.app/replay/issue/BAC-2426
+  recordreplay::RegisterPointer("DiscardableSharedMemory", this);
+}
 
 DiscardableSharedMemory::DiscardableSharedMemory(
     UnsafeSharedMemoryRegion shared_memory_region)
-    : shared_memory_region_(std::move(shared_memory_region)) {}
+    : shared_memory_region_(std::move(shared_memory_region)) {
+  // https://linear.app/replay/issue/BAC-2426
+  recordreplay::RegisterPointer("DiscardableSharedMemory", this);
+}
 
 DiscardableSharedMemory::~DiscardableSharedMemory() {
   // https://linear.app/replay/issue/BAC-2426
