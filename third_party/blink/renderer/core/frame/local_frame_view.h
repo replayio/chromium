@@ -523,7 +523,7 @@ class CORE_EXPORT LocalFrameView final
 
   using ScrollableAreaMap =
       HeapHashMap<CompositorElementId, Member<PaintLayerScrollableArea>>;
-  using ScrollableAreaSet = HeapHashSet<Member<PaintLayerScrollableArea>>;
+  using ScrollableAreaSet = HeapHashSet<Member<PaintLayerScrollableArea>, WTF::MemberHashRecordReplayId<PaintLayerScrollableArea>>;
   void AddScrollAnchoringScrollableArea(PaintLayerScrollableArea*);
   void RemoveScrollAnchoringScrollableArea(PaintLayerScrollableArea*);
 
