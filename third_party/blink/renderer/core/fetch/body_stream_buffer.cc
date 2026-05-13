@@ -485,6 +485,9 @@ void BodyStreamBuffer::Abort() {
     DCHECK(!consumer_);
     return;
   }
+
+  recordreplay::Assert("[RUN-1182] BodyStreamBuffer::Abort #1");
+
   auto* byte_controller =
       To<ReadableByteStreamController>(stream_->GetController());
   v8::Local<v8::Value> dom_exception = V8ThrowDOMException::CreateOrEmpty(
