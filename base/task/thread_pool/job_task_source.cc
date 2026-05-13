@@ -109,6 +109,7 @@ JobTaskSource::JobTaskSource(const Location& from_here,
     : TaskSource(traits,
                  TaskSourceExecutionMode::kJob,
                  originating_thread_type),
+      worker_lock_(recordreplay::AreEventsDisallowed() ? nullptr : "JobTaskSource.worker_lock_"),
       max_concurrency_callback_(std::move(max_concurrency_callback)),
       worker_task_(std::move(worker_task)),
       primary_task_(base::BindRepeating(
