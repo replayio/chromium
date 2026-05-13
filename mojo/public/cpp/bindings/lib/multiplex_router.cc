@@ -424,6 +424,8 @@ MultiplexRouter::MultiplexRouter(
                  primary_interface_name),
       control_message_handler_(this),
       control_message_proxy_(&connector_) {
+  recordreplay::RegisterPointer("MultiplexRouter", this);
+
   if (config_ == MULTI_INTERFACE) {
     lock_.emplace();
   }
