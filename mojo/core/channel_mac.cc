@@ -696,8 +696,19 @@ class ChannelMac : public Channel,
         return;
       }
 
+      // When replaying the raw address used when recording will be replayed,
+      // which we can't dereference. Allocate a new block of memory and copy
+      // in its contents from the recording.
+      void* address = descriptor->address;
+      if (recordreplay::IsReplaying()) {
+        address = nullptr;
+        kr = vm_allocate(mach_task_self(), (vm_address_t*)&address, descriptor->size, true);
+        CHECK(kr == KERN_SUCCESS);
+      }
+      recordreplay::RecordReplayBytes("ChannelMac::OnMachMessageReceived", address, descriptor->size);
+
       payload = UNSAFE_TODO(base::span<const char>(
-          reinterpret_cast<const char*>(descriptor->address),
+          reinterpret_cast<const char*>(address),
           descriptor->size));
       // The kernel page-aligns the OOL memory when performing the mach_msg on
       // the send side, but it preserves the original size in the descriptor.
