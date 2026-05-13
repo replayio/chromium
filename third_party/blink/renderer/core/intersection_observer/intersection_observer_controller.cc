@@ -172,6 +172,14 @@ void IntersectionObserverController::ComputeIntersections(
 
   auto compute_observer_intersections = [&](IntersectionObserver& observer,
                                             const auto& observations) {
+    REPLAY_ASSERT("[TT-1483-1527] IntersectionObserver::ComputeIntersections A %d %d %u",
+      !!observer.RootIsValid(),
+      !!observer.GetExecutionContext(),
+      (unsigned)observations.size());
+    REPLAY_ASSERT("[TT-1483-1527] IntersectionObserver::ComputeIntersections B %d %d",
+      !!(flags & IntersectionObservation::kPostLayoutDeliveryOnly),
+      observer.GetDeliveryBehavior() ==
+          IntersectionObserver::kDeliverDuringPostLayoutSteps);
     if (metrics_timer && observer.GetUkmMetricId()) {
       metrics_timer->StartInterval(observer.GetUkmMetricId().value());
     }
