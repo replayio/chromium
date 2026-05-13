@@ -636,6 +636,7 @@ bool EventTarget::AddEventListenerInternal(
       !execution_context->IsFeatureEnabled(
           network::mojom::PermissionsPolicyFeature::kUnload,
           ReportOptions::kReportOnFailure)) {
+    REPLAY_ASSERT("[RUN-1260-1332] EventTarget::AddEventListenerInternal B");
     return false;
   }
 
@@ -1207,6 +1208,11 @@ Vector<AtomicString> EventTarget::EventTypes() {
 
 void EventTarget::RemoveAllEventListeners() {
   if (auto* d = GetEventTargetData()) {
+    if (!recordreplay::AreEventsDisallowed()) {
+      // don't Assert during GC
+      REPLAY_ASSERT("[RUN-1260-1332] EventTarget::RemoveAllEventListeners");
+    }
+
     d->event_listener_map.Clear();
   }
 }
