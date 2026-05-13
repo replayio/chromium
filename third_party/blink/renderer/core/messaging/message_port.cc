@@ -403,6 +403,9 @@ bool MessagePort::Accept(mojo::Message* mojo_message) {
   }
 
   ExecutionContext* context = GetExecutionContext();
+  if (!context)
+    return true;
+
   if (base::FeatureList::IsEnabled(features::kBFCacheWithSharedWorker) &&
       context->is_in_back_forward_cache()) {
     if (IsSharedWorkerPort()) {
@@ -434,6 +437,9 @@ bool MessagePort::Accept(mojo::Message* mojo_message) {
 
 void MessagePort::DispatchMessageEvent(BlinkTransferableMessage message) {
   ExecutionContext* context = GetExecutionContext();
+  if (!context)
+    return;
+
   // WorkerGlobalScope::close() in Worker onmessage handler should prevent
   // the next message from dispatching.
   if (auto* scope = DynamicTo<WorkerGlobalScope>(context)) {
