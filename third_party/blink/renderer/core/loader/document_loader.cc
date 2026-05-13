@@ -2031,6 +2031,12 @@ void DocumentLoader::StartLoadingInternal() {
   // so we don't MarkFetchStart here.
   main_resource_identifier_ = CreateUniqueIdentifier();
 
+  if (recordreplay::IsRecordingOrReplaying("notify-network")) {
+    ResourceRequest request(url_);
+    request.SetInspectorId(main_resource_identifier_);
+    recordreplay::OnNetworkPrepareRequest(nullptr, nullptr, request);
+  }
+
   virtual_time_pauser_ =
       frame_->GetFrameScheduler()->CreateWebScopedVirtualTimePauser(
           url_.GetString(),
