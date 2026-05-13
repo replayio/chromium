@@ -106,8 +106,12 @@ void SkFontGetGlyphExtentsForHarfBuzz(const SkFont& font,
 #if BUILDFLAG(IS_APPLE)
   // TODO(drott): Remove this once we have better metrics bounds
   // on Mac, https://bugs.chromium.org/p/skia/issues/detail?id=5328
-  if (const auto path = font.getPath(glyph)) {
-    sk_bounds = path->getBounds();
+  if (!recordreplay::AreEventsUnavailable("divergent-update")) {
+    if (const auto path = font.getPath(glyph)) {
+      sk_bounds = path->getBounds();
+    } else {
+      sk_bounds = font.getBounds(glyph, nullptr);
+    }
   } else {
     sk_bounds = font.getBounds(glyph, nullptr);
   }
