@@ -114,12 +114,18 @@ bool CanSetThreadTypeToRealtimeAudio() {
 
 void SetCurrentThreadTypeImpl(ThreadType thread_type,
                               MessagePumpType pump_type_hint) {
+  recordreplay::Assert("[RUN-1967-2038] SetCurrentThreadTypeImpl A %d %d",
+                       thread_type, (int)pump_type_hint);
+
   const PlatformThreadId thread_id = PlatformThread::CurrentId();
 
   if (g_thread_type_delegate &&
       g_thread_type_delegate->HandleThreadTypeChange(thread_id, thread_type)) {
     return;
   }
+
+  recordreplay::Assert("[RUN-1967-2038] SetCurrentThreadTypeImpl B %d %d",
+                       thread_type, (int)pump_type_hint);
 
   internal::SetThreadType(getpid(), thread_id, thread_type);
 }
