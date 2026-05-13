@@ -34,6 +34,8 @@
 #include "base/trace_event/typed_macros.h"
 #include "mojo/core/ipcz_driver/envelope.h"
 
+#include "base/record_replay.h"
+
 namespace mojo::core {
 
 namespace {
