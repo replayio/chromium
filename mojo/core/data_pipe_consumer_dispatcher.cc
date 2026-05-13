@@ -183,9 +183,13 @@ MojoResult DataPipeConsumerDispatcher::ReadData(
         std::min(options_.capacity_num_bytes - read_offset_, bytes_to_read);
     uint32_t head_bytes_to_copy = bytes_to_read - tail_bytes_to_copy;
     if (tail_bytes_to_copy > 0) {
+      recordreplay::RecordReplayBytes("DataPipeConsumerDispatcher::ReadData",
+                                      (uint8_t*)data + read_offset_, tail_bytes_to_copy);
       UNSAFE_TODO(memcpy(destination, data + read_offset_, tail_bytes_to_copy));
     }
     if (head_bytes_to_copy > 0) {
+      recordreplay::RecordReplayBytes("DataPipeConsumerDispatcher::ReadData",
+                                      (uint8_t*)data, head_bytes_to_copy);
       UNSAFE_TODO(
           memcpy(destination + tail_bytes_to_copy, data, head_bytes_to_copy));
     }
