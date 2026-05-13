@@ -287,6 +287,11 @@ void ChildProcessHostImpl::OnChannelError() {
 }
 
 void ChildProcessHostImpl::OnBadMessageReceived() {
+  // https://linear.app/replay/issue/RUN-1082
+  recordreplay::Diagnostic("[RUN-1082] ChildProcessHostImpl::OnBadMessageReceived %p", (void*)delegate_);
+  if (!delegate_)
+    return;
+
   delegate_->OnBadMessageReceived();
 }
 
