@@ -195,6 +195,11 @@ void IntersectionObserverController::ComputeIntersections(
     }
   };
 
+  REPLAY_ASSERT("[TT-1483-1499] IntersectionObserverController::ComputeIntersections %u %u %u",
+    flags,
+    tracked_explicit_root_observers_.size(),
+    tracked_implicit_root_observations_.size());
+
   bool update_tracking = flags & IntersectionObservation::kUpdateTracking;
   if (update_tracking) {
     // If the root has disappeared, then this observer is toast. If the
