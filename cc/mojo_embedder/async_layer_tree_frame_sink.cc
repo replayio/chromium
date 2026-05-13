@@ -291,6 +291,11 @@ void AsyncLayerTreeFrameSink::SubmitCompositorFrame(
     frame.metadata.begin_frame_ack.frame_id.source_id =
         viz::BeginFrameArgs::kManualSourceId;
   }
+
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    recordreplay::SubmitCompositorFrame(local_surface_id_, frame);
+  }
+
   compositor_frame_sink_ptr_->SubmitCompositorFrame(
       local_surface_id_, std::move(frame), std::move(hit_test_region_list), 0);
 
