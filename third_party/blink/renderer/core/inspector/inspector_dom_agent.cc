@@ -1387,8 +1387,12 @@ protocol::Response InspectorDOMAgent::performSearch(
     std::optional<bool> optional_include_user_agent_shadow_dom,
     String* search_id,
     int* result_count) {
-  if (!enabled_.Get())
-    return protocol::Response::ServerError("DOM agent is not enabled");
+  if (!recordreplay::IsInReplayCode()) {
+    // [replay] act as though it is enabled when in Replay code.
+    if (!enabled_.Get()) {
+      return protocol::Response::ServerError("DOM agent is not enabled");
+    }
+  }
 
   // FIXME: Few things are missing here:
   // 1) Search works with node granularity - number of matches within node is
