@@ -58,6 +58,7 @@
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
 
+#include "base/record_replay.h"
 using base::apple::CFToNSOwnershipCast;
 using base::apple::CFToNSPtrCast;
 using base::apple::NSToCFPtrCast;
