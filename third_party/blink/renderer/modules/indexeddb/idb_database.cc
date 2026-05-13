@@ -179,6 +179,10 @@ void IDBDatabase::SetDatabaseMetadata(const IDBDatabaseMetadata& metadata) {
 
 void IDBDatabase::TransactionCreated(IDBTransaction* transaction) {
   TRACE_EVENT0("IndexedDB", "IDBDatabase::TransactionCreated");
+  // https://linear.app/replay/issue/RUN-969
+  recordreplay::Assert("IDBDatabase::TransactionCreated %d",
+                       (int)transaction->Id());
+
   DCHECK(transaction);
   DCHECK(!transactions_.Contains(transaction->Id()));
   transactions_.insert(transaction->Id(), transaction);
