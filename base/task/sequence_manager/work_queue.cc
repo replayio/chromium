@@ -200,7 +200,11 @@ void WorkQueue::RecordReplayRunUnorderedTasks(TaskQueueImpl::TaskDeque* queue) {
 void WorkQueue::TakeImmediateIncomingQueueTasks() {
   DCHECK(tasks_.empty());
 
-  task_queue_->TakeImmediateIncomingQueueTasks(&tasks_);
+  TaskQueueImpl::TaskDeque record_replay_unordered_queue;
+
+  task_queue_->TakeImmediateIncomingQueueTasks(&tasks_, &record_replay_unordered_queue);
+  RecordReplayRunUnorderedTasks(&record_replay_unordered_queue);
+
   if (tasks_.empty()) {
     return;
   }
