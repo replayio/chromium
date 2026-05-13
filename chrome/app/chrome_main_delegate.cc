@@ -30,6 +30,7 @@
 #include "base/process/process_handle.h"
 #include "base/profiler/thread_group_profiler.h"
 #include "base/rand_util.h"
+#include "base/record_replay_driver.h"
 #include "base/strings/string_util.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
