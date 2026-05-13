@@ -251,6 +251,7 @@ static_library("ui") {
     "//chrome/browser/ui/webui/omnibox/aim_eligibility:mojo_bindings",
     "//chrome/browser/ui/webui/omnibox/logging",
     "//chrome/browser/ui/webui/omnibox/logging:mojo_bindings",
+    "//chrome/browser/ui/webui/record_replay:mojo_bindings",
   ]
 
   deps = [
@@ -347,6 +348,7 @@ static_library("ui") {
     "//chrome/browser/profiling_host",
     "//chrome/browser/resources",
     "//chrome/browser/resources:dev_ui_resources",
+    "//chrome/browser/resources/record_replay:resources",
     "//chrome/browser/safe_browsing",
     "//chrome/browser/search_engine_choice",
     "//chrome/browser/search_engine_choice:impl",
@@ -1264,6 +1266,10 @@ static_library("ui") {
       "webui/profile_internals/profile_internals_handler.h",
       "webui/profile_internals/profile_internals_ui.cc",
       "webui/profile_internals/profile_internals_ui.h",
+      "webui/record_replay/record_replay_manager_handler.cc",
+      "webui/record_replay/record_replay_manager_handler.h",
+      "webui/record_replay/record_replay_ui.cc",
+      "webui/record_replay/record_replay_ui.h",
       "webui/search_engine_choice/search_engine_choice_handler.cc",
       "webui/search_engine_choice/search_engine_choice_handler.h",
       "webui/search_engine_choice/search_engine_choice_ui.cc",
@@ -4382,6 +4388,8 @@ static_library("ui") {
       "views/qrcode_generator/qrcode_generator_bubble.h",
       "views/record_replay/save_recording_bubble_view.cc",
       "views/record_replay/save_recording_bubble_view.h",
+      "views/toolbar/record_replay_toolbar_button.cc",
+      "views/toolbar/record_replay_toolbar_button.h",
       "views/relaunch_notification/relaunch_notification_controller.cc",
       "views/relaunch_notification/relaunch_notification_controller.h",
       "views/relaunch_notification/relaunch_required_timer.cc",
