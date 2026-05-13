@@ -1329,6 +1329,10 @@ void ResourceLoader::RequestSynchronously() {
 }
 
 void ResourceLoader::RequestAsynchronously() {
+  // After diverging from the recording we can't access system resources anymore.
+  if (recordreplay::HasDivergedFromRecording())
+    return;
+
   if (resource_->Url().ProtocolIsData()) {
     CHECK(!network_resource_request_);
     CHECK(!loader_);
