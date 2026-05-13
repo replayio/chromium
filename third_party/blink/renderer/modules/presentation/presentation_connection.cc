@@ -561,7 +561,7 @@ void PresentationConnection::DidReceiveBinaryMessage(
     }
     case V8BinaryType::Enum::kArraybuffer:
       DOMArrayBuffer* buffer = DOMArrayBuffer::Create(data);
-      DispatchEvent(*MessageEvent::Create(buffer));
+      DispatchEvent(*MessageEvent::Create(buffer), "PresentationConnection::DidReceiveBinaryMessage #2");
       return;
   }
   NOTREACHED();
