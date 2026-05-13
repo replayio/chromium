@@ -101,7 +101,11 @@ class SyncWaiter : public WaitableEvent::Waiter {
   STACK_ALLOCATED();
 
  public:
-  SyncWaiter() : cv_(&lock_) {}
+  SyncWaiter(bool record_replay_unordered)
+     : lock_(record_replay_unordered ? nullptr : "SyncWaiter.lock_"),
+       cv_(&lock_) {}
+
+  ~SyncWaiter() override {}
 
   bool Fire(WaitableEvent* signaling_event) override {
     base::AutoLock locked(lock_);
@@ -154,6 +158,10 @@ class SyncWaiter : public WaitableEvent::Waiter {
 };
 
 bool WaitableEvent::TimedWaitImpl(TimeDelta wait_delta) {
+  std::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (kernel_->record_replay_unordered_)
+    disallow.emplace("WaitableEvent::TimedWait");
+
   kernel_->lock_.Acquire();
   if (kernel_->signaled_) {
     if (!kernel_->manual_reset_) {
@@ -166,7 +174,7 @@ bool WaitableEvent::TimedWaitImpl(TimeDelta wait_delta) {
     return true;
   }
 
-  SyncWaiter sw;
+  SyncWaiter sw(kernel_->record_replay_unordered_);
   if (only_used_while_idle_) {
     sw.cv()->declare_only_used_while_idle();
   }
@@ -232,6 +240,12 @@ cmp_fst_addr(const std::pair<WaitableEvent*, unsigned>& a,
 // NO_THREAD_SAFETY_ANALYSIS: Complex control flow.
 size_t WaitableEvent::WaitManyImpl(base::span<WaitableEvent*> raw_waitables)
     NO_THREAD_SAFETY_ANALYSIS {
+  bool record_replay_unordered = !raw_waitables.empty() && raw_waitables[0]->kernel_->record_replay_unordered_;
+
+  std::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (record_replay_unordered)
+    disallow.emplace("WaitableEvent::WaitMany");
+
   // We need to acquire the locks in a globally consistent order. Thus we sort
   // the array of waitables by address. We actually sort a pairs so that we can
   // map back to the original index values later.
