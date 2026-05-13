@@ -8,6 +8,7 @@
 
 #include "base/compiler_specific.h"
 #include "base/dcheck_is_on.h"
+#include "base/record_replay.h"
 #include "mojo/core/ports/port.h"
 
 #if DCHECK_IS_ON()
