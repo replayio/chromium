@@ -738,6 +738,17 @@ static LocalWindowProxy* gLatestLocalWindowProxy;
 LocalWindowProxy::LocalWindowProxy(v8::Isolate* isolate,
                                    LocalFrame& frame,
                                    DOMWrapperWorld* world)
-    : WindowProxy(isolate, frame, world) {}
+    : WindowProxy(isolate, frame, world) {
+  gLatestLocalWindowProxy = this;
+}
+
+bool RecordReplayStateEnsureInitialized() {
+  if (recordreplay::IsRecordingOrReplaying("commands") &&
+      !gRecordReplayStateInitialized &&
+      gLatestLocalWindowProxy) {
+    gLatestLocalWindowProxy->InitializeIfNeeded();
+  }
+  return gRecordReplayStateInitialized;
+}
 
 }  // namespace blink
