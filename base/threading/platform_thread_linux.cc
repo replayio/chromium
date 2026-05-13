@@ -213,11 +213,16 @@ bool PlatformThreadLinux::IsThreadBackgroundedForTest(
 void PlatformThreadBase::SetName(const std::string& name) {
   SetNameCommon(name);
 
+  if (recordreplay::AreEventsDisallowed("PlatformThread::SetName"))
+    return;
+
   // On linux we can get the thread names to show up in the debugger by setting
   // the process name for the LWP.  We don't want to do this for the main
   // thread because that would rename the process, causing tools like killall
-  // to stop working.
-  if (PlatformThread::CurrentId().raw() == getpid()) {
+  // to stop working. This comparison needs to be recorded/replayed because thread
+  // IDs are different when replaying.
+  if (recordreplay::RecordReplayValue("PlatformThread::SetName",
+                                      PlatformThread::CurrentId().raw() == getpid())) {
     return;
   }
 
