@@ -723,6 +723,10 @@ const ThreadGroup* ThreadPoolImpl::GetThreadGroup(ThreadType thread_type,
 
 ThreadGroup* ThreadPoolImpl::GetThreadGroup(ThreadType thread_type,
                                             ThreadPolicy policy) {
+  if (recordreplay::AreEventsDisallowed("unordered-tasks")) {
+    return record_replay_unordered_thread_group_.get();
+  }
+
   if (thread_type == ThreadType::kBackground &&
       policy == ThreadPolicy::PREFER_BACKGROUND && background_thread_group_) {
     return background_thread_group_.get();
