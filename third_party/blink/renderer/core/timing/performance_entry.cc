@@ -46,7 +46,7 @@
 namespace blink {
 
 namespace {
-static base::AtomicSequenceNumber index_seq;
+static ::recordreplay::AtomicSequenceNumber index_seq;
 }  // namespace
 
 PerformanceEntry::PerformanceEntry(const AtomicString& name,
