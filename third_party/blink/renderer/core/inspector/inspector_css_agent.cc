@@ -2736,6 +2736,25 @@ protocol::Response InspectorCSSAgent::getStyleSheetText(
   return protocol::Response::Success();
 }
 
+CSSStyleSheet* InspectorCSSAgent::getStyleSheet(const String& style_sheet_id) {
+  InspectorStyleSheetBase* inspector_style_sheet = nullptr;
+  protocol::Response response =
+      AssertStyleSheetForId(style_sheet_id, inspector_style_sheet);
+  if (response.IsSuccess()) {
+    if (!inspector_style_sheet->IsInlineStyle()) {
+      auto* targetSheet =
+          static_cast<InspectorStyleSheet*>(inspector_style_sheet);
+      return targetSheet->PageStyleSheet();
+    }
+  } else {
+    recordreplay::Print(
+      "[RuntimeError] InspectorCSSAgent::getStyleSheet failed (style_sheet_id: %s, Code: %d): %s",
+      style_sheet_id.Utf8().c_str(), response.Code(), response.Message().c_str()
+    );
+  }
+  return nullptr;
+}
+
 protocol::Response InspectorCSSAgent::collectClassNames(
     const String& style_sheet_id,
     std::unique_ptr<protocol::Array<String>>* class_names) {
