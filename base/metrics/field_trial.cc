@@ -655,6 +655,15 @@ void FieldTrialList::CreateTrialsInChildProcess(const CommandLine& cmd_line) {
   CHECK(!global_->create_trials_in_child_process_called_);
   global_->create_trials_in_child_process_called_ = true;
 
+  // Field trials are disabled when recording/replaying.
+  if (recordreplay::IsRecordingOrReplaying("no-field-trials")) {
+    return;
+  }
+
+  recordreplay::Assert(
+      "[RUN-2350-2356] FieldTrialList::CreateTrialsFromCommandLine %d %d",
+      recordreplay::IsRecordingOrReplaying(), recordreplay::FeatureEnabled("no-field-trials"));
+
 #if BUILDFLAG(USE_BLINK)
   // TODO(crbug.com/41403903): Change to a CHECK.
   if (cmd_line.HasSwitch(switches::kFieldTrialHandle)) {
