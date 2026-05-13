@@ -6,6 +6,8 @@
 
 #include <atomic>
 
+#include "base/record_replay.h"
+
 PollableThreadSafeFlag::PollableThreadSafeFlag(base::Lock* write_lock_)
     : flag_(false), write_lock_(write_lock_) {}
 
