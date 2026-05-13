@@ -34,6 +34,7 @@
 
 #include "base/containers/adapters.h"
 #include "base/feature_list.h"
+#include "base/record_replay.h"
 #include "cc/input/snap_selection_strategy.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/mojom/scroll/scroll_enums.mojom-blink.h"
