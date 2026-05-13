@@ -93,6 +93,14 @@ void AudioDeviceThread::ThreadMain() {
   while (true) {
     uint32_t pending_data = 0;
     size_t bytes_read = socket_.Receive(base::byte_span_from_ref(pending_data));
+    recordreplay::Assert(
+      "[RUN-1667-1674] AudioDeviceThread::ThreadMain %u %u %u %u",
+      (unsigned) record_replay_iteration_idx,
+      (unsigned) buffer_index,
+      (unsigned) pending_data,
+      (unsigned) bytes_read
+    );
+    record_replay_iteration_idx++;
     if (bytes_read != sizeof(pending_data))
       break;
 
