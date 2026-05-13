@@ -229,9 +229,15 @@ void MessagePort::close() {
   // A closed port should not be neutered, so rather than merely disconnecting
   // from the mojo message pipe, also entangle with a new dangling message pipe.
   if (!IsNeutered()) {
-    Disentangle().ReleaseHandle();
-    MessagePortDescriptorPair pipe;
-    Entangle(pipe.TakePort0(), nullptr);
+    // Refuse to entangle the port at non-deterministic points, as this requires
+    // creating mojo resources. close() calls are always treated as non-deterministic
+    // because the port's lifetime is managed by the GC and on destruction the
+    // port is detached from the connector.
+    if (!recordreplay::IsRecordingOrReplaying("disallow-events", "MessagePort::close")) {
+      Disentangle().ReleaseHandle();
+      MessagePortDescriptorPair pipe;
+      Entangle(pipe.TakePort0(), nullptr);
+    }
   }
   closed_ = true;
 }
