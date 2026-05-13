@@ -7,6 +7,7 @@
 #include <optional>
 
 #include "base/debug/alias.h"
+#include "base/record_replay.h"
 #include "base/task/common/task_annotator.h"
 #include "base/task/sequence_manager/fence.h"
 #include "base/task/sequence_manager/sequence_manager_impl.h"
