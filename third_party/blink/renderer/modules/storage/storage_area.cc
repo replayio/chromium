@@ -166,11 +166,15 @@ NamedPropertySetterResult StorageArea::setItem(
     return NamedPropertySetterResult::kIntercepted;
   }
   if (!cached_area_->SetItem(key, value, this)) {
+    recordreplay::Assert("[RUN-1307-1773] StorageArea::setItem B %s",
+                         key.Utf8().c_str());
     QuotaExceededError::Throw(
         exception_state,
         StrCat({"Setting the value of '", key, "' exceeded the quota."}));
     return NamedPropertySetterResult::kIntercepted;
   }
+  recordreplay::Assert("[RUN-1307-1773] StorageArea::setItem C %s",
+                       key.Utf8().c_str());
   return NamedPropertySetterResult::kIntercepted;
 }
 
