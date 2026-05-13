@@ -145,6 +145,9 @@ class WaitSet::State : public base::RefCountedThreadSafe<State> {
             base::span<Handle> ready_handles,
             base::span<MojoResult> ready_results,
             base::span<HandleSignalsState> signals_states) {
+    // https://linear.app/replay/issue/RUN-551
+    recordreplay::Assert("WaitSet::State::Wait Start");
+
     DCHECK(trap_handle_.is_valid());
     DCHECK(num_ready_handles);
     DCHECK(!ready_handles.empty());
@@ -181,6 +184,9 @@ class WaitSet::State : public base::RefCountedThreadSafe<State> {
             const auto& event = blocking_events[i];
             auto it = contexts_.find(event.trigger_context);
             CHECK(it != contexts_.end());
+            // https://linear.app/replay/issue/RUN-551
+            recordreplay::Assert("WaitSet::State::Wait #2 %u %u %d",
+                                 it->second->handle().value(), event.result, event.signals_state);
             ready_handles_[it->second->handle()] = {event.result,
                                                     event.signals_state};
           }
