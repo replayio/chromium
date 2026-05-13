@@ -113,6 +113,7 @@ LayerImpl::LayerImpl(LayerTreeImpl* tree_impl, int id)
       effect_tree_index_(kInvalidPropertyNodeId),
       clip_tree_index_(kInvalidPropertyNodeId),
       scroll_tree_index_(kInvalidPropertyNodeId) {
+  recordreplay::RegisterPointer("LayerImpl", this);
   DCHECK_GT(layer_id_, 0);
   DCHECK_GT(stable_id_for_shared_quad_state_, 0);
 
