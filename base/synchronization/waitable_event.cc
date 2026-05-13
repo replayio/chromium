@@ -36,6 +36,10 @@ WaitableEvent::~WaitableEvent() {
 }
 
 void WaitableEvent::Signal() {
+  absl::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (!record_replay_ordered_lock_id_)
+    disallow.emplace("WaitableEvent::Signal");
+
   // Must be ordered before SignalImpl() to guarantee it's emitted before the
   // matching TerminatingFlow in TimedWait().
   if (!only_used_while_idle_) {
