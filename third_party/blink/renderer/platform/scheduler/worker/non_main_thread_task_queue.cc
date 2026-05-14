@@ -35,6 +35,9 @@ NonMainThreadTaskQueue::NonMainThreadTaskQueue(
       thread_task_runner_(std::move(thread_task_runner)),
       task_runner_with_default_task_type_(
           WrapTaskRunner(task_queue_->task_runner())) {
+  // Pointer registration is needed for sorting in TaskQueueVoterMap.
+  recordreplay::RegisterPointer("NonMainThreadTaskQueue", this);
+
   // Throttling needs |should_notify_observers| to get task timing.
   DCHECK(!params.can_be_throttled || spec.should_notify_observers)
       << "Throttled queue is not supported with |!should_notify_observers|";
