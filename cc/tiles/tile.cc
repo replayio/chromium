@@ -45,6 +45,7 @@ Tile::~Tile() {
       TRACE_DISABLED_BY_DEFAULT("cc.debug"),
       "cc::Tile", this);
   deleted_ = true;
+  recordreplay::UnregisterPointer(this);
   tile_manager_->Release(this);
 }
 
