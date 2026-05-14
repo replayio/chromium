@@ -388,6 +388,9 @@ v8::Local<v8::Object> HTMLPlugInElement::PluginWrapper() {
   if (plugin_wrapper_.IsEmpty()) {
     WebPluginContainerImpl* plugin;
 
+    recordreplay::Assert(
+        "[RUN-1492-2299] HTMLPlugInElement::PluginWrapper B %d %d",
+        RecordReplayId(), !!persisted_plugin_);
     // Be careful to call PluginEmbeddedContentView only once, because calling
     // it can change things such that another call will return a different
     // result.
