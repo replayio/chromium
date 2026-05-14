@@ -32,6 +32,7 @@ class PollableThreadSafeFlag {
   bool IsSet() const;
 
  private:
+  int ordered_lock_id_;
   std::atomic<bool> flag_;
   raw_ptr<base::Lock> write_lock_;  // Not owned.
 };
