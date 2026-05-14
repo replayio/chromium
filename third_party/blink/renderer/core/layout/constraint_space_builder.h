@@ -88,6 +88,13 @@ class CORE_EXPORT ConstraintSpaceBuilder final {
     is_available_size_set_ = true;
     DCHECK(!is_percentage_resolution_size_set_);
 #endif
+    recordreplay::Assert(
+      "[RUN-1855-1911] NGConstraintSpaceBuilder::SetAvailableSize par=%d adj=%d block=%s inline=%s",
+      int(is_in_parallel_flow_),
+      int(adjust_inline_size_if_needed_),
+      available_size.block_size.ToString().Utf8().c_str(),
+      available_size.inline_size.ToString().Utf8().c_str()
+    );
 
     if (is_in_parallel_flow_) [[likely]] {
       space_.available_size_ = space_.percentage_size_ = available_size;
