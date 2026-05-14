@@ -55,6 +55,10 @@ class SVGElementRareData final : public GarbageCollected<SVGElementRareData> {
     return element_instances_;
   }
 
+  HeapHashSet<Member<SVGElement>>& ReplayStrongElementInstances() {
+    return replay_strong_element_instances_;
+  }
+
   SVGElement* CorrespondingElement() const {
     return corresponding_element_.Get();
   }
