@@ -53,6 +53,8 @@ class PLATFORM_EXPORT FontFallbackMap : public FontCacheClient,
   const Member<FontSelector> font_selector_;
   HeapHashMap<FontDescription, WeakMember<FontFallbackList>>
       fallback_list_for_description_;
+
+  int record_replay_id_;
 };
 
 }  // namespace blink
