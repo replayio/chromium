@@ -73,7 +73,7 @@ bool EventQueue::EnqueueEvent(const base::Location& from_here, Event& event) {
   // object like IDBTransaction as soon as possible.
   task_runner->PostTask(
       from_here, BindOnce(&EventQueue::DispatchEvent, WrapPersistent(this),
-                          WrapWeakPersistent(&event)));
+                          WrapWeakPersistent(&event), node_id));
 
   return true;
 }
