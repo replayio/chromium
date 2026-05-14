@@ -67,7 +67,13 @@ class MemoryCacheEntry final : public GarbageCollected<MemoryCacheEntry> {
   }
 
   void Trace(Visitor*) const;
-  Resource* GetResource() const { return resource_.Get(); }
+  Resource* GetResource() const {
+    if (recordreplay::IsRecordingOrReplaying("leak-references", "MemoryCacheEntry")) {
+      return strong_resource_.Get();
+    } else {
+      return resource_.Get();
+    }
+  }
 
  private:
   void ClearResourceWeak(const LivenessBroker&);
