@@ -160,6 +160,18 @@ void DynamicImportTreeClient::NotifyModuleTreeLoadFinished(
     return;
   }
 
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "dynamicImportTreeLoadFinished");
+    if (module_script)
+      info.Set("url", module_script->SourceUrl().GetString().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
+    execute.emplace(node_id);
+  }
+
   // <spec step="9">Otherwise, set promise to the result of running a module
   // script given result and true.</spec>
   ScriptEvaluationResult result =
