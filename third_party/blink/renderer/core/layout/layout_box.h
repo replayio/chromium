@@ -1200,6 +1200,12 @@ class CORE_EXPORT LayoutBox : public LayoutBoxModelObject {
     return (ChildrenInline() || NeedsLayout()) &&
            PhysicalFragments().MayHaveFragmentItems();
   }
+
+  int RecordReplayId() const {
+    NOT_DESTROYED();
+    return record_replay_id_;
+  }
+
   bool HasFragmentItems() const {
     NOT_DESTROYED();
     // See `MayHaveFragmentItems()`.
