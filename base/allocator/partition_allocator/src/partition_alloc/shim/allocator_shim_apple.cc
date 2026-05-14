@@ -88,9 +88,18 @@ void TryFreeDefaultFallbackToFindZoneAndFree(void* ptr) {
 #include "partition_alloc/shim/allocator_shim_override_apple_symbols.h"
 #endif  // PA_BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
 
+static inline bool MaybeRecordingOrReplaying() {
+  return true;
+}
+
 namespace allocator_shim {
 
 void InitializeAllocatorShim() {
+  // Don't alter memory allocation behavior when recording/replaying.
+  if (MaybeRecordingOrReplaying()) {
+    return;
+  }
+
 #if !PA_BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
   // Prepares the default dispatch. After the intercepted malloc calls have
   // traversed the shim this will route them to the default malloc zone.
