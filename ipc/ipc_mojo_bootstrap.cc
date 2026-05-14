@@ -180,7 +180,8 @@ class ChannelAssociatedGroupController
         dispatcher_(this),
         control_message_handler_(this),
         control_message_proxy_thunk_(this),
-        control_message_proxy_(&control_message_proxy_thunk_) {
+        control_message_proxy_(&control_message_proxy_thunk_),
+        lock_("ChannelAssociatedGroupController.lock_") {
     control_message_handler_.SetDescription(
         "IPC::mojom::Bootstrap [primary] PipeControlMessageHandler");
     dispatcher_.SetValidator(std::make_unique<mojo::MessageHeaderValidator>(
