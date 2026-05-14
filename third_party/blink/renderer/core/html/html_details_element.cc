@@ -63,7 +63,7 @@ void HTMLDetailsElement::DispatchPendingEvent(
 
   if (reason == AttributeModificationReason::kByParser)
     GetDocument().SetToggleDuringParsing(true);
-  DispatchEvent(*toggle_event);
+  DispatchEvent(*toggle_event, "HTMLDetailsEvent::DispatchPendingEvent");
   if (reason == AttributeModificationReason::kByParser)
     GetDocument().SetToggleDuringParsing(false);
 }
