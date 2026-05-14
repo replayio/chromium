@@ -100,6 +100,7 @@ class RuleFeatureSet;
 class DocumentStyleEnvironmentVariables;
 class CascadeLayerMap;
 class SpaceSplitString;
+class StyleFetchedImage;
 class StyleResolver;
 class StyleResolverStats;
 class StyleRuleFontFace;
@@ -761,6 +762,11 @@ class CORE_EXPORT StyleEngine final : public GarbageCollected<StyleEngine>,
   ImageResourceContent* CacheImageContent(FetchParameters& params) {
     return style_image_cache_.CacheImageContent(GetDocument().Fetcher(),
                                                 params);
+  }
+
+  // Replay: see StyleImageCache::RetainStyleImageForReplay.
+  void RetainStyleImageForReplay(StyleFetchedImage* image) {
+    style_image_cache_.RetainStyleImageForReplay(image);
   }
 
   void AddCachedFillOrClipPathURIValue(const AtomicString& string,

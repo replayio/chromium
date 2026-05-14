@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/core/css/style_image_cache.h"
 
 #include "third_party/blink/renderer/core/loader/resource/image_resource_content.h"
+#include "third_party/blink/renderer/core/style/style_fetched_image.h"
 #include "third_party/blink/renderer/platform/loader/fetch/fetch_parameters.h"
 #include "third_party/blink/renderer/platform/loader/fetch/memory_cache.h"
 
@@ -35,6 +36,12 @@ ImageResourceContent* StyleImageCache::CacheImageContent(
     image_content = ImageResourceContent::Fetch(params, fetcher);
   }
   return image_content.Get();
+}
+
+void StyleImageCache::RetainStyleImageForReplay(StyleFetchedImage* image) {
+  if (image) {
+    fetched_image_map_strong_.insert(image);
+  }
 }
 
 void StyleImageCache::Trace(Visitor* visitor) const {

@@ -17,6 +17,7 @@ namespace blink {
 class FetchParameters;
 class ImageResourceContent;
 class ResourceFetcher;
+class StyleFetchedImage;
 
 // A per-StyleEngine cache for ImageResourceContent for StyleImages. A
 // CSSImageValue points to a StyleImage, but different CSSImageValue objects
@@ -31,6 +32,10 @@ class CORE_EXPORT StyleImageCache {
   // Look up an existing ImageResourceContent in the cache, or create a new one,
   // add it to the cache, and start the fetch.
   ImageResourceContent* CacheImageContent(ResourceFetcher*, FetchParameters&);
+
+  // Replay: keep a strong reference to the cached StyleFetchedImage to avoid
+  // weak-pointer-driven divergence between record and replay.
+  void RetainStyleImageForReplay(StyleFetchedImage*);
 
   void Trace(Visitor*) const;
 
