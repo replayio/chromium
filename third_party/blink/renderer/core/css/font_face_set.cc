@@ -282,9 +282,9 @@ void FontFaceSet::FireDoneEvent() {
       failed_fonts_.clear();
     }
     is_loading_ = false;
-    DispatchEvent(*done_event);
+    DispatchEvent(*done_event, "FontFaceSet::FireDoneEvent");
     if (error_event) {
-      DispatchEvent(*error_event);
+      DispatchEvent(*error_event, "FontFaceSet::FireDoneEvent ERROR");
     }
   }
 
