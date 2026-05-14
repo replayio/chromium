@@ -77,6 +77,8 @@ LocalFrameUkmAggregator::ScopedUkmHierarchicalTimer::
     ~ScopedUkmHierarchicalTimer() {
   if (aggregator_ && !start_time_.is_null()) {
     if (base::TimeTicks::IsHighResolution()) {
+      // https://linear.app/replay/issue/RUN-1044
+      recordreplay::Assert("[RUN-1044] ~ScopedUkmHierarchicalTimer #1");
       aggregator_->RecordTimerSample(metric_index_, start_time_,
                                      clock_->NowTicks());
     }
