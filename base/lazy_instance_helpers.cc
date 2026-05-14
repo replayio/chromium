@@ -9,6 +9,7 @@
 #include "base/at_exit.h"
 #include "base/threading/platform_thread.h"
 #include "base/time/time.h"
+#include "base/record_replay_inline.h"
 
 namespace base::internal {
 
