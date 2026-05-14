@@ -365,6 +365,9 @@ void ScriptedIdleTaskController::RunIdleTask(
   probe::UserCallback probe(GetExecutionContext(), "requestIdleCallback",
                             AtomicString(), true);
 
+  recordreplay::UserEventProbe replayEvent("requestIdleCallback",
+                                           AtomicString());
+
   bool cross_origin_isolated_capability =
       GetExecutionContext() &&
       GetExecutionContext()->CrossOriginIsolatedCapability();
