@@ -586,7 +586,7 @@ void MediaStream::ScheduledEventTimerFired(TimerBase*) {
   events.swap(scheduled_events_);
 
   for (auto& event : events) {
-    DispatchEvent(*event.Release());
+    DispatchEvent(*event.Release(), "MediaStream::ScheduledEventTimerFired");
   }
 
   events.clear();
