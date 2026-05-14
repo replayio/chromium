@@ -6,6 +6,7 @@
 
 #include <optional>
 
+#include "base/record_replay.h"
 #include "base/task/sequence_manager/sequence_manager_impl.h"
 #include "base/threading/thread_checker.h"
 
