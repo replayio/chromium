@@ -1089,6 +1089,9 @@ NO_STACK_PROTECTOR int ContentMainRunnerImpl::Run() {
       // through the normal child process launch path. GetPseudonymizationSalt()
       // has a DCHECK to catch issues in debug builds.
 
+      recordreplay::Assert("[RUN-2350-2356] ContentMainRunnerImpl::Run %d",
+                           delegate_->ShouldCreateFeatureList(
+                               ContentMainDelegate::InvokedInChildProcess()));
       if (delegate_->ShouldCreateFeatureList(
               ContentMainDelegate::InvokedInChildProcess())) {
         InitializeFieldTrialAndFeatureList();
