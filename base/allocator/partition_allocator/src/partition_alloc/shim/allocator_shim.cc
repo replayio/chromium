@@ -54,6 +54,10 @@
 #include "partition_alloc/shim/allocator_shim_override_glibc_weak_symbols.h"
 #endif
 
+static inline bool MaybeRecordingOrReplaying() {
+  return true;
+}
+
 // Cross-checks.
 
 #if defined(MEMORY_TOOL_REPLACES_ALLOCATOR)
