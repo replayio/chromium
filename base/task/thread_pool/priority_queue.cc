@@ -9,6 +9,7 @@
 #include "base/check_op.h"
 #include "base/compiler_specific.h"
 #include "base/memory/ptr_util.h"
+#include "base/record_replay.h"
 
 namespace base::internal {
 
