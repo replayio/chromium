@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "base/check_op.h"
+#include "base/record_replay.h"
 #include "base/sequence_token.h"
 
 namespace base::internal {
