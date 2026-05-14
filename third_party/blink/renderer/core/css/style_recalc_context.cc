@@ -16,6 +16,7 @@ StyleRecalcContext StyleRecalcContext::FromInclusiveAncestors(
     Element& start_element,
     PseudoId pseudo_id) {
   StyleRecalcContext result;
+  recordreplay::Assert("[RUN-2424-3005] StyleRecalcContext::FromInclusiveAncestors %d", start_element.RecordReplayId());
   for (Element* element = &start_element; element;
        element = FlatTreeTraversal::ParentElement(*element)) {
     if (const ComputedStyle* style = element->GetComputedStyle()) {
