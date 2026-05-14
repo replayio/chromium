@@ -106,7 +106,7 @@ void BluetoothRemoteGATTCharacteristic::ReadValueCallback(
               value_, resolver));
     } else {
       DispatchEvent(
-          *Event::Create(event_type_names::kCharacteristicvaluechanged));
+          *Event::Create(event_type_names::kCharacteristicvaluechanged), "BluetoothRemoteGATTCharacteristic::ReadValueCallback");
       resolver->Resolve(value_);
     }
   } else {
