@@ -40,6 +40,8 @@
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
 #include "third_party/blink/renderer/platform/wtf/wtf_export.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 template <typename T>
