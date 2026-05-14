@@ -162,6 +162,8 @@
 #include "third_party/blink/renderer/core/dom/named_node_map.h"
 #endif
 
+namespace v8 { extern std::string RecordReplayGetScriptedCaller(); }
+
 namespace blink {
 
 using ReattachHookScope = LayoutShiftTracker::ReattachHookScope;
