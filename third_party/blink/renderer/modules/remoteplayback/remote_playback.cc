@@ -401,7 +401,7 @@ void RemotePlayback::StateChanged(
 
   state_ = state;
   if (state_ == mojom::blink::PresentationConnectionState::CONNECTING) {
-    DispatchEvent(*Event::Create(event_type_names::kConnecting));
+    DispatchEvent(*Event::Create(event_type_names::kConnecting), "RemotePlayback::StateChanged #1");
     RemotingStarting(*media_element_);
   } else if (state_ == mojom::blink::PresentationConnectionState::CONNECTED) {
     DispatchEvent(*Event::Create(event_type_names::kConnect), "RemotePlayback::StateChanged #2");
