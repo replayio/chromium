@@ -8,6 +8,7 @@
 #include <optional>
 
 #include "base/functional/function_ref.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/layout/block_node.h"
 #include "third_party/blink/renderer/core/layout/constraint_space.h"
@@ -228,6 +229,8 @@ inline LayoutUnit ResolveMainBlockLength(
     const Length* auto_length,
     LayoutUnit intrinsic_size,
     LayoutUnit override_available_size = kIndefiniteSize) {
+  recordreplay::Assert("[RUN-1239] ResolveMainBlockLength %d",
+                       length.IsContentOrIntrinsic());
   return ResolveBlockLengthInternal(
       constraint_space, style, border_padding, length, auto_length,
       LengthTypeInternal::kMain, override_available_size,
@@ -243,6 +246,8 @@ inline LayoutUnit ResolveMainBlockLength(
     const Length* auto_length,
     BlockSizeFunctionRef block_size_func,
     LayoutUnit override_available_size = kIndefiniteSize) {
+  recordreplay::Assert("[RUN-1239] ResolveMainBlockLength %d",
+                       length.IsContentOrIntrinsic());
   return ResolveBlockLengthInternal(
       constraint_space, style, border_padding, length, auto_length,
       LengthTypeInternal::kMain, override_available_size,
