@@ -421,6 +421,8 @@ class MODULES_EXPORT IDBRequest : public EventTarget,
   raw_ptr<IDBRequestQueueItem> queue_item_ = nullptr;
 
   probe::AsyncTaskContext async_task_context_;
+
+  int record_replay_created_node_id_ = 0;
 };
 
 }  // namespace blink
