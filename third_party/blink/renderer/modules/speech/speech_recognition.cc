@@ -351,7 +351,7 @@ void SpeechRecognition::ErrorOccurred(
   base::UmaHistogramEnumeration(kWebSpeechErrorOccurredHistogram, error->code);
   if (error->code ==
       media::mojom::blink::SpeechRecognitionErrorCode::kNoMatch) {
-    DispatchEvent(*SpeechRecognitionEvent::CreateNoMatch(nullptr));
+    DispatchEvent(*SpeechRecognitionEvent::CreateNoMatch(nullptr), "SpeechRecognition::ErrorOccurred #1");
   } else {
     // TODO(primiano): message?
     DispatchEvent(*SpeechRecognitionErrorEvent::Create(error->code, String()), "SpeechRecognition::ErrorOccurred #2");
