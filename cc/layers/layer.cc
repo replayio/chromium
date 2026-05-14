@@ -117,7 +117,8 @@ Layer::Layer()
       ignore_set_needs_commit_for_test_(false),
       subtree_property_changed_(false),
       bitflags_(0u),
-      changed_properties_(0u) {}
+      changed_properties_(0u) {
+}
 
 Layer::~Layer() {
   // Our parent should be holding a reference to us so there should be no
