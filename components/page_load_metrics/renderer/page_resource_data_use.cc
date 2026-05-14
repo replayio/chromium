@@ -15,7 +15,14 @@
 namespace page_load_metrics {
 
 PageResourceDataUse::PageResourceDataUse(int resource_id)
-    : resource_id_(resource_id) {}
+    : resource_id_(resource_id) {
+  // Pointer registration is needed for sorting in PageTimingMetricsSender.modified_resources_
+  recordreplay::RegisterPointer("PageResourceDataUse", this);
+}
+
+PageResourceDataUse::PageResourceDataUse(const PageResourceDataUse& other) {
+  recordreplay::RegisterPointer("PageResourceDataUse", this);
+}
 
 PageResourceDataUse::~PageResourceDataUse() {
   recordreplay::UnregisterPointer(this);
