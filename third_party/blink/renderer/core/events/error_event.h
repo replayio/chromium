@@ -114,6 +114,7 @@ class CORE_EXPORT ErrorEvent final : public Event {
   Member<SourceLocation> location_;
   WorldSafeV8Reference<v8::Value> error_;
   const Member<DOMWrapperWorld> world_;
+  int record_replay_bookmark_ = 0;
 };
 
 template <>
