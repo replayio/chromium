@@ -55,6 +55,16 @@ class CORE_EXPORT IdleTask : public GarbageCollected<IdleTask>,
   // Handle to the associated "scheduler timeout task".
   base::DelayedTaskHandle delayed_task_handle_;
   bool has_scheduler_idle_task_ = false;
+
+ public:
+  IdleTask() : NameClient() {
+    record_replay_id_ = recordreplay::NewIdMainThread("IdleTask");
+    recordreplay::Assert("[RUN-1335-1456] IdleTask::IdleTask %d",
+                         record_replay_id_);
+  }
+  int RecordReplayId() const { return record_replay_id_; }
+ private:
+  int record_replay_id_ = 0;
 };
 
 // `ScriptedIdleTaskController` manages scheduling and running `IdleTask`s. This
