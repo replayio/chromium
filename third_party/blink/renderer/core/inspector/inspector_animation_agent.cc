@@ -376,6 +376,8 @@ protocol::Response InspectorAnimationAgent::getPlaybackRate(
 
 protocol::Response InspectorAnimationAgent::setPlaybackRate(
     double playback_rate) {
+  recordreplay::Assert("[RUN-1641] InspectorAnimationAgent::setPlaybackRate");
+
   for (LocalFrame* frame : *inspected_frames_)
     frame->GetDocument()->Timeline().SetPlaybackRate(playback_rate);
   playback_rate_.Set(playback_rate);
