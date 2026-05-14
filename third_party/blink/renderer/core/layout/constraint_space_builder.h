@@ -9,6 +9,7 @@
 
 #include "base/check_op.h"
 #include "base/dcheck_is_on.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/layout/constraint_space.h"
 #include "third_party/blink/renderer/core/layout/floats_utils.h"
