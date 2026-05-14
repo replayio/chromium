@@ -231,7 +231,14 @@ void RuleData::MovedToDifferentRuleSet(const Vector<uint16_t>& old_backing,
   position_ = new_position;
 }
 
-RuleSet::RuleSet() = default;
+RuleSet::RuleSet() {
+  // Pointer registration is needed for sorting within StyleEngine methods.
+  recordreplay::RegisterPointer("RuleSet", this);
+}
+
+RuleSet::~RuleSet() {
+  recordreplay::UnregisterPointer(this);
+}
 
 void RuleSet::AddToBucket(const AtomicString& key,
                           RuleMap& map,
