@@ -7,6 +7,7 @@
 #include <ostream>
 
 #include "base/check_op.h"
+#include "base/record_replay.h"
 #include "base/synchronization/waitable_event.h"
 
 namespace base::internal {
