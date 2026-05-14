@@ -154,6 +154,10 @@ UINT GetIntervalMs() {
 // new request). If there is no change then do nothing.
 void UpdateTimerIntervalLocked() {
   UINT new_interval = GetIntervalMs();
+
+  recordreplay::Assert("[RUN-1916-2636] UpdateTimerIntervalLocked A %u %u",
+                       new_interval, g_last_interval_requested_ms);
+
   if (new_interval == g_last_interval_requested_ms) {
     return;
   }
