@@ -7,6 +7,7 @@
 
 #include <utility>
 
+#include "base/record_replay.h"
 #include "base/task/sequenced_task_runner.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "third_party/blink/renderer/platform/context_lifecycle_observer.h"
