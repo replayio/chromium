@@ -119,6 +119,9 @@ void LayoutBlock::StyleDidChange(
     StyleDifference diff,
     const ComputedStyle* old_style,
     const StyleChangeContext& style_change_context) {
+  recordreplay::Assert("[RUN-2300] LayoutBlock::StyleDidChange %d",
+                       RecordReplayId());
+
   NOT_DESTROYED();
   // Computes old scaling factor before PaintLayer::UpdateTransform()
   // updates Layer()->Transform().
