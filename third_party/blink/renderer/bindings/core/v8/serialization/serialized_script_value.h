@@ -376,6 +376,24 @@ class CORE_EXPORT SerializedScriptValue
   // This enforces that there are no other references to `this`.
   DataBufferPtr ConsumeAndTakeBuffer() &&;
 
+  // RUN-1618: Ensure this serialized script value has a consistent length when
+  // recording vs. replaying. When necessary we want to tolerate different
+  // serialized value lengths when replaying, to improve robustness and allow
+  // the replay to continue.
+  void RecordReplayDataSize() {
+    size_t recorded_size = recordreplay::RecordReplayValue("SerializedScriptValue::RecordReplayDataSize", data_buffer_size_);
+    if (recorded_size == data_buffer_size_) {
+      return;
+    }
+
+    recordreplay::Print("Warning: SerializedScriptValue::RecordReplayDataSize mismatched size, expected %zu got %zu",
+                        recorded_size, data_buffer_size_);
+
+    data_buffer_ = AllocateBuffer(recorded_size);
+    memset(data_buffer_.get(), 0, recorded_size);
+    data_buffer_size_ = recorded_size;
+  }
+
  private:
   friend class ScriptValueSerializer;
   friend class V8ScriptValueSerializer;
