@@ -747,6 +747,8 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
       network::mojom::AttributionSupport::kUnset;
 
   Member<CloseTaskHandler> close_task_handler_;
+
+  int record_replay_id_;
 };
 
 extern template class CORE_EXTERN_TEMPLATE_EXPORT Supplement<Page>;
