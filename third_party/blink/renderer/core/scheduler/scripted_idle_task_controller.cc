@@ -266,6 +266,9 @@ void ScriptedIdleTaskController::SchedulerIdleTask(
     CallbackId id,
     DecrementOnDelete decrement_on_delete,
     base::TimeTicks deadline) {
+  recordreplay::Assert("[RUN-2419] IdleRequestCallbackWrapper::IdleTaskFired %d %d",
+                       id, 1);
+
   CHECK_GT(num_scheduler_idle_tasks_->data, 0u, base::NotFatalUntil::M136);
 
   // Consume `decrement_on_delete` before running the task, to maintain the
@@ -305,6 +308,9 @@ void ScriptedIdleTaskController::SchedulerIdleTask(
 }
 
 void ScriptedIdleTaskController::SchedulerTimeoutTask(CallbackId id) {
+  recordreplay::Assert(
+      "[RUN-2419] IdleRequestCallbackWrapper::TimeoutFired %d %d",
+      id, 1);
   // The timeout task is cancelled when the IdleTask is removed from
   // `idle_tasks_`, so this should only run if the task is in `idle_tasks_`.
   CHECK(idle_tasks_.Contains(id), base::NotFatalUntil::M138);
@@ -338,6 +344,10 @@ void ScriptedIdleTaskController::RunIdleTask(
   CHECK_NE(idle_task_iter, idle_tasks_.end());
   IdleTask* idle_task = idle_task_iter->value;
   DCHECK(idle_task);
+
+  recordreplay::Assert(
+      "[RUN-2419] ScriptedIdleTaskController::RunCallback B %d %d",
+      id, idle_task->RecordReplayId());
 
   base::TimeDelta allotted_time =
       std::max(deadline - base::TimeTicks::Now(), base::TimeDelta());
@@ -385,6 +395,11 @@ void ScriptedIdleTaskController::RemoveAllIdleTasks() {
 }
 
 void ScriptedIdleTaskController::ContextDestroyed() {
+  if (idle_tasks_.size())
+    recordreplay::Assert(
+        "[RUN-2419] ScriptedIdleTaskController::ContextDestroyed %lu %d",
+        idle_tasks_.size(),
+        idle_tasks_.begin()->value->RecordReplayId());
   RemoveAllIdleTasks();
 }
 
