@@ -31,6 +31,8 @@
 #include "third_party/skia/include/core/SkRefCnt.h"
 #include "third_party/skia/include/ports/SkTypeface_win.h"
 
+#include "base/record_replay.h"
+
 namespace content {
 
 namespace {
