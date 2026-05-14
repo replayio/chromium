@@ -558,6 +558,7 @@ NodeChannel::NodeChannel(
     : base::RefCountedDeleteOnSequence<NodeChannel>(io_task_runner),
       delegate_(delegate),
       process_error_callback_(process_error_callback),
+      channel_lock_("NodeChannel.channel_lock_"),
       channel_(Channel::Create(this,
                                std::move(connection_params),
                                channel_handle_policy,
