@@ -47,6 +47,8 @@ class WindowAgent final : public Agent, public AgentGroupScheduler::Agent {
   // AgentGroupScheduler::Agent overrides.
   void PerformMicrotaskCheckpoint() override;
 
+  int RecordReplayId() const override { return record_replay_id_; }
+
   AgentGroupScheduler& GetAgentGroupScheduler();
 
  private:
