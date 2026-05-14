@@ -345,6 +345,7 @@ DeferredTaskHandler::DeferredTaskHandler(
       defer_pull_status_update_(base::FeatureList::IsEnabled(
           features::kWebAudioDeferPullStatusUpdate)),
       task_runner_(std::move(task_runner)),
+      context_graph_mutex_("DeferredTaskHandler"),
       audio_thread_(base::kInvalidThreadId) {}
 
 scoped_refptr<DeferredTaskHandler> DeferredTaskHandler::Create(
