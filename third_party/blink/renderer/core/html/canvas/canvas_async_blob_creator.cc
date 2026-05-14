@@ -432,6 +432,9 @@ void CanvasAsyncBlobCreator::CreateBlobAndReturnResult(
     Vector<unsigned char> encoded_image) {
   RecordIdleTaskStatusHistogram(idle_task_status_);
 
+  REPLAY_ASSERT(
+      "[TT-362-1366] CanvasAsyncBlobCreator::CreateBlobAndReturnResult %u",
+      encoded_image.size());
   Blob* result_blob =
       Blob::Create(encoded_image, ImageEncoderUtils::MimeTypeName(mime_type_));
   if (function_type_ == kHTMLCanvasToBlobCallback) {
