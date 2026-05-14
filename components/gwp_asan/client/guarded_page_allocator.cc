@@ -34,6 +34,8 @@
 #include "components/crash/core/app/crashpad.h"  // nogncheck
 #endif
 
+#include "base/record_replay.h"
+
 namespace gwp_asan {
 namespace internal {
 
