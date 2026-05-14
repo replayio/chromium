@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/core/css/css_numeric_literal_value.h"
 
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "third_party/blink/renderer/core/css/css_length_resolver.h"
 #include "third_party/blink/renderer/core/css/css_value_clamping_utils.h"
@@ -307,6 +308,13 @@ String CSSNumericLiteralValue::CustomCSSText() const {
         } else {
           text =
               FormatNumber(value, UnitTypeToString(GetType()).Utf8().c_str());
+
+          if (!recordreplay::AreEventsDisallowed()) {
+            // [RUN-1918] Workaround divergent floating point sprintf.
+            std::string textStr = text.Ascii();
+            recordreplay::RecordReplayString("CSSNumericLiteralValue::CustomCSSText", textStr);
+            text = String::FromUTF8(&textStr[0], textStr.length());
+          }
         }
       } else {
         StringBuilder builder;
