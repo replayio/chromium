@@ -212,12 +212,14 @@ scoped_refptr<Image> LayoutImageResource::GetImage(
   if (!svg_image)
     return image;
 
+  recordreplay::Assert("[RUN-658-1901] LayoutImageResource::GetImage C");
   const ComputedStyle& style = layout_object_->StyleRef();
   auto preferred_color_scheme = layout_object_->GetDocument()
                                     .GetStyleEngine()
                                     .ResolveColorSchemeForEmbedding(&style);
   const SVGImageViewInfo* view_info = SVGImageForContainer::CreateViewInfo(
       *svg_image, layout_object_->GetNode());
+  recordreplay::Assert("[RUN-658-1901] LayoutImageResource::GetImage D");
   return SVGImageForContainer::Create(*svg_image, container_size,
                                       style.EffectiveZoom(), view_info,
                                       preferred_color_scheme);
