@@ -158,6 +158,9 @@ sk_sp<PaintImageGenerator> DeferredImageDecoder::CreateGenerator() {
     frames[i].duration = FrameDurationAtIndex(i);
   }
 
+  recordreplay::Assert(
+      "[RUN-1975-2036] DeferredImageDecoder::CreateGenerator E");
+
   if (!first_decoding_generator_created_) {
     DCHECK(!incremental_decode_needed_.has_value());
     incremental_decode_needed_ = !all_data_received_;
