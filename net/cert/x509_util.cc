@@ -428,6 +428,7 @@ bssl::UniquePtr<CRYPTO_BUFFER> CreateCryptoBuffer(
 }
 
 bssl::UniquePtr<CRYPTO_BUFFER> CreateCryptoBuffer(std::string_view data) {
+  recordreplay::Assert("[RUN-1489-1494] CreateCryptoBuffer B %zu", data.size());
   return CreateCryptoBuffer(base::as_byte_span(data));
 }
 
