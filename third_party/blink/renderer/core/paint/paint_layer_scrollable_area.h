@@ -711,6 +711,10 @@ class CORE_EXPORT PaintLayerScrollableArea final
   gfx::Size ComputeScrollbarWidthsForViewportUnits(
       StyleBasedScrollbarData) const;
 
+  int RecordReplayId() const {
+    return record_replay_id_;
+  }
+
  private:
   bool NeedsHypotheticalScrollbarThickness(ScrollbarOrientation) const;
   int ComputeHypotheticalScrollbarThickness(
