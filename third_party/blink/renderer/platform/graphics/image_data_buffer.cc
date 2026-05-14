@@ -140,6 +140,21 @@ String ImageDataBuffer::ToDataURL(const ImageEncodingMimeType mime_type,
   if (!ImageEncoder::Encode(&result, pixmap_, mime_type, quality)) {
     return "data:,";
   }
+
+  if (!recordreplay::AreEventsUnavailable()) {
+    // [TT-604] Avoid divergences caused by small differences in render output.
+    wtf_size_t numBytes = (wtf_size_t)recordreplay::RecordReplayValue(
+      "ImageDataBuffer::ToDataURL",
+      (uintptr_t)result.size()
+    );
+    result.resize(numBytes);
+    recordreplay::RecordReplayBytes(
+      "ImageDataBuffer::ToDataURL",
+      (void*)&result[0],
+      result.size()
+    );
+  }
+
   return StrCat({"data:", ImageEncoderUtils::MimeTypeName(mime_type),
                  ";base64,", Base64Encode(result)});
 }
