@@ -21,6 +21,8 @@
 #include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_events.h"
+
 using DecrementOnDelete = blink::ScriptedIdleTaskController::DecrementOnDelete;
 
 namespace base {
