@@ -339,6 +339,7 @@ PipelineImpl::RendererWrapper::RendererWrapper(
       demuxer_(nullptr),
       playback_rate_(kDefaultPlaybackRate),
       volume_(kDefaultVolume),
+      shared_state_lock_("PipelineImpl::RendererWrapper.shared_state_lock_"),
       state_(State::kCreated),
       status_(PIPELINE_OK),
       renderer_ended_(false) {
