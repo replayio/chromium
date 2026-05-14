@@ -78,7 +78,15 @@ void AudioNode::Dispose() {
           this, Handler().GetNodeType(), handler_.get(),
           context()->currentTime());
 #endif
+  // Avoid warning when the audio node is destroyed at a non-deterministic point.
+  if (recordreplay::AreEventsDisallowed())
+    recordreplay::BeginPassThroughEvents();
+
   DeferredTaskHandler::GraphAutoLocker locker(context());
+
+  if (recordreplay::AreEventsDisallowed())
+    recordreplay::EndPassThroughEvents();
+
   Handler().Dispose();
 
   // Add the handler to the orphan list.  This keeps the handler alive until it
