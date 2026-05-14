@@ -8,6 +8,13 @@
 
 #include "base/synchronization/lock_metrics_recorder.h"
 
+namespace recordreplay {
+
+extern void AddOrderedSRWLock(const char* name, void* lock);
+extern void RemoveOrderedSRWLock(void* lock);
+
+} // namespace recordreplay
+
 namespace base {
 namespace internal {
 
