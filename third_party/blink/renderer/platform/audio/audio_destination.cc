@@ -433,6 +433,8 @@ AudioDestination::AudioDestination(
       is_output_buffer_bypassed_(BypassOutputBuffer()) {
   CHECK(web_audio_device_);
 
+  recordreplay::Assert("[RUN-1345] callback_buffer_size_ is big: %d", (callback_buffer_size_ > render_quantum_frames_ * 2));
+
   SendLogMessage(__func__, String::Format("({output_channels=%u})",
                                           number_of_output_channels));
   SendLogMessage(__func__,
