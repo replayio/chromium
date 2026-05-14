@@ -231,6 +231,14 @@ ElementRareDataVector::EnsureInlineCSSStyleDeclaration(Element* owner_element) {
                                                 owner_element);
 }
 
+// Replay edit: As of 1/2023, there is ElementRareDataVector::GetWrappedField
+// so we won't need this in the future.
+InlineCSSStyleDeclaration*
+ElementRareDataVector::GetInlineCSSStyleDeclaration() const {
+  return static_cast<InlineCSSStyleDeclaration*>(
+      GetField(FieldId::kCssomWrapper));
+}
+
 ShadowRoot* ElementRareDataVector::GetShadowRoot() const {
   return static_cast<ShadowRoot*>(GetField(FieldId::kShadowRoot));
 }

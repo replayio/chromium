@@ -36,6 +36,7 @@ typedef HeapVector<Member<Attr>> AttrNodeList;
 class ElementIntersectionObserverData;
 class ContainerQueryEvaluator;
 class EditContext;
+class InlineCSSStyleDeclaration;
 class InlineStylePropertyMap;
 class ElementInternals;
 class DisplayLockContext;
@@ -213,6 +214,11 @@ class CORE_EXPORT ElementRareDataVector final
 
   std::pair<std::reference_wrapper<CSSStyleDeclaration>, ElementRareDataVector*>
   EnsureInlineCSSStyleDeclaration(Element* owner_element);
+
+  // Replay edit: As of 1/2023, there is ElementRareDataVector::GetWrappedField
+  // so we won't need this in the future. Returns the existing inline CSS style
+  // declaration without creating one, for use in Replay-only code paths.
+  InlineCSSStyleDeclaration* GetInlineCSSStyleDeclaration() const;
 
   ShadowRoot* GetShadowRoot() const;
   [[nodiscard]] ElementRareDataVector* SetShadowRoot(ShadowRoot& shadow_root);
