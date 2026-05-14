@@ -345,6 +345,8 @@ class MODULES_EXPORT IDBTransaction final
   //
   // Only valid for versionchange transactions.
   IDBDatabaseMetadata old_database_metadata_;
+
+  int record_replay_created_node_id_ = 0;
 };
 
 }  // namespace blink
