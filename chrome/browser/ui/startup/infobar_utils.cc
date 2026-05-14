@@ -186,9 +186,10 @@ void AddInfoBarsIfNecessary(BrowserWindowInterface* browser,
   infobars::ContentInfoBarManager* infobar_manager =
       infobars::ContentInfoBarManager::FromWebContents(web_contents);
 
-  if (!google_apis::HasAPIKeyConfigured()) {
-    GoogleApiKeysInfoBarDelegate::Create(infobar_manager);
-  }
+  // [TT-859] disable the api key delegate (which displays the banner in the infobar.)
+  // if (!google_apis::HasAPIKeyConfigured()) {
+  //   GoogleApiKeysInfoBarDelegate::Create(infobar_manager);
+  // }
 
   if (ObsoleteSystem::IsObsoleteNowOrSoon()) {
     PrefService* local_state = g_browser_process->local_state();
