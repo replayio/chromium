@@ -242,7 +242,7 @@ class CORE_EXPORT IntersectionObserver final
   > observations_;
   HeapLinkedHashSet<Member<IntersectionObservation>> replay_strong_observations_;
   // Observations that have updates waiting to be delivered
-  HeapHashSet<Member<IntersectionObservation>> active_observations_;
+  HeapHashSet<Member<IntersectionObservation>, WTF::MemberHashRecordReplayRegisteredPointerId<IntersectionObservation>> active_observations_;
   const Vector<float> thresholds_;
   const base::TimeDelta delay_;
   const Vector<Length> margin_;
