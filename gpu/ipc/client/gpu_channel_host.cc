@@ -51,7 +51,8 @@ GpuChannelHost::GpuChannelHost(
           static_cast<int32_t>(GpuChannelReservedRoutes::kSharedImageInterface),
           shared_image_capabilities),
       sync_point_graph_validation_enabled_(
-          features::IsSyncPointGraphValidationEnabled()) {
+          features::IsSyncPointGraphValidationEnabled()),
+      deferred_message_lock_("GpuChannelHost.deferred_message_lock_") {
   if (features::IsLegacyIpcDisabled()) {
     gpu_channel_.emplace<SharedRemote>(
         mojo::PendingRemote<mojom::GpuChannel>(std::move(handle), 0),
