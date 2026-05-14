@@ -9,6 +9,7 @@
 #include "base/apple/mach_logging.h"
 #include "base/apple/scoped_mach_vm.h"
 #include "base/check_op.h"
+#include "base/record_replay.h"
 #include "base/types/expected.h"
 
 namespace base::subtle {
