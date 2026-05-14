@@ -82,6 +82,9 @@ PendingScript::PendingScript(ScriptElementBase* element,
       task_state_(task_state) {
   async_task_context_.Schedule(original_execution_context_, "PendingScript",
                                probe::AsyncTaskContext::ScanForAds::kTrue);
+  record_replay_dependency_node_ids_.push_back(
+    recordreplay::NewDependencyGraphNode("{\"kind\":\"pendingScriptCreated\"}")
+  );
 }
 
 PendingScript::~PendingScript() {}
