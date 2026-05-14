@@ -211,6 +211,10 @@ class CORE_EXPORT ShadowRoot final : public DocumentFragment,
 
   bool ContainsShadowRoots() const { return child_shadow_root_count_; }
 
+  int RecordReplayId() const {
+    return DocumentFragment::RecordReplayId();
+  }
+
   void Trace(Visitor*) const override;
 
  private:
