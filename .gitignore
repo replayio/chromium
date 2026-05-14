@@ -350,3 +350,10 @@ third_party/rust/target/
 
 # Trace files created when using --trace-startup.
 **/chrometrace.log
+
+# Build scripts 
+/replay_build_scripts/node_modules
+
+# Reclient
+/buildtools/reclient_cfgs/reproxy.cfg
+/third_party/reclient_configs
