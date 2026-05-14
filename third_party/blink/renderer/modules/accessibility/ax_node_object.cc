@@ -786,7 +786,7 @@ void AXNodeObject::AlterSliderOrSpinButtonValue(bool increase) {
           BindOnce(
               [](Node* node, KeyboardEvent* evt) {
                 if (node) {
-                  node->DispatchEvent(*evt);
+                  node->DispatchEvent(*evt, "AXNodeObject::AlterSliderOrSpinButtonValue #2");
                 }
               },
               WrapWeakPersistent(GetNode()), WrapPersistent(keyup)),
