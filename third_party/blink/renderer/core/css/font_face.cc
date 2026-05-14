@@ -263,6 +263,7 @@ FontFace::FontFace(ExecutionContext* context,
       ExecutionContextClient(context),
       family_(family),
       status_(kUnloaded) {
+  recordreplay::RegisterPointer("FontFace", this);
   SetPropertyFromString(context, descriptors->style(),
                         AtRuleDescriptorID::FontStyle);
   SetPropertyFromString(context, descriptors->weight(),
