@@ -83,6 +83,7 @@ TaskSource::TaskSource(const TaskTraits& traits,
     : traits_(traits),
       thread_type_racy_(EffectiveThreadType(traits, originating_thread_type)),
       originating_thread_type_(originating_thread_type),
+      lock_(recordreplay::AreEventsDisallowed() ? nullptr : "TaskSource.lock_"),
       execution_mode_(execution_mode) {}
 
 TaskSource::~TaskSource() {
