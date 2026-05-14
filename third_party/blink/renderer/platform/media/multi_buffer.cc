@@ -10,6 +10,7 @@
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
+#include "base/record_replay.h"
 #include "base/task/single_thread_task_runner.h"
 #include "media/base/media_switches.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
