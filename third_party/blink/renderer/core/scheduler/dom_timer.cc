@@ -172,7 +172,12 @@ int DOMTimer::setTimeout(ScriptState* script_state,
                          V8Function* handler,
                          int timeout,
                          const HeapVector<ScriptValue>& arguments) {
+  // https://linear.app/replay/issue/RUN-885
+  recordreplay::Assert("WindowOrWorkerGlobalScope::setTimeout #1");
+
   if (!IsAllowed(context, false, g_empty_string)) {
+    // https://linear.app/replay/issue/RUN-885
+    recordreplay::Assert("WindowOrWorkerGlobalScope::setTimeout #1.1");
     return 0;
   }
   auto* action = MakeGarbageCollected<ScheduledAction>(script_state, context,
@@ -204,12 +209,19 @@ int DOMTimer::setTimeout(ScriptState* script_state,
     return 0;
   }
 
+  // https://linear.app/replay/issue/RUN-885
+  recordreplay::Assert("WindowOrWorkerGlobalScope::setTimeout #2");
+
   if (!IsAllowed(context, true, handler)) {
+    // https://linear.app/replay/issue/RUN-885
+    recordreplay::Assert("WindowOrWorkerGlobalScope::setTimeout #2.1");
     return 0;
   }
   // Don't allow setting timeouts to run empty functions.  Was historically a
   // performance issue.
   if (handler.empty()) {
+    // https://linear.app/replay/issue/RUN-885
+    recordreplay::Assert("WindowOrWorkerGlobalScope::setTimeout #2.2");
     return 0;
   }
   auto* action =
