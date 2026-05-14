@@ -11,6 +11,7 @@
 #include "base/no_destructor.h"
 #include "base/observer_list_threadsafe.h"
 #include "base/process/process.h"
+#include "base/record_replay.h"
 #include "base/sequence_checker.h"
 #include "base/synchronization/lock.h"
 #include "base/thread_annotations.h"
