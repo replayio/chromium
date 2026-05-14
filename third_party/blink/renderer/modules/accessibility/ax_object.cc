@@ -3567,6 +3567,7 @@ void AXObject::InvalidateCachedValues(TreeUpdateReason reason) {
 
 void AXObject::UpdateCachedAttributeValuesIfNeeded(
     bool notify_parent_of_ignored_changes) {
+  recordreplay::Assert("[RUN-2424-3202] AXObject::UpdateCachedAttributeValuesIfNeeded %u", id_);
   if (IsDetached()) {
     cached_is_ignored_ = true;
     cached_is_ignored_but_included_in_tree_ = false;
