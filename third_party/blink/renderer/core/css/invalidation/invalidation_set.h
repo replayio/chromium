@@ -384,6 +384,7 @@ class CORE_EXPORT InvalidationSet
   explicit InvalidationSet(InvalidationType);
 
   ~InvalidationSet() {
+    recordreplay::UnregisterPointer(this);
     ClearAllBackings();
   }
 
