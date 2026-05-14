@@ -94,6 +94,17 @@ struct CORE_EXPORT MatchedProperties {
   Data data_;
 };
 
+// This is a duplicate of the above, except that we do not have a pointer for 'properties'.
+// Instead, we store the id of the pointer, for deterministic replay.  We cannot alter
+// the above struct, because the Member<> is required for garbage collection tracing.
+struct CORE_EXPORT RecordReplayMatchedProperties {
+  DISALLOW_NEW();
+
+ public:
+  int record_replay_id_properties;
+  MatchedProperties::Data types_;
+};
+
 struct SameSizeAsMatchedProperties {
   Member<void*> properties;
   Member<void*> mixin_parameter_bindings;
@@ -120,6 +131,7 @@ WTF_ALLOW_MOVE_AND_INIT_WITH_MEM_FUNCTIONS(blink::MatchedProperties)
 namespace blink {
 
 using MatchedPropertiesVector = HeapVector<MatchedProperties, 64>;
+using RecordReplayMatchedPropertiesVector = Vector<RecordReplayMatchedProperties, 64>;
 using MatchedPropertiesHashVector = Vector<MatchedPropertiesHash, 64>;
 
 class CORE_EXPORT MatchResult {
