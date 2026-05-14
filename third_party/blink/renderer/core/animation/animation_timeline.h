@@ -174,7 +174,12 @@ class CORE_EXPORT AnimationTimeline : public ScriptWrappable {
   HeapHashSet<Member<Animation>, WTF::MemberHashRecordReplayId<Animation>>
       animations_needing_update_;
   // All animations attached to this timeline.
-  HeapHashSet<WeakMember<Animation>> animations_;
+  HeapHashSet<WeakMember<Animation>, WTF::MemberHashRecordReplayId<Animation>> animations_;
+
+  // Strongly held references on animations when recording/replaying. Updating the
+  // animations can interact with the recording and the animations should be consistent
+  // between recording and replaying.
+  HeapHashSet<Member<Animation>> record_replay_animations_strong_;
   // Triggers which depend on this timeline.
   HeapHashSet<Member<TimelineTrigger>> triggers_;
 
