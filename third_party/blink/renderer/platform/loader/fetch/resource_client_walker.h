@@ -42,7 +42,9 @@ class ResourceClientWalker {
 
  public:
   explicit ResourceClientWalker(
-      const HeapHashCountedSet<WeakMember<ResourceClient>>& set)
+      const HeapHashCountedSet<WeakMember<ResourceClient>,
+                               WTF::MemberHashRecordReplayId<ResourceClient>>&
+          set)
       : client_set_(set), client_vector_(client_set_.Values()) {}
 
   T* Next() {
