@@ -31,6 +31,9 @@ struct CORE_EXPORT BlinkCloneableMessage {
   base::UnguessableToken sender_agent_cluster_id;
   bool locked_to_sender_agent_cluster = false;
   uint64_t trace_id;
+
+  int record_replay_message_id = 0;
+  int record_replay_process_id = 0;
 };
 
 }  // namespace blink
