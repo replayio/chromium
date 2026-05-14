@@ -24,6 +24,7 @@
 #include "base/process/process.h"
 #include "base/process/set_process_title.h"
 #include "base/profiler/sample_metadata.h"
+#include "base/record_replay.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/synchronization/condition_variable.h"
