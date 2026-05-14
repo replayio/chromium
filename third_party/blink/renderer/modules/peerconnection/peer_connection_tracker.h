@@ -323,7 +323,11 @@ class MODULES_EXPORT PeerConnectionTracker
   void AddStandardStats(int lid, base::ListValue value);
 
   // This map stores the local ID assigned to each RTCPeerConnectionHandler.
-  typedef HashMap<RTCPeerConnectionHandler*, int> PeerConnectionLocalIdMap;
+  typedef HashMap<
+        RTCPeerConnectionHandler*,
+        int,
+        WTF::MemberHashRecordReplayId<RTCPeerConnectionHandler>
+    > PeerConnectionLocalIdMap;
   PeerConnectionLocalIdMap peer_connection_local_id_map_;
   mojom::blink::DeviceThermalState current_thermal_state_ =
       mojom::blink::DeviceThermalState::kUnknown;
