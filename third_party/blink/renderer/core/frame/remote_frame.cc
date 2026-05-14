@@ -487,6 +487,9 @@ void RemoteFrame::ForwardPostMessage(
   if (source_frame)
     source_token = source_frame->GetLocalFrameToken();
 
+  // RUN-1618: Force serialized JS message sizes to match before sending over IPC.
+  transferable_message.message->RecordReplayDataSize();
+
   GetRemoteFrameHostRemote().RouteMessageEvent(
       source_token, std::move(source_security_origin),
       std::move(target_security_origin), std::move(transferable_message));
