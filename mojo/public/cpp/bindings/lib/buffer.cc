@@ -11,6 +11,7 @@
 #include "base/compiler_specific.h"
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "mojo/public/cpp/bindings/lib/bindings_internal.h"
 
 namespace recordreplay {
