@@ -497,7 +497,11 @@ class PLATFORM_EXPORT ResourceRequestHead {
   }
 
   const String& GetDevToolsId() const { return devtools_id_; }
-  void SetDevToolsId(const String devtools_id) { devtools_id_ = devtools_id; }
+  void SetDevToolsId(const String devtools_id) {
+    devtools_id_ = devtools_id;
+    recordreplay::Assert("[RUN-1725-1903] ResourceRequest::SetDevToolsId %s",
+                         devtools_id.Ascii().c_str());
+  }
 
   void SetRequestedWithHeader(const String& value) {
     requested_with_header_ = value;
