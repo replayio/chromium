@@ -160,7 +160,7 @@ WebGLContextFactory::GetRenderingAPI() const {
 void WebGLContextFactory::OnError(HTMLCanvasElement* canvas,
                                   const String& error) {
   canvas->DispatchEvent(*WebGLContextEvent::Create(
-      event_type_names::kWebglcontextcreationerror, error));
+      event_type_names::kWebglcontextcreationerror, error), "WebGLContextFactory::OnError");
 }
 
 const char* WebGLContextFactory::GetContextName() const {
