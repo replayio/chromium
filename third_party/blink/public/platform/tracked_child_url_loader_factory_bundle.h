@@ -143,8 +143,8 @@ class BLINK_PLATFORM_EXPORT HostChildURLLoaderFactoryBundle final
       std::pair<base::WeakPtr<TrackedChildURLLoaderFactoryBundle>,
                 scoped_refptr<base::SequencedTaskRunner>>;
   using ObserverList =
-      std::unordered_map<ObserverKey,
-                         std::unique_ptr<ObserverPtrAndTaskRunner>>;
+      base::deterministic_unordered_map<ObserverKey,
+                                        std::unique_ptr<ObserverPtrAndTaskRunner>>;
 
   explicit HostChildURLLoaderFactoryBundle(
       scoped_refptr<base::SequencedTaskRunner> task_runner);
