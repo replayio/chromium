@@ -180,6 +180,9 @@ void WidgetInputHandlerImpl::DispatchEvent(
     std::optional<std::unique_ptr<blink::WebCoalescedInputEvent>>
         original_event_for_gesture,
     DispatchEventCallback callback) {
+  // https://linear.app/replay/issue/RUN-550
+  recordreplay::Assert("[RUN-550] WidgetInputHandlerImpl::DispatchEvent");
+
   TRACE_EVENT("input,input.scrolling", "WidgetInputHandlerImpl::DispatchEvent");
   if (original_event_for_gesture.has_value()) {
     input_handler_manager_->DispatchEvent(
