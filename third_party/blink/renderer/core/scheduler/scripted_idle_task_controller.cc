@@ -337,6 +337,14 @@ void ScriptedIdleTaskController::RunIdleTask(
     IdleDeadline::CallbackType callback_type) {
   DCHECK(!paused_);
 
+  recordreplay::Assert(
+      "[RUN-2419] ScriptedIdleTaskController::RunCallback A %d",
+      id);
+
+  recordreplay::AutoDependencyExecution execute(
+    recordreplay::NewDependencyGraphNode("{\"kind\":\"executeIdleCallback\"}")
+  );
+
   // Keep the idle task in |idle_tasks_| so that it's still wrapper-traced.
   // TODO(https://crbug.com/796145): Remove this hack once on-stack objects
   // get supported by either of wrapper-tracing or unified GC.
