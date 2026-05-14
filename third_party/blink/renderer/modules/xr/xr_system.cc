@@ -1458,7 +1458,7 @@ void XRSystem::OnDeviceChanged() {
   ExecutionContext* context = GetExecutionContext();
   if (context && context->IsFeatureEnabled(
                      network::mojom::PermissionsPolicyFeature::kWebXr)) {
-    DispatchEvent(*blink::Event::Create(event_type_names::kDevicechange));
+    DispatchEvent(*blink::Event::Create(event_type_names::kDevicechange), "XRSystem::OnDeviceChanged");
   }
 }
 
