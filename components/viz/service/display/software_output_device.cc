@@ -8,7 +8,9 @@
 
 #include "base/check.h"
 #include "base/functional/bind.h"
+#include "base/record_replay.h"
 #include "base/task/sequenced_task_runner.h"
+#include "components/viz/service/display/record_replay_render.h"
 #include "skia/ext/legacy_display_globals.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkCanvas.h"
