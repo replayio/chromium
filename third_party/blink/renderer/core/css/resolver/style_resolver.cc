@@ -3082,6 +3082,7 @@ void StyleResolver::ApplyPropertiesFromCascade(StyleResolverState& state,
     const ComputedStyle* non_legacy_style = state.StyleBuilder().CloneStyle();
     // Re-apply all overlapping properties (both legacy and non-legacy).
     cascade.Apply(filter.Add(CSSProperty::kOverlapping));
+
     UseCountLegacyOverlapping(GetDocument(), *non_legacy_style,
                               state.StyleBuilder());
   }
