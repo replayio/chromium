@@ -9,6 +9,7 @@
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/record_replay.h"
 #include "base/strings/string_util.h"
 #include "base/values.h"
 #include "media/base/media_switches.h"
