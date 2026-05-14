@@ -1720,7 +1720,7 @@ DispatchEventResult DispatchBeforeInputEditorCommand(
   InputEvent* before_input_event = InputEvent::CreateBeforeInput(
       input_type, g_null_atom, InputEvent::EventIsComposing::kNotComposing,
       ranges);
-  return target->DispatchEvent(*before_input_event);
+  return target->DispatchEvent(*before_input_event, "DispatchBeforeInputEditorCommand");
 }
 
 DispatchEventResult DispatchBeforeInputDataTransfer(
