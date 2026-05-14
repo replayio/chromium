@@ -34,6 +34,9 @@
 namespace content {
 
 #if BUILDFLAG(USE_ZYGOTE)
+static inline bool MaybeRecordingOrReplaying() {
+  return true;
+}
 ZygoteCommunication* RendererSandboxedProcessLauncherDelegate::GetZygote() {
   const base::CommandLine& browser_command_line =
       *base::CommandLine::ForCurrentProcess();
