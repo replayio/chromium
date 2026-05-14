@@ -31,6 +31,23 @@
 #include "components/crash/core/app/crashpad.h"
 #include "components/version_info/channel.h"
 
+static void* LookupRecordReplaySymbol(const char* name) {
+  HMODULE module = GetModuleHandleA("windows-recordreplay.dll");
+  void* fnptr = module ? (void*)GetProcAddress(module, name) : nullptr;
+  return fnptr ? fnptr : reinterpret_cast<void*>(1);
+}
+
+static bool RecordReplayIsReplaying() {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayIsReplaying");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    return reinterpret_cast<bool(*)()>(fnptr)();
+  }
+  return false;
+}
+
 ChromeCrashReporterClient::ChromeCrashReporterClient() = default;
 
 ChromeCrashReporterClient::~ChromeCrashReporterClient() = default;
