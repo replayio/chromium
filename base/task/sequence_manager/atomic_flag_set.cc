@@ -9,6 +9,7 @@
 
 #include "base/check_op.h"
 #include "base/functional/callback.h"
+#include "base/record_replay.h"
 
 namespace base::sequence_manager::internal {
 
