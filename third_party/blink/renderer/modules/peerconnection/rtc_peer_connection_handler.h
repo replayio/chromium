@@ -124,6 +124,9 @@ class MODULES_EXPORT RTCPeerConnectionHandler {
   base::WeakPtr<RTCPeerConnectionHandler> GetWeakPtr() {
     return weak_factory_.GetWeakPtr();
   }
+
+  HAS_RECORD_REPLAY_ID();
+
   // Initialize method only used for unit test.
   bool InitializeForTest(
       const webrtc::PeerConnectionInterface::RTCConfiguration&
