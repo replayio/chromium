@@ -95,6 +95,8 @@ MainThreadTaskQueue::MainThreadTaskQueue(
       frame_scheduler_(params.frame_scheduler) {
   task_runner_with_default_task_type_ =
       WrapTaskRunner(task_queue_->task_runner());
+  // Needed for sorting in TaskQueueVoterMap.
+  recordreplay::RegisterPointer("MainThreadTaskQueue", this);
   // Throttling needs |should_notify_observers| to get task timing.
   DCHECK(!params.queue_traits.can_be_throttled || spec.should_notify_observers)
       << "Throttled queue is not supported with |!should_notify_observers|";
