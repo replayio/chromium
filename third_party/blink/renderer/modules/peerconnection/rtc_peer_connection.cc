@@ -2921,7 +2921,7 @@ void RTCPeerConnection::DispatchScheduledEvents() {
 
   for (auto& event : events) {
     if (event->Setup()) {
-      DispatchEvent(*event->event_.Release());
+      DispatchEvent(*event->event_.Release(), "RTCPeerConnection::DispatchScheduledEvents");
     }
   }
 
