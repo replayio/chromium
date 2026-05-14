@@ -35,6 +35,7 @@ class SVGTreeScopeResources final
   void ProcessCustomWeakness(const LivenessBroker&);
 
   HashMap<AtomicString, UntracedMember<LocalSVGResource>> resources_;
+  HeapHashMap<AtomicString, Member<LocalSVGResource>> replay_strong_resources_;
   Member<TreeScope> tree_scope_;
 };
 
