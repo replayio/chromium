@@ -38,7 +38,12 @@ BarrierInfo::BarrierInfo(size_t num_callbacks, OnceClosure done_closure)
 
 void BarrierInfo::Run() {
   DCHECK(!num_callbacks_left_.IsZero());
-  if (!num_callbacks_left_.Decrement()) {
+  bool done;
+  {
+    recordreplay::AutoOrderedLock ordered(record_replay_ordered_lock_);
+    done = !num_callbacks_left_.Decrement();
+  }
+  if (done) {
     std::move(done_closure_).Run();
   }
 }
