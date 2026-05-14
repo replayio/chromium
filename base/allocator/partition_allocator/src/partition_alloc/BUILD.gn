@@ -533,7 +533,10 @@ if (is_clang_or_gcc) {
       ":memory_tagging",
       ":wexit_time_destructors",
     ]
-    deps = [ ":allocator_base" ]
+    deps = [
+      ":allocator_base",
+      "//base:debugging_buildflags",
+    ]
     if (use_partition_alloc_as_malloc_on_win_component_build) {
       # We need to add explicit libc++ dependency here because of
       # no_default_deps=true.
