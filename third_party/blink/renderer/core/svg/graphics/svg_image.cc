@@ -103,6 +103,11 @@ SVGImage::SVGImage(ImageObserver* observer, bool is_multipart)
       has_pending_timeline_rewind_(false) {}
 
 SVGImage::~SVGImage() {
+  // Leak the agent_group_scheduler_ when removed during GC.
+  // See https://linear.app/replay/issue/RUN-2056#comment-f827701f.
+  if (recordreplay::AreEventsDisallowed("~SVGImage"))
+    agent_group_scheduler_.release();
+
   if (document_host_) {
     // Store `document_host_` in a local variable and clear it so that
     // SVGImageChromeClient knows we're destructed.
