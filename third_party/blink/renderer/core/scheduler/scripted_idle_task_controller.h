@@ -17,7 +17,6 @@
 #include "third_party/blink/renderer/platform/bindings/name_client.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
-#include "third_party/blink/renderer/platform/heap/persistent.h"
 #include "third_party/blink/renderer/platform/heap/prefinalizer.h"
 #include "third_party/blink/renderer/platform/supplementable.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
@@ -195,12 +194,6 @@ class CORE_EXPORT ScriptedIdleTaskController
   // Whether `next_callback_id_` wrapped around.
   // TODO(crbug.com/394266102): Remove after the bug is understood and fixed.
   bool next_callback_id_wrapped_around_ = false;
-
-  // Replay: A strong self-reference kept alive while there are outstanding
-  // idle tasks. Replaces the strong-controller field previously held by the
-  // (now-deleted) `IdleRequestCallbackWrapper`. Used when recording or
-  // replaying to avoid the weak-pointer non-determinism hazard.
-  Persistent<ScriptedIdleTaskController> replay_strong_self_;
 
  public:
   // Type of SchedulerIdleTask(), used to define callback cancellation traits in

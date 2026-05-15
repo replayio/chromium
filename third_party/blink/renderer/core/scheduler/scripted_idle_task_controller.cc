@@ -199,15 +199,6 @@ void ScriptedIdleTaskController::DecrementOnDelete::DecrementNow() {
 void ScriptedIdleTaskController::PostSchedulerIdleAndTimeoutTasks(
     CallbackId id,
     uint32_t timeout_millis) {
-  // Replay [RUN-2419]: hold a strong self-reference while any idle task is
-  // pending, to avoid the weak-pointer non-determinism hazard previously
-  // guarded by `IdleRequestCallbackWrapper::replay_strong_controller_`.
-  if (!replay_strong_self_ &&
-      recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
-                                           "IdleRequestCallbackWrapper")) {
-    replay_strong_self_ = this;
-  }
-
   auto it = idle_tasks_.find(id);
   CHECK_NE(it, idle_tasks_.end());
   CHECK(!it->value->delayed_task_handle_.IsValid());
@@ -400,11 +391,7 @@ void ScriptedIdleTaskController::RemoveIdleTask(CallbackId id) {
   }
   // A `base::DelayedTaskHandle` must be explicitly canceled before deletion.
   it->value->delayed_task_handle_.CancelTask();
-  recordreplay::Assert("[RUN-2419] IdleRequestCallbackWrapper::Cancel %d", id);
   idle_tasks_.erase(it);
-  if (idle_tasks_.empty()) {
-    replay_strong_self_ = nullptr;
-  }
 }
 
 void ScriptedIdleTaskController::RemoveAllIdleTasks() {
@@ -413,7 +400,6 @@ void ScriptedIdleTaskController::RemoveAllIdleTasks() {
     idle_task.value->delayed_task_handle_.CancelTask();
   }
   idle_tasks_.clear();
-  replay_strong_self_ = nullptr;
 
   // The delta between `IdleTask`s and "scheduler idle tasks" increased.
   CleanupSchedulerIdleTasks();
