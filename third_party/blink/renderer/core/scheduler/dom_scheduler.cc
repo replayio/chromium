@@ -87,6 +87,9 @@ DOMScheduler::DOMScheduler(ExecutionContext* context)
 }
 
 void DOMScheduler::ContextDestroyed() {
+  REPLAY_ASSERT("[TT-1465] DOMScheduler::ContextDestroyed %u %u",
+    fixed_priority_task_queues_.size(),
+    signal_to_task_queue_map_.size());
   fixed_priority_task_queues_.clear();
   signal_to_task_queue_map_.clear();
 }
