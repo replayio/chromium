@@ -22,6 +22,8 @@
 #include "third_party/blink/renderer/core/layout/table/layout_table_section.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 using mojom::blink::FormControlType;
