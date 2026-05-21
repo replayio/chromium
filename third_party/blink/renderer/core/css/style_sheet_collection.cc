@@ -167,6 +167,14 @@ void StyleSheetCollection::PrepareUpdateActiveStyleSheets(
     }
   }
 
+  if (is_shadow_tree_) {
+    recordreplay::Assert(
+        "[RUN-968] "
+        "ShadowTreeStyleSheetCollection::CollectStyleSheets A %d %u",
+        GetTreeScope().RecordReplayId(),
+        (unsigned) style_sheet_candidate_nodes_.size());
+  }
+
   for (Node* n : style_sheet_candidate_nodes_) {
     StyleSheetCandidate candidate(*n);
 
