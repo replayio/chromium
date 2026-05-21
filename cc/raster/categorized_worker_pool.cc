@@ -24,6 +24,8 @@
 #include "cc/base/switches.h"
 #include "cc/raster/task_category.h"
 
+#include "base/record_replay.h"
+
 namespace cc {
 namespace {
 
@@ -440,7 +442,8 @@ CategorizedWorkerPool* CategorizedWorkerPool::GetOrCreate(Delegate* delegate) {
 }
 
 CategorizedWorkerPool::CategorizedWorkerPool()
-    : namespace_token_(GenerateNamespaceToken()),
+    : lock_("CategorizedWorkerPool.lock_"),
+      namespace_token_(GenerateNamespaceToken()),
       has_namespaces_with_finished_running_tasks_cv_(&lock_),
       workers_are_idle_cv_(&lock_) {}
 
