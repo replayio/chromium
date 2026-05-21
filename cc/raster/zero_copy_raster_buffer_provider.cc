@@ -11,6 +11,7 @@
 
 #include "base/feature_list.h"
 #include "base/memory/raw_ptr.h"
+#include "base/record_replay.h"
 #include "base/trace_event/process_memory_dump.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/traced_value.h"
@@ -48,6 +49,19 @@ ZeroCopyRasterBufferImpl::ZeroCopyRasterBufferImpl(
           sii, "ZeroCopyRasterBufferProviderSoftware");
       in_use_resource.backing()->mailbox_sync_token =
           sii->GenUnverifiedSyncToken();
+
+      if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+        auto* backing = in_use_resource.backing();
+        if (backing->shared_image()) {
+          auto mapping = backing->shared_image()->Map();
+          if (mapping) {
+            recordreplay::NotifyRasterBuffer(
+                backing->shared_image()->mailbox(),
+                mapping->GetMemoryForPlane(0).data(),
+                mapping->GetMemoryForPlane(0).size());
+          }
+        }
+      }
     } else {
       auto backing = std::make_unique<ResourcePool::Backing>(
           in_use_resource.size(), in_use_resource.format(),
