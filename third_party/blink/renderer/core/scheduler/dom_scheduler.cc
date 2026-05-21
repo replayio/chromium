@@ -97,6 +97,7 @@ void DOMScheduler::Trace(Visitor* visitor) const {
   visitor->Trace(fixed_priority_task_signals_);
   visitor->Trace(signal_to_task_queue_map_);
   visitor->Trace(signal_to_continuation_queue_map_);
+  visitor->Trace(replay_strong_signal_);
   ScriptWrappable::Trace(visitor);
   ExecutionContextLifecycleObserver::Trace(visitor);
   Supplement<ExecutionContext>::Trace(visitor);
