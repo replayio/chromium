@@ -162,6 +162,8 @@ void DOMTask::InvokeInternal(ScriptState* script_state) {
       delay_.InMillisecondsF());
   probe::AsyncTask async_task(context, &async_task_context_);
 
+  recordreplay::UserEventProbe replayEvent("postTask", AtomicString());
+
   std::optional<scheduler::TaskAttributionTracker::TaskScope>
       task_attribution_scope;
   // For the main thread (tracker exists), create the task scope with the signal
