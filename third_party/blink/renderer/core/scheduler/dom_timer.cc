@@ -406,6 +406,12 @@ void DOMTimer::Fired() {
   // Only the first execution of a multi-shot timer should get an affirmative
   // user gesture indicator.
 
+  int dependency_graph_fired_id = recordreplay::NewDependencyGraphNode("{\"kind\":\"timerFired\"}");
+  recordreplay::AddDependencyGraphEdge(record_replay_dependency_graph_node_id_,
+                                       dependency_graph_fired_id,
+                                       "{\"kind\":\"baseTimer\"}");
+  recordreplay::AutoDependencyExecution execute(dependency_graph_fired_id);
+
   DEVTOOLS_TIMELINE_TRACE_EVENT("TimerFire", inspector_timer_fire_event::Data,
                                 context, timeout_id_);
   const bool is_interval = RepeatInterval().has_value();
