@@ -110,7 +110,7 @@ FilePath PathForFrameworkBundleResource(const char* resource_name) {
   NSBundle* bundle = apple::FrameworkBundle();
   NSURL* resource_url = [bundle URLForResource:@(resource_name)
                                  withExtension:nil];
-  return NSURLToFilePath(resource_url);
+  return base::MakeAbsoluteFilePath(NSURLToFilePath(resource_url));
 }
 
 OSType CreatorCodeForCFBundleRef(CFBundleRef bundle) {
