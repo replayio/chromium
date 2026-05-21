@@ -6,6 +6,7 @@
 
 #include <limits>
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/editing/position_with_affinity.h"
 #include "third_party/blink/renderer/core/layout/block_node.h"
 #include "third_party/blink/renderer/core/layout/constraint_space_builder.h"
@@ -247,7 +248,11 @@ SVGLayoutResult LayoutSVGText::UpdateSVGLayout(
       style.GetWritingMode(), style.GetWritingDirection(),
       /* is_new_fc */ true, /* adjust_inline_size_if_needed */ false);
   builder.SetAvailableSize(LogicalSize());
+  recordreplay::Assert("[RUN-1239-2230] LayoutSVGText::UpdateSVGLayout A %d",
+                       GetElement()->RecordReplayId());
   BlockNode(this).Layout(builder.ToConstraintSpace());
+  recordreplay::Assert("[RUN-1239-2230] LayoutSVGText::UpdateSVGLayout B %d",
+                       GetElement()->RecordReplayId());
 
   needs_update_bounding_box_ = true;
   InvalidateDescendantObjectBoundingBoxes();
