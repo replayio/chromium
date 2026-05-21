@@ -436,6 +436,8 @@ void DOMTimer::Fired() {
   probe::AsyncTask async_task(context, &async_task_context_,
                               is_interval ? "fired" : nullptr);
 
+  recordreplay::UserEventProbe replayEvent(is_interval ? "setInterval" : "setTimeout", g_null_atom);
+
   const int max_timer_nesting_level = kSpecCompliantMaxTimerNestingLevel;
 
   // Simple case for non-one-shot timers.
