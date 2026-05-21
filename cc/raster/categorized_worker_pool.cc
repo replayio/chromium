@@ -144,6 +144,11 @@ CategorizedWorkerPoolJob::CategorizedWorkerPoolJob() = default;
 CategorizedWorkerPoolJob::~CategorizedWorkerPoolJob() = default;
 
 void CategorizedWorkerPoolJob::Start(int max_concurrency_foreground) {
+  // Using multiple threads for raster tasks runs into ordering problems within
+  // Skia when recording/replaying. For now we avoid this by only creating one thread.
+  if (recordreplay::IsRecordingOrReplaying("no-render-workers")) {
+    max_concurrency_foreground = 1;
+  }
   max_concurrency_foreground_ = max_concurrency_foreground;
   background_job_handle_ = base::CreateJob(
       FROM_HERE,
