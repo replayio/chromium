@@ -10,6 +10,7 @@
 #include <optional>
 
 #include "base/memory/values_equivalent.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/accessibility/ax_object_cache.h"
 #include "third_party/blink/renderer/core/css/css_property_value_set.h"
 #include "third_party/blink/renderer/core/css/out_of_flow_data.h"
@@ -1159,6 +1160,8 @@ void OutOfFlowLayoutPart::AddInlineContainingBlockInfo(
 
 void OutOfFlowLayoutPart::LayoutCandidates(
     const HeapVector<LogicalOofPositionedNode>& candidates) {
+  recordreplay::Assert("[RUN-1239] OutOfFlowLayoutPart::LayoutCandidates %d",
+                       candidates.size());
   if (!should_add_outer_fragmentainer_children_ ||
       GetConstraintSpace().IsInitialColumnBalancingPass()) {
     ComputeInlineContainingBlocks(candidates);
@@ -2375,6 +2378,12 @@ OutOfFlowLayoutPart::TryCalculateOffset(
       ToPhysicalSize(container_rect.size,
                      node_info.default_writing_direction.GetWritingMode());
 
+  recordreplay::Assert(
+      "[RUN-1239-1435] OutOfFlowLayoutPart::TryCalculateOffset %d %d %s",
+      container_physical_content_size.width.RawValue(),
+      container_physical_content_size.height.RawValue(),
+      node_info.node.ToString().Utf8().c_str());
+
   // The container insets. Don't use the position-area offsets directly as they
   // may be clamped to produce non-negative space. Instead take the difference
   // between the base, and adjusted container-info.
@@ -2504,6 +2513,9 @@ OutOfFlowLayoutPart::TryCalculateOffset(
 
   // We may have already pre-computed our block-dimensions when determining
   // our min/max sizes, only run if needed.
+  recordreplay::Assert(
+      "[RUN-1239] OutOfFlowLayoutPart::TryCalculateOffset D %d",
+      node_dimensions.size.block_size.RawValue());
   if (node_dimensions.size.block_size == kIndefiniteSize) {
     offset_info.initial_layout_result = ComputeOofBlockDimensions(
         node_info.node, node_info.break_token, candidate_style, space, imcb,
@@ -2511,6 +2523,9 @@ OutOfFlowLayoutPart::TryCalculateOffset(
         container_insets, container_writing_direction, &node_dimensions);
   }
 
+  recordreplay::Assert(
+      "[RUN-1239] OutOfFlowLayoutPart::TryCalculateOffset C %d",
+      try_fit_available_space);
   if (try_fit_available_space) {
     const PhysicalToLogicalGetter has_non_auto_inset(
         candidate_writing_direction, candidate_style,
@@ -2758,6 +2773,10 @@ const LayoutResult* OutOfFlowLayoutPart::GenerateFragment(
     const NodeToLayout& oof_node_to_layout,
     const ConstraintSpace* fragmentainer_constraint_space,
     bool is_last_fragmentainer_so_far) {
+  // https://linear.app/replay/issue/RUN-546
+  recordreplay::Assert("[RUN-546] OutOfFlowLayoutPart::GenerateFragment Start %d",
+                       oof_node_to_layout.node_info.node.GetLayoutBox()->RecordReplayId());
+
   const NodeInfo& node_info = oof_node_to_layout.node_info;
   const OffsetInfo& offset_info = oof_node_to_layout.offset_info;
   const BlockBreakToken* break_token = node_info.break_token;
