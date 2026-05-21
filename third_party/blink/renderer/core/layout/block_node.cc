@@ -398,6 +398,11 @@ const LayoutResult* BlockNode::Layout(
     const BlockBreakToken* break_token,
     const EarlyBreak* early_break,
     const ColumnSpannerPath* column_spanner_path) const {
+  recordreplay::Assert("[RUN-1855-1862] NGBlockNode::Layout %d space(%s)",
+    RecordReplayId(),
+    constraint_space.ToString().Ascii().c_str()
+  );
+
   // The exclusion space internally is a pointer to a shared vector, and
   // equality of exclusion spaces is performed using pointer comparison on this
   // internal shared vector.
