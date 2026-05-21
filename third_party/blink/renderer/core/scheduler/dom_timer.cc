@@ -312,6 +312,17 @@ DOMTimer::DOMTimer(ExecutionContext& context,
       action_(action) {
   DCHECK_GT(timeout_id_, 0);
 
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "timerScheduled");
+    info.Set("duration", timeout.InMillisecondsF());
+    info.Set("singleShot", single_shot);
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    record_replay_dependency_graph_node_id_ =
+      recordreplay::NewDependencyGraphNode(json.c_str());
+  }
+
   // Step 10:
   if (timeout.is_negative()) {
     timeout = base::TimeDelta();
