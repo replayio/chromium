@@ -11,6 +11,7 @@
 #include "base/containers/adapters.h"
 #include "base/debug/dump_without_crashing.h"
 #include "base/not_fatal_until.h"
+#include "base/record_replay.h"
 #include "base/trace_event/trace_event.h"
 #include "third_party/blink/renderer/core/dom/text_diff_range.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
