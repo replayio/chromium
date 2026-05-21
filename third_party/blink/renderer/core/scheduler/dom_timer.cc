@@ -49,6 +49,9 @@
 #include "third_party/blink/renderer/platform/scheduler/public/scheduling_policy.h"
 #include "third_party/blink/renderer/platform/weborigin/reporting_disposition.h"
 
+#include "base/json/json_writer.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_events.h"
+
 namespace blink {
 
 namespace {
