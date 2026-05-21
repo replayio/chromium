@@ -252,6 +252,10 @@ void LayoutInputNode::GetOverrideIntrinsicSize(
   }
 }
 
+void LayoutInputNode::InitRecordReplayId() {
+  record_replay_id_ = recordreplay::NewIdMainThread("LayoutInputNode");
+}
+
 }  // namespace blink
 
 #if DCHECK_IS_ON()
