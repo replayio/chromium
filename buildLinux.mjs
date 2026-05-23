@@ -2,6 +2,8 @@
 import path from "path";
 import { spawnChecked } from "./replay_build_scripts/common.mjs";
 
+// TODO: This might not work anymore. Should not set RBE_service. But maybe it works anyway :shrug:
+
 const dockerArgs = [
   "run",
   "-e",

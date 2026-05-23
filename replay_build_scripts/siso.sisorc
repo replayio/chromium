@@ -1,0 +1,1 @@
+ninja --strict_remote=true --local_jobs=1

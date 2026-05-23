@@ -603,6 +603,7 @@ component("base") {
     "rand_util.h",
     "record_replay.cc",
     "record_replay.h",
+    "record_replay_partition_alloc.h",
     "record_replay_ordered_atomic.h",
     "record_replay_paint_surface.h",
     "record_replay_paint_surface.cc",

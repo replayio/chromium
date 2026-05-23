@@ -3,7 +3,7 @@
 # found in the LICENSE file.
 
 # largely cribbed from new_tab_page/BUILD.gn
-import("//chrome/browser/resources/tools/optimize_webui.gni")
+import("//ui/webui/resources/tools/optimize_webui.gni")
 import("//chrome/common/features.gni")
 import("//tools/grit/grit_rule.gni")
 import("//tools/polymer/css_to_wrapper.gni")
@@ -58,9 +58,6 @@ if (optimize_webui) {
       "record_replay.js",
     ]
     out_manifest = "$target_gen_dir/$build_manifest"
-    js_out_files = [
-      "record_replay.rollup.js",
-    ]
     excludes = mojo_js_files
   }
 
@@ -76,8 +73,8 @@ if (optimize_webui) {
 }
 
 copy("copy_mojom") {
-  deps = [ "//chrome/browser/ui/webui/record_replay:mojo_bindings_js__generator" ]
-  sources = [ "$root_gen_dir/mojom-webui/chrome/browser/ui/webui/record_replay/record_replay_manager.mojom-webui.js" ]
+  deps = [ "//chrome/browser/ui/webui/record_replay:mojo_bindings_ts__generator" ]
+  sources = [ "$root_gen_dir/chrome/browser/ui/webui/record_replay/record_replay_manager.mojom-webui.ts" ]
   outputs = [ "$target_gen_dir/$preprocess_folder/{{source_file_part}}" ]
 }
 
@@ -95,7 +92,7 @@ ts_library_sourcemaps("build_ts") {
   } else {
     tsconfig_base = "tsconfig_base.json"
   }
-  in_files = ts_files + mojo_js_files
+  in_files = ts_files + mojo_ts_files
 
   extra_deps = [
     ":preprocess",
