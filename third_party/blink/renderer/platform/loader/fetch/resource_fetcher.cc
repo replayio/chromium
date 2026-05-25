@@ -1267,8 +1267,6 @@ void ResourceFetcher::RemovePreload(Resource* resource) {
 std::optional<ResourceRequestBlockedReason>
 ResourceFetcher::UpdateRequestForTransparentPlaceholderImage(
     FetchParameters& params) {
-  recordreplay::Assert("[RUN-749] ResourceFetcher::PrepareRequest Start");
-
   ResourceRequest& resource_request = params.MutableResourceRequest();
   // Should only be called if request has transparent-placholder-image.
   DCHECK_NE(resource_request.GetKnownTransparentPlaceholderImageIndex(),
@@ -3619,6 +3617,8 @@ ResourceFetcher::ResourcePrepareHelper::ResourcePrepareHelper(
 std::optional<ResourceRequestBlockedReason>
 ResourceFetcher::ResourcePrepareHelper::PrepareRequestForCacheAccess(
     WebScopedVirtualTimePauser& pauser) {
+  recordreplay::Assert("[RUN-749] ResourceFetcher::PrepareRequest Start");
+
 #if DCHECK_IS_ON()
   DCHECK(!determined_initial_blocked_reason_);
   determined_initial_blocked_reason_ = true;
