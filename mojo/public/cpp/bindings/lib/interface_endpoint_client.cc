@@ -678,6 +678,8 @@ bool InterfaceEndpointClient::SendMessageWithResponder(
     SyncSendMode sync_send_mode,
     std::unique_ptr<MessageReceiver> responder) {
   RecordReplayEnsureConsistentMessageSize(message);
+  recordreplay::Assert(
+      "[RUN-1307-1773] InterfaceEndpointClient::SendMessageWithResponder");
 
   CHECK(sequence_checker_.CalledOnValidSequence());
   DCHECK(message->has_flag(Message::kFlagExpectsResponse));
@@ -801,6 +803,9 @@ void InterfaceEndpointClient::NotifyError(
               });
 
   CHECK(sequence_checker_.CalledOnValidSequence());
+
+  // https://linear.app/replay/issue/RUN-965
+  recordreplay::Assert("InterfaceEndpointClient::NotifyError %d", encountered_error_);
 
   if (encountered_error_) {
     return;
