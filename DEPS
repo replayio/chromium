@@ -4853,6 +4853,11 @@ hooks = [
                '--input-public',
                'src/chromeos/tast_control_disabled_tests_public_builders.txt'],
   },
+  {
+    'name': 'configure_reclient',
+    'pattern': '.',
+    'action': ['python3', 'src/third_party/reclient_configs/configure_reclient.py', '--src_dir=src'],
+  },
 
 ]
 
