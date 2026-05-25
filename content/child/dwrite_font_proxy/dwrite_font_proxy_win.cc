@@ -188,13 +188,13 @@ std::optional<UINT32> DWriteFontCollectionProxy::FindFamilyIndex(
       recordreplay::Assert("[RUN-2116] DWriteFontCollectionProxy::FindFamilyIndex #1");
       if (iter->second != kFamilyNotFound)
         return iter->second;
-      recordreplay::Assert("[RUN-2116] DWriteFontCollectionProxy::FindFamilyIndex #3");
       return std::nullopt;
     }
 
     if (base::FeatureList::IsEnabled(kLimitFontFamilyNamesPerRenderer) &&
         family_names_.size() > kFamilyNamesLimit &&
         !IsLastResortFontName(family_name)) {
+      recordreplay::Assert("[RUN-2116] DWriteFontCollectionProxy::FindFamilyIndex #2");
       return std::nullopt;
     }
   }
@@ -206,6 +206,7 @@ std::optional<UINT32> DWriteFontCollectionProxy::FindFamilyIndex(
   if (!GetFontProxy().FindFamily(family_name, &family_index)) {
     if (hresult_out)
       *hresult_out = E_FAIL;
+    recordreplay::Assert("[RUN-2116] DWriteFontCollectionProxy::FindFamilyIndex #3");
     return std::nullopt;
   }
 
