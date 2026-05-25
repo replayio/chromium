@@ -627,6 +627,8 @@ static void RecordReplayEnsureConsistentMessageSize(Message* message) {
 
 bool InterfaceEndpointClient::SendMessage(Message* message,
                                           bool is_control_message) {
+  RecordReplayEnsureConsistentMessageSize(message);
+
   CHECK(sequence_checker_.CalledOnValidSequence());
   DCHECK(!message->has_flag(Message::kFlagExpectsResponse));
 
@@ -675,6 +677,8 @@ bool InterfaceEndpointClient::SendMessageWithResponder(
     bool is_control_message,
     SyncSendMode sync_send_mode,
     std::unique_ptr<MessageReceiver> responder) {
+  RecordReplayEnsureConsistentMessageSize(message);
+
   CHECK(sequence_checker_.CalledOnValidSequence());
   DCHECK(message->has_flag(Message::kFlagExpectsResponse));
   DCHECK(!handle_.pending_association());
