@@ -54,6 +54,9 @@
 #include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_hash.h"
+
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
+
 namespace blink {
 
 ThreadDebuggerCommonImpl::ThreadDebuggerCommonImpl(v8::Isolate* isolate)
