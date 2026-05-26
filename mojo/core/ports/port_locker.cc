@@ -46,6 +46,8 @@ PortLocker::PortLocker(const PortRef** port_refs, size_t num_ports)
 #endif
       port_refs_(port_refs),
       num_ports_(num_ports) {
+  // recordreplay::Assert("[RUN-1217]-1310 PortLocker::PortLocker %d", num_ports);
+
   // Sort the ports by address to lock them in a globally consistent order.
   std::sort(
       port_refs_, UNSAFE_TODO(port_refs_ + num_ports_),
