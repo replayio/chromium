@@ -181,6 +181,7 @@ void MessagePumpKqueue::Run(Delegate* delegate) {
 
     Delegate::NextWorkInfo next_work_info = delegate->DoWork();
     do_more_work |= next_work_info.is_immediate();
+
     if (!keep_running_) {
       break;
     }
@@ -190,6 +191,7 @@ void MessagePumpKqueue::Run(Delegate* delegate) {
     }
 
     delegate->DoIdleWork();
+
     if (!keep_running_) {
       break;
     }
