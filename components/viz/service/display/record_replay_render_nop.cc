@@ -15,8 +15,9 @@ void OnCommitPaint() {}
 
 void OnReadyToCommit() {}
 
-void NotifyRasterBuffer(const viz::SharedBitmapId& shared_bitmap_id,
-                        void* memory, size_t size) {}
+// TODO-REPLAY-REBASE: NotifyRasterBuffer infrastructure depended on viz::SharedBitmapId, removed upstream in v147. Restore once ported to gpu::Mailbox or decide to drop.
+// void NotifyRasterBuffer(const viz::SharedBitmapId& shared_bitmap_id,
+//                         void* memory, size_t size) {}
 
 void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
                            const viz::CompositorFrame& frame) {}

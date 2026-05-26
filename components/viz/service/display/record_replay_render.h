@@ -6,7 +6,8 @@
 #define COMPONENTS_VIZ_SERVICE_DISPLAY_RECORD_REPLAY_RENDER_H_
 
 #include "cc/trees/proxy_main.h"
-#include "components/viz/common/resources/shared_bitmap.h"
+// TODO-REPLAY-REBASE: NotifyRasterBuffer infrastructure depended on viz::SharedBitmapId, removed upstream in v147. Restore once ported to gpu::Mailbox or decide to drop.
+// #include "components/viz/common/resources/shared_bitmap.h"
 #include "components/viz/common/resources/resource_id.h"
 #include "components/viz/common/surfaces/local_surface_id.h"
 #include "components/viz/common/quads/compositor_frame.h"
@@ -35,8 +36,9 @@ void OnCommitPaint();
 void OnReadyToCommit();
 
 // Called when a shared memory buffer for rasterization has been created.
-void NotifyRasterBuffer(const viz::SharedBitmapId& shared_bitmap_id,
-                        void* memory, size_t size);
+// TODO-REPLAY-REBASE: NotifyRasterBuffer infrastructure depended on viz::SharedBitmapId, removed upstream in v147. Restore once ported to gpu::Mailbox or decide to drop.
+// void NotifyRasterBuffer(const viz::SharedBitmapId& shared_bitmap_id,
+//                         void* memory, size_t size);
 
 // Called when a CompositorFrame is being submitted to the GPU process.
 void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,

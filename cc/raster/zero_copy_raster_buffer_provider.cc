@@ -50,18 +50,19 @@ ZeroCopyRasterBufferImpl::ZeroCopyRasterBufferImpl(
       in_use_resource.backing()->mailbox_sync_token =
           sii->GenUnverifiedSyncToken();
 
-      if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
-        auto* backing = in_use_resource.backing();
-        if (backing->shared_image()) {
-          auto mapping = backing->shared_image()->Map();
-          if (mapping) {
-            recordreplay::NotifyRasterBuffer(
-                backing->shared_image()->mailbox(),
-                mapping->GetMemoryForPlane(0).data(),
-                mapping->GetMemoryForPlane(0).size());
-          }
-        }
-      }
+      // TODO-REPLAY-REBASE: NotifyRasterBuffer infrastructure depended on viz::SharedBitmapId, removed upstream in v147. Restore once ported to gpu::Mailbox or decide to drop.
+      // if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+      //   auto* backing = in_use_resource.backing();
+      //   if (backing->shared_image()) {
+      //     auto mapping = backing->shared_image()->Map();
+      //     if (mapping) {
+      //       recordreplay::NotifyRasterBuffer(
+      //           backing->shared_image()->mailbox(),
+      //           mapping->GetMemoryForPlane(0).data(),
+      //           mapping->GetMemoryForPlane(0).size());
+      //     }
+      //   }
+      // }
     } else {
       auto backing = std::make_unique<ResourcePool::Backing>(
           in_use_resource.size(), in_use_resource.format(),

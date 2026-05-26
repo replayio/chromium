@@ -25,21 +25,22 @@ namespace recordreplay {
 
 extern bool IsMainThread();
 
-struct SharedBitmapInfo {
-  viz::SharedBitmapId id_;
-  uint8_t* memory_;
-  size_t size_;
-};
-typedef std::vector<SharedBitmapInfo> SharedBitmapInfoVector;
-static SharedBitmapInfoVector* gSharedBitmaps;
-
-void NotifyRasterBuffer(const viz::SharedBitmapId& shared_bitmap_id,
-                        void* memory, size_t size) {
-  if (!gSharedBitmaps) {
-    gSharedBitmaps = new SharedBitmapInfoVector();
-  }
-  gSharedBitmaps->push_back({ shared_bitmap_id, (uint8_t*)memory, size });
-}
+// TODO-REPLAY-REBASE: NotifyRasterBuffer infrastructure depended on viz::SharedBitmapId, removed upstream in v147. Restore once ported to gpu::Mailbox or decide to drop.
+// struct SharedBitmapInfo {
+//   viz::SharedBitmapId id_;
+//   uint8_t* memory_;
+//   size_t size_;
+// };
+// typedef std::vector<SharedBitmapInfo> SharedBitmapInfoVector;
+// static SharedBitmapInfoVector* gSharedBitmaps;
+//
+// void NotifyRasterBuffer(const viz::SharedBitmapId& shared_bitmap_id,
+//                         void* memory, size_t size) {
+//   if (!gSharedBitmaps) {
+//     gSharedBitmaps = new SharedBitmapInfoVector();
+//   }
+//   gSharedBitmaps->push_back({ shared_bitmap_id, (uint8_t*)memory, size });
+// }
 
 static viz::SoftwareOutputSurface* gOutputSurface;
 static viz::SoftwareRenderer* gRenderer;
@@ -135,13 +136,14 @@ bool PopulateSkBitmapWithResource(SkBitmap* sk_bitmap, viz::ResourceId resource_
   }
 
   void* pixels = nullptr;
-  if (gSharedBitmaps) {
-    for (const SharedBitmapInfo& info : *gSharedBitmaps) {
-      if (info.id_ == transferable->mailbox_holder.mailbox) {
-        pixels = info.memory_;
-      }
-    }
-  }
+  // TODO-REPLAY-REBASE: NotifyRasterBuffer infrastructure depended on viz::SharedBitmapId, removed upstream in v147. Restore once ported to gpu::Mailbox or decide to drop.
+  // if (gSharedBitmaps) {
+  //   for (const SharedBitmapInfo& info : *gSharedBitmaps) {
+  //     if (info.id_ == transferable->mailbox_holder.mailbox) {
+  //       pixels = info.memory_;
+  //     }
+  //   }
+  // }
 
   recordreplay::AssertMaybeEventsDisallowed("[RUN-2847-3001] recordreplay::PopulateSkBitmapWithResource B %d", !!pixels);
   if (!pixels) {
