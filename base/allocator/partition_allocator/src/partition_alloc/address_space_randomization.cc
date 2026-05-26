@@ -13,7 +13,7 @@
 #include <windows.h>
 #endif
 
-#include "base/record_replay.h"
+#include "base/record_replay_partition_alloc.h"
 
 namespace partition_alloc {
 

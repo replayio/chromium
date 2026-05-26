@@ -4,7 +4,7 @@
 
 #include "partition_alloc/partition_alloc_hooks.h"
 
-#include "base/record_replay.h"
+#include "base/record_replay_partition_alloc.h"
 
 #include <ostream>
 
