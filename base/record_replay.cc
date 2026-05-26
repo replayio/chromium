@@ -214,15 +214,21 @@ ForEachV8APIVoid(LoadFunctionVoid)
 
 #else // !BUILD_FLAG(IS_WIN)
 
+// Weak fallback definitions for the V8* driver entry points. //base is linked
+// by host tools (e.g. root_store_tool) that do NOT link //v8, so without
+// fallbacks the link fails with undefined references to V8*. When //v8 is in
+// the link, the strong definitions from v8 override these weak ones.
 #define DefineFunction(Name, Formals, Args, ReturnType, DefaultValue) \
-  extern "C" ReturnType Name Formals;
+  extern "C" __attribute__((weak)) ReturnType Name Formals {          \
+    return DefaultValue;                                              \
+  }
 ForEachV8API(DefineFunction)
 #undef DefineFunction
 
-#define DefineFunctionVoid(Name, Formals, Args) \
-  extern "C" void Name Formals;
+#define DefineFunctionVoid(Name, Formals, Args)              \
+  extern "C" __attribute__((weak)) void Name Formals {}
 ForEachV8APIVoid(DefineFunctionVoid)
-#undef DefineFunction
+#undef DefineFunctionVoid
 
 #endif // !BUILD_FLAG(IS_WIN)
 
@@ -430,7 +436,7 @@ void GetCurrentJSStack(std::string* stackTrace) {
   return V8RecordReplayGetCurrentJSStack(stackTrace);
 }
 
-void BrowserEvent(const char* name, const base::DictionaryValue& info) {
+void BrowserEvent(const char* name, const base::DictValue& info) {
   std::string json;
   base::JSONWriter::Write(info, &json);
   V8RecordReplayBrowserEvent(name, json.c_str());
@@ -490,19 +496,19 @@ AutoLockMaybeEventsDisallowed::AutoLockMaybeEventsDisallowed(
 }
 
 AutoLockMaybeEventsDisallowed::~AutoLockMaybeEventsDisallowed() {
-  lock_.Release();
+  lock_->Release();
 }
 
 AutoUnlockMaybeEventsDisallowed::AutoUnlockMaybeEventsDisallowed(base::Lock& lock) : lock_(lock) {
-  lock_.Release();
+  lock_->Release();
 }
 
 AutoUnlockMaybeEventsDisallowed::~AutoUnlockMaybeEventsDisallowed() {
   if (AreEventsDisallowed()) {
     AutoPassThroughEvents pt;
-    lock_.Acquire();
+    lock_->Acquire();
   } else {
-    lock_.Acquire();
+    lock_->Acquire();
   }
 }
 
@@ -528,7 +534,7 @@ void EndDependencyExecution() {
 
 AutoMarkerDependencyExecution::AutoMarkerDependencyExecution(const char* reason, const char* name) {
   if (DependencyGraphEnabled()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "marker");
     info.Set("reason", reason);
     info.Set("name", name);
@@ -576,7 +582,7 @@ int NewIdMainThread(const char* name) {
     return 0;
   }
   if (!V8IsMainThread()) {
-    fprintf(stderr, "NewIdMainThread not main thread: %s\n", name);
+    UNSAFE_TODO(fprintf(stderr, "NewIdMainThread not main thread: %s\n", name));
     CHECK(V8IsMainThread());
   }
   return gNextMainThreadId++;

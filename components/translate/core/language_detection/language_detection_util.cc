@@ -151,7 +151,7 @@ std::string DetermineTextLanguage(const std::string& utf8_text,
   // Don't bother with language detection when recording/replaying, as this has
   // caused some crashes and isn't likely to be needed by anyone.
   if (recordreplay::IsRecordingOrReplaying("no-language-detection")) {
-    return translate::kUnknownLanguageCode;
+    return language_detection::kUnknownLanguageCode;
   }
 
   // Make a prediction.

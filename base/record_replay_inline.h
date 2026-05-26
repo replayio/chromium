@@ -7,19 +7,24 @@
 #include <windows.h>
 #endif
 
-static void* LookupRecordReplaySymbol(const char* name) {
+using RecordReplayVoidFn = void (*)();
+
+static RecordReplayVoidFn LookupRecordReplaySymbol(const char* name) {
 #if !BUILDFLAG(IS_WIN)
   void* fnptr = dlsym(RTLD_DEFAULT, name);
 #else
   HMODULE module = GetModuleHandleA("windows-recordreplay.dll");
   void* fnptr = module ? (void*)GetProcAddress(module, name) : nullptr;
 #endif
-  return fnptr ? fnptr : reinterpret_cast<void*>(1);
+  return reinterpret_cast<RecordReplayVoidFn>(
+      fnptr ? fnptr : reinterpret_cast<void*>(1));
 }
 
 struct RecordReplayAutoPassThroughEvents {
-  void *fnBegin;
-  void *fnEnd;
+  // Function pointers (not data pointers) — intentionally not `raw_ptr<T>`,
+  // which only applies to data pointers and does not support `void`.
+  RecordReplayVoidFn fnBegin;
+  RecordReplayVoidFn fnEnd;
   bool didBegin;
 
   RecordReplayAutoPassThroughEvents() {
@@ -28,14 +33,14 @@ struct RecordReplayAutoPassThroughEvents {
     fnBegin = LookupRecordReplaySymbol("RecordReplayBeginPassThroughEvents");
     fnEnd = LookupRecordReplaySymbol("RecordReplayEndPassThroughEvents");
 
-    if (fnBegin != reinterpret_cast<void*>(1)) {
-      reinterpret_cast<void(*)()>(fnBegin)();
+    if (reinterpret_cast<void*>(fnBegin) != reinterpret_cast<void*>(1)) {
+      fnBegin();
     }
   }
 
   ~RecordReplayAutoPassThroughEvents() {
-    if (fnEnd != reinterpret_cast<void*>(1)) {
-      reinterpret_cast<void(*)()>(fnEnd)();
+    if (reinterpret_cast<void*>(fnEnd) != reinterpret_cast<void*>(1)) {
+      fnEnd();
     }
   }
 };

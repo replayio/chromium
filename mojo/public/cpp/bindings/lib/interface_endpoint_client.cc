@@ -618,9 +618,9 @@ static void RecordReplayEnsureConsistentMessageSize(Message* message) {
 
   if (recorded_bytes != message->data_num_bytes()) {
     char* new_payload = new char[recorded_bytes];
-    memset(new_payload, 0, recorded_bytes);
-    memcpy(new_payload, message->data(),
-           std::min<size_t>(recorded_bytes, message->data_num_bytes()));
+    UNSAFE_TODO(memset(new_payload, 0, recorded_bytes));
+    UNSAFE_TODO(memcpy(new_payload, message->data(),
+                       std::min<size_t>(recorded_bytes, message->data_num_bytes())));
     *message->payload_buffer() = internal::Buffer(new_payload, recorded_bytes, recorded_bytes);
   }
 }

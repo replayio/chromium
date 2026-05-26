@@ -131,6 +131,7 @@ ThreadPoolImpl::ThreadPoolImpl(std::string_view histogram_label,
         std::string(),
         kBackgroundPoolEnvironmentParams.name_suffix,
         kBackgroundPoolEnvironmentParams.thread_type_hint,
+        ThreadGroupType::BACKGROUND,
         task_tracker_->GetTrackedRef(), tracked_ref_factory_.GetTrackedRef());
   }
 }

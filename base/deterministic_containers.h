@@ -11,6 +11,7 @@
 // this. This file defines replacements for these containers that have the
 // same interface but always iterate their contents in insertion order.
 
+#include "base/memory/raw_ref.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
@@ -34,13 +35,13 @@ class deterministic_unordered_map {
  public:
   struct iterator {
     size_t index_;
-    InnerVector& vector_;
+    raw_ref<InnerVector> vector_;
     iterator(size_t index, InnerVector& vector)
       : index_(index), vector_(vector) {}
 
     iterator& operator++() {
       index_++;
-      while (index_ < vector_.size() && !vector_[index_].has_value()) {
+      while (index_ < vector_->size() && !(*vector_)[index_].has_value()) {
         index_++;
       }
       return *this;
@@ -53,33 +54,33 @@ class deterministic_unordered_map {
     }
 
     bool operator !=(const iterator& o) const {
-      CHECK(&vector_ == &o.vector_);
+      CHECK(vector_ == o.vector_);
       return index_ != o.index_;
     }
 
     bool operator ==(const iterator& o) const {
-      CHECK(&vector_ == &o.vector_);
+      CHECK(vector_ == o.vector_);
       return index_ == o.index_;
     }
 
     std::pair<Key, T>& operator *() const {
-      return vector_[index_].value();
+      return (*vector_)[index_].value();
     }
 
     std::pair<Key, T>* operator ->() const {
-      return &vector_[index_].value();
+      return &(*vector_)[index_].value();
     }
   };
 
   struct const_iterator {
     size_t index_;
-    const InnerVector& vector_;
+    raw_ref<const InnerVector> vector_;
     const_iterator(size_t index, const InnerVector& vector)
       : index_(index), vector_(vector) {}
 
     const_iterator& operator++() {
       index_++;
-      while (index_ < vector_.size() && !vector_[index_].has_value()) {
+      while (index_ < vector_->size() && !(*vector_)[index_].has_value()) {
         index_++;
       }
       return *this;
@@ -92,21 +93,21 @@ class deterministic_unordered_map {
     }
 
     bool operator !=(const const_iterator& o) const {
-      CHECK(&vector_ == &o.vector_);
+      CHECK(vector_ == o.vector_);
       return index_ != o.index_;
     }
 
     bool operator ==(const const_iterator& o) const {
-      CHECK(&vector_ == &o.vector_);
+      CHECK(vector_ == o.vector_);
       return index_ == o.index_;
     }
 
     const std::pair<Key, T>& operator *() const {
-      return vector_[index_].value();
+      return (*vector_)[index_].value();
     }
 
     const std::pair<Key, T>* operator ->() const {
-      return &vector_[index_].value();
+      return &(*vector_)[index_].value();
     }
   };
 
@@ -123,6 +124,8 @@ class deterministic_unordered_map {
     auto iter = map_.find(k);
     return iter != map_.end() ? const_iterator(iter->second, vector_) : end();
   }
+
+  bool contains(const Key& k) const { return map_.find(k) != map_.end(); }
 
   iterator begin() {
     for (size_t i = 0; i < vector_.size(); i++) {

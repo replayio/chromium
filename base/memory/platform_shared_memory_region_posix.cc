@@ -49,7 +49,7 @@ std::optional<FDAccessModeError> CheckFDAccessMode(int fd, int expected_mode) {
   // RUN-1685: Ignore the fcntl result after diverging from the recording,
   // the recorder will start returning errors and we don't want to crash the process.
   if (recordreplay::HasDivergedFromRecording())
-    return true;
+    return std::nullopt;
 
   if (fd_status == -1) {
     // TODO(crbug.com/40574272): convert to DLOG when bug fixed.

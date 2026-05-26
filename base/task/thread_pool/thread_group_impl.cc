@@ -924,7 +924,7 @@ ThreadGroupImpl::CreateAndRegisterWorkerLockRequired(
   DCHECK_LT(workers_.size(), kMaxNumberOfWorkers);
   DCHECK(idle_workers_set_.IsEmpty());
 
-  absl::optional<recordreplay::AutoDisallowEvents> disallow;
+  std::optional<recordreplay::AutoDisallowEvents> disallow;
   if (record_replay_unordered_)
     disallow.emplace("ThreadGroupImpl::CreateAndRegisterWorkerLockRequired");
 

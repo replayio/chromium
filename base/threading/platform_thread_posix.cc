@@ -228,7 +228,7 @@ PlatformThreadId PlatformThreadBase::CurrentId() {
 #elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   // Always use gettid() here to workaround bug where g_thread_id doesn't work
   // properly when replaying.
-  return (PlatformThreadId)syscall(__NR_gettid);
+  return PlatformThreadId(static_cast<pid_t>(syscall(__NR_gettid)));
   /*
   // Workaround false-positive MSAN use-of-uninitialized-value on
   // thread_local storage for loaded libraries:

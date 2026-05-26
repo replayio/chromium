@@ -242,7 +242,6 @@ std::unique_ptr<AggregatedRenderPass> CompositorRenderPass::DeepCopyAggregated()
                                            quad_list.size());
   copy_pass->SetAll(AggregatedRenderPassId::FromUnsafeValue(id.GetUnsafeValue()),
                     output_rect, damage_rect, transform_to_root_target,
-                    filters, backdrop_filters, backdrop_filter_bounds,
                     gfx::ContentColorUsage::kSRGB,
                     has_transparent_background, cache_render_pass,
                     has_damage_from_contributing_content, generate_mipmap);
@@ -268,7 +267,7 @@ std::unique_ptr<AggregatedRenderPass> CompositorRenderPass::DeepCopyAggregated()
     if (quad->material == DrawQuad::Material::kCompositorRenderPass) {
       const auto* pass_quad = CompositorRenderPassDrawQuad::MaterialCast(quad);
       auto nid = AggregatedRenderPassId::FromUnsafeValue(pass_quad->render_pass_id.GetUnsafeValue());
-      copy_pass->CopyFromAndAppendRenderPassDrawQuad(pass_quad, nid);
+      copy_pass->CopyFromAndAppendRenderPassDrawQuad(pass_quad, *this, nid);
     } else {
       copy_pass->CopyFromAndAppendDrawQuad(quad);
     }

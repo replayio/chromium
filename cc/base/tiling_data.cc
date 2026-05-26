@@ -233,7 +233,7 @@ gfx::Rect TilingData::TileBoundsWithBorder(int i, int j) const {
   recordreplay::Assert("TilingData::TileBoundsWithBorder %d %d %d %d %d %d %d",
                        i, j,
                        max_texture_size_.width(), max_texture_size_.height(), border_texels_,
-                       tiling_size_.width(), tiling_size_.height());
+                       tiling_rect_.width(), tiling_rect_.height());
 
   AssertTile(i, j);
   int max_texture_size_x = max_texture_size_.width() - 2 * border_texels_;

@@ -8,6 +8,8 @@
 #define BASE_RECORD_REPLAY_H_
 
 #include "base/check.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/synchronization/lock.h"
 #include "base/thread_annotations.h"
@@ -16,9 +18,11 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace base {
-  class DictionaryValue;
+  class DictValue;
 }
 
 namespace recordreplay {
@@ -93,7 +97,7 @@ bool HasDisabledFeatures();
  */
 void GetCurrentJSStack(std::string* stackTrace);
 
-void BrowserEvent(const char* msg, const base::DictionaryValue& info);
+void BrowserEvent(const char* msg, const base::DictValue& info);
 
 struct AutoPassThroughEvents {
   AutoPassThroughEvents() { BeginPassThroughEvents(); }
@@ -159,6 +163,23 @@ struct CompareByPointerId {
       return ida < idb;
     }
     return (uintptr_t)a < (uintptr_t)b;
+  }
+
+  // Overloads to support base::raw_ptr<T, Traits> keys (e.g. in std::set).
+  // raw_ptr has an implicit conversion to T*, but template type deduction
+  // does not trigger user-defined conversions, so we forward explicitly.
+  template <typename T, ::base::RawPtrTraits Traits = ::base::RawPtrTraits::kEmpty>
+  bool operator()(const ::base::raw_ptr<T, Traits>& a,
+                  const ::base::raw_ptr<T, Traits>& b) const {
+    return (*this)(a.get(), b.get());
+  }
+  template <typename T, ::base::RawPtrTraits Traits = ::base::RawPtrTraits::kEmpty>
+  bool operator()(const ::base::raw_ptr<T, Traits>& a, const T* b) const {
+    return (*this)(a.get(), b);
+  }
+  template <typename T, ::base::RawPtrTraits Traits = ::base::RawPtrTraits::kEmpty>
+  bool operator()(const T* a, const ::base::raw_ptr<T, Traits>& b) const {
+    return (*this)(a, b.get());
   }
 };
 
@@ -288,7 +309,7 @@ class SCOPED_LOCKABLE AutoLockMaybeEventsDisallowed {
   ~AutoLockMaybeEventsDisallowed() UNLOCK_FUNCTION();
 
  private:
-  base::Lock& lock_;
+  const base::raw_ref<base::Lock> lock_;
 };
 
 // For releasing ordered locks when events might be disallowed. Passes through
@@ -299,7 +320,7 @@ class SCOPED_LOCKABLE AutoUnlockMaybeEventsDisallowed {
   ~AutoUnlockMaybeEventsDisallowed();
 
  private:
-  base::Lock& lock_;
+  const base::raw_ref<base::Lock> lock_;
 };
 
 // Returns whether dependency graph APIs need to be called.

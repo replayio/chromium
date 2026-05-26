@@ -152,8 +152,8 @@ WorkerThread::WorkerThread(ThreadType thread_type_hint,
       flow_terminator_(flow_terminator == nullptr
                            ? reinterpret_cast<intptr_t>(this)
                            : reinterpret_cast<intptr_t>(flow_terminator)),
-      delegate_(std::move(delegate)),
-      record_replay_unordered_(recordreplay::AreEventsDisallowed()) {
+      record_replay_unordered_(recordreplay::AreEventsDisallowed()),
+      delegate_(std::move(delegate)) {
   CHECK(task_tracker_);
   CHECK(CanUseBackgroundThreadTypeForWorkerThread() ||
         thread_type_hint_ != ThreadType::kBackground);

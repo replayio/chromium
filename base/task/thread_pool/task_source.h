@@ -258,6 +258,10 @@ class BASE_EXPORT TaskSource : public RefCountedThreadSafe<TaskSource> {
   // The cached thread_type for atomic access.
   std::atomic<ThreadType> thread_type_racy_;
 
+  // The cached priority for atomic access. Maintained by Replay for
+  // record/replay determinism (see out-of-line priority_racy() in .cc).
+  std::atomic<TaskPriority> priority_racy_;
+
   const ThreadType originating_thread_type_;
 
   // Synchronizes access to all members.

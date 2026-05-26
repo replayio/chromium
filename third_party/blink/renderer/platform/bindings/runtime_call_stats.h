@@ -117,12 +117,9 @@ class PLATFORM_EXPORT RuntimeCallTimer {
   raw_ptr<const base::TickClock> clock_ = nullptr;
 };
 
-static inline bool BlinkRuntimeCallStatsEnabled() {
-  // Force-disable call stats when recording/replaying, as calls can occur at
-  // non-deterministic points and will also bloat the recording.
-  return UNLIKELY(RuntimeEnabledFeatures::BlinkRuntimeCallStatsEnabled()
-               && !v8::recordreplay::IsRecordingOrReplaying("no-call-stats"));
-}
+// Force-disable call stats when recording/replaying, as calls can occur at
+// non-deterministic points and will also bloat the recording.
+PLATFORM_EXPORT bool BlinkRuntimeCallStatsEnabled();
 
 // Macros that take RuntimeCallStats as a parameter; used only in
 // RuntimeCallStatsTest.

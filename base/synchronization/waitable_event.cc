@@ -36,7 +36,7 @@ WaitableEvent::~WaitableEvent() {
 }
 
 void WaitableEvent::Signal() {
-  absl::optional<recordreplay::AutoDisallowEvents> disallow;
+  std::optional<recordreplay::AutoDisallowEvents> disallow;
   if (!record_replay_ordered_lock_id_)
     disallow.emplace("WaitableEvent::Signal");
 
@@ -59,7 +59,7 @@ bool WaitableEvent::TimedWait(TimeDelta wait_delta, const Location& location) {
     return IsSignaled();
   }
 
-  absl::optional<recordreplay::AutoDisallowEvents> disallow;
+  std::optional<recordreplay::AutoDisallowEvents> disallow;
   if (!record_replay_ordered_lock_id_)
     disallow.emplace("WaitableEvent::TimedWait");
 

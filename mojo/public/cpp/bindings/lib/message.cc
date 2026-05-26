@@ -600,7 +600,7 @@ bool Message::DeserializeAssociatedEndpointHandles(
 
       // https://linear.app/replay/issue/RUN-1228
       recordreplay::Assert("[RUN-1228] MessageWrapper::DeserializeAssociatedEndpointHandles %u id=%u",
-        i, ids[i]);
+        i, UNSAFE_TODO(ids[i]));
     }
 
     endpoint_handles.push_back(std::move(handle));

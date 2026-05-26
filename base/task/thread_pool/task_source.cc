@@ -38,6 +38,8 @@ void TaskSource::Transaction::UpdatePriority(TaskPriority priority) {
   task_source_->traits_.UpdatePriority(priority);
   task_source_->thread_type_racy_.store(TaskPriorityToThreadType(priority),
                                         std::memory_order_relaxed);
+  task_source_->priority_racy_.store(task_source_->traits_.priority(),
+                                     std::memory_order_relaxed);
 }
 
 ThreadType TaskSource::Transaction::thread_type() const {
@@ -82,6 +84,7 @@ TaskSource::TaskSource(const TaskTraits& traits,
                        ThreadType originating_thread_type)
     : traits_(traits),
       thread_type_racy_(EffectiveThreadType(traits, originating_thread_type)),
+      priority_racy_(traits.priority()),
       originating_thread_type_(originating_thread_type),
       lock_(recordreplay::AreEventsDisallowed() ? nullptr : "TaskSource.lock_"),
       execution_mode_(execution_mode) {}
