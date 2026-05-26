@@ -94,7 +94,7 @@ class PLATFORM_EXPORT AgentGroupSchedulerImpl : public AgentGroupScheduler {
   scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner_;
   const raw_ref<MainThreadSchedulerImpl, DanglingUntriaged>
       main_thread_scheduler_;  // Not owned.
-  HeapHashSet<WeakMember<Agent>, WTF::MemberHashRecordReplayId<Agent>> agents_;
+  HeapHashSet<WeakMember<Agent>, WTF::WeakMemberHashRecordReplayId<Agent>> agents_;
   HeapHashSet<Member<Agent>> replay_agents_strong_;
   HashSet<PageSchedulerImpl*> page_schedulers_;
   std::map<base::UnguessableToken, int> num_visible_frames_per_agent_

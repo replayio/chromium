@@ -538,7 +538,7 @@ class PLATFORM_EXPORT Resource : public GarbageCollected<Resource>,
   String GetMemoryDumpName() const;
 
   const HeapHashCountedSet<WeakMember<ResourceClient>,
-                           WTF::MemberHashRecordReplayId<ResourceClient>>&
+                           WTF::WeakMemberHashRecordReplayId<ResourceClient>>&
   Clients() const {
     return clients_;
   }
@@ -621,13 +621,13 @@ class PLATFORM_EXPORT Resource : public GarbageCollected<Resource>,
   Vector<RedirectPair> redirect_chain_;
 
   HeapHashCountedSet<WeakMember<ResourceClient>,
-                     WTF::MemberHashRecordReplayId<ResourceClient>> clients_;
+                     WTF::WeakMemberHashRecordReplayId<ResourceClient>> clients_;
   HeapHashCountedSet<WeakMember<ResourceClient>,
-                     WTF::MemberHashRecordReplayId<ResourceClient>> clients_awaiting_callback_;
+                     WTF::WeakMemberHashRecordReplayId<ResourceClient>> clients_awaiting_callback_;
   HeapHashCountedSet<WeakMember<ResourceClient>,
-                     WTF::MemberHashRecordReplayId<ResourceClient>> finished_clients_;
+                     WTF::WeakMemberHashRecordReplayId<ResourceClient>> finished_clients_;
   HeapHashSet<WeakMember<ResourceFinishObserver>,
-              WTF::MemberHashRecordReplayId<ResourceFinishObserver>> finish_observers_;
+              WTF::WeakMemberHashRecordReplayId<ResourceFinishObserver>> finish_observers_;
 
   // RUN-1724: Keep strong references to prevent above data structures from becoming
   // divergent.

@@ -151,16 +151,16 @@ struct MaybeValidTraits<blink::WeakPersistent<T>> {
 
 }  // namespace base
 
-namespace WTF {
+namespace blink {
 
 // Some type trait implementations for Persistent<> and WeakPersistent<>.
 
 template <typename T>
-struct IsPointerType<blink::Persistent<T>> : std::true_type {};
+struct IsPointerType<Persistent<T>> : std::true_type {};
 
 template <typename T>
-struct IsPointerType<blink::WeakPersistent<T>> : std::true_type {};
+struct IsPointerType<WeakPersistent<T>> : std::true_type {};
 
-}  // namespace WTF
+}  // namespace blink
 
 #endif  // THIRD_PARTY_BLINK_RENDERER_PLATFORM_HEAP_PERSISTENT_H_

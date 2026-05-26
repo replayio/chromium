@@ -260,6 +260,17 @@ template <typename T>
 struct HashTraits<blink::UntracedMember<T>> : UntracedMemberHashTraits<T> {};
 
 template <typename T>
+using MemberHashRecordReplayId = MemberHashTraits<T>;
+template <typename T>
+using WeakMemberHashRecordReplayId = WeakMemberHashTraits<T>;
+template <typename T>
+using UntracedMemberHashRecordReplayId = UntracedMemberHashTraits<T>;
+
+}  // namespace WTF
+
+namespace blink {
+
+template <typename T>
 class MemberConstructTraits {
   STATIC_ONLY(MemberConstructTraits);
 
@@ -310,7 +321,7 @@ class ConstructTraits<WeakMember<T>, Traits, Allocator> final
 
 }  // namespace blink
 
-namespace WTF {
+namespace blink {
 
 template <typename T>
 struct IsPointerType<blink::WeakMember<T>> : std::true_type {};
@@ -318,6 +329,6 @@ struct IsPointerType<blink::WeakMember<T>> : std::true_type {};
 template <typename T>
 struct IsPointerType<blink::Member<T>> : std::true_type {};
 
-}  // namespace WTF
+}  // namespace blink
 
 #endif  // THIRD_PARTY_BLINK_RENDERER_PLATFORM_HEAP_MEMBER_H_

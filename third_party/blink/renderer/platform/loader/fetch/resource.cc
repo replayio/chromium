@@ -76,7 +76,7 @@ namespace blink {
 namespace {
 
 void NotifyFinishObservers(
-    GCedHeapHashSet<WeakMember<ResourceFinishObserver>, WTF::MemberHashRecordReplayId<ResourceFinishObserver>>* observers,
+    GCedHeapHashSet<WeakMember<ResourceFinishObserver>, WTF::WeakMemberHashRecordReplayId<ResourceFinishObserver>>* observers,
     HeapVector<Member<ResourceFinishObserver>>* observers_strong) {
   for (const auto& observer : *observers)
     observer->NotifyFinished();
@@ -354,7 +354,7 @@ void Resource::TriggerNotificationForFinishObservers(
 
 
   auto* new_collections =
-      MakeGarbageCollected<GCedHeapHashSet<WeakMember<ResourceFinishObserver>, WTF::MemberHashRecordReplayId<ResourceFinishObserver>>>(
+      MakeGarbageCollected<GCedHeapHashSet<WeakMember<ResourceFinishObserver>, WTF::WeakMemberHashRecordReplayId<ResourceFinishObserver>>>(
           std::move(finish_observers_));
   finish_observers_.clear();
 
