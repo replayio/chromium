@@ -311,6 +311,7 @@ class CORE_EXPORT MessageEvent final : public Event {
   // to the agent cluster.
   bool locked_to_agent_cluster_ = false;
   uint64_t trace_id_;
+  int record_replay_dependency_graph_node_id_ = 0;
 };
 
 }  // namespace blink
