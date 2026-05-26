@@ -2213,7 +2213,13 @@ void StyleEngine::ApplyRuleSetInvalidationForElement(
   unsigned rule_set_group_index = 0;
   RuleSetGroup rule_set_group(rule_set_group_index++);
   bool matched_any = false;
-  for (const Member<RuleSet>& rule_set : rule_sets) {
+  HeapVector<Member<RuleSet>> rule_sets_vector;
+  for (const auto& rule_set : rule_sets) {
+    rule_sets_vector.push_back(rule_set);
+  }
+  std::sort(rule_sets_vector.begin(), rule_sets_vector.end(),
+            recordreplay::CompareMemberByPointerId<Member<RuleSet>>());
+  for (const Member<RuleSet>& rule_set : rule_sets_vector) {
     rule_set_group.AddRuleSet(rule_set.Get());
     if (rule_set_group.IsFull()) {
       MatchRequest match_request(rule_set_group, &tree_scope.RootNode(),
@@ -2529,7 +2535,13 @@ void StyleEngine::ApplyRuleSetInvalidationForTreeScope(
       // recalc, or if the host is not rendered.
       return;
     }
+    HeapVector<Member<RuleSet>> rule_sets_vector;
     for (const auto& rule_set : rule_sets) {
+      rule_sets_vector.push_back(rule_set);
+    }
+    std::sort(rule_sets_vector.begin(), rule_sets_vector.end(),
+              recordreplay::CompareMemberByPointerId<Member<RuleSet>>());
+    for (const auto& rule_set : rule_sets_vector) {
       if (rule_set->HasSlottedRules()) {
         invalidate_slotted = true;
         break;
@@ -2547,7 +2559,13 @@ void StyleEngine::ApplyRuleSetInvalidationForTreeScope(
   //
   // We do a similar thing for :part(), descending into all shadows.
   if (invalidation_scope != kInvalidateAllScopes) {
+    HeapVector<Member<RuleSet>> rule_sets_vector;
     for (const auto& rule_set : rule_sets) {
+      rule_sets_vector.push_back(rule_set);
+    }
+    std::sort(rule_sets_vector.begin(), rule_sets_vector.end(),
+              recordreplay::CompareMemberByPointerId<Member<RuleSet>>());
+    for (const auto& rule_set : rule_sets_vector) {
       if (rule_set->HasUAShadowPseudoElementRules() ||
           rule_set->HasPartPseudoRules()) {
         invalidation_scope = kInvalidateAllScopes;
