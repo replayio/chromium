@@ -55,6 +55,7 @@ constinit thread_local bool g_is_main_thread = false;
 
 base::PlatformThreadId g_main_thread_identifier;
 
+/*
 #if BUILDFLAG(IS_ANDROID)
 // On Android going through libc (gettid) is faster than runtime-lib emulation.
 bool IsMainThread() {
