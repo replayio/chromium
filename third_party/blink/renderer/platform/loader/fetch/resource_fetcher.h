@@ -647,8 +647,8 @@ class PLATFORM_EXPORT ResourceFetcher
   // document where |Resource::IsLoaded| might be false. The is used for
   // performance optimizations and might still contain images which are actually
   // loaded.
-  HeapHashSet<WeakMember<Resource>, WTF::MemberHashRecordReplayRegisteredPointerId<Resource>> not_loaded_image_resources_;
-  HeapHashSet<WeakMember<Resource>, WTF::MemberHashRecordReplayRegisteredPointerId<Resource>> speculative_decode_candidate_images_;
+  HeapHashSet<WeakMember<Resource>, WTF::WeakMemberHashRecordReplayRegisteredPointerId<Resource>> not_loaded_image_resources_;
+  HeapHashSet<WeakMember<Resource>, WTF::WeakMemberHashRecordReplayRegisteredPointerId<Resource>> speculative_decode_candidate_images_;
 
   HeapHashMap<PreloadKey, Member<Resource>> preloads_;
   HeapVector<Member<Resource>> matched_preloads_;

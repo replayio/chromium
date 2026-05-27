@@ -157,7 +157,7 @@ class CORE_EXPORT DevToolsAgent : public GarbageCollected<DevToolsAgent>,
   scoped_refptr<base::SingleThreadTaskRunner> io_task_runner_;
   HashMap<WorkerThread*,
           std::unique_ptr<WorkerData>,
-          WTF::MemberHashRecordReplayRegisteredPointerId<WorkerThread>>
+          WTF::RawPtrHashRecordReplayRegisteredPointerId<WorkerThread>>
       unreported_child_worker_threads_;
   IOAgent* io_agent_{nullptr};
   bool report_child_workers_ = false;
