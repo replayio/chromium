@@ -7,6 +7,7 @@
 
 // Methods for notifying the recorder about activity related to network requests.
 
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "base/record_replay.h"
 
 namespace blink {
@@ -30,7 +31,8 @@ void OnNetworkResourceRedirect(uint64_t inspector_id, const blink::KURL& new_url
                                blink::ResourceRequest* new_request);
 
 void OnNetworkReceiveResponse(uint64_t inspector_id,
-                                 const blink::ResourceResponse& response);
+                              const blink::ResourceResponse& response,
+                              absl::optional<bool> response_from_cache = absl::nullopt);
 
 void OnNetworkReceiveData(uint64_t inspector_id, const char* data, int length);
 

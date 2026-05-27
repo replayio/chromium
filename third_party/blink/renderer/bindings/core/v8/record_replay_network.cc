@@ -281,7 +281,8 @@ void OnNetworkResourceRedirect(uint64_t inspector_id, const blink::KURL& new_url
 }
 
 void OnNetworkReceiveResponse(uint64_t inspector_id,
-                              const blink::ResourceResponse& response) {
+                              const blink::ResourceResponse& response,
+                              absl::optional<bool> response_from_cache) {
   if (!PermitRecordReplayBrowserEvents()) {
     return;
   }
@@ -300,7 +301,8 @@ void OnNetworkReceiveResponse(uint64_t inspector_id,
   dict.SetString("responseProtocolVersion", http_version);
   dict.SetDoubleKey("responseStatus", response.HttpStatusCode());
   dict.SetString("responseStatusText", response.HttpStatusText().Utf8());
-  dict.SetBoolean("responseFromCache", response.WasCached());
+  dict.SetBoolean("responseFromCache",
+                  response_from_cache.value_or(response.WasCached()));
   BrowserEvent("Network.DidReceiveResponse", dict);
 }
 
