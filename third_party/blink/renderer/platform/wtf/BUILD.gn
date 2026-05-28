@@ -99,6 +99,7 @@ component("wtf") {
     "pod_interval_tree.h",
     "pod_red_black_tree.h",
     "ref_counted.h",
+    "replay_pointer_id_hash_traits.h",
     "sanitizers.h",
     "sequence_bound.h",
     "shared_buffer.cc",

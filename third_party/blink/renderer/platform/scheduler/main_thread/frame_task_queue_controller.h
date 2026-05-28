@@ -10,7 +10,6 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
-#include "base/record_replay.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_task_queue.h"
 #include "third_party/blink/renderer/platform/scheduler/public/web_scheduling_priority.h"
@@ -18,6 +17,7 @@
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
+#include "third_party/blink/renderer/platform/wtf/replay_pointer_id_hash_traits.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
 
@@ -125,7 +125,7 @@ class PLATFORM_EXPORT FrameTaskQueueController {
   using TaskQueueEnabledVoterMap = HashMap<
       scoped_refptr<MainThreadTaskQueue>,
       std::unique_ptr<base::sequence_manager::TaskQueue::QueueEnabledVoter>,
-      recordreplay::ReplayRefPointerIdHash<MainThreadTaskQueue>>;
+      recordreplay::ReplayRefPointerIdHashTraits<MainThreadTaskQueue>>;
 
   // QueueEnabledVoters for the task queues we've created.
   TaskQueueEnabledVoterMap task_queue_enabled_voters_;

@@ -800,7 +800,7 @@ void BaseAudioContext::HandleStoppableSourceNodes() {
   DCHECK(IsAudioThread());
   AssertGraphOwner();
 
-  HashSet<scoped_refptr<AudioHandler>, recordreplay::ReplayRefPointerIdHash<AudioHandler>>* active_source_handlers =
+  HashSet<scoped_refptr<AudioHandler>, recordreplay::ReplayRefPointerIdHashTraits<AudioHandler>>* active_source_handlers =
       GetDeferredTaskHandler().GetActiveSourceHandlers();
 
   if (active_source_handlers->size()) {

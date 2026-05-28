@@ -261,46 +261,6 @@ inline unsigned HashInt(uint64_t key) {
   return static_cast<unsigned>(key);
 }
 
-// Replay's hashing function for pointers, using the registered pointer id.
-template <typename T>
-struct ReplayPointerIdHash {
-  static unsigned GetHash(T* key) {
-    if (!IsRecordingOrReplaying("pointer-ids")) {
-      return HashInt((uint64_t)key);
-    }
-
-    int ptr = PointerId(key);
-    CHECK(ptr != 0);
-    return HashInt((uint32_t)ptr);
-  }
-  static bool Equal(T* a, T* b) { return a == b; }
-  static bool Equal(std::nullptr_t, T* b) { return !b; }
-  static bool Equal(T* a, std::nullptr_t) { return !a; }
-  static const bool safe_to_compare_to_empty_or_deleted = true;
-};
-
-// Replay's hashing function for scoped pointers, using the registered pointer id.
-template <typename T>
-struct ReplayRefPointerIdHash : ReplayPointerIdHash<T> {
-  using ReplayPointerIdHash<T>::GetHash;
-  static unsigned GetHash(const scoped_refptr<T>& key) {
-    if (!IsRecordingOrReplaying("pointer-ids")) {
-      return HashInt((uint64_t)key.get());
-    }
-
-    int ptr = PointerId(key.get());
-    CHECK(ptr != 0);
-    return HashInt((uint32_t)ptr);
-  }
-  using ReplayPointerIdHash<T>::Equal;
-  static bool Equal(const scoped_refptr<T>& a, const scoped_refptr<T>& b) {
-    return a == b;
-  }
-  static bool Equal(T* a, const scoped_refptr<T>& b) { return a == b; }
-  static bool Equal(const scoped_refptr<T>& a, T* b) { return a == b; }
-};
-
-
 // For taking ordered locks when events might be disallowed. Passes through
 // events during the acquire to avoid generating a warning.
 class SCOPED_LOCKABLE AutoLockMaybeEventsDisallowed {
