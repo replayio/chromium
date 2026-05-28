@@ -19,8 +19,6 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#include "base/hash/md5.h"
-#include "base/strings/string_piece_forward.h"
 #include "third_party/blink/renderer/platform/network/encoded_form_data.h"
 
 #include "base/check_is_test.h"

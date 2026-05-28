@@ -3036,7 +3036,7 @@ class CORE_EXPORT Document : public ContainerNode,
   Member<Document> template_document_;
   Member<Document> template_document_host_;
 
-  HeapHashSet<Member<SVGUseElement>, WTF::MemberHashRecordReplayId<SVGUseElement>> use_elements_needing_update_;
+  HeapHashSet<Member<SVGUseElement>, blink::MemberHashRecordReplayId<SVGUseElement>> use_elements_needing_update_;
   // SVG resources ("resource elements") for which NotifyContentChanged() needs
   // to be called to notify any clients about a change in layout attachment
   // state. Should be populated during layout detach or style recalc, and be

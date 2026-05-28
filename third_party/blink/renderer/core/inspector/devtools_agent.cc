@@ -198,7 +198,7 @@ void DevToolsAgent::Trace(Visitor* visitor) const {
 
 void DevToolsAgent::Dispose() {
   HeapHashSet<Member<DevToolsSession>,
-              WTF::MemberHashRecordReplayId<DevToolsSession>>
+              blink::MemberHashRecordReplayId<DevToolsSession>>
       copy(sessions_);
   for (auto& session : copy)
     session->Detach();

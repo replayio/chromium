@@ -141,11 +141,8 @@ struct IsPointerType<scoped_refptr<T>> : std::true_type {};
 template <typename T>
 struct IsPointerType<base::WeakPtr<T>> : std::true_type {};
 
-template <>
-struct IsPointerType<base::internal::WeakPtrBase> : std::true_type {};
-
-template <typename T, typename U>
-struct IsPointerType<raw_ptr<T, U>> : std::true_type {};
+template <typename T, base::RawPtrTraits Traits>
+struct IsPointerType<raw_ptr<T, Traits>> : std::true_type {};
 
 template <typename T>
 constexpr bool IsPointerTypeV = IsPointerType<T>::value;

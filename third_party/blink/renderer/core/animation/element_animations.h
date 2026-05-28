@@ -48,10 +48,10 @@ class CSSAnimations;
 
 using AnimationCountedSet =
     HeapHashCountedSet<WeakMember<Animation>,
-                       WTF::WeakMemberHashRecordReplayId<Animation>>;
+                       blink::WeakMemberHashRecordReplayId<Animation>>;
 using WorkletAnimationSet =
     HeapHashSet<WeakMember<WorkletAnimationBase>,
-                WTF::WeakMemberHashRecordReplayId<WorkletAnimationBase>>;
+                blink::WeakMemberHashRecordReplayId<WorkletAnimationBase>>;
 
 class CORE_EXPORT ElementAnimations final
     : public GarbageCollected<ElementAnimations>,

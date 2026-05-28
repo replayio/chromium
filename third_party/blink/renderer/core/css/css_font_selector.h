@@ -88,7 +88,7 @@ class CORE_EXPORT CSSFontSelector : public CSSFontSelectorBase {
   // currently leak because ComputedStyle and its data are not on the heap.
   // See crbug.com/383860 for details.
   WeakMember<const TreeScope> tree_scope_;
-  HeapHashSet<WeakMember<FontSelectorClient>, WTF::WeakMemberHashRecordReplayId<FontSelectorClient>> clients_;
+  HeapHashSet<WeakMember<FontSelectorClient>, blink::WeakMemberHashRecordReplayId<FontSelectorClient>> clients_;
   HeapHashSet<Member<FontSelectorClient>> record_replay_strong_clients_;
 };
 

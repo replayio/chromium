@@ -432,7 +432,7 @@ void LayerImpl::PushPropertiesTo(LayerImpl* layer) {
   DCHECK(layer->IsActive());
 
   recordreplay::Assert("[RUN-550-1329] LayerImpl::PushPropertiesTo %d %d %llu",
-                       transform_tree_index_, layer_id_, element_id_.GetStableId());
+                       transform_tree_index_, layer_id_, element_id_.GetInternalValue());
 
   if (GetChangeFlag(kChangedPropertyTreeIndex)) {
     layer->transform_tree_index_ = transform_tree_index_;

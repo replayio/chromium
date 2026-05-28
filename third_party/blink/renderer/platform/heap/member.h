@@ -325,7 +325,7 @@ template <typename T>
 using RawPtrHashRecordReplayRegisteredPointerId =
     PointerIdHashTraitsMixin<T, HashTraits<T*>>;
 
-}  // namespace WTF
+}  // namespace blink
 
 namespace blink {
 

@@ -1109,8 +1109,9 @@ void ProxyImpl::RecordReplayRepaint() {
                                                          now,
                                                          now,
                                                          viz::BeginFrameArgs::DefaultInterval(),
-                                                         viz::BeginFrameArgs::NORMAL, 
-                                                         true /*replay_force_draw*/);
+                                                         viz::BeginFrameArgs::NORMAL,
+                                                         base::TimeDelta() /*unthrottled_interval*/,
+                                                         true /*replay_force_redraw*/);
   scheduler_->OnBeginFrameDerivedImpl(args);
 }
 

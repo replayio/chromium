@@ -7,6 +7,7 @@
 
 #include "base/task/common/lazy_now.h"
 #include "base/time/time.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/scheduler/common/throttling/task_queue_throttler.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
@@ -100,7 +101,7 @@ class PLATFORM_EXPORT BudgetPool {
 
   const char* name_;  // NOT OWNED
 
-  HashSet<TaskQueueThrottler*, WTF::RawPtrHashRecordReplayRegisteredPointerId<TaskQueueThrottler>> associated_throttlers_;
+  HashSet<TaskQueueThrottler*, blink::RawPtrHashRecordReplayRegisteredPointerId<TaskQueueThrottler>> associated_throttlers_;
   bool is_enabled_;
 };
 

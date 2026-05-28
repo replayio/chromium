@@ -218,7 +218,7 @@ class CORE_EXPORT IntersectionObserver final
   const HeapLinkedHashSet<
       WeakMember<IntersectionObservation>,
       HashTraits<WeakMember<IntersectionObservation>>,
-      WTF::MemberHashRecordReplayRegisteredPointerId<IntersectionObservation>
+      blink::MemberHashRecordReplayRegisteredPointerId<IntersectionObservation>
     >& Observations() {
     return observations_;
   }
@@ -238,11 +238,11 @@ class CORE_EXPORT IntersectionObserver final
   HeapLinkedHashSet<
     WeakMember<IntersectionObservation>,
     HashTraits<WeakMember<IntersectionObservation>>,
-    WTF::MemberHashRecordReplayRegisteredPointerId<IntersectionObservation>
+    blink::MemberHashRecordReplayRegisteredPointerId<IntersectionObservation>
   > observations_;
   HeapLinkedHashSet<Member<IntersectionObservation>> replay_strong_observations_;
   // Observations that have updates waiting to be delivered
-  HeapHashSet<Member<IntersectionObservation>, WTF::MemberHashRecordReplayRegisteredPointerId<IntersectionObservation>> active_observations_;
+  HeapHashSet<Member<IntersectionObservation>, blink::MemberHashRecordReplayRegisteredPointerId<IntersectionObservation>> active_observations_;
   const Vector<float> thresholds_;
   const base::TimeDelta delay_;
   const Vector<Length> margin_;

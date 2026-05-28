@@ -180,7 +180,7 @@ bool PictureLayerTiling::SetRasterSourceAndResize(
     scoped_refptr<RasterSource> raster_source) {
   // https://linear.app/replay/issue/RUN-885
   recordreplay::Assert("PictureLayerTiling::SetRasterSourceAndResize %d %d",
-                       raster_source->GetSize().width(), raster_source->GetSize().height());
+                       raster_source->size().width(), raster_source->size().height());
 
   DCHECK(!raster_source->IsSolidColor());
   raster_source_ = std::move(raster_source);
@@ -329,7 +329,6 @@ void PictureLayerTiling::RemoveTilesInRegion(const Region& layer_invalidation,
       Tile::CreateInfo info = CreateInfoForTile(index.i, index.j);
       if (Tile* tile = CreateTile(info))
         tile->SetInvalidated(invalid_content_rect, old_tile->id());
-      }
     }
   }
 }

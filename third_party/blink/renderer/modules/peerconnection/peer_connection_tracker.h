@@ -326,7 +326,7 @@ class MODULES_EXPORT PeerConnectionTracker
   typedef HashMap<
         RTCPeerConnectionHandler*,
         int,
-        WTF::MemberHashRecordReplayId<RTCPeerConnectionHandler>
+        blink::MemberHashRecordReplayId<RTCPeerConnectionHandler>
     > PeerConnectionLocalIdMap;
   PeerConnectionLocalIdMap peer_connection_local_id_map_;
   mojom::blink::DeviceThermalState current_thermal_state_ =

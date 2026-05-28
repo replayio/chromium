@@ -430,7 +430,7 @@ void SVGElement::AddInstance(SVGElement* instance) {
   DCHECK(instance);
   DCHECK(instance->InUseShadowTree());
 
-  HeapHashSet<WeakMember<SVGElement>, WTF::WeakMemberHashRecordReplayId<SVGElement>>& instances =
+  HeapHashSet<WeakMember<SVGElement>, blink::WeakMemberHashRecordReplayId<SVGElement>>& instances =
       EnsureSVGRareData()->ElementInstances();
   DCHECK(!instances.Contains(instance));
 
@@ -445,7 +445,7 @@ void SVGElement::RemoveInstance(SVGElement* instance) {
   // Called during instance->RemovedFrom() after removal from shadow tree
   DCHECK(!instance->isConnected());
 
-  HeapHashSet<WeakMember<SVGElement>, WTF::WeakMemberHashRecordReplayId<SVGElement>>& instances =
+  HeapHashSet<WeakMember<SVGElement>, blink::WeakMemberHashRecordReplayId<SVGElement>>& instances =
       SvgRareData()->ElementInstances();
 
   instances.erase(instance);
@@ -454,7 +454,7 @@ void SVGElement::RemoveInstance(SVGElement* instance) {
     EnsureSVGRareData()->ReplayStrongElementInstances().erase(instance);
 }
 
-using ReplaySVGElementSet = HeapHashSet<WeakMember<SVGElement>, WTF::WeakMemberHashRecordReplayId<SVGElement>>;
+using ReplaySVGElementSet = HeapHashSet<WeakMember<SVGElement>, blink::WeakMemberHashRecordReplayId<SVGElement>>;
 
 static ReplaySVGElementSet& EmptyInstances() {
   using EmptyInstanceHolder = DisallowNewWrapper<ReplaySVGElementSet>;
@@ -463,7 +463,7 @@ static ReplaySVGElementSet& EmptyInstances() {
   return empty_instances->Value();
 }
 
-const HeapHashSet<WeakMember<SVGElement>, WTF::WeakMemberHashRecordReplayId<SVGElement>>& SVGElement::InstancesForElement()
+const HeapHashSet<WeakMember<SVGElement>, blink::WeakMemberHashRecordReplayId<SVGElement>>& SVGElement::InstancesForElement()
     const {
   if (!HasSVGRareData())
     return EmptyInstances();
@@ -616,7 +616,7 @@ bool SVGElement::HaveLoadedRequiredResources() {
 
 static inline void CollectInstancesForSVGElement(
     SVGElement* element,
-    HeapHashSet<WeakMember<SVGElement>, WTF::WeakMemberHashRecordReplayId<SVGElement>>& instances) {
+    HeapHashSet<WeakMember<SVGElement>, blink::WeakMemberHashRecordReplayId<SVGElement>>& instances) {
   DCHECK(element);
   if (element->ContainingShadowRoot())
     return;
@@ -631,7 +631,7 @@ void SVGElement::AddedEventListener(
   Node::AddedEventListener(event_type, registered_listener);
 
   // Add event listener to all shadow tree DOM element instances
-  HeapHashSet<WeakMember<SVGElement>, WTF::WeakMemberHashRecordReplayId<SVGElement>> instances;
+  HeapHashSet<WeakMember<SVGElement>, blink::WeakMemberHashRecordReplayId<SVGElement>> instances;
   CollectInstancesForSVGElement(this, instances);
   AddEventListenerOptionsResolved* options = registered_listener.Options();
   EventListener* listener = registered_listener.Callback();
@@ -648,7 +648,7 @@ void SVGElement::RemovedEventListener(
   Node::RemovedEventListener(event_type, registered_listener);
 
   // Remove event listener from all shadow tree DOM element instances
-  HeapHashSet<WeakMember<SVGElement>, WTF::WeakMemberHashRecordReplayId<SVGElement>> instances;
+  HeapHashSet<WeakMember<SVGElement>, blink::WeakMemberHashRecordReplayId<SVGElement>> instances;
   CollectInstancesForSVGElement(this, instances);
   EventListenerOptions* options = registered_listener.Options();
   const EventListener* listener = registered_listener.Callback();
@@ -935,7 +935,7 @@ void SVGElement::InvalidateStyleAttribute(
 }
 
 void SVGElement::InvalidateInstances() {
-  const HeapHashSet<WeakMember<SVGElement>, WTF::WeakMemberHashRecordReplayId<SVGElement>>& set = InstancesForElement();
+  const HeapHashSet<WeakMember<SVGElement>, blink::WeakMemberHashRecordReplayId<SVGElement>>& set = InstancesForElement();
   if (set.empty())
     return;
 
@@ -958,7 +958,7 @@ void SVGElement::InvalidateInstances() {
 void SVGElement::SetNeedsStyleRecalcForInstances(
     StyleChangeType change_type,
     const StyleChangeReasonForTracing& reason) {
-  const HeapHashSet<WeakMember<SVGElement>, WTF::WeakMemberHashRecordReplayId<SVGElement>>& set = InstancesForElement();
+  const HeapHashSet<WeakMember<SVGElement>, blink::WeakMemberHashRecordReplayId<SVGElement>>& set = InstancesForElement();
   if (set.empty())
     return;
 

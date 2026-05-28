@@ -34,7 +34,7 @@ class CORE_EXPORT SlotAssignmentEngine final
   void Trace(Visitor*) const;
 
  private:
-  HeapHashSet<WeakMember<ShadowRoot>, WTF::WeakMemberHashRecordReplayId<ShadowRoot>> shadow_roots_needing_recalc_;
+  HeapHashSet<WeakMember<ShadowRoot>, blink::WeakMemberHashRecordReplayId<ShadowRoot>> shadow_roots_needing_recalc_;
 };
 
 }  // namespace blink

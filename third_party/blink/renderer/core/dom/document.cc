@@ -3227,7 +3227,7 @@ void Document::UpdateUseShadowTreesIfNeeded() {
 
   // Breadth-first search since nested use elements add to the queue.
   while (!use_elements_needing_update_.empty()) {
-    HeapHashSet<Member<SVGUseElement>, WTF::MemberHashRecordReplayId<SVGUseElement>> elements;
+    HeapHashSet<Member<SVGUseElement>, blink::MemberHashRecordReplayId<SVGUseElement>> elements;
     use_elements_needing_update_.swap(elements);
 
     for (SVGUseElement* element : elements)

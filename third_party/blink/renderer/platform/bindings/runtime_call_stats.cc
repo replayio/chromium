@@ -24,8 +24,8 @@ namespace blink {
 bool BlinkRuntimeCallStatsEnabled() {
   // Force-disable call stats when recording/replaying, as calls can occur at
   // non-deterministic points and will also bloat the recording.
-  return UNLIKELY(RuntimeEnabledFeatures::BlinkRuntimeCallStatsEnabled()
-               && !v8::recordreplay::IsRecordingOrReplaying("no-call-stats"));
+  return RuntimeEnabledFeatures::BlinkRuntimeCallStatsEnabled()
+         && !v8::recordreplay::IsRecordingOrReplaying("no-call-stats");
 }
 
 void LogRuntimeCallStats(v8::Isolate* isolate) {

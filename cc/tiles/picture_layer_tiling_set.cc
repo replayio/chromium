@@ -175,7 +175,7 @@ void PictureLayerTilingSet::UpdateTilingsToCurrentRasterSourceForCommit(
     float maximum_contents_scale) {
   // https://linear.app/replay/issue/RUN-885
   recordreplay::Assert("PictureLayerTilingSet::UpdateTilingsToCurrentRasterSourceForCommit %d %d",
-                       raster_source->GetSize().width(), raster_source->GetSize().height());
+                       raster_source->size().width(), raster_source->size().height());
 
   RemoveTilingsBelowScaleKey(minimum_contents_scale);
   RemoveTilingsAboveScaleKey(maximum_contents_scale);

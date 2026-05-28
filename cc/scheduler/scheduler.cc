@@ -1042,7 +1042,7 @@ void Scheduler::ProcessScheduledActions() {
         break;
       case SchedulerStateMachine::Action::DRAW_FORCED:
         DrawForced();
-        if (state_machine_.ClearReplayForceDraw()) {
+        if (state_machine_->ClearReplayForceDraw()) {
           recordreplay::OnRepaintFinished();
         }
         break;

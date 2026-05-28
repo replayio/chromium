@@ -683,7 +683,7 @@ MainThreadSchedulerImpl::MainThreadOnly::MainThreadOnly(
       last_frame_time(now),
       agent_group_schedulers(
           MakeGarbageCollected<
-              GCedHeapHashSet<WeakMember<AgentGroupSchedulerImpl>, WTF::WeakMemberHashRecordReplayId<AgentGroupSchedulerImpl>>>()),
+              GCedHeapHashSet<WeakMember<AgentGroupSchedulerImpl>, blink::WeakMemberHashRecordReplayId<AgentGroupSchedulerImpl>>>()),
       message_pump(
           main_thread_scheduler_impl->sequence_manager_->GetMessagePump()) {}
 

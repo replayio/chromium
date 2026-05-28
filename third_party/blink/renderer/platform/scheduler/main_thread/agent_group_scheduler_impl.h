@@ -11,6 +11,7 @@
 #include "base/unguessable_token.h"
 #include "third_party/blink/renderer/platform/allow_discouraged_type.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/heap/persistent.h"
 #include "third_party/blink/renderer/platform/heap/prefinalizer.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
@@ -94,7 +95,7 @@ class PLATFORM_EXPORT AgentGroupSchedulerImpl : public AgentGroupScheduler {
   scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner_;
   const raw_ref<MainThreadSchedulerImpl, DanglingUntriaged>
       main_thread_scheduler_;  // Not owned.
-  HeapHashSet<WeakMember<Agent>, WTF::WeakMemberHashRecordReplayId<Agent>> agents_;
+  HeapHashSet<WeakMember<Agent>, blink::WeakMemberHashRecordReplayId<Agent>> agents_;
   HeapHashSet<Member<Agent>> replay_agents_strong_;
   HashSet<PageSchedulerImpl*> page_schedulers_;
   std::map<base::UnguessableToken, int> num_visible_frames_per_agent_

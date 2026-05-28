@@ -29,7 +29,7 @@ class LocalFrame;
 class Page;
 
 // We use UntracedMember<> here to do custom weak processing.
-typedef HashCountedSet<UntracedMember<EventTarget>, WTF::UntracedMemberHashRecordReplayId<EventTarget>> EventTargetSet;
+typedef HashCountedSet<UntracedMember<EventTarget>, blink::UntracedMemberHashRecordReplayId<EventTarget>> EventTargetSet;
 
 // Registry for keeping track of event handlers. Note that only handlers on
 // documents that can be rendered or can receive input (i.e., are attached to a

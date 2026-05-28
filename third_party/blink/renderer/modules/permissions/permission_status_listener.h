@@ -77,7 +77,7 @@ class PermissionStatusListener final
 
   MojoPermissionStatus status_;
   MojoPermissionDescriptor descriptor_;
-  HeapHashSet<WeakMember<Observer>, WTF::WeakMemberHashRecordReplayId<Observer>> observers_;
+  HeapHashSet<WeakMember<Observer>, blink::WeakMemberHashRecordReplayId<Observer>> observers_;
   HeapMojoReceiver<mojom::blink::PermissionObserver, PermissionStatusListener>
       receiver_;
 };

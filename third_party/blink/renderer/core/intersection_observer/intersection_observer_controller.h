@@ -100,11 +100,11 @@ class CORE_EXPORT IntersectionObserverController
   void PostTaskToDeliverNotifications();
 
   // IntersectionObserver's with a connected explicit root in this document.
-  HeapHashSet<Member<IntersectionObserver>, WTF::MemberHashRecordReplayRegisteredPointerId<IntersectionObserver>> tracked_explicit_root_observers_;
+  HeapHashSet<Member<IntersectionObserver>, blink::MemberHashRecordReplayRegisteredPointerId<IntersectionObserver>> tracked_explicit_root_observers_;
   // IntersectionObservations with an implicit root and connected target in this
   // document, grouped by IntersectionObservers.
   HeapHashMap<Member<IntersectionObserver>,
-              HeapHashSet<Member<IntersectionObservation>, WTF::MemberHashRecordReplayRegisteredPointerId<IntersectionObservation>>>
+              HeapHashSet<Member<IntersectionObservation>, blink::MemberHashRecordReplayRegisteredPointerId<IntersectionObservation>>>
       tracked_implicit_root_observations_;
 
   HeapHashSet<Member<IntersectionObserver>> replay_strong_tracked_explicit_root_observers_;
@@ -112,7 +112,7 @@ class CORE_EXPORT IntersectionObserverController
 
   // IntersectionObservers for which this is the execution context of the
   // callback, and with unsent notifications.
-  HeapHashSet<Member<IntersectionObserver>, WTF::MemberHashRecordReplayRegisteredPointerId<IntersectionObserver>> pending_intersection_observers_;
+  HeapHashSet<Member<IntersectionObserver>, blink::MemberHashRecordReplayRegisteredPointerId<IntersectionObserver>> pending_intersection_observers_;
   // This is 'true' if any observation tracked by this controller is able to
   // compute geometry (i.e., observation->CanCompute() is true).
   bool has_active_observations_ = false;

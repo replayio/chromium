@@ -43,7 +43,7 @@ class ResourceClientWalker {
  public:
   explicit ResourceClientWalker(
       const HeapHashCountedSet<WeakMember<ResourceClient>,
-                               WTF::WeakMemberHashRecordReplayId<ResourceClient>>&
+                               blink::WeakMemberHashRecordReplayId<ResourceClient>>&
           set)
       : client_set_(set), client_vector_(client_set_.Values()) {}
 
@@ -61,7 +61,7 @@ class ResourceClientWalker {
 
  private:
   const HeapHashCountedSet<WeakMember<ResourceClient>,
-                           WTF::WeakMemberHashRecordReplayId<ResourceClient>>&
+                           blink::WeakMemberHashRecordReplayId<ResourceClient>>&
       client_set_;
   HeapVector<Member<ResourceClient>> client_vector_;
   wtf_size_t index_ = 0;

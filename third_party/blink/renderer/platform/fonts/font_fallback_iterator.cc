@@ -160,11 +160,11 @@ FontDataForRangeSet* FontFallbackIterator::Next(const HintCharList& hint_list) {
     fallback_stage_ = kOutOfLuck;
     if (!first_candidate_) {
       // [replay] hackfix: try not to crash if a font symbol cannot be found
-      scoped_refptr<SimpleFontData> system_font = UniqueSystemFontForHintList(hint_list);
+      const SimpleFontData* system_font = UniqueSystemFontForHintList(hint_list);
       if (system_font) {
         // Fallback fonts are not retained in the FontDataCache.
-        return UniqueOrNext(base::AdoptRef(new FontDataForRangeSet(system_font)),
-                            hint_list);
+        return UniqueOrNext(
+            MakeGarbageCollected<FontDataForRangeSet>(system_font), hint_list);
       }
     }
     return first_candidate_;

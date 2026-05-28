@@ -7,6 +7,8 @@
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/context_lifecycle_observer.h"
 
+#include <vector>
+
 #include "base/record_replay.h"
 
 namespace blink {
@@ -64,7 +66,7 @@ void ContextLifecycleNotifier::NotifyContextDestroyed() {
       recordreplay::FeatureEnabled("pointer-ids") &&
       !recordreplay::AreEventsDisallowed()) {
     size_t num_observers = recordreplay::RecordReplayValue("NotifyContextDestroyed NumObservers", observers.size());
-    int* observer_ids = new int[num_observers];
+    std::vector<int> observer_ids(num_observers);
 
     if (recordreplay::IsRecording()) {
       for (wtf_size_t i = 0; i < observers.size(); i++) {
@@ -75,7 +77,7 @@ void ContextLifecycleNotifier::NotifyContextDestroyed() {
     }
 
     recordreplay::RecordReplayBytes("ContextLifecycleNotifier::NotifyContextDestroyed ObserverIds",
-                                    observer_ids, num_observers * sizeof(int));
+                                    observer_ids.data(), num_observers * sizeof(int));
 
     if (recordreplay::IsReplaying()) {
       HeapVector<Member<ContextLifecycleObserver>> new_observers;
@@ -96,7 +98,6 @@ void ContextLifecycleNotifier::NotifyContextDestroyed() {
       observers = std::move(new_observers);
     }
 
-    delete[] observer_ids;
   }
 
   for (ContextLifecycleObserver* observer : observers) {

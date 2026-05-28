@@ -46,7 +46,7 @@ void SlotAssignmentEngine::RecalcSlotAssignments() {
   TRACE_EVENT0("blink", "SlotAssignmentEngine::RecalcSlotAssignments");
 
   for (auto& shadow_root :
-       HeapHashSet<WeakMember<ShadowRoot>, WTF::WeakMemberHashRecordReplayId<ShadowRoot>>(shadow_roots_needing_recalc_))
+       HeapHashSet<WeakMember<ShadowRoot>, blink::WeakMemberHashRecordReplayId<ShadowRoot>>(shadow_roots_needing_recalc_))
   {
     DCHECK(shadow_root->isConnected());
     DCHECK(shadow_root->NeedsSlotAssignmentRecalc());

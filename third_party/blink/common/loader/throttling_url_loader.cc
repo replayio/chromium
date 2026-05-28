@@ -5,6 +5,7 @@
 #include "third_party/blink/public/common/loader/throttling_url_loader.h"
 
 #include <algorithm>
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -31,6 +32,7 @@
 #include "third_party/perfetto/include/perfetto/tracing/track_event_args.h"
 
 #include "base/json/json_writer.h"
+#include "base/values.h"
 
 namespace blink {
 
@@ -741,9 +743,9 @@ void ThrottlingURLLoader::OnReceiveRedirect(
 
   // Keep track of network requests triggered by the download message we are
   // handling from the browser process.
-  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  std::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "receivedRedirect");
     info.Set("original_url", original_url_.spec());
     info.Set("new_url", redirect_info.new_url.spec());

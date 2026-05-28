@@ -206,9 +206,10 @@ class V8Platform::TracingControllerImpl : public v8::TracingController {
 V8Platform* V8Platform::Get() { return g_v8_platform.Pointer(); }
 
 V8Platform::V8Platform() : tracing_controller_(new TracingControllerImpl) {
-  if (recordreplay::IsRecordingOrReplaying("eager-initialization", "V8Platform"))
-    // [RUN-1348] Eagerly allocate g_time_clamper.
-    g_time_clamper.Get();
+  if (recordreplay::IsRecordingOrReplaying("eager-initialization", "V8Platform")) {
+    // [RUN-1348] Eagerly touch time_clamper_ (formerly g_time_clamper LazyInstance).
+    (void)&time_clamper_;
+  }
 }
 
 V8Platform::~V8Platform() = default;

@@ -144,7 +144,7 @@ class CORE_EXPORT SMILTimeContainer final
 
   HeapTaskRunnerTimer<SMILTimeContainer> wakeup_timer_;
 
-  using AnimatedTargets = HeapHashCountedSet<WeakMember<SVGElement>, WTF::WeakMemberHashRecordReplayId<SVGElement>>;
+  using AnimatedTargets = HeapHashCountedSet<WeakMember<SVGElement>, blink::WeakMemberHashRecordReplayId<SVGElement>>;
   AnimatedTargets animated_targets_;
 
   PriorityQueue<SMILTime, SVGSMILElement> priority_queue_;
