@@ -7,6 +7,7 @@
 #include <string_view>
 
 #include "base/notimplemented.h"
+#include "base/record_replay.h"
 #include "components/ui_devtools/devtools_server.h"
 #include "third_party/inspector_protocol/crdtp/dispatch.h"
 #include "third_party/inspector_protocol/crdtp/json.h"

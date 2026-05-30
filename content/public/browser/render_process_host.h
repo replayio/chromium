@@ -70,6 +70,7 @@ namespace base {
 class PersistentMemoryAllocator;
 class TimeDelta;
 class Token;
+class Value;
 #if BUILDFLAG(IS_ANDROID)
 namespace android {
 enum class ChildBindingState;

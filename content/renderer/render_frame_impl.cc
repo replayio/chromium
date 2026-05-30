@@ -2689,7 +2689,7 @@ void RenderFrameImpl::CommitNavigation(
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "renderFrameNavigate");
     info.Set("url", common_params->url.spec());
     std::string json;

@@ -224,7 +224,14 @@
 #include "base/test/clang_profiling.h"
 #endif
 
-#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
+// [DeterminatorConflict] Re-apply RecordReplayBrowserEvent.
+// Replaced the blink-internal record_replay_interface.h include (a content-layer
+// layering violation: it transitively pulls local_frame.h -> *.mojom-blink.h,
+// which #error "must only be imported inside blink") with the pure v8 umbrella.
+// render_thread_impl.cc only needs v8::IsMainThread() from that header chain;
+// V8RecordReplayBrowserEvent is provided by a local extern "C" decl below and
+// blink::SetIsIsolatedContext by the already-included public blink.h.
+#include "v8/include/v8.h"
 
 namespace content {
 
@@ -1295,7 +1302,7 @@ extern "C" void V8RecordReplayBrowserEvent(const char* name,
                                            const char* payload);
 
 void RenderThreadImpl::RecordReplayBrowserEvent(const std::string& name,
-                                                base::Value::Dict value) {
+                                                base::DictValue value) {
   // Do nothing if not in record/replay mode.
   if (!recordreplay::IsRecordingOrReplaying("browser-event") ||
       !v8::IsMainThread()) {
