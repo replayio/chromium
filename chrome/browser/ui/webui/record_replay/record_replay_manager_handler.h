@@ -43,9 +43,9 @@ class RecordReplayManagerHandler : public mojom::RecordReplayManagerHandler {
   void GetEnv(const std::string& key, GetEnvCallback callback) override;
   void GetBuildId(GetBuildIdCallback callback) override;
   void GetReplayUserToken(GetReplayUserTokenCallback callback) override;
-  void SetReplayUserToken(const absl::optional<std::string>& token) override;
+  void SetReplayUserToken(const std::optional<std::string>& token) override;
   void GetReplayRefreshToken(GetReplayRefreshTokenCallback callback) override;
-  void SetReplayRefreshToken(const absl::optional<std::string>& token) override;
+  void SetReplayRefreshToken(const std::optional<std::string>& token) override;
   void ShowAuthenticationError(const std::string& message) override;
   void OpenExternalBrowser(const std::string& url) override;
 
@@ -54,8 +54,8 @@ class RecordReplayManagerHandler : public mojom::RecordReplayManagerHandler {
   mojo::Remote<mojom::RecordReplayManager> manager_;
 
   // user and refresh tokens.
-  absl::optional<std::string> record_replay_user_token_;
-  absl::optional<std::string> record_replay_refresh_token_;
+  std::optional<std::string> record_replay_user_token_;
+  std::optional<std::string> record_replay_refresh_token_;
 
   // The Profile* handed to us in our constructor.
   raw_ptr<Profile> profile_;

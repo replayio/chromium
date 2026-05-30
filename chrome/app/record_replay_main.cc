@@ -5,6 +5,14 @@
 // Routines for setting up the recorder handle when recording/replaying.
 // This is directly included from files which need it to avoid linker issues.
 
+// This file makes heavy use of libc calls (snprintf/memcpy/strcmp/vfprintf
+// etc.) for low-level recorder bootstrapping, so opt out of the
+// -Wunsafe-buffer-usage checks for this region.
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/ABC): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "../../base/record_replay_driver.cc"
 
 #if BUILDFLAG(IS_WIN)

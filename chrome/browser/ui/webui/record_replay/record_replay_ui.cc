@@ -19,11 +19,8 @@ RecordReplayUI::RecordReplayUI(
           web_ui->GetWebContents()->GetBrowserContext(),
           chrome::kChromeUIRecordReplayHost);
 
-  data_source->AddResourcePaths(base::make_span(
-      kRecordReplayResources, kRecordReplayResourcesSize));
+  data_source->AddResourcePaths(kRecordReplayResources);
   data_source->AddResourcePath("", IDR_RECORD_REPLAY_RECORD_REPLAY_HTML);
-
-  content::WebUIDataSource::Add(Profile::FromWebUI(web_ui), data_source);
 }
 
 RecordReplayUI::~RecordReplayUI() = default;

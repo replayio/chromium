@@ -235,7 +235,7 @@ void VersionUI::AddVersionDetailStrings(content::WebUIDataSource* html_source) {
 
   // Data strings.
   html_source->AddString(version_ui::kVersion,
-                         version_info::GetVersionNumber() + " (replay.io build " + RECORD_REPLAY_BUILD_ID + ")");
+                         std::string(version_info::GetVersionNumber()) + " (replay.io build " + RECORD_REPLAY_BUILD_ID + ")");
   html_source->AddString(version_ui::kVersionSuffix,
                          GetVersionInformationalSuffix());
 

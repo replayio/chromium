@@ -10,6 +10,7 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/common/webui_url_constants.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/views/controls/button/button_controller.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -30,7 +31,7 @@ struct RecordReplayToolbarButtonWebContentsObserver
     button_->RecordingTabDestroyed();
   }
 
-  RecordReplayToolbarButton* button_;
+  raw_ptr<RecordReplayToolbarButton> button_;
 };
 
 RecordReplayToolbarButton::RecordReplayToolbarButton(Browser* browser)
@@ -61,15 +62,15 @@ void RecordReplayToolbarButton::CreateHiddenWebContents() {
     browser_->profile(),
     content::SiteInstance::CreateForURL(
       browser_->profile(),
-      GURL(base::StringPiece(chrome::kChromeUIRecordReplayPageURL))
+      GURL(std::string_view(chrome::kChromeUIRecordReplayPageURL))
     )
   );
-  recordreplay_params.is_never_visible = true;
+  recordreplay_params.is_never_composited = true;
 
   recordreplay_contents_ = content::WebContents::Create(recordreplay_params);
   recordreplay_contents_->SetDelegate(browser_); // what does the delegate do?
   recordreplay_contents_->GetController().LoadURL(
-    GURL(base::StringPiece(chrome::kChromeUIRecordReplayPageURL)),
+    GURL(std::string_view(chrome::kChromeUIRecordReplayPageURL)),
     content::Referrer(),
     ui::PAGE_TRANSITION_TYPED, // wrong.  the user didn't type this
     std::string()
@@ -182,3 +183,6 @@ void RecordReplayToolbarButton::CreatePostRecordingWebContents() {
 
   tab_strip_model->AppendWebContents(std::move(post_recording_web_contents), true);
 }
+
+BEGIN_METADATA(RecordReplayToolbarButton)
+END_METADATA

@@ -7,7 +7,6 @@
 #include "components/record_replay/services/auth_token/public/cpp/auth_token_service_factory.h"
 #include <string>
 
-#include "base/bind.h"
 #include "chrome/browser/profiles/profile.h"
 #if BUILDFLAG(IS_MAC)
 #include <CoreFoundation/CFBundle.h>
@@ -34,7 +33,7 @@ void RecordReplayManagerHandler::HandleSignInButtonClicked() {
 }
 
 void RecordReplayManagerHandler::GetEnv(const std::string& key, GetEnvCallback callback) {
-  std::move(callback).Run(absl::optional<std::string>());
+  std::move(callback).Run(std::optional<std::string>());
 }
 void RecordReplayManagerHandler::GetBuildId(GetBuildIdCallback callback) {
   std::move(callback).Run(RECORD_REPLAY_BUILD_ID);
@@ -42,13 +41,13 @@ void RecordReplayManagerHandler::GetBuildId(GetBuildIdCallback callback) {
 void RecordReplayManagerHandler::GetReplayUserToken(GetReplayUserTokenCallback callback) {
   std::move(callback).Run(record_replay_user_token_);
 }
-void RecordReplayManagerHandler::SetReplayUserToken(const absl::optional<std::string>& token) {
+void RecordReplayManagerHandler::SetReplayUserToken(const std::optional<std::string>& token) {
   record_replay_user_token_ = token;
 }
 void RecordReplayManagerHandler::GetReplayRefreshToken(GetReplayRefreshTokenCallback callback) {
   std::move(callback).Run(record_replay_refresh_token_);
 }
-void RecordReplayManagerHandler::SetReplayRefreshToken(const absl::optional<std::string>& token) {
+void RecordReplayManagerHandler::SetReplayRefreshToken(const std::optional<std::string>& token) {
   record_replay_refresh_token_ = token;
 }
 void RecordReplayManagerHandler::ShowAuthenticationError(const std::string& message) {

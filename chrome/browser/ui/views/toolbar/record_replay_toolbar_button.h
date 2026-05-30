@@ -13,6 +13,7 @@ class Browser;
 struct RecordReplayToolbarButtonWebContentsObserver;
 
 class RecordReplayToolbarButton: public ToolbarButton {
+ METADATA_HEADER(RecordReplayToolbarButton, ToolbarButton)
  friend struct RecordReplayToolbarButtonWebContentsObserver;
  public:
   explicit RecordReplayToolbarButton(Browser* browser);
@@ -32,7 +33,7 @@ class RecordReplayToolbarButton: public ToolbarButton {
   void CreatePostRecordingWebContents();
 
   const raw_ptr<Browser> browser_;
-  content::WebContents* web_contents_;
+  raw_ptr<content::WebContents> web_contents_;
   std::unique_ptr<RecordReplayToolbarButtonWebContentsObserver>
     web_contents_observer_;
   // our hidden webcontent running business/auth logic.

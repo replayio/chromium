@@ -5,6 +5,8 @@
 #ifndef COMPONENTS_RECORD_REPLAY_SERVICES_AUTH_TOKEN_PUBLIC_CPP_AUTH_TOKEN_SERVICE_FACTORY_H_
 #define COMPONENTS_RECORD_REPLAY_SERVICES_AUTH_TOKEN_PUBLIC_CPP_AUTH_TOKEN_SERVICE_FACTORY_H_
 
+#include <memory>
+
 #include "base/no_destructor.h"
 #include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 #include "components/record_replay/services/auth_token/public/cpp/auth_token_service.h"
@@ -32,7 +34,7 @@ class RecordReplayAuthTokenServiceFactory : public BrowserContextKeyedServiceFac
   ~RecordReplayAuthTokenServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   content::BrowserContext* GetBrowserContextToUse(
       content::BrowserContext* context) const override;

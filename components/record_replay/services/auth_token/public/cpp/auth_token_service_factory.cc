@@ -30,9 +30,10 @@ RecordReplayAuthTokenServiceFactory::RecordReplayAuthTokenServiceFactory()
 
 RecordReplayAuthTokenServiceFactory::~RecordReplayAuthTokenServiceFactory() = default;
 
-KeyedService* RecordReplayAuthTokenServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+RecordReplayAuthTokenServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* /*context*/) const {
-  return new auth_token::RecordReplayAuthTokenService();
+  return std::make_unique<auth_token::RecordReplayAuthTokenService>();
 }
 
 // Incognito profiles should use their own instance.
