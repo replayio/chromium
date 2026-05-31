@@ -1345,7 +1345,7 @@ void MainThreadSchedulerImpl::PerformMicrotaskCheckpoint() {
   REPLAY_ASSERT(
       "[RUN-2056-2298] MainThreadSchedulerImpl::PerformMicrotaskCheckpoint %d %d %u",
       recordreplay::PointerId(this), !!isolate(),
-      main_thread_only().agent_group_schedulers.size());
+      main_thread_only().agent_group_schedulers->size());
   if (isolate())
     EventLoop::PerformIsolateGlobalMicrotasksCheckpoint(isolate());
 

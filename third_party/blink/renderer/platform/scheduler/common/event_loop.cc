@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/platform/scheduler/public/event_loop.h"
 
+#include <optional>
 #include <utility>
 
 #include "base/memory/ptr_util.h"
@@ -117,7 +118,7 @@ void EventLoop::RunPendingMicrotask(void* data) {
   self->pending_microtasks_.pop_front();
   TaskAttributionTracker::MicrotaskTraceScope scope(self->isolate_);
 
-  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  std::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::DependencyGraphEnabled()) {
     int node_id = recordreplay::NewDependencyGraphNode("{\"kind\":\"runMicrotask\"}");
     recordreplay::AddDependencyGraphEdge(record_replay_scheduled_node_id, node_id,

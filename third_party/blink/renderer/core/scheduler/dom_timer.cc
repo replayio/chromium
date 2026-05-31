@@ -313,7 +313,7 @@ DOMTimer::DOMTimer(ExecutionContext& context,
   DCHECK_GT(timeout_id_, 0);
 
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "timerScheduled");
     info.Set("duration", timeout.InMillisecondsF());
     info.Set("singleShot", single_shot);

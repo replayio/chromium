@@ -41,9 +41,8 @@ FrameTaskQueueController::~FrameTaskQueueController() {
   // Destroy queue enabled voters in a deterministic order, as changing
   // task queue enabled status will interact with the recording.
   std::vector<MainThreadTaskQueue*> queues;
-  for (auto* it = all_task_queues_and_voters_.begin();
-      it != all_task_queues_and_voters_.end(); ++it) {
-    queues.push_back(it->first);
+  for (const auto& entry : all_task_queues_and_voters_) {
+    queues.push_back(entry.first);
   }
   std::sort(queues.begin(), queues.end(), recordreplay::CompareByPointerId());
   for (MainThreadTaskQueue* queue : queues) {

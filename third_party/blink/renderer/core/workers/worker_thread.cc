@@ -159,8 +159,8 @@ class WorkerThread::InterruptData {
 WorkerThread::~WorkerThread() {
   recordreplay::Assert(
       "[RUN-1537-1689] WorkerThread::~WorkerThread %d %d (%d %d %d)",
-      recordreplay::PointerId(this), worker_thread_id_, requested_to_terminate_,
-      (int)exit_code_, (int)thread_state_);
+      recordreplay::PointerId(this), worker_thread_id_,
+      (int)termination_progress_, (int)exit_code_, (int)thread_state_);
 
   recordreplay::UnregisterPointer(this);
   DCHECK_CALLED_ON_VALID_THREAD(parent_thread_checker_);
