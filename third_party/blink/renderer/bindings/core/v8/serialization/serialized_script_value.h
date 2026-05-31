@@ -35,6 +35,7 @@
 #include <memory>
 #include <utility>
 
+#include "base/compiler_specific.h"
 #include "base/containers/heap_array.h"
 #include "base/containers/span.h"
 #include "base/dcheck_is_on.h"
@@ -390,7 +391,7 @@ class CORE_EXPORT SerializedScriptValue
                         recorded_size, data_buffer_size_);
 
     data_buffer_ = AllocateBuffer(recorded_size);
-    memset(data_buffer_.get(), 0, recorded_size);
+    UNSAFE_BUFFERS(memset(data_buffer_.data(), 0, recorded_size));
     data_buffer_size_ = recorded_size;
   }
 

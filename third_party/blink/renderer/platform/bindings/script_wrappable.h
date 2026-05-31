@@ -132,10 +132,6 @@ class PLATFORM_EXPORT ScriptWrappable : public v8::Object::Wrappable {
 
   int RecordReplayId() const { return record_replay_id_; }
 
-  // Avoid pointer-based hashes for ScriptWrappable.
-  // TODO: [RUN-1741] Remove this.
-  unsigned GetHash() const { return (unsigned)record_replay_id_; }
-
  protected:
   ScriptWrappable() {
     record_replay_id_ = recordreplay::NewIdAnyThread("ScriptWrappable");

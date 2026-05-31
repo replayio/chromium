@@ -787,7 +787,7 @@ bool ResourceScriptStreamer::TryStartStreamingTask() {
   watcher_.reset();
 
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "scheduleScriptStreamingTask");
     info.Set("url", ScriptURLString().Utf8());
     std::string json;

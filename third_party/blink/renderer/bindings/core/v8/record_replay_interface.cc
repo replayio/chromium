@@ -11,6 +11,9 @@
 #include "third_party/inspector_protocol/crdtp/serializable.h"
 
 #include "base/base64.h"
+// `base/compiler_specific.h` provides the `UNSAFE_BUFFERS`/`UNSAFE_TODO` macros
+// used below to opt out of `-Wunsafe-buffer-usage` on Replay intervention sites.
+#include "base/compiler_specific.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/path_service.h"
@@ -25,8 +28,15 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_node.h"
 #include "third_party/blink/renderer/bindings/core/v8/serialization/serialized_script_value.h"
 #include "third_party/blink/renderer/core/css/css_style_declaration.h"
+// `getV8FromBlinkObject` upcasts `CSSStyleSheet*` to `ScriptWrappable*`, which
+// requires the complete type (it was only forward-declared via the inspector
+// CSS agent header). `CSSStyleSheet : StyleSheet : ScriptWrappable`.
+#include "third_party/blink/renderer/core/css/css_style_sheet.h"
 #include "third_party/blink/renderer/core/dom/dom_node_ids.h"
 #include "third_party/blink/renderer/core/dom/events/custom_event.h"
+// `event_interface_names::kCustomEvent` is used to type-check events without
+// `DowncastTraits<CustomEvent>` (which does not exist).
+#include "third_party/blink/renderer/core/event_interface_names.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/settings.h"
 #include "third_party/blink/renderer/core/inspector/inspected_frames.h"
@@ -41,7 +51,6 @@
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
 #include "third_party/blink/renderer/platform/bindings/v8_dom_wrapper.h"
-#include "third_party/inspector_protocol/crdtp/maybe.h"
 #include "v8/include/v8-inspector.h"
 
 #include <array>
@@ -93,7 +102,7 @@ constexpr const char* kInternalScriptURL = "record-replay-internal";
 using RemoteObjectIdTypeRaw = std::u16string;
 
 // The more convenient type that we use
-using RemoteObjectIdType = WTF::String;
+using RemoteObjectIdType = String;
 
 extern "C" void V8RecordReplaySetDefaultContext(v8::Isolate* isolate, v8::Local<v8::Context> cx);
 extern "C" void V8RecordReplayFinishRecording();
@@ -235,7 +244,11 @@ static String ReadReplayAssetFile(const char* fname) {
   size_t len;
 
   // Important: Treat as UTF-8.
-  String result = String::FromUTF8(ReadReplayAssetFile(fname, len).c_str(), len);
+  // SAFETY: `len` is the byte length written by `ReadReplayAssetFile` for the
+  // same buffer whose `.c_str()` is passed here, so the span bounds match.
+  String result = String::FromUTF8(UNSAFE_BUFFERS(base::span<const uint8_t>(
+      reinterpret_cast<const uint8_t*>(ReadReplayAssetFile(fname, len).c_str()),
+      len)));
   if (!len) {
     recordreplay::Crash("ReadReplayAssetFile failed: %s", fname);
   }
@@ -246,14 +259,18 @@ static String ReadReplayCommandAssetFile(const char* fname) {
   size_t len;
 
   // Important: Treat as UTF-8.
-  String result = String::FromUTF8(
-    IsCommandHandlingEnabledWhenRecording()
-      // Recording + Replay.
-      ? ReadReplayAssetFile(fname, len).c_str()
-      // Replay only.
-      : V8RecordReplayReadAssetFileContents(fname, &len),
+  // SAFETY: `len` is the byte length written for whichever buffer pointer is
+  // selected below (both paths populate `len` for the buffer they return), so
+  // the span bounds match.
+  String result = String::FromUTF8(UNSAFE_BUFFERS(base::span<const uint8_t>(
+    reinterpret_cast<const uint8_t*>(
+      IsCommandHandlingEnabledWhenRecording()
+        // Recording + Replay.
+        ? ReadReplayAssetFile(fname, len).c_str()
+        // Replay only.
+        : V8RecordReplayReadAssetFileContents(fname, &len)),
     len
-  );
+  )));
   if (!len) {
     recordreplay::Crash("ReadReplayAssetFile failed: %s", fname);
   }
@@ -859,7 +876,7 @@ static int GetBlinkPersistentId(v8::Local<v8::Object> object) {
 
   // Provide a unique id for Blink Objects.
   if (V8DOMWrapper::IsWrapper(isolate, object)) {
-    ScriptWrappable* wrappable = ToScriptWrappable(object);
+    ScriptWrappable* wrappable = ToAnyScriptWrappable(isolate, object);
     return wrappable->RecordReplayId();
   }
 
@@ -905,19 +922,19 @@ static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
       // Ensure the message has an ID. If not, handle the error in JavaScript.
       v8::String::Utf8Value inmessage(args.GetIsolate(), args[0]);
       std::string nmessage(*inmessage);
-      absl::optional<base::Value> jsonMessage = base::JSONReader::Read(nmessage);
-      base::Value::Dict* messageDict = jsonMessage->GetIfDict();
+      absl::optional<base::Value> jsonMessage = base::JSONReader::Read(nmessage, base::JSON_PARSE_RFC);
+      base::DictValue* messageDict = jsonMessage->GetIfDict();
       CHECK(messageDict != nullptr);
       CHECK(messageDict->FindInt("id").has_value());
 
       // Construct our error result.
-      std::unique_ptr<base::DictionaryValue> error(new base::DictionaryValue);
-      error->SetStringKey("message", "[RUN-2600] No context group available for Isolate.");
-      error->SetIntKey("code", CDPERROR_MISSINGCONTEXT);
+      base::DictValue error;
+      error.Set("message", "[RUN-2600] No context group available for Isolate.");
+      error.Set("code", CDPERROR_MISSINGCONTEXT);
 
-      base::DictionaryValue result;
-      result.SetKey("error", base::Value::FromUniquePtrValue(std::move(error)));
-      result.SetIntKey("id", *(messageDict->FindInt("id")));
+      base::DictValue result;
+      result.Set("error", std::move(error));
+      result.Set("id", *(messageDict->FindInt("id")));
 
       std::string json;
       base::JSONWriter::Write(result, &json);
@@ -965,12 +982,21 @@ static void SHA256DigestHex(const v8::FunctionCallbackInfo<v8::Value>& args) {
 
   std::unique_ptr<crypto::SecureHash> hasher =
     crypto::SecureHash::Create(crypto::SecureHash::SHA256);
-  hasher->Update(*content, content.length());
+  // SAFETY: `content.length()` is the byte length of the buffer pointed to by
+  // `*content` (the V8 UTF-8 value), so the span bounds match.
+  hasher->Update(UNSAFE_BUFFERS(base::span<const uint8_t>(
+      reinterpret_cast<const uint8_t*>(*content), content.length())));
   uint8_t digest[crypto::kSHA256Length];
-  hasher->Finish(digest, crypto::kSHA256Length);
+  // SAFETY: `digest` is declared `uint8_t[crypto::kSHA256Length]`, so the span
+  // bounds match its declared size exactly.
+  hasher->Finish(UNSAFE_BUFFERS(base::span<uint8_t>(digest, crypto::kSHA256Length)));
   char* digestHex = new char[65];
   for (int i = 0; i < 32; i++) {
-    sprintf(digestHex + i * 2, "%02x", digest[i]);
+    // SAFETY: `digest` has 32 bytes (`crypto::kSHA256Length`) so `digest[i]` is
+    // in range for `i < 32`; `digestHex` is `new char[65]` and each iteration
+    // writes 2 hex chars + NUL at offset `i*2` (max offset 62), so it stays
+    // within the buffer.
+    UNSAFE_BUFFERS(sprintf(digestHex + i * 2, "%02x", digest[i]));
   }
 
   // The content being hashed can vary when replaying if source contents have been
@@ -1187,22 +1213,6 @@ v8::Local<v8::Array> convertCborToJS(v8::Isolate* isolate,
   return result;
 }
 
-template <typename T>
-v8::MaybeLocal<v8::Value> convertCborToJSMaybe(v8::Isolate* isolate,
-                                               crdtp::Maybe<T> value) {
-  static_assert(
-      std::is_base_of<crdtp::Serializable, T>::value,
-      "type parameter T of Maybe<T> must derive from crdtp::Serializable");
-
-  if (value.isJust()) {
-    crdtp::Serializable* serializable = (crdtp::Serializable*)value.fromJust();
-    return convertCborToJSTempl<crdtp::Serializable, ConvertCborToJsonDefault>(
-        isolate, serializable);
-  }
-  v8::MaybeLocal<v8::Value> defaultVal;
-  return defaultVal;
-}
-
 
 /** ###########################################################################
  * More Debugger interfaces (Inspectors)
@@ -1347,16 +1357,13 @@ static bool getV8FromBlinkObject(
     v8::Isolate* isolate,
     ScriptWrappable* blinkObject,
     v8::Local<v8::Value>& result) {
-  ScriptState* scriptState = ScriptState::Current(isolate);
-  v8::Local<v8::Value> v8Object;
-  if (blinkObject->Wrap(scriptState).ToLocal(&v8Object)) {
-    result = v8Object;
-    return true;
-  }
-
-  // weird
-  recordreplay::Print("[RuntimeError] getV8FromBlinkObject failed");
-  return false;
+  // `ScriptState::Current` was removed; obtain the ScriptState for the
+  // current realm instead.
+  ScriptState* scriptState = ScriptState::ForCurrentRealm(isolate);
+  // `ScriptWrappable::Wrap` now returns `v8::Local<v8::Value>` directly
+  // (no MaybeLocal/ToLocal), so assign it straight to `result`.
+  result = blinkObject->Wrap(scriptState);
+  return true;
 }
 
 /**
@@ -1495,7 +1502,9 @@ static void fromJsIsBlinkObject(
 
   v8::Isolate* isolate = args.GetIsolate();
 
-  bool result = V8DOMWrapper::IsWrapper(isolate, args[0]);
+  // `V8DOMWrapper::IsWrapper` now expects a `v8::Local<v8::Object>`; cast the
+  // incoming value accordingly.
+  bool result = V8DOMWrapper::IsWrapper(isolate, args[0].As<v8::Object>());
 
   args.GetReturnValue().Set(result);
 }
@@ -1536,8 +1545,10 @@ static void fromJsGetReturnValue(
 struct NetworkRequestStatus {
   size_t response_data_received;
   size_t request_data_sent;
-  base::Value info;
-  NetworkRequestStatus(const base::DictionaryValue& info_arg)
+  // `base::DictionaryValue` was removed; `info` is now a `base::DictValue`
+  // (built from `info_arg.Clone()`, which returns a `base::DictValue`).
+  base::DictValue info;
+  NetworkRequestStatus(const base::DictValue& info_arg)
   : response_data_received(0),
     request_data_sent(0),
     info(info_arg.Clone())
@@ -1549,7 +1560,10 @@ std::unordered_map<std::string, NetworkRequestStatus>*
 
 // Globals storing values to be returned to controller commands
 // `GetCurrentNetwork*`
-static base::Value *gCurrentNetworkRequestEvent = nullptr;
+// `base::DictionaryValue` was removed; the network `event` locals are now
+// `base::DictValue`, so this pointer is a `base::DictValue*`. `JSONWriter`
+// still serializes it via the implicit `base::ValueView(const DictValue&)`.
+static base::DictValue *gCurrentNetworkRequestEvent = nullptr;
 static std::vector<uint8_t>* gCurrentNetworkStreamData = nullptr;
 
 static void GetCurrentNetworkRequestEvent(const v8::FunctionCallbackInfo<v8::Value>& args) {
@@ -1593,15 +1607,26 @@ static void GetCurrentNetworkStreamData(const v8::FunctionCallbackInfo<v8::Value
   }
 
   uint8_t* bytes = &(*gCurrentNetworkStreamData)[index];
+  // SAFETY: `bytes` points at offset `index` into `*gCurrentNetworkStreamData`
+  // and `length` was bounds-checked against that buffer's remaining size above,
+  // so the span stays within the buffer.
   std::string encoded = base::Base64Encode(
-    base::span<const uint8_t>(bytes, length)
+    UNSAFE_BUFFERS(base::span<const uint8_t>(bytes, length))
   );
   char* encoded_cstr = strdup(encoded.c_str());
-  char* encoded_end = encoded_cstr + encoded.length();
-  for (char *cur = encoded_cstr; cur < encoded_end; cur++) {
-    if (*cur == '-') { *cur = '+'; }
-    if (*cur == '_') { *cur = '/'; }
-  }
+  // SAFETY: `encoded_cstr` is a `strdup` of `encoded`, so it has at least
+  // `encoded.length()` bytes; the computed end pointer is the one-past-the-end
+  // pointer of that buffer.
+  char* encoded_end = UNSAFE_BUFFERS(encoded_cstr + encoded.length());
+  // SAFETY: `cur` iterates from `encoded_cstr` to `encoded_end`, the
+  // one-past-the-end pointer of the same `strdup`ed buffer, so the increment
+  // stays within bounds.
+  UNSAFE_BUFFERS(
+    for (char *cur = encoded_cstr; cur < encoded_end; cur++) {
+      if (*cur == '-') { *cur = '+'; }
+      if (*cur == '_') { *cur = '/'; }
+    }
+  )
 
   v8::Local<v8::Object> result = v8::Object::New(isolate);
   result->Set(context,
@@ -1615,21 +1640,25 @@ static void GetCurrentNetworkStreamData(const v8::FunctionCallbackInfo<v8::Value
   args.GetReturnValue().Set(result);
 }
 
-static std::string GetRequestIdentifierProperty(const base::DictionaryValue& info) {
-  const std::string *requestId = info.FindPath("requestId")->GetIfString();
+static std::string GetRequestIdentifierProperty(const base::DictValue& info) {
+  // `FindPath("k")->GetIfString()` → single-key `FindString("k")`.
+  const std::string *requestId = info.FindString("requestId");
   return *requestId;
 }
 
-static void CopyDictionaryProperty(base::DictionaryValue& dst,
-                                   const base::DictionaryValue& src,
+static void CopyDictionaryProperty(base::DictValue& dst,
+                                   const base::DictValue& src,
                                    const char* property) {
-  const base::Value* value = src.FindPath(property);
+  // Dynamic-key `FindPath(property)` → `Find(property)`.
+  const base::Value* value = src.Find(property);
   if (value) {
-    dst.Set(property, std::unique_ptr<base::Value>(value->CreateDeepCopy()));
+    // `CreateDeepCopy()` removed → `Clone()`; `Set(string_view, Value&&)`
+    // replaces the old `Set(key, unique_ptr<Value>)` overload.
+    dst.Set(property, value->Clone());
   }
 }
 
-static void HandleNetworkPrepareRequestEvent(const base::DictionaryValue& info) {
+static void HandleNetworkPrepareRequestEvent(const base::DictValue& info) {
   CHECK(gActiveNetworkRequests);
   std::string request_id = GetRequestIdentifierProperty(info);
   if (gActiveNetworkRequests->find(request_id) != gActiveNetworkRequests->end()) {
@@ -1647,12 +1676,12 @@ static void HandleNetworkPrepareRequestEvent(const base::DictionaryValue& info) 
   );
 
   // Register the request.
-  uint64_t bookmark = *info.FindPath("bookmark")->GetIfDouble();
+  uint64_t bookmark = *info.FindDouble("bookmark");
   recordreplay::OnNetworkRequest(request_id.c_str(), "http", bookmark);
 
   // Package and emit a network request event with the appropriate info.
-  base::DictionaryValue event;
-  event.SetString("kind", "request");
+  base::DictValue event;
+  event.Set("kind", "request");
   CopyDictionaryProperty(event, info, "requestUrl");
   CopyDictionaryProperty(event, info, "requestHeaders");
   CopyDictionaryProperty(event, info, "requestMethod");
@@ -1664,7 +1693,7 @@ static void HandleNetworkPrepareRequestEvent(const base::DictionaryValue& info) 
   gCurrentNetworkRequestEvent = nullptr;
 }
 
-static void HandleNetworkResourceRedirectEvent(const base::DictionaryValue& info) {
+static void HandleNetworkResourceRedirectEvent(const base::DictValue& info) {
   CHECK(gActiveNetworkRequests);
 
   // Retrieve the existing request data which should already have been
@@ -1676,18 +1705,19 @@ static void HandleNetworkResourceRedirectEvent(const base::DictionaryValue& info
       request_id.c_str());
     return;
   }
-  const base::DictionaryValue& original_info =
-    base::Value::AsDictionaryValue(request_info->second.info);
+  // `base::Value::AsDictionaryValue` was removed; `info` is already a
+  // `base::DictValue`, so bind it directly.
+  const base::DictValue& original_info = request_info->second.info;
 
   // Register a new network request with the same request id as the original
   // for this redirect.
-  uint64_t bookmark = *original_info.FindPath("bookmark")->GetIfDouble();
+  uint64_t bookmark = *original_info.FindDouble("bookmark");
   recordreplay::OnNetworkRequest(request_id.c_str(), "http", bookmark);
 
   // Package and emit a network request event, using data from the original
   // request when necessary.
-  base::DictionaryValue event;
-  event.SetString("kind", "request");
+  base::DictValue event;
+  event.Set("kind", "request");
   CopyDictionaryProperty(event, info, "requestUrl");
   CopyDictionaryProperty(event, info, "requestHeaders");
   CopyDictionaryProperty(event, original_info, "requestMethod");
@@ -1699,7 +1729,7 @@ static void HandleNetworkResourceRedirectEvent(const base::DictionaryValue& info
   gCurrentNetworkRequestEvent = nullptr;
 }
 
-static void HandleNetworkNavigationEvent(const base::DictionaryValue& info) {
+static void HandleNetworkNavigationEvent(const base::DictValue& info) {
   CHECK(gActiveNetworkRequests);
 
   // Navigation events are network requests that are not resource requests.
@@ -1708,7 +1738,7 @@ static void HandleNetworkNavigationEvent(const base::DictionaryValue& info) {
   // content process.
 
   // Ensure that a request with the same ID has not already been registered.
-  std::string request_id = *info.FindPath("requestId")->GetIfString();
+  std::string request_id = *info.FindString("requestId");
   if (gActiveNetworkRequests->find(request_id) != gActiveNetworkRequests->end()) {
     recordreplay::Print("Duplicate request id: %s", request_id.c_str());
     return;
@@ -1720,26 +1750,26 @@ static void HandleNetworkNavigationEvent(const base::DictionaryValue& info) {
   recordreplay::OnNetworkRequest(request_id.c_str(), "http", /* bookmark = */ 0);
 
   // Package and emit a network request event.
-  base::DictionaryValue event;
-  event.SetString("kind", "request");
+  base::DictValue event;
+  event.Set("kind", "request");
   CopyDictionaryProperty(event, info, "requestUrl");
   CopyDictionaryProperty(event, info, "requestHeaders");
   CopyDictionaryProperty(event, info, "requestMethod");
-  event.SetString("requestCause", "document");
+  event.Set("requestCause", "document");
 
   gCurrentNetworkRequestEvent = &event;
   recordreplay::OnNetworkRequestEvent(request_id.c_str());
   gCurrentNetworkRequestEvent = nullptr;
 }
 
-static void HandleNetworkNavigationRedirectEvent(const base::DictionaryValue& info) {
+static void HandleNetworkNavigationRedirectEvent(const base::DictValue& info) {
   CHECK(gActiveNetworkRequests);
 
   // Navigation redirect events are, as with navigation events, sent from
   // the content process to the renderer process.
 
   // Ensure that a request with the same ID has not already been registered.
-  std::string request_id = *info.FindPath("requestId")->GetIfString();
+  std::string request_id = *info.FindString("requestId");
   // This is a redirect, so an existing request should have been registered
   // with the same id.
   auto request_info = gActiveNetworkRequests->find(request_id);
@@ -1748,27 +1778,28 @@ static void HandleNetworkNavigationRedirectEvent(const base::DictionaryValue& in
       request_id.c_str());
     return;
   }
-  const base::DictionaryValue& original_info =
-    base::Value::AsDictionaryValue(request_info->second.info);
+  // `base::Value::AsDictionaryValue` was removed; `info` is already a
+  // `base::DictValue`, so bind it directly.
+  const base::DictValue& original_info = request_info->second.info;
 
   // A navigation redirect event is a new network request. There is no bookmark.
   recordreplay::OnNetworkRequest(request_id.c_str(), "http", 0);
 
   // Package and emit a network request event.
   // The request method is obtained from the saved request info.
-  base::DictionaryValue event;
-  event.SetString("kind", "request");
+  base::DictValue event;
+  event.Set("kind", "request");
   CopyDictionaryProperty(event, info, "requestUrl");
   CopyDictionaryProperty(event, info, "requestHeaders");
   CopyDictionaryProperty(event, original_info, "requestMethod");
-  event.SetString("requestCause", "document");
+  event.Set("requestCause", "document");
 
   gCurrentNetworkRequestEvent = &event;
   recordreplay::OnNetworkRequestEvent(request_id.c_str());
   gCurrentNetworkRequestEvent = nullptr;
 }
 
-static void HandleNetworkRequestDataFormEvent(const base::DictionaryValue& info) {
+static void HandleNetworkRequestDataFormEvent(const base::DictValue& info) {
   CHECK(gActiveNetworkRequests);
   std::string request_id = GetRequestIdentifierProperty(info);
   auto request_info = gActiveNetworkRequests->find(request_id);
@@ -1783,8 +1814,8 @@ static void HandleNetworkRequestDataFormEvent(const base::DictionaryValue& info)
   CHECK(request_info->second.request_data_sent == 0);
 
   { // Send a "request-body" network request event.
-    base::DictionaryValue requestBodyEvent;
-    requestBodyEvent.SetString("kind", "request-body");
+    base::DictValue requestBodyEvent;
+    requestBodyEvent.Set("kind", "request-body");
 
     gCurrentNetworkRequestEvent = &requestBodyEvent;
     recordreplay::OnNetworkRequestEvent(request_id.c_str());
@@ -1799,18 +1830,20 @@ static void HandleNetworkRequestDataFormEvent(const base::DictionaryValue& info)
   );
 
   // Call StreamData API.
-  size_t length = *info.FindPath("dataLength")->GetIfDouble();
+  size_t length = *info.FindDouble("dataLength");
 
   CHECK(length >= 0);
   gCurrentNetworkStreamData->clear();
-  const std::string *data_base64 = info.FindPath("data")->GetIfString();
+  const std::string *data_base64 = info.FindString("data");
   if (data_base64) {
     const uint8_t* data =
       reinterpret_cast<const uint8_t *>(data_base64->c_str());
     gCurrentNetworkStreamData->insert(
       gCurrentNetworkStreamData->begin(),
       data,
-      data + data_base64->length()
+      // SAFETY: `data` points at `data_base64`'s buffer, so the computed end
+      // pointer (`data + data_base64->length()`) is its one-past-the-end.
+      UNSAFE_BUFFERS(data + data_base64->length())
     );
     size_t offset = request_info->second.response_data_received;
     recordreplay::OnNetworkStreamData(
@@ -1821,7 +1854,7 @@ static void HandleNetworkRequestDataFormEvent(const base::DictionaryValue& info)
   request_info->second.request_data_sent += length;
 }
 
-static void HandleNetworkDidReceiveResponseEvent(const base::DictionaryValue& info) {
+static void HandleNetworkDidReceiveResponseEvent(const base::DictValue& info) {
   CHECK(gActiveNetworkRequests);
   std::string request_id = GetRequestIdentifierProperty(info);
   auto request_info = gActiveNetworkRequests->find(request_id);
@@ -1831,8 +1864,8 @@ static void HandleNetworkDidReceiveResponseEvent(const base::DictionaryValue& in
     return;
   }
 
-  base::DictionaryValue event;
-  event.SetString("kind", "response");
+  base::DictValue event;
+  event.Set("kind", "response");
   CopyDictionaryProperty(event, info, "responseHeaders");
   CopyDictionaryProperty(event, info, "responseProtocolVersion");
   CopyDictionaryProperty(event, info, "responseStatus");
@@ -1844,7 +1877,7 @@ static void HandleNetworkDidReceiveResponseEvent(const base::DictionaryValue& in
   gCurrentNetworkRequestEvent = nullptr;
 }
 
-static void HandleNetworkDidFinishLoadingEvent(const base::DictionaryValue& info) {
+static void HandleNetworkDidFinishLoadingEvent(const base::DictValue& info) {
   CHECK(gActiveNetworkRequests);
   std::string request_id = GetRequestIdentifierProperty(info);
   auto request_info = gActiveNetworkRequests->find(request_id);
@@ -1854,8 +1887,8 @@ static void HandleNetworkDidFinishLoadingEvent(const base::DictionaryValue& info
     return;
   }
 
-  base::DictionaryValue event;
-  event.SetString("kind", "request-done");
+  base::DictValue event;
+  event.Set("kind", "request-done");
   CopyDictionaryProperty(event, info, "encodedBodySize");
   CopyDictionaryProperty(event, info, "decodedBodySize");
 
@@ -1864,7 +1897,7 @@ static void HandleNetworkDidFinishLoadingEvent(const base::DictionaryValue& info
   gCurrentNetworkRequestEvent = nullptr;
 }
 
-static void HandleNetworkDidFailLoadingEvent(const base::DictionaryValue& info) {
+static void HandleNetworkDidFailLoadingEvent(const base::DictValue& info) {
   CHECK(gActiveNetworkRequests);
   std::string request_id = GetRequestIdentifierProperty(info);
   auto request_info = gActiveNetworkRequests->find(request_id);
@@ -1874,8 +1907,8 @@ static void HandleNetworkDidFailLoadingEvent(const base::DictionaryValue& info) 
     return;
   }
 
-  base::DictionaryValue event;
-  event.SetString("kind", "request-failed");
+  base::DictValue event;
+  event.Set("kind", "request-failed");
   CopyDictionaryProperty(event, info, "requestFailedReason");
 
   gCurrentNetworkRequestEvent = &event;
@@ -1883,7 +1916,7 @@ static void HandleNetworkDidFailLoadingEvent(const base::DictionaryValue& info) 
   gCurrentNetworkRequestEvent = nullptr;
 }
 
-static void HandleNetworkDidReceiveDataEvent(const base::DictionaryValue& info) {
+static void HandleNetworkDidReceiveDataEvent(const base::DictValue& info) {
   CHECK(gActiveNetworkRequests);
   CHECK(gCurrentNetworkStreamData);
   // Get request info.
@@ -1899,8 +1932,8 @@ static void HandleNetworkDidReceiveDataEvent(const base::DictionaryValue& info) 
 
   // The first byte of data received triggers a "response-body" event.
   if (request_info->second.response_data_received == 0) {
-    base::DictionaryValue event;
-    event.SetString("kind", "response-body");
+    base::DictValue event;
+    event.Set("kind", "response-body");
 
     gCurrentNetworkRequestEvent = &event;
     recordreplay::OnNetworkRequestEvent(request_id.c_str());
@@ -1912,11 +1945,11 @@ static void HandleNetworkDidReceiveDataEvent(const base::DictionaryValue& info) 
   }
 
   // Sending stream data.
-  size_t length = *info.FindPath("dataLength")->GetIfDouble();
+  size_t length = *info.FindDouble("dataLength");
   CHECK(length >= 0);
 
   gCurrentNetworkStreamData->clear();
-  const std::string *data_base64 = info.FindPath("data")->GetIfString();
+  const std::string *data_base64 = info.FindString("data");
   if (data_base64) {
     std::string out_string;
     if (!base::Base64Decode(*data_base64, &out_string)) {
@@ -1929,7 +1962,9 @@ static void HandleNetworkDidReceiveDataEvent(const base::DictionaryValue& info) 
     gCurrentNetworkStreamData->insert(
       gCurrentNetworkStreamData->begin(),
       data,
-      data + out_string.length()
+      // SAFETY: `data` points at `out_string`'s buffer, so the computed end
+      // pointer (`data + out_string.length()`) is its one-past-the-end.
+      UNSAFE_BUFFERS(data + out_string.length())
     );
     size_t offset = request_info->second.response_data_received;
     recordreplay::OnNetworkStreamData(
@@ -1976,7 +2011,10 @@ static void fromJsGetNodeIdByCpdId(const v8::FunctionCallbackInfo<v8::Value>& ar
 
   v8::Local<v8::Object> nodeObj;
   if (getObjectByCdpId(isolate, cdpIdV8, nodeObj)) {
-    Node* node = V8Node::ToImplWithTypeCheck(isolate, nodeObj);
+    // `V8Node::ToImplWithTypeCheck` was removed; `V8Node` now derives from
+    // `bindings::V8InterfaceBridge<V8Node, Node>` which provides the
+    // type-checked `ToWrappable(isolate, Local<Value>)` -> `Node*`/null.
+    Node* node = V8Node::ToWrappable(isolate, nodeObj.As<v8::Value>());
     if (node) {
       // Bind node and get nodeId.
       auto domAgent = getOrCreateInspectorDOMAgent(isolate);
@@ -2053,19 +2091,33 @@ static void fromJsGetMatchedStylesForElement(
     return;
   }
 
-  Maybe<protocol::CSS::CSSStyle> inlineStyle;
-  Maybe<protocol::CSS::CSSStyle> attributesStyle;
-  Maybe<protocol::Array<protocol::CSS::RuleMatch>> matchedRules;
-  Maybe<protocol::Array<protocol::CSS::PseudoElementMatches>> pseudoIdMatches;
-  Maybe<protocol::Array<protocol::CSS::InheritedStyleEntry>> inheritedEntries;
-  Maybe<protocol::Array<protocol::CSS::InheritedPseudoElementMatches>> inherited_pseudo_id_matches;
-  Maybe<protocol::Array<protocol::CSS::CSSKeyframesRule>> keyframesRules;
-  Maybe<int> parentLayoutNodeId;
+  // Upstream removed `protocol::Maybe<T>`: object/array out-params are now
+  // `std::unique_ptr<protocol::...>` and scalar `int` is `std::optional<int>`.
+  std::unique_ptr<protocol::CSS::CSSStyle> inlineStyle;
+  std::unique_ptr<protocol::CSS::CSSStyle> attributesStyle;
+  std::unique_ptr<protocol::Array<protocol::CSS::RuleMatch>> matchedRules;
+  std::unique_ptr<protocol::Array<protocol::CSS::PseudoElementMatches>> pseudoIdMatches;
+  std::unique_ptr<protocol::Array<protocol::CSS::InheritedStyleEntry>> inheritedEntries;
+  std::unique_ptr<protocol::Array<protocol::CSS::InheritedPseudoElementMatches>> inherited_pseudo_id_matches;
+  std::unique_ptr<protocol::Array<protocol::CSS::CSSKeyframesRule>> keyframesRules;
+  std::optional<int> parentLayoutNodeId;
+  // New out-params added by the upstream 16-param `getMatchedStylesForNode`
+  // signature; impl unconditionally dereferences every out-param, so all must
+  // be real locals (none can be `nullptr`).
+  std::unique_ptr<protocol::Array<protocol::CSS::CSSPositionTryRule>> css_position_try_rules;
+  std::optional<int> active_position_fallback_index;
+  std::unique_ptr<protocol::Array<protocol::CSS::CSSPropertyRule>> css_property_rules;
+  std::unique_ptr<protocol::Array<protocol::CSS::CSSPropertyRegistration>> css_property_registrations;
+  std::unique_ptr<protocol::Array<protocol::CSS::CSSAtRule>> css_at_rules;
+  std::unique_ptr<protocol::Array<protocol::CSS::CSSFunctionRule>> css_function_rules;
 
+  // Pass all 16 out-params by address in the new upstream param order.
   auto response = (*cssAgent)->getMatchedStylesForNode(
     nodeId, &inlineStyle, &attributesStyle, &matchedRules, &pseudoIdMatches,
     &inheritedEntries, &inherited_pseudo_id_matches, &keyframesRules,
-    &parentLayoutNodeId);
+    &css_position_try_rules, &active_position_fallback_index,
+    &css_property_rules, &css_property_registrations, &css_at_rules,
+    &parentLayoutNodeId, &css_function_rules);
 
   if (!response.IsSuccess()) {
     recordreplay::Warning(
@@ -2078,23 +2130,23 @@ static void fromJsGetMatchedStylesForElement(
 
   v8::Local<v8::Object> result = v8::Object::New(isolate);
   // NOTE: not sure what `attributesStyle` is and how its different from `inlineStyle`?
-  if (attributesStyle.isJust()) {
-    auto rulesJs = convertCborToJS(isolate, attributesStyle.fromJust());
+  if (attributesStyle) {
+    auto rulesJs = convertCborToJS(isolate, attributesStyle.get());
     if (!rulesJs.IsEmpty()) {
       SetDataProperty(isolate, result, "attributesStyle",
                       rulesJs.ToLocalChecked());
     }
   }
-  if (matchedRules.isJust()) {
-    auto rulesJs = convertCborToJS(isolate, matchedRules.fromJust());
+  if (matchedRules) {
+    auto rulesJs = convertCborToJS(isolate, matchedRules.get());
     SetDataProperty(isolate, result, "matchedRules", rulesJs);
   }
-  if (pseudoIdMatches.isJust()) {
-    auto rulesJs = convertCborToJS(isolate, pseudoIdMatches.fromJust());
+  if (pseudoIdMatches) {
+    auto rulesJs = convertCborToJS(isolate, pseudoIdMatches.get());
     SetDataProperty(isolate, result, "pseudoIdMatches", rulesJs);
   }
-  if (keyframesRules.isJust()) {
-    auto rulesJs = convertCborToJS(isolate, keyframesRules.fromJust());
+  if (keyframesRules) {
+    auto rulesJs = convertCborToJS(isolate, keyframesRules.get());
     SetDataProperty(isolate, result, "keyframesRules", rulesJs);
   }
   args.GetReturnValue().Set(result);
@@ -2108,7 +2160,9 @@ static void fromJsCssGetStylesheetByCpdId(
 
   v8::Isolate* isolate = args.GetIsolate();
 
-  auto sheetId = ToCoreString(args[0].As<v8::String>());
+  // The single-arg `ToCoreString(Local<String>)` overload was removed; the
+  // current overload requires the isolate as the first argument.
+  auto sheetId = ToCoreString(isolate, args[0].As<v8::String>());
   auto cssAgent = getOrCreateInspectorCSSAgent(isolate);
   if (!cssAgent.has_value()) {
     recordreplay::Warning("[RUN-2600] fromJsCssGetStylesheetByCpdId failed no context id");
@@ -2132,7 +2186,9 @@ static void fromJsDomPerformSearch(
 
   v8::Isolate* isolate = args.GetIsolate();
 
-  auto query = ToCoreString(args[0].As<v8::String>());
+  // The single-arg `ToCoreString(Local<String>)` overload was removed; the
+  // current overload requires the isolate as the first argument.
+  auto query = ToCoreString(isolate, args[0].As<v8::String>());
   auto domAgent = getOrCreateInspectorDOMAgent(isolate);
   if (!domAgent.has_value()) {
     recordreplay::Warning("[RUN-2600] fromJsDomPerformSearch failed no context id");
@@ -2185,7 +2241,9 @@ static void fromJsCollectEventListeners(const v8::FunctionCallbackInfo<v8::Value
   v8::Isolate* isolate = args.GetIsolate();
   auto context = isolate->GetCurrentContext();
   auto nodeObject = args[0].As<v8::Object>();
-  auto* node = V8Node::ToImplWithTypeCheck(isolate, nodeObject);
+  // `V8Node::ToImplWithTypeCheck` was removed; use the type-checked
+  // `ToWrappable(isolate, Local<Value>)` inherited from V8InterfaceBridge.
+  auto* node = V8Node::ToWrappable(isolate, nodeObject.As<v8::Value>());
 
   v8::Local<v8::Array> result = v8::Array::New(isolate);
   if (!node) {
@@ -2295,27 +2353,32 @@ static void fromJsGetCurrentViewportPixelSize(const v8::FunctionCallbackInfo<v8:
 
 // Handle incoming browser events.
 static void HandleBrowserEvent(const char* name, const char* payload) {
-  base::Value val = base::JSONReader::Read(payload).value_or(base::Value());
+  // `base::JSONReader::Read` now requires an options argument; pass
+  // `JSON_PARSE_RFC` (matching the in-file precedent above).
+  base::Value val = base::JSONReader::Read(payload, base::JSON_PARSE_RFC).value_or(base::Value());
   assert(!val.is_none() && "Browser event JSON failed");
   assert(!val.is_dict() && "Browser event JSON is not a dictionary");
-  if (!strcmp(name, "Network.PrepareRequest")) {
-    HandleNetworkPrepareRequestEvent(base::Value::AsDictionaryValue(val));
-  } else if (!strcmp(name, "Network.ResourceRedirect")) {
-    HandleNetworkResourceRedirectEvent(base::Value::AsDictionaryValue(val));
-  } else if (!strcmp(name, "Network.RequestData.Form")) {
-    HandleNetworkRequestDataFormEvent(base::Value::AsDictionaryValue(val));
-  } else if (!strcmp(name, "Network.DidReceiveResponse")) {
-    HandleNetworkDidReceiveResponseEvent(base::Value::AsDictionaryValue(val));
-  } else if (!strcmp(name, "Network.DidFinishLoading")) {
-    HandleNetworkDidFinishLoadingEvent(base::Value::AsDictionaryValue(val));
-  } else if (!strcmp(name, "Network.DidFailLoading")) {
-    HandleNetworkDidFailLoadingEvent(base::Value::AsDictionaryValue(val));
-  } else if (!strcmp(name, "Network.DidReceiveData")) {
-    HandleNetworkDidReceiveDataEvent(base::Value::AsDictionaryValue(val));
-  } else if (!strcmp(name, "Network.Navigation")) {
-    HandleNetworkNavigationEvent(base::Value::AsDictionaryValue(val));
-  } else if (!strcmp(name, "Network.NavigationRedirect")) {
-    HandleNetworkNavigationRedirectEvent(base::Value::AsDictionaryValue(val));
+  // SAFETY: `name` is a NUL-terminated C string and each second argument is a
+  // NUL-terminated string literal, so every `strcmp` below reads within bounds.
+  // The libc check is opted out per-call via `UNSAFE_TODO`.
+  if (!UNSAFE_TODO(strcmp(name, "Network.PrepareRequest"))) {
+    HandleNetworkPrepareRequestEvent(val.GetDict());
+  } else if (!UNSAFE_TODO(strcmp(name, "Network.ResourceRedirect"))) {
+    HandleNetworkResourceRedirectEvent(val.GetDict());
+  } else if (!UNSAFE_TODO(strcmp(name, "Network.RequestData.Form"))) {
+    HandleNetworkRequestDataFormEvent(val.GetDict());
+  } else if (!UNSAFE_TODO(strcmp(name, "Network.DidReceiveResponse"))) {
+    HandleNetworkDidReceiveResponseEvent(val.GetDict());
+  } else if (!UNSAFE_TODO(strcmp(name, "Network.DidFinishLoading"))) {
+    HandleNetworkDidFinishLoadingEvent(val.GetDict());
+  } else if (!UNSAFE_TODO(strcmp(name, "Network.DidFailLoading"))) {
+    HandleNetworkDidFailLoadingEvent(val.GetDict());
+  } else if (!UNSAFE_TODO(strcmp(name, "Network.DidReceiveData"))) {
+    HandleNetworkDidReceiveDataEvent(val.GetDict());
+  } else if (!UNSAFE_TODO(strcmp(name, "Network.Navigation"))) {
+    HandleNetworkNavigationEvent(val.GetDict());
+  } else if (!UNSAFE_TODO(strcmp(name, "Network.NavigationRedirect"))) {
+    HandleNetworkNavigationRedirectEvent(val.GetDict());
   } else {
     recordreplay::Print("HandleBrowserEvent received unrecognized event %s", name);
   }
@@ -2399,7 +2462,9 @@ static std::string GetStackTrace(v8::Isolate* isolate, v8::TryCatch& try_catch) 
 
 static void RunScript(v8::Isolate* isolate, v8::Local<v8::Context> context, const char* source_raw, const char* filename) {
   v8::Local<v8::String> filename_string = ToV8String(isolate, filename);
-  v8::ScriptOrigin origin(isolate, filename_string);
+  // `v8::ScriptOrigin` no longer takes an isolate; the ctor now begins with
+  // the `Local<Value> resource_name`.
+  v8::ScriptOrigin origin(filename_string);
 
   v8::TryCatch try_catch(isolate);
   v8::Local<v8::String> source = ToV8String(isolate, source_raw);
@@ -2655,7 +2720,9 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
 
 void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
   // 1. Register navigation event.
-  if (localFrame->GetDocument()->Url().ProtocolIsInHTTPFamily()) {
+  // `KURL::ProtocolIsInHTTPFamily` was renamed (casing) to
+  // `ProtocolIsInHttpFamily`.
+  if (localFrame->GetDocument()->Url().ProtocolIsInHttpFamily()) {
     recordreplay::OnNavigationEvent(
         nullptr, localFrame->GetDocument()->Url().GetString().Utf8().c_str());
   }
@@ -2731,7 +2798,8 @@ static void GetCurrentError(const v8::FunctionCallbackInfo<v8::Value>& args) {
 }
 
 bool GetStringProperty(v8::Local<v8::Context> context, v8::Local<v8::Object> obj, const char* name, v8::Local<v8::String>* out) {
-  v8::Isolate* isolate = context->GetIsolate();
+  // `v8::Context::GetIsolate()` was removed; use the current isolate.
+  v8::Isolate* isolate = v8::Isolate::GetCurrent();
   v8::Local<v8::String> v8Name = ToV8String(isolate, name);
   v8::Local<v8::Value> v8Value = obj->Get(context, v8Name).ToLocalChecked();
 
@@ -2739,7 +2807,8 @@ bool GetStringProperty(v8::Local<v8::Context> context, v8::Local<v8::Object> obj
 }
 
 bool GetObjectProperty(v8::Local<v8::Context> context, v8::Local<v8::Object> obj, const char* name, v8::Local<v8::Object>* out) {
-  v8::Isolate* isolate = context->GetIsolate();
+  // `v8::Context::GetIsolate()` was removed; use the current isolate.
+  v8::Isolate* isolate = v8::Isolate::GetCurrent();
   v8::Local<v8::String> v8Name = ToV8String(isolate, name);
   v8::Local<v8::Value> v8Value = obj->Get(context, v8Name).ToLocalChecked();
 
@@ -2753,12 +2822,16 @@ bool StringEquals(v8::Isolate* isolate, v8::Local<v8::String> str1, const char* 
 void RecordReplayEventListener::Invoke(ExecutionContext* context, Event* event) {
   v8::Isolate* isolate = context->GetIsolate();
   v8::Local<v8::Context> v8_context = isolate->GetCurrentContext();
-  ScriptState* scriptState = ScriptState::Current(isolate);
-  CustomEvent* customEvent = To<CustomEvent>(event);
-
-  if (!customEvent) {
+  // `ScriptState::Current` was removed; `ForCurrentRealm(isolate)` has the
+  // same semantics (`From(isolate, isolate->GetCurrentContext())`).
+  ScriptState* scriptState = ScriptState::ForCurrentRealm(isolate);
+  // `CustomEvent` has no `DowncastTraits`, so `To<CustomEvent>` static-asserts
+  // and never returns null (the original null-check was already dead). Type-
+  // check via the virtual `Event::InterfaceName()` instead, then static_cast.
+  if (event->InterfaceName() != event_interface_names::kCustomEvent) {
     return;
   }
+  CustomEvent* customEvent = static_cast<CustomEvent*>(event);
 
   v8::Local<v8::Value> detail = customEvent->detail(scriptState).V8Value();
   v8::Local<v8::String> detail_json;
@@ -2807,7 +2880,8 @@ void RecordReplayEventListener::Invoke(ExecutionContext* context, Event* event) 
 }
 
 void RecordReplayEventListener::HandleRecordReplayTokenMessage(v8::Local<v8::Context> context, v8::Local<v8::Object> message) {
-  v8::Isolate* isolate = context->GetIsolate();
+  // `v8::Context::GetIsolate()` was removed; use the current isolate.
+  v8::Isolate* isolate = v8::Isolate::GetCurrent();
 
   // cases here:
   // { "id": "record-replay-token", "message": { "type": "connect" } }      => register auth token observer
@@ -2851,7 +2925,8 @@ void RecordReplayEventListener::HandleRecordReplayTokenMessage(v8::Local<v8::Con
 }
 
 void RecordReplayEventListener::HandleRecordReplayMessage(v8::Local<v8::Context> context, v8::Local<v8::Object> message) {
-  v8::Isolate* isolate = context->GetIsolate();
+  // `v8::Context::GetIsolate()` was removed; use the current isolate.
+  v8::Isolate* isolate = v8::Isolate::GetCurrent();
 
   // the only message handled here is `{ user: <string|null> }`
   v8::Local<v8::Value> message_user = message->Get(context, ToV8String(isolate, "user")).ToLocalChecked();
@@ -2881,7 +2956,10 @@ int RecordReplayOnDOMMutation(Node& target, const char* type) {
     return -1;
   }
 
-  base::Value::Dict info;
+  // `base::Value::Dict` was removed; the top-level `base::DictValue` replaces
+  // it (`.Set(...)` unchanged; `JSONWriter::Write` accepts it via the implicit
+  // `ValueView(const DictValue&)`).
+  base::DictValue info;
   info.Set("kind", "domMutation");
   info.Set("mutationType", type);
   info.Set("mutationNode", target.RecordReplayId());

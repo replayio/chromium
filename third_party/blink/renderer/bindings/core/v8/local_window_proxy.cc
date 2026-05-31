@@ -166,8 +166,7 @@ void LocalWindowProxy::DisposeContext(Lifecycle next_status,
 }
 
 static const char* RecordReplayGetProcessType(
-  LocalFrame* frame,
-  scoped_refptr<DOMWrapperWorld> world
+  LocalFrame* frame
 ) {
   bool isExtension = frame->GetDocument()->Url().Protocol().Utf8() == "chrome-extension";
   bool isRoot = frame->IsOutermostMainFrame();
@@ -269,8 +268,7 @@ void LocalWindowProxy::Initialize() {
       // commands when recording/replaying, and to create checkpoints.
       InitializeRecordReplay(
         RecordReplayGetProcessType(
-          GetFrame(),
-          world_
+          GetFrame()
         ),
         GetIsolate(), GetFrame(), context
       );
@@ -328,7 +326,7 @@ void LocalWindowProxy::SetupRecordReplayWebChannel() {
 
   record_replay_listener_ = RecordReplayEventListener::Create(GetIsolate(), localFrame);
 
-  bool added = localFrame->DomWindow()->addEventListener("WebChannelMessageToChrome", record_replay_listener_.Get());
+  bool added = localFrame->DomWindow()->addEventListener(AtomicString("WebChannelMessageToChrome"), record_replay_listener_.Get());
 
   DCHECK(added);
 }
