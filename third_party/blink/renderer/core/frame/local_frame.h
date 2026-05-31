@@ -987,6 +987,9 @@ class CORE_EXPORT LocalFrame final
 #if BUILDFLAG(IS_ANDROID)
   void PerformFullContentSpellCheck();
 #endif  // BUILDFLAG(IS_ANDROID)
+
+  void RegisterRecordReplayAuthTokenObserver();
+
  private:
   friend class FrameNavigationDisabler;
   // LocalFrameMojoHandler is a part of LocalFrame.

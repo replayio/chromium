@@ -1509,7 +1509,7 @@ void LocalFrameMojoHandler::RequestFullscreenVideoElement() {
   }
 }
 
-void LocalFrameMojoHandler::OnRecordReplayAuthTokenChanged(const WTF::String& token) {
+void LocalFrameMojoHandler::OnRecordReplayAuthTokenChanged(const String& token) {
   v8::Isolate* isolate = ToIsolate(frame_);
   v8::HandleScope handle_scope(isolate);
 
@@ -1544,8 +1544,7 @@ void LocalFrameMojoHandler::OnRecordReplayAuthTokenChanged(const WTF::String& to
       .Check();
 
 
-  ExceptionState exception_state(isolate, ExceptionState::kExecutionContext,
-                                 "LocalFrameMojoHandler", "OnTokenChanged");
+  ExceptionState exception_state(isolate);
 
   CustomEventInit* ev_init = CustomEventInit::Create(isolate, v8::Null(isolate), exception_state);
   // bail if the creator of the event threw an exception
@@ -1553,10 +1552,10 @@ void LocalFrameMojoHandler::OnRecordReplayAuthTokenChanged(const WTF::String& to
     return;
   }
 
-  ev_init->setDetail(ScriptValue::From(script_state, detail));
+  ev_init->setDetail(ScriptValue(isolate, detail));
 
   frame_->DomWindow()->DispatchEvent(
-    *CustomEvent::Create(script_state, "WebChannelMessageToContent", ev_init)
+    *CustomEvent::Create(script_state, AtomicString("WebChannelMessageToContent"), ev_init)
   );
 }
 

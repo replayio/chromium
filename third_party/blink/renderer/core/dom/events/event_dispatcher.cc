@@ -30,6 +30,7 @@
 #include <optional>
 
 #include "base/feature_list.h"
+#include "base/json/json_writer.h"
 #include "base/memory/scoped_refptr.h"
 #include "build/build_config.h"
 #include "third_party/blink/public/common/features.h"
@@ -78,7 +79,7 @@ DispatchEventResult EventDispatcher::DispatchEvent(Node& node, Event& event) {
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "dispatchEvent");
     info.Set("type", event.type().Utf8());
     std::string json;

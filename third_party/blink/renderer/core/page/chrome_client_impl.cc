@@ -451,15 +451,13 @@ void ChromeClientImpl::AddMessageToConsole(LocalFrame* local_frame,
   std::string stack_trace_str = stack_trace.Ascii();
   recordreplay::RecordReplayString(
       "ChromeClientImpl::AddMessageToConsole stack_trace", stack_trace_str);
-  const String new_stack_trace =
-      String::FromUTF8(&stack_trace_str[0], stack_trace_str.length());
+  const String new_stack_trace = String::FromUTF8(stack_trace_str);
 
   // [RUN-2650] source_id is sometimes a divergent URL.
   std::string source_id_str = source_id.Ascii();
   recordreplay::RecordReplayString(
       "ChromeClientImpl::AddMessageToConsole source_id", source_id_str);
-  const String new_source_id =
-      String::FromUTF8(&stack_trace_str[0], stack_trace_str.length());
+  const String new_source_id = String::FromUTF8(source_id_str);
 
   if (!message.IsNull()) {
     recordreplay::Assert(

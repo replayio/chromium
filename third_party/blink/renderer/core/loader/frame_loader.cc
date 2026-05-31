@@ -1117,7 +1117,7 @@ static void ReportCommitNavigation(const WebNavigationParams* navigation_params,
 
   std::string annotationContents;
   if (recordreplay::IsReplaying()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("commit_reason", (int)commit_reason);
     info.Set("url", navigation_params->url.GetString().Utf8());
     info.Set("http_method", navigation_params->http_method.Utf8());

@@ -24,6 +24,7 @@
 
 #include <utility>
 
+#include "base/containers/span.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver.h"
 #include "third_party/blink/renderer/core/dom/events/scoped_event_queue.h"
 #include "third_party/blink/renderer/core/dom/first_letter_pseudo_element.h"
@@ -58,7 +59,7 @@ Text* Text::Create(Document& document, const String& data) {
     size_t recordedLength = recordreplay::RecordReplayValue("Text::Create length", contents.length());
     contents.resize(recordedLength, ' ');
     recordreplay::RecordReplayBytes("Text::Create string", &contents[0], recordedLength);
-    dataStr = String::FromUTF8(&contents[0], recordedLength);
+    dataStr = String::FromUTF8(base::as_byte_span(contents));
     dataPtr = &dataStr;
   } else {
     dataPtr = &data;

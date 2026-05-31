@@ -1320,7 +1320,7 @@ void DocumentLoader::BodyDataReceivedImpl(BodyData& data) {
     probe::DidReceiveData(probe::ToCoreProbeSink(GetFrame()),
                           main_resource_identifier_, this, encoded_data);
     recordreplay::OnNetworkReceiveData(main_resource_identifier_,
-                                       encoded_data.data(), (int)encoded_data.size());
+                                       encoded_data.ptr_or_null_if_no_data(), (int)encoded_data.size());
   }
 
   TRACE_EVENT("loading", "DocumentLoader::HandleData",

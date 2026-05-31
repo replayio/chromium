@@ -234,13 +234,15 @@ class LocalDOMWindow::NetworkStateObserver final
       online_observer_handle_;
 };
 
-static std::unordered_set<LocalDOMWindow*>* gValidDOMWindowPointers;
+// Address-keyed (uintptr_t) set: identity-only membership that does NOT trace
+// the GC'd LocalDOMWindow, and a non-pointer key dodges the blink-gc plugin.
+static std::unordered_set<uintptr_t>* gValidDOMWindowPointers;
 
 // Workaround for invalid window pointers being used.
 //
 // See https://linear.app/replay/issue/TT-957
 bool LocalDOMWindowPointerIsValid(LocalDOMWindow* window) {
-  return gValidDOMWindowPointers && gValidDOMWindowPointers->find(window) != gValidDOMWindowPointers->end();
+  return gValidDOMWindowPointers && gValidDOMWindowPointers->find(reinterpret_cast<uintptr_t>(window)) != gValidDOMWindowPointers->end();
 }
 
 LocalDOMWindow::LocalDOMWindow(LocalFrame& frame, WindowAgent* agent)
@@ -269,8 +271,8 @@ LocalDOMWindow::LocalDOMWindow(LocalFrame& frame, WindowAgent* agent)
           MakeGarbageCollected<CloseWatcher::WatcherStack>(this)) {
   CHECK(IsMainThread());
   if (!gValidDOMWindowPointers)
-    gValidDOMWindowPointers = new std::unordered_set<LocalDOMWindow*>();
-  gValidDOMWindowPointers->insert(this);
+    gValidDOMWindowPointers = new std::unordered_set<uintptr_t>();
+  gValidDOMWindowPointers->insert(reinterpret_cast<uintptr_t>(this));
 }
 
 void LocalDOMWindow::BindContentSecurityPolicy() {
@@ -1034,7 +1036,7 @@ void LocalDOMWindow::DispatchPopstateEvent(
 LocalDOMWindow::~LocalDOMWindow() {
   CHECK(IsMainThread());
   CHECK(gValidDOMWindowPointers);
-  gValidDOMWindowPointers->erase(this);
+  gValidDOMWindowPointers->erase(reinterpret_cast<uintptr_t>(this));
 }
 
 void LocalDOMWindow::Dispose() {

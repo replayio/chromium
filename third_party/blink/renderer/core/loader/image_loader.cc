@@ -459,7 +459,7 @@ void ImageLoader::DoUpdateFromElement(const DOMWrapperWorld* world,
     std::string json;
     {
       recordreplay::AutoDisallowEvents disallow("ImageLoader::DoUpdateFromElement");
-      base::Value::Dict info;
+      base::DictValue info;
       info.Set("kind", "imageUpdateFromElement");
       info.Set("url", element_->ImageSourceURL().GetString().Utf8());
       base::JSONWriter::Write(info, &json);
@@ -1070,7 +1070,7 @@ void ImageLoader::DispatchPendingLoadEvent(
     std::string json;
     {
       recordreplay::AutoDisallowEvents disallow("ImageLoader::DispatchPendingLoadEvent");
-      base::Value::Dict info;
+      base::DictValue info;
       info.Set("kind", "imageLoaded");
       info.Set("url", element_->ImageSourceURL().GetString().Utf8());
       base::JSONWriter::Write(info, &json);
@@ -1096,7 +1096,7 @@ void ImageLoader::DispatchPendingErrorEvent(
   absl::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::DependencyGraphEnabled()) {
     recordreplay::AutoDisallowEvents disallow("ImageLoader::DispatchPendingErrorEvent");
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "imageError");
     info.Set("url", element_->ImageSourceURL().GetString().Utf8());
     std::string json;

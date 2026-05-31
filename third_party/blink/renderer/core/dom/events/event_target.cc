@@ -901,7 +901,7 @@ bool EventTarget::dispatchEventForBindings(Event* event,
 
             if (!x && !y) {
               if (auto* element = DynamicTo<Element>(ToNode())) {
-                auto* rect = element->getBoundingClientRect();
+                auto* rect = element->GetBoundingClientRect();
                 x = rect->x() + rect->width() / 2;
                 y = rect->y() + rect->height() / 2;
               }

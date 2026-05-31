@@ -93,7 +93,7 @@ void MessagePort::Dispose() {
       connector_->set_connection_error_handler(base::OnceClosure());
       connector_.release();
     }
-    new MessagePortDescriptor(std::move(port_));
+    new MessagePortDescriptor(std::move(port_descriptor_));
     return;
   }
 
@@ -181,7 +181,7 @@ void MessagePort::postMessage(ScriptState* script_state,
     msg.record_replay_process_id = (int)base::GetCurrentProcId();
 
     if (recordreplay::DependencyGraphEnabled()) {
-      base::Value::Dict info;
+      base::DictValue info;
       info.Set("kind", "postMessage");
       info.Set("messageId", msg.record_replay_message_id);
       info.Set("processId", msg.record_replay_process_id);
@@ -392,7 +392,7 @@ bool MessagePort::Accept(mojo::Message* mojo_message) {
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "acceptMessage");
     info.Set("messageId", message.record_replay_message_id);
     info.Set("processId", message.record_replay_process_id);

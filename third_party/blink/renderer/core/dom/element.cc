@@ -87,6 +87,9 @@
 #include "third_party/blink/renderer/core/css/css_style_sheet.h"
 #include "third_party/blink/renderer/core/css/css_value.h"
 #include "third_party/blink/renderer/core/css/cssom/inline_style_property_map.h"
+// Replay edit: Full definition needed so Element::style()'s Replay-only code
+// path can convert InlineCSSStyleDeclaration* to its CSSStyleDeclaration* base.
+#include "third_party/blink/renderer/core/css/inline_css_style_declaration.h"
 #include "third_party/blink/renderer/core/css/native_paint_image_generator.h"
 #include "third_party/blink/renderer/core/css/out_of_flow_data.h"
 #include "third_party/blink/renderer/core/css/parser/css_parser.h"

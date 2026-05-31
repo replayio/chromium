@@ -2777,7 +2777,7 @@ void Document::UpdateStyle() {
   // Updating style can trigger network requests, so keep track of execution.
   absl::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "documentUpdateStyle");
     info.Set("url", Url().GetString().Utf8());
     std::string json;
@@ -4295,7 +4295,7 @@ void Document::ImplicitClose() {
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "documentLoaded");
     info.Set("url", Url().GetString().Utf8());
     std::string json;
@@ -4554,7 +4554,7 @@ bool Document::DispatchBeforeUnloadEvent(
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "documentBeforeUnload");
     info.Set("url", Url().GetString().Utf8());
     std::string json;
@@ -4666,7 +4666,7 @@ void Document::DispatchUnloadEvents(UnloadEventTimingInfo* unload_timing_info) {
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "documentUnloaded");
     info.Set("url", Url().GetString().Utf8());
     std::string json;
@@ -5307,7 +5307,7 @@ void Document::DidLoadAllScriptBlockingResources() {
 void Document::ExecuteScriptsWaitingForResources() {
   absl::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "documentExecuteScriptsWaitingForResources");
     info.Set("url", Url().GetString().Utf8());
     std::string json;
@@ -8034,7 +8034,7 @@ void Document::FinishedParsing() {
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "documentFinishedParsing");
     info.Set("url", Url().GetString().Utf8());
     std::string json;
