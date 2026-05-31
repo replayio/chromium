@@ -130,7 +130,14 @@ ThreadPoolImpl::ThreadPoolImpl(std::string_view histogram_label,
     record_replay_unordered_thread_group_ = std::make_unique<ThreadGroupImpl>(
         std::string(),
         kBackgroundPoolEnvironmentParams.name_suffix,
-        kBackgroundPoolEnvironmentParams.thread_type_hint,
+        // Use the foreground (kDefault) thread_type_hint, NOT kBackground: on
+        // Linux CanUseBackgroundThreadTypeForWorkerThread() is always false, so
+        // a kBackground hint would trip the CHECK in WorkerThread::WorkerThread
+        // (worker_thread.cc:159). The hint only affects OS thread priority and
+        // may-block tuning -- it has no ordering/correctness effect on this
+        // unordered group -- so kDefault is the safe fallback, mirroring what
+        // the real background_thread_group_ above does on Linux.
+        kForegroundPoolEnvironmentParams.thread_type_hint,
         ThreadGroupType::BACKGROUND,
         task_tracker_->GetTrackedRef(), tracked_ref_factory_.GetTrackedRef());
   }
