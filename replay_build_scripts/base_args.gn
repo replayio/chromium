@@ -8,7 +8,6 @@ use_reclient = false
 symbol_level = 1
 is_debug = false
 dcheck_always_on = false # disable dchecks
-enable_nacl = false
 
 use_allocator = "none"
 use_allocator_shim = false

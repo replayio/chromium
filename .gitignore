@@ -67,7 +67,7 @@ tags
 TAGS
 Thumbs.db
 rust-project.json
-v8
+/v8
 v8.log
 vs-chromium-project.txt
 # Store android emulator artifacts, used by //tools/android/avd/avd.py
