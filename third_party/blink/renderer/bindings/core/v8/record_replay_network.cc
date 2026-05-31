@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
 
 #include "base/base64.h"
+#include "base/compiler_specific.h"
 #include "base/json/json_writer.h"
 #include "base/values.h"
 #include "net/base/net_errors.h"
@@ -19,6 +20,7 @@
 #include "third_party/blink/renderer/platform/loader/fetch/resource_request.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_response.h"
 #include "third_party/blink/renderer/platform/network/encoded_form_data.h"
+#include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "v8/include/v8.h"
 
 using namespace blink;
@@ -139,7 +141,7 @@ static const char* GetRequestCauseString(const ResourceRequest& req) {
    */
 }
 
-static absl::optional<base::DictionaryValue>
+static std::optional<base::DictValue>
 BuildInitiatorObject(const blink::Document* document,
                      const blink::FetchInitiatorInfo& initiator_info) {
   // See InspectorNetworkAgent::BuildInitiatorObject for the basis of this
@@ -147,10 +149,10 @@ BuildInitiatorObject(const blink::Document* document,
   // while replaying so we don't need this logic duplication.
 
   if (initiator_info.is_imported_module && !initiator_info.referrer.empty()) {
-    base::DictionaryValue rv;
-    rv.SetString("url", initiator_info.referrer.Utf8());
-    rv.SetInteger("line", initiator_info.position.line_.OneBasedInt());
-    rv.SetInteger("column", initiator_info.position.column_.ZeroBasedInt());
+    base::DictValue rv;
+    rv.Set("url", initiator_info.referrer.Utf8());
+    rv.Set("line", initiator_info.position.line_.OneBasedInt());
+    rv.Set("column", initiator_info.position.column_.ZeroBasedInt());
     return rv;
   }
 
@@ -158,8 +160,8 @@ BuildInitiatorObject(const blink::Document* document,
       initiator_info.name == blink::fetch_initiator_type_names::kCSS ||
       initiator_info.name == blink::fetch_initiator_type_names::kUacss;
   if (was_requested_by_stylesheet && !initiator_info.referrer.empty()) {
-    base::DictionaryValue rv;
-    rv.SetString("url", initiator_info.referrer.Utf8());
+    base::DictValue rv;
+    rv.Set("url", initiator_info.referrer.Utf8());
     return rv;
   }
 
@@ -167,24 +169,24 @@ BuildInitiatorObject(const blink::Document* document,
     document = document->LocalOwner() ? document->LocalOwner()->ownerDocument()
                                       : nullptr;
   if (document && document->GetScriptableDocumentParser()) {
-    base::DictionaryValue rv;
+    base::DictValue rv;
 
     blink::KURL url = document->Url();
     url.RemoveFragmentIdentifier();
-    rv.SetString("url", url.GetString().Utf8());
+    rv.Set("url", url.GetString().Utf8());
 
     if (TextPosition::BelowRangePosition() != initiator_info.position) {
-      rv.SetInteger("line", initiator_info.position.line_.OneBasedInt());
-      rv.SetInteger("column", initiator_info.position.column_.ZeroBasedInt());
+      rv.Set("line", initiator_info.position.line_.OneBasedInt());
+      rv.Set("column", initiator_info.position.column_.ZeroBasedInt());
     } else {
-      rv.SetInteger("line", document->GetScriptableDocumentParser()->GetTextPosition().line_.OneBasedInt());
-      rv.SetInteger("column", document->GetScriptableDocumentParser()->GetTextPosition().column_.ZeroBasedInt());
+      rv.Set("line", document->GetScriptableDocumentParser()->GetTextPosition().line_.OneBasedInt());
+      rv.Set("column", document->GetScriptableDocumentParser()->GetTextPosition().column_.ZeroBasedInt());
     }
 
     return rv;
   }
 
-  return absl::optional<base::DictionaryValue>();
+  return std::optional<base::DictValue>();
 }
 
 void OnNetworkPrepareRequest(const blink::Document* document, const blink::Resource* resource,
@@ -204,7 +206,7 @@ void OnNetworkPrepareRequest(const blink::Document* document, const blink::Resou
   std::string requestId = RecordReplayNetworkRequestId(request.InspectorId());
 
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "networkRequest");
     info.Set("requestId", requestId);
     std::string json;
@@ -212,31 +214,31 @@ void OnNetworkPrepareRequest(const blink::Document* document, const blink::Resou
     recordreplay::NewDependencyGraphNode(json.c_str());
   }
 
-  base::DictionaryValue dict;
+  base::DictValue dict;
 
-  dict.SetDoubleKey("bookmark", (double) bookmark);
-  dict.SetString("requestId", requestId);
-  dict.SetString("requestUrl", url_string);
-  dict.SetString("requestMethod", request.HttpMethod().Utf8());
+  dict.Set("bookmark", (double) bookmark);
+  dict.Set("requestId", requestId);
+  dict.Set("requestUrl", url_string);
+  dict.Set("requestMethod", request.HttpMethod().Utf8());
   const char* requestCause = GetRequestCauseString(request);
   if (requestCause) {
-    dict.SetString("requestCause", requestCause);
+    dict.Set("requestCause", requestCause);
   }
 
   base::ListValue headers;
   for (auto header : request.HttpHeaderFields()) {
-    base::DictionaryValue header_obj;
-    header_obj.SetString("name", header.key.Utf8());
-    header_obj.SetString("value", header.value.Utf8());
+    base::DictValue header_obj;
+    header_obj.Set("name", header.key.Utf8());
+    header_obj.Set("value", header.value.Utf8());
     headers.Append(std::move(header_obj));
   }
-  dict.SetKey("requestHeaders", std::move(headers));
+  dict.Set("requestHeaders", std::move(headers));
 
   if (resource) {
     const blink::FetchInitiatorInfo& initiator_info = resource->Options().initiator_info;
-    absl::optional<base::DictionaryValue> initiator_obj = BuildInitiatorObject(document, initiator_info);
+    std::optional<base::DictValue> initiator_obj = BuildInitiatorObject(document, initiator_info);
     if (initiator_obj) {
-      dict.SetKey("initiator", *std::move(initiator_obj));
+      dict.Set("initiator", *std::move(initiator_obj));
     }
   }
 
@@ -246,12 +248,12 @@ void OnNetworkPrepareRequest(const blink::Document* document, const blink::Resou
   const scoped_refptr<blink::EncodedFormData>& form_body =
     request.Body().FormBody();
   if (form_body) {
-    WTF::String data = form_body->FlattenToString();
-    base::DictionaryValue requestDataDict;
-    requestDataDict.SetString("requestId", requestId);
+    String data = form_body->FlattenToString();
+    base::DictValue requestDataDict;
+    requestDataDict.Set("requestId", requestId);
     std::string dataStr = data.Utf8();
-    requestDataDict.SetString("data", dataStr);
-    requestDataDict.SetInteger("dataLength", (int)dataStr.size());
+    requestDataDict.Set("data", dataStr);
+    requestDataDict.Set("dataLength", (int)dataStr.size());
     BrowserEvent("Network.RequestData.Form", requestDataDict);
   }
 }
@@ -262,20 +264,20 @@ void OnNetworkResourceRedirect(uint64_t inspector_id, const blink::KURL& new_url
     return;
   }
 
-  base::DictionaryValue dict;
-  dict.SetString("requestId", RecordReplayNetworkRequestId(inspector_id));
-  dict.SetString("requestUrl", new_url.GetString().Utf8());
+  base::DictValue dict;
+  dict.Set("requestId", RecordReplayNetworkRequestId(inspector_id));
+  dict.Set("requestUrl", new_url.GetString().Utf8());
 
   base::ListValue headers;
   if (new_request) {
     for (auto header : new_request->HttpHeaderFields()) {
-      base::DictionaryValue header_obj;
-      header_obj.SetString("name", header.key.Utf8());
-      header_obj.SetString("value", header.value.Utf8());
+      base::DictValue header_obj;
+      header_obj.Set("name", header.key.Utf8());
+      header_obj.Set("value", header.value.Utf8());
       headers.Append(std::move(header_obj));
     }
   }
-  dict.SetKey("requestHeaders", std::move(headers));
+  dict.Set("requestHeaders", std::move(headers));
 
   BrowserEvent("Network.ResourceRedirect", dict);
 }
@@ -286,21 +288,21 @@ void OnNetworkReceiveResponse(uint64_t inspector_id,
     return;
   }
 
-  base::DictionaryValue dict;
-  dict.SetString("requestId", RecordReplayNetworkRequestId(inspector_id));
+  base::DictValue dict;
+  dict.Set("requestId", RecordReplayNetworkRequestId(inspector_id));
   const char* http_version = HttpVersionToString(response.HttpVersion());
   base::ListValue headers;
   for (auto header : response.HttpHeaderFields()) {
-    base::DictionaryValue header_obj;
-    header_obj.SetString("name", header.key.Utf8());
-    header_obj.SetString("value", header.value.Utf8());
+    base::DictValue header_obj;
+    header_obj.Set("name", header.key.Utf8());
+    header_obj.Set("value", header.value.Utf8());
     headers.Append(std::move(header_obj));
   }
-  dict.SetKey("responseHeaders", std::move(headers));
-  dict.SetString("responseProtocolVersion", http_version);
-  dict.SetDoubleKey("responseStatus", response.HttpStatusCode());
-  dict.SetString("responseStatusText", response.HttpStatusText().Utf8());
-  dict.SetBoolean("responseFromCache", response.WasCached());
+  dict.Set("responseHeaders", std::move(headers));
+  dict.Set("responseProtocolVersion", http_version);
+  dict.Set("responseStatus", response.HttpStatusCode());
+  dict.Set("responseStatusText", response.HttpStatusText().Utf8());
+  dict.Set("responseFromCache", response.WasCached());
   BrowserEvent("Network.DidReceiveResponse", dict);
 }
 
@@ -312,7 +314,7 @@ void OnNetworkReceiveData(uint64_t inspector_id, const char* data, int length) {
   std::string requestId = RecordReplayNetworkRequestId(inspector_id);
 
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "networkReceiveData");
     info.Set("requestId", requestId);
     info.Set("length", length);
@@ -321,17 +323,17 @@ void OnNetworkReceiveData(uint64_t inspector_id, const char* data, int length) {
     recordreplay::NewDependencyGraphNode(json.c_str());
   }
 
-  base::DictionaryValue dict;
-  dict.SetString("requestId", requestId);
-  dict.SetDoubleKey("dataLength", (double) length);
+  base::DictValue dict;
+  dict.Set("requestId", requestId);
+  dict.Set("dataLength", (double) length);
   if (data) {
     std::string data_base64 = base::Base64Encode(
-      base::span<const uint8_t>(
+      UNSAFE_BUFFERS(base::span<const uint8_t>(
         reinterpret_cast<const uint8_t*>(data),
-        length
-      )
+        static_cast<size_t>(length)
+      ))
     );
-    dict.SetString("data", data_base64);
+    dict.Set("data", data_base64);
   }
   BrowserEvent("Network.DidReceiveData", dict);
 }
@@ -346,7 +348,7 @@ void OnNetworkFinishLoading(uint64_t inspector_id,
   std::string requestId = RecordReplayNetworkRequestId(inspector_id);
 
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "networkFinishLoading");
     info.Set("requestId", requestId);
     std::string json;
@@ -354,10 +356,10 @@ void OnNetworkFinishLoading(uint64_t inspector_id,
     recordreplay::NewDependencyGraphNode(json.c_str());
   }
 
-  base::DictionaryValue dict;
-  dict.SetString("requestId", requestId);
-  dict.SetDoubleKey("encodedBodySize", (double) encoded_body_length);
-  dict.SetDoubleKey("decodedBodySize", (double) decoded_body_length);
+  base::DictValue dict;
+  dict.Set("requestId", requestId);
+  dict.Set("encodedBodySize", (double) encoded_body_length);
+  dict.Set("decodedBodySize", (double) decoded_body_length);
   BrowserEvent("Network.DidFinishLoading", dict);
 }
 
@@ -369,7 +371,7 @@ void OnNetworkFail(uint64_t inspector_id, const blink::WebURLError& error) {
   std::string requestId = RecordReplayNetworkRequestId(inspector_id);
 
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "networkFail");
     info.Set("requestId", requestId);
     std::string json;
@@ -378,9 +380,9 @@ void OnNetworkFail(uint64_t inspector_id, const blink::WebURLError& error) {
   }
 
   std::string reason = net::ErrorToShortString(error.reason());
-  base::DictionaryValue dict;
-  dict.SetString("requestId", requestId);
-  dict.SetString("requestFailedReason", std::move(reason));
+  base::DictValue dict;
+  dict.Set("requestId", requestId);
+  dict.Set("requestFailedReason", std::move(reason));
   BrowserEvent("Network.DidFailLoading", dict);
 }
 

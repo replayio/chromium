@@ -77,7 +77,7 @@ namespace {
 
 void NotifyFinishObservers(
     GCedHeapHashSet<WeakMember<ResourceFinishObserver>, blink::WeakMemberHashRecordReplayId<ResourceFinishObserver>>* observers,
-    HeapVector<Member<ResourceFinishObserver>>* observers_strong) {
+    GCedHeapVector<Member<ResourceFinishObserver>>* observers_strong) {
   for (const auto& observer : *observers)
     observer->NotifyFinished();
 }
@@ -345,10 +345,10 @@ void Resource::TriggerNotificationForFinishObservers(
 
   // RUN-1724
   // [RUN-1457 cleanup]
-  HeapVector<Member<ResourceFinishObserver>>* new_collections_strong =
-      MakeGarbageCollected<HeapVector<Member<ResourceFinishObserver>>>();
+  GCedHeapVector<Member<ResourceFinishObserver>>* new_collections_strong =
+      MakeGarbageCollected<GCedHeapVector<Member<ResourceFinishObserver>>>();
   if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "Resource")) {
-    new_collections_strong->AppendRange(replay_finish_observers_strong_.begin(), replay_finish_observers_strong_.end());
+    new_collections_strong->Append(replay_finish_observers_strong_.begin(), replay_finish_observers_strong_.end());
     replay_finish_observers_strong_.clear();
   }
 
@@ -436,7 +436,7 @@ void Resource::Finish(base::TimeTicks load_response_end,
                       base::SingleThreadTaskRunner* task_runner) {
   absl::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "resourceFinished");
     info.Set("url", Url().GetString().Utf8());
     std::string json;
@@ -672,7 +672,7 @@ void Resource::DidAddClient(ResourceClient* client) {
   if (IsLoaded()) {
     absl::optional<recordreplay::AutoDependencyExecution> execute;
     if (recordreplay::DependencyGraphEnabled()) {
-      base::Value::Dict info;
+      base::DictValue info;
       info.Set("kind", "resourceAlreadyLoaded");
       info.Set("url", Url().GetString().Utf8());
       std::string json;

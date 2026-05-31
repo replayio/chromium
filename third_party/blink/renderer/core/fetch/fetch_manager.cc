@@ -861,7 +861,7 @@ static void ReportFetchFailed(const ResourceError& error) {
 
   std::string annotationContents;
   if (recordreplay::IsReplaying()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("error_code", error.ErrorCode());
     info.Set("failing_url", error.FailingURL().Utf8());
     info.Set("error_message", error.LocalizedDescription().Utf8());
@@ -957,7 +957,10 @@ void FetchLoaderBase::Start(ExceptionState& exception_state) {
 
   if (recordreplay::IsInReplayCode()) {
     // [TT-1422] Always allow |fetch| from Replay code.
-    PerformSchemeFetch();
+    // Upstream PerformSchemeFetch now requires an ExceptionState&;
+    // exception_state is in scope (Start's parameter), matching the
+    // non-Replay sibling call below.
+    PerformSchemeFetch(exception_state);
     return;
   }
   // "- |request|'s url's origin is same origin with |request|'s origin,

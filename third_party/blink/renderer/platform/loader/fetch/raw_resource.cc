@@ -46,6 +46,7 @@
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 
 #include "base/json/json_writer.h"
+#include "base/values.h"
 
 namespace blink {
 
@@ -238,9 +239,9 @@ void RawResource::Trace(Visitor* visitor) const {
 }
 
 void RawResource::ResponseReceived(const ResourceResponse& response) {
-  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  std::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "resourceResponseReceived");
     info.Set("url", Url().GetString().Utf8());
     std::string json;

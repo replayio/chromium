@@ -44,7 +44,7 @@ static void ReportFetchFailed(const char* reason) {
 
   std::string annotationContents;
   if (recordreplay::IsReplaying()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("reason", reason);
     base::JSONWriter::Write(info, &annotationContents);
   }

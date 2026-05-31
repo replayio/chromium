@@ -69,7 +69,7 @@ class BodyConsumerBase : public GarbageCollected<BodyConsumerBase>,
   template <typename IDLType, typename T>
   void ResolveLater(const T& object) {
     if (recordreplay::DependencyGraphEnabled()) {
-      base::Value::Dict info;
+      base::DictValue info;
       info.Set("kind", "scheduleResolveBodyConsumer");
       info.Set("url", url_);
       std::string json;
@@ -100,7 +100,7 @@ class BodyConsumerBase : public GarbageCollected<BodyConsumerBase>,
     requires(!std::is_same<IDLType, IDLAny>::value &&
              !IsNotShared<IDLType>::value)
   void ResolveNow(const T& object) {
-    absl::optional<recordreplay::AutoDependencyExecution> execute;
+    std::optional<recordreplay::AutoDependencyExecution> execute;
     if (recordreplay::DependencyGraphEnabled()) {
       int node_id = recordreplay::NewDependencyGraphNode(
         "{\"kind\":\"resolveBodyConsumer\"}"
@@ -117,7 +117,7 @@ class BodyConsumerBase : public GarbageCollected<BodyConsumerBase>,
   template <typename IDLType, typename T>
     requires std::is_same<IDLType, IDLAny>::value
   void ResolveNow(const Persistent<DisallowNewWrapper<ScriptValue>>& object) {
-    absl::optional<recordreplay::AutoDependencyExecution> execute;
+    std::optional<recordreplay::AutoDependencyExecution> execute;
     if (recordreplay::DependencyGraphEnabled()) {
       int node_id = recordreplay::NewDependencyGraphNode(
         "{\"kind\":\"resolveBodyConsumer\"}"
@@ -134,7 +134,7 @@ class BodyConsumerBase : public GarbageCollected<BodyConsumerBase>,
   template <typename IDLType, typename T>
     requires IsNotShared<IDLType>::value
   void ResolveNow(const T& object) {
-    absl::optional<recordreplay::AutoDependencyExecution> execute;
+    std::optional<recordreplay::AutoDependencyExecution> execute;
     if (recordreplay::DependencyGraphEnabled()) {
       int node_id = recordreplay::NewDependencyGraphNode(
         "{\"kind\":\"resolveBodyConsumer\"}"

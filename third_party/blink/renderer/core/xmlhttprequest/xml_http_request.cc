@@ -584,7 +584,7 @@ void XMLHttpRequest::DispatchReadyStateChangeEvent() {
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "xhrReadyStateChangeEvent");
     info.Set("url", Url().GetString().Utf8());
     std::string json;
@@ -887,10 +887,8 @@ void XMLHttpRequest::send(const String& body, ExceptionState& exception_state) {
         );
       } else if (length < recorded_length) {
         size_t padding = recorded_length - length;
-        std::unique_ptr<char[]> buffer(new char[padding + 1]);
-        memset(buffer.get(), ' ', padding);
-        buffer[padding] = '\0';
-        adj_body = body + String(buffer.get());
+        Vector<char> buffer(static_cast<wtf_size_t>(padding), ' ');
+        adj_body = body + String(base::span(buffer));
       } else {
         adj_body = body.Substring(0, (unsigned int) recorded_length);
       }
@@ -1836,7 +1834,7 @@ void XMLHttpRequest::EndLoading() {
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "xhrEndLoading");
     info.Set("url", Url().GetString().Utf8());
     std::string json;

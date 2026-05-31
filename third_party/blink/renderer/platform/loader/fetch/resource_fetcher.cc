@@ -2874,6 +2874,13 @@ void ResourceFetcher::UpdateImagePrioritiesAndSpeculativeDecodes() {
 
   HeapVector<Member<Resource>> entries;
   for (Resource* resource : not_loaded_image_resources_) {
+    entries.push_back(resource);
+  }
+  std::sort(entries.begin(), entries.end(),
+            recordreplay::CompareMemberByPointerId<Member<Resource>>());
+
+  HeapVector<Member<Resource>> to_be_removed;
+  for (Resource* resource : entries) {
     if (resource->IsLoaded()) {
       to_be_removed.push_back(resource);
       continue;
