@@ -317,7 +317,10 @@ void IntersectionObserverController::AddTrackedObservation(
   if (!observer->RootIsImplicit())
     return;
   tracked_implicit_root_observations_
-      .insert(observer, HeapHashSet<Member<IntersectionObservation>>())
+      .insert(observer,
+              HeapHashSet<Member<IntersectionObservation>,
+                          blink::MemberHashRecordReplayRegisteredPointerId<
+                              IntersectionObservation>>())
       .stored_value->value.insert(&observation);
   if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "IntersectionObserverController")) {
     replay_strong_tracked_implicit_root_observations_.insert(&observation);

@@ -200,7 +200,7 @@ bool ScrollSnapshotTimeline::UpdateSnapshotInternal(bool service_animations) {
   timeline_state_snapshotted_ = new_state;
   ResolveTimelineOffsets();
 
-  const HeapHashSet<WeakMember<Animation>>& animations = GetAnimations();
+  const auto& animations = GetAnimations();
 
   if (RuntimeEnabledFeatures::TimelineTriggerEnabled() &&
       (snapshot_changed || update_triggers_)) {

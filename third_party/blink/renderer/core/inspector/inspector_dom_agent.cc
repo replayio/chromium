@@ -1604,6 +1604,7 @@ protocol::Response InspectorDOMAgent::getSearchResults(
   *node_ids = std::make_unique<protocol::Array<int>>();
   for (int i = from_index; i < to_index; ++i) {
     (*node_ids)->emplace_back(PushNodePathToFrontend((*it->value)[i].Get()));
+  }
   return protocol::Response::Success();
 }
 

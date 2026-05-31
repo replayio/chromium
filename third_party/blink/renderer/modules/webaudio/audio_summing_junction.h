@@ -27,6 +27,10 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_WEBAUDIO_AUDIO_SUMMING_JUNCTION_H_
 
 #include "third_party/blink/renderer/platform/audio/audio_bus.h"
+// Replay (replay-code): pulls platform/heap/member.h transitively, providing
+// the RawPtrHashRecordReplayRegisteredPointerId<> force-determinism hash trait
+// used by outputs_ below; without it the trait is undeclared.
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 

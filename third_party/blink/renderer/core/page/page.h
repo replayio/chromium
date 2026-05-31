@@ -62,6 +62,7 @@
 #include "third_party/blink/renderer/platform/scheduler/public/page_scheduler.h"
 #include "third_party/blink/renderer/platform/supplementable.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
+#include "third_party/blink/renderer/platform/wtf/hash_functions.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "ui/gfx/geometry/insets.h"
 
@@ -144,23 +145,10 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
   void CloseSoon();
   bool IsClosing() const { return is_closing_; }
 
-  // recordreplay stable hasher for the page set.
-  struct PageHash {
-    static unsigned GetHash(const WeakMember<Page>& key) {
-      // Hash the record replay id for the pointer.
-      Page* ptr = key.Get();
-      int record_replay_id = ptr ? ptr->RecordReplayId() : -1;
-      return DefaultHash<int>::Hash::GetHash(record_replay_id);
-    }
-
-    static bool Equal(const WeakMember<Page>& a, const WeakMember<Page>& b) {
-      return a == b;
-    }
-
-    static const bool safe_to_compare_to_empty_or_deleted = true;
-  };
-
-  using PageSet = HeapHashSet<WeakMember<Page>, PageHash>;
+  // recordreplay: deterministic page-set ordering is provided by the default
+  // HashTraits<WeakMember<Page>>, which hash by Page::RecordReplayId() (see
+  // member.h BaseMemberHashTraits). No custom hasher needed.
+  using PageSet = HeapHashSet<WeakMember<Page>>;
 
   // Return the current set of full-fledged, ordinary pages.
   // Each created and owned by a WebView.

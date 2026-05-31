@@ -158,12 +158,14 @@ bool SnapCoordinator::UpdateSnapContainerData(LayoutBox& snap_container) {
   } else {
     for (auto& fragment : snap_container.PhysicalFragments()) {
       if (auto* snap_areas = fragment.SnapAreas()) {
-        std::vector<Element*> snap_area_vector;
+        HeapVector<Member<Element>> snap_area_vector;
         for (Element* snap_area : *snap_areas) {
           snap_area_vector.push_back(snap_area);
         }
         std::sort(snap_area_vector.begin(), snap_area_vector.end(),
-                  recordreplay::CompareByRecordReplayId());
+                  [](Element* a, Element* b) {
+                    return recordreplay::CompareByRecordReplayId()(a, b);
+                  });
 
         for (Element* snap_area : snap_area_vector) {
           cc::SnapAreaData snap_area_data =
