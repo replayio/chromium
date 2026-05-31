@@ -528,9 +528,12 @@ InlinePaintContext& BoxFragmentPainter::EnsureInlineContext() {
 
 void BoxFragmentPainter::PaintFragment(const PhysicalBoxFragment& fragment,
                                        const PaintInfo& paint_info) {
+  // [RUN-1975-2008] v147 removed PaintInfo::FragmentID() (and any numeric
+  // fragment-id equivalent), so the fragment-id arg was dropped from this
+  // diagnostic; only the node RecordReplayId remains.
   recordreplay::Assert(
-      "[RUN-1975-2008] NgBoxFragmentPainter::PaintFragment A %llu %d",
-      (uint64_t)paint_info.FragmentID(), fragment.GetNode() ? fragment.GetNode()->RecordReplayId() : -1);
+      "[RUN-1975-2008] NgBoxFragmentPainter::PaintFragment A %d",
+      fragment.GetNode() ? fragment.GetNode()->RecordReplayId() : -1);
   if (fragment.CanTraverse()) {
     BoxFragmentPainter(fragment).Paint(paint_info);
     return;

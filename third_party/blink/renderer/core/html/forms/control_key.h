@@ -22,9 +22,16 @@ static inline int CompareControlKeyStrings(StringImpl* a, StringImpl* b) {
     return a->Is8Bit() ? -1 : 1;
   }
   if (a->Is8Bit()) {
-    return memcmp(a->Characters8(), b->Characters8(), a->length());
+    // Replay (force-determinism): raw-ptr memcmp trips -Wunsafe-buffer-usage
+    // (errors under -Werror); UNSAFE_BUFFERS is non-semantic and preserves the
+    // byte-exact comparison order required for deterministic ControlKey sorting.
+    return UNSAFE_BUFFERS(
+        memcmp(a->Characters8(), b->Characters8(), a->length()));
   }
-  return memcmp(a->Characters16(), b->Characters16(), a->length() * 2);
+  // Replay (force-determinism): see above; raw-ptr memcmp wrapped in
+  // UNSAFE_BUFFERS to satisfy -Wunsafe-buffer-usage without changing semantics.
+  return UNSAFE_BUFFERS(
+      memcmp(a->Characters16(), b->Characters16(), a->length() * 2));
 }
 
 // ControlKey class represents a pair of a name attribute value and a control

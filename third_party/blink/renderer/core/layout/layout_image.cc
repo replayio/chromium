@@ -307,9 +307,12 @@ void LayoutImage::PaintReplaced(const PaintInfo& paint_info,
   if (ChildPaintBlockedByDisplayLock())
     return;
 
+  // [RUN-1975-2008] v147 removed PaintInfo::FragmentID() (and any numeric
+  // fragment-id equivalent), so the fragment-id arg was dropped from this
+  // diagnostic; only paint_offset remains.
   recordreplay::Assert(
-      "[RUN-1975-2008] LayoutImage::PaintReplaced %llu %s",
-      (uint64_t)paint_info.FragmentID(), paint_offset.ToString().Utf8().c_str());
+      "[RUN-1975-2008] LayoutImage::PaintReplaced %s",
+      paint_offset.ToString().Utf8().c_str());
   ImagePainter(*this).PaintReplaced(paint_info, paint_offset);
 }
 

@@ -255,8 +255,8 @@ class CORE_EXPORT MatchResult {
     RecordReplayMatchedPropertiesVector result;
     result.resize(matched_properties_.size());
 
-    for (WTF::wtf_size_t i = 0; i < matched_properties_.size(); ++i) {
-      memcpy(&result[i].types_, &matched_properties_[i].types_, sizeof(MatchedProperties::Data));
+    for (wtf_size_t i = 0; i < matched_properties_.size(); ++i) {
+      UNSAFE_BUFFERS(memcpy(&result[i].types_, &matched_properties_[i].data_, sizeof(MatchedProperties::Data)));
       result[i].record_replay_id_properties = recordreplay::PointerId(matched_properties_[i].properties.Get());
     }
 

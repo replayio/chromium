@@ -313,7 +313,9 @@ String CSSNumericLiteralValue::CustomCSSText() const {
             // [RUN-1918] Workaround divergent floating point sprintf.
             std::string textStr = text.Ascii();
             recordreplay::RecordReplayString("CSSNumericLiteralValue::CustomCSSText", textStr);
-            text = String::FromUTF8(&textStr[0], textStr.length());
+            // [RUN-1918] Upstream dropped the 2-arg (ptr,len) FromUTF8; textStr
+            // is a std::string, which binds to the std::string_view overload.
+            text = String::FromUTF8(textStr);
           }
         }
       } else {

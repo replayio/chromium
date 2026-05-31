@@ -1190,7 +1190,7 @@ CSSStyleSheet* StyleEngine::CreateSheet(
   recordreplay::Assert("[RUN-1065-1390] StyleEngine::CreateSheet %d %d %d %lu",
                        result.is_new_entry, !!contents,
                        contents && contents->IsCacheableForStyleElement(),
-                       AtomicStringHash::GetHash(text_content));
+                       FastHash(text.RawByteSpan()));
 
   if (result.is_new_entry || !contents ||
       !contents->IsCacheableForStyleElement() ||

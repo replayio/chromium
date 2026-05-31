@@ -101,7 +101,10 @@ StyleImage* CSSImageValue::CacheImage(
 
     if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
                                              "StyleImageCache")) {
-      document.GetStyleEngine().RetainStyleImageForReplay(cached_image_.Get());
+      // `cached_image_` is statically `Member<StyleImage>` but was just assigned
+      // a concrete `StyleFetchedImage` above, so the checked downcast is safe.
+      document.GetStyleEngine().RetainStyleImageForReplay(
+          To<StyleFetchedImage>(cached_image_.Get()));
     }
   }
   return cached_image_.Get();

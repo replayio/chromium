@@ -230,7 +230,7 @@ inline LayoutUnit ResolveMainBlockLength(
     LayoutUnit intrinsic_size,
     LayoutUnit override_available_size = kIndefiniteSize) {
   recordreplay::Assert("[RUN-1239] ResolveMainBlockLength %d",
-                       length.IsContentOrIntrinsic());
+                       length.HasContentOrIntrinsic());
   return ResolveBlockLengthInternal(
       constraint_space, style, border_padding, length, auto_length,
       LengthTypeInternal::kMain, override_available_size,
@@ -247,7 +247,7 @@ inline LayoutUnit ResolveMainBlockLength(
     BlockSizeFunctionRef block_size_func,
     LayoutUnit override_available_size = kIndefiniteSize) {
   recordreplay::Assert("[RUN-1239] ResolveMainBlockLength %d",
-                       length.IsContentOrIntrinsic());
+                       length.HasContentOrIntrinsic());
   return ResolveBlockLengthInternal(
       constraint_space, style, border_padding, length, auto_length,
       LengthTypeInternal::kMain, override_available_size,

@@ -105,8 +105,11 @@ SVGImage::SVGImage(ImageObserver* observer, bool is_multipart)
 SVGImage::~SVGImage() {
   // Leak the agent_group_scheduler_ when removed during GC.
   // See https://linear.app/replay/issue/RUN-2056#comment-f827701f.
+  // AgentGroupScheduler is an Oilpan GarbageCollected object, so the member is
+  // a Persistent (no .release()). Root it forever via an intentionally-leaked
+  // heap Persistent so the object is never finalized.
   if (recordreplay::AreEventsDisallowed("~SVGImage"))
-    agent_group_scheduler_.release();
+    new Persistent<AgentGroupScheduler>(agent_group_scheduler_);
 
   if (document_host_) {
     // Store `document_host_` in a local variable and clear it so that

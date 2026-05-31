@@ -171,7 +171,7 @@ void StyleSheetCollection::PrepareUpdateActiveStyleSheets(
     recordreplay::Assert(
         "[RUN-968] "
         "ShadowTreeStyleSheetCollection::CollectStyleSheets A %d %u",
-        GetTreeScope().RecordReplayId(),
+        tree_scope_->RecordReplayId(),
         (unsigned) style_sheet_candidate_nodes_.size());
   }
 

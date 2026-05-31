@@ -501,7 +501,7 @@ LayoutObject::~LayoutObject() {
   // that are accessed deterministically.
   // See https://linear.app/replay/issue/RUN-1758/fontfallbackmap-items-getting-removed-non-deterministically
   if (recordreplay::AreEventsDisallowed("~LayoutObject")) {
-    (void) style_.release();
+    (void) style_.Release();
   }
 }
 

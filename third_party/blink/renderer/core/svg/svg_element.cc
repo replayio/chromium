@@ -962,10 +962,13 @@ void SVGElement::SetNeedsStyleRecalcForInstances(
   if (set.empty())
     return;
 
-  std::vector<SVGElement*> members;
+  HeapVector<Member<SVGElement>> members;
   for (SVGElement* instance : set)
     members.push_back(instance);
-  std::sort(members.begin(), members.end(), recordreplay::CompareByRecordReplayId());
+  std::sort(members.begin(), members.end(),
+            [](SVGElement* a, SVGElement* b) {
+              return recordreplay::CompareByRecordReplayId()(a, b);
+            });
 
   for (SVGElement* instance : members)
     instance->SetNeedsStyleRecalc(change_type, reason);
@@ -1181,7 +1184,7 @@ SMILTimeContainer* SVGElement::GetTimeContainer() const {
 void SVGElement::SynchronizeAttributeInShadowInstances(
     const QualifiedName& name,
     const AtomicString& value) {
-  const HeapHashSet<WeakMember<SVGElement>>& set = InstancesForElement();
+  const ReplaySVGElementSet& set = InstancesForElement();
   for (SVGElement* instance : set) {
     instance->SetAttributeWithoutValidation(name, value);
   }
