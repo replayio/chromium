@@ -145,7 +145,7 @@ DisplayResourceProviderSoftware::ScopedReadLockSkImage::ScopedReadLockSkImage(
     SkBitmap sk_bitmap;
     if (recordreplay::PopulateSkBitmapWithResource(&sk_bitmap, resource_id)) {
       sk_bitmap.setImmutable();
-      sk_image_ = SkImage::MakeFromBitmap(sk_bitmap);
+      sk_image_ = SkImages::RasterFromBitmap(sk_bitmap);
     }
     return;
   }

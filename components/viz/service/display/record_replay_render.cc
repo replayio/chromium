@@ -151,8 +151,8 @@ bool PopulateSkBitmapWithResource(SkBitmap* sk_bitmap, viz::ResourceId resource_
   }
 
   SkImageInfo info =
-      SkImageInfo::MakeN32Premul(transferable->size.width(),
-                                 transferable->size.height());
+      SkImageInfo::MakeN32Premul(transferable->GetSize().width(),
+                                 transferable->GetSize().height());
   return sk_bitmap->installPixels(info, pixels, info.minRowBytes());
 }
 
@@ -165,19 +165,19 @@ const SkPixmap* gCurrentPixmap;
 static char* EncodeBitmapContents(const char* mime_type, int jpeg_quality) {
   CHECK(gCurrentPixmap);
 
-  if (strcmp(mime_type, "image/jpeg")) {
+  if (std::string_view(mime_type) != "image/jpeg") {
     // NYI
     return nullptr;
   }
 
-  std::vector<unsigned char> data;
-  if (!gfx::JPEGCodec::Encode(*gCurrentPixmap, jpeg_quality,
-                              SkJpegEncoder::Downsample::k444, &data)) {
+  std::optional<std::vector<uint8_t>> data = gfx::JPEGCodec::Encode(
+      *gCurrentPixmap, jpeg_quality, SkJpegEncoder::Downsample::k444);
+  if (!data) {
     Print("Error: JPEG encoding failed");
     return nullptr;
   }
 
-  std::string encoded = base::Base64Encode(data);
+  std::string encoded = base::Base64Encode(*data);
   return strdup(encoded.c_str());
 }
 

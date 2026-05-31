@@ -191,7 +191,7 @@ void ImageDownloaderImpl::DownloadImage(const KURL& image_url,
   // we are handling.
   absl::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "downloadImage");
     info.Set("url", image_url.GetString().Utf8());
     std::string json;

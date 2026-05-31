@@ -140,7 +140,7 @@ bool SharedGpuContext::CreateContextProviderIfNeededNoPost(
     bool only_if_gpu_compositing) {
   if (recordreplay::IsRecordingOrReplaying("no-gpu")) {
     is_gpu_compositing_disabled_ = true;
-    return;
+    return false;
   }
 
   // Once true, |is_gpu_compositing_disabled_| will always stay true.
