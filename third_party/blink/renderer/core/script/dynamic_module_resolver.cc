@@ -160,7 +160,7 @@ void DynamicImportTreeClient::NotifyModuleTreeLoadFinished(
     return;
   }
 
-  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  std::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::DependencyGraphEnabled()) {
     base::DictValue info;
     info.Set("kind", "dynamicImportTreeLoadFinished");

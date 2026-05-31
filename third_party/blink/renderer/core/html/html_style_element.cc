@@ -120,7 +120,7 @@ void HTMLStyleElement::DispatchPendingEvent(
     DispatchEvent(*Event::Create(event_type_names::kError), "HTMLStyleElement::DispatchPendingEvent #2");
   }
 
-  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  std::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::DependencyGraphEnabled()) {
     int node_id = recordreplay::NewDependencyGraphNode(
       "{\"kind\":\"styleSheetLoaded\"}"
