@@ -130,7 +130,7 @@ String StorageArea::getItem(const String& key,
   if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
     std::string annotationContents;
     if (recordreplay::IsReplaying()) {
-      base::Value::Dict info;
+      base::DictValue info;
       info.Set("kind", "getItem");
       info.Set("type", (int)storage_type_);
       info.Set("key", key.Utf8());
@@ -150,7 +150,7 @@ NamedPropertySetterResult StorageArea::setItem(
   if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
     std::string annotationContents;
     if (recordreplay::IsReplaying()) {
-      base::Value::Dict info;
+      base::DictValue info;
       info.Set("kind", "setItem");
       info.Set("type", (int)storage_type_);
       info.Set("key", key.Utf8());
@@ -184,7 +184,7 @@ NamedPropertyDeleterResult StorageArea::removeItem(
   if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
     std::string annotationContents;
     if (recordreplay::IsReplaying()) {
-      base::Value::Dict info;
+      base::DictValue info;
       info.Set("kind", "removeItem");
       info.Set("type", (int)storage_type_);
       info.Set("key", key.Utf8());
@@ -205,7 +205,7 @@ void StorageArea::clear(ExceptionState& exception_state) {
   if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
     std::string annotationContents;
     if (recordreplay::IsReplaying()) {
-      base::Value::Dict info;
+      base::DictValue info;
       info.Set("kind", "clear");
       info.Set("type", (int)storage_type_);
       base::JSONWriter::Write(info, &annotationContents);

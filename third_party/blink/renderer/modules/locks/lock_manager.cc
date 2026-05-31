@@ -191,7 +191,7 @@ class LockManager::LockRequestImpl final
 
     absl::optional<recordreplay::AutoDependencyExecution> execute;
     if (recordreplay::DependencyGraphEnabled()) {
-      base::Value::Dict info;
+      base::DictValue info;
       info.Set("kind", "lockRequestGranted");
       std::string json;
       base::JSONWriter::Write(info, &json);
@@ -388,7 +388,7 @@ ScriptPromise<IDLAny> LockManager::request(ScriptState* script_state,
 
   int record_replay_dependency_graph_node_id = -1;
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "lockManagerRequest");
     info.Set("name", name.Utf8());
     std::string json;
