@@ -510,7 +510,11 @@ bool HTMLParserScriptRunner::ExecuteScriptsWaitingForParsing() {
                            if (runner->ExecuteScriptsWaitingForParsing()) {
                              // If all scripts are done, need to notify parser
                              // The parser will be resumed when it tries again
-                             runner->host_->NotifyScriptLoaded();
+                             int record_replay_scheduled_node_id =
+                                 recordreplay::NewDependencyGraphNode(
+                                     "{\"kind\":\"scheduleNotifyScriptLoaded\"}");
+                             runner->host_->NotifyScriptLoaded(
+                                 record_replay_scheduled_node_id);
                            }
                          },
                          WrapPersistent(this)));

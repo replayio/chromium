@@ -87,6 +87,7 @@
 
 #include "base/json/json_writer.h"
 #include "base/record_replay.h"
+#include "base/values.h"
 
 // V8 API for HTML parsing activity that will be reported to the record/replay driver.
 extern "C" void V8RecordReplayHTMLParseStart(void* token, const char* url);
@@ -701,7 +702,7 @@ bool HTMLDocumentParser::PumpTokenizer() {
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "documentPumpTokenizer");
     info.Set("url", GetDocument()->Url().GetString().Utf8());
     std::string json;
@@ -1007,7 +1008,7 @@ void HTMLDocumentParser::Append(const String& input_source) {
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "documentAppendString");
     info.Set("url", GetDocument()->Url().GetString().Utf8());
     info.Set("length", (int)input_source.Utf8().length());

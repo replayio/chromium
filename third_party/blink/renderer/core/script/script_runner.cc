@@ -217,7 +217,7 @@ void ScriptRunner::RemoveDelayReasonFromScript(PendingScript* pending_script,
 
   int record_replay_scheduled_node_id = 0;
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "scheduleExecuteAsyncScript");
     if (pending_script->IsEligibleForLowPriorityAsyncScriptExecution()) {
       double timeout = features::kTimeoutForLowPriorityAsyncScriptExecution.Get().InMillisecondsF();

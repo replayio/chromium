@@ -211,7 +211,7 @@ void PendingScript::ExecuteScriptBlock() {
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
+    base::DictValue info;
     info.Set("kind", "executeScriptBlock");
     if (script)
       info.Set("url", script->SourceUrl().GetString().Utf8());
