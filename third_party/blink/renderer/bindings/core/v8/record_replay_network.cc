@@ -25,7 +25,7 @@ using namespace blink;
 
 namespace recordreplay {
 
-static bool PermitRecordReplayBrowserEvents() {
+bool ShouldEmitRecordReplayNetworkBrowserEvents() {
   return IsRecordingOrReplaying("notify-network") && v8::IsMainThread();
 }
 
@@ -189,7 +189,7 @@ BuildInitiatorObject(const blink::Document* document,
 
 void OnNetworkPrepareRequest(const blink::Document* document, const blink::Resource* resource,
                              const blink::ResourceRequest& request) {
-  if (!PermitRecordReplayBrowserEvents()) {
+  if (!ShouldEmitRecordReplayNetworkBrowserEvents()) {
     return;
   }
 
@@ -258,7 +258,7 @@ void OnNetworkPrepareRequest(const blink::Document* document, const blink::Resou
 
 void OnNetworkResourceRedirect(uint64_t inspector_id, const blink::KURL& new_url,
                                blink::ResourceRequest* new_request) {
-  if (!PermitRecordReplayBrowserEvents()) {
+  if (!ShouldEmitRecordReplayNetworkBrowserEvents()) {
     return;
   }
 
@@ -283,7 +283,7 @@ void OnNetworkResourceRedirect(uint64_t inspector_id, const blink::KURL& new_url
 void OnNetworkReceiveResponse(uint64_t inspector_id,
                               const blink::ResourceResponse& response,
                               absl::optional<bool> response_from_cache) {
-  if (!PermitRecordReplayBrowserEvents()) {
+  if (!ShouldEmitRecordReplayNetworkBrowserEvents()) {
     return;
   }
 
@@ -307,7 +307,7 @@ void OnNetworkReceiveResponse(uint64_t inspector_id,
 }
 
 void OnNetworkReceiveData(uint64_t inspector_id, const char* data, int length) {
-  if (!PermitRecordReplayBrowserEvents()) {
+  if (!ShouldEmitRecordReplayNetworkBrowserEvents()) {
     return;
   }
 
@@ -341,7 +341,7 @@ void OnNetworkReceiveData(uint64_t inspector_id, const char* data, int length) {
 void OnNetworkFinishLoading(uint64_t inspector_id,
                             int64_t encoded_body_length,
                             int64_t decoded_body_length) {
-  if (!PermitRecordReplayBrowserEvents()) {
+  if (!ShouldEmitRecordReplayNetworkBrowserEvents()) {
     return;
   }
 
@@ -364,7 +364,7 @@ void OnNetworkFinishLoading(uint64_t inspector_id,
 }
 
 void OnNetworkFail(uint64_t inspector_id, const blink::WebURLError& error) {
-  if (!PermitRecordReplayBrowserEvents()) {
+  if (!ShouldEmitRecordReplayNetworkBrowserEvents()) {
     return;
   }
 

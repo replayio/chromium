@@ -23,6 +23,8 @@ struct WebURLError;
 
 namespace recordreplay {
 
+bool ShouldEmitRecordReplayNetworkBrowserEvents();
+
 void OnNetworkPrepareRequest(const blink::Document* document,
                              const blink::Resource* resource,
                              const blink::ResourceRequest& request);
