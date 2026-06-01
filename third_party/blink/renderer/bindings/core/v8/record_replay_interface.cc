@@ -1550,7 +1550,19 @@ std::unordered_map<std::string, NetworkRequestStatus>*
 // Globals storing values to be returned to controller commands
 // `GetCurrentNetwork*`
 static base::Value *gCurrentNetworkRequestEvent = nullptr;
+static const std::string* gCurrentNetworkRequestId = nullptr;
 static std::vector<uint8_t>* gCurrentNetworkStreamData = nullptr;
+
+static void SetCurrentNetworkRequestEvent(const std::string& request_id,
+                                          base::Value* event) {
+  gCurrentNetworkRequestEvent = event;
+  gCurrentNetworkRequestId = &request_id;
+}
+
+static void ClearCurrentNetworkRequestEvent() {
+  gCurrentNetworkRequestEvent = nullptr;
+  gCurrentNetworkRequestId = nullptr;
+}
 
 static void GetCurrentNetworkRequestEvent(const v8::FunctionCallbackInfo<v8::Value>& args) {
   if (!gCurrentNetworkRequestEvent) {
@@ -1562,6 +1574,17 @@ static void GetCurrentNetworkRequestEvent(const v8::FunctionCallbackInfo<v8::Val
   base::JSONWriter::Write(*gCurrentNetworkRequestEvent, &json);
   v8::Local<v8::String> json_string = ToV8String(isolate, json.c_str());
   args.GetReturnValue().Set(json_string);
+}
+
+static void GetCurrentNetworkRequestId(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  if (!gCurrentNetworkRequestEvent) {
+    return;
+  }
+
+  v8::Isolate* isolate = args.GetIsolate();
+  args.GetReturnValue().Set(
+      ToV8String(isolate, gCurrentNetworkRequestId->c_str()));
 }
 
 static void GetCurrentNetworkStreamData(const v8::FunctionCallbackInfo<v8::Value>& args) {
@@ -1659,9 +1682,9 @@ static void HandleNetworkPrepareRequestEvent(const base::DictionaryValue& info) 
   CopyDictionaryProperty(event, info, "requestCause");
   CopyDictionaryProperty(event, info, "initiator");
 
-  gCurrentNetworkRequestEvent = &event;
+  SetCurrentNetworkRequestEvent(request_id, &event);
   recordreplay::OnNetworkRequestEvent(request_id.c_str());
-  gCurrentNetworkRequestEvent = nullptr;
+  ClearCurrentNetworkRequestEvent();
 }
 
 static void HandleNetworkResourceRedirectEvent(const base::DictionaryValue& info) {
@@ -1694,9 +1717,9 @@ static void HandleNetworkResourceRedirectEvent(const base::DictionaryValue& info
   CopyDictionaryProperty(event, original_info, "requestCause");
   CopyDictionaryProperty(event, original_info, "initiator");
 
-  gCurrentNetworkRequestEvent = &event;
+  SetCurrentNetworkRequestEvent(request_id, &event);
   recordreplay::OnNetworkRequestEvent(request_id.c_str());
-  gCurrentNetworkRequestEvent = nullptr;
+  ClearCurrentNetworkRequestEvent();
 }
 
 static void HandleNetworkNavigationEvent(const base::DictionaryValue& info) {
@@ -1727,9 +1750,9 @@ static void HandleNetworkNavigationEvent(const base::DictionaryValue& info) {
   CopyDictionaryProperty(event, info, "requestMethod");
   event.SetString("requestCause", "document");
 
-  gCurrentNetworkRequestEvent = &event;
+  SetCurrentNetworkRequestEvent(request_id, &event);
   recordreplay::OnNetworkRequestEvent(request_id.c_str());
-  gCurrentNetworkRequestEvent = nullptr;
+  ClearCurrentNetworkRequestEvent();
 }
 
 static void HandleNetworkNavigationRedirectEvent(const base::DictionaryValue& info) {
@@ -1763,9 +1786,9 @@ static void HandleNetworkNavigationRedirectEvent(const base::DictionaryValue& in
   CopyDictionaryProperty(event, original_info, "requestMethod");
   event.SetString("requestCause", "document");
 
-  gCurrentNetworkRequestEvent = &event;
+  SetCurrentNetworkRequestEvent(request_id, &event);
   recordreplay::OnNetworkRequestEvent(request_id.c_str());
-  gCurrentNetworkRequestEvent = nullptr;
+  ClearCurrentNetworkRequestEvent();
 }
 
 static void HandleNetworkRequestDataFormEvent(const base::DictionaryValue& info) {
@@ -1786,9 +1809,9 @@ static void HandleNetworkRequestDataFormEvent(const base::DictionaryValue& info)
     base::DictionaryValue requestBodyEvent;
     requestBodyEvent.SetString("kind", "request-body");
 
-    gCurrentNetworkRequestEvent = &requestBodyEvent;
+    SetCurrentNetworkRequestEvent(request_id, &requestBodyEvent);
     recordreplay::OnNetworkRequestEvent(request_id.c_str());
-    gCurrentNetworkRequestEvent = nullptr;
+    ClearCurrentNetworkRequestEvent();
   }
 
   std::string stream_id = "request-" + request_id;
@@ -1839,9 +1862,9 @@ static void HandleNetworkDidReceiveResponseEvent(const base::DictionaryValue& in
   CopyDictionaryProperty(event, info, "responseStatusText");
   CopyDictionaryProperty(event, info, "responseFromCache");
 
-  gCurrentNetworkRequestEvent = &event;
+  SetCurrentNetworkRequestEvent(request_id, &event);
   recordreplay::OnNetworkRequestEvent(request_id.c_str());
-  gCurrentNetworkRequestEvent = nullptr;
+  ClearCurrentNetworkRequestEvent();
 }
 
 static void HandleNetworkDidFinishLoadingEvent(const base::DictionaryValue& info) {
@@ -1859,9 +1882,9 @@ static void HandleNetworkDidFinishLoadingEvent(const base::DictionaryValue& info
   CopyDictionaryProperty(event, info, "encodedBodySize");
   CopyDictionaryProperty(event, info, "decodedBodySize");
 
-  gCurrentNetworkRequestEvent = &event;
+  SetCurrentNetworkRequestEvent(request_id, &event);
   recordreplay::OnNetworkRequestEvent(request_id.c_str());
-  gCurrentNetworkRequestEvent = nullptr;
+  ClearCurrentNetworkRequestEvent();
 }
 
 static void HandleNetworkDidFailLoadingEvent(const base::DictionaryValue& info) {
@@ -1878,9 +1901,9 @@ static void HandleNetworkDidFailLoadingEvent(const base::DictionaryValue& info) 
   event.SetString("kind", "request-failed");
   CopyDictionaryProperty(event, info, "requestFailedReason");
 
-  gCurrentNetworkRequestEvent = &event;
+  SetCurrentNetworkRequestEvent(request_id, &event);
   recordreplay::OnNetworkRequestEvent(request_id.c_str());
-  gCurrentNetworkRequestEvent = nullptr;
+  ClearCurrentNetworkRequestEvent();
 }
 
 static void HandleNetworkDidReceiveDataEvent(const base::DictionaryValue& info) {
@@ -1902,9 +1925,9 @@ static void HandleNetworkDidReceiveDataEvent(const base::DictionaryValue& info) 
     base::DictionaryValue event;
     event.SetString("kind", "response-body");
 
-    gCurrentNetworkRequestEvent = &event;
+    SetCurrentNetworkRequestEvent(request_id, &event);
     recordreplay::OnNetworkRequestEvent(request_id.c_str());
-    gCurrentNetworkRequestEvent = nullptr;
+    ClearCurrentNetworkRequestEvent();
 
     recordreplay::OnNetworkStreamStart(
       stream_id.c_str(), "response-data", request_id.c_str()
@@ -2495,6 +2518,8 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
   // networking
   SetFunctionProperty(isolate, args, "getCurrentNetworkRequestEvent",
                       GetCurrentNetworkRequestEvent);
+  SetFunctionProperty(isolate, args, "getCurrentNetworkRequestId",
+                      GetCurrentNetworkRequestId);
   SetFunctionProperty(isolate, args, "getCurrentNetworkStreamData",
                       GetCurrentNetworkStreamData);
 
