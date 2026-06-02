@@ -29,6 +29,12 @@ namespace recordreplay {
 
 bool IsRecordingOrReplaying(const char* feature = nullptr,
                             const char* subfeature = nullptr);
+
+// Whether the current process is part of a record/replay run. Unlike
+// IsRecordingOrReplaying(), this is env-derived and so stays correct in the
+// browser process, which never loads the driver.
+bool IsRecordReplayRun();
+
 bool IsRecording();
 bool IsReplaying();
 char* GetRecordingId();

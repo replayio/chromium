@@ -14,6 +14,7 @@
 #endif
 
 #include "../../base/record_replay_driver.cc"
+#include "base/record_replay.h"
 
 #if BUILDFLAG(IS_WIN)
 
@@ -267,19 +268,10 @@ static __attribute__((noinline)) void BusyWait() {
 }
 
 static bool RecordReplayRecordingDisabled(bool cmdline_for_recording) {
-  // When RECORD_REPLAY_DONT_RECORD is set we don't record.
-  if (getenv("RECORD_REPLAY_DONT_RECORD")) {
-    if (getenv("RECORD_REPLAY_WAIT_AT_DONT_RECORD"))
-      BusyWait();
-    return true;
+  if (getenv("RECORD_REPLAY_DONT_RECORD") && getenv("RECORD_REPLAY_WAIT_AT_DONT_RECORD")) {
+    BusyWait();
   }
-  if (getenv("RECORD_ALL_CONTENT")) {
-    return false;
-  }
-  if (cmdline_for_recording) {
-    return false;
-  }
-  return true;
+  return !recordreplay::IsRecordReplayRun() && !cmdline_for_recording;
 }
 
 // Return whether the current process should be recorded. May update the arguments.

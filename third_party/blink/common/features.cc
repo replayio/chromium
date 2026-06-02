@@ -7,6 +7,7 @@
 #include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/features.h"
+#include "base/record_replay.h"
 #include "base/time/time.h"
 #include "build/android_buildflags.h"
 #include "build/build_config.h"
@@ -2733,7 +2734,15 @@ bool IsParkableStringsToDiskEnabled() {
 }
 
 bool IsPersistentCacheForCodeCacheEnabled() {
-  // PersistentCache for CodeCache requires HTTP split cache.
+  // replay-intervention: force off across all processes.
+  //   - A browser(on)/renderer(off) mismatch routes raw mojo FetchCachedCode to
+  //     the browser's test-only persistent CodeCacheHost, which CHECK_IS_TEST()-aborts.
+  //   - Checked here so host selection (both sides) and the process-wide backend
+  //     (GeneratedCodeCacheContext) agree on the non-persistent path.
+  if (recordreplay::IsRecordReplayRun()) {
+    return false;
+  }
+
   return net::HttpCache::IsSplitCacheEnabled() &&
          base::FeatureList::IsEnabled(kUsePersistentCacheForCodeCache);
 }

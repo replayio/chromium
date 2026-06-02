@@ -236,6 +236,16 @@ bool IsRecordingOrReplaying(const char* feature, const char* subfeature) {
   return V8IsRecordingOrReplaying(feature, subfeature);
 }
 
+bool IsRecordReplayRun() {
+  static const bool is_run = [] {
+    if (getenv("RECORD_REPLAY_DONT_RECORD")) {
+      return false;
+    }
+    return !!getenv("RECORD_ALL_CONTENT");
+  }();
+  return is_run;
+}
+
 bool IsRecording() {
   return V8IsRecording();
 }
