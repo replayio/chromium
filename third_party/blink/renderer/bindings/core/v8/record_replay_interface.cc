@@ -1551,6 +1551,7 @@ std::unordered_map<std::string, NetworkRequestStatus>*
 // `GetCurrentNetwork*`
 static base::Value *gCurrentNetworkRequestEvent = nullptr;
 static const std::string* gCurrentNetworkRequestId = nullptr;
+static const char* gCurrentNetworkStreamKind = nullptr;
 static std::vector<uint8_t>* gCurrentNetworkStreamData = nullptr;
 
 static void SetCurrentNetworkRequestEvent(const std::string& request_id,
@@ -1562,6 +1563,26 @@ static void SetCurrentNetworkRequestEvent(const std::string& request_id,
 static void ClearCurrentNetworkRequestEvent() {
   gCurrentNetworkRequestEvent = nullptr;
   gCurrentNetworkRequestId = nullptr;
+}
+
+static void SetCurrentNetworkStreamData(
+    const std::string& request_id,
+    const char* stream_kind,
+    const uint8_t* data,
+    size_t data_length) {
+  gCurrentNetworkRequestId = &request_id;
+  gCurrentNetworkStreamKind = stream_kind;
+  gCurrentNetworkStreamData->clear();
+  gCurrentNetworkStreamData->insert(
+      gCurrentNetworkStreamData->begin(),
+      data,
+      data + data_length);
+}
+
+static void ClearCurrentNetworkStreamData() {
+  gCurrentNetworkRequestId = nullptr;
+  gCurrentNetworkStreamKind = nullptr;
+  gCurrentNetworkStreamData->clear();
 }
 
 static void GetCurrentNetworkRequestEvent(const v8::FunctionCallbackInfo<v8::Value>& args) {
@@ -1578,13 +1599,24 @@ static void GetCurrentNetworkRequestEvent(const v8::FunctionCallbackInfo<v8::Val
 
 static void GetCurrentNetworkRequestId(
     const v8::FunctionCallbackInfo<v8::Value>& args) {
-  if (!gCurrentNetworkRequestEvent) {
+  if (!gCurrentNetworkRequestId) {
     return;
   }
 
   v8::Isolate* isolate = args.GetIsolate();
   args.GetReturnValue().Set(
       ToV8String(isolate, gCurrentNetworkRequestId->c_str()));
+}
+
+static void GetCurrentNetworkStreamKind(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  if (!gCurrentNetworkStreamKind) {
+    return;
+  }
+
+  v8::Isolate* isolate = args.GetIsolate();
+  args.GetReturnValue().Set(
+      ToV8String(isolate, gCurrentNetworkStreamKind));
 }
 
 static void GetCurrentNetworkStreamData(const v8::FunctionCallbackInfo<v8::Value>& args) {
@@ -1825,21 +1857,21 @@ static void HandleNetworkRequestDataFormEvent(const base::DictionaryValue& info)
   size_t length = *info.FindPath("dataLength")->GetIfDouble();
 
   CHECK(length >= 0);
-  gCurrentNetworkStreamData->clear();
   const std::string *data_base64 = info.FindPath("data")->GetIfString();
   if (data_base64) {
     const uint8_t* data =
       reinterpret_cast<const uint8_t *>(data_base64->c_str());
-    gCurrentNetworkStreamData->insert(
-      gCurrentNetworkStreamData->begin(),
-      data,
-      data + data_base64->length()
-    );
     size_t offset = request_info->second.response_data_received;
+    SetCurrentNetworkStreamData(
+      request_id,
+      "request-data",
+      data,
+      data_base64->length()
+    );
     recordreplay::OnNetworkStreamData(
       stream_id.c_str(), offset, length, /* bookmark = */ 0
     );
-    gCurrentNetworkStreamData->clear();
+    ClearCurrentNetworkStreamData();
   }
   request_info->second.request_data_sent += length;
 }
@@ -1938,7 +1970,6 @@ static void HandleNetworkDidReceiveDataEvent(const base::DictionaryValue& info) 
   size_t length = *info.FindPath("dataLength")->GetIfDouble();
   CHECK(length >= 0);
 
-  gCurrentNetworkStreamData->clear();
   const std::string *data_base64 = info.FindPath("data")->GetIfString();
   if (data_base64) {
     std::string out_string;
@@ -1949,16 +1980,17 @@ static void HandleNetworkDidReceiveDataEvent(const base::DictionaryValue& info) 
     }
     const uint8_t* data =
       reinterpret_cast<const uint8_t *>(out_string.c_str());
-    gCurrentNetworkStreamData->insert(
-      gCurrentNetworkStreamData->begin(),
-      data,
-      data + out_string.length()
-    );
     size_t offset = request_info->second.response_data_received;
+    SetCurrentNetworkStreamData(
+      request_id,
+      "response-data",
+      data,
+      out_string.length()
+    );
     recordreplay::OnNetworkStreamData(
       stream_id.c_str(), offset, length, /* bookmark = */ 0
     );
-    gCurrentNetworkStreamData->clear();
+    ClearCurrentNetworkStreamData();
   }
   request_info->second.response_data_received += length;
 }
@@ -2520,6 +2552,8 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
                       GetCurrentNetworkRequestEvent);
   SetFunctionProperty(isolate, args, "getCurrentNetworkRequestId",
                       GetCurrentNetworkRequestId);
+  SetFunctionProperty(isolate, args, "getCurrentNetworkStreamKind",
+                      GetCurrentNetworkStreamKind);
   SetFunctionProperty(isolate, args, "getCurrentNetworkStreamData",
                       GetCurrentNetworkStreamData);
 
