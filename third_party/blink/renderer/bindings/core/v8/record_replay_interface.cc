@@ -1565,16 +1565,24 @@ static void ClearCurrentNetworkRequestEvent() {
   gCurrentNetworkRequestId = nullptr;
 }
 
-static void SetCurrentNetworkStreamDataContext(
+static void SetCurrentNetworkStreamData(
     const std::string& request_id,
-    const char* stream_kind) {
+    const char* stream_kind,
+    const uint8_t* data,
+    size_t data_length) {
   gCurrentNetworkRequestId = &request_id;
   gCurrentNetworkStreamKind = stream_kind;
+  gCurrentNetworkStreamData->clear();
+  gCurrentNetworkStreamData->insert(
+      gCurrentNetworkStreamData->begin(),
+      data,
+      data + data_length);
 }
 
-static void ClearCurrentNetworkStreamDataContext() {
+static void ClearCurrentNetworkStreamData() {
   gCurrentNetworkRequestId = nullptr;
   gCurrentNetworkStreamKind = nullptr;
+  gCurrentNetworkStreamData->clear();
 }
 
 static void GetCurrentNetworkRequestEvent(const v8::FunctionCallbackInfo<v8::Value>& args) {
@@ -1849,23 +1857,21 @@ static void HandleNetworkRequestDataFormEvent(const base::DictionaryValue& info)
   size_t length = *info.FindPath("dataLength")->GetIfDouble();
 
   CHECK(length >= 0);
-  gCurrentNetworkStreamData->clear();
   const std::string *data_base64 = info.FindPath("data")->GetIfString();
   if (data_base64) {
     const uint8_t* data =
       reinterpret_cast<const uint8_t *>(data_base64->c_str());
-    gCurrentNetworkStreamData->insert(
-      gCurrentNetworkStreamData->begin(),
-      data,
-      data + data_base64->length()
-    );
     size_t offset = request_info->second.response_data_received;
-    SetCurrentNetworkStreamDataContext(request_id, "request-data");
+    SetCurrentNetworkStreamData(
+      request_id,
+      "request-data",
+      data,
+      data_base64->length()
+    );
     recordreplay::OnNetworkStreamData(
       stream_id.c_str(), offset, length, /* bookmark = */ 0
     );
-    ClearCurrentNetworkStreamDataContext();
-    gCurrentNetworkStreamData->clear();
+    ClearCurrentNetworkStreamData();
   }
   request_info->second.request_data_sent += length;
 }
@@ -1964,7 +1970,6 @@ static void HandleNetworkDidReceiveDataEvent(const base::DictionaryValue& info) 
   size_t length = *info.FindPath("dataLength")->GetIfDouble();
   CHECK(length >= 0);
 
-  gCurrentNetworkStreamData->clear();
   const std::string *data_base64 = info.FindPath("data")->GetIfString();
   if (data_base64) {
     std::string out_string;
@@ -1975,18 +1980,17 @@ static void HandleNetworkDidReceiveDataEvent(const base::DictionaryValue& info) 
     }
     const uint8_t* data =
       reinterpret_cast<const uint8_t *>(out_string.c_str());
-    gCurrentNetworkStreamData->insert(
-      gCurrentNetworkStreamData->begin(),
-      data,
-      data + out_string.length()
-    );
     size_t offset = request_info->second.response_data_received;
-    SetCurrentNetworkStreamDataContext(request_id, "response-data");
+    SetCurrentNetworkStreamData(
+      request_id,
+      "response-data",
+      data,
+      out_string.length()
+    );
     recordreplay::OnNetworkStreamData(
       stream_id.c_str(), offset, length, /* bookmark = */ 0
     );
-    ClearCurrentNetworkStreamDataContext();
-    gCurrentNetworkStreamData->clear();
+    ClearCurrentNetworkStreamData();
   }
   request_info->second.response_data_received += length;
 }
