@@ -1253,8 +1253,6 @@ void ResourceLoader::DidFinishLoading(
   resource_->SetEncodedBodyLength(encoded_body_length);
   resource_->SetDecodedBodyLength(decoded_body_length);
 
-  recordreplay::OnNetworkFinishLoading(resource_->InspectorId(), encoded_body_length, decoded_body_length);
-
   if (pervasive_payload_requested.has_value()) {
     ukm::SourceId ukm_source_id =
         resource_->GetResourceRequest().GetUkmSourceId();
@@ -1294,6 +1292,13 @@ void ResourceLoader::DidFinishLoading(
       TRACE_ID_WITH_SCOPE("BlinkResourceID",
                           TRACE_ID_LOCAL(resource_->InspectorId())),
       "outcome", RequestOutcomeToString(RequestOutcome::kSuccess));
+
+  // Emit finish only once the deferred body-drain path has resolved. This
+  // matches the real DevTools loadingFinished timing more closely and avoids
+  // reporting the same request completion twice.
+  recordreplay::OnNetworkFinishLoading(resource_->InspectorId(),
+                                       encoded_body_length,
+                                       decoded_body_length);
 
   fetcher_->HandleLoaderFinish(
       resource_.Get(), response_end_time, ResourceFetcher::kDidFinishLoading,
