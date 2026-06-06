@@ -233,7 +233,9 @@ void RuleData::MovedToDifferentRuleSet(const Vector<uint16_t>& old_backing,
   position_ = new_position;
 }
 
-RuleSet::RuleSet() = default;
+// [RecordReplay] RuleSet's constructor is defined inline in rule_set.h so it can
+// recordreplay::RegisterPointer(this); the out-of-line `= default` definition was
+// removed to avoid a redefinition.
 
 void RuleSet::AddToBucket(const AtomicString& key,
                           RuleMap& map,

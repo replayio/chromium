@@ -27,6 +27,7 @@
 #include "base/containers/span.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/stack_allocated.h"
+#include "base/record_replay.h"
 #include "base/substring_set_matcher/substring_set_matcher.h"
 #include "base/types/pass_key.h"
 #include "third_party/blink/renderer/core/core_export.h"
@@ -344,7 +345,13 @@ class RuleMap {
 // under consideration by ElementRuleCollector::CollectMatchingRules.
 class CORE_EXPORT RuleSet final : public GarbageCollected<RuleSet> {
  public:
-  RuleSet();
+  RuleSet() {
+    // Pointer registration is needed for sorting within StyleEngine methods.
+    recordreplay::RegisterPointer("RuleSet", this);
+  }
+  ~RuleSet() {
+    recordreplay::UnregisterPointer(this);
+  }
   RuleSet(const RuleSet&) = delete;
   RuleSet& operator=(const RuleSet&) = delete;
 
