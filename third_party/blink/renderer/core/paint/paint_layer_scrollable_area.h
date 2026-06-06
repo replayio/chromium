@@ -722,6 +722,10 @@ class CORE_EXPORT PaintLayerScrollableArea final
   gfx::Size ComputeScrollbarWidthsForViewportUnits(
       StyleBasedScrollbarData) const;
 
+  int RecordReplayId() const { 
+    return record_replay_id_; 
+  }
+
  private:
   bool NeedsHypotheticalScrollbarThickness(ScrollbarOrientation) const;
   int ComputeHypotheticalScrollbarThickness(
@@ -930,6 +934,8 @@ class CORE_EXPORT PaintLayerScrollableArea final
   // The used pointer events value that was in effect at last paint
   // invalidation. Used to invalidate paint!
   EPointerEvents last_used_pointer_events_ = EPointerEvents::kAuto;
+
+  int record_replay_id_ = 0;
 
   class ScrollingBackgroundDisplayItemClient final
       : public GarbageCollected<ScrollingBackgroundDisplayItemClient>,

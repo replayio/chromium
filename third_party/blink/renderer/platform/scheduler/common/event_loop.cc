@@ -58,7 +58,9 @@ EventLoop::~EventLoop() {
 }
 
 void EventLoop::EnqueueMicrotask(base::OnceClosure task) {
-  pending_microtasks_.push_back(std::move(task));
+  int record_replay_scheduled_node_id =
+    recordreplay::NewDependencyGraphNode("{\"kind\":\"enqueueMicrotask\"}");
+  pending_microtasks_.emplace_back(std::move(task), record_replay_scheduled_node_id);
   v8::HandleScope handle_scope(isolate_);
 
   if (microtask_data_.IsEmpty()) {
@@ -156,8 +158,18 @@ void EventLoop::RunPendingMicrotask(v8::Local<v8::Data> data) {
   // corruption substituted a wrapper to a wrong loop.
   CHECK(!self->pending_microtasks_.empty());
 
-  base::OnceClosure task = std::move(self->pending_microtasks_.front());
+  base::OnceClosure task = std::move(self->pending_microtasks_.front().first);
+  int record_replay_scheduled_node_id = self->pending_microtasks_.front().second;
   self->pending_microtasks_.pop_front();
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    int node_id = recordreplay::NewDependencyGraphNode("{\"kind\":\"runMicrotask\"}");
+    recordreplay::AddDependencyGraphEdge(record_replay_scheduled_node_id, node_id,
+                                         "{\"kind\":\"scheduler\"}");
+    execute.emplace(node_id);
+  }
+
   TaskAttributionTracker::MicrotaskTraceScope scope(self->isolate_);
   std::move(task).Run();
 }

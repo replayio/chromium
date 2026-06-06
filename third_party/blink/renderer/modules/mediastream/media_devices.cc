@@ -1334,7 +1334,7 @@ void MediaDevices::DispatchScheduledEvents() {
   events.swap(scheduled_events_);
 
   for (const auto& event : events) {
-    DispatchEvent(*event);
+    DispatchEvent(*event, "MediaDevices::DispatchScheduledEvents");
   }
 }
 

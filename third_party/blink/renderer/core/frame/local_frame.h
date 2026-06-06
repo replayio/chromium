@@ -1323,6 +1323,8 @@ class FrameNavigationDisabler {
   FrameNavigationDisabler& operator=(const FrameNavigationDisabler&) = delete;
   ~FrameNavigationDisabler();
 
+  void RegisterRecordReplayAuthTokenObserver();
+  
  private:
   LocalFrame* frame_;
 };

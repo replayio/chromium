@@ -88,6 +88,11 @@ class VIZ_SERVICE_EXPORT SoftwareOutputDevice {
   // Copy and return the contents of |surface_|.
   SkBitmap ReadbackForTesting();
 
+  // [RUN-2989] Allow Replay commmand handlers to read the viewport size.
+  const gfx::Size& ReplayViewportPixelSize() const {
+    return viewport_pixel_size_;
+  }
+
  protected:
   scoped_refptr<base::SequencedTaskRunner> task_runner_;
   raw_ptr<SoftwareOutputDeviceClient> client_ = nullptr;

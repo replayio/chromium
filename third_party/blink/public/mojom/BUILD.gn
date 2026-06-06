@@ -1235,6 +1235,7 @@ mojom("android_mojo_bindings") {
     ":credentialmanagement_mojo_bindings",
     "//components/digital_goods/mojom",
     "//components/payments/mojom",
+    "//components/record_replay/services/auth_token/public/mojom",
     "//components/schema_org/common:mojom",
     "//mojo/public/mojom/base",
     "//services/media_session/public/mojom",
