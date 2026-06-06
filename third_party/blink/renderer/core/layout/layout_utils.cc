@@ -461,6 +461,12 @@ bool MaySkipLayoutWithinBlockFormattingContext(
   const ConstraintSpace& old_space =
       cached_layout_result.GetConstraintSpaceForCaching();
 
+  recordreplay::Assert("[RUN-1855-1856] CalculateSizeBasedLayoutCacheStatus node(%d) old(%s) new(%s)",
+    node.RecordReplayId(),
+    old_space.ToString().Ascii().c_str(),
+    new_space.ToString().Ascii().c_str()
+  );
+
   bool is_margin_strut_equal =
       old_space.GetMarginStrut() == new_space.GetMarginStrut();
 

@@ -64,6 +64,8 @@
 #include "third_party/blink/renderer/platform/wtf/text/string_buffer.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_offset_map.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 namespace {
@@ -1579,6 +1581,7 @@ void InlineNode::ShapeText(InlineItemsData* data,
                            const String* previous_text,
                            const InlineItems* previous_items,
                            const Font* override_font) const {
+
   const String& text_content = data->text_content;
   InlineItems& items = data->items;
 #if EXPENSIVE_DCHECKS_ARE_ON()
@@ -1911,6 +1914,7 @@ void InlineNode::ShapeTextIncludingFirstLine(
   TRACE_EVENT0("blink", "InlineNode::ShapeTextIncludingFirstLine");
   InlineItem::UpdateIndex(data->items);
   ShapeText(data, previous_text, previous_items);
+
   ShapeTextForFirstLineIfNeeded(data);
 }
 
@@ -2349,6 +2353,7 @@ MinMaxSizesResult InlineNode::ComputeMinMaxSizes(
     WritingMode container_writing_mode,
     const ConstraintSpace& space,
     const MinMaxSizesFloatInput& float_input) const {
+
   PrepareLayoutIfNeeded();
 
   // Compute the max of inline sizes of all line boxes with 0 available inline

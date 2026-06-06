@@ -604,6 +604,9 @@ InlinePaintContext& BoxFragmentPainter::EnsureInlineContext() {
 
 void BoxFragmentPainter::PaintFragment(const PhysicalBoxFragment& fragment,
                                        const PaintInfo& paint_info) {
+  recordreplay::Assert(
+      "[RUN-1975-2008] NgBoxFragmentPainter::PaintFragment A %llu %d",
+      (uint64_t)paint_info.FragmentID(), fragment.GetNode() ? fragment.GetNode()->RecordReplayId() : -1);
   if (fragment.CanTraverse()) {
     BoxFragmentPainter(fragment).Paint(paint_info);
     return;
@@ -1223,6 +1226,9 @@ void BoxFragmentPainter::PaintFloatingItems(const PaintInfo& paint_info,
   while (*cursor) {
     const FragmentItem* item = cursor->Current().Item();
     DCHECK(item);
+    recordreplay::Assert(
+        "[RUN-1975-2008] NGBoxFragmentPainter::PaintInlineItems A %llu %d %d",
+        (uint64_t)item->FragmentId(), (int)item->Type(), item->GetNode() ? item->GetNode()->RecordReplayId() : -1);
     const PhysicalBoxFragment* child_fragment = item->BoxFragment();
     if (!child_fragment) {
       cursor->MoveToNext();
@@ -1483,6 +1489,8 @@ void BoxFragmentPainter::PaintBoxDecorationBackgroundWithRect(
         DisplayItem::kBoxDecorationBackground, box_decoration_data);
   }
 }
+  recordreplay::Assert(
+      "[RUN-1975-2008] NGBoxFragmentPainter::PaintInlineItems C");
 
 void BoxFragmentPainter::PaintCompositeBackgroundAttachmentFixed(
     const PaintInfo& paint_info,

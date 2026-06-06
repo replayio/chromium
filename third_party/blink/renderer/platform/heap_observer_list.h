@@ -90,6 +90,9 @@ class PLATFORM_EXPORT HeapObserverList final {
   void Clear() {
     CHECK(mutation_state_ & kAllowRemoval);
     observers_.clear();
+    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+                                             "HeapObserverSet"))
+      replay_observers_strong_.clear();
     observers_to_indices_.clear();
   }
 

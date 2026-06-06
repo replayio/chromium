@@ -423,6 +423,7 @@ const LayoutResult* BlockNode::Layout(
       constraint_space, break_token, early_break, column_spanner_path,
       &fragment_geometry, &cache_status);
 
+
   if ((cache_status == LayoutCacheStatus::kHit ||
        cache_status == LayoutCacheStatus::kNeedsSimplifiedLayout) &&
       needed_layout &&
@@ -781,6 +782,11 @@ void BlockNode::FinishRepeatableRoot() const {
   box_->FinalizeLayoutResults();
 
   box_->ClearNeedsLayout();
+
+  recordreplay::Assert(
+      "[RUN-1239-1384] NGBlockNode::CachedLayoutResultForOutOfFlowPositioned A %d %lu",
+      box_->NeedsLayout(),
+      box_->PhysicalFragmentCount());
 
   FragmentRepeater::DeepCloneRepeatableRoot(*box_);
 }

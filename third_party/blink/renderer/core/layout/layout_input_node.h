@@ -308,7 +308,10 @@ class CORE_EXPORT LayoutInputNode {
 
  protected:
   LayoutInputNode(LayoutBox* box, LayoutInputNodeType type)
-      : box_(box), type_(type) {}
+      : box_(box), type_(type)
+  {
+    InitRecordReplayId();
+  }
 
   void GetOverrideIntrinsicSize(
       std::optional<LayoutUnit>* computed_inline_size,

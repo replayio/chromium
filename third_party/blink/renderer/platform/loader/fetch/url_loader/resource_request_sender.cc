@@ -633,6 +633,9 @@ void ResourceRequestSender::OnRequestComplete(
       // No completion timestamp is provided, leave it as is.
     } else if (request_info_->remote_request_start.is_null() ||
                request_info_->load_timing_info.request_start.is_null()) {
+    // https://linear.app/replay/issue/RUN-618
+    recordreplay::Assert("WebResourceRequestSender::OnRequestComplete #1");
+
       // We cannot convert the remote time to a local time, let's use the
       // current timestamp. This happens when
       //  - We get an error before OnReceivedRedirect or OnReceivedResponse is
@@ -640,6 +643,9 @@ void ResourceRequestSender::OnRequestComplete(
       //  - Somehow such a timestamp was missing in the LoadTimingInfo.
       renderer_status.completion_time = complete_ipc_arrival_time;
     } else {
+    // https://linear.app/replay/issue/RUN-618
+    recordreplay::Assert("WebResourceRequestSender::OnRequestComplete #2");
+
       // We have already converted the request start timestamp, let's use that
       // conversion information.
       // Note: We cannot create a InterProcessTimeTicksConverter with
