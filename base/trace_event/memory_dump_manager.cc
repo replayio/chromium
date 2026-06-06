@@ -53,6 +53,8 @@
 #include "base/trace_event/address_space_dump_provider.h"
 #endif
 
+#include "base/record_replay.h"
+
 namespace base::trace_event {
 
 namespace {
@@ -349,6 +351,13 @@ void MemoryDumpManager::CreateProcessDump(const MemoryDumpRequestArgs& args,
 void MemoryDumpManager::ContinueAsyncProcessDump(
     scoped_refptr<ProcessMemoryDumpAsyncState> pmd_async_state) {
   HEAP_PROFILER_SCOPED_IGNORE;
+
+  // Don't generate process dumps when recording/replaying, to avoid mismatched
+  // behavior issues when accessing memory dump state.
+  if (recordreplay::IsRecordingOrReplaying("gc-changes", "MemoryDumpManager::ContinueAsyncProcessDump")) {
+    FinishAsyncProcessDump(std::move(pmd_async_state));
+    return;
+  }
 
   // In theory |pmd_async_state| should be a unique_ptr. The only reason why it
   // isn't is because of the corner case logic of |did_post_task| below, which

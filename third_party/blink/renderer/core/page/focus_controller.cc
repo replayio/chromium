@@ -78,6 +78,7 @@
 #include "third_party/blink/renderer/core/page/frame_tree.h"
 #include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/core/page/spatial_navigation.h"
+#include "third_party/blink/renderer/core/record_replay/lifecycle.h"
 #include "third_party/blink/renderer/core/style/computed_style_constants.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
@@ -1148,7 +1149,7 @@ inline void DispatchEventsOnWindowAndFocusedElement(Document* document,
 
   if (LocalDOMWindow* window = document->domWindow()) {
     window->DispatchEvent(*Event::Create(focused ? event_type_names::kFocus
-                                                 : event_type_names::kBlur));
+                                                 : event_type_names::kBlur), "DispatchEventsOnWindowAndFocusedElement");
   }
   if (focused && document->FocusedElement()) {
     Element* focused_element(document->FocusedElement());
@@ -1802,13 +1803,13 @@ void FocusController::SetFocusedFrame(Frame* frame, bool notify_embedder) {
   if (old_frame && old_frame->View()) {
     old_frame->Selection().SetFrameIsFocused(false);
     old_frame->DomWindow()->DispatchEvent(
-        *Event::Create(event_type_names::kBlur));
+        *Event::Create(event_type_names::kBlur), "FocusController::SetFocusedFrame #1");
   }
 
   if (new_frame && new_frame->View() && IsFocused()) {
     new_frame->Selection().SetFrameIsFocused(true);
     new_frame->DomWindow()->DispatchEvent(
-        *Event::Create(event_type_names::kFocus));
+        *Event::Create(event_type_names::kFocus), "FocusController::SetFocusedFrame #2");
   }
 
   is_changing_focused_frame_ = false;
@@ -1918,6 +1919,10 @@ bool FocusController::IsDocumentFocused(const Document& document) const {
 }
 
 void FocusController::FocusHasChanged() {
+  recordreplay::AutoMarkerDependencyExecution execute(
+    "ScriptExecution", "FocusController::FocusHasChanged"
+  );
+
   bool focused = IsFocused();
   if (!focused) {
     if (auto* focused_or_main_local_frame =
@@ -2396,6 +2401,7 @@ bool FocusController::SetFocusedElement(Element* element,
 }
 
 void FocusController::ActiveHasChanged() {
+  recordreplay::NotifyPageFocusControllerActiveChanged(page_);
   Frame* frame = FocusedOrMainFrame();
   if (auto* local_frame = DynamicTo<LocalFrame>(frame)) {
     Document* const document = local_frame->LocalFrameRoot().GetDocument();

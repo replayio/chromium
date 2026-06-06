@@ -499,6 +499,14 @@ LocalFrame::~LocalFrame() {
   // the frame owner.
   DCHECK(!view_);
   DCHECK(!frame_color_overlay_);
+
+  if (!IsA<LocalFrame>(Tree().Parent())) {
+    recordreplay::CommandDiagnostic(
+        "[RUN-2486-2577] ~LocalFrame %d",
+        WeakIdentifierMap<LocalFrame>::HasIdentifier(this)
+            ? WeakIdentifierMap<LocalFrame>::ExistingIdentifier(this)
+            : -1);
+  }
   if (IsAdFrame())
     InstanceCounters::DecrementCounter(InstanceCounters::kAdSubframeCounter);
 
@@ -827,6 +835,14 @@ bool LocalFrame::DetachImpl(FrameDetachType type) {
   supplements_.clear();
   frame_scheduler_.reset();
   mojo_handler_->DidDetachFrame();
+
+  if (!IsA<LocalFrame>(Tree().Parent())) {
+    recordreplay::CommandDiagnosticTrace(
+        "[RUN-2486-2577] LocalFrame::DetachImpl %d",
+        WeakIdentifierMap<LocalFrame>::HasIdentifier(this)
+            ? WeakIdentifierMap<LocalFrame>::ExistingIdentifier(this)
+            : -1);
+  }
   WeakIdentifierMap<LocalFrame>::NotifyObjectDestroyed(this);
 
   LocalFramesByTokenMap& local_frames_map = GetLocalFramesMap();
@@ -2055,6 +2071,9 @@ void LocalFrame::ScheduleVisualUpdateUnlessThrottled(
     cc::BeginMainFrameReason reason) {
   if (ShouldThrottleRendering())
     return;
+
+  recordreplay::Assert("[RUN-1436] LocalFrame::ScheduleVisualUpdateUnlessThrottled #1");
+
   GetPage()->Animator().ScheduleVisualUpdate(this, reason);
 }
 
@@ -3323,7 +3342,7 @@ void LocalFrame::DidResume() {
   GetDocument()->Fetcher()->SetDefersLoading(LoaderFreezeMode::kNone);
   Loader().SetDefersLoading(LoaderFreezeMode::kNone);
 
-  GetDocument()->DispatchEvent(*Event::Create(event_type_names::kResume));
+  GetDocument()->DispatchEvent(*Event::Create(event_type_names::kResume), "LocalFrame::DidResume");
   // TODO(fmeawad): Move the following logic to the page once we have a
   // PageResourceCoordinator in Blink
   if (auto* document_resource_coordinator =
@@ -3895,6 +3914,10 @@ bool LocalFrame::ShouldThrottleDownload() {
 
   num_burst_download_requests_++;
   return false;
+}
+
+void LocalFrame::RegisterRecordReplayAuthTokenObserver() {
+  mojo_handler_->RegisterRecordReplayAuthTokenObserver();
 }
 
 Frame* LocalFrame::GetProvisionalOwnerFrame() {

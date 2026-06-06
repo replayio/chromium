@@ -39,6 +39,7 @@
 #include "base/no_destructor.h"
 #include "base/path_service.h"
 #include "base/pending_task.h"
+#include "base/record_replay.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/process/process_handle.h"
 #include "base/scoped_clear_last_error.h"
@@ -109,6 +110,35 @@ typedef FILE* FileHandle;
 #if BUILDFLAG(IS_CHROMEOS)
 #include "base/files/scoped_file.h"
 #endif
+
+#if !BUILDFLAG(IS_WIN)
+#include <dlfcn.h>
+#else
+#include <windows.h>
+#endif
+
+static void* LookupRecordReplaySymbol(const char* name) {
+#if !BUILDFLAG(IS_WIN)
+  void* fnptr = dlsym(RTLD_DEFAULT, name);
+#else
+  HMODULE module = GetModuleHandleA("windows-recordreplay.dll");
+  void* fnptr = module ? (void*)GetProcAddress(module, name) : nullptr;
+#endif
+  return fnptr ? fnptr : reinterpret_cast<void*>(1);
+}
+
+static void RecordReplayPrint(const char* aFormat, ...) {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayPrint");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    va_list ap;
+    va_start(ap, aFormat);
+    reinterpret_cast<void(*)(const char*, va_list)>(fnptr)(aFormat, ap);
+    va_end(ap);
+  }
+}
 
 #if BUILDFLAG(IS_FUCHSIA)
 #include "base/fuchsia/scoped_fx_logger.h"
@@ -734,6 +764,9 @@ void LogMessage::Flush() {
 #endif
   stream_ << std::endl;
   std::string str_newline(stream_.str());
+
+  RecordReplayPrint("LogMessage %s", str_newline.c_str());
+
   TraceLogMessage(file_, line_, str_newline.substr(message_start_));
 
   // FATAL messages should always run the assert handler and crash, even if a
@@ -932,6 +965,8 @@ std::string LogMessage::BuildCrashString() const {
 
 // writes the common header info to the stream
 void LogMessage::Init(const char* file, int line) {
+  RecordReplayPrint("LogMessage::Init %s:%d", file, line);
+
   // Don't let actions from this method affect the system error after returning.
   base::ScopedClearLastError scoped_clear_last_error;
 
@@ -1040,6 +1075,9 @@ void LogMessage::HandleFatal(size_t stack_start,
 #endif
 
     // Crash the process to generate a dump.
+      // Replace this with an API call to `RecordReplaySetCrashReasonCallback`
+      // See RUN-1562: https://linear.app/replay/issue/RUN-1562
+      RecordReplayPrint("ErrorFatal %s:%d %s", file_, line_, str_newline.c_str());
     // TODO(crbug.com/40254046): Move ImmediateCrash() to an absl::Cleanup to
     // make sure it runs unconditionally. Currently LogAssertHandlers can abort
     // a FATAL message and tests rely on this. HandleFatal() should be

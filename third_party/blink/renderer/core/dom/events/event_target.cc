@@ -81,6 +81,10 @@
 #include "third_party/blink/renderer/platform/wtf/threading.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_events.h"
+#include "third_party/blink/renderer/core/events/keyboard_event.h"
+#include "third_party/blink/renderer/core/geometry/dom_rect.h"
+
 namespace blink {
 namespace {
 
@@ -388,7 +392,11 @@ void EventTargetData::Trace(Visitor* visitor) const {
   visitor->Trace(event_listener_map);
 }
 
-EventTarget::EventTarget() = default;
+EventTarget::EventTarget() {
+  if (recordreplay::AreEventsDisallowed() &&
+      !recordreplay::HasDivergedFromRecording())
+    recordreplay::Warning("[RUN-1735-1764] EventTarget::EventTarget");
+}
 
 EventTarget::~EventTarget() = default;
 
@@ -561,6 +569,7 @@ bool EventTarget::addEventListener(
     }
   }
 
+
   NOTREACHED();
 }
 
@@ -584,11 +593,18 @@ bool EventTarget::AddEventListenerInternal(
     const AtomicString& event_type,
     EventListener* listener,
     const AddEventListenerOptionsResolved* options) {
-  if (!listener)
-    return false;
+  REPLAY_ASSERT(
+      "[RUN-1260-1332] EventTarget::AddEventListenerInternal A %d %d %d %s",
+      !!listener, options->hasSignal() && options->signal()->aborted(),
+      !!GetExecutionContext(), event_type.GetString().Utf8().c_str());
 
-  if (options->hasSignal() && options->signal()->aborted())
+  if (!listener) {
     return false;
+  }
+
+  if (options->hasSignal() && options->signal()->aborted()) {
+    return false;
+  }
 
   // It doesn't make sense to add an event listener without an ExecutionContext
   // and some code below here assumes we have one.
@@ -604,6 +620,8 @@ bool EventTarget::AddEventListenerInternal(
         if (frame->IsInFencedFrameTree()) {
           window->PrintErrorMessage(
               "unload/beforeunload handlers are prohibited in fenced frames.");
+          REPLAY_ASSERT(
+              "[RUN-1260-1332] EventTarget::AddEventListenerInternal C");
           return false;
         }
       }
@@ -618,6 +636,7 @@ bool EventTarget::AddEventListenerInternal(
       !execution_context->IsFeatureEnabled(
           network::mojom::PermissionsPolicyFeature::kUnload,
           ReportOptions::kReportOnFailure)) {
+    REPLAY_ASSERT("[RUN-1260-1332] EventTarget::AddEventListenerInternal B");
     return false;
   }
 
@@ -634,6 +653,13 @@ bool EventTarget::AddEventListenerInternal(
     }
   }
 
+  if (!recordreplay::AreEventsDisallowed()) {
+    // don't Assert during GC
+    REPLAY_ASSERT(
+        "[RUN-1260-1332] EventTarget::RemoveEventListenerInternal %s",
+        event_type.GetString().Utf8().c_str());
+  }
+
   V8DOMActivityLogger* activity_logger =
       V8DOMActivityLogger::CurrentActivityLoggerIfIsolatedWorld(
           execution_context->GetIsolate());
@@ -647,6 +673,10 @@ bool EventTarget::AddEventListenerInternal(
   RegisteredEventListener* registered_listener = nullptr;
   bool added = EnsureEventTargetData().event_listener_map.Add(
       event_type, listener, options, &registered_listener);
+
+  REPLAY_ASSERT(
+      "[RUN-1260-1332] EventTarget::AddEventListenerInternal D %d", added);
+
   if (added) {
     CHECK(registered_listener);
     if (options->hasSignal()) {
@@ -852,6 +882,49 @@ bool EventTarget::dispatchEventForBindings(Event* event,
     return false;
 
   event->SetTrusted(false);
+  
+  if (recordreplay::IsRecordingOrReplaying()) {
+    if (event->IsMouseEvent() &&
+      (event->type() == event_type_names::kMouseup ||
+      event->type() == event_type_names::kMousedown ||
+      event->type() == event_type_names::kMousemove)
+    ) {
+      auto* mouseEvent = DynamicTo<MouseEvent>(event);
+      double x = 0, y = 0;
+      
+      if (const LocalDOMWindow* window = ExecutingWindow()) {
+        if (const LocalFrame* frame = window->GetFrame()) {
+          if (frame->GetPage()) {
+            x = mouseEvent->pageX();
+            y = mouseEvent->pageY();
+
+            if (!x && !y) {
+              if (auto* element = DynamicTo<Element>(ToNode())) {
+                auto* rect = element->getBoundingClientRect();
+                x = rect->x() + rect->width() / 2;
+                y = rect->y() + rect->height() / 2;
+              }
+            }
+
+            gfx::PointF pos(x, y);
+            gfx::PointF rootPos = frame->View()->ConvertToRootFrame(pos);
+            x = rootPos.x();
+            y = rootPos.y();
+          }
+        } 
+      }
+      recordreplay::OnMouseEvent(event->type().Utf8().c_str(), (size_t)std::round(x), (size_t)std::round(y), true);
+    } else if (event->IsKeyboardEvent() &&
+      (event->type() == event_type_names::kKeydown ||
+      event->type() == event_type_names::kKeyup ||
+      event->type() == event_type_names::kKeypress)
+    ) {
+      auto* keyEvent = DynamicTo<KeyboardEvent>(event);
+      recordreplay::OnKeyEvent(event->type().Utf8().c_str(),
+                               keyEvent->key().Utf8().c_str(),
+                               true);
+    }
+  }
 
   // Return whether the event was cancelled or not to JS not that it
   // might have actually been default handled; so check only against
@@ -860,7 +933,7 @@ bool EventTarget::dispatchEventForBindings(Event* event,
          DispatchEventResult::kCanceledByEventHandler;
 }
 
-DispatchEventResult EventTarget::DispatchEvent(Event& event) {
+DispatchEventResult EventTarget::DispatchEvent(Event& event, const char* why) {
   if (!GetExecutionContext())
     return DispatchEventResult::kCanceledBeforeDispatch;
   event.SetTrusted(true);
@@ -942,6 +1015,12 @@ void EventTarget::CountLegacyEvents(
     prefixed_and_unprefixed_feature = WebFeature::kMouseWheelAndWheelEvent;
   } else {
     return;
+
+  if (!recordreplay::AreEventsDisallowed()) {
+    // don't Assert during GC
+    REPLAY_ASSERT("[RUN-1260-1332] EventTarget::RemoveAllEventListeners");
+  }
+
   }
 
   if (const LocalDOMWindow* executing_window = ExecutingWindow()) {
@@ -965,6 +1044,8 @@ DispatchEventResult EventTarget::FireEventListeners(Event& event) {
   DCHECK(event.WasInitialized());
 
   EventTargetData* d = GetEventTargetData();
+  REPLAY_ASSERT("[RUN-1260] EventTarget::FireEventListeners 1 %d",
+                       !!d);
   if (!d)
     return DispatchEventResult::kNotCanceled;
 
@@ -976,7 +1057,14 @@ DispatchEventResult EventTarget::FireEventListeners(Event& event) {
   EventListenerVector* listeners_vector =
       d->event_listener_map.Find(event.type());
 
+    recordreplay::UserEventProbe replayEvent(nullptr, event.type(), this);
+
   bool fired_event_listeners = false;
+  REPLAY_ASSERT(
+      "[RUN-1260] EventTarget::FireEventListeners 2 %d %d %d",
+      listeners_vector ? listeners_vector->size() : -1,
+      legacy_listeners_vector ? legacy_listeners_vector->size() : -1,
+      event.isTrusted());
   if (listeners_vector) {
     // Calling `FireEventListener` causes a clone of `listeners_vector`.
     fired_event_listeners = FireEventListeners(
@@ -1159,7 +1247,7 @@ void EventTarget::DispatchEnqueuedEvent(
   // navigation events).
   NavigationEventTiming event_timing_scope(
       ExecutingWindow() ? ExecutingWindow()->GetFrame() : nullptr, *event);
-  DispatchEvent(*event);
+  DispatchEvent(*event, "EventTarget::DispatchEnqueuedEvent");
 }
 
 void EventTarget::Trace(Visitor* visitor) const {

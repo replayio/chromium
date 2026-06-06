@@ -8,6 +8,8 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 
+#include "base/record_replay.h"
+
 using SingleThreadIdleTaskRunner = blink::scheduler::SingleThreadIdleTaskRunner;
 
 namespace base {
@@ -119,7 +121,11 @@ void SingleThreadIdleTaskRunner::RunTask(IdleTask idle_task) {
                "allotted_time_ms",
                (deadline - base::TimeTicks::Now()).InMillisecondsF());
   std::move(idle_task).Run(deadline);
-  delegate_->DidProcessIdleTask();
+
+  if (!recordreplay::AreEventsDisallowed("SingleThreadIdleTaskRunner::RunTask")) {
+    recordreplay::Assert("[RUN-1335-1336] SingleThreadIdleTaskRunner::RunTask");
+    delegate_->DidProcessIdleTask();
+  }
 }
 
 }  // namespace blink::scheduler

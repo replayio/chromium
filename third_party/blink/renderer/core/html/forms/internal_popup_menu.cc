@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/core/html/forms/internal_popup_menu.h"
 
+#include "base/record_replay.h"
 #include "base/containers/span.h"
 #include "base/strings/string_view_util.h"
 #include "build/build_config.h"

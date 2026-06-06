@@ -58,6 +58,8 @@
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
 
+#include "base/record_replay.h"
+
 using base::apple::CFToNSOwnershipCast;
 using base::apple::CFToNSPtrCast;
 using base::apple::NSToCFPtrCast;
@@ -123,6 +125,12 @@ bool IsAppleColorEmojiFont(CTFontRef font) {
           CFStringCompare(family_name.get(), CFSTR(".Apple Color Emoji UI"),
                           kCFCompareCaseInsensitive) == kCFCompareEqualTo);
 }
+
+  if (recordreplay::AreEventsDisallowed("PlatformFallbackFontForCharacter") ||
+      recordreplay::HasDivergedFromRecording()) {
+    // [RUN-2765] Circumvent a rabbit hole of MAC-related font calls.
+    return nullptr;
+  }
 
 ScopedCFTypeRef<CTFontRef> GetSubstituteFont(CTFontRef ct_font,
                                              UChar32 character,

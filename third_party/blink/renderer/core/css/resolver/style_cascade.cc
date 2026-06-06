@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/core/css/resolver/style_cascade.h"
 
+#include "base/record_replay.h"
 #include <bit>
 #include <optional>
 
@@ -245,6 +246,9 @@ bool EvaluateContainerQueries(Element& element,
     // is supposed to be the output of ElementRuleCollector.
     // Consider refactoring.
     ContainerQueryEvaluator::SetDependencyFlags(*query, match_result);
+
+  recordreplay::Assert("[RUN-2424-3053] StyleCascade::Apply %d",
+                       state_.GetElement().RecordReplayId());
 
     Element* starting_element =
         ContainerQueryEvaluator::DetermineStartingElement(

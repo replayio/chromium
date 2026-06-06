@@ -50,6 +50,9 @@ bool StructTraits<blink::mojom::blink::CloneableMessage::DataView,
   out->sender_agent_cluster_id = sender_agent_cluster_id;
   out->locked_to_sender_agent_cluster = data.locked_to_sender_agent_cluster();
 
+  out->record_replay_message_id = data.record_replay_message_id();
+  out->record_replay_process_id = data.record_replay_process_id();
+
   blink::Vector<
       PendingRemote<blink::mojom::blink::FileSystemAccessTransferToken>>&
       tokens = out->message->FileSystemAccessTokens();

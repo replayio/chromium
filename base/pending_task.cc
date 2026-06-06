@@ -4,6 +4,7 @@
 
 #include "base/pending_task.h"
 
+#include "base/record_replay.h"
 #include "base/task/task_features.h"
 
 namespace base {
@@ -19,7 +20,12 @@ TaskMetadata::TaskMetadata(const Location& posted_from,
       queue_time(queue_time),
       delayed_run_time(delayed_run_time),
       leeway(leeway),
-      delay_policy(delay_policy) {}
+      delay_policy(delay_policy) {
+  if (!recordreplay::AreEventsDisallowed() && !recordreplay::AreEventsPassedThrough()) {
+    // We use these for Asserts.
+    record_replay_id = recordreplay::NewIdAnyThread("PendingTask");
+  }
+}
 
 TaskMetadata::TaskMetadata(TaskMetadata&& other) = default;
 TaskMetadata::TaskMetadata(const TaskMetadata& other) = default;

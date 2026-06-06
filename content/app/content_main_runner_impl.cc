@@ -820,6 +820,9 @@ int ContentMainRunnerImpl::Initialize(ContentMainParams params) {
       // Zygotes will run this at a later point in time when the command line
       // has been updated.
       CreateChildThreadPool(process_type);
+      recordreplay::Assert("[RUN-2350-2356] ContentMainRunnerImpl::Run %d",
+                           delegate_->ShouldCreateFeatureList(
+                               ContentMainDelegate::InvokedInChildProcess()));
     }
   } else {
     // Create and start the ThreadPool early to allow the rest of the startup

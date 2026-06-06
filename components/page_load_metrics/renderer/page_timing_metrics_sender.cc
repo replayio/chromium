@@ -339,6 +339,11 @@ void PageTimingMetricsSender::EnsureSendTimer(bool urgent) {
   else if (timer_->IsRunning())
     return;
 
+  // Due to the use of weak pointers the points when we try to send metrics can
+  // vary between recording and replaying, so we only send metrics urgently.
+  if (!urgent && recordreplay::IsRecordingOrReplaying("no-page-timing-metrics"))
+    return;
+
   int delay_ms;
   if (urgent) {
     // Send as soon as possible, but not synchronously, so that all pending
@@ -367,6 +372,7 @@ void PageTimingMetricsSender::SendNow() {
       page_resource_data_use_.erase(resource->resource_id());
     }
   }
+
 
   TRACE_EVENT("loading", "PageTimingMetricsSender::SendNow",
               "custom_user_timings_count", custom_user_timings_.size());

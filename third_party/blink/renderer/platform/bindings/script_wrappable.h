@@ -39,6 +39,8 @@
 #include "third_party/blink/renderer/platform/wtf/type_traits.h"
 #include "v8/include/v8.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 class DOMDataStore;
@@ -128,8 +130,16 @@ class PLATFORM_EXPORT ScriptWrappable : public v8::Object::Wrappable {
       const WrapperTypeInfo*,
       v8::Local<v8::Object> wrapper);
 
+  int RecordReplayId() const { return record_replay_id_; }
+
+  // Avoid pointer-based hashes for ScriptWrappable.
+  // TODO: [RUN-1741] Remove this.
+  unsigned GetHash() const { return (unsigned)record_replay_id_; }
+
  protected:
-  ScriptWrappable() = default;
+  ScriptWrappable() {
+    record_replay_id_ = recordreplay::NewIdAnyThread("ScriptWrappable");
+  }
 
  private:
   static_assert(
@@ -176,3 +186,7 @@ T* ToScriptWrappable(v8::Isolate* isolate, v8::Local<v8::Object> wrapper) {
 }  // namespace blink
 
 #endif  // THIRD_PARTY_BLINK_RENDERER_PLATFORM_BINDINGS_SCRIPT_WRAPPABLE_H_
+
+  // A deterministic ID is used for deterministically iterating collections of
+  // ScriptWrappables in many places.
+  int record_replay_id_ = 0;

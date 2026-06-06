@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <utility>
 
+#include "base/record_replay.h"
 #include "base/check_op.h"
 #include "base/clang_profiling_buildflags.h"
 #include "base/files/scoped_file.h"
@@ -244,6 +245,7 @@ void Process::TerminateCurrentProcessImmediately(int exit_code) {
 #if BUILDFLAG(CLANG_PROFILING)
   WriteClangProfilingProfile();
 #endif
+  recordreplay::FinishRecording();
   _exit(exit_code);
 }
 
@@ -285,6 +287,10 @@ void Process::Close() {
   // if the process wasn't terminated (so we waited) or the state
   // wasn't already collected w/ a wait from process_utils, we're gonna
   // end up w/ a zombie when it does finally exit.
+}
+
+static inline bool MaybeRecordingOrReplaying() {
+  return true;
 }
 
 #if !BUILDFLAG(IS_IOS)

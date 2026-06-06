@@ -99,6 +99,7 @@
 #include "chrome/browser/ui/views/toolbar/browser_app_menu_button.h"
 #include "chrome/browser/ui/views/toolbar/chrome_labs/chrome_labs_coordinator.h"
 #include "chrome/browser/ui/views/toolbar/home_button.h"
+#include "chrome/browser/ui/views/toolbar/record_replay_toolbar_button.h"
 #include "chrome/browser/ui/views/toolbar/pinned_toolbar_actions_container.h"
 #include "chrome/browser/ui/views/toolbar/reload_button.h"
 #include "chrome/browser/ui/views/toolbar/split_tabs_button.h"
@@ -294,6 +295,14 @@ ToolbarView::ToolbarView(Browser* browser, BrowserView* browser_view)
     glic_nudge_controller->SetToolbarDelegate(this);
   }
 }
+
+  // RecordReplay: #RUN-2762
+  // Only show the record-button if our chromium UI is enabled.
+  std::unique_ptr<RecordReplayToolbarButton> record_replay_button;
+  if (getenv("CHROMIUM_UI")) {
+    record_replay_button =
+      std::make_unique<RecordReplayToolbarButton>(browser_);
+  }
 
 ToolbarView::~ToolbarView() {
   if (display_mode_ != DisplayMode::kNormal) {
@@ -550,6 +559,9 @@ void ToolbarView::Init() {
     battery_saver_button_ =
         AddChildView(std::make_unique<BatterySaverButton>(browser_view_));
   }
+
+  if (record_replay_button)
+    record_replay_button_ = AddChildView(std::move(record_replay_button));
 
   if (!features::IsWebUIPerformanceInterventionButtonEnabled()) {
     performance_intervention_button_ = AddChildView(

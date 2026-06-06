@@ -579,6 +579,9 @@ static void UnmarkAsCoveredByBucketing(CSSSelector& selector) {
       break;
     }
   }
+
+  // https://linear.app/replay/issue/RUN-968
+  recordreplay::Assert("RuleSet::AddChildRules Done");
 }
 
 template <RuleSet::BucketCoverage bucket_coverage>
@@ -1304,6 +1307,9 @@ void RuleSet::AddRulesFromSheet(const StyleSheetContents* sheet,
                                 const MixinMap& mixins,
                                 CascadeLayer* cascade_layer,
                                 const StyleScope* style_scope) {
+  // https://linear.app/replay/issue/RUN-968
+  recordreplay::Assert("RuleSet::AddChildRules Start");
+
   TRACE_EVENT0("blink", "RuleSet::addRulesFromSheet");
   DCHECK(sheet);
 

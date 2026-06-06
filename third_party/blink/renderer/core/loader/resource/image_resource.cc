@@ -35,6 +35,7 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/loader/referrer_utils.h"
@@ -712,6 +713,9 @@ void ImageResource::UpdateImage(
   auto result = GetContent()->UpdateImage(std::move(shared_buffer), GetStatus(),
                                           update_image_option,
                                           all_data_received, is_multipart);
+
+  recordreplay::Assert("[RUN-1436] ImageResource::UpdateImage #1 %d", (int)result);
+
   if (result == ImageResourceContent::UpdateImageResult::kShouldDecodeError) {
     // In case of decode error, we call imageNotifyFinished() iff we don't
     // initiate reloading:

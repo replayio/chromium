@@ -92,6 +92,7 @@
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_linked_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/heap_observer_list.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
@@ -2432,6 +2433,9 @@ class CORE_EXPORT Document : public ContainerNode,
   FRIEND_TEST_ALL_PREFIXES(HTMLLinkElementSimTest,
                            PaymentLinkNotHandledWhenNotInTheMainFrame);
 
+  // IDs for dependency graph nodes which the load event depends on.
+  Vector<int> record_replay_load_event_dependency_nodes_;
+
   // Listed elements that are not associated to a <form> element.
   class UnassociatedListedElementsList {
     DISALLOW_NEW();
@@ -2650,6 +2654,8 @@ class CORE_EXPORT Document : public ContainerNode,
                                    mojom::blink::FocusType focus_type);
   void DisplayNoneChangedForFrame();
 
+  void RecordReplayOnRemoveLoadEventDelay();
+
   // Handles a connection error to |trust_token_query_answerer_| by rejecting
   // all pending promises created by |hasPrivateToken| and
   // |hasRedemptionRecord|.
@@ -2796,6 +2802,8 @@ class CORE_EXPORT Document : public ContainerNode,
   bool compatibility_mode_locked_ = false;
 
   TaskHandle execute_scripts_waiting_for_resources_task_handle_;
+  int record_replay_execute_scripts_waiting_for_resources_node_id_ = 0;
+
   TaskHandle javascript_url_task_handle_;
   class PendingJavascriptUrl final
       : public GarbageCollected<PendingJavascriptUrl> {
@@ -3120,7 +3128,7 @@ class CORE_EXPORT Document : public ContainerNode,
   Member<Document> template_document_;
   Member<Document> template_document_host_;
 
-  HeapHashSet<Member<SVGUseElement>> use_elements_needing_update_;
+  HeapHashSet<Member<SVGUseElement>, WTF::MemberHashRecordReplayId<SVGUseElement>> use_elements_needing_update_;
   // SVG resources ("resource elements") for which NotifyContentChanged() needs
   // to be called to notify any clients about a change in layout attachment
   // state. Should be populated during layout detach or style recalc, and be

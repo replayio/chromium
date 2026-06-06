@@ -5,6 +5,7 @@
 #ifndef UI_GFX_MOJOM_TRANSFORM_MOJOM_TRAITS_H_
 #define UI_GFX_MOJOM_TRANSFORM_MOJOM_TRAITS_H_
 
+#include "base/record_replay.h"
 #include <array>
 
 #include "base/check.h"

@@ -4,6 +4,8 @@
 
 #include "third_party/blink/renderer/core/input/mouse_event_manager.h"
 
+#include "base/record_replay.h"
+
 #include "base/metrics/histogram_functions.h"
 #include "build/build_config.h"
 #include "third_party/blink/public/platform/web_input_event_result.h"
@@ -216,6 +218,17 @@ MouseEventManager::DispatchMouseEvent(
          mouse_event_type == event_type_names::kClick ||
          mouse_event_type == event_type_names::kAuxclick);
 
+  if (recordreplay::IsRecordingOrReplaying() && (
+    mouse_event_type == event_type_names::kMouseup ||
+    mouse_event_type == event_type_names::kMousedown ||
+    mouse_event_type == event_type_names::kMousemove)) {
+
+    auto pos = mouse_event.PositionInRootFrame();
+    auto x = (size_t)pos.x();
+    auto y = (size_t)pos.y();
+    recordreplay::OnMouseEvent(mouse_event_type.Utf8().c_str(), x, y, false);
+  }
+  
   WebInputEventResult input_event_result = WebInputEventResult::kNotHandled;
 
   if (target && target->ToNode()) {
@@ -267,7 +280,7 @@ MouseEventManager::DispatchMouseEvent(
 
       if (should_dispatch) {
         input_event_result = event_handling_util::ToWebInputEventResult(
-            target->DispatchEvent(*event));
+            target->DispatchEvent(*event, "MouseEventManager::DispatchMouseEvent #2"));
         return {event, input_event_result};
       }
     } else {
@@ -284,7 +297,7 @@ MouseEventManager::DispatchMouseEvent(
 
       if (should_dispatch) {
         input_event_result = event_handling_util::ToWebInputEventResult(
-            target->DispatchEvent(*event));
+            target->DispatchEvent(*event, "MouseEventManager::DispatchMouseEvent #1"));
         return {event, input_event_result};
       }
     }
@@ -1152,7 +1165,7 @@ WebInputEventResult MouseEventManager::DispatchDragEvent(
                                         : MouseEvent::kRealOrIndistinguishable);
 
   const auto event_result = event_handling_util::ToWebInputEventResult(
-      drag_target->DispatchEvent(*me));
+      drag_target->DispatchEvent(*me, "MouseEventManager::DispatchDragEvent"));
   // If the drop effect was overridden to none for a dragLeave, reset it to
   // an uninitialized state. In cases where a drag leaves a target, having
   // dropEffect explicitly set to none would be incorrect and may

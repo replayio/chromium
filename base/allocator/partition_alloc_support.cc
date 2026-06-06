@@ -75,6 +75,8 @@
 #include "partition_alloc/stack/stack.h"
 #include "partition_alloc/thread_cache.h"
 
+#include "base/record_replay.h"
+
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/background_thread_pool_field_trial.h"
 #include "base/system/sys_info.h"
@@ -640,6 +642,10 @@ void DanglingRawPtrReleased(uintptr_t id) {
       free_info, stack_trace_release, task_trace_release);
 
   {
+    // The memory reclaimer runs at consistent points when recording vs. replaying,
+    // but can behave differently.
+    recordreplay::AutoDisallowEvents disallow("RunMemoryReclaimer");
+
     // Log the full error in a single LogMessage. Printing StackTrace is
     // expensive, so we want to avoid interleaving the output with other logs.
     logging::LogMessage log_message(__FILE__, __LINE__, logging::LOGGING_ERROR);

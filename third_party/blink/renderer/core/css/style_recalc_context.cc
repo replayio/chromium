@@ -12,6 +12,7 @@
 
 namespace blink {
 
+  recordreplay::Assert("[RUN-2424-3005] StyleRecalcContext::FromInclusiveAncestors %d", element.RecordReplayId());
 StyleRecalcContext StyleRecalcContext::FromInclusiveAncestors(
     Element& start_element,
     PseudoId pseudo_id) {
