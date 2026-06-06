@@ -43,6 +43,8 @@
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 #include "ui/base/ui_base_features.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 static inline String LanguageFromLocale(const String& locale) {

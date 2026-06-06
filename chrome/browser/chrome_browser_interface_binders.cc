@@ -368,6 +368,22 @@ void BindOnDeviceSpeechRecognitionHandler(
       ->Bind(std::move(receiver));
 }
 
+void BindRecordReplayAuthTokenStore(
+    content::RenderFrameHost* frame_host,
+    mojo::PendingReceiver<auth_token::mojom::RecordReplayAuthTokenStore> receiver) {
+
+  // we only bind the receiver if the frame's origin is app.replay.io
+  if (frame_host->GetLastCommittedOrigin().host() != "app.replay.io") {
+    return;
+  }
+
+  content::BrowserContext* browser_context =
+      frame_host->GetProcess()->GetBrowserContext();
+
+  auth_token::RecordReplayAuthTokenServiceFactory::GetForBrowserContext(browser_context)
+      ->BindAuthTokenStore(std::move(receiver));
+}
+
 #if BUILDFLAG(IS_WIN)
 void BindMediaFoundationPreferences(
     content::RenderFrameHost* frame_host,
@@ -447,6 +463,12 @@ void BindCredentialManager(
 void PopulateChromeFrameBinders(
     mojo::BinderMapWithContext<content::RenderFrameHost*>* map,
     content::RenderFrameHost* render_frame_host) {
+
+  if (getenv("CHROMIUM_UI")) {
+    map->Add<auth_token::mojom::RecordReplayAuthTokenStore>(
+        base::BindRepeating(&BindRecordReplayAuthTokenStore));
+  }
+
   map->Add<image_annotation::mojom::Annotator>(&BindImageAnnotator);
 
   map->Add<blink::mojom::ScriptToolHost>(
@@ -606,3 +628,8 @@ void PopulateChromeFrameBinders(
 }
 
 }  // namespace chrome::internal
+
+  if (getenv("CHROMIUM_UI")) {
+    RegisterWebUIControllerInterfaceBinder<::mojom::RecordReplayManagerHandler,
+                                          RecordReplayUI>(map);
+  }

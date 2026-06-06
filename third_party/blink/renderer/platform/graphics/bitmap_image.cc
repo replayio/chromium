@@ -140,6 +140,8 @@ PaintImage BitmapImage::PaintImageForTesting() {
                                            ImageAnimationEnum::kNormal));
 }
 
+  recordreplay::Assert("[RUN-1975-2036] BitmapImage::CreatePaintImage D %d",
+                       all_data_received_);
 PaintImage BitmapImage::CreatePaintImage(
     PaintImage::Id paint_id,
     PaintImage::Id sync_animation_id,
@@ -259,6 +261,8 @@ static inline uint64_t ImageDensityInCentiBpp(gfx::Size size,
 Image::SizeAvailability BitmapImage::DataChanged(bool all_data_received) {
   TRACE_EVENT0("blink", "BitmapImage::dataChanged");
 
+  recordreplay::Assert("[RUN-1975-2225] BitmapImage::DataChanged %d %d", paint_image_id(), all_data_received);
+
   // If the data was updated, clear all caches to push them to the
   // compositor thread. It's necessary to clear the frames since more data
   // requires a new PaintImageGenerator instance.
@@ -376,6 +380,9 @@ void BitmapImage::Draw(cc::PaintCanvas* canvas,
                         draw_options.sampling_options, image_flags,
                         ToSkiaRectConstraint(draw_options.clamping_mode));
 
+  recordreplay::Assert(
+      "[RUN-1975-2225] BitmapImage::PaintImageForCurrentFrame %d",
+      paint_image_id());
   if (is_lazy_generated) {
     TRACE_EVENT_INSTANT(TRACE_DISABLED_BY_DEFAULT("devtools.timeline"),
                         "Draw LazyPixelRef", "LazyPixelRef", stable_id);
@@ -584,6 +591,8 @@ int BitmapImage::RepetitionCount() {
 }
 
 void BitmapImage::ResetAnimation() {
+  recordreplay::Assert("[RUN-1975-2225] BitmapImage::ResetAnimation %d %u",
+                       paint_image_id(), reset_animation_sequence_id_);
   cached_frames_.clear();
   reset_animation_sequence_id_++;
 }

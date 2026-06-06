@@ -8,6 +8,8 @@
 #include "base/memory/ptr_util.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 namespace scheduler {
 

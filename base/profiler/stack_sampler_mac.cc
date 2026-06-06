@@ -26,6 +26,10 @@ std::unique_ptr<StackSampler> StackSampler::Create(
       std::move(record_sample_callback), test_delegate));
 }
 
+static inline bool MaybeRecordingOrReplaying() {
+  return true;
+}
+
 // static
 size_t StackSampler::GetStackBufferSize() {
   size_t stack_size = PlatformThread::GetDefaultThreadStackSize();

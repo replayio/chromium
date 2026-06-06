@@ -13,11 +13,13 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+#include <cstdio>
 
 #include "base/allocator/partition_alloc_support.h"
 #include "base/at_exit.h"
 #include "base/command_line.h"
 #include "base/debug/crash_logging.h"
+#include "base/json/json_writer.h"
 #include "base/feature_list.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
@@ -37,6 +39,7 @@
 #include "base/path_service.h"
 #include "base/process/process.h"
 #include "base/process/process_metrics.h"
+#include "base/record_replay.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
@@ -223,6 +226,8 @@
 #if BUILDFLAG(CLANG_PROFILING_INSIDE_SANDBOX)
 #include "base/test/clang_profiling.h"
 #endif
+
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
 
 namespace content {
 
@@ -1388,6 +1393,28 @@ void RenderThreadImpl::CreateAgentSchedulingGroup(
     mojo::PendingReceiver<IPC::mojom::ChannelBootstrap> bootstrap) {
   agent_scheduling_groups_.emplace(
       std::make_unique<AgentSchedulingGroup>(*this, std::move(bootstrap)));
+}
+
+extern "C" void V8RecordReplayBrowserEvent(const char* name,
+                                           const char* payload);
+
+void RenderThreadImpl::RecordReplayBrowserEvent(const std::string& name,
+                                                base::Value::Dict value) {
+  // Do nothing if not in record/replay mode.
+  if (!recordreplay::IsRecordingOrReplaying("browser-event") ||
+      !v8::IsMainThread()) {
+    return;
+  }
+
+  // For now these events are always ignored unless a special env var is set,
+  // see discussion in https://linear.app/replay/issue/RUN-2961
+  if (!getenv("RECORD_REPLAY_REPORT_BROWSER_PROCESS_EVENTS")) {
+    return;
+  }
+
+  std::string json;
+  base::JSONWriter::Write(value, &json);
+  V8RecordReplayBrowserEvent(name.c_str(), json.c_str());
 }
 
 void RenderThreadImpl::CreateAssociatedAgentSchedulingGroup(

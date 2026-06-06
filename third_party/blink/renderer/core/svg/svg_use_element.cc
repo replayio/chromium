@@ -371,6 +371,9 @@ SVGElement* SVGUseElement::InstanceRoot() const {
 }
 
 void SVGUseElement::BuildPendingResource() {
+  recordreplay::Assert(
+      "[RUN-2313] SVGUseElement::BuildPendingResource A %d",
+      RecordReplayId());
   if (!isConnected()) {
     DCHECK(!needs_shadow_tree_recreation_);
     DCHECK(!attach_load_event_delayer_);
@@ -386,6 +389,8 @@ void SVGUseElement::BuildPendingResource() {
       return;
     ancestor = ancestor->GeneratingUseElement();
   }
+
+  recordreplay::Assert("[RUN-2313] SVGUseElement::BuildPendingResource C");
 
   DetachShadowTree();
   ClearResourceReference();
@@ -477,6 +482,12 @@ SVGElement* SVGUseElement::CreateInstanceTree(SVGElement& target_root) const {
   PostProcessInstanceTree(target_root, *instance_root);
   return instance_root;
 }
+
+  recordreplay::Assert(
+      "[RUN-2313] SVGUseElement::AttachShadowTree A %d %d %d %d",
+      RecordReplayId(),
+      target.RecordReplayId(), IsDisallowedElement(target),
+      HasCycleUseReferencing(*this, target));
 
 void SVGUseElement::AttachShadowTree(SVGElement& target) {
   DCHECK(!InstanceRoot());
@@ -584,6 +595,9 @@ bool SVGUseElement::ShadowTreeRebuildPending() const {
 }
 
 void SVGUseElement::InvalidateShadowTree() {
+  recordreplay::Assert(
+      "[RUN-2313] SVGUseElement::InvalidateShadowTree %d %d",
+      RecordReplayId(), ShadowTreeRebuildPending());
   if (ShadowTreeRebuildPending())
     return;
   ScheduleShadowTreeRecreation();

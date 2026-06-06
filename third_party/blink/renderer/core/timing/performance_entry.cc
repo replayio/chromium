@@ -41,10 +41,12 @@
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
 
+#include "base/record_replay_atomic_sequence_num.h"
+
 namespace blink {
 
 namespace {
-static base::AtomicSequenceNumber index_seq;
+static ::recordreplay::AtomicSequenceNumber index_seq;
 }  // namespace
 
 PerformanceEntry::PerformanceEntry(const AtomicString& name,
@@ -68,7 +70,9 @@ PerformanceEntry::PerformanceEntry(double duration,
       start_time_(start_time),
       index_(index_seq.GetNext()),
       source_(source),
-      navigation_id_(navigation_id) {}
+      navigation_id_(navigation_id) {
+  recordreplay::Assert("[RUN-2317-2316] PerformanceEntry A %d %u", index_, navigation_id);
+}
 
 PerformanceEntry::~PerformanceEntry() = default;
 

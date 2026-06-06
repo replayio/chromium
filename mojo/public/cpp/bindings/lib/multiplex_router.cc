@@ -28,6 +28,8 @@
 #include "mojo/public/cpp/bindings/lib/may_auto_lock.h"
 #include "mojo/public/cpp/bindings/sequence_local_sync_event_watcher.h"
 
+#include "base/record_replay.h"
+
 namespace mojo::internal {
 
 // InterfaceEndpoint stores the information of an interface endpoint registered
@@ -321,6 +323,10 @@ class MultiplexRouter::MessageWrapper {
   // handles.
   Message DeserializeEndpointHandlesAndTake() {
     if (!value_.DeserializeAssociatedEndpointHandles(router_)) {
+      // https://linear.app/replay/issue/RUN-1228
+      // Not asserting here because the location where false is returned
+      // in the call above is asserted instead.
+
       // The previous call may have deserialized part of the associated
       // interface endpoint handles. They must be destroyed outside of the
       // router's lock, so we cannot wait until destruction of MessageWrapper.
@@ -463,6 +469,8 @@ void MultiplexRouter::StartReceiving() {
 }
 
 MultiplexRouter::~MultiplexRouter() {
+  recordreplay::UnregisterPointer(this);
+
   MayAutoLock locker(&lock_);
 
   being_destructed_ = true;
@@ -615,6 +623,12 @@ void MultiplexRouter::DetachEndpointClient(
   const InterfaceId id = handle.id();
 
   DCHECK(IsValidInterfaceId(id));
+
+  // Avoid warning when endpoints are removed at non-deterministic points,
+  // e.g. during GC.
+  if (recordreplay::AreEventsDisallowed()) {
+    recordreplay::BeginPassThroughEvents();
+  }
 
   MayAutoLock locker(&lock_);
   DCHECK(endpoints_.contains(id));
@@ -1219,6 +1233,9 @@ bool MultiplexRouter::ProcessIncomingMessage(
     // always accessed on the same sequence, including DetachEndpointClient().
     MayAutoUnlock unlocker(&lock_);
     Message tmp_message = message_wrapper->DeserializeEndpointHandlesAndTake();
+    recordreplay::Assert(
+        "[RUN-2229-2231] MultiplexRouter::ProcessIncomingMessage %d",
+        tmp_message.IsNull());
     result =
         !tmp_message.IsNull() && client->HandleIncomingMessage(&tmp_message);
   }

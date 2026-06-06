@@ -3979,6 +3979,10 @@ void Element::ClassAttributeChanged(const AtomicString& new_class_string) {
                                                         new_classes, *this);
 }
 
+  recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle A %d %d", 
+                       RecordReplayId(),
+                       HasCustomStyleCallbacks());
+
 void Element::UpdateSubtreeBloomFilterAfterInsert() {
   Element* to_update = this;
   Element* parent = parentElement();
@@ -4075,6 +4079,7 @@ void Element::UpdateClassList(const AtomicString& old_class_string,
     }
   }
 }
+  recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle E");
 
 // Returns true if the given attribute is an event handler.
 // We consider an event handler any attribute that begins with "on".
@@ -5032,6 +5037,8 @@ bool Element::SkipStyleRecalcForContainer(
 
   if (HasCustomStyleCallbacks()) {
     DidRecalcStyle(child_change);
+
+    recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle B");
   }
 
   // This needs to be cleared to satisfy the DCHECKed invariants in
@@ -8125,6 +8132,14 @@ void Element::removeAttributeNS(const AtomicString& namespace_uri,
 Attr* Element::getAttributeNode(const AtomicString& local_name) {
   if (!HasElementData()) {
     return nullptr;
+
+  if (recordreplay::IsInReplayCode() &&
+      !recordreplay::HasDivergedFromRecording()) {
+    // [RUN-1764] Do not try to create blink API objects in our Replay-only
+    // scripts, unless explicitly diverged.
+    return EnsureElementRareData().GetInlineCSSStyleDeclaration();
+  }
+
   }
   AtomicStringTable::WeakResult hint = WeakLowercaseIfNecessary(local_name);
   SynchronizeAttributeHinted(local_name, hint);
@@ -9386,7 +9401,7 @@ bool Element::DispatchFocusEvent(Element* old_focused_element,
   Document& document = GetDocument();
   if (DispatchEvent(*FocusEvent::Create(
           event_type_names::kFocus, Event::Bubbles::kNo, document.domWindow(),
-          0, old_focused_element, source_capabilities)) !=
+          0, old_focused_element, source_capabilities), "Element::DispatchFocusEvent") !=
       DispatchEventResult::kNotCanceled) {
     return false;
   }
@@ -9398,7 +9413,7 @@ void Element::DispatchBlurEvent(Element* new_focused_element,
                                 InputDeviceCapabilities* source_capabilities) {
   DispatchEvent(*FocusEvent::Create(
       event_type_names::kBlur, Event::Bubbles::kNo, GetDocument().domWindow(),
-      0, new_focused_element, source_capabilities));
+      0, new_focused_element, source_capabilities), "Element::DispatchBlurEvent");
 }
 
 void Element::DispatchFocusInEvent(
@@ -10045,6 +10060,9 @@ const ComputedStyle* Element::EnsureComputedStyle(
   // because there is always a possibility that it could allocate something on
   // the V8 heap.
   DCHECK(ThreadState::Current()->IsAllocationAllowed());
+
+  recordreplay::Assert("[RUN-2424-3227] Element::EnsureComputedStyle %d",
+    RecordReplayId());
 
   StyleEngine::InEnsureComputedStyleScope ensure_scope(
       GetDocument().GetStyleEngine());
@@ -11344,6 +11362,9 @@ Element* Element::closest(const AtomicString& selectors) {
 }
 
 DOMTokenList& Element::classList() {
+  // https://linear.app/replay/issue/RUN-1040
+  recordreplay::Assert("Element::classList %d", RecordReplayId());
+
   ElementRareDataVector* rare_data = &EnsureRareData();
   if (!rare_data->GetClassList()) {
     auto* class_list =

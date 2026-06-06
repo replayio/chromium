@@ -88,6 +88,7 @@ void ThreadControllerWithMessagePumpImpl::ResetFeatures() {
 ThreadControllerWithMessagePumpImpl::ThreadControllerWithMessagePumpImpl(
     const SequenceManager::Settings& settings)
     : ThreadController(settings.clock),
+      task_runner_lock_("ThreadControllerWithMessagePumpImpl.task_runner_lock_"),
       work_deduplicator_(associated_thread_),
       can_run_tasks_by_batches_(settings.can_run_tasks_by_batches),
       is_main_thread_(settings.is_main_thread) {
@@ -218,6 +219,10 @@ void ThreadControllerWithMessagePumpImpl::SetNextDelayedDoWork(
                                         wake_up->latest_time())
           : TimeTicks::Max();
   DCHECK_LT(lazy_now->Now(), run_time);
+
+  recordreplay::Assert(
+    "[RUN-2801-2978] ThreadControllerWithMessagePumpImpl::SetNextDelayedDoWork A %d",
+    main_thread_only().next_delayed_do_work == run_time);
 
   if (!run_time.is_max()) {
     run_time = CapAtOneDay(run_time, lazy_now);
@@ -423,6 +428,8 @@ std::optional<WakeUp> ThreadControllerWithMessagePumpImpl::DoWorkImpl(
        (batch_duration.is_zero() &&
         num_tasks_executed < main_thread_only().work_batch_size);
        ++num_tasks_executed) {
+    recordreplay::Assert("[RUN-1124] ThreadControllerWithMessagePumpImpl::DoWorkImpl #5");
+
     LazyNow lazy_now_select_task(recent_time, time_source_);
     // Include SelectNextTask() in the scope of the work item. This ensures
     // it's covered in tracing and hang reports. This is particularly
@@ -445,6 +452,12 @@ std::optional<WakeUp> ThreadControllerWithMessagePumpImpl::DoWorkImpl(
             ? selected_task->task.queue_time
             : TimeTicks(),
         lazy_now_task_selected);
+
+    recordreplay::Assert("[RUN-1124] ThreadControllerWithMessagePumpImpl::DoWorkImpl #6 %d %d %d",
+                         selected_task ? selected_task->task.RecordReplayId() : 0,
+                         selected_task ? selected_task->task.IsCanceled() : -1,
+                         selected_task ? (int)selected_task->task_queue_name : -1);
+
     if (!selected_task) {
       OnEndWorkItemImpl(lazy_now_task_selected, run_depth);
       break;
@@ -509,6 +522,10 @@ std::optional<WakeUp> ThreadControllerWithMessagePumpImpl::DoWorkImpl(
       recent_time.reset();
     }
 
+    recordreplay::Assert("[RUN-1124] ThreadControllerWithMessagePumpImpl::DoWorkImpl #7 %d",
+                         main_thread_only().quit_pending);
+
+
     // When Quit() is called we must stop running the batch because the
     // caller expects per-task granularity.
     if (main_thread_only().quit_pending) {
@@ -562,6 +579,8 @@ void ThreadControllerWithMessagePumpImpl::DoIdleWork() {
   TRACE_EVENT0("sequence_manager", "SequenceManager::DoIdleWork");
 
 #if BUILDFLAG(IS_WIN)
+  recordreplay::Assert(
+      "[RUN-1916-2636] ThreadControllerWithMessagePumpImpl::Run A");
   if (!power_monitor_.IsProcessInPowerSuspendState()) {
     // Avoid calling Time::ActivateHighResolutionTimer() between
     // suspend/resume as the system hangs if we do (crbug.com/1074028).

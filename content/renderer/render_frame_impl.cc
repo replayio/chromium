@@ -39,6 +39,7 @@
 #include "base/notreached.h"
 #include "base/observer_list.h"
 #include "base/process/process.h"
+#include "base/record_replay.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_split.h"
@@ -262,6 +263,8 @@
 #include "content/renderer/java/gin_java_bridge_dispatcher.h"
 #include "mojo/public/cpp/bindings/self_owned_associated_receiver.h"
 #endif
+
+#include "base/json/json_writer.h"
 
 using base::Time;
 using blink::ContextMenuData;
@@ -2188,6 +2191,10 @@ void RenderFrameImpl::Unload(
                frame_token_);
   DCHECK(!base::RunLoop::IsNestedOnCurrentThread());
 
+  recordreplay::AutoDependencyExecution execute(
+    recordreplay::NewDependencyGraphNode("{\"kind\":\"renderFrameUnload\"}")
+  );
+
   // Send an UpdateState message before we get deleted.
   // TODO(dcheng): Improve this comment to clarify why it's important to sent
   // state updates.
@@ -2594,6 +2601,16 @@ void RenderFrameImpl::SetOldPageLifecycleStateFromNewPageCommitIfNeeded(
       old_page_info->new_lifecycle_state_for_old_page->visibility,
       old_page_info->new_lifecycle_state_for_old_page->pagehide_dispatch);
 }
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "renderFrameNavigate");
+    info.Set("url", common_params->url.spec());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
 
 void RenderFrameImpl::CommitNavigation(
     blink::mojom::CommonNavigationParamsPtr common_params,
@@ -4796,8 +4813,9 @@ void RenderFrameImpl::DidCreateScriptContext(v8::Local<v8::Context> context,
         context, std::move(mojo_js_interface_broker_));
   }
 
-  for (auto& observer : observers_)
+  for (auto& observer : observers_) {
     observer.DidCreateScriptContext(context, world_id);
+  }
 }
 
 void RenderFrameImpl::WillReleaseScriptContext(v8::Local<v8::Context> context,
@@ -4830,7 +4848,6 @@ blink::WebString RenderFrameImpl::UserAgentOverride() {
                                    ->GetRendererPreferences()
                                    .user_agent_override.ua_string_override);
   }
-
   return blink::WebString();
 }
 

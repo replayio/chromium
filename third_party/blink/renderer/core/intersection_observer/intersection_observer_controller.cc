@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/core/intersection_observer/intersection_observer_controller.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/element.h"
@@ -258,6 +259,9 @@ void IntersectionObserverController::AddTrackedObserver(
   if (observer.RootIsImplicit() || !observer.HasObservations())
     return;
   tracked_explicit_root_observers_.insert(&observer);
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "IntersectionObserverController")) {
+    replay_strong_tracked_explicit_root_observers_.insert(&observer);
+  }
   if (observer.trackVisibility()) {
     if (LocalFrameView* frame_view = observer.root()->GetDocument().View()) {
       if (FrameOwner* frame_owner = frame_view->GetFrame().Owner()) {
@@ -280,6 +284,9 @@ void IntersectionObserverController::RemoveTrackedObserver(
   // compelling reason to do it here, so we avoid the iteration through
   // observers and observations here.
   tracked_explicit_root_observers_.erase(&observer);
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "IntersectionObserverController")) {
+    replay_strong_tracked_explicit_root_observers_.erase(&observer);
+  }
 }
 
 void IntersectionObserverController::AddTrackedObservation(

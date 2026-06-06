@@ -19,6 +19,8 @@
 #include <map>
 #include <utility>
 
+#include "base/record_replay.h"
+
 #include "base/check.h"
 #include "base/no_destructor.h"
 #include "base/rand_util.h"

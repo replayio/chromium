@@ -22,6 +22,8 @@
 #include "third_party/skia/include/core/SkPictureRecorder.h"
 #include "ui/gfx/geometry/rect_conversions.h"
 
+#include "base/record_replay.h"
+
 namespace cc {
 
 scoped_refptr<PictureLayer> PictureLayer::Create(ContentLayerClient* client) {
@@ -91,6 +93,7 @@ void PictureLayer::SetLayerTreeHost(LayerTreeHost* host) {
   update_source_frame_number_.Write(*this) = -1;
 }
 
+  recordreplay::Assert("[RUN-2104-2296] PictureLayer::PushPropertiesTo B");
 void PictureLayer::SetNeedsDisplayRect(const gfx::Rect& layer_rect) {
   DCHECK(IsPropertyChangeAllowed());
   recording_source_.Write(*this).SetNeedsDisplayRect(layer_rect);
@@ -237,6 +240,10 @@ void PictureLayer::CaptureContent(const gfx::Rect& rect,
 
 void PictureLayer::DropRecordingSourceContentIfInvalid(
     int source_frame_number) {
+  // https://linear.app/replay/issue/RUN-885
+  recordreplay::Assert("PictureLayer::DropRecordingSourceContentIfInvalid %d %d",
+                       this->id(), source_frame_number);
+
   gfx::Size recording_source_size = recording_source_.Read(*this).size();
 
   gfx::Size layer_bounds = bounds();

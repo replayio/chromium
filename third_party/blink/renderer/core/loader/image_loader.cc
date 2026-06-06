@@ -80,6 +80,8 @@
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 #include "third_party/blink/renderer/platform/weborigin/security_policy.h"
 
+#include "base/json/json_writer.h"
+
 namespace blink {
 
 namespace {
@@ -151,6 +153,10 @@ ImageLoader::ImageLoader(Element* element)
       suppress_error_events_(false),
       lazy_image_load_state_(LazyImageLoadState::kNone) {
   RESOURCE_LOADING_DVLOG(1) << "new ImageLoader " << this;
+
+  record_replay_created_node_id_ = recordreplay::NewDependencyGraphNode(
+    "{\"kind\":\"imageLoaderCreated\"}"
+  );
 }
 
 ImageLoader::~ImageLoader() = default;
@@ -160,6 +166,8 @@ void ImageLoader::Dispose() {
       << "~ImageLoader " << this
       << "; has pending load event=" << pending_load_event_.IsActive()
       << ", has pending error event=" << pending_error_event_.IsActive();
+
+  int record_replay_scheduled_node_id_ = 0;
 
   if (image_content_) {
     delay_until_image_notify_finished_ = nullptr;
@@ -393,6 +401,9 @@ inline void ImageLoader::EnqueueImageLoadingMicroTask(
     UpdateFromElementBehavior update_behavior) {
   auto task = std::make_unique<Task>(this, update_behavior);
   pending_task_ = task->GetWeakPtr();
+  recordreplay::Assert(
+      "[RUN-1333] ImageLoader::EnqueueImageLoadingMicroTask %d",
+      element_->RecordReplayId());
   element_->GetDocument().GetAgent().event_loop()->EnqueueMicrotask(
       BindOnce(&Task::Run, std::move(task)));
   delay_until_do_update_from_element_ =
@@ -428,6 +439,7 @@ void ImageLoader::DoUpdateFromElement(const DOMWrapperWorld* world,
                                       UpdateFromElementBehavior update_behavior,
                                       const KURL* source_url,
                                       UpdateType update_type,
+    int record_replay_scheduled_node_id,
                                       bool force_blocking) {
   // FIXME: According to
   // http://www.whatwg.org/specs/web-apps/current-work/multipage/embedded-content.html#the-img-element:the-img-element-55
@@ -575,6 +587,10 @@ void ImageLoader::DoUpdateFromElement(const DOMWrapperWorld* world,
       params.SetLazyImageNonBlocking();
     }
 
+    recordreplay::Assert(
+        "[TT-418-1118] ImageLoader::DoUpdateFromElement A %d",
+        element_->RecordReplayId());
+
     new_image_content = ImageResourceContent::Fetch(params, document.Fetcher());
 
     // If this load is starting while navigating away, treat it as an auditing
@@ -595,6 +611,16 @@ void ImageLoader::DoUpdateFromElement(const DOMWrapperWorld* world,
   ImageResourceContent* old_image_content = image_content_.Get();
   if (old_image_content != new_image_content)
     RejectPendingDecodes(update_type);
+
+  recordreplay::Assert(
+      "[TT-418-1118] ImageLoader::DoUpdateFromElement B %d %d %d layout=%d %d",
+      update_behavior,
+      !!old_image_content,
+      new_image_content == old_image_content,
+
+      !!element_->GetLayoutObject(),
+      element_->GetLayoutObject() && element_->GetLayoutObject()->IsImage()
+  );
 
   if (update_behavior == kUpdateSizeChanged && element_->GetLayoutObject() &&
       element_->GetLayoutObject()->IsImage() &&
@@ -638,6 +664,8 @@ void ImageLoader::DoUpdateFromElement(const DOMWrapperWorld* world,
     }
   }
 
+  recordreplay::Assert("[TT-418-1118] ImageLoader::DoUpdateFromElement C");
+
   if (LayoutImageResource* image_resource = GetLayoutImageResource())
     image_resource->ResetAnimation();
 }
@@ -669,6 +697,10 @@ void ImageLoader::UpdateFromElement(UpdateFromElementBehavior update_behavior,
     image_content_for_image_document_ = nullptr;
     return;
   }
+
+  recordreplay::AutoMarkerDependencyExecution execute(
+    "LoadEventDelay", "ImageLoader::UpdateFromElement"
+  );
 
   // If we have a pending task, we have to clear it -- either we're now loading
   // immediately, or we need to reset the task's state.
@@ -790,6 +822,10 @@ void ImageLoader::ImageChanged(ImageResourceContent* content,
 }
 
 void ImageLoader::ImageNotifyFinished(ImageResourceContent* content) {
+  recordreplay::AutoMarkerDependencyExecution execute(
+    "LoadEventDelay", "ImageLoader::ImageNotifyFinished"
+  );
+
   RESOURCE_LOADING_DVLOG(1)
       << "ImageLoader::imageNotifyFinished " << this
       << "; has pending load event=" << pending_load_event_.IsActive();
@@ -909,6 +945,15 @@ void ImageLoader::UpdateLayoutObject() {
   // is a complete image.  This prevents flickering in the case where a dynamic
   // change is happening between two images.
   ImageResourceContent* cached_image_content = image_resource->CachedImage();
+
+  recordreplay::Assert(
+      "[TT-418-1118] ImageLoader::UpdateLayoutObject %d %d %d %d",
+      !!cached_image_content,
+      !!image_complete_,
+      image_content_ == cached_image_content,
+      !!cached_image_content
+  );
+
   if (image_content_ != cached_image_content &&
       (image_complete_ || !cached_image_content))
     image_resource->SetImageResource(image_content_.Get());
@@ -986,6 +1031,25 @@ void ImageLoader::DispatchPendingLoadEvent(
   if (!image_content_)
     return;
   CHECK(image_complete_);
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    std::string json;
+    {
+      recordreplay::AutoDisallowEvents disallow("ImageLoader::DispatchPendingLoadEvent");
+      base::Value::Dict info;
+      info.Set("kind", "imageLoaded");
+      info.Set("url", element_->ImageSourceURL().GetString().Utf8());
+      base::JSONWriter::Write(info, &json);
+    }
+    int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
+    recordreplay::AddDependencyGraphEdge(
+      record_replay_created_node_id_, node_id,
+      "{\"kind\":\"imageLoader\"}"
+    );
+    execute.emplace(node_id);
+  }
+
   DispatchLoadEvent();
 
   // Checks Document's load event synchronously here for performance.

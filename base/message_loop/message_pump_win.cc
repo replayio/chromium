@@ -30,6 +30,8 @@
 #include "base/tracing_buildflags.h"
 #include "third_party/perfetto/protos/perfetto/trace/track_event/chrome_message_pump.pbzero.h"
 
+#include "base/record_replay.h"
+
 namespace base {
 
 namespace {

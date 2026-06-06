@@ -57,6 +57,8 @@ String LocaleController::SetLocaleOverride(const String& locale,
   } else {
     icu::Locale locale_object(locale.Ascii().data());
     const char* lang = locale_object.getLanguage();
+    recordreplay::Assert(
+        "[RUN-1537-1681] LocaleController::SetLocaleOverride B %s", lang ? lang : "");
     if (!lang || *lang == '\0')
       return "Invalid locale name";
     UpdateLocale(locale);

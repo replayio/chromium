@@ -111,6 +111,8 @@
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
 #include "third_party/perfetto/include/perfetto/tracing/track.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
+
 namespace blink {
 
 constexpr uint32_t ResourceFetcher::kKeepaliveInflightBytesQuota;
@@ -965,6 +967,12 @@ void ResourceFetcher::DidLoadResourceFromMemoryCache(
     resource_load_observer_->DidReceiveResponse(
         request.InspectorId(), request, resource->GetResponse(), resource,
         ResourceLoadObserver::ResponseSource::kFromMemoryCache);
+
+  recordreplay::OnNetworkReceiveResponse(resource->InspectorId(), resource->GetResponse());
+  recordreplay::OnNetworkFinishLoading(resource->InspectorId(),
+                                       resource->GetResponse().EncodedBodyLength(),
+                                       resource->GetResponse().DecodedBodyLength());
+
     if (resource->EncodedSize() > 0) {
       resource_load_observer_->DidReceiveData(
           request.InspectorId(),
@@ -1394,6 +1402,10 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
   resource_request.SetInspectorId(identifier);
   resource_request.SetFromOriginDirtyStyleSheet(
       params.IsFromOriginDirtyStyleSheet());
+
+  recordreplay::Assert("[RUN-658-1381] ResourceFetcher::RequestResource %s",
+                       params.Url().ElidedString().Utf8().c_str());
+
   TRACE_EVENT_BEGIN(TRACE_DISABLED_BY_DEFAULT("network"), "ResourceLoad",
                     perfetto::Track(identifier), "url", resource_request.Url());
   absl::Cleanup record_times = [start = base::TimeTicks::Now(), &params] {
@@ -1827,6 +1839,9 @@ Resource* ResourceFetcher::CreateResourceForLoading(
 
   RESOURCE_LOADING_DVLOG(1) << "Loading Resource for "
                             << params.GetResourceRequest().Url().ElidedString();
+
+  // https://linear.app/replay/issue/RUN-820
+  recordreplay::Assert("[RUN-820] ResourceFetcher::CreateResourceForLoading #1");
 
   Resource* resource = factory.Create(
       params.GetResourceRequest(), params.Options(), params.DecoderOptions());
@@ -2344,6 +2359,9 @@ void ResourceFetcher::PopulateResourceRequestPermissionsPolicy(
             {}, url::Origin::Create(request->url));
   }
 }
+
+  std::sort(loaders_to_cancel.begin(), loaders_to_cancel.end(),
+            recordreplay::CompareMemberByPointerId<Member<ResourceLoader>>());
 
 FetchContext& ResourceFetcher::Context() const {
   return *context_;
@@ -2937,8 +2955,15 @@ void ResourceFetcher::UpdateImagePrioritiesAndSpeculativeDecodes() {
       });
   StartSpeculativeImageDecodes();
 
-  HeapVector<Member<Resource>> to_be_removed;
+  HeapVector<Member<Resource>> entries;
   for (Resource* resource : not_loaded_image_resources_) {
+    entries.push_back(resource);
+  }
+  std::sort(entries.begin(), entries.end(),
+            recordreplay::CompareMemberByPointerId<Member<Resource>>());
+
+  HeapVector<Member<Resource>> to_be_removed;
+  for (Resource* resource : entries) {
     if (resource->IsLoaded()) {
       to_be_removed.push_back(resource);
       continue;

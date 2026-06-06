@@ -44,6 +44,8 @@
 #include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
 
+#include "base/json/json_writer.h"
+
 namespace {
 
 // These values are persisted to logs. Entries should not be renumbered and
@@ -267,6 +269,9 @@ void ScriptRunner::ExecutePendingScript(PendingScript* pending_script) {
 
   DCHECK(!document_->domWindow() || !document_->domWindow()->IsContextPaused());
   DCHECK(pending_script);
+
+  int node_id = recordreplay::NewDependencyGraphNode("{\"kind\":\"executePendingScript\"}");
+  recordreplay::AutoDependencyExecution execute(node_id);
 
   pending_script->ExecuteScriptBlock();
 

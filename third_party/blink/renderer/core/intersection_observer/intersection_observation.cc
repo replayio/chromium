@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/core/intersection_observer/intersection_observation.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/dom/element_rare_data_vector.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/intersection_observer/element_intersection_observer_data.h"
@@ -55,6 +56,19 @@ int64_t IntersectionObservation::ComputeIntersection(
                                    : kExplicitRootObserversNeedUpdate)) {
     needs_update_ = true;
   }
+
+  REPLAY_ASSERT("[TT-1483-1499] IntersectionObservation::ComputeIntersection B %d %u %d %d",
+    needs_update_,
+    compute_flags,
+    ShouldCompute(compute_flags),
+    monotonic_time.has_value());
+
+  REPLAY_ASSERT("[TT-1483-1499] IntersectionObservation::ComputeIntersection A %d %u %d %d",
+    needs_update_,
+    compute_flags,
+    ShouldCompute(compute_flags),
+    monotonic_time.has_value());
+
 
   if (!CanCompute() || !ShouldCompute(compute_flags)) {
     return 0;

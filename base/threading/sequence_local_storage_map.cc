@@ -19,9 +19,9 @@ constinit thread_local SequenceLocalStorageMap* current_sequence_local_storage =
 
 }  // namespace
 
-SequenceLocalStorageMap::SequenceLocalStorageMap() = default;
+SequenceLocalStorageMap::SequenceLocalStorageMap() {}
 
-SequenceLocalStorageMap::~SequenceLocalStorageMap() = default;
+SequenceLocalStorageMap::~SequenceLocalStorageMap() {}
 
 // static
 SequenceLocalStorageMap& SequenceLocalStorageMap::GetForCurrentThread() {

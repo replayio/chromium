@@ -22,6 +22,7 @@
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/traced_value.h"
+#include "base/record_replay.h"
 #include "cc/base/devtools_instrumentation.h"
 #include "cc/base/features.h"
 #include "cc/metrics/begin_main_frame_metrics.h"
@@ -83,8 +84,10 @@ Scheduler::Scheduler(
   // We want to handle animate_only BeginFrames.
   wants_animate_only_begin_frames_ = true;
 
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::Scheduler");
   ProcessScheduledActions();
 }
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::Stop");
 
 Scheduler::~Scheduler() {
   SetBeginFrameSource(nullptr);
@@ -115,6 +118,7 @@ void Scheduler::SetNeedsImplSideInvalidation(
   ProcessScheduledActions();
 }
 
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::NotifyReadyToActivate");
 base::TimeTicks Scheduler::Now() const {
   base::TimeTicks now = base::TimeTicks::Now();
   TRACE_EVENT1(TRACE_DISABLED_BY_DEFAULT("cc.debug.scheduler.now"),
@@ -125,6 +129,7 @@ base::TimeTicks Scheduler::Now() const {
 void Scheduler::SetVisible(bool visible) {
   state_machine_->SetVisible(visible);
   UpdateCompositorTimingHistoryRecordingEnabled();
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::SetVisible");
   ProcessScheduledActions();
 }
 
@@ -258,6 +263,7 @@ void Scheduler::SetNeedsPrepareTiles() {
   state_machine_->SetNeedsPrepareTiles();
   ProcessScheduledActions();
 }
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::BeginMainFrameAborted");
 
 void Scheduler::DidSubmitCompositorFrame(SubmitInfo& submit_info) {
   // Hardware and software draw may occur at the same frame simultaneously for
@@ -307,6 +313,7 @@ void Scheduler::NotifyReadyToCommit(
     state_machine_->NotifyReadyToCommit();
     next_commit_origin_frame_args_ = last_dispatched_begin_main_frame_args_;
   }
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::NotifyReadyToCommit");
   ProcessScheduledActions();
 }
 
@@ -341,6 +348,8 @@ void Scheduler::DidLoseLayerTreeFrameSink() {
     state_machine_->DidLoseLayerTreeFrameSink();
     UpdateCompositorTimingHistoryRecordingEnabled();
   }
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::DidCreateAndInitializeLayerTreeFrameSink");
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::DidLoseLayerTreeFrameSink");
   ProcessScheduledActions();
 }
 
@@ -399,6 +408,7 @@ void Scheduler::StartOrStopBeginFrames() {
     client_->WillNotReceiveBeginFrame();
   }
 }
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::OnBeginFrameSourcePausedChanged");
 
 void Scheduler::CancelPendingBeginFrameTask() {
   if (pending_begin_frame_args_.IsValid()) {
@@ -423,6 +433,7 @@ void Scheduler::PostPendingBeginFrameTask() {
 
   if (is_idle && needs_begin_frames && has_pending_begin_frame_args &&
       has_no_pending_begin_frame_task) {
+    recordreplay::Assert("[RUN-1230] Scheduler::PostPendingBeginFrameTask #1");
     pending_begin_frame_task_.Reset(base::BindOnce(
         &Scheduler::HandlePendingBeginFrame, base::Unretained(this)));
     task_runner_->PostTask(FROM_HERE, pending_begin_frame_task_.callback());
@@ -518,6 +529,7 @@ bool Scheduler::OnBeginFrameDerivedImpl(const viz::BeginFrameArgs& args) {
     // deadline has already run. If we're already inside
     // ProcessScheduledActions() this call will be a nop and the above will
     // happen at end of the top most call to ProcessScheduledActions().
+    recordreplay::Assert("[RUN-1230-1710] Scheduler::OnBeginFrameDerivedImpl");
     ProcessScheduledActions();
   } else {
     // This starts the begin frame immediately, and puts us in the
@@ -743,8 +755,10 @@ void Scheduler::FinishImplFrame() {
     }
   }
 
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::BeginImplFrame");
   begin_impl_frame_tracker_.Finish();
 
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::FinishImplFrame");
   ProcessScheduledActions();
   DCHECK(!inside_scheduled_action_);
   {
@@ -839,9 +853,16 @@ void Scheduler::ScheduleBeginImplFrameDeadline() {
       }
       break;
     }
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::OnBeginImplFrameDeadline");
     case DeadlineMode::REGULAR:
       // We are animating the active tree but we're also waiting for commit.
-      new_deadline = begin_impl_frame_tracker_.Current().deadline;
+
+      // This deadline is derived from time-since-reboot, which means if we're replaying on
+      // something vastly different from recording, we might see times deep into the future,
+      // which will block our ability to render divergent frames.
+      if (!recordreplay::HasDivergedFromRecording()) {
+        new_deadline = begin_impl_frame_tracker_.Current().deadline;
+      }
       break;
     case DeadlineMode::IMMEDIATE:
       // Avoid using Now() for immediate deadlines because it's expensive, and
@@ -882,6 +903,7 @@ void Scheduler::ScheduleBeginImplFrameDeadline() {
         base::subtle::DelayPolicy::kPrecise);
   }
 }
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::SetDeferBeginMainFrame");
 
 void Scheduler::OnBeginImplFrameDeadline() {
   {
@@ -905,6 +927,7 @@ void Scheduler::OnBeginImplFrameDeadline() {
       compositor_frame_reporting_controller_->OnFinishImplFrame(
           begin_main_frame_args_.frame_id, waiting_for_main);
     }
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::SetPauseRendering");
 
     state_machine_->OnBeginImplFrameDeadline();
     client_->OnBeginImplFrameDeadline();
@@ -1041,6 +1064,9 @@ void Scheduler::ProcessScheduledActions() {
         break;
       case SchedulerStateMachine::Action::DRAW_FORCED:
         DrawForced();
+        if (state_machine_.ClearReplayForceDraw()) {
+          recordreplay::OnRepaintFinished();
+        }
         break;
       case SchedulerStateMachine::Action::DRAW_ABORT:
         // No action is actually performed, but this allows the state machine to
@@ -1127,6 +1153,7 @@ viz::BeginFrameAck Scheduler::CurrentBeginFrameAckForActiveTree() const {
 void Scheduler::ClearHistory() {
   // Ensure we reset decisions based on history from the previous navigation.
   compositor_timing_history_->ClearHistory();
+  recordreplay::Assert("[RUN-1230-1710] Scheduler::ClearHistory");
   ProcessScheduledActions();
 }
 

@@ -341,7 +341,7 @@ void DedicatedWorkerMessagingProxy::DispatchErrorEvent(
   // been terminated and garbage collected."
   // https://html.spec.whatwg.org/C/#runtime-script-errors-2
   ErrorEvent* event = ErrorEvent::Create(error_message, location, nullptr);
-  if (worker_object_->DispatchEvent(*event) !=
+  if (worker_object_->DispatchEvent(*event, "DedicatedWorkerMessagingProxy::DispatchErrorEvent") !=
       DispatchEventResult::kNotCanceled)
     return;
 

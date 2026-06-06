@@ -39,6 +39,7 @@
 #include "base/metrics/single_sample_metrics.h"
 #include "third_party/blink/renderer/bindings/core/v8/isolated_world_csp.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_controller.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
 #include "third_party/blink/renderer/bindings/core/v8/to_v8_traits.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_context_snapshot.h"
@@ -79,6 +80,9 @@
 #include "third_party/blink/renderer/platform/weborigin/reporting_disposition.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 #include "v8/include/v8.h"
+
+#include "base/record_replay.h"
+#include "third_party/blink/renderer/controller/dev_tools_frontend_impl.h"
 
 namespace blink {
 
@@ -154,6 +158,9 @@ void ForceReinstallConditionalFeaturesForWindow(ScriptState* script_state) {
 
 }  // namespace
 
+  // https://linear.app/replay/issue/RUN-749
+  recordreplay::Assert("LocalWindowProxy::DisposeContext Done %d", (int)next_status);
+
 void LocalWindowProxy::Trace(Visitor* visitor) const {
   visitor->Trace(script_state_);
   WindowProxy::Trace(visitor);
@@ -174,6 +181,9 @@ void LocalWindowProxy::DisposeContext(Lifecycle next_status,
   // If the former, |global_proxy_| should become weak, and if the latter, the
   // necessary operations are already done so can return here.
   if (lifecycle_ == Lifecycle::kV8MemoryIsForciblyPurged) {
+    // https://linear.app/replay/issue/RUN-749
+    recordreplay::Assert("LocalWindowProxy::DisposeContext #1 %d", (int)next_status);
+
     DCHECK(next_status == Lifecycle::kGlobalObjectIsDetached ||
            next_status == Lifecycle::kFrameIsDetachedAndV8MemoryIsPurged);
     lifecycle_ = next_status;
@@ -290,6 +300,58 @@ void LocalWindowProxy::Initialize() {
     SetSecurityToken(origin.get());
   }
 
+  if (recordreplay::IsRecordingOrReplaying("commands") &&
+      origin && !origin->Host().empty()) {
+    bool initGlobally = !gRecordReplayStateInitialized;
+
+    // Whether this is the relative root frame of this process.
+    bool isMainFrame = GetFrame()->IsLocalRoot() && world_->IsMainWorld();
+    if (initGlobally) {
+      gRecordReplayStateInitialized = true;
+
+      if (!isMainFrame) {
+        recordreplay::Warning(
+            "LocalWindowProxy::Initialize Called on non-root frame first: %d %d origin=%s url=%s",
+            GetFrame()->IsLocalRoot(),
+            world_->IsMainWorld(),
+            origin->ToRawString().Utf8().c_str(),
+            GetFrame()->GetDocument()->Url().GetString().Utf8().c_str());
+      }
+
+      // After creating the first context that is associated with a non-empty
+      // origin, we are ready to set up the state used to process driver
+      // commands when recording/replaying, and to create checkpoints.
+      InitializeRecordReplay(
+        RecordReplayGetProcessType(
+          GetFrame(),
+          world_
+        ),
+        GetIsolate(), GetFrame(), context
+      );
+    }
+
+    if (isMainFrame) {
+      // Root-level navigation event, initially happens before
+      // first checkpoint.
+      OnRootFrameInit(GetIsolate(), GetFrame(), context);
+    }
+
+    if (initGlobally) {
+      // Create the first checkpoint at which execution can pause.
+      recordreplay::NewCheckpoint();
+      // Initialize some more.
+      InitializeRecordReplayAfterCheckpoint();
+    }
+    
+    if (isMainFrame) {
+      // Root-level navigation event, after first checkpoint.
+      OnRootFrameInitAfterCheckpoint(GetIsolate(), GetFrame(), context);
+    }
+
+    // Event for all new windows.
+    OnNewWindowAfterCheckpoint(GetIsolate(), GetFrame(), context);
+  }
+
   {
     TRACE_EVENT2("v8", "ContextCreatedNotification", "IsMainFrame",
                  GetFrame()->IsMainFrame(), "IsOutermostMainFrame",
@@ -300,6 +362,12 @@ void LocalWindowProxy::Initialize() {
   }
 
   InstallConditionalFeatures();
+
+  // Add an event listener for the dispatched custom event the devtools uses to register
+  // its listener.  Do this outside the recording.
+  if (getenv("CHROMIUM_UI")) {
+    SetupRecordReplayWebChannel();
+  }
 
   if (World().IsMainWorld()) {
     probe::DidCreateMainWorldContext(GetFrame());
@@ -371,6 +439,9 @@ void LocalWindowProxy::InstallConditionalFeatures() {
   if (context_was_created_from_snapshot_) {
     V8ContextSnapshot::InstallContextIndependentProps(script_state_);
   }
+
+  // https://linear.app/replay/issue/RUN-749
+  recordreplay::Assert("LocalWindowProxy::CreateContext Done");
 
   // Direct Sockets state must be inherited from the opener BEFORE the
   // unconditional Window wrapper warmup compilation below so that non-snapshot
@@ -531,6 +602,9 @@ void LocalWindowProxy::SetSecurityToken(const SecurityOrigin* origin) {
 }
 
 void LocalWindowProxy::UpdateDocument() {
+  // https://linear.app/replay/issue/RUN-965
+  recordreplay::Assert("LocalWindowProxy::UpdateDocument %d", (int)lifecycle_);
+
   // For an uninitialized main window proxy, there's nothing we need
   // to update. The update is done when the window proxy gets initialized later.
   if (lifecycle_ == Lifecycle::kContextIsUninitialized)

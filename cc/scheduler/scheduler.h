@@ -11,6 +11,7 @@
 
 #include "base/cancelable_callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/record_replay.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "cc/cc_export.h"

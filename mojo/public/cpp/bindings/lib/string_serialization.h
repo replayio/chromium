@@ -7,6 +7,7 @@
 
 #include <string.h>
 
+#include "base/record_replay.h"
 #include <string_view>
 
 #include "base/compiler_specific.h"

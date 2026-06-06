@@ -109,6 +109,11 @@ void Font::DrawText(cc::PaintCanvas* canvas,
   DrawTextBlobs(bloberizer.Blobs(), *canvas, point, flags, node_id);
 }
 
+  if (recordreplay::AreEventsDisallowed("Font::ReleaseFontFallbackListRef")) {
+    // [RUN-1436] Leak font_fallback_list_.
+    return;
+  }
+
 void Font::DrawEmphasisMarks(cc::PaintCanvas* canvas,
                              const TextFragmentPaintInfo& text_info,
                              const AtomicString& mark,

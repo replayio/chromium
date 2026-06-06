@@ -286,6 +286,8 @@
 #include "content/public/common/profiling_utils.h"
 #endif
 
+#include "base/values.h"
+
 #if BUILDFLAG(IS_P2P_ENABLED)
 #include "content/browser/renderer_host/p2p/socket_dispatcher_host.h"
 #endif  // BUILDFLAG(IS_P2P_ENABLED)
@@ -450,6 +452,10 @@ SiteProcessMap* GetSiteProcessMapForBrowserContext(BrowserContext* context) {
   auto* new_map_ptr = new_map.get();
   context->SetUserData(kSiteProcessMapKeyName, std::move(new_map));
   return new_map_ptr;
+}
+
+static inline bool MaybeRecordingOrReplaying() {
+  return true;
 }
 
 class RenderProcessHostIsReadyObserver : public RenderProcessHostObserver {
@@ -1623,6 +1629,9 @@ RenderProcessHost* RenderProcessHostImpl::CreateRenderProcessHost(
     if (site_instance->IsPdf()) {
       flags |= RenderProcessFlags::kPdf;
     }
+    if (site_instance->RecordReplayIsForRecording()) {
+      flags |= RenderProcessFlags::kRecordReplayForRecording;
+    }
     if (site_instance->AreV8OptimizationsDisabled()) {
       flags |= RenderProcessFlags::kV8OptimizationsDisabled;
     }
@@ -1889,8 +1898,9 @@ bool RenderProcessHostImpl::Init() {
 #endif
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-  int flags = renderer_prefix.empty() ? ChildProcessHost::CHILD_ALLOW_SELF
-                                      : ChildProcessHost::CHILD_NORMAL;
+  int flags = (renderer_prefix.empty() && !MaybeRecordingOrReplaying())
+    ? ChildProcessHost::CHILD_ALLOW_SELF
+    : ChildProcessHost::CHILD_NORMAL;
 #elif BUILDFLAG(IS_MAC)
   int flags = ChildProcessHost::CHILD_RENDERER;
 #else
@@ -2744,6 +2754,14 @@ void RenderProcessHostImpl::WriteIntoTrace(
   // Can be null in the unittests.
   if (ChildProcessSecurityPolicyImpl::GetInstance())
     dict.Add("process_lock", GetProcessLock().ToString());
+}
+
+void RenderProcessHostImpl::SendRecordReplayBrowserEvent(
+    const std::string& name,
+    base::Value&& value) {
+  fprintf(stderr, "SendRecordReplayBrowserEvent CRASH\n");
+  CHECK(0);
+  //GetRendererInterface()->RecordReplayBrowserEvent(name, std::move(value));
 }
 
 void RenderProcessHostImpl::CreateEmbeddedFrameSinkProvider(
@@ -3714,6 +3732,10 @@ void RenderProcessHostImpl::AppendRendererCommandLine(
   if (IsPdf())
     command_line->AppendSwitch(switches::kPdfRenderer);
 
+  if (IsRecordReplayForRecording()) {
+    command_line->AppendSwitch("--record-replay-for-recording");
+  }
+
 #if BUILDFLAG(IS_WIN)
   if (command_line->HasSwitch(kExtensionProcess)) {
     command_line->AppendArgNative(app_launch_prefetch::GetPrefetchSwitch(
@@ -3737,7 +3759,8 @@ void RenderProcessHostImpl::AppendRendererCommandLine(
   // A non-empty RendererCmdPrefix implies that Zygote is disabled.
   if (!base::CommandLine::ForCurrentProcess()
            ->GetSwitchValueNative(switches::kRendererCmdPrefix)
-           .empty()) {
+           .empty() ||
+      MaybeRecordingOrReplaying()) {
     command_line->AppendSwitch(switches::kNoZygote);
   }
 
@@ -4518,6 +4541,11 @@ void RenderProcessHostImpl::Cleanup() {
     return;
   }
 
+  // [RecordReplay] NOTE: When spawning processes for recording, we may
+  // need to skip the following policy check.  It hasn't been necessary
+  // yet so we haven't done anything here.. but leaving a note for
+  // future reference.
+
   LogDelayReasonForCleanup(DelayShutdownReason::kNoDelay);
 
   // If there are listeners but they do not include any live RenderFrameHosts
@@ -5046,6 +5074,8 @@ bool RenderProcessHostImpl::MayReuseAndIsSuitable(
 bool RenderProcessHostImpl::MayReuseAndIsSuitable(
     RenderProcessHost* host,
     SiteInstanceImpl* site_instance) {
+  bool record_replay_is_for_recording = site_instance->RecordReplayIsForRecording();
+
   return MayReuseAndIsSuitable(host, site_instance->GetIsolationContext(),
                                site_instance->GetSiteInfo());
 }

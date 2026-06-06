@@ -15,6 +15,8 @@
 #include "cc/paint/solid_color_analyzer.h"
 #include "cc/raster/raster_source.h"
 
+#include "base/record_replay.h"
+
 namespace {
 
 // We don't perform per-layer solid color analysis when there are too many skia
@@ -57,7 +59,15 @@ void RecordingSource::FinishDisplayItemListUpdate() {
   }
 }
 
-void RecordingSource::SetNeedsDisplayRect(const gfx::Rect& layer_rect) {
+void RecordingSource::SetNeedsDisplayRect(const gfx::Rect& base_layer_rect) {
+  // Sometimes there can be off-by-one differences in how invalidated rects
+  // are computed between recording and replaying. It's not clear how this
+  // happens, and for now we paper over this by forcing the rects to have
+  // the same contents when replaying.
+  gfx::Rect layer_rect = base_layer_rect;
+  recordreplay::RecordReplayBytes("RecordingSource::SetNeedsDisplayRect",
+                                  &layer_rect, sizeof(layer_rect));
+
   if (!layer_rect.IsEmpty()) {
     // Clamp invalidation to the layer bounds.
     invalidation_.Union(gfx::IntersectRects(layer_rect, gfx::Rect(size_)));
@@ -115,6 +125,9 @@ bool RecordingSource::Update(const gfx::Size& layer_size,
 }
 
 void RecordingSource::SetEmptyBounds() {
+  // https://linear.app/replay/issue/RUN-885
+  recordreplay::Assert("RecordingSource::SetEmptyBounds");
+
   size_ = gfx::Size();
   is_solid_color_ = false;
 

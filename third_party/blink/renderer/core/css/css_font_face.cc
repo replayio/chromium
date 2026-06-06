@@ -90,6 +90,7 @@ bool CSSFontFace::FontLoaded(CSSFontFaceSource* source) {
 
   for (CSSSegmentedFontFace* segmented_font_face : segmented_font_faces_) {
     segmented_font_face->FontFaceInvalidated();
+
   }
 
   const FontCustomPlatformData* platform_data = source->GetCustomPlaftormData();

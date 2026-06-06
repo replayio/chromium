@@ -1359,6 +1359,9 @@ WebInputEventResult WebFrameWidgetImpl::HandleCharEvent(
     const WebKeyboardEvent& event) {
   DCHECK_EQ(event.GetType(), WebInputEvent::Type::kChar);
 
+  recordreplay::Assert(
+    "[RUN-1675-1826] WebFrameWidgetImpl::DidBeginMainFrame %d", !!root_frame->View());
+
   // Please refer to the comments explaining the m_suppressNextKeypressEvent
   // member.  The m_suppressNextKeypressEvent is set if the KeyDown is
   // handled by Webkit. A keyDown event is typically associated with a
@@ -2148,6 +2151,9 @@ void WebFrameWidgetImpl::SetEventListenerProperties(
   widget_base_->LayerTreeHost()->SetEventListenerProperties(
       listener_class, listener_properties);
 
+  recordreplay::Assert(
+      "[RUN-2300] WebFrameWidgetImpl::SetEventListenerProperties A %d",
+      (int)listener_class);
   if (listener_class == cc::EventListenerClass::kTouchStartOrMove ||
       listener_class == cc::EventListenerClass::kTouchEndOrCancel) {
     bool has_touch_handlers =
@@ -2155,6 +2161,10 @@ void WebFrameWidgetImpl::SetEventListenerProperties(
             cc::EventListenerProperties::kNone ||
         EventListenerProperties(cc::EventListenerClass::kTouchEndOrCancel) !=
             cc::EventListenerProperties::kNone;
+
+    recordreplay::Assert(
+        "[RUN-2300] WebFrameWidgetImpl::SetEventListenerProperties B");
+
     if (!has_touch_handlers_ || *has_touch_handlers_ != has_touch_handlers) {
       has_touch_handlers_ = has_touch_handlers;
 
@@ -2169,6 +2179,8 @@ void WebFrameWidgetImpl::SetEventListenerProperties(
     SetHasPointerRawUpdateEventHandlers(listener_properties !=
                                         cc::EventListenerProperties::kNone);
   }
+  recordreplay::Assert(
+      "[RUN-2300] WebFrameWidgetImpl::SetEventListenerProperties D");
 }
 
 cc::EventListenerProperties WebFrameWidgetImpl::EventListenerProperties(
@@ -3790,6 +3802,10 @@ class ReportTimeSwapPromise : public cc::SwapPromise {
       base::TimeTicks swap_time,
       WebFrameWidgetImpl::PromiseCallbacks callbacks,
       int frame_token) {
+    recordreplay::Assert(
+        "[RUN-2317-2366] ReportTimeSwapPromise::RunCallbackAfterSwap %u %d %d",
+        frame_token, !!widget, widget && widget->widget_base_);
+
     // If the widget was collected or the widget wasn't collected yet, but
     // it was closed don't schedule a presentation callback.
     if (widget && widget->widget_base_) {
@@ -3844,6 +3860,8 @@ class ReportTimeSwapPromise : public cc::SwapPromise {
 
   static void ReportTime(base::OnceCallback<void(base::TimeTicks)> callback,
                          base::TimeTicks time) {
+    recordreplay::Assert("[RUN-2317-2570] WebFrameWidgetImpl::ReportTime A %d %lld",
+                         !!callback, time.ToInternalValue());
     if (callback)
       std::move(callback).Run(time);
   }
@@ -5271,7 +5289,7 @@ void WebFrameWidgetImpl::DidUpdateSurfaceAndScreen(
         CoreInitializer::GetInstance().DidUpdateScreens(
             *local_frame->GetFrame(), original_screen_infos);
         if (window_screen_has_changed)
-          screen->DispatchEvent(*Event::Create(event_type_names::kChange));
+              screen->DispatchEvent(*Event::Create(event_type_names::kChange), "WebFrameWidgetImpl::DidUpdateSurfaceAndScreen");
         if (color_gamut_changed) {
           local_frame->GetFrame()
               ->GetDocument()

@@ -96,5 +96,7 @@ void WebCacheManager::ClearRendererCache(
     }
   }
 }
+  recordreplay::Assert(
+      "[RUN-1975-2287] WebCacheManager::ClearRendererCache C");
 
 }  // namespace web_cache

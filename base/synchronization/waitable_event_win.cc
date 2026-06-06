@@ -13,6 +13,8 @@
 #include <optional>
 #include <utility>
 
+#include "base/record_replay.h"
+
 #include "base/compiler_specific.h"
 #include "base/containers/span.h"
 #include "base/debug/crash_logging.h"

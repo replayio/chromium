@@ -5,6 +5,10 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_FRAME_EVENT_HANDLER_REGISTRY_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_FRAME_EVENT_HANDLER_REGISTRY_H_
 
+// Include these first so the default hash for EventTarget can be determined.
+#include "third_party/blink/renderer/core/dom/events/event_target.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
+
 #include <array>
 
 #include "base/dcheck_is_on.h"
@@ -23,7 +27,7 @@ class LocalFrame;
 class Page;
 
 // We use UntracedMember<> here to do custom weak processing.
-typedef HashCountedSet<UntracedMember<EventTarget>> EventTargetSet;
+typedef HashCountedSet<UntracedMember<EventTarget>, WTF::MemberHashRecordReplayId<EventTarget>> EventTargetSet;
 
 // Registry for keeping track of event handlers. Note that only handlers on
 // documents that can be rendered or can receive input (i.e., are attached to a

@@ -25,6 +25,8 @@
 #include "base/threading/threading_features.h"
 #endif
 
+#include "base/record_replay.h"
+
 namespace base {
 
 namespace {

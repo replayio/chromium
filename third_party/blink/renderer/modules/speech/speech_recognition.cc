@@ -435,7 +435,7 @@ void SpeechRecognition::Ended() {
   session_.reset();
   receiver_.reset();
   ResetAudioSink();
-  DispatchEvent(*Event::Create(event_type_names::kEnd));
+  DispatchEvent(*Event::Create(event_type_names::kEnd), "SpeechRecognition::Ended");
 }
 
 const AtomicString& SpeechRecognition::InterfaceName() const {

@@ -83,6 +83,8 @@
 #include "ui/gfx/presentation_feedback.h"
 #include "ui/latency/latency_info.h"
 
+#include "base/record_replay.h"
+
 namespace {
 static base::AtomicSequenceNumber s_layer_tree_host_sequence_number;
 static base::AtomicSequenceNumber s_image_decode_sequence_number;
@@ -525,6 +527,7 @@ void LayerTreeHost::WaitForProtectedSequenceCompletion() const {
 
 void LayerTreeHost::WaitForCommitCompletion(bool for_protected_sequence) const {
   DCHECK(IsMainThread());
+
   // We should not be running code that modifies commit state just prior to the
   // impl commit.
   CHECK(!inside_will_commit_);
@@ -1805,6 +1808,7 @@ void LayerTreeHost::RegisterLayer(Layer* layer) {
   DCHECK(IsMainThread());
   DCHECK(!LayerById(layer->id()));
   DCHECK(!in_paint_layer_contents_);
+
   thread_unsafe_commit_state().layer_id_map[layer->id()] = layer;
 }
 

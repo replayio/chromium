@@ -26,6 +26,7 @@
 #include "base/memory/safe_ref.h"
 #include "base/observer_list.h"
 #include "base/process/kill.h"
+#include "base/record_replay.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_session_observer.h"
@@ -2367,6 +2368,8 @@ class CONTENT_EXPORT WebContentsImpl
   // crash occurred.
   base::TerminationStatus primary_main_frame_process_status_;
   int primary_main_frame_process_error_code_;
+
+  bool record_replay_for_recording_ = false;
 
   // The current load state and the URL associated with it.
   net::LoadStateWithParam load_state_;

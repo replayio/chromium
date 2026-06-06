@@ -181,6 +181,8 @@ Connector::~Connector() {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
     CancelWait();
   }
+
+  recordreplay::UnregisterPointer(this);
 }
 
 void Connector::SetOutgoingSerializationMode(OutgoingSerializationMode mode) {
@@ -204,6 +206,7 @@ void Connector::StartReceiving(
   if (task_runner_->RunsTasksInCurrentSequence()) {
     WaitToReadMore();
   } else {
+    recordreplay::Assert("[RUN-1209-1900] Connector::HandleError B");
     task_runner_->PostTask(
         FROM_HERE,
         base::BindOnce(&Connector::WaitToReadMore, weak_factory_.GetWeakPtr()));
@@ -314,6 +317,8 @@ bool Connector::PrefersSerializedMessages() {
 }
 
 bool Connector::Accept(Message* message) {
+  recordreplay::Assert("[RUN-1209-1800] Connector::Accept A %d %d %d",
+                       !!lock_, !!task_runner_, !!error_);
   MojoResult result = AcceptAndGetResult(message);
   return result == MOJO_RESULT_OK;
 }
@@ -329,6 +334,9 @@ MojoResult Connector::AcceptAndGetResult(Message* message) {
 
   internal::MayAutoLock locker(&lock_);
 
+  recordreplay::Assert("[RUN-1209-1800] Connector::Accept B %d %d %d",
+                       message_pipe_.is_valid(), drop_writes_,
+                       message->is_serialized());
   if (!message_pipe_.is_valid() || drop_writes_) {
     return MOJO_RESULT_OK;
   }
@@ -568,8 +576,19 @@ bool Connector::DispatchMessage(ScopedMessageHandle handle) {
   if (connection_group_) {
     message.set_receiver_connection_group(&connection_group_);
   }
-  bool receiver_result =
-      incoming_receiver_ && incoming_receiver_->Accept(&message);
+
+  // Whether there is a receiver or not can vary when replaying due to different
+  // MessagePort GC behavior. For now we hack around this by only notifying the
+  // receiver if it was present while recording.
+  bool recorded_has_receiver =
+    recordreplay::RecordReplayValue("Connector::DispatchMessage has_receiver", !!incoming_receiver_);
+
+  bool receiver_result = false;
+  if (recorded_has_receiver) {
+    recordreplay::Assert("Connector::DispatchMessage has_receiver %d", !!incoming_receiver_);
+    receiver_result = incoming_receiver_ && incoming_receiver_->Accept(&message);
+  }
+
   if (!weak_self) {
     return receiver_result;
   }
@@ -630,9 +649,8 @@ void Connector::ReadAllAvailableMessages() {
 
     switch (rv) {
       case MOJO_RESULT_OK:
-        if (!DispatchMessage(std::move(message)) || !weak_self || paused_) {
+        if (!DispatchMessage(std::move(message)) || !weak_self || paused_)
           return;
-        }
         break;
 
       case MOJO_RESULT_SHOULD_WAIT:
@@ -671,6 +689,7 @@ void Connector::CancelWait() {
 }
 
 void Connector::HandleError(bool force_pipe_reset, bool force_async_handler) {
+  recordreplay::Assert("[RUN-1209-1900] Connector::HandleError A %d", !!paused_);
   if (error_ || !message_pipe_.is_valid()) {
     return;
   }

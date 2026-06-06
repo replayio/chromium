@@ -59,6 +59,10 @@ ImageDecodingStore& ImageDecodingStore::Instance() {
   return store;
 }
 
+bool ImageDecodingStore::HasInstance() {
+  return gHasInstance;
+}
+
 bool ImageDecodingStore::LockDecoder(
     const ImageFrameGenerator* generator,
     const SkISize& scaled_size,

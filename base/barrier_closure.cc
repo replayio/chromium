@@ -12,6 +12,8 @@
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
 
+#include "base/record_replay.h"
+
 namespace base {
 namespace {
 

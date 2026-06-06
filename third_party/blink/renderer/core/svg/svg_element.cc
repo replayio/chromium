@@ -434,11 +434,14 @@ void SVGElement::AddInstance(SVGElement* instance) {
   DCHECK(instance);
   DCHECK(instance->InUseShadowTree());
 
-  HeapHashSet<WeakMember<SVGElement>>& instances =
+  HeapHashSet<WeakMember<SVGElement>, WTF::MemberHashRecordReplayId<SVGElement>>& instances =
       EnsureSVGRareData()->ElementInstances();
   DCHECK(!instances.Contains(instance));
 
   instances.insert(instance);
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+                                           "SVGElement"))
+    EnsureSVGRareData()->ReplayStrongElementInstances().insert(instance);
 }
 
 void SVGElement::RemoveInstance(SVGElement* instance) {
@@ -613,7 +616,7 @@ bool SVGElement::HaveLoadedRequiredResources() {
 
 static inline void CollectInstancesForSVGElement(
     SVGElement* element,
-    HeapHashSet<WeakMember<SVGElement>>& instances) {
+    HeapHashSet<WeakMember<SVGElement>, WTF::MemberHashRecordReplayId<SVGElement>>& instances) {
   DCHECK(element);
   if (element->ContainingShadowRoot())
     return;
@@ -628,7 +631,7 @@ void SVGElement::AddedEventListener(
   Node::AddedEventListener(event_type, registered_listener);
 
   // Add event listener to all shadow tree DOM element instances
-  HeapHashSet<WeakMember<SVGElement>> instances;
+  HeapHashSet<WeakMember<SVGElement>, WTF::MemberHashRecordReplayId<SVGElement>> instances;
   CollectInstancesForSVGElement(this, instances);
   AddEventListenerOptionsResolved* options = registered_listener.Options();
   EventListener* listener = registered_listener.Callback();
@@ -645,7 +648,7 @@ void SVGElement::RemovedEventListener(
   Node::RemovedEventListener(event_type, registered_listener);
 
   // Remove event listener from all shadow tree DOM element instances
-  HeapHashSet<WeakMember<SVGElement>> instances;
+  HeapHashSet<WeakMember<SVGElement>, WTF::MemberHashRecordReplayId<SVGElement>> instances;
   CollectInstancesForSVGElement(this, instances);
   EventListenerOptions* options = registered_listener.Options();
   const EventListener* listener = registered_listener.Callback();
@@ -682,7 +685,7 @@ bool SVGElement::SendSVGLoadEventIfPossible() {
     return false;
   if ((IsStructurallyExternal() || IsA<SVGSVGElement>(*this)) &&
       HasLoadListener(this))
-    DispatchEvent(*Event::Create(event_type_names::kLoad));
+    DispatchEvent(*Event::Create(event_type_names::kLoad), "SVGElement::SendSVGLoadEventIfPossible");
   return true;
 }
 
@@ -952,7 +955,7 @@ void SVGElement::InvalidateInstances() {
 void SVGElement::SetNeedsStyleRecalcForInstances(
     StyleChangeType change_type,
     const StyleChangeReasonForTracing& reason) {
-  const HeapHashSet<WeakMember<SVGElement>>& set = InstancesForElement();
+  const HeapHashSet<WeakMember<SVGElement>, WTF::MemberHashRecordReplayId<SVGElement>>& set = InstancesForElement();
   if (set.empty())
     return;
 

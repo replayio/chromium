@@ -401,6 +401,8 @@ void ContainerNode::InsertNodeVector(
       Node& child = *target_node;
       mutator(*this, child, next);
       ChildListMutationScope(*this).ChildAdded(child);
+      recordreplay::Assert("[1436-1922] ContainerNode::InsertNodeVector %d %d",
+                           RecordReplayId(), child.RecordReplayId());
       if (RuntimeEnabledFeatures::
               SendSlotChangeSignalAfterNodeInsertedEnabled()) {
         probe::DidInsertDOMNode(&child);
@@ -423,6 +425,26 @@ void ContainerNode::DidInsertNodeVector(
     const NodeVector& targets,
     Node* next,
     const NodeVector& post_insertion_notification_targets) {
+
+  // https://linear.app/replay/issue/RUN-820
+  {
+    size_t numTargets = targets.size();
+    size_t targetsBufSize = numTargets * 12;
+    char* targetsBuf = (char*)malloc(targetsBufSize);
+    size_t targetsBufIdx = 0;
+    for (const auto& target_node : targets) {
+      targetsBufIdx += snprintf(
+        targetsBuf + targetsBufIdx,
+        targetsBufSize - targetsBufIdx,
+        "%d,", target_node->RecordReplayId());
+    }
+    // Eliminate the trailing comma.
+    targetsBuf[targetsBufIdx - 1] = '\0';
+    recordreplay::Assert(
+      "[RUN-820] ContainerNode::DidInsertNodeVector targets=%s next=%d",
+      targetsBuf, next ? next->RecordReplayId() : -1);
+  }
+
   Node* unchanged_previous =
       targets.size() > 0 ? targets[0]->previousSibling() : nullptr;
   for (const auto& target_node : targets) {
@@ -665,6 +687,7 @@ void ContainerNode::ParserInsertBefore(Node* new_child, Node& next_child) {
     AdoptAndInsertBefore()(*this, *new_child, &next_child);
     DCHECK_EQ(new_child->ConnectedSubframeCount(), 0u);
     ChildListMutationScope(*this).ChildAdded(*new_child);
+    recordreplay::Assert("[1436-1922] ContainerNode::ParserInsertBefore %d %d", RecordReplayId(), new_child->RecordReplayId());
   }
 
   NotifyNodeInserted(*new_child, ChildrenChangeSource::kParser);
@@ -858,6 +881,10 @@ Node* ContainerNode::ReplaceChild(Node* new_child, Node* old_child) {
 void ContainerNode::WillRemoveChild(Node& child) {
   DCHECK_EQ(child.parentNode(), this);
   ChildListMutationScope(*this).WillRemoveChild(child);
+
+  recordreplay::Assert("[1436-1922] ContainerNode::WillRemoveChild %d %d",
+                       RecordReplayId(), child.RecordReplayId());
+
   child.NotifyMutationObserversNodeWillDetach();
   probe::WillRemoveDOMNode(&child);
 
@@ -899,6 +926,8 @@ void ContainerNode::WillRemoveChildren() {
     DCHECK(node);
     Node& child = *node;
     mutation.WillRemoveChild(child);
+    recordreplay::Assert("[1436-1922] ContainerNode::WillRemoveChildren %d %d",
+                         RecordReplayId(), child.RecordReplayId());
     child.NotifyMutationObserversNodeWillDetach();
     probe::WillRemoveDOMNode(&child);
   }
@@ -936,6 +965,9 @@ static bool ShouldMergeCombinedTextAfterRemoval(const Node& old_child) {
   auto* const layout_object = old_child.GetLayoutObject();
   if (!layout_object)
     return false;
+
+  recordreplay::Assert("[RUN-1436-2237] ContainerNode::AppendChild A %d",
+                       new_child->RecordReplayId());
 
   // Request to merge previous and next |LayoutTextCombine| of |child|.
   // See http:://crbug.com/1227066
@@ -994,6 +1026,8 @@ Node* ContainerNode::RemoveChild(Node* old_child,
   }
 
   WillRemoveChild(*child);
+  recordreplay::Assert("[1436-1922] ContainerNode::RemoveChild %d %d",
+                       RecordReplayId(), child->RecordReplayId());
 
   // TODO(crbug.com/927646): |WillRemoveChild()| may dispatch events that set
   // focus to a node that will be detached, leaving behind a detached focused
@@ -1081,6 +1115,9 @@ void ContainerNode::ParserRemoveChild(Node& old_child) {
     return;
 
   ChildListMutationScope(*this).WillRemoveChild(old_child);
+  recordreplay::Assert("[1436-1922] ContainerNode::ParserRemoveChild %d %d",
+                       RecordReplayId(), old_child.RecordReplayId());
+
   old_child.NotifyMutationObserversNodeWillDetach();
 
   probe::WillRemoveDOMNode(&old_child);
@@ -1260,6 +1297,8 @@ void ContainerNode::ParserAppendChild(Node* new_child) {
     AdoptAndAppendChild()(*this, *new_child, nullptr);
     DCHECK_EQ(new_child->ConnectedSubframeCount(), 0u);
     ChildListMutationScope(*this).ChildAdded(*new_child);
+    recordreplay::Assert("[1436-1922] ContainerNode::ParserAppendChild %d %d",
+                         RecordReplayId(), new_child->RecordReplayId());
   }
 
   NotifyNodeInserted(*new_child, ChildrenChangeSource::kParser);
@@ -1447,8 +1486,9 @@ void ContainerNode::AttachLayoutTree(AttachContext& context) {
 }
 
 void ContainerNode::DetachLayoutTree(bool performing_reattach) {
-  for (Node* child = firstChild(); child; child = child->nextSibling())
+  for (Node* child = firstChild(); child; child = child->nextSibling()) {
     child->DetachLayoutTree(performing_reattach);
+  }
   Node::DetachLayoutTree(performing_reattach);
 }
 
@@ -1592,6 +1632,9 @@ void ContainerNode::RecalcDescendantStyles(
     Element& host_or_element) {
   DCHECK(GetDocument().InStyleRecalc());
   DCHECK(!NeedsStyleRecalc());
+
+  recordreplay::Assert("[RUN-1436-1437] ContainerNode::RecalcDescendantStyles %d",
+                       RecordReplayId());
 
   bool seen_any_child_elements = false;
   SelectorFilter& selector_filter =
@@ -1777,6 +1820,9 @@ void ContainerNode::InvalidateNodeListCachesInAncestors(
 HTMLCollection* ContainerNode::getElementsByTagName(
     const AtomicString& qualified_name) {
   DCHECK(!qualified_name.IsNull());
+
+  // https://linear.app/replay/issue/RUN-822
+  recordreplay::Assert("ContainerNode::getElementsByTagName");
 
   if (IsA<HTMLDocument>(GetDocument())) {
     return EnsureCachedCollection<HTMLTagCollection>(kHTMLTagCollectionType,

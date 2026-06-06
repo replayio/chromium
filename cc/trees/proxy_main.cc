@@ -38,6 +38,7 @@
 #include "cc/trees/render_frame_metadata_observer.h"
 #include "cc/trees/scoped_abort_remaining_swap_promises.h"
 #include "cc/trees/swap_promise.h"
+#include "components/viz/service/display/record_replay_render.h"
 #include "cc/trees/trace_utils.h"
 #include "components/viz/common/view_transition_element_resource_id.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
@@ -67,6 +68,11 @@ ProxyMain::ProxyMain(LayerTreeHost* layer_tree_host,
   TRACE_EVENT0("cc", "ProxyMain::ProxyMain");
   DCHECK(task_runner_provider_);
   DCHECK(IsMainThread());
+  
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    recordreplay::InitPaintCallback();
+    recordreplay::SetCompositorProxy(this);
+  }
 }
 
 ProxyMain::~ProxyMain() {
@@ -145,6 +151,17 @@ void ProxyMain::DidCompletePageScaleAnimation() {
 
 void ProxyMain::BeginMainFrame(
     std::unique_ptr<BeginMainFrameAndCommitState> begin_main_frame_state) {
+  
+  BeginMainFrameWithBlocking(std::move(begin_main_frame_state), false);
+}
+
+void ProxyMain::BeginMainFrameWithBlocking(
+    std::unique_ptr<BeginMainFrameAndCommitState> begin_main_frame_state,
+    bool force_blocking) {
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    recordreplay::SetCompositorProxy(this);
+  }
+
   DCHECK(IsMainThread());
   DCHECK_EQ(NO_PIPELINE_STAGE, current_pipeline_stage_);
   // Record the final status, subsampled. Use an RAII object as this function
@@ -528,6 +545,10 @@ void ProxyMain::BeginMainFrame(
     std::optional<DebugScopedSetMainThreadBlocked> main_thread_blocked;
     if (blocking)
       main_thread_blocked.emplace(task_runner_provider_);
+
+    if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+      recordreplay::OnCommitPaint();
+    }
 
     ImplThreadTaskRunner()->PostTask(
         FROM_HERE, base::BindOnce(&ProxyImpl::NotifyReadyToCommitOnImpl,
@@ -1145,6 +1166,12 @@ void ProxyMain::CompositeImmediatelyForTest(base::TimeTicks frame_begin_time,
 double ProxyMain::GetAverageThroughput() const {
   NOTIMPLEMENTED();
   return 0.0;
+}
+
+void ProxyMain::RecordReplayRepaint() {
+  ImplThreadTaskRunner()->PostTask(
+      FROM_HERE, base::BindOnce(&ProxyImpl::RecordReplayRepaint,
+                                base::Unretained(proxy_impl_.get())));
 }
 
 bool ProxyMain::IsRenderingPaused() const {

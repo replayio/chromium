@@ -8,6 +8,7 @@
 #include <inttypes.h>
 
 #include "base/containers/span.h"
+#include "base/record_replay.h"
 #include "third_party/blink/public/mojom/permissions_policy/policy_disposition.mojom-blink-forward.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/frame/web_feature_forward.h"

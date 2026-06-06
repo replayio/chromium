@@ -526,7 +526,7 @@ class CORE_EXPORT LocalFrameView final
 
   using ScrollableAreaMap =
       HeapHashMap<CompositorElementId, Member<PaintLayerScrollableArea>>;
-  using ScrollableAreaSet = HeapHashSet<Member<PaintLayerScrollableArea>>;
+  using ScrollableAreaSet = HeapHashSet<Member<PaintLayerScrollableArea>, WTF::MemberHashRecordReplayId<PaintLayerScrollableArea>>;
   void AddScrollAnchoringScrollableArea(PaintLayerScrollableArea*);
   void RemoveScrollAnchoringScrollableArea(PaintLayerScrollableArea*);
 
@@ -1217,7 +1217,7 @@ class CORE_EXPORT LocalFrameView final
 #endif
 
   PluginSet plugins_;
-  HeapHashSet<Member<Scrollbar>> scrollbars_;
+  HeapHashSet<Member<Scrollbar>, WTF::MemberHashRecordReplayId<Scrollbar>> scrollbars_;
 
   // TODO(bokan): This is unneeded when root-layer-scrolls is turned on.
   // crbug.com/417782.

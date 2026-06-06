@@ -87,6 +87,8 @@ class CORE_EXPORT ErrorEvent final : public Event {
   const String& filename() const { return location_->Url(); }
   unsigned lineno() const { return location_->LineNumber(); }
   unsigned colno() const { return location_->ColumnNumber(); }
+  void set_record_replay_bookmark(int bookmark) { record_replay_bookmark_ = bookmark; }
+  int record_replay_bookmark() const { return record_replay_bookmark_; }
   ScriptValue error(ScriptState*) const;
 
   // Not exposed to JavaScript, prefers |unsanitized_message_|.

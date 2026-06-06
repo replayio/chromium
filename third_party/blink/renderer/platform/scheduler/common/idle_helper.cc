@@ -297,6 +297,13 @@ void IdleHelper::OnIdleTaskPostedOnMainThread() {
                "OnIdleTaskPostedOnMainThread");
   if (is_shutdown_)
     return;
+
+  // Avoid updating idle state non-deterministically.
+  if (recordreplay::AreEventsDisallowed("IdleHelper::OnIdleTaskPostedOnMainThread"))
+    return;
+
+  // RecordReplay issue RUN-1021
+  // Only call OnPendingTasksChanged when events aren't disallowed.
   delegate_->OnPendingTasksChanged(true);
   if (idle_period_state_ == IdlePeriodState::kInLongIdlePeriodPaused) {
     // Restart long idle period ticks.

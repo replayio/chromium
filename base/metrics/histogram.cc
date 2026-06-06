@@ -193,6 +193,7 @@ class Histogram::Factory {
 };
 
 HistogramBase* Histogram::Factory::Build() {
+  // recordreplay::Assert("[RUN-1217]-1310 Histogram::Factory::Build");
   HistogramBase* histogram =
       StatisticsRecorder::FindHistogram(name_hash_, name_);
   if (!histogram) {

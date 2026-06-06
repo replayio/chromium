@@ -634,6 +634,8 @@ String WebDevToolsAgentImpl::NavigationInitiatorInfo(LocalFrame* frame) {
 }
 
 void WebDevToolsAgentImpl::FlushProtocolNotifications() {
+  recordreplay::Assert("[RUN-2161] WebDevToolsAgentImpl::FlushProtocolNotifications");
+
   agent_->FlushProtocolNotifications();
 }
 

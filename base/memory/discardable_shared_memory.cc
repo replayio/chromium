@@ -16,6 +16,7 @@
 #include "base/memory/page_size.h"
 #include "base/memory/shared_memory_tracker.h"
 #include "base/numerics/safe_math.h"
+#include "base/record_replay.h"
 #include "base/tracing_buildflags.h"
 #include "build/build_config.h"
 
@@ -302,6 +303,8 @@ void DiscardableSharedMemory::Unlock(size_t offset, size_t length) {
   DCHECK_EQ(AlignToPageSize(offset), offset);
   DCHECK_EQ(AlignToPageSize(length), length);
 
+  recordreplay::Assert("[RUN-1877-2481] DiscardableSharedMemory::Unlock A");
+
   // Calls to this function must be synchronized properly.
   DFAKE_SCOPED_LOCK(thread_collision_warner_);
 
@@ -334,6 +337,9 @@ void DiscardableSharedMemory::Unlock(size_t offset, size_t length) {
   }
   DCHECK_EQ(locked_pages_.size(), locked_page_count_);
 #endif
+
+  recordreplay::Assert("[RUN-1877-3208] DiscardableSharedMemory::Unlock C %zu",
+                       locked_page_count_);
 
   // Early out and avoid releasing the platform independent lock if some pages
   // are still locked.
@@ -392,6 +398,9 @@ bool DiscardableSharedMemory::Purge(Time current_time) {
       &SharedStateFromSharedMemory(shared_memory_mapping_)->value.i,
       old_state.value.i, new_state.value.i));
 
+  recordreplay::Assert("[RUN-1877-3208] DiscardableSharedMemory::Purge A %d",
+                       result.value.u != old_state.value.u);
+
   // Update |last_known_usage_| to |current_time| if the memory is locked. This
   // allows the caller to determine if purging failed because last known usage
   // was incorrect or memory was locked. In the second case, the caller should
@@ -401,6 +410,8 @@ bool DiscardableSharedMemory::Purge(Time current_time) {
     last_known_usage_ = result.GetLockState() == SharedState::LOCKED
                             ? current_time
                             : result.GetTimestamp();
+    recordreplay::Assert("[RUN-1877-3208] DiscardableSharedMemory::Purge B %d %d",
+                         result.GetLockState(), last_known_usage_.is_null());
     return false;
   }
 
@@ -456,6 +467,7 @@ bool DiscardableSharedMemory::Purge(Time current_time) {
   ZX_DCHECK(status == ZX_OK, status) << "zx_vmo_op_range(ZX_VMO_OP_DECOMMIT)";
 #endif  // BUILDFLAG(IS_FUCHSIA)
 
+
   last_known_usage_ = Time();
   return true;
 }
@@ -466,8 +478,9 @@ bool DiscardableSharedMemory::IsMemoryResident() const {
   SharedState result(subtle::NoBarrier_Load(
       &SharedStateFromSharedMemory(shared_memory_mapping_)->value.i));
 
-  return result.GetLockState() == SharedState::LOCKED ||
-         !result.GetTimestamp().is_null();
+  return recordreplay::RecordReplayValue("DiscardableSharedMemory::IsMemoryResident",
+                                         result.GetLockState() == SharedState::LOCKED ||
+                                         !result.GetTimestamp().is_null());
 }
 
 bool DiscardableSharedMemory::IsMemoryLocked() const {
@@ -476,7 +489,8 @@ bool DiscardableSharedMemory::IsMemoryLocked() const {
   SharedState result(subtle::NoBarrier_Load(
       &SharedStateFromSharedMemory(shared_memory_mapping_)->value.i));
 
-  return result.GetLockState() == SharedState::LOCKED;
+  return recordreplay::RecordReplayValue("DiscardableSharedMemory::IsMemoryLocked",
+                                         result.GetLockState() == SharedState::LOCKED);
 }
 
 void DiscardableSharedMemory::Close() {

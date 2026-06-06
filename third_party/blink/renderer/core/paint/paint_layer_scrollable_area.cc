@@ -1847,7 +1847,6 @@ void PaintLayerScrollableArea::ComputeScrollbarExistence(
     }
   }
 }
-
 bool PaintLayerScrollableArea::TryRemovingAutoScrollbars(
     const bool& needs_horizontal_scrollbar,
     const bool& needs_vertical_scrollbar) {

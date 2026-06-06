@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "base/record_replay.h"
 #include "base/compiler_specific.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/trace_event/trace_event.h"

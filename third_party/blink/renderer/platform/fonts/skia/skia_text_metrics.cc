@@ -12,6 +12,8 @@
 #include "third_party/skia/include/core/SkPath.h"
 #include "third_party/skia/include/core/SkStrikeRef.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 namespace {

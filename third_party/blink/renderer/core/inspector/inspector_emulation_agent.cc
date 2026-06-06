@@ -379,6 +379,7 @@ protocol::Response InspectorEmulationAgent::setEmulatedMedia(
   protocol::Response response = AssertPage();
   if (!response.IsSuccess())
     return response;
+
   String media_value = media.value_or("");
   emulated_media_.Set(media_value);
   GetWebViewImpl()->GetPage()->GetSettings().SetMediaTypeOverride(media_value);
