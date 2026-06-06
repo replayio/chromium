@@ -1,0 +1,21 @@
+---
+ownership_rules:
+  # This is to allow adding .github/workflows
+  allow_dot_github: true
+  directory_matching_rules:
+    - name: Github workflows
+      path: .github/workflows/**
+    - name: Github actions
+      path: .github/actions/**
+    - name: DEPS file
+      path: "**/DEPS"
+    - name: Root DEPS file
+      path: "DEPS"
+    - name: Replay build scripts
+      path: "replay_build_scripts/**"
+    - name: More Replay build scripts
+      path: "replay-scripts/**"
+    - name: BUCK files
+      path: "**/BUCK"
+    - name: Root BUCK file
+      path: "BUCK"
