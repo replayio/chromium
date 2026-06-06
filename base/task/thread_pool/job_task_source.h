@@ -26,6 +26,8 @@
 #include "base/task/thread_pool/task_source_sort_key.h"
 #include "base/threading/scoped_thread_priority.h"
 
+#include "base/record_replay_ordered_atomic.h"
+
 namespace base {
 namespace internal {
 
@@ -137,8 +139,14 @@ class BASE_EXPORT JobTaskSource : public TaskSource {
     // Loads and returns the state.
     Value Load() const;
 
+    // [RecordReplay] RUN-2080 (https://linear.app/replay/issue/RUN-2080)
+    // This lock can be acquired in non-deterministic contexts when computing
+    // max concurrency.  This is a variant of `Load` above that doesn't
+    // record its thread acquisition.
+    Value RecordReplayLoadUnordered() const;
+
    private:
-    std::atomic<uint32_t> value_{0};
+    recordreplay::OrderedAtomic<uint32_t> value_{0};
   };
 
   // Atomic flag that indicates if the joining thread is currently waiting on

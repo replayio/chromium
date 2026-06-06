@@ -48,7 +48,8 @@ DelayedTaskManager::DelayedTaskManager(const TickClock* tick_clock)
       schedule_process_ripe_tasks_closure_(BindRepeating(
           &DelayedTaskManager::ScheduleProcessRipeTasksOnServiceThread,
           Unretained(this))),
-      tick_clock_(tick_clock) {
+      tick_clock_(tick_clock),
+      queue_lock_("DelayedTaskManager.queue_lock_") {
   DETACH_FROM_SEQUENCE(sequence_checker_);
   DCHECK(tick_clock_);
 }

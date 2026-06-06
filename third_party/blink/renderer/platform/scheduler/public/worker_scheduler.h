@@ -9,6 +9,8 @@
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/platform/scheduler/public/frame_or_worker_scheduler.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 class VirtualTimeController;
 namespace scheduler {

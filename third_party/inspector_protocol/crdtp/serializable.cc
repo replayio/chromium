@@ -6,6 +6,8 @@
 
 #include <utility>
 
+#include "base/record_replay.h"
+
 namespace crdtp {
 // =============================================================================
 // Serializable - An object to be emitted as a sequence of bytes.

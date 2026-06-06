@@ -93,7 +93,7 @@ if (use_v8_context_snapshot) {
 
   if (v8_snapshot_toolchain == current_toolchain) {
     executable("v8_context_snapshot_generator") {
-      sources = [ "v8_context_snapshot_generator.cc" ]
+      sources = [ "v8_context_snapshot_generator.cc", "//components/viz/service/display/record_replay_render_nop.cc" ]
 
       deps = [
         "//gin",

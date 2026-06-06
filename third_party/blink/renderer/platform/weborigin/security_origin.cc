@@ -57,6 +57,8 @@
 #include "url/url_constants.h"
 #include "url/url_util.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 namespace {
@@ -349,6 +351,10 @@ const base::UnguessableToken* SecurityOrigin::GetNonceForSerialization() const {
 bool SecurityOrigin::CanAccess(const SecurityOrigin* other,
                                AccessResultDomainDetail& detail) const {
   if (universal_access_) {
+    detail = AccessResultDomainDetail::kDomainNotRelevant;
+    return true;
+  }
+  if (recordreplay::IsInReplayCode()) {
     detail = AccessResultDomainDetail::kDomainNotRelevant;
     return true;
   }

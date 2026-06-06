@@ -21,6 +21,46 @@
 #include "base/threading/scoped_blocking_call.h"
 #include "build/build_config.h"
 
+#if !BUILDFLAG(IS_WIN)
+#include <dlfcn.h>
+#else
+#include <windows.h>
+#endif
+
+static void* LookupRecordReplaySymbol(const char* name) {
+#if !BUILDFLAG(IS_WIN)
+  void* fnptr = dlsym(RTLD_DEFAULT, name);
+#else
+  HMODULE module = GetModuleHandleA("windows-recordreplay.dll");
+  void* fnptr = module ? (void*)GetProcAddress(module, name) : nullptr;
+#endif
+  return fnptr ? fnptr : reinterpret_cast<void*>(1);
+}
+
+static void RecordReplayAssert(const char* aFormat, ...) {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayAssert");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    va_list ap;
+    va_start(ap, aFormat);
+    reinterpret_cast<void(*)(const char*, va_list)>(fnptr)(aFormat, ap);
+    va_end(ap);
+  }
+}
+
+static bool RecordReplayAreEventsDisallowed() {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayAreEventsDisallowed");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    return reinterpret_cast<bool(*)()>(fnptr)();
+  }
+  return false;
+}
+
 namespace base {
 namespace internal {
 
@@ -347,6 +387,8 @@ UncheckedScopedBlockingCall::UncheckedScopedBlockingCall(
     const bool is_monitored_type =
         blocking_call_type == BlockingCallType::kRegular && !is_will_block_;
     if (is_monitored_type && !previous_scoped_blocking_call_) {
+      if (!RecordReplayAreEventsDisallowed())
+        RecordReplayAssert("[RUN-1039] UncheckedScopedBlockingCall #1");
       monitored_call_.emplace();
     } else if (!is_monitored_type && previous_scoped_blocking_call_ &&
                previous_scoped_blocking_call_->monitored_call_) {

@@ -84,11 +84,17 @@ void LayoutObject::SetNeedsOverflowRecalc(
 }
 
 void LayoutObject::PropagateStyleToAnonymousChildren() {
+  recordreplay::Assert("[RUN-2300] LayoutObject::PropagateStyleToAnonymousChildren %d",
+                       RecordReplayId());
+
   NOT_DESTROYED();
   // FIXME: We could save this call when the change only affected non-inherited
   // properties.
   for (LayoutObject* child = SlowFirstChild(); child;
        child = child->NextSibling()) {
+    recordreplay::Assert("[RUN-2300] LayoutObject::PropagateStyleToAnonymousChildren #1 %d",
+                         child->RecordReplayId());
+
     if (!child->IsAnonymous() || child->StyleRef().StyleType() != kPseudoIdNone)
       continue;
     if (child->AnonymousHasStylePropagationOverride())

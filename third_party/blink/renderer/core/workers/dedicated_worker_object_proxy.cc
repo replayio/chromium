@@ -59,7 +59,9 @@
 
 namespace blink {
 
-DedicatedWorkerObjectProxy::~DedicatedWorkerObjectProxy() = default;
+DedicatedWorkerObjectProxy::~DedicatedWorkerObjectProxy() {
+  recordreplay::UnregisterPointer(this);
+}
 
 void DedicatedWorkerObjectProxy::PostMessageToWorkerObject(
     BlinkTransferableMessage message) {
@@ -144,7 +146,9 @@ DedicatedWorkerObjectProxy::DedicatedWorkerObjectProxy(
     : ThreadedObjectProxyBase(parent_execution_context_task_runners,
                               /*parent_agent_group_task_runner=*/nullptr),
       token_(token),
-      messaging_proxy_weak_ptr_(messaging_proxy_weak_ptr) {}
+      messaging_proxy_weak_ptr_(messaging_proxy_weak_ptr) {
+  recordreplay::RegisterPointer("DedicatedWorkerObjectProxy", this);
+}
 
 CrossThreadWeakPersistent<ThreadedMessagingProxyBase>
 DedicatedWorkerObjectProxy::MessagingProxyWeakPtr() {

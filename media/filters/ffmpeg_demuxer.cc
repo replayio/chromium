@@ -57,6 +57,8 @@
 #include "media/filters/ffmpeg_h265_to_annex_b_bitstream_converter.h"
 #endif
 
+#include "base/record_replay.h"
+
 namespace media {
 
 namespace {

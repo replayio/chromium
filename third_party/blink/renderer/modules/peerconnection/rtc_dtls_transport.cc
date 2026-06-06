@@ -106,7 +106,7 @@ void RTCDtlsTransport::ChangeState(webrtc::DtlsTransportInformation info) {
 void RTCDtlsTransport::Close() {
   closed_from_owner_ = true;
   if (current_state_.state() != webrtc::DtlsTransportState::kClosed) {
-    DispatchEvent(*Event::Create(event_type_names::kStatechange));
+    DispatchEvent(*Event::Create(event_type_names::kStatechange), "RTCDtlsTransport::Close");
   }
   ice_transport_->Stop();
 }
@@ -164,7 +164,7 @@ void RTCDtlsTransport::OnStateChange(webrtc::DtlsTransportInformation info) {
     remote_certificates_.clear();
   }
   if (!closed_from_owner_) {
-    DispatchEvent(*Event::Create(event_type_names::kStatechange));
+    DispatchEvent(*Event::Create(event_type_names::kStatechange), "RTCDtlsTransport::OnStateChange");
   }
 }
 

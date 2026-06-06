@@ -31,6 +31,8 @@
 #include "third_party/blink/renderer/platform/graphics/graphics_context_types.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_priority.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 class ImageResourceContent;
@@ -46,7 +48,14 @@ class CORE_EXPORT ImageResourceObserver : public GarbageCollectedMixin {
   // invalidation can not be deferred.
   enum class CanDeferInvalidation { kYes, kNo };
 
-  virtual ~ImageResourceObserver() = default;
+  ImageResourceObserver() {
+    // Pointer registration is needed for sorting in e.g. ImageResourceContent::NotifyObservers.
+    recordreplay::RegisterPointer("ImageResourceObserver", this);
+  }
+
+  virtual ~ImageResourceObserver() {
+    recordreplay::UnregisterPointer(this);
+  }
 
   // Called whenever a frame of an image changes, either because we got more
   // data from the network or because we are animating.

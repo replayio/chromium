@@ -131,7 +131,7 @@ void VirtualKeyboard::VirtualKeyboardOverlayChanged(
   vars.SetVariable(UADefinedVariable::kKeyboardInsetHeight,
                    StyleEnvironmentVariables::FormatPx(keyboard_rect.height()));
   DispatchEvent(*(MakeGarbageCollected<VirtualKeyboardGeometryChangeEvent>(
-      event_type_names::kGeometrychange)));
+      event_type_names::kGeometrychange)), "VirtualKeyboard::VirtualKeyboardOverlayChanged");
 }
 
 void VirtualKeyboard::show() {
