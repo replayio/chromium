@@ -1,0 +1,56 @@
+# One-off Buildkite pipeline to build the Replay Chromium **m151** branch and
+# produce a DOWNLOADABLE macOS binary (.dmg / .tar.xz on static.replay.io).
+#
+# HOW TO RUN (one-off, no GitHub Actions):
+#   In Buildkite, create a new build on this repo with:
+#     branch:   m151
+#     pipeline: this file  (or paste it as the pipeline, or `buildkite-agent pipeline upload .buildkite/pipeline.m151-oneoff.yml`)
+#
+# PREREQUISITES (the build will not link until these exist):
+#   1. An **M151-ABI recordreplay driver** published to
+#      static.replay.io/downloads/macOS-recordreplay-<rev>.tgz, with REPLAY_BACKEND_REV
+#      pointing at it. (Until then, set REPLAY_LOCAL_DRIVER_DIR to a stub driver to validate
+#      compile/link only.)
+#   2. The dependency forks (v8 / skia / webrtc / boringssl) rebased to M151 and referenced by
+#      DEPS, so `update-all-repos.mjs` + gclient sync resolve. (chromium-v8 must be the v8-m151 branch.)
+#   3. A macOS Buildkite agent (tags below). The standard pipeline only has linux agents.
+#
+# This uses the self-contained build.js path (driver-embed -> gn gen -> autoninja chrome ->
+# package), which is simpler for a one-off than the backend Buck2 //:chromium path.
+
+env:
+  FORCE_COLOR: 1
+  GIT_TERMINAL_PROMPT: 0
+
+steps:
+  - label: "🍎 Build Replay Chromium (m151, macOS) + upload"
+    key: "build-m151-macos"
+    timeout_in_minutes: 240
+    plugins:
+      - seek-oss/aws-sm#v2.3.1:
+          region: us-east-2
+          env:
+            BUILDEVENT_APIKEY: honeycomb-api-key
+            BUILDEVENT_BUILDKITE_API_TOKEN: buildkite-api-token-honeycomb-build-events
+    commands:
+      - "git fetch --all"
+      - "git reset --hard origin/m151"
+      # sync dep forks (v8/skia/webrtc/boringssl) + backend; reads REPLAY_BACKEND_REV
+      - "node replay_build_scripts/update-all-repos.mjs"
+      - "pushd replay_build_scripts && npm ci && popd"
+      # embed driver into base/record_replay_driver.cc, gn gen out/Release, autoninja chrome
+      - "node build.js"
+      # package Chromium.app -> .dmg + .tar.xz, upload to S3, annotate the download URL.
+      # LOCAL_DEVELOPER_BUILD_EXTENSION keeps it in the dev bucket (still downloadable via
+      # https://static.replay.io/downloads/<buildId>.tar.xz) and avoids touching prod.
+      - "node replay_build_scripts/upload_build_artifacts.mjs"
+    env:
+      RECORD_REPLAY_BACKEND_DIR: /Users/buildkite/chromium/backend
+      LOCAL_DEVELOPER_BUILD_EXTENSION: "m151-oneoff"
+      # To validate compile/link before the M151 driver exists, point this at a stub driver dir:
+      # REPLAY_LOCAL_DRIVER_DIR: /Users/buildkite/chromium/stub-driver
+    agents:
+      - "os=macos"
+      - "queue=runtime"
+    artifact_paths:
+      - "build_id/macOS/**"
