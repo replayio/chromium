@@ -25,6 +25,7 @@
 #include "third_party/blink/renderer/core/css/css_computed_style_declaration.h"
 
 #include "base/memory/values_equivalent.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/animation/css/css_animation_data.h"
 #include "third_party/blink/renderer/core/css/computed_style_css_value_mapping.h"
 #include "third_party/blink/renderer/core/css/css_identifier_value.h"
@@ -386,6 +387,13 @@ const CSSValue* CSSComputedStyleDeclaration::GetPropertyCSSValue(
   const CSSValue* value = property_class.CSSValueFromComputedStyle(
       *style, StyledLayoutObject(), allow_visited_style_,
       CSSValuePhase::kResolvedValue);
+
+  if (!recordreplay::AreEventsDisallowed()) {
+    recordreplay::Assert(
+        "[RUN-1918-1921] CSSComputedStyleDeclaration::GetPropertyCSSValue B %s",
+        value ? value->CssText().Ascii().c_str() : "");
+  }
+
   if (value) {
     return value;
   }

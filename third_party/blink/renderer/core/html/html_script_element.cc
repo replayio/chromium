@@ -23,6 +23,7 @@
 
 #include "third_party/blink/renderer/core/html/html_script_element.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/mojom/script/script_type.mojom-blink.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_htmlscriptelement_svgscriptelement.h"
@@ -440,13 +441,18 @@ DOMNodeId HTMLScriptElement::GetDOMNodeId() {
 }
 
 void HTMLScriptElement::DispatchLoadEvent() {
+  // https://linear.app/replay/issue/RUN-822
+  recordreplay::Assert("HTMLScriptElement::DispatchLoadEvent");
+
   probe::AsyncTask async_task(GetExecutionContext(), &async_task_context_);
-  DispatchEvent(*Event::Create(event_type_names::kLoad));
+  DispatchEvent(*Event::Create(event_type_names::kLoad),
+                "HTMLScriptElement::DispatchLoadEvent");
 }
 
 void HTMLScriptElement::DispatchErrorEvent() {
   probe::AsyncTask async_task(GetExecutionContext(), &async_task_context_);
-  DispatchEvent(*Event::Create(event_type_names::kError));
+  DispatchEvent(*Event::Create(event_type_names::kError),
+                "HTMLScriptElement::DispatchErrorEvent");
 }
 
 ScriptElementBase::Type HTMLScriptElement::GetScriptElementType() {

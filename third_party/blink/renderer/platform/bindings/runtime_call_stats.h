@@ -121,24 +121,24 @@ class PLATFORM_EXPORT RuntimeCallTimer {
 // RuntimeCallStatsTest.
 #define RUNTIME_CALL_STATS_ENTER_WITH_RCS(runtime_call_stats, timer, \
                                           counterId)                 \
-  if (RuntimeCallStats::IsEnabled()) [[unlikely]] {                  \
+  if (blink::BlinkRuntimeCallStatsEnabled()) [[unlikely]] {          \
     (runtime_call_stats)->Enter(timer, counterId);                   \
   }
 
 #define RUNTIME_CALL_STATS_LEAVE_WITH_RCS(runtime_call_stats, timer) \
-  if (RuntimeCallStats::IsEnabled()) [[unlikely]] {                  \
+  if (blink::BlinkRuntimeCallStatsEnabled()) [[unlikely]] {          \
     (runtime_call_stats)->Leave(timer);                              \
   }
 
 #define RUNTIME_CALL_TIMER_SCOPE_WITH_RCS(runtime_call_stats, counterId) \
   std::optional<RuntimeCallTimerScope> rcs_scope;                        \
-  if (RuntimeCallStats::IsEnabled()) [[unlikely]] {                      \
+  if (blink::BlinkRuntimeCallStatsEnabled()) [[unlikely]] {              \
     rcs_scope.emplace(runtime_call_stats, counterId);                    \
   }
 
 #define RUNTIME_CALL_TIMER_SCOPE_WITH_OPTIONAL_RCS(             \
     optional_scope_name, runtime_call_stats, counterId)         \
-  if (RuntimeCallStats::IsEnabled()) [[unlikely]] {             \
+  if (blink::BlinkRuntimeCallStatsEnabled()) [[unlikely]] {     \
     optional_scope_name.emplace(runtime_call_stats, counterId); \
   }
 
@@ -351,6 +351,13 @@ class PLATFORM_EXPORT RuntimeCallStats {
 #endif
 };
 
+static inline bool BlinkRuntimeCallStatsEnabled() {
+  // Force-disable call stats when recording/replaying, as calls can occur at
+  // non-deterministic points and will also bloat the recording.
+  return RuntimeCallStats::IsEnabled() &&
+         !v8::recordreplay::IsRecordingOrReplaying("no-call-stats");
+}
+
 // A utility class that creates a RuntimeCallTimer and uses it with
 // RuntimeCallStats to measure execution time of a C++ scope.
 // Do not use this class directly, use RUNTIME_CALL_TIMER_SCOPE instead.
@@ -387,7 +394,7 @@ class PLATFORM_EXPORT RuntimeCallStatsScopedTracer {
 
  public:
   explicit RuntimeCallStatsScopedTracer(v8::Isolate* isolate) {
-    if (RuntimeCallStats::IsEnabled()) [[unlikely]] {
+    if (blink::BlinkRuntimeCallStatsEnabled()) [[unlikely]] {
       AddBeginTraceEventIfEnabled(isolate);
     }
   }

@@ -30,6 +30,7 @@
 
 #include "third_party/blink/public/platform/web_cache.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/platform/loader/fetch/memory_cache.h"
 
 namespace blink {
@@ -44,6 +45,9 @@ static void ToResourceTypeStat(const MemoryCache::TypeStatistic& from,
 }
 
 void WebCache::Clear() {
+  // https://linear.app/replay/issue/RUN-821
+  recordreplay::Assert("WebCache::Clear");
+
   MemoryCache* cache = MemoryCache::Get();
   if (cache)
     cache->EvictResources();

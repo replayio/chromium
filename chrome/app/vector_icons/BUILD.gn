@@ -275,6 +275,8 @@ aggregate_vector_icons("chrome_vector_icons") {
     "queue_music.icon",
     "read_later_add_old.icon",
     "reading_list_old.icon",
+    "record_replay.icon",
+    "record_replay_stop.icon",
     "refresh.icon",
     "release_alert.icon",
     "release_alert_old.icon",

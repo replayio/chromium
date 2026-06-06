@@ -6,6 +6,7 @@
 
 #include <string_view>
 
+#include "base/record_replay.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/system/data_pipe.h"
@@ -376,6 +377,7 @@ void PopulateResourceRequest(const ResourceRequestHead& src,
 
   if (!src.GetDevToolsId().IsNull()) {
     dest->devtools_request_id = src.GetDevToolsId().Ascii();
+    recordreplay::Assert("[RUN-1725-1903] PopulateResourceRequest %s", dest->devtools_request_id->c_str());
   }
 
   if (src.GetDevToolsStackId().has_value()) {

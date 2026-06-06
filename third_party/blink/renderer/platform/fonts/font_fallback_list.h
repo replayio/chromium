@@ -21,6 +21,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_FONTS_FONT_FALLBACK_LIST_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_FONTS_FONT_FALLBACK_LIST_H_
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/platform/fonts/font_cache.h"
 #include "third_party/blink/renderer/platform/fonts/font_selector.h"
 #include "third_party/blink/renderer/platform/fonts/shaping/font_features.h"
@@ -173,6 +174,8 @@ class PLATFORM_EXPORT FontFallbackList
   // primary font.
   Member<const ShapeResult> emphasis_mark_shape_;
   AtomicString emphasis_mark_text_;
+
+  HAS_RECORD_REPLAY_ID();
 };
 
 }  // namespace blink

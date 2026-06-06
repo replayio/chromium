@@ -36,6 +36,7 @@ MediaStreamAudioDestinationHandler::MediaStreamAudioDestinationHandler(
     : AudioHandler(NodeType::kNodeTypeMediaStreamAudioDestination,
                    node,
                    node.context()->sampleRate()),
+      process_lock_("MediaStreamAudioDestinationHandler"),
       mix_bus_(
           AudioBus::Create(number_of_channels,
                            GetDeferredTaskHandler().RenderQuantumFrames())) {

@@ -24,7 +24,7 @@ namespace base {
 // AssertAcquired() method.
 class LOCKABLE BASE_EXPORT Lock {
  public:
-  Lock() = default;
+  Lock(const char* ordered_name = nullptr) : lock_(ordered_name) {}
 
   Lock(const Lock&) = delete;
   Lock& operator=(const Lock&) = delete;

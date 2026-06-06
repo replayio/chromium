@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/core/page/page_animator.h"
 
 #include "base/auto_reset.h"
+#include "base/record_replay.h"
 #include "base/time/time.h"
 #include "cc/animation/animation_host.h"
 #include "third_party/blink/renderer/core/animation/document_animations.h"
@@ -381,6 +382,10 @@ void PageAnimator::SetHasViewTransition(bool has_view_transition) {
 DISABLE_CFI_PERF
 void PageAnimator::ScheduleVisualUpdate(LocalFrame* frame,
                                         cc::BeginMainFrameReason reason) {
+  recordreplay::Assert("[RUN-1641] PageAnimator::ScheduleVisualUpdate %d %d %d",
+                       servicing_animations_, updating_layout_and_style_for_painting_,
+                       suppress_frame_requests_workaround_for704763_only_);
+
   if (servicing_animations_ || updating_layout_and_style_for_painting_ ||
       suppress_frame_requests_workaround_for704763_only_) {
     return;

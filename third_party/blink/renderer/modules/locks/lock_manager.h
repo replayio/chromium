@@ -90,6 +90,7 @@ class MODULES_EXPORT LockManager final
                    const String& name,
                    V8LockGrantedCallback* callback,
                    mojom::blink::LockMode mode,
+                   int record_replay_dependency_graph_node_id,
                    ScriptPromiseResolver<IDLAny>* resolver);
 
   // Query the ContentSettingsClient to ensure access is allowed from

@@ -5,6 +5,7 @@
 #include "components/page_load_metrics/renderer/page_resource_data_use.h"
 
 #include "base/byte_count.h"
+#include "base/record_replay.h"
 #include "net/base/proxy_chain.h"
 #include "services/network/public/cpp/url_loader_completion_status.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
@@ -15,11 +16,18 @@
 namespace page_load_metrics {
 
 PageResourceDataUse::PageResourceDataUse(int resource_id)
-    : resource_id_(resource_id) {}
+    : resource_id_(resource_id) {
+  // Pointer registration is needed for sorting in PageTimingMetricsSender.modified_resources_
+  recordreplay::RegisterPointer("PageResourceDataUse", this);
+}
 
-PageResourceDataUse::PageResourceDataUse(const PageResourceDataUse& other) =
-    default;
-PageResourceDataUse::~PageResourceDataUse() = default;
+PageResourceDataUse::PageResourceDataUse(const PageResourceDataUse& other) {
+  recordreplay::RegisterPointer("PageResourceDataUse", this);
+}
+
+PageResourceDataUse::~PageResourceDataUse() {
+  recordreplay::UnregisterPointer(this);
+}
 
 void PageResourceDataUse::DidStartResponse(
     const url::SchemeHostPort& final_response_url,

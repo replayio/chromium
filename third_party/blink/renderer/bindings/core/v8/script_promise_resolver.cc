@@ -4,6 +4,9 @@
 
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 
+#include <optional>
+
+#include "base/record_replay.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/bindings/core/v8/capture_source_location.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
@@ -199,17 +202,30 @@ void ScriptPromiseResolverBase::ResolveOrRejectImmediately() {
 }
 
 void ScriptPromiseResolverBase::ScheduleResolveOrReject() {
+  int record_replay_scheduled_node_id = recordreplay::NewDependencyGraphNode(
+      "{\"kind\":\"scheduleSettleScriptPromise\"}");
   GetExecutionContext()
       ->GetTaskRunner(TaskType::kMicrotask)
       ->PostTask(FROM_HERE,
                  BindOnce(&ScriptPromiseResolverBase::ResolveOrRejectDeferred,
-                          WrapPersistent(this)));
+                          WrapPersistent(this),
+                          record_replay_scheduled_node_id));
 }
 
-void ScriptPromiseResolverBase::ResolveOrRejectDeferred() {
+void ScriptPromiseResolverBase::ResolveOrRejectDeferred(
+    int record_replay_scheduled_node_id) {
   DCHECK(state_ == kResolving || state_ == kRejecting);
   if (!GetExecutionContext()) {
     return;
+  }
+
+  std::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    int node_id = recordreplay::NewDependencyGraphNode(
+        "{\"kind\":\"settleScriptPromise\"}");
+    recordreplay::AddDependencyGraphEdge(record_replay_scheduled_node_id,
+                                         node_id, "{\"kind\":\"scheduler\"}");
+    execute.emplace(node_id);
   }
 
   ScriptState::Scope scope(script_state_.Get());

@@ -29,6 +29,7 @@
 #include "chrome/browser/ui/views/toolbar/overflow_button.h"
 #include "chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.h"
 #include "chrome/browser/ui/views/toolbar/pinned_toolbar_actions.h"
+#include "chrome/browser/ui/views/toolbar/record_replay_toolbar_button.h"
 #include "chrome/browser/ui/views/toolbar/split_tabs_button.h"
 #include "components/prefs/pref_member.h"
 #include "ui/base/accelerators/accelerator.h"
@@ -187,6 +188,9 @@ class ToolbarView : public views::AccessiblePaneView,
   HomeButton* home_button() const { return home_; }
   PinnedActionToolbarButton* tab_search_button() const {
     return tab_search_button_;
+  }
+  RecordReplayToolbarButton* record_replay_button() const {
+    return record_replay_button_;
   }
 
   // TODO(crbug.com/513238408): Remove this once toolbar layout/overflow is
@@ -404,6 +408,7 @@ class ToolbarView : public views::AccessiblePaneView,
   raw_ptr<MediaToolbarButtonView> media_button_ = nullptr;
   raw_ptr<BrowserAppMenuButton> app_menu_button_ = nullptr;
   raw_ptr<PinnedActionToolbarButton> tab_search_button_ = nullptr;
+  raw_ptr<RecordReplayToolbarButton> record_replay_button_ = nullptr;
 
   // The button currently holding the lock to be shown/hidden.
   raw_ptr<glic::GlicButtonInterface> locked_expansion_button_ = nullptr;

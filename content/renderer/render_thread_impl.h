@@ -32,6 +32,7 @@
 #include "base/trace_event/trace_session_observer.h"
 #include "base/trace_event/typed_macros.h"
 #include "base/types/pass_key.h"
+#include "base/values.h"
 #include "build/build_config.h"
 #include "components/discardable_memory/client/client_discardable_shared_memory_manager.h"
 #include "content/child/child_thread_impl.h"
@@ -429,6 +430,8 @@ class CONTENT_EXPORT RenderThreadImpl
   void SetIsIsolatedContext(bool value) override;
   void SetWebUIResourceUrlToCodeCacheMap(
       const base::flat_map<GURL, int>& resource_map) override;
+  void RecordReplayBrowserEvent(const std::string& name,
+                                base::Value::Dict value) override;
 
   bool RendererIsHidden() const;
   void OnRendererHidden();

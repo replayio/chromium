@@ -4,6 +4,7 @@
 
 #include "base/memory/values_equivalent.h"
 #include "base/numerics/clamped_math.h"
+#include "base/record_replay.h"
 #include "third_party/blink/public/strings/grit/blink_strings.h"
 #include "third_party/blink/renderer/core/css/basic_shape_functions.h"
 #include "third_party/blink/renderer/core/css/css_anchor_query_enums.h"
@@ -4231,6 +4232,7 @@ const CSSValue* Filter::CSSValueFromComputedStyleInternal(
 void Filter::ApplyValue(StyleResolverState& state,
                         const CSSValue& value,
                         ValueModeFlags) const {
+  recordreplay::Assert("[RUN-2424-3227] longhands::Filter::ApplyValue");
   state.StyleBuilder().SetFilter(StyleBuilderConverter::ConvertFilterOperations(
       state, value, PropertyID()));
 }

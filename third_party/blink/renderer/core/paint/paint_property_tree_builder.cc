@@ -9,6 +9,7 @@
 #include "base/check_op.h"
 #include "base/feature_list.h"
 #include "base/memory/ptr_util.h"
+#include "base/record_replay.h"
 #include "cc/base/features.h"
 #include "cc/input/main_thread_scrolling_reason.h"
 #include "cc/input/overscroll_behavior.h"
@@ -1475,7 +1476,13 @@ void FragmentPaintPropertyTreeBuilder::UpdateIndividualTransform(
                                 style.Preserves3D() &&
                                 !state.rendering_context_id;
         if (new_rendering_context) {
-          state.rendering_context_id = GetHash(&object_);
+          // When recording/replaying we need a consistent context ID, so use
+          // the pointer ID of the object instead of its hash.
+          if (recordreplay::IsRecordingOrReplaying("pointer-ids")) {
+            state.rendering_context_id = object_.RecordReplayId();
+          } else {
+            state.rendering_context_id = GetHash(&object_);
+          }
         }
 
         // TODO(crbug.com/1185254): Make this work correctly for block
