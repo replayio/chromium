@@ -4,6 +4,8 @@
 
 #include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
 
+#include <unordered_map>
+
 #include "base/base64.h"
 #include "base/json/json_writer.h"
 #include "base/values.h"
@@ -46,15 +48,41 @@ static const char* HttpVersionToString(blink::ResourceResponse::HTTPVersion vers
   }
 }
 
-static std::string RecordReplayNetworkRequestId(uint64_t inspector_id) {
+// this is keyed by the original inspector identifier
+// and the value is used to generate the requestId that is reported to the recorder
+static std::unordered_map<uint64_t, size_t> gReplayNetworkRedirectCounts;
+
+static uint64_t RecordReplayNetworkInspectorId(uint64_t inspector_id) {
   // Inspector identifiers can vary when replaying due to differences in inspector
   // behavior. Make sure the identifiers we report to the recorder are consistent
   // by manually recording/replaying the identifier.
-  uint64_t identifier = RecordReplayValue("NetworkRequestId", inspector_id);
+  return RecordReplayValue("NetworkInspectorId", inspector_id);
+}
+
+static std::string RecordReplayNetworkRequestId(uint64_t inspector_id) {
+  const uint64_t identifier = RecordReplayNetworkInspectorId(inspector_id);
 
   char request_id[64];
-  snprintf(request_id, 64, "%d.%lu", (int) base::GetCurrentProcId(), (unsigned long) identifier);
-  return std::string(request_id);
+  snprintf(request_id, 64, "%d.%lu", (int) base::GetCurrentProcId(),
+           (unsigned long)identifier);
+  std::string root_request_id(request_id);
+
+  auto it = gReplayNetworkRedirectCounts.find(identifier);
+  if (it == gReplayNetworkRedirectCounts.end() || it->second == 0) {
+    return root_request_id;
+  }
+
+  return root_request_id + ":" + std::to_string(it->second);
+}
+
+static void RecordReplayNetworkIncrementRedirectCount(uint64_t inspector_id) {
+  const uint64_t identifier = RecordReplayNetworkInspectorId(inspector_id);
+  gReplayNetworkRedirectCounts[identifier]++;
+}
+
+static void RecordReplayNetworkClearRedirectCount(uint64_t inspector_id) {
+  const uint64_t identifier = RecordReplayNetworkInspectorId(inspector_id);
+  gReplayNetworkRedirectCounts.erase(identifier);
 }
 
 static const char* GetRequestCauseString(const ResourceRequest& req) {
@@ -256,14 +284,23 @@ void OnNetworkPrepareRequest(const blink::Document* document, const blink::Resou
   }
 }
 
-void OnNetworkResourceRedirect(uint64_t inspector_id, const blink::KURL& new_url,
-                               blink::ResourceRequest* new_request) {
+void OnNetworkResourceRedirect(uint64_t inspector_id,
+                               const blink::KURL& new_url,
+                               blink::ResourceRequest* new_request,
+                               const blink::ResourceResponse& redirect_response) {
   if (!ShouldEmitRecordReplayNetworkBrowserEvents()) {
     return;
   }
 
+  const std::string previous_request_id =
+      RecordReplayNetworkRequestId(inspector_id);
+  RecordReplayNetworkIncrementRedirectCount(inspector_id);
+  const std::string redirected_request_id =
+      RecordReplayNetworkRequestId(inspector_id);
+
   base::DictionaryValue dict;
-  dict.SetString("requestId", RecordReplayNetworkRequestId(inspector_id));
+  dict.SetString("requestId", redirected_request_id);
+  dict.SetString("redirectSourceId", previous_request_id);
   dict.SetString("requestUrl", new_url.GetString().Utf8());
 
   base::ListValue headers;
@@ -274,10 +311,41 @@ void OnNetworkResourceRedirect(uint64_t inspector_id, const blink::KURL& new_url
       header_obj.SetString("value", header.value.Utf8());
       headers.Append(std::move(header_obj));
     }
+    dict.SetString("requestMethod", new_request->HttpMethod().Utf8());
   }
   dict.SetKey("requestHeaders", std::move(headers));
+  {
+    // Include the redirect response information as well since that is useful for understanding the redirect chain and why a request was redirected.
+    const char* http_version = HttpVersionToString(redirect_response.HttpVersion());
+    base::ListValue response_headers;
+    for (auto header : redirect_response.HttpHeaderFields()) {
+      base::DictionaryValue header_obj;
+      header_obj.SetString("name", header.key.Utf8());
+      header_obj.SetString("value", header.value.Utf8());
+      response_headers.Append(std::move(header_obj));
+    }
+    dict.SetKey("responseHeaders", std::move(response_headers));
+    dict.SetString("responseProtocolVersion", http_version);
+    dict.SetDoubleKey("responseStatus", redirect_response.HttpStatusCode());
+    dict.SetString("responseStatusText", redirect_response.HttpStatusText().Utf8());
+    dict.SetBoolean("responseFromCache", redirect_response.WasCached());
+  }
 
   BrowserEvent("Network.ResourceRedirect", dict);
+
+  if (new_request) {
+    const scoped_refptr<blink::EncodedFormData>& form_body =
+      new_request->Body().FormBody();
+    if (form_body) {
+      WTF::String data = form_body->FlattenToString();
+      base::DictionaryValue requestDataDict;
+      requestDataDict.SetString("requestId", redirected_request_id);
+      std::string dataStr = data.Utf8();
+      requestDataDict.SetString("data", dataStr);
+      requestDataDict.SetInteger("dataLength", (int)dataStr.size());
+      BrowserEvent("Network.RequestData.Form", requestDataDict);
+    }
+  }
 }
 
 void OnNetworkReceiveResponse(uint64_t inspector_id,
@@ -361,6 +429,7 @@ void OnNetworkFinishLoading(uint64_t inspector_id,
   dict.SetDoubleKey("encodedBodySize", (double) encoded_body_length);
   dict.SetDoubleKey("decodedBodySize", (double) decoded_body_length);
   BrowserEvent("Network.DidFinishLoading", dict);
+  RecordReplayNetworkClearRedirectCount(inspector_id);
 }
 
 void OnNetworkFail(uint64_t inspector_id, const blink::WebURLError& error) {
@@ -384,6 +453,7 @@ void OnNetworkFail(uint64_t inspector_id, const blink::WebURLError& error) {
   dict.SetString("requestId", requestId);
   dict.SetString("requestFailedReason", std::move(reason));
   BrowserEvent("Network.DidFailLoading", dict);
+  RecordReplayNetworkClearRedirectCount(inspector_id);
 }
 
 }  // namespace recordreplay

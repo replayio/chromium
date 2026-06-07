@@ -90,8 +90,9 @@ namespace recordreplay {
         (const char* kind, const char* contents),                       \
         (kind, contents))                                               \
   Macro(V8RecordReplayOnNetworkRequest,                                 \
-    (const char* id, const char* kind, uint64_t bookmark),              \
-    (id, kind, bookmark))                                               \
+    (const char* id, const char* kind, uint64_t bookmark,               \
+     const char* redirect_source_id),                                   \
+    (id, kind, bookmark, redirect_source_id))                           \
   Macro(V8RecordReplayOnNetworkRequestEvent, (const char* id), (id))    \
   Macro(V8RecordReplayOnNetworkStreamStart,                             \
         (const char* id, const char* kind, const char* parentId),       \
@@ -370,8 +371,9 @@ void OnAnnotation(const char* kind, const char* contents) {
   V8RecordReplayOnAnnotation(kind, contents);
 }
 
-void OnNetworkRequest(const char* id, const char* kind, uint64_t bookmark) {
-  V8RecordReplayOnNetworkRequest(id, kind, bookmark);
+void OnNetworkRequest(const char* id, const char* kind, uint64_t bookmark,
+                      const char* redirect_source_id) {
+  V8RecordReplayOnNetworkRequest(id, kind, bookmark, redirect_source_id);
 }
 
 void OnNetworkRequestEvent(const char* id) {

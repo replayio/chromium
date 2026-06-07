@@ -27,6 +27,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_response_init.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_throw_dom_exception.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
 #include "third_party/blink/renderer/core/dom/abort_signal.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
@@ -353,6 +354,7 @@ bool FetchManager::Loader::WillFollowRedirect(
     const ResourceResponse& response) {
   const auto redirect_mode = fetch_request_data_->Redirect();
   if (redirect_mode == network::mojom::RedirectMode::kError) {
+    recordreplay::OnNetworkReceiveResponse(identifier, response);
     DidFailRedirectCheck(identifier);
     Dispose();
     return false;

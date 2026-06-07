@@ -63,7 +63,8 @@ void NewCheckpoint();
 
 uint64_t NewBookmark();
 void OnAnnotation(const char* kind, const char* contents);
-void OnNetworkRequest(const char* id, const char* kind, uint64_t bookmark);
+void OnNetworkRequest(const char* id, const char* kind, uint64_t bookmark,
+                      const char* redirect_source_id = nullptr);
 void OnNetworkRequestEvent(const char* id);
 void OnNetworkStreamStart(const char* id, const char* kind, const char* parentId);
 void OnNetworkStreamData(const char* id, size_t offset, size_t length, uint64_t bookmark);

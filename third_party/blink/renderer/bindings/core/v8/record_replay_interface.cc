@@ -163,8 +163,8 @@ public:
   // won't be crawled by the GC.  However, I don't think we need to worry about
   // this, as inspector actions can't be initiated against non-existant frames,
   // and likewise, any inspector objects that get culled should never be accessible
-  // via an inspector action (any inspector action will be against some other 
-  // isolate/frame/context group that exists), so we shouldn't be able to cause an 
+  // via an inspector action (any inspector action will be against some other
+  // isolate/frame/context group that exists), so we shouldn't be able to cause an
   // invalid dereference.
   v8::Isolate* isolate;
   UntracedMember<InspectorDOMAgent> inspectorDomAgent;
@@ -175,7 +175,7 @@ public:
   v8_inspector::V8InspectorSession* inspectorSession;
 
   InspectorData(v8::Isolate* i) {
-    isolate = i; 
+    isolate = i;
     inspectorDomAgent = nullptr;
     inspectorDomDebuggerAgent = nullptr;
     inspectorNetworkAgent = nullptr;
@@ -623,7 +623,7 @@ const char* gOnNewWindowScript = R""""(
   window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ = window.top.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__;
 
   // TODO: Feels like this cross-context function usage can cause trouble, especially when
-  //      the user pauses inside the iframe's JS and tries to access something inside the iframe via 
+  //      the user pauses inside the iframe's JS and tries to access something inside the iframe via
   //      __RECORD_REPLAY__?
   window.__RECORD_REPLAY__ = window.top.__RECORD_REPLAY__;
   window.__RECORD_REPLAY_ARGUMENTS__ = window.top.__RECORD_REPLAY_ARGUMENTS__;
@@ -1270,7 +1270,7 @@ absl::optional<InspectorNetworkAgent*> getOrCreateInspectorNetworkAgent(v8::Isol
   }
 
   InspectorData *data = getInspectorFor(isolate, *contextGroupId);
-  
+
   if (!data->inspectorNetworkAgent) {
     InspectedFrames* inspectedFrames = getOrCreateInspectedFrames(isolate, *contextGroupId);
     data->inspectorNetworkAgent = MakeGarbageCollected<InspectorNetworkAgent>(
@@ -1684,13 +1684,49 @@ static void CopyDictionaryProperty(base::DictionaryValue& dst,
   }
 }
 
+static void EmitNetworkRequestEvent(const std::string& request_id,
+                                    base::DictionaryValue& event) {
+  gCurrentNetworkRequestEvent = &event;
+  gCurrentNetworkRequestId = &request_id;
+  recordreplay::OnNetworkRequestEvent(request_id.c_str());
+  gCurrentNetworkRequestEvent = nullptr;
+  gCurrentNetworkRequestId = nullptr;
+}
+
+static void EmitResponseEvent(const std::string& request_id,
+                              const base::DictionaryValue& info) {
+  base::DictionaryValue event;
+  event.SetString("kind", "response");
+  CopyDictionaryProperty(event, info, "responseHeaders");
+  CopyDictionaryProperty(event, info, "responseProtocolVersion");
+  CopyDictionaryProperty(event, info, "responseStatus");
+  CopyDictionaryProperty(event, info, "responseStatusText");
+  CopyDictionaryProperty(event, info, "responseFromCache");
+  EmitNetworkRequestEvent(request_id, event);
+}
+
+static base::DictionaryValue BuildRedirectedRequestInfo(
+    const base::DictionaryValue& previous_info,
+    const base::DictionaryValue& info) {
+  base::DictionaryValue redirected_info;
+  CopyDictionaryProperty(redirected_info, previous_info, "bookmark");
+  CopyDictionaryProperty(redirected_info, info, "requestUrl");
+  CopyDictionaryProperty(redirected_info, info, "requestHeaders");
+  CopyDictionaryProperty(redirected_info, info, "requestMethod");
+  CopyDictionaryProperty(redirected_info, previous_info, "requestCause");
+  CopyDictionaryProperty(redirected_info, previous_info, "initiator");
+  return redirected_info;
+}
+
 static void HandleNetworkPrepareRequestEvent(const base::DictionaryValue& info) {
   CHECK(gActiveNetworkRequests);
   std::string request_id = GetRequestIdentifierProperty(info);
   if (gActiveNetworkRequests->find(request_id) != gActiveNetworkRequests->end()) {
-    // If the request already exists, this is a redirect.
-    // Chromium will send a "Network.ResourceRedirect" event which will
-    // be handled by `HandleNetworkPrepareRequestEvent` below.
+    // Redirects trigger a second PrepareRequest for the redirected request
+    // before Chromium emits Network.ResourceRedirect. That duplicate-looking
+    // PrepareRequest still uses the original replay request id, so we ignore it
+    // here and let HandleNetworkResourceRedirectEvent perform the actual
+    // redirect transition later.
     return;
   }
 
@@ -1714,44 +1750,50 @@ static void HandleNetworkPrepareRequestEvent(const base::DictionaryValue& info) 
   CopyDictionaryProperty(event, info, "requestCause");
   CopyDictionaryProperty(event, info, "initiator");
 
-  SetCurrentNetworkRequestEvent(request_id, &event);
-  recordreplay::OnNetworkRequestEvent(request_id.c_str());
-  ClearCurrentNetworkRequestEvent();
+  EmitNetworkRequestEvent(request_id, event);
 }
 
 static void HandleNetworkResourceRedirectEvent(const base::DictionaryValue& info) {
   CHECK(gActiveNetworkRequests);
 
-  // Retrieve the existing request data which should already have been
-  // registered by `HandleNetworkPrepareRequestEvent`.
-  std::string request_id = GetRequestIdentifierProperty(info);
-  auto request_info = gActiveNetworkRequests->find(request_id);
+  std::string redirected_request_id = GetRequestIdentifierProperty(info);
+  const std::string& previous_request_id =
+      *info.FindPath("redirectSourceId")->GetIfString();
+
+  auto request_info = gActiveNetworkRequests->find(previous_request_id);
   if (request_info == gActiveNetworkRequests->end()) {
     recordreplay::Print("No original request for navigation redirect: %s",
-      request_id.c_str());
+      previous_request_id.c_str());
     return;
   }
-  const base::DictionaryValue& original_info =
+  const base::DictionaryValue& previous_info =
     base::Value::AsDictionaryValue(request_info->second.info);
 
-  // Register a new network request with the same request id as the original
-  // for this redirect.
-  uint64_t bookmark = *original_info.FindPath("bookmark")->GetIfDouble();
-  recordreplay::OnNetworkRequest(request_id.c_str(), "http", bookmark);
+  EmitResponseEvent(previous_request_id, info);
 
-  // Package and emit a network request event, using data from the original
-  // request when necessary.
+  // TODO: should we be inheriting the bookmark from the previous request?
+  const uint64_t bookmark = *previous_info.FindPath("bookmark")->GetIfDouble();
+  // unlike real Chromium we register the redirected requests under unique ids (Chrome reuses the IDs for all hops of a redirect),
+  // so we need to pass the previous request id as the "redirectSourceId" param to the hook.
+  recordreplay::OnNetworkRequest(redirected_request_id.c_str(), "http", bookmark,
+                                 previous_request_id.c_str());
+
+  const base::DictionaryValue redirected_info =
+      BuildRedirectedRequestInfo(previous_info, info);
+
   base::DictionaryValue event;
   event.SetString("kind", "request");
-  CopyDictionaryProperty(event, info, "requestUrl");
-  CopyDictionaryProperty(event, info, "requestHeaders");
-  CopyDictionaryProperty(event, original_info, "requestMethod");
-  CopyDictionaryProperty(event, original_info, "requestCause");
-  CopyDictionaryProperty(event, original_info, "initiator");
+  CopyDictionaryProperty(event, redirected_info, "requestUrl");
+  CopyDictionaryProperty(event, redirected_info, "requestHeaders");
+  CopyDictionaryProperty(event, redirected_info, "requestMethod");
+  CopyDictionaryProperty(event, redirected_info, "requestCause");
+  CopyDictionaryProperty(event, redirected_info, "initiator");
+  EmitNetworkRequestEvent(redirected_request_id, event);
 
-  SetCurrentNetworkRequestEvent(request_id, &event);
-  recordreplay::OnNetworkRequestEvent(request_id.c_str());
-  ClearCurrentNetworkRequestEvent();
+  gActiveNetworkRequests->erase(request_info);
+  gActiveNetworkRequests->insert(
+    { redirected_request_id, NetworkRequestStatus(redirected_info) }
+  );
 }
 
 static void HandleNetworkNavigationEvent(const base::DictionaryValue& info) {
@@ -1782,9 +1824,7 @@ static void HandleNetworkNavigationEvent(const base::DictionaryValue& info) {
   CopyDictionaryProperty(event, info, "requestMethod");
   event.SetString("requestCause", "document");
 
-  SetCurrentNetworkRequestEvent(request_id, &event);
-  recordreplay::OnNetworkRequestEvent(request_id.c_str());
-  ClearCurrentNetworkRequestEvent();
+  EmitNetworkRequestEvent(request_id, event);
 }
 
 static void HandleNetworkNavigationRedirectEvent(const base::DictionaryValue& info) {
@@ -1818,9 +1858,7 @@ static void HandleNetworkNavigationRedirectEvent(const base::DictionaryValue& in
   CopyDictionaryProperty(event, original_info, "requestMethod");
   event.SetString("requestCause", "document");
 
-  SetCurrentNetworkRequestEvent(request_id, &event);
-  recordreplay::OnNetworkRequestEvent(request_id.c_str());
-  ClearCurrentNetworkRequestEvent();
+  EmitNetworkRequestEvent(request_id, event);
 }
 
 static void HandleNetworkRequestDataFormEvent(const base::DictionaryValue& info) {
@@ -1841,9 +1879,7 @@ static void HandleNetworkRequestDataFormEvent(const base::DictionaryValue& info)
     base::DictionaryValue requestBodyEvent;
     requestBodyEvent.SetString("kind", "request-body");
 
-    SetCurrentNetworkRequestEvent(request_id, &requestBodyEvent);
-    recordreplay::OnNetworkRequestEvent(request_id.c_str());
-    ClearCurrentNetworkRequestEvent();
+    EmitNetworkRequestEvent(request_id, requestBodyEvent);
   }
 
   std::string stream_id = "request-" + request_id;
@@ -1886,17 +1922,7 @@ static void HandleNetworkDidReceiveResponseEvent(const base::DictionaryValue& in
     return;
   }
 
-  base::DictionaryValue event;
-  event.SetString("kind", "response");
-  CopyDictionaryProperty(event, info, "responseHeaders");
-  CopyDictionaryProperty(event, info, "responseProtocolVersion");
-  CopyDictionaryProperty(event, info, "responseStatus");
-  CopyDictionaryProperty(event, info, "responseStatusText");
-  CopyDictionaryProperty(event, info, "responseFromCache");
-
-  SetCurrentNetworkRequestEvent(request_id, &event);
-  recordreplay::OnNetworkRequestEvent(request_id.c_str());
-  ClearCurrentNetworkRequestEvent();
+  EmitResponseEvent(request_id, info);
 }
 
 static void HandleNetworkDidFinishLoadingEvent(const base::DictionaryValue& info) {
@@ -1914,9 +1940,7 @@ static void HandleNetworkDidFinishLoadingEvent(const base::DictionaryValue& info
   CopyDictionaryProperty(event, info, "encodedBodySize");
   CopyDictionaryProperty(event, info, "decodedBodySize");
 
-  SetCurrentNetworkRequestEvent(request_id, &event);
-  recordreplay::OnNetworkRequestEvent(request_id.c_str());
-  ClearCurrentNetworkRequestEvent();
+  EmitNetworkRequestEvent(request_id, event);
 }
 
 static void HandleNetworkDidFailLoadingEvent(const base::DictionaryValue& info) {
@@ -1933,9 +1957,7 @@ static void HandleNetworkDidFailLoadingEvent(const base::DictionaryValue& info) 
   event.SetString("kind", "request-failed");
   CopyDictionaryProperty(event, info, "requestFailedReason");
 
-  SetCurrentNetworkRequestEvent(request_id, &event);
-  recordreplay::OnNetworkRequestEvent(request_id.c_str());
-  ClearCurrentNetworkRequestEvent();
+  EmitNetworkRequestEvent(request_id, event);
 }
 
 static void HandleNetworkDidReceiveDataEvent(const base::DictionaryValue& info) {
@@ -1957,9 +1979,7 @@ static void HandleNetworkDidReceiveDataEvent(const base::DictionaryValue& info) 
     base::DictionaryValue event;
     event.SetString("kind", "response-body");
 
-    SetCurrentNetworkRequestEvent(request_id, &event);
-    recordreplay::OnNetworkRequestEvent(request_id.c_str());
-    ClearCurrentNetworkRequestEvent();
+    EmitNetworkRequestEvent(request_id, event);
 
     recordreplay::OnNetworkStreamStart(
       stream_id.c_str(), "response-data", request_id.c_str()
@@ -2636,7 +2656,7 @@ void InitializeRecordReplay(
   gActiveNetworkRequests =
       new std::unordered_map<std::string, NetworkRequestStatus>();
   gCurrentNetworkStreamData = new std::vector<uint8_t>();
-  
+
   // Add process type metadata.
   std::string metadata = std::string("{ \"process\": \"") + processType + "\" }";
   V8RecordReplayAddMetadata(metadata.c_str());
@@ -2649,12 +2669,12 @@ void InitializeRecordReplayAfterCheckpoint() {
 }
 
 static void InitializeReplayScripts(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
-  // Register context, s.t. when handling a command and we are not on a 
+  // Register context, s.t. when handling a command and we are not on a
   // JS stack, we can always use the current root frame's context.
   // Note: We are assuming that each tab has its own process, for now.
   //   (That might not hold true for tabs of the same domain - not sure)
   V8RecordReplaySetDefaultContext(isolate, context);
-  
+
   // Initialize __RECORD_REPLAY__ things.
   InitializeRecordReplayApiObjects(isolate, localFrame);
 
@@ -2695,17 +2715,17 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
       localFrame->IsMainFrame(),
 
       localFrame->Parent() ? localFrame->Parent()->IsMainFrame() : -1,
-      
+
       localFrame->GetDocument()->Url().GetString().Utf8().c_str()
       );
-  
+
   // NOTE: The root `LocalFrame` can change over time.
   gRootLocalFrame = localFrame;
 
   // 1. Reset paint surface so that paints to the new root's surface are not ignored.
   // See: https://linear.app/replay/issue/RUN-2400
   recordreplay::DoResetPaintSurface();
-  
+
   // 2. Initialize sourcemap worker, command handlers etc.
   gReplayScriptsAlive = true;
   recordreplay::Print("ReplayScript STATUS_CHANGE_ALIVE");
