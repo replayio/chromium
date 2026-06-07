@@ -327,11 +327,11 @@ vars = {
   # Three lines of non-changing comments so that
   # the commit queue can handle CLs rolling Skia
   # and whatever else without interference from each other.
-  'skia_revision': '91ee612cf552bd0f757cd682cebf8a3d9a8ee080',
+  'skia_revision': '95c6b8514c32134f2aa8b66d688b28e5a6f82304',
   # Three lines of non-changing comments so that
   # the commit queue can handle CLs rolling V8
   # and whatever else without interference from each other.
-  'v8_revision': '3f531962c0a25b868b9f61f7cade55464a9c4659',
+  'v8_revision': 'beabe23aec6f9ecb1ad70042391c6733a76f509c',
   # Three lines of non-changing comments so that
   # the commit queue can handle CLs rolling ANGLE
   # and whatever else without interference from each other.
@@ -347,7 +347,7 @@ vars = {
   # Three lines of non-changing comments so that
   # the commit queue can handle CLs rolling BoringSSL
   # and whatever else without interference from each other.
-  'boringssl_revision': '610dbdda2589fb4c5c8b4c3e96e96aa087199010',
+  'boringssl_revision': 'c08fcdd4eefcb0e3723d07ea69414abfac9449ea',
   # Three lines of non-changing comments so that
   # the commit queue can handle CLs rolling Fuchsia sdk
   # and whatever else without interference from each other.
@@ -3104,7 +3104,7 @@ deps = {
     Var('chromium_git') + '/webpagereplay.git' + '@' + Var('webpagereplay_revision'),
 
   'src/third_party/webrtc':
-    Var('webrtc_git') + '/src.git' + '@' + 'f8f44e931c1118cfa66755abfe65b9497b451d4f',
+    'https://github.com/replayio/webrtc-blamy.git' + '@' + '91e22523d4fd720b5072f9b0683b92290fde118b',
 
   # Wuffs' canonical repository is at github.com/google/wuffs, but we use
   # Skia's mirror of Wuffs, the same as in upstream Skia's DEPS file.

@@ -35,9 +35,23 @@ steps:
     commands:
       - "git fetch --all"
       - "git reset --hard origin/m151"
-      # sync dep forks (v8/skia/webrtc/boringssl) + backend; reads REPLAY_BACKEND_REV
+      # Ensure each dep subrepo has the replayio fork as a remote so update-all-repos'
+      # `git fetch --all` can retrieve the fork-tip SHAs pinned in DEPS. syncRepo does
+      # NOT add remotes. (idempotent; webrtc lives in the separate webrtc-blamy repo.)
+      - "git -C v8 remote add replayio https://github.com/replayio/chromium-v8.git || true"
+      - "git -C third_party/skia remote add replayio https://github.com/replayio/chromium-skia.git || true"
+      - "git -C third_party/boringssl/src remote add replayio https://github.com/replayio/boringssl.git || true"
+      - "git -C third_party/webrtc remote add webrtc-blamy https://github.com/replayio/webrtc-blamy.git || true"
+      # sync dep forks (v8/skia/webrtc/boringssl) to the DEPS-pinned fork tips + backend
       - "node replay_build_scripts/update-all-repos.mjs"
       - "pushd replay_build_scripts && npm ci && popd"
+      # Seed gn args. build.js runs a bare `gn gen out/Release`; nothing copies a
+      # *_args.gn into the out dir on the build.js path, so do it here. Force
+      # use_remoteexec=false: this one-off builds locally (no EngFlow RBE/reclient
+      # provisioning), which sidesteps the reclient gap (see M151_BUILD_WIRING.md).
+      - "mkdir -p out/Release"
+      - "cp replay_build_scripts/mac_x86_64_args.gn out/Release/args.gn"
+      - "echo 'use_remoteexec = false' >> out/Release/args.gn"
       # embed driver into base/record_replay_driver.cc, gn gen out/Release, autoninja chrome
       - "node build.js"
       # package Chromium.app -> .dmg + .tar.xz, upload to S3, annotate the download URL.

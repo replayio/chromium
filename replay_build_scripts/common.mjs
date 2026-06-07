@@ -209,7 +209,7 @@ function getChromiumDeps() {
   results.skia = match[1];
 
   match =
-    /'https:\/\/github.com\/replayio\/chromium-webrtc.git' \+ '@' \+ '(.*?)'/.exec(
+    /'https:\/\/github.com\/replayio\/webrtc-blamy.git' \+ '@' \+ '(.*?)'/.exec(
       text,
     );
   assert(match, "Could not find webrtc revision");
