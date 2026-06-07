@@ -83,8 +83,27 @@ export function toNumber(str) {
   return rv;
 }
 
-export function syncRepo(dir, treeish) {
+// Ensure a git remote named `name` points at `url` so its commits are
+// fetchable. Idempotent: adds it if missing, otherwise fixes the URL.
+function ensureRemote(dir, name, url) {
+  try {
+    spawnChecked("git", ["remote", "add", name, url], { cwd: dir, stdio: "inherit" });
+  } catch (e) {
+    // Remote already exists; make sure it points at the right URL.
+    spawnChecked("git", ["remote", "set-url", name, url], { cwd: dir, stdio: "inherit" });
+  }
+}
+
+export function syncRepo(dir, treeish, forkUrl) {
   log(`Syncing ${dir} to ${treeish}`);
+  // The dep subrepos are pinned (in DEPS) to commits on the replayio forks.
+  // syncRepo runs against pre-existing checkouts whose remotes may not include
+  // the fork (e.g. third_party/webrtc -> replayio/webrtc-blamy, a repo distinct
+  // from googlesource webrtc). Ensure the fork remote so `git fetch --all` can
+  // retrieve the pinned commit, otherwise `git reset --hard` fails to parse it.
+  if (forkUrl) {
+    ensureRemote(dir, "replay-fork", forkUrl);
+  }
   try {
     spawnChecked("git", ["fetch", "--all"], { cwd: dir, stdio: "inherit" });
   } catch (e) {
@@ -175,15 +194,16 @@ export function updateChromiumRepo() {
 
   const deps = getChromiumDeps();
 
-  syncRepo(path.join(chromium, "v8"), deps.v8);
+  syncRepo(path.join(chromium, "v8"), deps.v8, "https://github.com/replayio/chromium-v8.git");
 
-  syncRepo(path.join(chromium, "third_party", "skia"), deps.skia);
+  syncRepo(path.join(chromium, "third_party", "skia"), deps.skia, "https://github.com/replayio/chromium-skia.git");
 
-  syncRepo(path.join(chromium, "third_party", "webrtc"), deps.webrtc);
+  syncRepo(path.join(chromium, "third_party", "webrtc"), deps.webrtc, "https://github.com/replayio/webrtc-blamy.git");
 
   syncRepo(
     path.join(chromium, "third_party", "boringssl", "src"),
     deps.boringssl,
+    "https://github.com/replayio/boringssl.git",
   );
 
   runGclientSync();
