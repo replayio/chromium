@@ -32,14 +32,9 @@ steps:
     commands:
       - "git fetch --all"
       - "git reset --hard origin/m151"
-      # Ensure each dep subrepo has the replayio fork as a remote so update-all-repos'
-      # `git fetch --all` can retrieve the fork-tip SHAs pinned in DEPS. syncRepo does
-      # NOT add remotes. (idempotent; webrtc lives in the separate webrtc-blamy repo.)
-      - "git -C v8 remote add replayio https://github.com/replayio/chromium-v8.git || true"
-      - "git -C third_party/skia remote add replayio https://github.com/replayio/chromium-skia.git || true"
-      - "git -C third_party/boringssl/src remote add replayio https://github.com/replayio/boringssl.git || true"
-      - "git -C third_party/webrtc remote add webrtc-blamy https://github.com/replayio/webrtc-blamy.git || true"
       # Sync dep forks (v8/skia/webrtc/boringssl) to DEPS-pinned fork tips + sync the backend
+      # (syncRepo in common.mjs adds the 'replay-fork' remote for each dep — public forks over
+      #  HTTPS, private webrtc-blamy over SSH — so no manual remote wiring is needed here.)
       # checkout to REPLAY_BACKEND_REV (the m151-driver commit).
       - "node replay_build_scripts/update-all-repos.mjs"
       - "pushd replay_build_scripts && npm ci && popd"

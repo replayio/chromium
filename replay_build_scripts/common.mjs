@@ -198,7 +198,9 @@ export function updateChromiumRepo() {
 
   syncRepo(path.join(chromium, "third_party", "skia"), deps.skia, "https://github.com/replayio/chromium-skia.git");
 
-  syncRepo(path.join(chromium, "third_party", "webrtc"), deps.webrtc, "https://github.com/replayio/webrtc-blamy.git");
+  // webrtc-blamy is a private repo; fetch over SSH (the agent has SSH access to
+  // replayio privates, as for the backend). The public forks above use HTTPS.
+  syncRepo(path.join(chromium, "third_party", "webrtc"), deps.webrtc, "git@github.com:replayio/webrtc-blamy.git");
 
   syncRepo(
     path.join(chromium, "third_party", "boringssl", "src"),
