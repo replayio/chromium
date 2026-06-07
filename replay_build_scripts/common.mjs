@@ -135,19 +135,27 @@ function gclient() {
   return currentPlatform() == Platform.windows ? "gclient.bat" : "gclient";
 }
 
-function runGclientSync() {
+function runGclientSync(rev) {
   // Sync ALL chromium third-party deps (angle, abseil, dawn, perfetto, build/, ...)
-  // to the revisions pinned in the checked-out src/DEPS. The Replay flow only
-  // repoints the 4 forks (v8/skia/webrtc/boringssl); everything else must come from
-  // gclient or `gn gen` fails on stale deps after a version bump — e.g. M108-era
+  // to the revisions pinned in this commit's src/DEPS. The Replay flow only repoints
+  // the 4 forks (v8/skia/webrtc/boringssl); everything else must come from gclient or
+  // `gn gen` fails on stale deps after a version bump — e.g. M108-era
   // third_party/angle whose .gn predates `exec_script_allowlist`.
   //
   // This was previously disabled because the *old* M108 fork base was too stale for
   // gclient sync; the M151 base is current, so syncing against its DEPS works.
-  // `-D` deletes removed deps; `--reset` discards stale local sub-repo state; hooks
-  // run (default) so generated build files exist for gn gen. Incremental after the
-  // first (large) sync. Requires depot_tools + a .gclient at the chromium root.
-  spawnChecked(gclient(), ["sync", "-D", "--reset"], { stdio: "inherit" });
+  // `--revision src@<rev>` pins the top solution to OUR commit for this sync so the
+  // M151 DEPS are read regardless of the agent's .gclient managed mode (otherwise a
+  // managed:true solution pinned to an old rev would reset src and sync the wrong,
+  // M108-era deps). `-D` deletes removed deps; `--reset` discards stale sub-repo
+  // state; hooks run (default) so generated build files exist for gn gen. The first
+  // sync after the M108->M151 jump is large; later builds are incremental. Requires
+  // depot_tools + a .gclient at the chromium root (solution named "src").
+  const args = ["sync", "-D", "--reset"];
+  if (rev) {
+    args.push("--revision", `src@${rev}`);
+  }
+  spawnChecked(gclient(), args, { stdio: "inherit" });
 }
 
 function updateRepo(repo, treeish) {
@@ -206,7 +214,7 @@ export function updateChromiumRepo() {
   // agent's .gclient managed mode, so re-pin src to our commit afterward. (Our
   // DEPS differs from upstream M151 only in the 4 fork revs, so the non-fork deps
   // land at the correct M151 revisions regardless of which DEPS gclient read.)
-  runGclientSync();
+  runGclientSync(rev);
   updateRepo(chromium, rev);
 
   const deps = getChromiumDeps();
