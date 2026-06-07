@@ -1229,7 +1229,10 @@ void DocumentLoader::HandleRedirect(
   probe::WillSendNavigationRequest(
       probe::ToCoreProbeSink(GetFrame()), main_resource_identifier_, this,
       url_after_redirect, http_method_, http_body_.get());
-  recordreplay::OnNetworkResourceRedirect(main_resource_identifier_, url_after_redirect, nullptr);
+  recordreplay::OnNetworkResourceRedirect(main_resource_identifier_,
+                                          url_after_redirect,
+                                          nullptr,
+                                          redirect_response);
 
   navigation_timing_info_->AddRedirect(redirect_response, url_after_redirect);
 
