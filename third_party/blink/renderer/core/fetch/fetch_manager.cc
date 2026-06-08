@@ -354,7 +354,6 @@ bool FetchManager::Loader::WillFollowRedirect(
     const ResourceResponse& response) {
   const auto redirect_mode = fetch_request_data_->Redirect();
   if (redirect_mode == network::mojom::RedirectMode::kError) {
-    recordreplay::OnNetworkReceiveResponse(identifier, response);
     DidFailRedirectCheck(identifier);
     Dispose();
     return false;

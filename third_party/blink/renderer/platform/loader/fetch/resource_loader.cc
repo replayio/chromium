@@ -811,6 +811,14 @@ bool ResourceLoader::WillFollowRedirect(
                             GURL(new_url.GetString().Utf8()), removed_headers);
   }
 
+  const ResourceResponse& redirect_response(
+      passed_redirect_response.ToResourceResponse());
+
+  // Record the redirect response once here before follow/block handling
+  // splits. The redirected PrepareRequest then only needs to model the new hop.
+  recordreplay::OnNetworkReceiveResponse(resource_->InspectorId(),
+                                         redirect_response);
+
   if (is_cache_aware_loading_activated_) {
     // Fail as cache miss if cached response is a redirect.
     HandleError(
@@ -825,10 +833,6 @@ bool ResourceLoader::WillFollowRedirect(
     // but we reject the redirect here because otherwise we would see confusing
     // errors such as MixedContent errors in the console during redirect
     // handling.
-
-    // record responses received by, for example, `fetch(url, { redirect: "error" })`
-    recordreplay::OnNetworkReceiveResponse(resource_->InspectorId(),
-                                           passed_redirect_response.ToResourceResponse());
     HandleError(ResourceError::Failure(new_url));
     return false;
   }
@@ -851,9 +855,6 @@ bool ResourceLoader::WillFollowRedirect(
       initial_request.GetCredentialsMode();
 
   const ResourceLoaderOptions& options = resource_->Options();
-
-  const ResourceResponse& redirect_response(
-      passed_redirect_response.ToResourceResponse());
 
   const KURL& url_before_redirects = initial_request.Url();
 
