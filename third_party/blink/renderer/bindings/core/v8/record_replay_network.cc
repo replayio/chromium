@@ -215,8 +215,16 @@ BuildInitiatorObject(const blink::Document* document,
   return absl::optional<base::DictionaryValue>();
 }
 
-void OnNetworkPrepareRequest(const blink::Document* document, const blink::Resource* resource,
+void OnNetworkPrepareRequest(const blink::Document* document,
+                             const blink::Resource* resource,
                              const blink::ResourceRequest& request) {
+  const blink::ResourceResponse redirect_response;
+  OnNetworkPrepareRequest(document, resource, request, redirect_response);
+}
+
+void OnNetworkPrepareRequest(const blink::Document* document, const blink::Resource* resource,
+                             const blink::ResourceRequest& request,
+                             const blink::ResourceResponse& redirect_response) {
   if (!ShouldEmitRecordReplayNetworkBrowserEvents()) {
     return;
   }
@@ -229,6 +237,11 @@ void OnNetworkPrepareRequest(const blink::Document* document, const blink::Resou
   // where the devtools stack id is taken.
   uint64_t bookmark = NewBookmark();
 
+  std::string redirect_source_id;
+  if (!redirect_response.IsNull()) {
+    redirect_source_id = RecordReplayNetworkRequestId(request.InspectorId());
+    RecordReplayNetworkIncrementRedirectCount(request.InspectorId());
+  }
   std::string requestId = RecordReplayNetworkRequestId(request.InspectorId());
 
   if (recordreplay::DependencyGraphEnabled()) {
@@ -259,6 +272,26 @@ void OnNetworkPrepareRequest(const blink::Document* document, const blink::Resou
     headers.Append(std::move(header_obj));
   }
   dict.SetKey("requestHeaders", std::move(headers));
+
+  if (!redirect_response.IsNull()) {
+    dict.SetString("redirectSourceId", redirect_source_id);
+
+    const char* http_version =
+        HttpVersionToString(redirect_response.HttpVersion());
+    base::ListValue response_headers;
+    for (auto header : redirect_response.HttpHeaderFields()) {
+      base::DictionaryValue header_obj;
+      header_obj.SetString("name", header.key.Utf8());
+      header_obj.SetString("value", header.value.Utf8());
+      response_headers.Append(std::move(header_obj));
+    }
+    dict.SetKey("responseHeaders", std::move(response_headers));
+    dict.SetString("responseProtocolVersion", http_version);
+    dict.SetDoubleKey("responseStatus", redirect_response.HttpStatusCode());
+    dict.SetString("responseStatusText",
+                   redirect_response.HttpStatusText().Utf8());
+    dict.SetBoolean("responseFromCache", redirect_response.WasCached());
+  }
 
   if (resource) {
     const blink::FetchInitiatorInfo& initiator_info = resource->Options().initiator_info;
@@ -293,6 +326,11 @@ void OnNetworkResourceRedirect(uint64_t inspector_id,
   }
 
   blink::ScriptForbiddenScope::AllowUserAgentScript allow_script;
+  if (new_request) {
+    // Resource redirects now carry their transition data on the redirected
+    // PrepareRequest, which creates the new request through the normal path.
+    return;
+  }
   const std::string previous_request_id =
       RecordReplayNetworkRequestId(inspector_id);
   RecordReplayNetworkIncrementRedirectCount(inspector_id);
@@ -332,20 +370,6 @@ void OnNetworkResourceRedirect(uint64_t inspector_id,
   }
 
   BrowserEvent("Network.ResourceRedirect", dict);
-
-  if (new_request) {
-    const scoped_refptr<blink::EncodedFormData>& form_body =
-      new_request->Body().FormBody();
-    if (form_body) {
-      WTF::String data = form_body->FlattenToString();
-      base::DictionaryValue requestDataDict;
-      requestDataDict.SetString("requestId", redirected_request_id);
-      std::string dataStr = data.Utf8();
-      requestDataDict.SetString("data", dataStr);
-      requestDataDict.SetInteger("dataLength", (int)dataStr.size());
-      BrowserEvent("Network.RequestData.Form", requestDataDict);
-    }
-  }
 }
 
 void OnNetworkReceiveResponse(uint64_t inspector_id,

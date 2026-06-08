@@ -29,6 +29,11 @@ void OnNetworkPrepareRequest(const blink::Document* document,
                              const blink::Resource* resource,
                              const blink::ResourceRequest& request);
 
+void OnNetworkPrepareRequest(const blink::Document* document,
+                             const blink::Resource* resource,
+                             const blink::ResourceRequest& request,
+                             const blink::ResourceResponse& redirect_response);
+
 void OnNetworkResourceRedirect(uint64_t inspector_id,
                                const blink::KURL& new_url,
                                blink::ResourceRequest* new_request,
