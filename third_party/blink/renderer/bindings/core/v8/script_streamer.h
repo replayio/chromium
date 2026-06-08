@@ -285,6 +285,8 @@ class CORE_EXPORT ResourceScriptStreamer final : public ScriptStreamer {
 
   const v8::ScriptType script_type_;
 
+  int record_replay_scheduled_node_id_ = 0;
+
   // For transmitting crowdsourced or local compile hints to V8 while streaming.
   std::unique_ptr<v8_compile_hints::CompileHintsForStreaming> compile_hints_;
 };

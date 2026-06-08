@@ -34,6 +34,8 @@
 #include "base/trace_event/typed_macros.h"
 #include "mojo/core/ipcz_driver/envelope.h"
 
+#include "base/record_replay.h"
+
 namespace mojo::core {
 
 namespace {
@@ -61,7 +63,8 @@ class ChannelMac : public Channel,
       : Channel(delegate, handle_policy, DispatchBufferPolicy::kUnmanaged),
         self_(this),
         io_task_runner_(io_task_runner),
-        watch_controller_(FROM_HERE) {
+        watch_controller_(FROM_HERE),
+        write_lock_("ChannelMac.write_lock_") {
     PlatformHandle channel_handle =
         connection_params.TakeEndpoint().TakePlatformHandle();
     if (channel_handle.is_mach_send()) {

@@ -121,6 +121,8 @@ class MODULES_EXPORT RTCPeerConnectionHandler {
 
   virtual ~RTCPeerConnectionHandler();
 
+  HAS_RECORD_REPLAY_ID();
+
   base::WeakPtr<RTCPeerConnectionHandler> GetWeakPtr() {
     return weak_factory_.GetWeakPtr();
   }

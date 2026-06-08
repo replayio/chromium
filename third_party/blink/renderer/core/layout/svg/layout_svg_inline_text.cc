@@ -228,3 +228,9 @@ gfx::RectF LayoutSVGInlineText::VisualRectInLocalSVGCoordinates() const {
 }
 
 }  // namespace blink
+
+  recordreplay::Assert(
+      "[RUN-1436-2286] LayoutSVGInlineText::ComputeNewScaledFontForStyle %d",
+      document.GetStyleEngine().GetFontSelector()
+          ? document.GetStyleEngine().GetFontSelector()->RecordReplayId()
+          : -1);

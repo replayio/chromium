@@ -15,6 +15,8 @@
 #include <optional>
 #include <string_view>
 
+#include "base/record_replay.h"
+
 #include "base/apple/scoped_mach_port.h"
 #include "base/byte_size.h"
 #include "base/check_op.h"

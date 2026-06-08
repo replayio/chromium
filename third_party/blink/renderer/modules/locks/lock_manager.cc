@@ -39,6 +39,8 @@
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
+#include "base/json/json_writer.h"
+
 namespace blink {
 
 namespace {
@@ -77,14 +79,17 @@ class LockManager::LockRequestImpl final
       mojom::blink::LockMode mode,
       mojo::PendingAssociatedReceiver<mojom::blink::LockRequest> receiver,
       mojo::PendingRemote<mojom::blink::ObservedFeature> lock_lifetime,
-      LockManager* manager)
+      LockManager* manager,
+      int record_replay_dependency_graph_node_id)
       : callback_(callback),
         resolver_(resolver),
         name_(name),
         mode_(mode),
         receiver_(this, manager->GetExecutionContext()),
         lock_lifetime_(std::move(lock_lifetime)),
-        manager_(manager) {
+        manager_(manager),
+        record_replay_dependency_graph_node_id_(
+            record_replay_dependency_graph_node_id) {
     receiver_.Bind(
         std::move(receiver),
         manager->GetExecutionContext()->GetTaskRunner(TaskType::kWebLocks));
@@ -184,6 +189,19 @@ class LockManager::LockRequestImpl final
         std::move(lock_lifetime_), manager_);
     manager_->held_locks_.insert(lock);
 
+    absl::optional<recordreplay::AutoDependencyExecution> execute;
+    if (recordreplay::DependencyGraphEnabled()) {
+      base::Value::Dict info;
+      info.Set("kind", "lockRequestGranted");
+      std::string json;
+      base::JSONWriter::Write(info, &json);
+      int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
+      recordreplay::AddDependencyGraphEdge(
+          record_replay_dependency_graph_node_id_, node_id,
+          "{\"kind\":\"creator\"}");
+      execute.emplace(node_id);
+    }
+
     // Note that either invoking `callback` or calling
     // ToResolvedPromise to convert the resulting value to a Promise
     // can or will execute javascript. This means that the ExecutionContext
@@ -228,6 +246,8 @@ class LockManager::LockRequestImpl final
   // registered. If the context is destroyed then |manager_| will dispose of
   // |this| which terminates the request on the service side.
   Member<LockManager> manager_;
+
+  int record_replay_dependency_graph_node_id_;
 
   // Handle that keeps the associated abort algorithm alive for the duration of
   // the request.
@@ -359,6 +379,17 @@ ScriptPromise<IDLAny> LockManager::request(ScriptState* script_state,
     return EmptyPromise();
   }
 
+  int record_replay_dependency_graph_node_id = -1;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "lockManagerRequest");
+    info.Set("name", name.Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    record_replay_dependency_graph_node_id =
+        recordreplay::NewDependencyGraphNode(json.c_str());
+  }
+
   // If options["signal"] exists and is aborted, then return a promise rejected
   // with options["signal"]'s abort reason.
   if (options->hasSignal() && options->signal()->aborted()) {
@@ -425,7 +456,7 @@ void LockManager::RequestImpl(const LockOptions* options,
   LockRequestImpl* request = MakeGarbageCollected<LockRequestImpl>(
       callback, resolver, name, mode,
       request_remote.InitWithNewEndpointAndPassReceiver(),
-      std::move(lock_lifetime), this);
+      std::move(lock_lifetime), this, record_replay_dependency_graph_node_id);
   AddPendingRequest(request);
 
   // 11.2. If options’ signal dictionary member is present, then add the

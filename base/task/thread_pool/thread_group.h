@@ -32,6 +32,8 @@
 #include "base/win/scoped_windows_thread_environment.h"
 #endif
 
+#include "base/record_replay_ordered_atomic.h"
+
 namespace base {
 
 class WorkerThreadObserver;
@@ -174,6 +176,10 @@ class BASE_EXPORT ThreadGroup {
   virtual void DidUpdateCanRunPolicy() = 0;
 
   virtual void OnShutdownStarted() = 0;
+
+  bool RecordReplayUnordered() const {
+    return record_replay_unordered_;
+  }
 
   // Returns true if a thread group is registered in TLS. Used by diagnostic
   // code to check whether it's inside a ThreadPool task.

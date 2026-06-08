@@ -101,6 +101,8 @@ class CORE_EXPORT DevToolsSession
   void PaintTiming(Document* document, const char* name, double timestamp);
   void DomContentLoadedEventFired(LocalFrame*);
 
+  int RecordReplayId() const { return record_replay_id_; }
+
   const String& script_to_evaluate_on_load() const {
     return script_to_evaluate_on_load_;
   }
@@ -191,6 +193,8 @@ class CORE_EXPORT DevToolsSession
   InspectorAgentState::Bytes v8_session_state_cbor_;
   String script_to_evaluate_on_load_;
   const String session_id_;
+
+  int record_replay_id_ = 0;
   // This is only relevant until the initial attach to v8 and is never reset
   // once the session stops waiting.
   const bool session_waits_for_debugger_;

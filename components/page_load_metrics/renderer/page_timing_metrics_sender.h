@@ -11,6 +11,7 @@
 #include "base/containers/flat_set.h"
 #include "base/containers/small_map.h"
 #include "base/memory/raw_ptr.h"
+#include "base/record_replay.h"
 #include "components/page_load_metrics/common/page_load_metrics.mojom-forward.h"
 #include "components/page_load_metrics/common/page_load_timing.h"
 #include "components/page_load_metrics/renderer/page_resource_data_use.h"
@@ -163,7 +164,8 @@ class PageTimingMetricsSender {
 
   // Set of all resources that have completed or received a transfer
   // size update since the last timimg update.
-  base::flat_set<raw_ptr<PageResourceDataUse, CtnExperimental>>
+  base::flat_set<raw_ptr<PageResourceDataUse, CtnExperimental>,
+                 recordreplay::CompareByPointerId>
       modified_resources_;
 
   // Field trial for alternating page timing metrics sender buffer timer delay.

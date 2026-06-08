@@ -31,6 +31,8 @@ namespace base {
 class SingleThreadTaskRunner;
 }
 
+#include "base/record_replay.h"
+
 namespace blink {
 class FrameScheduler;
 class WebSchedulingTaskQueue;
@@ -85,7 +87,12 @@ class PLATFORM_EXPORT FrameOrWorkerScheduler {
     SchedulingAffectingFeatureHandle& operator=(
         SchedulingAffectingFeatureHandle&&);
 
-    inline ~SchedulingAffectingFeatureHandle() { reset(); }
+    inline ~SchedulingAffectingFeatureHandle() {
+      if (!recordreplay::AreEventsDisallowed("~SchedulingAffectingFeatureHandle")) {
+        // This might touch the recording stream during GC when using devtools.
+        reset();
+      }
+    }
 
     explicit operator bool() const { return scheduler_.get(); }
 

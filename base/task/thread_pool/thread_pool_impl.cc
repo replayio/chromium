@@ -122,6 +122,15 @@ ThreadPoolImpl::ThreadPoolImpl(std::string_view histogram_label,
         ThreadGroupType::BACKGROUND, task_tracker_->GetTrackedRef(),
         tracked_ref_factory_.GetTrackedRef(), monitor_worker_thread_priorities);
   }
+
+  if (recordreplay::IsRecordingOrReplaying()) {
+    recordreplay::AutoDisallowEvents disallow("ThreadPoolImpl::ThreadPoolImpl");
+    record_replay_unordered_thread_group_ = std::make_unique<ThreadGroupImpl>(
+        std::string(),
+        kBackgroundPoolEnvironmentParams.name_suffix,
+        kBackgroundPoolEnvironmentParams.thread_type_hint,
+        task_tracker_->GetTrackedRef(), tracked_ref_factory_.GetTrackedRef());
+  }
 }
 
 ThreadPoolImpl::~ThreadPoolImpl() {
@@ -129,10 +138,13 @@ ThreadPoolImpl::~ThreadPoolImpl() {
   DCHECK(join_for_testing_returned_.IsSet());
 #endif
 
+#include "base/record_replay.h"
+
   // Reset thread groups to release held TrackedRefs, which block teardown.
   foreground_thread_group_.reset();
   utility_thread_group_.reset();
   background_thread_group_.reset();
+  record_replay_unordered_thread_group_.reset();
   presentation_thread_group_.reset();
   audio_thread_group_.reset();
 }
@@ -306,6 +318,14 @@ void ThreadPoolImpl::BeginRestrictedTasks() {
     audio_thread_group_->SetMaxTasks(1);
   }
 }
+
+  if (record_replay_unordered_thread_group_) {
+    static_cast<ThreadGroupImpl*>(record_replay_unordered_thread_group_.get())
+        ->Start(max_best_effort_tasks, max_best_effort_tasks,
+                init_params.suggested_reclaim_time,
+                service_thread_task_runner, worker_thread_observer,
+                worker_environment, g_synchronous_thread_start_for_testing);
+  }
 
 void ThreadPoolImpl::EndRestrictedTasks() {
   foreground_thread_group_->ResetMaxTasks();
@@ -748,6 +768,8 @@ void ThreadPoolImpl::UpdateCanRunPolicy(CanRunPolicy can_run_policy) {
   }
   if (background_thread_group_) {
     background_thread_group_->DidUpdateCanRunPolicy();
+  if (record_replay_unordered_thread_group_)
+    record_replay_unordered_thread_group_->DidUpdateCanRunPolicy();
   }
   if (presentation_thread_group_) {
     presentation_thread_group_->DidUpdateCanRunPolicy();

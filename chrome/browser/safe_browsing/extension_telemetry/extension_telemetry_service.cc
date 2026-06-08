@@ -17,6 +17,7 @@
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/record_replay.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_tokenizer.h"
 #include "base/strings/utf_string_conversions.h"
@@ -171,6 +172,8 @@ void RecordWhenFileWasPersisted(bool persisted_at_write_interval) {
       persisted_at_write_interval);
 }
 
+  recordreplay::Diagnostic("[TT-198] ExtensionTelemetryService::SetEnabled %s",
+                           enable ? "true" : "false");
 void RecordSignalUploadSize(size_t size, ExtensionSignalType signal_type) {
   switch (signal_type) {
     case ExtensionSignalType::kTabsExecuteScript:
@@ -893,6 +896,9 @@ void ExtensionTelemetryService::UploadPersistedFile(std::string report) {
 
 void ExtensionTelemetryService::UploadReport(
     std::unique_ptr<std::string> report) {
+
+  recordreplay::Diagnostic("[TT-198] ExtensionTelemetryService::UploadReport");
+
   auto callback = base::BindOnce(&ExtensionTelemetryService::OnUploadComplete,
                                  weak_factory_.GetWeakPtr());
   active_uploader_ = std::make_unique<ExtensionTelemetryUploader>(

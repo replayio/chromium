@@ -294,10 +294,14 @@ class BASE_EXPORT TaskQueueImpl : public TaskQueue {
 
     void StartAcceptingOperations() {
       operations_controller_.StartAcceptingOperations();
+      if (record_replay_unordered_operations_controller_.has_value())
+        record_replay_unordered_operations_controller_.value().StartAcceptingOperations();
     }
 
     void ShutdownAndWaitForZeroOperations() {
       operations_controller_.ShutdownAndWaitForZeroOperations();
+      if (record_replay_unordered_operations_controller_.has_value())
+        record_replay_unordered_operations_controller_.value().ShutdownAndWaitForZeroOperations();
       // `operations_controller_` won't let any more operations here, and
       // `outer_` might get destroyed before `this` does, so clearing `outer_`
       // avoids a potential dangling pointer.
@@ -310,6 +314,8 @@ class BASE_EXPORT TaskQueueImpl : public TaskQueue {
     ~GuardedTaskPoster();
 
     base::internal::OperationsController operations_controller_;
+    absl::optional<base::internal::OperationsController> record_replay_unordered_operations_controller_;
+
     // Pointer might be stale, access guarded by |operations_controller_|
     // RAW_PTR_EXCLUSION: Performance reasons (based on analysis of
     // speedometer3).
@@ -469,6 +475,8 @@ class BASE_EXPORT TaskQueueImpl : public TaskQueue {
   void RemoveCancelableTask(HeapHandle heap_handle);
 
   void PostImmediateTaskImpl(PostedTask task, CurrentThread current_thread);
+  void PostImmediateTaskImplOrdered(PostedTask task, CurrentThread current_thread);
+  void PostImmediateTaskImplUnordered(PostedTask task, CurrentThread current_thread);
   void PostDelayedTaskImpl(PostedTask task, CurrentThread current_thread);
 
   // Push the task onto the |delayed_incoming_queue|. Lock-free main thread
@@ -493,7 +501,7 @@ class BASE_EXPORT TaskQueueImpl : public TaskQueue {
   // Extracts all the tasks from the immediate incoming queue and swaps it with
   // |queue| which must be empty.
   // Can be called from any thread.
-  void TakeImmediateIncomingQueueTasks(TaskDeque* queue);
+  void TakeImmediateIncomingQueueTasks(TaskDeque* queue, TaskDeque* record_replay_unordered_queue);
 
   void TraceQueueSize() const;
   static ListValue QueueAsValue(const TaskDeque& queue, TimeTicks now);
@@ -550,6 +558,13 @@ class BASE_EXPORT TaskQueueImpl : public TaskQueue {
 
   mutable base::internal::CheckedLock any_thread_lock_;
 
+
+  // This lock protects access to the handler callbacks, and is used in both ordered and unordered
+  // contexts.  In particular, this lock must only be used around the handler
+  mutable base::internal::CheckedLock unordered_lock_;
+
+  TaskDeque record_replay_unordered_immediate_incoming_queue GUARDED_BY(unordered_lock_);
+  base::flat_map<raw_ptr<OnTaskPostedCallbackHandleImpl>, OnTaskPostedHandler> on_task_posted_handlers GUARDED_BY(unordered_lock_);
   struct AnyThread {
     // Mirrored from MainThreadOnly. These are only used for tracing.
     struct TracingOnly {
@@ -569,9 +584,6 @@ class BASE_EXPORT TaskQueueImpl : public TaskQueue {
     bool post_immediate_task_should_schedule_work = true;
     bool unregistered = false;
     bool is_enabled = true;
-
-    base::flat_map<raw_ptr<OnTaskPostedCallbackHandleImpl>, OnTaskPostedHandler>
-        on_task_posted_handlers;
 
 #if DCHECK_IS_ON()
     // A cache of |immediate_work_queue->work_queue_set_index()| which is used

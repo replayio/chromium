@@ -128,6 +128,8 @@ class CC_EXPORT ProxyImpl : public LayerTreeHostImplDelegate,
 
   void NotifyNewLocalSurfaceIdExpectedWhilePaused();
 
+  void RecordReplayRepaint();
+
  private:
   // LayerTreeHostImplDelegate implementation
   void DidLoseLayerTreeFrameSinkOnImplThread() override;

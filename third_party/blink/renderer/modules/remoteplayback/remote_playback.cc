@@ -401,13 +401,13 @@ void RemotePlayback::StateChanged(
 
   state_ = state;
   if (state_ == mojom::blink::PresentationConnectionState::CONNECTING) {
-    DispatchEvent(*Event::Create(event_type_names::kConnecting));
+    DispatchEvent(*Event::Create(event_type_names::kConnecting), "RemotePlayback::StateChanged #1");
     RemotingStarting(*media_element_);
   } else if (state_ == mojom::blink::PresentationConnectionState::CONNECTED) {
-    DispatchEvent(*Event::Create(event_type_names::kConnect));
+    DispatchEvent(*Event::Create(event_type_names::kConnect), "RemotePlayback::StateChanged #2");
   } else if (state_ == mojom::blink::PresentationConnectionState::CLOSED ||
              state_ == mojom::blink::PresentationConnectionState::TERMINATED) {
-    DispatchEvent(*Event::Create(event_type_names::kDisconnect));
+    DispatchEvent(*Event::Create(event_type_names::kDisconnect), "RemotePlayback::StateChanged #3");
     if (auto* video_element =
             DynamicTo<HTMLVideoElement>(media_element_.Get())) {
       video_element->MediaRemotingStopped(

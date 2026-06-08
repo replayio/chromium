@@ -23,6 +23,8 @@
 #include "third_party/blink/renderer/core/layout/table/layout_table_section.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 using mojom::blink::FormControlType;
@@ -251,6 +253,10 @@ void LayoutInputNode::GetOverrideIntrinsicSize(
   } else if (ShouldApplyBlockSizeContainment()) {
     *computed_block_size = LayoutUnit();
   }
+}
+
+void NGLayoutInputNode::InitRecordReplayId() {
+  record_replay_id_ = recordreplay::NewIdMainThread("NGLayoutInputNode");
 }
 
 }  // namespace blink

@@ -256,6 +256,8 @@ void DirectRenderer::DrawFrame(
   output_surface_->SetNeedsMeasureNextDrawLatency();
   BeginDrawingFrame();
 
+  recordreplay::AssertMaybeEventsDisallowed("[RUN-2847-3001] DirectRenderer::DrawFrame A");
+
   if (!base::FeatureList::IsEnabled(features::kRpdqFilterLookupOptimizations)) {
     // Determine the output rects for render passes with pixel-moving backdrop
     // filters.
@@ -283,6 +285,8 @@ void DirectRenderer::DrawFrame(
       }
     }
   }
+
+  recordreplay::AssertMaybeEventsDisallowed("[RUN-2847-3001] DirectRenderer::DrawFrame B");
 
   gfx::ColorSpace frame_color_space =
       RenderPassColorSpace(current_frame()->root_render_pass);
@@ -383,6 +387,8 @@ void DirectRenderer::DrawFrame(
 #endif
   }
 
+  recordreplay::AssertMaybeEventsDisallowed("[RUN-2847-3001] DirectRenderer::DrawFrame C");
+
 #if BUILDFLAG(IS_WIN)
   // For delegated compositing the root pass is preserved, but not rendered.
   // If a previous frame fell out of delegated compositing we want to make
@@ -415,6 +421,8 @@ void DirectRenderer::DrawFrame(
       break;
     DrawRenderPassAndExecuteCopyRequests(pass.get(), tracked_element_rects);
   }
+
+  recordreplay::AssertMaybeEventsDisallowed("[RUN-2847-3001] DirectRenderer::DrawFrame D");
 
   bool skip_drawing_root_render_pass =
       current_frame()->root_damage_rect.IsEmpty() && use_partial_swap_ &&
@@ -463,6 +471,8 @@ void DirectRenderer::DrawFrame(
 
   if (overlay_processor_)
     overlay_processor_->ScheduleOverlays(resource_provider_);
+    
+  recordreplay::AssertMaybeEventsDisallowed("[RUN-2847-3001] DirectRenderer::DrawFrame E");
 
   // The current drawing frame is valid only during the duration of this
   // function. Clear the pointers held inside to avoid holding dangling
@@ -584,6 +594,8 @@ void DirectRenderer::FlushPolygons(
   if (poly_list->empty()) {
     return;
   }
+
+  recordreplay::AssertMaybeEventsDisallowed("[RUN-2847-3001] DirectRenderer::DrawRenderPassAndExecuteCopyRequests A");
 
   BspTree bsp_tree(poly_list);
   BspWalkActionDrawPolygon action_handler(this, render_pass_scissor,

@@ -27,6 +27,8 @@ class BLINK_PLATFORM_EXPORT AgentGroupScheduler
   class Agent : public GarbageCollectedMixin {
    public:
     virtual void PerformMicrotaskCheckpoint() = 0;
+
+    virtual int RecordReplayId() const = 0;
   };
 
   ~AgentGroupScheduler() override = default;

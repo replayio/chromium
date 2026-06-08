@@ -47,6 +47,8 @@
 #include "ui/gfx/geometry/transform_util.h"
 #include "ui/gfx/geometry/vector2d_conversions.h"
 
+#include "base/record_replay.h"
+
 namespace cc {
 
 namespace {
@@ -123,6 +125,7 @@ LayerImpl::LayerImpl(LayerTreeImpl* tree_impl, int id)
 }
 
 LayerImpl::~LayerImpl() {
+  recordreplay::UnregisterPointer(this);
   TRACE_EVENT_INSTANT(
       TRACE_DISABLED_BY_DEFAULT("cc.debug"), "cc::LayerImpl:deleted",
       perfetto::TerminatingFlow::FromPointer(this, "LayerImpl"));
@@ -173,6 +176,8 @@ void LayerImpl::SetTransformTreeIndex(int index) {
   }
 
   transform_tree_index_ = index;
+  recordreplay::Assert("[RUN-550-1329] LayerImpl::SetTransformTreeIndex %d %d",
+                       layer_id_, index);
   SetNeedsPushProperties(LayerImpl::kChangedPropertyTreeIndex);
 }
 
@@ -443,6 +448,9 @@ bool LayerImpl::IsSnappedToPixelGridInTarget() {
 
 void LayerImpl::CopyPropertiesTo(LayerImpl* layer) const {
   DCHECK(layer->IsActive());
+
+  recordreplay::Assert("[RUN-550-1329] LayerImpl::PushPropertiesTo %d %d %llu",
+                       transform_tree_index_, layer_id_, element_id_.GetStableId());
 
   if (GetChangeFlag(kChangedPropertyTreeIndex)) {
     layer->transform_tree_index_ = transform_tree_index_;

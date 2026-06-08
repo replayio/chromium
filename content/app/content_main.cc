@@ -22,6 +22,7 @@
 #include "base/process/launch.h"
 #include "base/process/memory.h"
 #include "base/process/process.h"
+#include "base/record_replay.h"
 #include "base/process/set_process_title.h"
 #include "base/profiler/sample_metadata.h"
 #include "base/run_loop.h"

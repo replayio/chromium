@@ -1,0 +1,40 @@
+# One-off Buildkite pipeline: standalone V8 (d8) COMPILE-validation of the
+# replayio/chromium-v8 fork (v8-m151), on a Linux agent — NO macOS needed.
+#
+# WHY: the macOS Chromium build is blocked on a macOS 12+ agent. Node's bundled
+# V8 is the same 15.1 line, but a standalone d8 build compiles the EXACT v8-m151
+# fork files (inspector + maglev + heap + compiler + torque + src/replay/*), so it
+# directly validates the Replay V8 instrumentation's compile-correctness — the
+# subtle type/template errors static review can't catch.
+#
+# HOW TO RUN (one-off):
+#   In Buildkite, create a build on this repo (any branch) with this pipeline file,
+#   or: `buildkite-agent pipeline upload .buildkite/pipeline.v8-validate.yml`.
+#   Override V8_REV via a build env var to validate a different fork commit.
+#
+# PREREQUISITES: a Linux Buildkite agent (os=linux, queue=runtime) with git + a C++
+# toolchain base; the script bootstraps its own depot_tools + V8 build deps via
+# gclient into its own work dir (does NOT touch the agent's chromium Replay tree).
+
+env:
+  FORCE_COLOR: 1
+  GIT_TERMINAL_PROMPT: 0
+
+steps:
+  - label: "🔧 Validate V8 fork (v8-m151) — standalone d8 compile (linux x64)"
+    key: "validate-v8-m151-linux-x64"
+    timeout_in_minutes: 150
+    commands:
+      - "git fetch --all"
+      - "git reset --hard origin/m151"
+      - "chmod +x replay_build_scripts/validate-v8-build.sh"
+      - "replay_build_scripts/validate-v8-build.sh"
+    env:
+      V8_REV: "cee65465270c49a470c51a9e518edcbc0b2ca630"
+      V8_TARGET_CPU: "x64"
+      V8_VALIDATE_DIR: "/var/lib/buildkite-agent/v8-validate"
+    agents:
+      - "os=linux"
+      - "queue=runtime"
+    artifact_paths:
+      - "/var/lib/buildkite-agent/v8-validate/v8-build.log"

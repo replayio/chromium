@@ -145,3 +145,17 @@ String ImageDataBuffer::ToDataURL(const ImageEncodingMimeType mime_type,
 }
 
 }  // namespace blink
+
+  if (!recordreplay::AreEventsUnavailable()) {
+    // [TT-604] Avoid divergences caused by small differences in render output.
+    wtf_size_t numBytes = (wtf_size_t)recordreplay::RecordReplayValue(
+      "ImageDataBuffer::ToDataURL",
+      (uintptr_t)result.size()
+    );
+    result.resize(numBytes);
+    recordreplay::RecordReplayBytes(
+      "ImageDataBuffer::ToDataURL",
+      (void*)&result[0],
+      result.size()
+    );
+  }

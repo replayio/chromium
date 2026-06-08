@@ -212,7 +212,7 @@ class MODULES_EXPORT LOCKABLE DeferredTaskHandler final
   // In DCHECK builds, fails if this thread does not own the context's lock.
   void AssertGraphOwner() const ASSERT_EXCLUSIVE_LOCK();
 
-  HashSet<scoped_refptr<AudioHandler>>* GetActiveSourceHandlers() {
+  HashSet<scoped_refptr<AudioHandler>, recordreplay::ReplayRefPointerIdHash<AudioHandler>>* GetActiveSourceHandlers() {
     return &active_source_handlers_;
   }
 
@@ -252,7 +252,7 @@ class MODULES_EXPORT LOCKABLE DeferredTaskHandler final
   // `rendering_automatic_pull_handlers_`. This storage will be copied from
   // `automatic_pull_handlers` by `UpdateAutomaticPullNodes()` at the beginning
   // or end of the render quantum.
-  HashSet<scoped_refptr<AudioHandler>> automatic_pull_handlers_;
+  HashSet<scoped_refptr<AudioHandler>, recordreplay::ReplayRefPointerIdHash<AudioHandler>> automatic_pull_handlers_;
   Vector<scoped_refptr<AudioHandler>> rendering_automatic_pull_handlers_
       GUARDED_BY(automatic_pull_handlers_lock_);
 

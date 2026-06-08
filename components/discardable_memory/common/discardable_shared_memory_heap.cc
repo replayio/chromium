@@ -20,6 +20,8 @@
 #include "base/strings/stringprintf.h"
 #include "base/trace_event/memory_dump_manager.h"
 
+#include "base/record_replay.h"
+
 namespace discardable_memory {
 
 namespace {
@@ -177,6 +179,9 @@ void DiscardableSharedMemoryHeap::MergeIntoFreeListsClean(
   end_key.second += 1u;
   auto next_it = spans_.find(end_key);
   if (next_it != spans_.end() && IsInFreeList(next_it->second)) {
+    recordreplay::Assert(
+        "[TT-1252-1255] DiscardableSharedMemoryHeap::MergeIntoFreeListsClean "
+        "C");
     std::unique_ptr<Span> next = RemoveFromFreeList(next_it->second);
     DCHECK_EQ(next->first_block_, span->first_block_ + span->num_blocks_);
     UnregisterSpan(next.get());
@@ -230,6 +235,11 @@ DiscardableSharedMemoryHeap::SearchFreeLists(size_t blocks, size_t slack) {
   const base::LinkedList<Span>& overflow_free_spans =
       free_spans_[std::size(free_spans_) - 1u];
 
+  recordreplay::Assert(
+      "[TT-1252-1255] DiscardableSharedMemoryHeap::MergeIntoFreeListsClean A %d %d",
+      span->RecordReplayId(),
+      recordreplay::PointerId(span->shared_memory_));
+
   // Search overflow free list for a suitable span. Starting with the most
   // recently used span located in tail and moving towards head.
   for (base::LinkNode<Span>* node = overflow_free_spans.tail();
@@ -263,11 +273,18 @@ void DiscardableSharedMemoryHeap::ReleasePurgedMemory() {
                        return segment->IsResident();
                      }),
       memory_segments_.end());
+
+  recordreplay::Assert(
+    "[TT-1252-1255] DiscardableSharedMemoryHeap::ReleasePurgedMemory A %zu",
+    memory_segments_.size());
 }
 
 size_t DiscardableSharedMemoryHeap::GetSize() const {
   return num_blocks_ * block_size_;
 }
+
+  recordreplay::Assert(
+      "[TT-1252-1255] DiscardableSharedMemoryHeap::MergeIntoFreeListsClean D");
 
 size_t DiscardableSharedMemoryHeap::GetFreelistSize() const {
   return num_free_blocks_ * block_size_;
@@ -438,6 +455,12 @@ void DiscardableSharedMemoryHeap::ReleaseMemory(
     }
   }
 }
+
+  recordreplay::Assert(
+      "[TT-1252-1255] DiscardableSharedMemoryHeap::InsertIntoFreeList %d %d %zu",
+      span->RecordReplayId(),
+      recordreplay::PointerId(span->shared_memory()),
+      index);
 
 void DiscardableSharedMemoryHeap::OnMemoryDump(
     const base::DiscardableSharedMemory* shared_memory,

@@ -584,7 +584,7 @@ class PLATFORM_EXPORT ResourceFetcher
                               bool is_static_data) const;
 
   void ScheduleStaleRevalidate(Resource* stale_resource);
-  void RevalidateStaleResource(Resource* stale_resource);
+  void RevalidateStaleResource(Resource* stale_resource, int record_replay_scheduled_node_id);
 
   void WarnUnusedPreloads(
       base::OnceCallback<void(Vector<KURL> unused_preloads)> callback);

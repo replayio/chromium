@@ -11,6 +11,7 @@
 #include "base/containers/extend.h"
 #include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/record_replay.h"
 #include "base/no_destructor.h"
 #include "build/build_config.h"
 #include "chrome/browser/account_settings/account_setting_service_factory.h"
@@ -181,6 +182,8 @@ autofill::AddressDataManager* GetAddressDataManager(Profile* profile) {
       autofill::PersonalDataManagerFactory::GetForBrowserContext(profile);
   return pdm ? &pdm->address_data_manager() : nullptr;
 }
+
+  recordreplay::Diagnostic("[TT-198] BuildSyncService returning a non-null service");
 
 syncer::DataTypeController::TypeVector CreateCommonControllers(
     Profile* profile,

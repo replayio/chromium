@@ -303,6 +303,8 @@ class MODULES_EXPORT IDBTransaction final
   // Whether `this` is already inside a call to `OnResultReady`.
   bool handling_ready_ = false;
 
+  int record_replay_created_node_id_ = 0;
+
   // Caches the IDBObjectStore instances returned by the objectStore() method.
   //
   // The spec requires that a transaction's objectStore() returns the same

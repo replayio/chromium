@@ -44,9 +44,13 @@ std::optional<bool> g_icons_supported_by_os_override;
 }  // namespace
 
 WebAppFileHandlerManager::WebAppFileHandlerManager(Profile* profile)
-    : profile_(profile) {}
+    : profile_(profile) {
+  recordreplay::RegisterPointer("WebAppFileHandlerManager", this);
+}
 
-WebAppFileHandlerManager::~WebAppFileHandlerManager() = default;
+WebAppFileHandlerManager::~WebAppFileHandlerManager() {
+  recordreplay::UnregisterPointer(this);
+}
 
 void WebAppFileHandlerManager::SetProvider(base::PassKey<OsIntegrationManager>,
                                            WebAppProvider& provider) {

@@ -112,7 +112,8 @@ BeginFrameArgs::BeginFrameArgs()
       deadline(base::TimeTicks::Min()),
       interval(base::Microseconds(-1)),
       unthrottled_interval(base::Microseconds(-1)),
-      frame_id(BeginFrameId(0, kInvalidFrameNumber)) {}
+      frame_id(BeginFrameId(0, kInvalidFrameNumber)),
+      replay_force_draw(false) {}
 
 BeginFrameArgs::~BeginFrameArgs() = default;
 

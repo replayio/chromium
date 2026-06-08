@@ -212,7 +212,7 @@ class CORE_EXPORT ScriptPromiseResolverBase
   void NotifyResolveOrReject();
   void ResolveOrRejectImmediately();
   void ScheduleResolveOrReject();
-  void ResolveOrRejectDeferred();
+  void ResolveOrRejectDeferred(int record_replay_scheduled_node_id);
 
   TraceWrapperV8Reference<v8::Promise::Resolver> resolver_;
   ResolutionState state_;

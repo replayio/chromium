@@ -154,6 +154,9 @@ class CreateSessionDescriptionRequest
         action_(action) {}
 
   void OnSuccess(webrtc::SessionDescriptionInterface* desc) override {
+    // https://linear.app/replay/issue/RUN-547
+    recordreplay::Assert("CreateSessionDescriptionRequest::OnSuccess %d", !!desc);
+
     // Explicitly take ownership of desc - as documented in the webrtc lib
     // comment.
     OnSuccessUniquePtr(base::WrapUnique(desc));
@@ -781,6 +784,8 @@ RTCPeerConnectionHandler::RTCPeerConnectionHandler(
       encoded_insertable_streams_(encoded_insertable_streams),
       task_runner_(std::move(task_runner)) {
   CHECK(client_);
+
+  INIT_RECORD_REPLAY_ID(RTCPeerConnectionHandler);
 
   GetPeerConnectionHandlers()->insert(this);
 }

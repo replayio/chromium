@@ -148,7 +148,23 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
   void CloseSoon();
   bool IsClosing() const { return is_closing_; }
 
-  using PageSet = HeapHashSet<WeakMember<Page>>;
+  // recordreplay stable hasher for the page set.
+  struct PageHash {
+    static unsigned GetHash(const WeakMember<Page>& key) {
+      // Hash the record replay id for the pointer.
+      Page* ptr = key.Get();
+      int record_replay_id = ptr ? ptr->RecordReplayId() : -1;
+      return DefaultHash<int>::Hash::GetHash(record_replay_id);
+    }
+
+    static bool Equal(const WeakMember<Page>& a, const WeakMember<Page>& b) {
+      return a == b;
+    }
+
+    static const bool safe_to_compare_to_empty_or_deleted = true;
+  };
+
+  using PageSet = HeapHashSet<WeakMember<Page>, PageHash>;
 
   // Return the current set of full-fledged, ordinary pages.
   // Each created and owned by a WebView.
@@ -438,6 +454,8 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
   bool ShouldPauseJavaScriptExecutionOnPrerender() const {
     return should_pause_javascript_execution_on_prerender_;
   }
+
+  int RecordReplayId() const { return record_replay_id_; }
 
   // Upgrades a prerender-until-script page to a full prerender by resuming
   // JavaScript execution. The page remains in prerendering state.
@@ -743,6 +761,8 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
       blink::FencedFrame::DeprecatedFencedFrameMode::kDefault;
 
   WebScopedVirtualTimePauser history_navigation_virtual_time_pauser_;
+
+  int record_replay_id_;
 
   Member<v8_compile_hints::V8CrowdsourcedCompileHintsProducer>
       v8_compile_hints_producer_;

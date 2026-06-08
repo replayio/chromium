@@ -461,6 +461,8 @@ void BodyStreamBuffer::Trace(Visitor* visitor) const {
 }
 
 void BodyStreamBuffer::Abort() {
+  recordreplay::Assert("[RUN-1182] BodyStreamBuffer::Abort");
+
   if (!GetExecutionContext()) {
     DCHECK(!consumer_);
     return;

@@ -207,7 +207,18 @@ class CORE_EXPORT WorkerThread : public Thread::TaskObserver {
                                          Parameters&&... parameters) {
     base::AutoLock locker(ThreadSetLock());
     unsigned called_worker_count = 0;
+
+    std::vector<WorkerThread*> threads;
     for (WorkerThread* thread : WorkerThreads()) {
+      threads.push_back(thread);
+    }
+    std::sort(threads.begin(), threads.end(),
+              recordreplay::CompareByPointerId());
+
+    recordreplay::Assert("[RUN-1537-1689] CallOnAllWorkerThreads %zu",
+                         threads.size());
+
+    for (WorkerThread* thread : threads) {
       PostCrossThreadTask(
           *thread->GetTaskRunner(task_type), FROM_HERE,
           CrossThreadBindOnce(function, CrossThreadUnretained(thread),

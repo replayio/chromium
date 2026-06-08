@@ -36,6 +36,7 @@
 #include "base/metrics/histogram.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/trace_event/trace_event.h"
@@ -452,6 +453,7 @@ AudioDestination::AudioDestination(
           AudioBus::TryCreate(number_of_output_channels,
                               render_quantum_frames)),
       callback_(callback),
+      device_state_lock_("AudioDestination"),
       uma_reporter_(
           AudioDestinationUmaReporter(latency_hint,
                                       callback_buffer_size_,
@@ -466,6 +468,10 @@ AudioDestination::AudioDestination(
   if (IsBusAllocationFailed()) {
     return;
   }
+
+  recordreplay::Assert(
+      "[RUN-1345] callback_buffer_size_ is big: %d",
+      (callback_buffer_size_ > render_quantum_frames_ * 2));
 
   SendLogMessage(__func__,
                  StrCat({"({output_channels=",

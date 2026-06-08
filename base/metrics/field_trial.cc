@@ -26,6 +26,7 @@
 #include "base/process/process_handle.h"
 #include "base/process/process_info.h"
 #include "base/rand_util.h"
+#include "base/record_replay.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
@@ -586,6 +587,13 @@ std::string FieldTrialList::AllParamsToString(EscapeDataFunc encode_data_func) {
 // static
 void FieldTrialList::GetActiveFieldTrialGroups(
     FieldTrial::ActiveGroups* active_groups) {
+  // Field trials are disabled when recording/replaying. The set of trials are
+  // read from shared memory and won't be consistent when replaying, and there
+  // isn't much point getting them working.
+  if (recordreplay::IsRecordingOrReplaying("no-field-trials")) {
+    return;
+  }
+
   GetActiveFieldTrialGroupsInternal(active_groups,
                                     /*include_low_anonymity=*/false);
 }
@@ -729,6 +737,15 @@ FieldTrial* FieldTrialList::CreateFieldTrial(std::string_view name,
   if (name.empty() || group_name.empty() || !global_) {
     return nullptr;
   }
+
+  // Field trials are disabled when recording/replaying.
+  if (recordreplay::IsRecordingOrReplaying("no-field-trials")) {
+    return;
+  }
+
+  recordreplay::Assert(
+      "[RUN-2350-2356] FieldTrialList::CreateTrialsFromCommandLine %d %d",
+      recordreplay::IsRecordingOrReplaying(), recordreplay::FeatureEnabled("no-field-trials"));
 
   FieldTrial* field_trial = FieldTrialList::Find(name);
   if (field_trial) {

@@ -55,7 +55,7 @@ class FontDataCache final {
   DISALLOW_NEW();
 
  public:
-  FontDataCache() = default;
+  FontDataCache() : lock_("FontDataCache") { }
   FontDataCache(const FontDataCache&) = delete;
   FontDataCache& operator=(const FontDataCache&) = delete;
 

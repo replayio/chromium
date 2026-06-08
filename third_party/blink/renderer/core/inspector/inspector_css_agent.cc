@@ -876,6 +876,17 @@ InspectorCSSAgent::InspectorCSSAgent(
       local_fonts_enabled_(&agent_state_, /*default_value=*/true) {
   DCHECK(dom_agent);
   DCHECK(network_agent);
+
+  if (recordreplay::IsInReplayCode()) {
+    // RUN-2521: Make sure documents are registered.
+    // This is partial copy-and-paste from |CompleteEnabled|
+    dom_agent_->AddDOMListener(this);
+    HeapVector<Member<Document>> documents = dom_agent_->Documents();
+    for (Document* document : documents) {
+      UpdateActiveStyleSheets(document);
+    }
+    enable_completed_ = true;
+  }
 }
 
 InspectorCSSAgent::~InspectorCSSAgent() = default;
@@ -1380,6 +1391,25 @@ protocol::Response InspectorCSSAgent::getLocationForSelector(
       }
     }
   }
+
+CSSStyleSheet* InspectorCSSAgent::getStyleSheet(const String& style_sheet_id) {
+  InspectorStyleSheetBase* inspector_style_sheet = nullptr;
+  Response response =
+      AssertStyleSheetForId(style_sheet_id, inspector_style_sheet);
+  if (response.IsSuccess()) {
+    if (!inspector_style_sheet->IsInlineStyle()) {
+      auto* targetSheet =
+          static_cast<InspectorStyleSheet*>(inspector_style_sheet);
+      return targetSheet->PageStyleSheet();
+    }
+  } else {
+    recordreplay::Print(
+      "[RuntimeError] InspectorCSSAgent::getStyleSheet failed (style_sheet_id: %s, Code: %d): %s",
+      style_sheet_id.Utf8().c_str(), response.Code(), response.Message().c_str()
+    );
+  }
+  return nullptr;
+}
 
   if ((*ranges)->empty()) {
     String message = StrCat({"Failed to find selector '", selector_text,
@@ -2398,6 +2428,7 @@ protocol::Response InspectorCSSAgent::getComputedStyleForNode(
   protocol::Response response = AssertEnabled();
   if (!response.IsSuccess())
     return response;
+
   Node* node = nullptr;
   response = dom_agent_->AssertNode(node_id, node);
   if (!response.IsSuccess())

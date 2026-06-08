@@ -542,7 +542,7 @@ void PresentationConnection::DidReceiveTextMessage(const WebString& message) {
   if (state_ != mojom::blink::PresentationConnectionState::CONNECTED)
     return;
 
-  DispatchEvent(*MessageEvent::Create(message));
+  DispatchEvent(*MessageEvent::Create(message), "PresentationConnection::DidReceiveTextMessage");
 }
 
 void PresentationConnection::DidReceiveBinaryMessage(

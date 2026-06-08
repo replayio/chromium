@@ -32,6 +32,10 @@
 
 #include <memory>
 
+// Pick up LayoutBox definition for computing the default hash.
+// FIXME remove this, see https://linear.app/replay/issue/RUN-1741
+#include "third_party/blink/renderer/core/layout/layout_box.h"
+
 #include "base/memory/ptr_util.h"
 #include "third_party/blink/renderer/core/layout/geometry/logical_size.h"
 #include "third_party/blink/renderer/core/layout/shapes/shape.h"

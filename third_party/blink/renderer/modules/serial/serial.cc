@@ -174,7 +174,8 @@ void Serial::OnPortConnectedStateChanged(
         if (window_proxy && !window_proxy->ContextIfInitialized().IsEmpty()) {
           SerialPort* port = GetOrCreatePort(*world, port_info->Clone());
           port->set_connected(connected);
-          port->DispatchEvent(*Event::CreateBubble(event_type));
+          port->DispatchEvent(*Event::CreateBubble(event_type),
+                              "Serial::OnPortConnectedStateChanged window");
         }
       }
     } else if (context->IsWorkerGlobalScope()) {
@@ -195,7 +196,8 @@ void Serial::OnPortConnectedStateChanged(
           DOMWrapperWorld& world = script_state->World();
           SerialPort* port = GetOrCreatePort(world, std::move(port_info));
           port->set_connected(connected);
-          port->DispatchEvent(*Event::CreateBubble(event_type));
+          port->DispatchEvent(*Event::CreateBubble(event_type),
+                              "Serial::OnPortConnectedStateChanged worker");
         }
       }
     }
@@ -205,7 +207,8 @@ void Serial::OnPortConnectedStateChanged(
     // This block can be safely removed when the feature flag is cleaned up.
     SerialPort* port = GetOrCreatePort(std::move(port_info));
     port->set_connected(connected);
-    port->DispatchEvent(*Event::CreateBubble(event_type));
+    port->DispatchEvent(*Event::CreateBubble(event_type),
+                        "Serial::OnPortConnectedStateChanged legacy");
   }
 }
 

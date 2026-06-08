@@ -61,6 +61,8 @@ class CC_EXPORT ProxyMain : public Proxy {
   void DidCompletePageScaleAnimation();
   void BeginMainFrame(
       std::unique_ptr<BeginMainFrameAndCommitState> begin_main_frame_state);
+  void BeginMainFrameWithBlocking(
+      std::unique_ptr<BeginMainFrameAndCommitState> begin_main_frame_state, bool force_blocking);
   void DidChangeBeginFrameSourcePaused(bool paused);
   void DidCompleteCommit(int source_frame_number, CommitTimestamps);
   void DidPresentCompositorFrame(
@@ -95,6 +97,8 @@ class CC_EXPORT ProxyMain : public Proxy {
   CommitPipelineStage final_pipeline_stage() const {
     return final_pipeline_stage_;
   }
+
+  void RecordReplayRepaint();
 
  private:
   // Proxy implementation.

@@ -48,11 +48,15 @@ class SVGElementRareData final : public GarbageCollected<SVGElementRareData> {
     return incoming_references_;
   }
 
-  HeapHashSet<WeakMember<SVGElement>>& ElementInstances() {
+  HeapHashSet<WeakMember<SVGElement>, WTF::MemberHashRecordReplayId<SVGElement>>& ElementInstances() {
     return element_instances_;
   }
-  const HeapHashSet<WeakMember<SVGElement>>& ElementInstances() const {
+  const HeapHashSet<WeakMember<SVGElement>, WTF::MemberHashRecordReplayId<SVGElement>>& ElementInstances() const {
     return element_instances_;
+  }
+
+  HeapHashSet<Member<SVGElement>>& ReplayStrongElementInstances() {
+    return replay_strong_element_instances_;
   }
 
   SVGElement* CorrespondingElement() const {
@@ -92,7 +96,8 @@ class SVGElementRareData final : public GarbageCollected<SVGElementRareData> {
  private:
   SVGElementSet outgoing_references_;
   SVGElementSet incoming_references_;
-  HeapHashSet<WeakMember<SVGElement>> element_instances_;
+  HeapHashSet<WeakMember<SVGElement>, WTF::MemberHashRecordReplayId<SVGElement>> element_instances_;
+  HeapHashSet<Member<SVGElement>> replay_strong_element_instances_;
   Member<SVGElement> corresponding_element_;
   Member<SVGElementResourceClient> resource_client_;
   Member<ElementSMILAnimations> smil_animations_;

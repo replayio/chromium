@@ -18,6 +18,7 @@
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
 #include "cc/base/switches.h"
+#include "components/record_replay/services/auth_token/public/mojom/auth_token.mojom-blink.h"
 #include "components/language_detection/content/common/language_detection.mojom.h"
 #include "components/optimization_guide/public/mojom/model_broker.mojom.h"
 #include "components/viz/host/gpu_client.h"
@@ -855,6 +856,9 @@ void PopulateBinderMapWithContext(
   // by blink.
   // This avoids renderer kills when no binder is found in the absence of the
   // production embedder (such as in tests).
+  map->Add<auth_token::mojom::blink::RecordReplayAuthTokenStore>(
+      base::BindRepeating(&EmptyBinderForFrame<
+                          auth_token::mojom::blink::RecordReplayAuthTokenStore>));
   map->Add<blink::mojom::NoStatePrefetchProcessor>(
       &EmptyBinderForFrame<blink::mojom::NoStatePrefetchProcessor>);
   map->Add<payments::mojom::PaymentRequest>(

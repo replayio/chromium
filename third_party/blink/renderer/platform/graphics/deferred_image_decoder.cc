@@ -117,6 +117,9 @@ const AtomicString& DeferredImageDecoder::MimeType() const {
 }
 
 sk_sp<PaintImageGenerator> DeferredImageDecoder::CreateGenerator() {
+  recordreplay::Assert(
+      "[RUN-1975-2036] DeferredImageDecoder::CreateGenerator A %d %s",
+      complete_frame_content_id_, FilenameExtension().Utf8().c_str());
   if (frame_generator_ && frame_generator_->DecodeFailed())
     return nullptr;
 
@@ -143,6 +146,9 @@ sk_sp<PaintImageGenerator> DeferredImageDecoder::CreateGenerator() {
     frames[i].duration = FrameDurationAtIndex(i);
   }
 
+  recordreplay::Assert(
+      "[RUN-1975-2036] DeferredImageDecoder::CreateGenerator E");
+
   if (!first_decoding_generator_created_) {
     DCHECK(!incremental_decode_needed_.has_value());
     incremental_decode_needed_ = !all_data_received_;
@@ -162,6 +168,9 @@ sk_sp<PaintImageGenerator> DeferredImageDecoder::CreateGenerator() {
   DCHECK(image_metadata_);
   image_metadata_->all_data_received_prior_to_decode =
       !incremental_decode_needed_.value();
+
+  recordreplay::Assert(
+      "[RUN-1975-2036] DeferredImageDecoder::CreateGenerator F");
 
   auto generator = DecodingImageGenerator::Create(
       frame_generator_, info, std::move(segment_reader), std::move(frames),

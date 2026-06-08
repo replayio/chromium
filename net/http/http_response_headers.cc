@@ -42,6 +42,8 @@
 #include "third_party/abseil-cpp/absl/container/flat_hash_set.h"
 #include "third_party/abseil-cpp/absl/strings/ascii.h"
 
+#include "base/record_replay.h"
+
 using base::Time;
 
 namespace net {
@@ -725,6 +727,13 @@ std::optional<std::string_view> HttpResponseHeaders::EnumerateHeader(
     *iter = i + 1;
   return header_value(parsed_[i]);
 }
+
+  // There is currently a problem that happens sometimes while replaying where
+  // base::StringToInt malfunctions and returns zero given a valid numeric input.
+  // The underlying reason has not been identified (see backend issue 2078),
+  // and for now we workaround this by forcing the code to match when replaying.
+  response_code_ = recordreplay::RecordReplayValue("HttpResponseHeaders::ParseStatusLine response code",
+                                                   response_code_);
 
 bool HttpResponseHeaders::EnumerateHeader(size_t* iter,
                                           std::string_view name,

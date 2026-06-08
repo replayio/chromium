@@ -16,6 +16,16 @@
 #include "base/types/pass_key.h"
 #include "mojo/public/c/system/core.h"
 
+#include "base/record_replay.h"
+
+namespace recordreplay {
+
+// Used to make sure we finish recordings on the main thread, even if we're
+// blocked in a sync event.
+void MaybeTerminate(void (*callback)(void*), void* data);
+
+} // namespace recordreplay
+
 namespace mojo {
 
 SyncHandleRegistry::Subscription::Subscription(base::OnceClosure remove_closure,
@@ -51,7 +61,9 @@ scoped_refptr<SyncHandleRegistry> SyncHandleRegistry::current() {
   return *g_current_sync_handle_watcher.GetValuePointer();
 }
 
-SyncHandleRegistry::SyncHandleRegistry(base::PassKey<SyncHandleRegistry>) {}
+SyncHandleRegistry::SyncHandleRegistry(base::PassKey<SyncHandleRegistry>) {
+  recordreplay::RegisterPointer("SyncHandleRegistry", this);
+}
 
 bool SyncHandleRegistry::RegisterHandle(const Handle& handle,
                                         MojoHandleSignals handle_signals,
@@ -169,6 +181,8 @@ bool SyncHandleRegistry::Wait(base::span<const bool*> should_stop) {
   }
 }
 
-SyncHandleRegistry::~SyncHandleRegistry() = default;
+SyncHandleRegistry::~SyncHandleRegistry() {
+  recordreplay::UnregisterPointer(this);
+}
 
 }  // namespace mojo

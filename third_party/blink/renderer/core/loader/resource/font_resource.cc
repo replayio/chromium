@@ -32,6 +32,7 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/numerics/checked_math.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/types/expected.h"
@@ -296,16 +297,27 @@ void FontResource::StartLoadLimitTimersIfNecessary(
   DCHECK(!font_load_long_limit_.IsActive());
   load_limit_state_ = LoadLimitState::kUnderLimit;
 
-  font_load_short_limit_ = PostDelayedCancellableTask(
-      *task_runner, FROM_HERE,
-      blink::BindOnce(&FontResource::FontLoadShortLimitCallback,
-                      WrapWeakPersistent(this)),
-      kFontLoadWaitShort);
-  font_load_long_limit_ = PostDelayedCancellableTask(
-      *task_runner, FROM_HERE,
-      blink::BindOnce(&FontResource::FontLoadLongLimitCallback,
-                      WrapWeakPersistent(this)),
+  // RUN-1724
+  // [RUN-1457 cleanup]
+#define POST_TIMER_TASKS(self)                              \
+  font_load_short_limit_ = PostDelayedCancellableTask(      \
+      *task_runner, FROM_HERE,                              \
+      blink::BindOnce(&FontResource::FontLoadShortLimitCallback, \
+                      self),                                \
+      kFontLoadWaitShort);                                  \
+  font_load_long_limit_ = PostDelayedCancellableTask(       \
+      *task_runner, FROM_HERE,                              \
+      blink::BindOnce(&FontResource::FontLoadLongLimitCallback,  \
+                      self),                                \
       kFontLoadWaitLong);
+
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+                                           "FontResource")) {
+    POST_TIMER_TASKS(WrapPersistent(this))
+  } else {
+    POST_TIMER_TASKS(WrapWeakPersistent(this))
+  }
+#undef POST_TIMER_TASKS
 }
 
 const FontCustomPlatformData* FontResource::GetCustomFontData() {

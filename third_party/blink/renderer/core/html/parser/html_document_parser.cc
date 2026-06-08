@@ -87,6 +87,14 @@
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
 #include "third_party/perfetto/include/perfetto/tracing/track_event_args.h"
 
+#include "base/json/json_writer.h"
+#include "base/record_replay.h"
+
+// V8 API for HTML parsing activity that will be reported to the record/replay driver.
+extern "C" void V8RecordReplayHTMLParseStart(void* token, const char* url);
+extern "C" void V8RecordReplayHTMLParseFinish(void* token);
+extern "C" void V8RecordReplayHTMLParseAddData(void* token, const char* data);
+
 namespace blink {
 
 // This sets the (default) maximum number of tokens which the foreground HTML
@@ -422,6 +430,10 @@ HTMLDocumentParser::HTMLDocumentParser(Document& document,
       scheduler_(sync_policy == kAllowDeferredParsing
                      ? Thread::Current()->Scheduler()
                      : nullptr) {
+  if (recordreplay::IsRecordingOrReplaying("notify-html-parse")) {
+    V8RecordReplayHTMLParseStart(this, document.Url().GetString().Utf8().c_str());
+  }
+
   TRACE_EVENT("blink", "HTMLDocumentParser::HTMLDocumentParser",
               perfetto::Flow::FromPointer(this));
   // Make sure the preload scanner thread will be ready when needed.
@@ -578,8 +590,20 @@ bool HTMLDocumentParser::IsParsingFragment() const {
 
 void HTMLDocumentParser::DeferredPumpTokenizerIfPossible(
     bool from_finish_append,
-    base::TimeTicks schedule_time) {
+    base::TimeTicks schedule_time,
+    int record_replay_scheduled_node_id) {
   // This method is called asynchronously, continues building the HTML document.
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    int node_id = recordreplay::NewDependencyGraphNode(
+      "{\"kind\":\"deferredDocumentPumpTokenizer\"}"
+    );
+    recordreplay::AddDependencyGraphEdge(
+      record_replay_scheduled_node_id, node_id, "{\"kind\":\"scheduler\"}"
+    );
+    execute.emplace(node_id);
+  }
 
   // If we're scheduled for a tokenizer pump, then document should be attached
   // and the parser should not be stopped, but sometimes a script completes
@@ -840,6 +864,16 @@ bool HTMLDocumentParser::PumpTokenizer() {
       preload_scanner_->AppendToEnd(input_.Current());
     }
     ScanAndPreload(preload_scanner_.get());
+  }
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "documentPumpTokenizer");
+    info.Set("url", GetDocument()->Url().GetString().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
   }
 
   // should_run_until_completion implies that we should not yield
@@ -1124,6 +1158,21 @@ void HTMLDocumentParser::Finish() {
   Flush();
   if (IsDetached()) {
     return;
+  }
+
+  if (recordreplay::IsRecordingOrReplaying("notify-html-parse")) {
+    V8RecordReplayHTMLParseAddData(this, input_source.Utf8().c_str());
+  }
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "documentAppendString");
+    info.Set("url", GetDocument()->Url().GetString().Utf8());
+    info.Set("length", (int)input_source.Utf8().length());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
   }
 
   // We're not going to get any more data off the network, so we tell the input

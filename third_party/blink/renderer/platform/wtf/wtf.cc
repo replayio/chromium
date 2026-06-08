@@ -51,6 +51,7 @@ bool g_initialized = false;
 constinit thread_local bool g_is_main_thread = false;
 #endif
 
+/*
 }  // namespace
 
 base::PlatformThreadId g_main_thread_identifier;
@@ -76,6 +77,10 @@ void InitializeWtf() {
 #if !BUILDFLAG(IS_ANDROID)
   g_is_main_thread = true;
 #endif
+*/
+bool IsMainThread() {
+  return CurrentThread() == g_main_thread_identifier;
+}
   g_main_thread_identifier = CurrentThread();
 
   Threading::Initialize();

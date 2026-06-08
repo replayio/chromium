@@ -61,6 +61,8 @@
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
 
+#include "base/json/json_writer.h"
+
 namespace blink {
 
 MessagePort::MessagePort(ExecutionContext& execution_context)
@@ -82,6 +84,19 @@ MessagePort::MessagePort(ExecutionContext& execution_context)
 
 void MessagePort::Dispose() {
   DCHECK(!started_ || !IsEntangled());
+
+  // Mojo resources can't be destroyed or otherwise operating on at non-deterministic
+  // points, so leak them if necessary.
+  if (recordreplay::AreEventsDisallowed("~MessagePort")) {
+    if (connector_) {
+      connector_->set_incoming_receiver(nullptr);
+      connector_->set_connection_error_handler(base::OnceClosure());
+      connector_.release();
+    }
+    new MessagePortDescriptor(std::move(port_));
+    return;
+  }
+
   if (!IsNeutered()) {
     // Disentangle before teardown. The MessagePortDescriptor will blow up if it
     // hasn't had its underlying handle returned to it before teardown.
@@ -145,6 +160,21 @@ void MessagePort::postMessage(ScriptState* script_state,
   msg.sender_agent_cluster_id = GetExecutionContext()->GetAgentClusterID();
   msg.locked_to_sender_agent_cluster = msg.message->IsLockedToAgentCluster();
   msg.task_state_id = std::nullopt;
+
+  if (recordreplay::IsRecordingOrReplaying() && IsMainThread()) {
+    msg.record_replay_message_id = recordreplay::NewIdMainThread("MessagePort::postMessage");
+    msg.record_replay_process_id = (int)base::GetCurrentProcId();
+
+    if (recordreplay::DependencyGraphEnabled()) {
+      base::Value::Dict info;
+      info.Set("kind", "postMessage");
+      info.Set("messageId", msg.record_replay_message_id);
+      info.Set("processId", msg.record_replay_process_id);
+      std::string json;
+      base::JSONWriter::Write(info, &json);
+      recordreplay::NewDependencyGraphNode(json.c_str());
+    }
+  }
 
   // Only pass the task state if the port is still entangled to its initially
   // entangled port. This is meant to enable propagating task state for
@@ -347,6 +377,8 @@ void MessagePort::Trace(Visitor* visitor) const {
 bool MessagePort::Accept(mojo::Message* mojo_message) {
   TRACE_EVENT0("blink", "MessagePort::Accept");
 
+  recordreplay::Assert("[RUN-1126] MessagePort::Accept");
+
   BlinkTransferableMessage message;
   if (!mojom::blink::TransferableMessage::DeserializeFromMessage(
           std::move(*mojo_message), &message)) {
@@ -466,6 +498,8 @@ Event* MessagePort::CreateMessageEvent(BlinkTransferableMessage& message) {
         message.user_activation->has_been_active,
         message.user_activation->was_active);
   }
+
+  recordreplay::Assert("[RUN-1126] MessagePort::CreateMessageEvent #5");
 
   return MessageEvent::Create(ports, std::move(message.message),
                               user_activation);

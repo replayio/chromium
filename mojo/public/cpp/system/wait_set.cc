@@ -14,6 +14,7 @@
 #include "base/compiler_specific.h"
 #include "base/containers/span.h"
 #include "base/memory/ptr_util.h"
+#include "base/record_replay.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/synchronization/lock.h"
@@ -26,7 +27,8 @@ namespace mojo {
 class WaitSet::State : public base::RefCountedThreadSafe<State> {
  public:
   State()
-      : handle_event_(base::WaitableEvent::ResetPolicy::MANUAL,
+      : lock_("WaitSet::State.lock_"),
+        handle_event_(base::WaitableEvent::ResetPolicy::MANUAL,
                       base::WaitableEvent::InitialState::NOT_SIGNALED) {
     MojoResult rv = CreateTrap(&Context::OnNotification, &trap_handle_);
     DCHECK_EQ(MOJO_RESULT_OK, rv);
@@ -150,6 +152,8 @@ class WaitSet::State : public base::RefCountedThreadSafe<State> {
     {
       base::AutoLock lock(lock_);
       if (ready_handles_.empty()) {
+        // https://linear.app/replay/issue/RUN-551
+        recordreplay::Assert("WaitSet::State::Wait #1");
         // No handles are currently in the ready set. Make sure the event is
         // reset and try to arm the watcher.
         handle_event_.Reset();

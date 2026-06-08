@@ -132,6 +132,9 @@ bool CanAccessWindow(const LocalDOMWindow* accessing_window,
     return false;
   }
 
+  if (recordreplay::IsInReplayCode())
+    return true;
+
   if (accessing_window != local_target_window) {
     Document* doc = local_target_window->document();
     if (doc->IsImageDocument() || doc->IsMediaDocument() ||
@@ -219,6 +222,9 @@ bool BindingSecurity::ShouldAllowAccessToV8ContextInternal(
   // Workers and worklets do not support multiple contexts, so both of
   // |accessing_context| and |target_context| must be windows at this point.
 
+  if (recordreplay::IsInReplayCode())
+    return true;
+
   const DOMWrapperWorld& accessing_world = accessing_script_state->World();
   const DOMWrapperWorld& target_world = target_script_state->World();
   CHECK_EQ(accessing_world.GetWorldId(), target_world.GetWorldId());
@@ -254,6 +260,9 @@ void BindingSecurity::FailedAccessCheckFor(v8::Local<v8::Object> holder) {
   // Failing to find a target means something is wrong. Failing to throw an
   // exception could be a security issue, so just crash.
   CHECK(target);
+
+  if (recordreplay::IsInReplayCode())
+    return true;
 
   auto* local_dom_window = CurrentDOMWindow(isolate);
   // Determine if the access check failure was because of cross-origin or if the

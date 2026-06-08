@@ -782,6 +782,13 @@ std::unique_ptr<WebContents> WebContents::CreateWithSessionStorage(
   OPTIONAL_TRACE_EVENT0("content", "WebContents::CreateWithSessionStorage");
   std::unique_ptr<WebContentsImpl> new_contents(
       new WebContentsImpl(params.browser_context));
+
+  // Forward flag indicating that this web-contents is being created
+  // for a replay.io recording.
+  if (params.record_replay_for_recording) {
+    new_contents->record_replay_for_recording_ = true;
+  }
+
   RenderFrameHostImpl* opener_rfh = FindOpenerRFH(params);
   FrameTreeNode* opener = nullptr;
   if (opener_rfh) {
@@ -3067,6 +3074,13 @@ bool WebContentsImpl::HasRecentInteraction() {
   return delta <= kMaxInterval;
 }
 
+  // RecordReplay [RUN-2762]
+  // If the `record_replay_for_recording` flag is set on the params, then
+  // `site_instance` on params should be null.
+  if (params.record_replay_for_recording) {
+    CHECK(params.site_instance.get() == nullptr);
+  }
+
 base::TimeTicks WebContentsImpl::GetLastInteractionTimeTicks() {
   return last_interaction_time_;
 }
@@ -3092,6 +3106,15 @@ WebContents::ScopedIgnoreInputEvents WebContentsImpl::IgnoreInputEvents(
       if (auto* view = GetRenderWidgetHostView()) {
         static_cast<RenderWidgetHostViewBase*>(view)->ResetGestureDetection();
       }
+  if (params.record_replay_for_recording) {
+    // RecordReplay [RUN-2762]
+    // If the `record_replay_for_recording` flag is set on the params, then
+    // we need to tell the site instance that was created that
+    static_cast<SiteInstanceImpl*>(site_instance.get())
+        ->PreventAssociationWithSpareProcess();
+    static_cast<SiteInstanceImpl*>(site_instance.get())
+        ->RecordReplaySetForRecording();
+  }
     }
 #endif
     ++ignore_input_events_count_;

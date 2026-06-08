@@ -6,6 +6,7 @@
 
 #include <utility>
 
+#include "base/record_replay.h"
 #include "mojo/public/cpp/bindings/lib/message_fragment.h"
 #include "mojo/public/cpp/bindings/lib/serialization.h"
 #include "mojo/public/cpp/bindings/message.h"
@@ -41,6 +42,13 @@ PipeControlMessageProxy::PipeControlMessageProxy(MessageReceiver* receiver)
 void PipeControlMessageProxy::NotifyPeerEndpointClosed(
     InterfaceId id,
     const std::optional<DisconnectReason>& reason) {
+  // IPC messages can't be sent at non-deterministic points, so just drop the
+  // close notification in that situation.
+  if (recordreplay::AreEventsDisallowed(
+          "PipeControlMessageProxy::NotifyPeerEndpointClosed")) {
+    return;
+  }
+
   Message message(ConstructPeerEndpointClosedMessage(id, reason));
   message.set_heap_profiler_tag(kMessageTag);
   std::ignore = receiver_->Accept(&message);

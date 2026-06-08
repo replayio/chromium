@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/core/svg/svg_tree_scope_resources.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/dom/tree_scope.h"
 #include "third_party/blink/renderer/core/svg/svg_resource.h"
@@ -19,6 +20,8 @@ LocalSVGResource* SVGTreeScopeResources::ResourceForId(const AtomicString& id) {
     return nullptr;
   }
   auto it = resources_.find(id);
+  recordreplay::Assert("[RUN-2424-3227] SVGTreeScopeResources::ResourceForId %d",
+                       it != resources_.end());
   if (it != resources_.end()) {
     return it->value;
   }
@@ -26,6 +29,7 @@ LocalSVGResource* SVGTreeScopeResources::ResourceForId(const AtomicString& id) {
   // shrinking the `resources_` map.
   auto* new_entry = MakeGarbageCollected<LocalSVGResource>(*tree_scope_, id);
   resources_.Set(id, new_entry);
+  replay_strong_resources_.insert(id, new_entry);
   return new_entry;
 }
 
@@ -55,6 +59,7 @@ void SVGTreeScopeResources::Trace(Visitor* visitor) const {
   visitor->template RegisterWeakCallbackMethod<
       SVGTreeScopeResources, &SVGTreeScopeResources::ProcessCustomWeakness>(
       this);
+  visitor->Trace(replay_strong_resources_);
   visitor->Trace(tree_scope_);
 }
 

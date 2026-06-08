@@ -46,7 +46,11 @@ class OnceCallbackAlgorithm final : public AbortSignal::Algorithm {
       : callback_(std::move(callback)) {}
   ~OnceCallbackAlgorithm() override = default;
 
-  void Run() override { std::move(callback_).Run(); }
+  void Run() override {
+    recordreplay::Assert("[RUN-1182] FollowAlgorithm::Run");
+    recordreplay::Assert("[RUN-1182] OnceCallbackAlgorithm::Run");
+    std::move(callback_).Run();
+  }
 
  private:
   base::OnceClosure callback_;

@@ -13,6 +13,7 @@
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
+#include "base/record_replay.h"
 #include "base/notreached.h"
 #include "base/task/common/checked_lock.h"
 #include "base/task/task_features.h"
@@ -65,6 +66,10 @@ JobTaskSource::State::Value JobTaskSource::State::IncrementWorkerCount() {
 
 JobTaskSource::State::Value JobTaskSource::State::Load() const {
   return {value_.load(std::memory_order_relaxed)};
+}
+
+JobTaskSource::State::Value JobTaskSource::State::RecordReplayLoadUnordered() const {
+  return {value_.load_unordered(std::memory_order_relaxed)};
 }
 
 JobTaskSource::JoinFlag::JoinFlag() = default;
@@ -252,6 +257,7 @@ TaskSource::RunStatus JobTaskSource::WillRunTask() {
 
   const size_t max_concurrency =
       GetMaxConcurrency(state_before_add.worker_count());
+
   if (state_before_add.worker_count() < max_concurrency) {
     state_before_add = state_.IncrementWorkerCount();
   }
@@ -282,7 +288,7 @@ TaskSource::RunStatus JobTaskSource::WillRunTask() {
 size_t JobTaskSource::GetRemainingConcurrency() const {
   // It is safe to read |state_| without a lock since this variable is atomic,
   // and no other state is synchronized with GetRemainingConcurrency().
-  const auto state = TS_UNCHECKED_READ(state_).Load();
+  const auto state = TS_UNCHECKED_READ(state_).RecordReplayLoadUnordered();
   if (state.is_canceled()) {
     return 0;
   }

@@ -306,6 +306,9 @@ void AuctionV8DevToolsSession::SendProtocolNotification(
 }
 
 void AuctionV8DevToolsSession::FlushProtocolNotifications() {
+  // https://linear.app/replay/issue/RUN-885
+  recordreplay::Assert("AuctionV8DevToolsSession::FlushProtocolNotifications");
+
   DCHECK_CALLED_ON_VALID_SEQUENCE(v8_sequence_checker_);
   NOTIMPLEMENTED();
 }

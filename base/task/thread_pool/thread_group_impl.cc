@@ -699,6 +699,9 @@ void ThreadGroupImpl::WorkerDelegate::BlockingStarted(
     return;
   }
 
+  if (worker->RecordReplayUnordered())
+    return false;
+
   worker_only().worker_thread_->MaybeUpdateThreadType();
 
   // WillBlock is always used when time overrides is active. crbug.com/1038867
@@ -972,6 +975,10 @@ void ThreadGroupImpl::OnShutdownStarted() {
   shutdown_started_ = true;
 }
 
+  // Workers can't be created / started non-deterministically.
+  if (recordreplay::AreEventsDisallowed("ThreadGroupImpl::MaintainAtLeastOneIdleWorkerLockRequired"))
+    return;
+
 void ThreadGroupImpl::EnsureEnoughWorkersLockRequired(
     BaseScopedCommandsExecutor* base_executor) {
   // Don't do anything if the thread group isn't started.
@@ -992,6 +999,10 @@ void ThreadGroupImpl::EnsureEnoughWorkersLockRequired(
   const size_t desired_num_awake_workers =
       GetDesiredNumAwakeWorkersLockRequired();
   const size_t num_awake_workers = GetNumAwakeWorkersLockRequired();
+
+  absl::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (record_replay_unordered_)
+    disallow.emplace("ThreadGroupImpl::CreateAndRegisterWorkerLockRequired");
 
   size_t num_workers_to_wake_up =
       ClampSub(desired_num_awake_workers, num_awake_workers);

@@ -34,6 +34,7 @@
 #include <type_traits>
 
 #include "base/numerics/clamped_math.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/css/css_property_value_set.h"
 #include "third_party/blink/renderer/core/css/style_rule.h"
 #include "third_party/blink/renderer/platform/wtf/math_extras.h"
@@ -87,9 +88,16 @@ void MatchResult::BeginAddingAuthorRulesForTreeScope(
   current_tree_order_ =
       ClampTo<decltype(current_tree_order_)>(tree_scopes_.size());
   tree_scopes_.push_back(&tree_scope);
+  REPLAY_ASSERT("[RUN-2424-3053] MatchResult::FinishAddingAuthorRulesForTreeScope %u",
+    tree_scopes_.size()
+  );
 }
 
 void MatchResult::Reset() {
+  REPLAY_ASSERT("[RUN-2424-3053] MatchResult::Reset %u",
+    (unsigned)current_tree_order_
+  );
+
   matched_properties_.clear();
   matched_properties_hashes_.clear();
   is_cacheable_ = true;

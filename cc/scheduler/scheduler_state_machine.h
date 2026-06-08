@@ -375,6 +375,12 @@ class CC_EXPORT SchedulerStateMachine {
 
   bool resourceless_draw() const { return resourceless_draw_; }
 
+  bool ClearReplayForceDraw() {
+    bool result = replay_force_draw_; 
+    replay_force_draw_ = false;
+    return result;
+  }
+
   void set_is_scrolling(bool is_scrolling) { is_scrolling_ = is_scrolling; }
   void set_waiting_for_scroll_event(bool waiting_for_scroll_event) {
     waiting_for_scroll_event_ = waiting_for_scroll_event;

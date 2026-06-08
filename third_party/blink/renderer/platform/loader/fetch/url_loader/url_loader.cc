@@ -88,6 +88,8 @@ class URLLoader::Context : public ResourceRequestClient {
           BackForwardCacheLoaderHelper* back_forward_cache_loader_helper,
           Vector<std::unique_ptr<URLLoaderThrottle>> throttles);
 
+#include "base/record_replay.h"
+
   int request_id() const { return request_id_; }
   URLLoaderClient* client() const { return client_; }
   void set_client(URLLoaderClient* client) { client_ = client; }

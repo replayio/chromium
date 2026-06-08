@@ -44,6 +44,7 @@
 #include "base/check_op.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
+#include "base/record_replay.h"
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
 #include "build/build_config.h"
@@ -946,7 +947,15 @@ void HarfBuzzShaper::ShapeSegment(
 
       current_font_data_for_range_set =
           fallback_iterator.Next(fallback_chars_hint);
-      if (!current_font_data_for_range_set->FontData()) {
+
+      // [RecordReplay] https://linear.app/replay/issue/RUN-1302#comment-0930eb4f
+      // When replaying and diverged from the recording, the `fallback_iterator.Next()`
+      // call can return null.
+      bool skipCheck =
+        recordreplay::HasDivergedFromRecording() &&
+        !current_font_data_for_range_set;
+
+      if (skipCheck || !current_font_data_for_range_set->FontData()) {
         DCHECK(range_data->reshape_queue.empty());
         break;
       }

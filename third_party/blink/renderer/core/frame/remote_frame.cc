@@ -471,6 +471,9 @@ void RemoteFrame::CreateView() {
 
   SetView(MakeGarbageCollected<RemoteFrameView>(this));
 
+  // RUN-1618: Force serialized JS message sizes to match before sending over IPC.
+  transferable_message.message->RecordReplayDataSize();
+
   if (OwnerLayoutObject())
     DeprecatedLocalOwner()->SetEmbeddedContentView(view_);
 }

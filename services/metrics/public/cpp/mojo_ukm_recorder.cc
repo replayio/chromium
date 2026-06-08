@@ -9,6 +9,7 @@
 #include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/notreached.h"
+#include "base/record_replay.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "services/metrics/public/mojom/ukm_interface.mojom.h"
 #include "third_party/abseil-cpp/absl/memory/memory.h"

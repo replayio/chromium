@@ -1186,6 +1186,15 @@ CSSStyleSheet* StyleEngine::CreateSheet(
 
   auto result = text_to_sheet_cache_.insert(key, nullptr);
   StyleSheetContents* contents = result.stored_value->value;
+
+  // Divergence is between a call to ParseSheet and a call to
+  // CreateInline within this method. Assert the values that
+  // introduce the codepath divergence.
+  recordreplay::Assert("[RUN-1065-1390] StyleEngine::CreateSheet %d %d %d %lu",
+                       result.is_new_entry, !!contents,
+                       contents && contents->IsCacheableForStyleElement(),
+                       AtomicStringHash::GetHash(text_content));
+
   if (result.is_new_entry || !contents ||
       !contents->IsCacheableForStyleElement() ||
       contents->BaseURL() != GetDocument().BaseURL()) {
@@ -2236,6 +2245,7 @@ void StyleEngine::ScheduleCustomElementInvalidations(
     invalidation_set->AddTagName(tag_name);
   }
   invalidation_set->SetTreeBoundaryCrossing();
+
   InvalidationLists invalidation_lists;
   invalidation_lists.descendants.push_back(invalidation_set);
   pending_invalidations_.ScheduleInvalidationSetsForNode(invalidation_lists,
@@ -4189,6 +4199,10 @@ void StyleEngine::UpdateStyleAndLayoutTree() {
 
   UpdateViewportStyle();
 
+  recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle A %d %d",
+                       !!GetDocument().documentElement(),
+                       NeedsStyleRecalc());
+
   if (GetDocument().documentElement()) {
     UpdateViewportSize();
     NthIndexCache nth_index_cache(GetDocument());
@@ -4197,6 +4211,7 @@ void StyleEngine::UpdateStyleAndLayoutTree() {
       SCOPED_BLINK_UMA_HISTOGRAM_TIMER_HIGHRES("Style.RecalcTime");
       Element* viewport_defining = GetDocument().ViewportDefiningElement();
       RecalcStyle();
+      recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle B");
       if (viewport_defining != GetDocument().ViewportDefiningElement()) {
         ViewportDefiningElementDidChange();
       }
@@ -4825,6 +4840,7 @@ void StyleEngine::Trace(Visitor* visitor) const {
   visitor->Trace(view_transition_rule_);
   visitor->Trace(view_transition_preview_rule_);
   visitor->Trace(style_image_cache_);
+  visitor->Trace(style_sheet_contents_strong_);
   visitor->Trace(fill_or_clip_path_uri_value_cache_);
   visitor->Trace(style_containment_scope_tree_);
   visitor->Trace(scroll_target_group_scope_tree_);

@@ -233,7 +233,9 @@ void RuleData::MovedToDifferentRuleSet(const Vector<uint16_t>& old_backing,
   position_ = new_position;
 }
 
-RuleSet::RuleSet() = default;
+// [RecordReplay] RuleSet's constructor is defined inline in rule_set.h so it can
+// recordreplay::RegisterPointer(this); the out-of-line `= default` definition was
+// removed to avoid a redefinition.
 
 void RuleSet::AddToBucket(const AtomicString& key,
                           RuleMap& map,
@@ -579,6 +581,9 @@ static void UnmarkAsCoveredByBucketing(CSSSelector& selector) {
       break;
     }
   }
+
+  // https://linear.app/replay/issue/RUN-968
+  recordreplay::Assert("RuleSet::AddChildRules Done");
 }
 
 template <RuleSet::BucketCoverage bucket_coverage>
@@ -1304,6 +1309,9 @@ void RuleSet::AddRulesFromSheet(const StyleSheetContents* sheet,
                                 const MixinMap& mixins,
                                 CascadeLayer* cascade_layer,
                                 const StyleScope* style_scope) {
+  // https://linear.app/replay/issue/RUN-968
+  recordreplay::Assert("RuleSet::AddChildRules Start");
+
   TRACE_EVENT0("blink", "RuleSet::addRulesFromSheet");
   DCHECK(sheet);
 

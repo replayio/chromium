@@ -932,6 +932,17 @@ void IDBRequest::TransactionDidFinishAndDispatch() {
   if (!GetExecutionContext())
     return;
 
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    int node_id = recordreplay::NewDependencyGraphNode(
+      "{\"kind\":\"enqueueIDBRequestEvent\"}"
+    );
+    recordreplay::AddDependencyGraphEdge(
+      record_replay_created_node_id_, node_id, "{\"kind\":\"creator\"}"
+    );
+    execute.emplace(node_id);
+  }
+
   ready_state_ = PENDING;
 }
 

@@ -23,6 +23,7 @@
 #include <unistd.h>
 
 #include <memory>
+#include <string>
 
 #include "base/allocator/early_zone_registration_apple.h"
 #include "build/branding_buildflags.h"
@@ -146,7 +147,11 @@ __attribute__((used)) const char kGrossPaddingForCrbug1300598[216 * 1024] = {};
 
 }  // namespace
 
+#include "./record_replay_main.cc"
+
 __attribute__((visibility("default"))) int main(int argc, char* argv[]) {
+  RecordReplayAttach(&argc, const_cast<const char***>(&argv));
+
   partition_alloc::EarlyMallocZoneRegistration();
 
   uint32_t exec_path_size = 0;

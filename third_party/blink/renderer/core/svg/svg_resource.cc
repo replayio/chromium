@@ -25,6 +25,15 @@
 
 namespace blink {
 
+SVGResourceClient::SVGResourceClient() {
+  // Pointer registration is needed for sorting after CopyKeysToVector calls.
+  recordreplay::RegisterPointer("SVGResourceClient", this);
+}
+
+SVGResourceClient::~SVGResourceClient() {
+  recordreplay::UnregisterPointer(this);
+}
+
 SVGResource::SVGResource() = default;
 
 SVGResource::~SVGResource() = default;
@@ -203,6 +212,7 @@ LocalSVGResource::LocalSVGResource(TreeScope& tree_scope,
 }
 
 void LocalSVGResource::Unregister() {
+  recordreplay::Assert("[RUN-2424-3227] LocalSVGResource::Unregister");
   SVGURIReference::UnobserveTarget(id_observer_);
 }
 

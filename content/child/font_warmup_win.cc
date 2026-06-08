@@ -31,6 +31,8 @@
 #include "third_party/skia/include/core/SkRefCnt.h"
 #include "third_party/skia/include/ports/SkTypeface_win.h"
 
+#include "base/record_replay.h"
+
 namespace content {
 
 namespace {
@@ -392,6 +394,13 @@ void PatchServiceManagerCalls() {
   const char* service_provider_dll = "api-ms-win-service-management-l1-1-0.dll";
 
   is_patched = true;
+
+  // Skip patching when replaying, we aren't working with real DLLs and will crash
+  // if we try to patch them.
+  if (recordreplay::IsReplaying())
+    return;
+
+  recordreplay::AutoPassThroughEvents pt;
 
   static base::NoDestructor<base::win::IATPatchFunction> patch_open_sc_manager;
   patch_open_sc_manager->Patch(L"dwrite.dll", service_provider_dll,

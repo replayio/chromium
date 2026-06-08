@@ -25,6 +25,9 @@
 #include "components/viz/common/gpu/raster_context_provider.h"
 #include "components/viz/common/hit_test/hit_test_region_list.h"
 #include "components/viz/common/quads/compositor_frame.h"
+#include "components/viz/service/display/record_replay_render.h"
+
+#include "base/record_replay.h"
 #include "services/viz/public/mojom/compositing/thread.mojom.h"
 #include "third_party/perfetto/include/perfetto/tracing/track.h"
 #include "third_party/perfetto/include/perfetto/tracing/track_event_args.h"
@@ -215,6 +218,10 @@ void AsyncLayerTreeFrameSink::SubmitCompositorFrame(
               frame.size_in_pixels().height());
     DCHECK_EQ(last_submitted_size_in_pixels_.width(),
               frame.size_in_pixels().width());
+  }
+
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    recordreplay::SubmitCompositorFrame(local_surface_id_, frame);
   }
 
   std::optional<viz::HitTestRegionList> hit_test_region_list =

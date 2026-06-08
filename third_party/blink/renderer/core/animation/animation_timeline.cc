@@ -30,6 +30,9 @@ void AnimationTimeline::AnimationAttached(Animation* animation) {
   DCHECK(!animations_.Contains(animation));
   DCHECK(!in_trigger_attachments_update_);
   animations_.insert(animation);
+
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "AnimationTimeline"))
+    record_replay_animations_strong_.insert(animation);
   animation->ResolveTimelineOffsets(GetTimelineRange());
 }
 
@@ -207,6 +210,8 @@ Animation* AnimationTimeline::Play(AnimationEffect* child,
 }
 
 void AnimationTimeline::MarkAnimationsCompositorPending(bool source_changed) {
+  recordreplay::Assert("[RUN-1641] AnimationTimeline::MarkAnimationsCompositorPending %d", RecordReplayId());
+
   Animation::CompositorPendingReason reason =
       source_changed ? Animation::CompositorPendingReason::kPendingEffectChange
                      : Animation::CompositorPendingReason::kPendingUpdate;
@@ -237,6 +242,7 @@ void AnimationTimeline::Trace(Visitor* visitor) const {
   visitor->Trace(document_);
   visitor->Trace(animations_needing_update_);
   visitor->Trace(animations_);
+  visitor->Trace(record_replay_animations_strong_);
   visitor->Trace(triggers_);
   ScriptWrappable::Trace(visitor);
 }

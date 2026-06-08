@@ -6,6 +6,7 @@
 
 #include <algorithm>
 
+#include "base/record_replay.h"
 #include "base/compiler_specific.h"
 #include "base/dcheck_is_on.h"
 #include "mojo/core/ports/port.h"

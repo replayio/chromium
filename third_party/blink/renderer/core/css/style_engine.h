@@ -70,6 +70,7 @@
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/loader/fetch/render_blocking_behavior.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
@@ -126,7 +127,8 @@ using ScrollTargetGroupScopeTree = OrderedScopeTree<HTMLAnchorElement>;
 enum InvalidationScope { kInvalidateCurrentScope, kInvalidateAllScopes };
 
 using StyleSheetKey = AtomicString;
-using UnorderedTreeScopeSet = HeapHashSet<Member<TreeScope>>;
+using UnorderedTreeScopeSet =
+    HeapHashSet<Member<TreeScope>, WTF::MemberHashRecordReplayId<TreeScope>>;
 
 // The StyleEngine class manages style-related state for the document. There is
 // a 1-1 relationship of Document to StyleEngine. The document calls the
@@ -1139,6 +1141,10 @@ class CORE_EXPORT StyleEngine final : public GarbageCollected<StyleEngine>,
 
   HeapHashMap<AtomicString, WeakMember<StyleSheetContents>>
       text_to_sheet_cache_;
+
+  // Keep strong pointer on cached `StyleSheetContents` to prevent divergence.
+  // see https://linear.app/replay/issue/RUN-1065#comment-7e345cbc
+  HeapHashSet<Member<StyleSheetContents>> style_sheet_contents_strong_;
 
   std::unique_ptr<StyleResolverStats> style_resolver_stats_;
   unsigned style_for_element_count_{0};

@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "base/process/process.h"
+#include "base/record_replay.h"
 
 #include <windows.h>
 
@@ -90,6 +91,7 @@ void Process::TerminateCurrentProcessImmediately(int exit_code) {
 #if BUILDFLAG(CLANG_PROFILING)
   WriteClangProfilingProfile();
 #endif
+  recordreplay::FinishRecording();
   ::TerminateProcess(::GetCurrentProcess(), static_cast<UINT>(exit_code));
   // There is some ambiguity over whether the call above can return. Rather than
   // hitting confusing crashes later on we should crash right here.

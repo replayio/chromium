@@ -364,6 +364,12 @@ class CORE_EXPORT ElementRareDataVector final
   EnsureInterestInvokerTargetData();
   void RemoveInterestInvokerTargetData();
 
+  // Replay edit: As of 1/2023, there is ElementRareDataVector::GetWrappedField
+  // so we won't need this in the future.
+  InlineCSSStyleDeclaration* GetInlineCSSStyleDeclaration() const {
+    return cssom_wrapper_.Get();
+  }
+
   bool HasElementFlag(ElementFlags mask) const {
     return flags_.element_flags_ & static_cast<uint16_t>(mask);
   }

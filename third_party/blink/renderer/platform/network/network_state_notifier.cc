@@ -25,9 +25,12 @@
 
 #include "third_party/blink/renderer/platform/network/network_state_notifier.h"
 
+#include <algorithm>
 #include <array>
 #include <memory>
+#include <vector>
 
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
 #include "net/nqe/effective_connection_type.h"
@@ -283,11 +286,24 @@ void NetworkStateNotifier::NotifyObservers(ObserverListMap& map,
                                            const NetworkState& state) {
   DCHECK(IsMainThread());
   base::AutoLock locker(lock_);
-  for (const auto& entry : map) {
-    entry.value->PostTask(
+
+  // Sort the observers by their record/replay pointer id so that they are
+  // notified in a deterministic order. Iteration order over the HashMap is
+  // not guaranteed to be stable across record/replay, which would otherwise
+  // cause divergences.
+  std::vector<NetworkStateObserver*> observers;
+  observers.reserve(map.size());
+  for (const auto& entry : map)
+    observers.push_back(entry.key);
+  std::sort(observers.begin(), observers.end(),
+            recordreplay::CompareByPointerId());
+
+  for (auto* observer : observers) {
+    base::SingleThreadTaskRunner* task_runner = map.at(observer);
+    task_runner->PostTask(
         FROM_HERE,
         base::BindOnce(&NetworkStateNotifier::NotifyObserverOnTaskRunner,
-                       base::Unretained(this), base::UnsafeDangling(entry.key),
+                       base::Unretained(this), base::UnsafeDangling(observer),
                        type, state));
   }
 }

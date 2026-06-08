@@ -208,6 +208,10 @@ class BASE_EXPORT WorkerThread : public RefCountedThreadSafe<WorkerThread>,
   // this WorkerThread is currently in-use. Thread-safe.
   TimeTicks GetLastUsedTime() const;
 
+  bool RecordReplayUnordered() const {
+    return record_replay_unordered_;
+  }
+
   size_t sequence_num() const { return sequence_num_; }
 
  protected:
@@ -252,6 +256,9 @@ class BASE_EXPORT WorkerThread : public RefCountedThreadSafe<WorkerThread>,
   // "RunLabeledWorker()" is a dummy frame based on ThreadLabel+ThreadType
   // and used to easily identify threads in stack traces.
   NOT_TAIL_CALLED void RunWorker();
+
+  // Whether operations on this worker thread may be unordered when recording/replaying.
+  bool record_replay_unordered_ = false;
 
   // Self-reference to prevent destruction of |this| while the thread is alive.
   // Set in Start() before creating the thread. Reset in ThreadMain() before the

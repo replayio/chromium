@@ -926,6 +926,7 @@ void InlineItemsBuilderTemplate<MappingBuilder>::AppendCollapseWhitespace(
         if (Character::IsCollapsibleSpace(c))
           break;
       }
+
       AppendTransformedString(
           transformed.Substring(start_of_non_space, i - start_of_non_space),
           *layout_object);
@@ -949,6 +950,7 @@ void InlineItemsBuilderTemplate<MappingBuilder>::AppendCollapseWhitespace(
       bool remove_newline = space_run_has_newline &&
                             ShouldRemoveNewline(text_, text_.length(), style,
                                                 StringView(string, i), style);
+
       if (remove_newline) [[unlikely]] {
         // |kNotCollapsible| because the newline is removed, not collapsed.
         end_collapse = InlineItem::kNotCollapsible;

@@ -33,6 +33,8 @@
 #include "partition_alloc/stack/stack.h"
 #endif
 
+#include "base/record_replay.h"
+
 namespace base {
 
 namespace {
@@ -69,6 +71,23 @@ void SetNameInternal(PlatformThreadId thread_id, const char* name) {
                    reinterpret_cast<ULONG_PTR*>(&info));
   } __except (EXCEPTION_EXECUTE_HANDLER) {
   }
+}
+
+// On windows the WaitForSingleObject calls done on thread handles will not be
+// ordered when replaying wrt the associated thread exiting. For now we workaround
+// this by using an ordered lock to explicitly enforce this ordering constraint.
+static std::atomic<int> g_record_replay_thread_join_ordered_lock_id = 0;
+
+static int GetRecordReplayThreadJoinOrderedLockId() {
+  if (!g_record_replay_thread_join_ordered_lock_id) {
+    g_record_replay_thread_join_ordered_lock_id = recordreplay::CreateOrderedLock("ThreadJoin");
+  }
+  return g_record_replay_thread_join_ordered_lock_id;
+}
+
+static void RecordReplayThreadJoinFence() {
+  int id = GetRecordReplayThreadJoinOrderedLockId();
+  recordreplay::AutoOrderedLock ordered(id);
 }
 
 struct ThreadParams {
@@ -167,6 +186,8 @@ bool CreateThreadInternal(size_t stack_size,
   params->delegate = delegate;
   params->joinable = out_thread_handle != nullptr;
   params->thread_type = thread_type;
+
+  RecordReplayThreadJoinFence();
 
   // Using CreateThread here vs _beginthreadex makes thread creation a bit
   // faster and doesn't require the loader lock to be available.  Our code will
@@ -314,6 +335,13 @@ bool PlatformThread::CreateNonJoinableWithType(size_t stack_size,
                               thread_type);
 }
 
+  // Only set the thread name while recording. It can be useful when debugging
+  // recording processes but isn't used when replaying, and the static initializer
+  // below can run non-deterministically.
+  if (recordreplay::IsReplaying())
+    return;
+  recordreplay::AutoPassThroughEvents pt;
+
 // static
 void PlatformThread::Join(PlatformThreadHandle thread_handle) {
   DCHECK(thread_handle.platform_handle());
@@ -337,6 +365,8 @@ void PlatformThread::Join(PlatformThreadHandle thread_handle) {
   CHECK_EQ(WAIT_OBJECT_0,
            WaitForSingleObject(thread_handle.platform_handle(), INFINITE));
   CloseHandle(thread_handle.platform_handle());
+
+  RecordReplayThreadJoinFence();
 }
 
 // static

@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <memory>
 #include <utility>
+#include <sstream>
 
 #include "base/compiler_specific.h"
 #include "base/debug/crash_logging.h"
@@ -750,6 +751,9 @@ bool PaintArtifactCompositor::Layerizer::DecompositeEffect(
   if (!upcast_state)
     return false;
 
+    recordreplay::Assert("[RUN-1470-1471] PaintArtifactCompositor::Update %d",
+                         layer.subtree_property_changed());
+
   upcast_state->SetEffect(parent_effect);
 
   // An exotic blend mode can be decomposited only if the src (`layer`) and
@@ -786,6 +790,8 @@ bool PaintArtifactCompositor::Layerizer::DecompositeEffect(
     }
   }
 
+  recordreplay::Assert("[RUN-657-1540] PaintArtifactCompositor::Update");
+
   layer.Upcast(*upcast_state);
   return true;
 }
@@ -819,6 +825,9 @@ void PaintArtifactCompositor::Layerizer::LayerizeGroup(
     // C. The next chunk belongs to some subgroup of the current group.
     const auto& chunk_effect = chunk_cursor_->properties.Effect().Unalias();
     if (&chunk_effect == &current_group) {
+#if !BUILDFLAG(IS_WIN) // RUN-2115
+      recordreplay::Assert("[RUN-1470-1471] PaintArtifactCompositor::LayerizeGroup %d", chunk_cursor->id);
+#endif
       compositor_.UpdatePaintedScrollTranslationsBeforeLayerization(
           artifact_, chunk_cursor_);
       pending_layers_.emplace_back(
@@ -1171,6 +1180,7 @@ void PaintArtifactCompositor::Update(
         root_layer_->layer_tree_host());
 
     cc::Layer& layer = pending_layer.CcLayer();
+
     const auto& transform = property_state.Transform();
     const auto& clip = property_state.Clip();
     const auto& effect = property_state.Effect();

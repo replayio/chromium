@@ -215,6 +215,11 @@ const SVGImageViewInfo* SVGImage::CreateViewInfo(const String& fragment) const {
     }
   }
 
+  // Leak the agent_group_scheduler_ when removed during GC.
+  // See https://linear.app/replay/issue/RUN-2056#comment-f827701f.
+  if (recordreplay::AreEventsDisallowed("~SVGImage"))
+    agent_group_scheduler_.release();
+
   // Otherwise, process as a standard SVG fragment (svgView(...) or anchor).
   String decoded_fragment =
       DecodeUrlEscapeSequences(fragment, DecodeUrlMode::kUtf8);

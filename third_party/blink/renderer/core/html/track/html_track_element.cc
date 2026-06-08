@@ -308,7 +308,7 @@ void HTMLTrackElement::DidCompleteLoad(LoadStatus status) {
   // simple event named error at the track element.
   if (status == kFailure) {
     SetReadyState(ReadyState::kError);
-    DispatchEvent(*Event::Create(event_type_names::kError));
+    DispatchEvent(*Event::Create(event_type_names::kError), "HTMLTrackElement::DidCompleteLoad #1");
     return;
   }
 
@@ -318,7 +318,7 @@ void HTMLTrackElement::DidCompleteLoad(LoadStatus status) {
   // readiness state to loaded, and fire a simple event named load at the track
   // element.
   SetReadyState(ReadyState::kLoaded);
-  DispatchEvent(*Event::Create(event_type_names::kLoad));
+  DispatchEvent(*Event::Create(event_type_names::kLoad), "HTMLTrackElement::DidCompleteLoad #2");
 }
 
 void HTMLTrackElement::NewCuesAvailable(TextTrackLoader* loader) {

@@ -412,6 +412,7 @@ bool ThreadGroup::ShouldYield(TaskSourceSortKey sort_key) {
   max_allowed_sort_key =
       TS_UNCHECKED_READ(max_allowed_sort_key_)
           .exchange(kMaxYieldSortKey, std::memory_order_relaxed);
+
   // Another thread might have decided to yield and racily reset
   // |max_allowed_sort_key_|, in which case this thread doesn't yield.
   return max_allowed_sort_key.thread_type != ThreadType::kBackground;

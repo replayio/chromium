@@ -40,6 +40,7 @@ void PendingInvalidations::ScheduleInvalidationSetsForNode(
       if (invalidation_set->WholeSubtreeInvalid()) {
         auto* shadow_root = DynamicTo<ShadowRoot>(node);
         auto* subtree_root = shadow_root ? &shadow_root->host() : &node;
+
         if (subtree_root->IsElementNode()) {
           TRACE_STYLE_INVALIDATOR_INVALIDATION_SET(
               To<Element>(*subtree_root), kInvalidationSetInvalidatesSubtree,

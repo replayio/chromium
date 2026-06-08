@@ -28,6 +28,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <unordered_map>
+#include <tuple>
+
 #include "third_party/blink/renderer/core/inspector/inspector_dom_debugger_agent.h"
 
 #include "third_party/blink/renderer/bindings/core/v8/js_based_event_listener.h"
@@ -662,6 +665,7 @@ void InspectorDOMDebuggerAgent::Will(const probe::UserCallback& probe) {
     return;
   }
   String name = probe.name ? String(probe.name) : probe.atomic_name;
+
   Node* node = probe.event_target->ToNode();
   String target_name =
       node ? node->nodeName() : probe.event_target->InterfaceName();
@@ -670,6 +674,7 @@ void InspectorDOMDebuggerAgent::Will(const probe::UserCallback& probe) {
 }
 
 void InspectorDOMDebuggerAgent::Did(const probe::UserCallback& probe) {
+  String name = probe.name ? String(probe.name) : probe.atomic_name;
   CancelNativeBreakpoint();
 }
 
@@ -744,14 +749,19 @@ void InspectorDOMDebuggerAgent::DidRemoveBreakpoint() {
 }
 
 void InspectorDOMDebuggerAgent::SetEnabled(bool enabled) {
-  if (enabled && !enabled_.Get()) {
-    instrumenting_agents_->AddInspectorDOMDebuggerAgent(this);
-    dom_agent_->AddDOMListener(this);
-    enabled_.Set(true);
-  } else if (!enabled && enabled_.Get()) {
-    instrumenting_agents_->RemoveInspectorDOMDebuggerAgent(this);
-    dom_agent_->RemoveDOMListener(this);
-    enabled_.Set(false);
+  if (!recordreplay::HasDivergedFromRecording() || (
+      instrumenting_agents_ && dom_agent_)
+    ) {
+    // [replay] `instrumenting_agents_` is generally not available to us
+    if (enabled && !enabled_.Get()) {
+      instrumenting_agents_->AddInspectorDOMDebuggerAgent(this);
+      dom_agent_->AddDOMListener(this);
+      enabled_.Set(true);
+    } else if (!enabled && enabled_.Get()) {
+      instrumenting_agents_->RemoveInspectorDOMDebuggerAgent(this);
+      dom_agent_->RemoveDOMListener(this);
+      enabled_.Set(false);
+    }
   }
 }
 

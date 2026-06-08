@@ -175,6 +175,9 @@ class CORE_EXPORT PendingScript : public GarbageCollected<PendingScript>,
 
   bool is_in_document_write() const { return is_in_document_write_; }
 
+  // IDs for nodes which executing the script depends on.
+  Vector<int> record_replay_dependency_node_ids_;
+
  private:
   static void ExecuteScriptBlockInternal(
       Script*,

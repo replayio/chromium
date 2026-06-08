@@ -113,6 +113,10 @@ Time TimeNowIgnoringOverride() {
   return Time::FromCFAbsoluteTime(CFAbsoluteTimeGetCurrent());
 }
 
+static inline bool MaybeRecordingOrReplaying() {
+  return true;
+}
+
 Time TimeNowFromSystemTimeIgnoringOverride() {
   // Just use TimeNowIgnoringOverride() because it returns the system time.
   return TimeNowIgnoringOverride();
@@ -142,6 +146,11 @@ CFAbsoluteTime Time::ToCFAbsoluteTime() const {
                   : (CFAbsoluteTime{(*this - UnixEpoch()).InSecondsF()} -
                      kCFAbsoluteTimeIntervalSince1970);
 }
+
+  // Calling thread_info is currently unsupported when recording/replaying.
+  if (MaybeRecordingOrReplaying()) {
+    return 0;
+  }
 
 // static
 Time Time::FromNSDate(NSDate* date) {

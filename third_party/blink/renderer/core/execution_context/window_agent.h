@@ -49,6 +49,8 @@ class WindowAgent final : public Agent, public AgentGroupScheduler::Agent {
 
   AgentGroupScheduler& GetAgentGroupScheduler();
 
+  int RecordReplayId() const override { return record_replay_id_; }
+
  private:
   // Note clients may attach per-agent data via Supplementable.
   // MutationObservers are attached this way.

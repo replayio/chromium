@@ -951,6 +951,9 @@ ScrollTimeline::ReferenceType ComputeReferenceType(TimelineScroller scroller) {
   }
 }
 
+          // https://linear.app/replay/issue/RUN-1046
+          recordreplay::Assert("[RUN-1046] CSSAnimations::CalculateAnimationUpdate #10");
+
 ScrollTimeline::ScrollAxis ComputeAxis(TimelineAxis axis) {
   switch (axis) {
     case TimelineAxis::kBlock:
@@ -1106,6 +1109,10 @@ void CSSAnimations::CalculateScrollTimelineUpdate(
         animating_element, existing_scroll_timelines, style_builder));
   }
 }
+
+        // https://linear.app/replay/issue/RUN-1046
+        recordreplay::Assert("[RUN-1046] CSSAnimations::CalculateAnimationUpdate #15");
+
 
 void CSSAnimations::CalculateViewTimelineUpdate(
     CSSAnimationUpdate& update,
@@ -1696,6 +1703,10 @@ bool ComputedValuesEqual(const PropertyHandle& property,
     // parsed.
     return CSSPropertyEquality::PropertiesEqual(property, a, b);
   }
+
+  // https://linear.app/replay/issue/RUN-1046
+  recordreplay::Assert("[RUN-1046] CSSAnimations::CalculateTransitionUpdateForPropertyHandle #10");
+
 }
 
 // Same as `ComputedValuesEqual`, but correctly handles unregistered custom
@@ -2277,6 +2288,9 @@ void CSSAnimations::UpdateAnimationFlags(Element& animating_element,
 }
 
 void CSSAnimations::MaybeApplyPendingUpdate(Element* element) {
+  recordreplay::Assert("[RUN-1641] CSSAnimations::MaybeApplyPendingUpdate %d",
+                       element->RecordReplayId());
+
   previous_active_interpolations_for_animations_.clear();
   if (pending_update_.IsEmpty()) {
     return;
@@ -2368,6 +2382,10 @@ void CSSAnimations::MaybeApplyPendingUpdate(Element* element) {
            cancelled_indices[i] < cancelled_indices[i + 1]);
     Animation& animation =
         *running_animations_[cancelled_indices[i]]->animation;
+
+    recordreplay::Assert("[RUN-1641] CSSAnimations::MaybeApplyPendingUpdate #5 %d",
+                         animation.RecordReplayId());
+
     animation.ClearOwningElement();
     if (animation.IsCSSAnimation()) {
       animation.cancel();
@@ -2421,6 +2439,10 @@ void CSSAnimations::MaybeApplyPendingUpdate(Element* element) {
     DCHECK(transitions_.Contains(property));
 
     Animation* animation = transitions_.Take(property)->animation;
+
+    recordreplay::Assert("[RUN-1641] CSSAnimations::MaybeApplyPendingUpdate #10 %d",
+                         animation->RecordReplayId());
+
     auto* effect = To<KeyframeEffect>(animation->effect());
     if (effect && effect->HasActiveAnimationsOnCompositor(property) &&
         pending_update_.NewTransitions().Contains(property) &&
@@ -3140,6 +3162,9 @@ const ComputedStyle& CSSAnimations::CalculateBeforeChangeStyle(
       auto* effect = DynamicTo<KeyframeEffect>(animation->effect());
       if (!effect)
         continue;
+
+      // https://linear.app/replay/issue/RUN-1046
+      recordreplay::Assert("[RUN-1046] CSSAnimations::CalculateBeforeChangeStyle #5");
 
       auto* inert_animation_for_sampling = MakeGarbageCollected<InertEffect>(
           effect->Model(), effect->SpecifiedTiming(),

@@ -495,6 +495,15 @@ LayoutObject::~LayoutObject() {
   DCHECK(is_destroyed_);
 #endif
   InstanceCounters::DecrementCounter(InstanceCounters::kLayoutObjectCounter);
+
+  // If recording/replaying and in a nondeterministic execution, allow
+  // style_ to leak, since it may otherwise get destroyed in a
+  // non-deterministic fashion and remove itself from font-fallback-maps
+  // that are accessed deterministically.
+  // See https://linear.app/replay/issue/RUN-1758/fontfallbackmap-items-getting-removed-non-deterministically
+  if (recordreplay::AreEventsDisallowed("~LayoutObject")) {
+    (void) style_.release();
+  }
 }
 
 bool LayoutObject::IsDescendantOf(const LayoutObject* obj) const {
@@ -2881,6 +2890,9 @@ void LayoutObject::SetPseudoElementStyle(const LayoutObject& owner,
 DISABLE_CFI_PERF
 void LayoutObject::SetStyle(const ComputedStyle* style,
                             ApplyStyleChanges apply_changes) {
+  recordreplay::Assert("[RUN-2300] LayoutObject::SetStyle %d %d %d",
+                       RecordReplayId(), style_ == style, (int)apply_changes);
+
   NOT_DESTROYED();
   if (style_ == style)
     return;
@@ -3037,6 +3049,11 @@ void LayoutObject::SetStyle(const ComputedStyle* style,
     InvalidateVisualOverflowForDCheck();
 #endif
   }
+
+  recordreplay::Assert("[RUN-2300] LayoutObject::SetStyle #9 %d %d %d",
+                       diff.NeedsPaintInvalidation(),
+                       updated_diff.NeedsPaintInvalidation(),
+                       IsSVGRoot());
 
   if (diff.NeedsNormalPaintInvalidation() ||
       updated_diff.NeedsNormalPaintInvalidation()) {
@@ -3679,6 +3696,10 @@ void LayoutObject::GetTransformFromContainer(
       transform.PreConcat(layer->CurrentTransform());
     }
   }
+
+  recordreplay::AssertMaybeEventsDisallowed(
+      "[RUN-2300] LayoutObject::WillBeDestroyed A %d %d", RecordReplayId(),
+      GetNode() ? GetNode()->RecordReplayId() : -1);
 
   transform.PostTranslate(offset_in_container.left.ToFloat(),
                           offset_in_container.top.ToFloat());
@@ -4949,6 +4970,9 @@ void LayoutObject::SetMayNeedPaintInvalidationAnimatedBackgroundImage() {
   NOT_DESTROYED();
   if (MayNeedPaintInvalidationAnimatedBackgroundImage())
     return;
+
+  recordreplay::Assert("[RUN-1641] LayoutObject::SetMayNeedPaintInvalidationAnimatedBackgroundImage #1");
+
   bitfields_.SetMayNeedPaintInvalidationAnimatedBackgroundImage(true);
   SetShouldCheckForPaintInvalidationWithoutLayoutChange();
 }
@@ -4964,6 +4988,8 @@ void LayoutObject::SetShouldDelayFullPaintInvalidation() {
 
   bitfields_.SetShouldDelayFullPaintInvalidation(true);
   if (!ShouldCheckForPaintInvalidation()) {
+    recordreplay::Assert("[RUN-2300] LayoutObject::SetShouldDelayFullPaintInvalidation #1");
+
     // This will also schedule a visual update.
     SetShouldCheckForPaintInvalidationWithoutLayoutChange();
   } else {

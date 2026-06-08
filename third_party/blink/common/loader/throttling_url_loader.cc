@@ -29,6 +29,8 @@
 #include "services/network/public/mojom/url_response_head.mojom.h"
 #include "third_party/perfetto/include/perfetto/tracing/track_event_args.h"
 
+#include "base/json/json_writer.h"
+
 namespace blink {
 
 namespace {
@@ -277,6 +279,8 @@ std::unique_ptr<ThrottlingURLLoader> ThrottlingURLLoader::CreateLoaderAndStart(
 }
 
 ThrottlingURLLoader::~ThrottlingURLLoader() {
+  recordreplay::UnregisterPointer(this);
+
   TRACE_EVENT("loading", "ThrottlingURLLoader::~ThrottlingURLLoader",
               perfetto::TerminatingFlow::FromPointer(this));
   if (inside_delegate_calls_ > 0) {
@@ -448,6 +452,11 @@ void ThrottlingURLLoader::Start(
       if (!HandleThrottleResult(throttle, throttle_deferred, &deferred))
         return;
     }
+  }
+
+  if (recordreplay::IsInReplayCode()) {
+    // [TT-1422] Special treatment for Replay-only requests.
+    options |= network::mojom::kURLLoadOptionReplayRequest;
   }
 
   start_info_ = std::make_unique<StartInfo>(factory, request_id, options,
@@ -738,6 +747,19 @@ void ThrottlingURLLoader::OnReceiveRedirect(
 
       MergeRequestHeaders(std::move(headers_update_params));
     }
+
+  // Keep track of network requests triggered by the download message we are
+  // handling from the browser process.
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info;
+    info.Set("kind", "receivedRedirect");
+    info.Set("original_url", original_url_.spec());
+    info.Set("new_url", redirect_info.new_url.spec());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
 
     if (deferred) {
       deferred_stage_ = DEFERRED_REDIRECT;

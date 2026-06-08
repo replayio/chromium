@@ -205,6 +205,11 @@ class CORE_EXPORT MessageEvent final : public Event {
     should_measure_data_access_before_origin_ = true;
   }
 
+  // Dependency graph node ID for when this event was created.
+  int RecordReplayDependencyGraphNodeId() const {
+    return record_replay_dependency_graph_node_id_;
+  }
+
   ScriptValue data(ScriptState*);
   bool IsDataDirty() const { return is_data_dirty_; }
   // This returns a serialized origin string (which might be "null") to support
@@ -224,6 +229,8 @@ class CORE_EXPORT MessageEvent final : public Event {
   Vector<MessagePortChannel> ReleaseChannels() { return std::move(channels_); }
 
   const AtomicString& InterfaceName() const override;
+
+  void RecordReplayInitDependencyGraphNodeId();
 
   // Use with caution. Since the data has already been unpacked, the underlying
   // SerializedScriptValue will no longer contain transferred contents.
@@ -304,6 +311,7 @@ class CORE_EXPORT MessageEvent final : public Event {
   // information of whether the actual original SerializedScriptValue was locked
   // to the agent cluster.
   bool locked_to_agent_cluster_ = false;
+  int record_replay_dependency_graph_node_id_ = 0;
   uint64_t trace_id_;
 };
 

@@ -16,6 +16,7 @@
 #include "base/mac/mac_util.h"
 #include "base/notreached.h"
 #include "base/posix/eintr_wrapper.h"
+#include "base/record_replay.h"
 #include "base/task/task_features.h"
 #include "base/time/time_override.h"
 #include "build/blink_buildflags.h"
@@ -180,6 +181,7 @@ void MessagePumpKqueue::Run(Delegate* delegate) {
 
     Delegate::NextWorkInfo next_work_info = delegate->DoWork();
     do_more_work |= next_work_info.is_immediate();
+
     if (!keep_running_) {
       break;
     }

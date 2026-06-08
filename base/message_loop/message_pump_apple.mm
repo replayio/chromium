@@ -28,6 +28,7 @@
 #include "base/memory/stack_allocated.h"
 #include "base/metrics/histogram_samples.h"
 #include "base/notreached.h"
+#include "base/record_replay.h"
 #include "base/run_loop.h"
 #include "base/task/task_features.h"
 #include "base/threading/platform_thread.h"
@@ -203,6 +204,10 @@ void MessagePumpCFRunLoopBase::ScheduleWork() {
 void MessagePumpCFRunLoopBase::ScheduleDelayedWork(
     const Delegate::NextWorkInfo& next_work_info) {
   DCHECK(!next_work_info.is_immediate());
+
+  recordreplay::Assert(
+    "[RUN-2801-2978] MessagePumpCFRunLoopBase::ScheduleDelayedWork A %lld",
+    next_work_info.delayed_run_time.ToInternalValue());
 
   // The tolerance needs to be set before the fire date or it may be ignored.
   if (GetAlignWakeUpsEnabled() &&
@@ -628,7 +633,7 @@ void MessagePumpCFRunLoopBase::PreWaitObserver(CFRunLoopObserverRef observer,
 
     // Notify the delegate that the loop is about to sleep.
     self->BeforeWait();
-  });
+  //});
 }
 
 // Called from the run loop.

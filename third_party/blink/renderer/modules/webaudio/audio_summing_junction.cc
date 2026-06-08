@@ -25,16 +25,21 @@
 
 #include "third_party/blink/renderer/modules/webaudio/audio_summing_junction.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_node_output.h"
 
 namespace blink {
 
 AudioSummingJunction::AudioSummingJunction(DeferredTaskHandler& handler)
-    : deferred_task_handler_(&handler) {}
+    : deferred_task_handler_(&handler) {
+  // Registered for set/map key determinism.
+  recordreplay::RegisterPointer("AudioSummingJunction", this);
+}
 
 AudioSummingJunction::~AudioSummingJunction() {
   deferred_task_handler_->AssertGraphOwner();
   deferred_task_handler_->RemoveMarkedSummingJunction(this);
+  recordreplay::UnregisterPointer(this);
 }
 
 void AudioSummingJunction::ChangedOutputs() {

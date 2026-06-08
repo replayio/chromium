@@ -393,7 +393,7 @@ void InputMethodController::DispatchCompositionUpdateEvent(LocalFrame& frame,
 
   auto* event = MakeGarbageCollected<CompositionEvent>(
       event_type_names::kCompositionupdate, frame.DomWindow(), text);
-  target->DispatchEvent(*event);
+  target->DispatchEvent(*event, "InputMethodController::DispatchCompositionUpdateEvent");
 }
 
 void InputMethodController::DispatchCompositionEndEvent(LocalFrame& frame,
@@ -425,7 +425,7 @@ void InputMethodController::DispatchBeforeInputFromComposition(
     ranges = TargetRangesForInputEvent(*node);
   InputEvent* before_input_event = InputEvent::CreateBeforeInput(
       input_type, data, InputEvent::EventIsComposing::kIsComposing, ranges);
-  target->DispatchEvent(*before_input_event);
+  target->DispatchEvent(*before_input_event, "InputMethodController::DispatchBeforeInputFromComposition");
 }
 
 // Used to insert/replace text during composition update and confirm
@@ -1004,7 +1004,7 @@ bool InputMethodController::DispatchCompositionStartEvent(const String& text) {
 
   auto* event = MakeGarbageCollected<CompositionEvent>(
       event_type_names::kCompositionstart, GetFrame().DomWindow(), text);
-  target->DispatchEvent(*event);
+  target->DispatchEvent(*event, "InputMethodController::DispatchCompositionStartEvent");
 
   return IsAvailable();
 }

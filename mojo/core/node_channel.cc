@@ -22,6 +22,8 @@
 #include "mojo/core/ipcz_driver/envelope.h"
 #include "mojo/core/request_context.h"
 
+#include "base/record_replay.h"
+
 namespace mojo {
 namespace core {
 
@@ -573,6 +575,13 @@ void NodeChannel::CreateAndBindLocalBrokerHost(
   new BrokerHost(remote_process_handle_.Duplicate(),
                  std::move(connection_params), process_error_callback_);
 #endif
+}
+
+void NodeChannel::Release() {
+  recordreplay::Assert("[RUN-1307-1830] NodeChannel::Release %d %d",
+                       HasOneRef(),
+                       owning_task_runner()->RunsTasksInCurrentSequence());
+  base::RefCountedDeleteOnSequence<NodeChannel>::Release();
 }
 
 void NodeChannel::OnChannelMessage(

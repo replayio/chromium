@@ -31,12 +31,15 @@
 #include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "base/process/internal_linux.h"
+#include "base/record_replay.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "base/threading/platform_thread_internal_posix.h"
 #include "base/threading/thread_id_name_manager.h"
 #include "base/threading/thread_type_delegate.h"
 #include "build/build_config.h"
+
+#include "base/record_replay.h"
 
 namespace base {
 

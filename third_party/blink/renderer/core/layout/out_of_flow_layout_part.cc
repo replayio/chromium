@@ -2521,6 +2521,19 @@ OutOfFlowLayoutPart::TryCalculateOffset(
     offset_info.imcb_size_for_try_order =
         ToPhysicalSize(imcb_for_position_fallback.Size(),
                        candidate_writing_direction.GetWritingMode());
+  recordreplay::Assert(
+      "[RUN-1239] NGOutOfFlowLayoutPart::TryCalculateOffset C %d %d",
+      test_if_margin_box_fits,
+      node_dimensions.MarginBoxInlineStart() < 0 ||
+          node_dimensions.MarginBoxInlineEnd() >
+              container_size_in_candidate_writing_mode.inline_size);
+
+  recordreplay::Assert(
+      "[RUN-1239-1435] NGOutOfFlowLayoutPart::TryCalculateOffset %d %d %d %s",
+      node_info.container_physical_content_size.width.RawValue(),
+      node_info.container_physical_content_size.height.RawValue(),
+      container_content_size_in_candidate_writing_mode.block_size.RawValue(),
+      node_info.node.ToString().Utf8().c_str());
 
     // Determine if the element overflows the IMCB, and calculate the
     // scroll-range for which it is valid.

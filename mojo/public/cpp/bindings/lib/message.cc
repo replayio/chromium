@@ -28,6 +28,8 @@
 #include "mojo/public/cpp/bindings/lib/message_fragment.h"
 #include "mojo/public/cpp/bindings/lib/unserialized_message_context.h"
 
+#include "base/record_replay.h"
+
 namespace mojo {
 
 namespace {
@@ -504,6 +506,8 @@ void Message::NotifyBadMessage(std::string_view error) {
 }
 
 void Message::SerializeHandles(AssociatedGroupController* group_controller) {
+  recordreplay::Assert("[RUN-1569] Message::SerializeHandles Start");
+
   if (mutable_handles()->empty() &&
       mutable_associated_endpoint_handles()->empty()) {
     // No handles attached, so no extra serialization work.
@@ -514,6 +518,8 @@ void Message::SerializeHandles(AssociatedGroupController* group_controller) {
     // Attaching only non-associated handles is easier since we don't have to
     // modify the message header. Faster path for that.
     bool attached = payload_buffer_.AttachHandles(mutable_handles());
+
+    recordreplay::Assert("[RUN-1569] Message::SerializeHandles #2 %d", attached);
 
     // TODO(crbug.com/40785088): Relax this assertion or fail more gracefully.
     CHECK(attached);

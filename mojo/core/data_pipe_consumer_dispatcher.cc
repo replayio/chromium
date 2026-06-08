@@ -25,6 +25,8 @@
 #include "mojo/core/user_message_impl.h"
 #include "mojo/public/c/system/data_pipe.h"
 
+#include "base/record_replay.h"
+
 namespace mojo {
 namespace core {
 
@@ -96,7 +98,7 @@ Dispatcher::Type DataPipeConsumerDispatcher::GetType() const {
 }
 
 MojoResult DataPipeConsumerDispatcher::Close() {
-  base::AutoLock lock(lock_);
+  recordreplay::AutoLockMaybeEventsDisallowed lock(lock_);
   DVLOG(1) << "Closing data pipe consumer " << pipe_id_;
   return CloseNoLock();
 }
@@ -241,6 +243,9 @@ MojoResult DataPipeConsumerDispatcher::BeginReadData(
   *buffer = UNSAFE_TODO(data + read_offset_);
   *buffer_num_bytes = bytes_to_read;
   two_phase_max_bytes_read_ = bytes_to_read;
+
+  recordreplay::RecordReplayBytes("DataPipeConsumerDispatcher::BeginReadData",
+                                  (void*)*buffer, *buffer_num_bytes);
 
   if (had_new_data) {
     watchers_.NotifyState(GetHandleSignalsStateNoLock());
@@ -477,6 +482,7 @@ DataPipeConsumerDispatcher::DataPipeConsumerDispatcher(
       node_controller_(node_controller),
       control_port_(control_port),
       pipe_id_(pipe_id),
+      lock_("DataPipeConsumerDispatcher.lock_"),
       watchers_(this),
       shared_ring_buffer_(std::move(shared_ring_buffer)) {}
 

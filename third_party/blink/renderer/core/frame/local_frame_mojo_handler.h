@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_FRAME_LOCAL_FRAME_MOJO_HANDLER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_FRAME_LOCAL_FRAME_MOJO_HANDLER_H_
 
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "cc/input/browser_controls_offset_tag_modifications.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
@@ -74,6 +75,7 @@ class LocalFrameMojoHandler
     return *non_associated_local_frame_host_remote_.get();
   }
 
+  void RegisterRecordReplayAuthTokenObserver();
   mojom::blink::ReportingServiceProxy* ReportingService();
   mojom::blink::DevicePostureProvider* DevicePostureProvider();
   mojom::blink::BackForwardCacheControllerHost&
@@ -93,6 +95,9 @@ class LocalFrameMojoHandler
   void BindFullscreenVideoElementReceiver(
       mojo::PendingAssociatedReceiver<
           mojom::blink::FullscreenVideoElementHandler> receiver);
+  void BindRecordReplayAuthTokenStoreObserver(
+      mojo::PendingReceiver<
+          auth_token::mojom::blink::RecordReplayAuthTokenStoreObserver> receiver);
 
   // blink::mojom::LocalFrame overrides:
   void GetTextSurroundingSelection(
@@ -251,6 +256,9 @@ class LocalFrameMojoHandler
       mojom::blink::SubframeResourceLengthsPtr resource_lengths) final;
   void GetScrollPosition(GetScrollPositionCallback callback) final;
 
+  // RecordReplayAuthTokenStoreObserver implementation:
+  void OnRecordReplayAuthTokenChanged(const WTF::String& token) final;
+
   // blink::mojom::LocalMainFrame overrides:
   void AnimateDoubleTapZoom(const gfx::Point& point,
                             const gfx::Rect& rect) override;
@@ -316,6 +324,9 @@ class LocalFrameMojoHandler
   HeapMojoAssociatedRemote<mojom::blink::LocalFrameHost>
       local_frame_host_remote_{nullptr};
 
+  HeapMojoRemote<auth_token::mojom::blink::RecordReplayAuthTokenStore>
+      auth_token_store_{nullptr};
+
   HeapMojoRemote<mojom::blink::NonAssociatedLocalFrameHost>
       non_associated_local_frame_host_remote_{nullptr};
 
@@ -330,6 +341,11 @@ class LocalFrameMojoHandler
   HeapMojoAssociatedReceiver<mojom::blink::FullscreenVideoElementHandler,
                              LocalFrameMojoHandler>
       fullscreen_video_receiver_{this, nullptr};
+  // LocalFrameMojoHandler can be reused by multiple ExecutionContext.
+  HeapMojoReceiver<auth_token::mojom::blink::RecordReplayAuthTokenStoreObserver,
+                   LocalFrameMojoHandler>
+      auth_token_store_observer_receiver_{this, nullptr};
+
 };
 
 class ActiveURLMessageFilter : public mojo::MessageFilter {

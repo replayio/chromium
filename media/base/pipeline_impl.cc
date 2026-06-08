@@ -212,7 +212,7 @@ class PipelineImpl::RendererWrapper final : public DemuxerHost,
     SEQUENCE_CHECKER(media_sequence_checker);
 
    private:
-    mutable base::Lock lock_;
+    mutable base::Lock lock_{"PipelineImpl::RendererWrapper.shared_state_lock_"};
     SharedState state_;  // Only sometimes guarded by `lock_`.
     LockedSharedState locked_state_ GUARDED_BY(lock_);
   };
