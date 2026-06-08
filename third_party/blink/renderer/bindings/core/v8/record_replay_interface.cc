@@ -1722,24 +1722,38 @@ static void HandleNetworkPrepareRequestEvent(const base::DictionaryValue& info) 
   CHECK(gActiveNetworkRequests);
   std::string request_id = GetRequestIdentifierProperty(info);
   if (gActiveNetworkRequests->find(request_id) != gActiveNetworkRequests->end()) {
-    // Redirects trigger a second PrepareRequest for the redirected request
-    // before Chromium emits Network.ResourceRedirect. That duplicate-looking
-    // PrepareRequest still uses the original replay request id, so we ignore it
-    // here and let HandleNetworkResourceRedirectEvent perform the actual
-    // redirect transition later.
+    // TODO: should be an assert?
+    recordreplay::Print("Duplicate request id: %s", request_id.c_str());
     return;
   }
 
+  const base::Value* redirect_source_value = info.FindPath("redirectSourceId");
+  const std::string* redirect_source_id =
+      redirect_source_value ? redirect_source_value->GetIfString() : nullptr;
+  if (redirect_source_id) {
+    auto request_info = gActiveNetworkRequests->find(*redirect_source_id);
+    if (request_info == gActiveNetworkRequests->end()) {
+      recordreplay::Print("No original request for redirected prepare: %s",
+                          redirect_source_id->c_str());
+      return;
+    }
+    EmitResponseEvent(*redirect_source_id, info);
+    gActiveNetworkRequests->erase(request_info);
+  }
+
   // Save request info in a global table.
-  // Associate with it the original request info which may be needed later if the
-  // request is redirected.
   gActiveNetworkRequests->insert(
     { request_id, NetworkRequestStatus(info) }
   );
 
   // Register the request.
   uint64_t bookmark = *info.FindPath("bookmark")->GetIfDouble();
-  recordreplay::OnNetworkRequest(request_id.c_str(), "http", bookmark);
+  if (redirect_source_id) {
+    recordreplay::OnNetworkRequest(request_id.c_str(), "http", bookmark,
+                                   redirect_source_id->c_str());
+  } else {
+    recordreplay::OnNetworkRequest(request_id.c_str(), "http", bookmark);
+  }
 
   // Package and emit a network request event with the appropriate info.
   base::DictionaryValue event;
@@ -1757,6 +1771,7 @@ static void HandleNetworkResourceRedirectEvent(const base::DictionaryValue& info
   CHECK(gActiveNetworkRequests);
 
   std::string redirected_request_id = GetRequestIdentifierProperty(info);
+
   const std::string& previous_request_id =
       *info.FindPath("redirectSourceId")->GetIfString();
 
