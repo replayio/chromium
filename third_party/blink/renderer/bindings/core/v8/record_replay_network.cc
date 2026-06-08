@@ -50,7 +50,15 @@ static const char* HttpVersionToString(blink::ResourceResponse::HTTPVersion vers
 
 // this is keyed by the original inspector identifier
 // and the value is used to generate the requestId that is reported to the recorder
-static std::unordered_map<uint64_t, size_t> gReplayNetworkRedirectCounts;
+static std::unordered_map<uint64_t, size_t>* gReplayNetworkRedirectCounts =
+    nullptr;
+
+static std::unordered_map<uint64_t, size_t>& GetReplayNetworkRedirectCounts() {
+  if (!gReplayNetworkRedirectCounts) {
+    gReplayNetworkRedirectCounts = new std::unordered_map<uint64_t, size_t>();
+  }
+  return *gReplayNetworkRedirectCounts;
+}
 
 static uint64_t RecordReplayNetworkInspectorId(uint64_t inspector_id) {
   // Inspector identifiers can vary when replaying due to differences in inspector
@@ -67,8 +75,9 @@ static std::string RecordReplayNetworkRequestId(uint64_t inspector_id) {
            (unsigned long)identifier);
   std::string root_request_id(request_id);
 
-  auto it = gReplayNetworkRedirectCounts.find(identifier);
-  if (it == gReplayNetworkRedirectCounts.end() || it->second == 0) {
+  auto& redirect_counts = GetReplayNetworkRedirectCounts();
+  auto it = redirect_counts.find(identifier);
+  if (it == redirect_counts.end() || it->second == 0) {
     return root_request_id;
   }
 
@@ -77,12 +86,12 @@ static std::string RecordReplayNetworkRequestId(uint64_t inspector_id) {
 
 static void RecordReplayNetworkIncrementRedirectCount(uint64_t inspector_id) {
   const uint64_t identifier = RecordReplayNetworkInspectorId(inspector_id);
-  gReplayNetworkRedirectCounts[identifier]++;
+  GetReplayNetworkRedirectCounts()[identifier]++;
 }
 
 static void RecordReplayNetworkClearRedirectCount(uint64_t inspector_id) {
   const uint64_t identifier = RecordReplayNetworkInspectorId(inspector_id);
-  gReplayNetworkRedirectCounts.erase(identifier);
+  GetReplayNetworkRedirectCounts().erase(identifier);
 }
 
 static const char* GetRequestCauseString(const ResourceRequest& req) {
