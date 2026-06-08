@@ -825,6 +825,10 @@ bool ResourceLoader::WillFollowRedirect(
     // but we reject the redirect here because otherwise we would see confusing
     // errors such as MixedContent errors in the console during redirect
     // handling.
+
+    // record responses received by, for example, `fetch(url, { redirect: "error" })`
+    recordreplay::OnNetworkReceiveResponse(resource_->InspectorId(),
+                                           passed_redirect_response.ToResourceResponse());
     HandleError(ResourceError::Failure(new_url));
     return false;
   }
