@@ -284,22 +284,6 @@ void OnNetworkPrepareRequest(const blink::Document* document, const blink::Resou
 
   if (!redirect_response.IsNull()) {
     dict.SetString("redirectSourceId", redirect_source_id);
-
-    const char* http_version =
-        HttpVersionToString(redirect_response.HttpVersion());
-    base::ListValue response_headers;
-    for (auto header : redirect_response.HttpHeaderFields()) {
-      base::DictionaryValue header_obj;
-      header_obj.SetString("name", header.key.Utf8());
-      header_obj.SetString("value", header.value.Utf8());
-      response_headers.Append(std::move(header_obj));
-    }
-    dict.SetKey("responseHeaders", std::move(response_headers));
-    dict.SetString("responseProtocolVersion", http_version);
-    dict.SetDoubleKey("responseStatus", redirect_response.HttpStatusCode());
-    dict.SetString("responseStatusText",
-                   redirect_response.HttpStatusText().Utf8());
-    dict.SetBoolean("responseFromCache", redirect_response.WasCached());
   }
 
   if (resource) {

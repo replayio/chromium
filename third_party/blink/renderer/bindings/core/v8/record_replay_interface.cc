@@ -1878,7 +1878,6 @@ static void HandleNetworkPrepareRequestEvent(const base::DictionaryValue& info) 
                           redirect_source_id->c_str());
       return;
     }
-    EmitResponseEvent(*redirect_source_id, info);
     gActiveNetworkRequests->erase(request_info);
   }
 
