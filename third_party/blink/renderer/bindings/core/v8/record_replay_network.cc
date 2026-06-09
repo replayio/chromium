@@ -48,16 +48,26 @@ static const char* HttpVersionToString(blink::ResourceResponse::HTTPVersion vers
   }
 }
 
-// this is keyed by the original inspector identifier
-// and the value is used to generate the requestId that is reported to the recorder
-static std::unordered_map<uint64_t, size_t>* gReplayNetworkRedirectCounts =
-    nullptr;
+struct ReplayNetworkRequestState {
+  size_t redirect_count = 0;
+  bool has_form_body = false;
+  std::string form_body;
+};
 
-static std::unordered_map<uint64_t, size_t>& GetReplayNetworkRedirectCounts() {
-  if (!gReplayNetworkRedirectCounts) {
-    gReplayNetworkRedirectCounts = new std::unordered_map<uint64_t, size_t>();
+// This is keyed by the original inspector identifier. It tracks producer-side
+// request-chain state used to derive replay request ids and preserve request
+// body data for redirected hops when Blink no longer exposes the redirected
+// body on the prepared ResourceRequest.
+static std::unordered_map<uint64_t, ReplayNetworkRequestState>*
+    gReplayNetworkRequestStates = nullptr;
+
+static std::unordered_map<uint64_t, ReplayNetworkRequestState>&
+GetReplayNetworkRequestStates() {
+  if (!gReplayNetworkRequestStates) {
+    gReplayNetworkRequestStates =
+        new std::unordered_map<uint64_t, ReplayNetworkRequestState>();
   }
-  return *gReplayNetworkRedirectCounts;
+  return *gReplayNetworkRequestStates;
 }
 
 static uint64_t RecordReplayNetworkInspectorId(uint64_t inspector_id) {
@@ -75,23 +85,32 @@ static std::string RecordReplayNetworkRequestId(uint64_t inspector_id) {
            (unsigned long)identifier);
   std::string root_request_id(request_id);
 
-  auto& redirect_counts = GetReplayNetworkRedirectCounts();
-  auto it = redirect_counts.find(identifier);
-  if (it == redirect_counts.end() || it->second == 0) {
+  auto& request_states = GetReplayNetworkRequestStates();
+  auto it = request_states.find(identifier);
+  if (it == request_states.end() || it->second.redirect_count == 0) {
     return root_request_id;
   }
 
-  return root_request_id + ":" + std::to_string(it->second);
+  return root_request_id + ":" + std::to_string(it->second.redirect_count);
 }
 
 static void RecordReplayNetworkIncrementRedirectCount(uint64_t inspector_id) {
   const uint64_t identifier = RecordReplayNetworkInspectorId(inspector_id);
-  GetReplayNetworkRedirectCounts()[identifier]++;
+  GetReplayNetworkRequestStates()[identifier].redirect_count++;
 }
 
-static void RecordReplayNetworkClearRedirectCount(uint64_t inspector_id) {
+static void RecordReplayNetworkClearRequestState(uint64_t inspector_id) {
   const uint64_t identifier = RecordReplayNetworkInspectorId(inspector_id);
-  GetReplayNetworkRedirectCounts().erase(identifier);
+  GetReplayNetworkRequestStates().erase(identifier);
+}
+
+static void EmitRequestDataFormEvent(const std::string& request_id,
+                                     const std::string& data) {
+  base::DictionaryValue requestDataDict;
+  requestDataDict.SetString("requestId", request_id);
+  requestDataDict.SetString("data", data);
+  requestDataDict.SetInteger("dataLength", (int)data.size());
+  BrowserEvent("Network.RequestData.Form", requestDataDict);
 }
 
 static const char* GetRequestCauseString(const ResourceRequest& req) {
@@ -238,6 +257,9 @@ void OnNetworkPrepareRequest(const blink::Document* document, const blink::Resou
     return;
   }
 
+  const uint64_t inspector_identifier =
+      RecordReplayNetworkInspectorId(request.InspectorId());
+
   // We must allow user agent scripts when taking a new bookmark.
   blink::ScriptForbiddenScope::AllowUserAgentScript allow_script;
   std::string url_string = request.Url().GetString().Utf8().c_str();
@@ -296,17 +318,26 @@ void OnNetworkPrepareRequest(const blink::Document* document, const blink::Resou
 
   BrowserEvent("Network.PrepareRequest", dict);
 
+  auto& request_state = GetReplayNetworkRequestStates()[inspector_identifier];
+
   // Check the request body for request data or stream.
   const scoped_refptr<blink::EncodedFormData>& form_body =
     request.Body().FormBody();
   if (form_body) {
     WTF::String data = form_body->FlattenToString();
-    base::DictionaryValue requestDataDict;
-    requestDataDict.SetString("requestId", requestId);
     std::string dataStr = data.Utf8();
-    requestDataDict.SetString("data", dataStr);
-    requestDataDict.SetInteger("dataLength", (int)dataStr.size());
-    BrowserEvent("Network.RequestData.Form", requestDataDict);
+    request_state.has_form_body = true;
+    request_state.form_body = dataStr;
+    EmitRequestDataFormEvent(requestId, dataStr);
+  } else if (!redirect_response.IsNull() && request_state.has_form_body &&
+             request.HttpMethod() != http_names::kGET &&
+             request.HttpMethod() != http_names::kHEAD) {
+    // Blink can stop exposing the upload body on the redirected prepared
+    // request. If the redirected method is still non-GET/HEAD here, Chromium
+    // preserved the upload semantics across the redirect; otherwise the method
+    // would already have been rewritten to GET and the body dropped.
+    // Reuse the cached original form body for that redirected hop.
+    EmitRequestDataFormEvent(requestId, request_state.form_body);
   }
 }
 
@@ -447,7 +478,7 @@ void OnNetworkFinishLoading(uint64_t inspector_id,
   dict.SetDoubleKey("encodedBodySize", (double) encoded_body_length);
   dict.SetDoubleKey("decodedBodySize", (double) decoded_body_length);
   BrowserEvent("Network.DidFinishLoading", dict);
-  RecordReplayNetworkClearRedirectCount(inspector_id);
+  RecordReplayNetworkClearRequestState(inspector_id);
 }
 
 void OnNetworkFail(uint64_t inspector_id, const blink::WebURLError& error) {
@@ -471,7 +502,7 @@ void OnNetworkFail(uint64_t inspector_id, const blink::WebURLError& error) {
   dict.SetString("requestId", requestId);
   dict.SetString("requestFailedReason", std::move(reason));
   BrowserEvent("Network.DidFailLoading", dict);
-  RecordReplayNetworkClearRedirectCount(inspector_id);
+  RecordReplayNetworkClearRequestState(inspector_id);
 }
 
 }  // namespace recordreplay
