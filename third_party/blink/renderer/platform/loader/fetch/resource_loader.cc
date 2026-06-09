@@ -1319,8 +1319,6 @@ void ResourceLoader::DidFail(const WebURLError& error,
   const ResourceRequestHead& request = resource_->GetResourceRequest();
   response_end_time_for_error_cases_ = response_end_time;
 
-  recordreplay::OnNetworkFail(resource_->InspectorId(), error);
-
   if (request.IsAutomaticUpgrade()) {
     LogMixedAutoupgradeMetrics(MixedContentAutoupgradeStatus::kFailed,
                                error.reason(), request.GetUkmSourceId(),
@@ -1333,6 +1331,9 @@ void ResourceLoader::DidFail(const WebURLError& error,
 }
 
 void ResourceLoader::HandleError(const ResourceError& error) {
+  recordreplay::OnNetworkFail(resource_->InspectorId(),
+                              static_cast<WebURLError>(error));
+
   if (error.CorsErrorStatus() &&
       error.CorsErrorStatus()
           ->has_authorization_covered_by_wildcard_on_preflight) {
