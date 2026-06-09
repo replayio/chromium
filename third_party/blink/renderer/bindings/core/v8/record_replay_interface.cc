@@ -1806,71 +1806,6 @@ static void HandleNetworkResourceRedirectEvent(const base::DictionaryValue& info
   );
 }
 
-static void HandleNetworkNavigationEvent(const base::DictionaryValue& info) {
-  CHECK(gActiveNetworkRequests);
-
-  // Navigation events are network requests that are not resource requests.
-  // They are directed here (the renderer process) from the content process.
-  // They have no associated bookmark, as we can't take bookmarks in the
-  // content process.
-
-  // Ensure that a request with the same ID has not already been registered.
-  std::string request_id = *info.FindPath("requestId")->GetIfString();
-  if (gActiveNetworkRequests->find(request_id) != gActiveNetworkRequests->end()) {
-    recordreplay::Print("Duplicate request id: %s", request_id.c_str());
-    return;
-  }
-  gActiveNetworkRequests->insert({ request_id, NetworkRequestStatus(info) });
-
-  // A navigation event is a new network request, so call the `OnNetworkRequest` hook.
-  // Navigation events have no bookmarks associated with them.
-  recordreplay::OnNetworkRequest(request_id.c_str(), "http", /* bookmark = */ 0);
-
-  // Package and emit a network request event.
-  base::DictionaryValue event;
-  event.SetString("kind", "request");
-  CopyDictionaryProperty(event, info, "requestUrl");
-  CopyDictionaryProperty(event, info, "requestHeaders");
-  CopyDictionaryProperty(event, info, "requestMethod");
-  event.SetString("requestCause", "document");
-
-  EmitNetworkRequestEvent(request_id, event);
-}
-
-static void HandleNetworkNavigationRedirectEvent(const base::DictionaryValue& info) {
-  CHECK(gActiveNetworkRequests);
-
-  // Navigation redirect events are, as with navigation events, sent from
-  // the content process to the renderer process.
-
-  // Ensure that a request with the same ID has not already been registered.
-  std::string request_id = *info.FindPath("requestId")->GetIfString();
-  // This is a redirect, so an existing request should have been registered
-  // with the same id.
-  auto request_info = gActiveNetworkRequests->find(request_id);
-  if (request_info == gActiveNetworkRequests->end()) {
-    recordreplay::Print("No original request for navigation redirect: %s",
-      request_id.c_str());
-    return;
-  }
-  const base::DictionaryValue& original_info =
-    base::Value::AsDictionaryValue(request_info->second.info);
-
-  // A navigation redirect event is a new network request. There is no bookmark.
-  recordreplay::OnNetworkRequest(request_id.c_str(), "http", 0);
-
-  // Package and emit a network request event.
-  // The request method is obtained from the saved request info.
-  base::DictionaryValue event;
-  event.SetString("kind", "request");
-  CopyDictionaryProperty(event, info, "requestUrl");
-  CopyDictionaryProperty(event, info, "requestHeaders");
-  CopyDictionaryProperty(event, original_info, "requestMethod");
-  event.SetString("requestCause", "document");
-
-  EmitNetworkRequestEvent(request_id, event);
-}
-
 static void HandleNetworkRequestDataFormEvent(const base::DictionaryValue& info) {
   CHECK(gActiveNetworkRequests);
   std::string request_id = GetRequestIdentifierProperty(info);
@@ -2397,10 +2332,6 @@ static void HandleBrowserEvent(const char* name, const char* payload) {
     HandleNetworkDidFailLoadingEvent(base::Value::AsDictionaryValue(val));
   } else if (!strcmp(name, "Network.DidReceiveData")) {
     HandleNetworkDidReceiveDataEvent(base::Value::AsDictionaryValue(val));
-  } else if (!strcmp(name, "Network.Navigation")) {
-    HandleNetworkNavigationEvent(base::Value::AsDictionaryValue(val));
-  } else if (!strcmp(name, "Network.NavigationRedirect")) {
-    HandleNetworkNavigationRedirectEvent(base::Value::AsDictionaryValue(val));
   } else {
     recordreplay::Print("HandleBrowserEvent received unrecognized event %s", name);
   }
