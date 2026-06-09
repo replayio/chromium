@@ -1747,12 +1747,7 @@ static void HandleNetworkPrepareRequestEvent(const base::DictionaryValue& info) 
 
   // Register the request.
   uint64_t bookmark = *info.FindPath("bookmark")->GetIfDouble();
-  if (redirect_source_id) {
-    recordreplay::OnNetworkRequest(request_id.c_str(), "http", bookmark,
-                                   redirect_source_id->c_str());
-  } else {
-    recordreplay::OnNetworkRequest(request_id.c_str(), "http", bookmark);
-  }
+  recordreplay::OnNetworkRequest(request_id.c_str(), "http", bookmark);
 
   // Package and emit a network request event with the appropriate info.
   base::DictionaryValue event;
@@ -1762,6 +1757,9 @@ static void HandleNetworkPrepareRequestEvent(const base::DictionaryValue& info) 
   CopyDictionaryProperty(event, info, "requestMethod");
   CopyDictionaryProperty(event, info, "requestCause");
   CopyDictionaryProperty(event, info, "initiator");
+  if (redirect_source_id) {
+    event.SetString("redirectSourceId", *redirect_source_id);
+  }
 
   EmitNetworkRequestEvent(request_id, event);
 }
@@ -1787,10 +1785,7 @@ static void HandleNetworkResourceRedirectEvent(const base::DictionaryValue& info
 
   // TODO: should we be inheriting the bookmark from the previous request?
   const uint64_t bookmark = *previous_info.FindPath("bookmark")->GetIfDouble();
-  // unlike real Chromium we register the redirected requests under unique ids (Chrome reuses the IDs for all hops of a redirect),
-  // so we need to pass the previous request id as the "redirectSourceId" param to the hook.
-  recordreplay::OnNetworkRequest(redirected_request_id.c_str(), "http", bookmark,
-                                 previous_request_id.c_str());
+  recordreplay::OnNetworkRequest(redirected_request_id.c_str(), "http", bookmark);
 
   const base::DictionaryValue redirected_info =
       BuildRedirectedRequestInfo(previous_info, info);
@@ -1802,6 +1797,7 @@ static void HandleNetworkResourceRedirectEvent(const base::DictionaryValue& info
   CopyDictionaryProperty(event, redirected_info, "requestMethod");
   CopyDictionaryProperty(event, redirected_info, "requestCause");
   CopyDictionaryProperty(event, redirected_info, "initiator");
+  event.SetString("redirectSourceId", previous_request_id);
   EmitNetworkRequestEvent(redirected_request_id, event);
 
   gActiveNetworkRequests->erase(request_info);
