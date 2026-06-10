@@ -1695,17 +1695,6 @@ static const std::string* gCurrentNetworkRequestId = nullptr;
 static const char* gCurrentNetworkStreamKind = nullptr;
 static std::vector<uint8_t>* gCurrentNetworkStreamData = nullptr;
 
-static void SetCurrentNetworkRequestEvent(const std::string& request_id,
-                                          base::Value* event) {
-  gCurrentNetworkRequestEvent = event;
-  gCurrentNetworkRequestId = &request_id;
-}
-
-static void ClearCurrentNetworkRequestEvent() {
-  gCurrentNetworkRequestEvent = nullptr;
-  gCurrentNetworkRequestId = nullptr;
-}
-
 static void SetCurrentNetworkStreamData(
     const std::string& request_id,
     const char* stream_kind,
@@ -1725,7 +1714,6 @@ static void ClearCurrentNetworkStreamData() {
   gCurrentNetworkStreamKind = nullptr;
   gCurrentNetworkStreamData->clear();
 }
-
 static void GetCurrentNetworkRequestEvent(const v8::FunctionCallbackInfo<v8::Value>& args) {
   if (!gCurrentNetworkRequestEvent) {
     return;
@@ -1905,7 +1893,7 @@ static void HandleNetworkPrepareRequestEvent(const base::DictionaryValue& info) 
   EmitNetworkRequestEvent(request_id, event);
 }
 
-static void HandleNetworkResourceRedirectEvent(const base::DictionaryValue& info) {
+static void HandleNetworkNavigationRedirectEvent(const base::DictionaryValue& info) {
   CHECK(gActiveNetworkRequests);
 
   std::string redirected_request_id = GetRequestIdentifierProperty(info);
@@ -2483,8 +2471,8 @@ static void HandleBrowserEvent(const char* name, const char* payload) {
   assert(!val.is_dict() && "Browser event JSON is not a dictionary");
   if (!strcmp(name, "Network.PrepareRequest")) {
     HandleNetworkPrepareRequestEvent(base::Value::AsDictionaryValue(val));
-  } else if (!strcmp(name, "Network.ResourceRedirect")) {
-    HandleNetworkResourceRedirectEvent(base::Value::AsDictionaryValue(val));
+  } else if (!strcmp(name, "Network.NavigationRedirect")) {
+    HandleNetworkNavigationRedirectEvent(base::Value::AsDictionaryValue(val));
   } else if (!strcmp(name, "Network.RequestData.Form")) {
     HandleNetworkRequestDataFormEvent(base::Value::AsDictionaryValue(val));
   } else if (!strcmp(name, "Network.DidReceiveResponse")) {

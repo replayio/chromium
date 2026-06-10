@@ -947,10 +947,6 @@ bool ResourceLoader::WillFollowRedirect(
     return false;
   }
 
-  recordreplay::OnNetworkResourceRedirect(resource_->InspectorId(),
-                                          new_request->Url(), new_request.get(),
-                                          redirect_response);
-
   has_devtools_request_id = new_request->GetDevToolsId().has_value();
   return true;
 }
