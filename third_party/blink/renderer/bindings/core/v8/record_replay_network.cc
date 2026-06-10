@@ -250,7 +250,8 @@ void OnNetworkPrepareRequest(const blink::Document* document,
   OnNetworkPrepareRequest(document, resource, request, redirect_response);
 }
 
-void OnNetworkPrepareRequest(const blink::Document* document, const blink::Resource* resource,
+void OnNetworkPrepareRequest(const blink::Document* document,
+                             const blink::Resource* resource,
                              const blink::ResourceRequest& request,
                              const blink::ResourceResponse& redirect_response) {
   if (!ShouldEmitRecordReplayNetworkBrowserEvents()) {
@@ -341,17 +342,10 @@ void OnNetworkPrepareRequest(const blink::Document* document, const blink::Resou
   }
 }
 
-void OnNetworkResourceRedirect(uint64_t inspector_id,
-                               const blink::KURL& new_url,
-                               blink::ResourceRequest* new_request,
-                               const blink::ResourceResponse& redirect_response) {
+void OnNetworkNavigationRedirect(uint64_t inspector_id,
+                                 const blink::KURL& new_url,
+                                 const blink::ResourceResponse& redirect_response) {
   if (!ShouldEmitRecordReplayNetworkBrowserEvents()) {
-    return;
-  }
-
-  if (new_request) {
-    // Resource redirects now carry their transition data on the redirected
-    // PrepareRequest, which creates the new request through the normal path.
     return;
   }
 
@@ -366,17 +360,6 @@ void OnNetworkResourceRedirect(uint64_t inspector_id,
   dict.SetString("redirectSourceId", previous_request_id);
   dict.SetString("requestUrl", new_url.GetString().Utf8());
 
-  base::ListValue headers;
-  if (new_request) {
-    for (auto header : new_request->HttpHeaderFields()) {
-      base::DictionaryValue header_obj;
-      header_obj.SetString("name", header.key.Utf8());
-      header_obj.SetString("value", header.value.Utf8());
-      headers.Append(std::move(header_obj));
-    }
-    dict.SetString("requestMethod", new_request->HttpMethod().Utf8());
-  }
-  dict.SetKey("requestHeaders", std::move(headers));
   {
     // Include the redirect response information as well since that is useful for understanding the redirect chain and why a request was redirected.
     const char* http_version = HttpVersionToString(redirect_response.HttpVersion());
@@ -394,7 +377,7 @@ void OnNetworkResourceRedirect(uint64_t inspector_id,
     dict.SetBoolean("responseFromCache", redirect_response.WasCached());
   }
 
-  BrowserEvent("Network.ResourceRedirect", dict);
+  BrowserEvent("Network.NavigationRedirect", dict);
 }
 
 void OnNetworkReceiveResponse(uint64_t inspector_id,
