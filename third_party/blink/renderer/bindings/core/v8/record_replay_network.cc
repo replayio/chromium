@@ -344,6 +344,7 @@ void OnNetworkPrepareRequest(const blink::Document* document,
 
 void OnNetworkNavigationRedirect(uint64_t inspector_id,
                                  const blink::KURL& new_url,
+                                 const blink::ResourceRequest& request,
                                  const blink::ResourceResponse& redirect_response) {
   if (!ShouldEmitRecordReplayNetworkBrowserEvents()) {
     return;
@@ -359,6 +360,16 @@ void OnNetworkNavigationRedirect(uint64_t inspector_id,
   dict.SetString("requestId", redirected_request_id);
   dict.SetString("redirectSourceId", previous_request_id);
   dict.SetString("requestUrl", new_url.GetString().Utf8());
+  dict.SetString("requestMethod", request.HttpMethod().Utf8());
+
+  base::ListValue headers;
+  for (auto header : request.HttpHeaderFields()) {
+    base::DictionaryValue header_obj;
+    header_obj.SetString("name", header.key.Utf8());
+    header_obj.SetString("value", header.value.Utf8());
+    headers.Append(std::move(header_obj));
+  }
+  dict.SetKey("requestHeaders", std::move(headers));
 
   {
     // Include the redirect response information as well since that is useful for understanding the redirect chain and why a request was redirected.
