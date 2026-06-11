@@ -1693,19 +1693,6 @@ static void EmitResponseEvent(const std::string& request_id,
   EmitNetworkRequestEvent(request_id, event);
 }
 
-static base::DictionaryValue BuildRedirectedRequestInfo(
-    const base::DictionaryValue& previous_info,
-    const base::DictionaryValue& info) {
-  base::DictionaryValue redirected_info;
-  CopyDictionaryProperty(redirected_info, previous_info, "bookmark");
-  CopyDictionaryProperty(redirected_info, info, "requestUrl");
-  CopyDictionaryProperty(redirected_info, info, "requestHeaders");
-  CopyDictionaryProperty(redirected_info, info, "requestMethod");
-  CopyDictionaryProperty(redirected_info, previous_info, "requestCause");
-  CopyDictionaryProperty(redirected_info, previous_info, "initiator");
-  return redirected_info;
-}
-
 static void HandleNetworkPrepareRequestEvent(const base::DictionaryValue& info) {
   CHECK(gActiveNetworkRequests);
   std::string request_id = GetRequestIdentifierProperty(info);
@@ -1775,8 +1762,13 @@ static void HandleNetworkNavigationRedirectEvent(const base::DictionaryValue& in
   const uint64_t bookmark = *previous_info.FindPath("bookmark")->GetIfDouble();
   recordreplay::OnNetworkRequest(redirected_request_id.c_str(), "http", bookmark);
 
-  const base::DictionaryValue redirected_info =
-      BuildRedirectedRequestInfo(previous_info, info);
+  base::DictionaryValue redirected_info;
+  CopyDictionaryProperty(redirected_info, previous_info, "bookmark");
+  CopyDictionaryProperty(redirected_info, info, "requestUrl");
+  CopyDictionaryProperty(redirected_info, info, "requestHeaders");
+  CopyDictionaryProperty(redirected_info, info, "requestMethod");
+  CopyDictionaryProperty(redirected_info, previous_info, "requestCause");
+  CopyDictionaryProperty(redirected_info, previous_info, "initiator");
 
   base::DictionaryValue event;
   event.SetString("kind", "request");
