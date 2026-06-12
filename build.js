@@ -195,6 +195,34 @@ function probeReclient(phase) {
   }
 }
 
+// Report autoninja's actual remote-build decision: which backend (siso vs
+// reclient) it picks and which RBE project that backend resolves to. This is
+// the real source of the rbe-chrome-untrusted error when siso is selected.
+function probeBackend(phase, outDir) {
+  const py = [
+    "import sys, os",
+    `sys.path.insert(0, ${JSON.stringify(depotToolsDir)})`,
+    "import autoninja, gclient_paths",
+    `out = ${JSON.stringify(outDir)}`,
+    "print('PHASE=' + " + JSON.stringify(phase) + ")",
+    "print('use_siso_default=' + str(autoninja._get_use_siso_default(out)))",
+    "print('SISO_PROJECT_env=' + (os.environ.get('SISO_PROJECT') or '(unset)'))",
+    "print('siso_rbe_project=' + (autoninja._siso_rbe_project(out) or '(none)'))",
+    "print('reclient_rbe_project=' + (autoninja._reclient_rbe_project() or '(none)'))",
+    "print('has_internal_checkout=' + str(autoninja._has_internal_checkout(out)))",
+  ].join("; ");
+  const res = spawnSync(depotPython, ["-c", py], { cwd: process.cwd() });
+  process.stdout.write(
+    "[reclient] " +
+      res.stdout.toString().trim().split("\n").join("\n[reclient] ") +
+      "\n"
+  );
+  const err = res.stderr.toString().trim();
+  if (err) {
+    console.log(`[reclient] backend probe stderr: ${err}`);
+  }
+}
+
 const reproxyCfgPath = path.join(
   __dirname,
   "buildtools",
@@ -220,6 +248,7 @@ const gn = currentPlatform() == "windows" ? "gn.bat" : "gn";
 spawnChecked(gn, ["gen", outdir], { stdio: "inherit" });
 
 probeReclient("after gn gen");
+probeBackend("after gn gen", outdir);
 
 // only lint when not in buildkite (since buildkite does the linting at a different stage)
 if (!process.env["BUILDKITE"]) {
@@ -238,6 +267,7 @@ if (!process.env["BUILDKITE"]) {
 }
 
 probeReclient("before autoninja");
+probeBackend("before autoninja", outdir);
 
 console.log(`Building...`);
 const autoninja =

@@ -1,4 +1,6 @@
 use_remoteexec = true
+use_reclient = true # force reclient (EngFlow) instead of siso's default RBE
+use_siso = false
 is_debug = false # we can't really use most debugging symbols right now
 dcheck_always_on = false # disable dchecks
 enable_nacl = false  # no native targets
