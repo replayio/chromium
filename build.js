@@ -129,12 +129,50 @@ fs.writeFileSync(
 );
 
 // regenerate reclient/reproxy config so it targets the EngFlow RBE_* env
-// vars that are set inside this build container
+// vars that are set inside this build container. reclient_custom.py overrides
+// the instance away from Chromium's corp-only 'rbe-chrome-untrusted'.
+console.log(`[reclient] RBE_service=${process.env.RBE_service || "(unset)"}`);
+console.log(`[reclient] RBE_instance=${process.env.RBE_instance || "(unset)"}`);
+const autoninjaPath = spawnSync("which", ["autoninja"])
+  .stdout.toString()
+  .trim();
+const depotToolsDir = autoninjaPath
+  ? path.dirname(autoninjaPath)
+  : "/depot_tools";
+const depotToolsRevision = spawnSync(
+  "git",
+  ["-C", depotToolsDir, "rev-parse", "HEAD"]
+)
+  .stdout.toString()
+  .trim();
+console.log(`[reclient] autoninja=${autoninjaPath || "(not found)"}`);
+console.log(
+  `[reclient] depot_tools=${depotToolsDir} revision=${depotToolsRevision || "(unknown)"}`
+);
+
 spawnChecked(
   "python3",
-  ["third_party/reclient_configs/configure_reclient.py", "--src_dir=."],
+  [
+    "third_party/reclient_configs/configure_reclient.py",
+    "--src_dir=.",
+    `--custom_py=${path.join(__dirname, "replay_build_scripts", "reclient_custom.py")}`,
+  ],
   { stdio: "inherit" }
 );
+
+const reproxyCfgPath = path.join(
+  __dirname,
+  "buildtools",
+  "reclient_cfgs",
+  "reproxy.cfg"
+);
+const instanceLine = fs.existsSync(reproxyCfgPath)
+  ? fs
+      .readFileSync(reproxyCfgPath, "utf8")
+      .split("\n")
+      .find((l) => l.startsWith("instance="))
+  : "(reproxy.cfg missing)";
+console.log(`[reclient] reproxy.cfg ${instanceLine || "(no instance= line)"}`);
 
 // ensure that build configuration is written with correct paths
 const gn = currentPlatform() == "windows" ? "gn.bat" : "gn";
