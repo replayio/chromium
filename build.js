@@ -128,6 +128,14 @@ fs.writeFileSync(
 `
 );
 
+// regenerate reclient/reproxy config so it targets the EngFlow RBE_* env
+// vars that are set inside this build container
+spawnChecked(
+  "python3",
+  ["third_party/reclient_configs/configure_reclient.py", "--src_dir=."],
+  { stdio: "inherit" }
+);
+
 // ensure that build configuration is written with correct paths
 const gn = currentPlatform() == "windows" ? "gn.bat" : "gn";
 spawnChecked(gn, ["gen", outdir], { stdio: "inherit" });

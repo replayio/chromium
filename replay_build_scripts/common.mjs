@@ -123,14 +123,6 @@ function runGclientSync() {
   //spawnChecked(gclient(), ["sync", "-D"], { stdio: "inherit" });
 }
 
-function runConfigureReclient() {
-  spawnChecked(
-    "python3",
-    ["third_party/reclient_configs/configure_reclient.py", "--src_dir=."],
-    { stdio: "inherit" },
-  );
-}
-
 function updateRepo(repo, treeish) {
   log(`Updating ${repo} to ${treeish}`);
   // delete git lock file if it exists on Windows
@@ -195,8 +187,6 @@ export function updateChromiumRepo() {
   );
 
   runGclientSync();
-
-  runConfigureReclient();
 
   runGnGen();
 }
