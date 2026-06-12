@@ -157,6 +157,14 @@ console.log(
   `[reclient] depot_tools=${depotToolsDir} revision=${depotToolsRevision || "(unknown)"}`
 );
 
+// autoninja runs depot_tools' bundled python (>=3.9), not the container's
+// system python3 (3.8). configure_reclient and our probe must use the same
+// interpreter, otherwise they hit/skip different code paths.
+const depotPython = path.join(depotToolsDir, "python-bin", "python3");
+console.log(
+  `[reclient] depotPython=${depotPython} exists=${fs.existsSync(depotPython)}`
+);
+
 // Resolve the cfg path EXACTLY as autoninja does, and report what
 // autoninja's own logic resolves the RBE project to. This verifies, end to
 // end, which file autoninja reads and which instance it derives from it.
@@ -175,7 +183,7 @@ function probeReclient(phase) {
     "inst = [l for l in lines if l.strip().startswith('instance')]",
     "print('instance_lines=' + repr(inst))",
   ].join("; ");
-  const out = spawnSync("python3", ["-c", py], { cwd: process.cwd() });
+  const out = spawnSync(depotPython, ["-c", py], { cwd: process.cwd() });
   process.stdout.write(
     "[reclient] " +
       out.stdout.toString().trim().split("\n").join("\n[reclient] ") +
@@ -196,7 +204,7 @@ const reproxyCfgPath = path.join(
 console.log(`[reclient] expected configure_reclient output=${reproxyCfgPath}`);
 
 spawnChecked(
-  "python3",
+  depotPython,
   [
     "third_party/reclient_configs/configure_reclient.py",
     "--src_dir=.",
