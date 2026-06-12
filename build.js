@@ -133,22 +133,67 @@ fs.writeFileSync(
 // the instance away from Chromium's corp-only 'rbe-chrome-untrusted'.
 console.log(`[reclient] RBE_service=${process.env.RBE_service || "(unset)"}`);
 console.log(`[reclient] RBE_instance=${process.env.RBE_instance || "(unset)"}`);
+console.log(
+  `[reclient] CHROMIUM_BUILDTOOLS_PATH=${process.env.CHROMIUM_BUILDTOOLS_PATH || "(unset)"}`
+);
+console.log(`[reclient] cwd=${process.cwd()} __dirname=${__dirname}`);
+
 const autoninjaPath = spawnSync("which", ["autoninja"])
   .stdout.toString()
   .trim();
 const depotToolsDir = autoninjaPath
   ? path.dirname(autoninjaPath)
   : "/depot_tools";
-const depotToolsRevision = spawnSync(
-  "git",
-  ["-C", depotToolsDir, "rev-parse", "HEAD"]
-)
+const depotToolsRevision = spawnSync("git", [
+  "-C",
+  depotToolsDir,
+  "rev-parse",
+  "HEAD",
+])
   .stdout.toString()
   .trim();
 console.log(`[reclient] autoninja=${autoninjaPath || "(not found)"}`);
 console.log(
   `[reclient] depot_tools=${depotToolsDir} revision=${depotToolsRevision || "(unknown)"}`
 );
+
+// Resolve the cfg path EXACTLY as autoninja does, and report what
+// autoninja's own logic resolves the RBE project to. This verifies, end to
+// end, which file autoninja reads and which instance it derives from it.
+function probeReclient(phase) {
+  const py = [
+    "import sys, os",
+    `sys.path.insert(0, ${JSON.stringify(depotToolsDir)})`,
+    "import reclient_helper, gclient_paths",
+    "cfg = reclient_helper.find_reclient_cfg() or ''",
+    "print('PHASE=' + " + JSON.stringify(phase) + ")",
+    "print('buildtools_path=' + (gclient_paths.GetBuildtoolsPath() or '(none)'))",
+    "print('primary_solution=' + (gclient_paths.GetPrimarySolutionPath() or '(none)'))",
+    "print('find_reclient_cfg=' + (cfg or '(none)'))",
+    "print('exists=' + str(bool(cfg and os.path.isfile(cfg))))",
+    "lines = open(cfg).read().splitlines() if cfg and os.path.isfile(cfg) else []",
+    "inst = [l for l in lines if l.strip().startswith('instance')]",
+    "print('instance_lines=' + repr(inst))",
+  ].join("; ");
+  const out = spawnSync("python3", ["-c", py], { cwd: process.cwd() });
+  process.stdout.write(
+    "[reclient] " +
+      out.stdout.toString().trim().split("\n").join("\n[reclient] ") +
+      "\n"
+  );
+  const err = out.stderr.toString().trim();
+  if (err) {
+    console.log(`[reclient] probe stderr: ${err}`);
+  }
+}
+
+const reproxyCfgPath = path.join(
+  __dirname,
+  "buildtools",
+  "reclient_cfgs",
+  "reproxy.cfg"
+);
+console.log(`[reclient] expected configure_reclient output=${reproxyCfgPath}`);
 
 spawnChecked(
   "python3",
@@ -160,23 +205,13 @@ spawnChecked(
   { stdio: "inherit" }
 );
 
-const reproxyCfgPath = path.join(
-  __dirname,
-  "buildtools",
-  "reclient_cfgs",
-  "reproxy.cfg"
-);
-const instanceLine = fs.existsSync(reproxyCfgPath)
-  ? fs
-      .readFileSync(reproxyCfgPath, "utf8")
-      .split("\n")
-      .find((l) => l.startsWith("instance="))
-  : "(reproxy.cfg missing)";
-console.log(`[reclient] reproxy.cfg ${instanceLine || "(no instance= line)"}`);
+probeReclient("after configure_reclient");
 
 // ensure that build configuration is written with correct paths
 const gn = currentPlatform() == "windows" ? "gn.bat" : "gn";
 spawnChecked(gn, ["gen", outdir], { stdio: "inherit" });
+
+probeReclient("after gn gen");
 
 // only lint when not in buildkite (since buildkite does the linting at a different stage)
 if (!process.env["BUILDKITE"]) {
@@ -193,6 +228,8 @@ if (!process.env["BUILDKITE"]) {
     stdio: "inherit",
   });
 }
+
+probeReclient("before autoninja");
 
 console.log(`Building...`);
 const autoninja =
