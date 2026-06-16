@@ -131,17 +131,112 @@ fs.writeFileSync(
 // regenerate reclient/reproxy config so it targets the EngFlow RBE_* env
 // vars that are set inside this build container. reclient_custom.py overrides
 // the instance away from Chromium's corp-only 'rbe-chrome-untrusted'.
+console.log(`[reclient] RBE_service=${process.env.RBE_service || "(unset)"}`);
+console.log(`[reclient] RBE_instance=${process.env.RBE_instance || "(unset)"}`);
+console.log(
+  `[reclient] CHROMIUM_BUILDTOOLS_PATH=${process.env.CHROMIUM_BUILDTOOLS_PATH || "(unset)"}`
+);
+console.log(`[reclient] cwd=${process.cwd()} __dirname=${__dirname}`);
+
 const autoninjaPath = spawnSync("which", ["autoninja"])
   .stdout.toString()
   .trim();
 const depotToolsDir = autoninjaPath
   ? path.dirname(autoninjaPath)
   : "/depot_tools";
+const depotToolsRevision = spawnSync("git", [
+  "-C",
+  depotToolsDir,
+  "rev-parse",
+  "HEAD",
+])
+  .stdout.toString()
+  .trim();
+console.log(`[reclient] autoninja=${autoninjaPath || "(not found)"}`);
+console.log(
+  `[reclient] depot_tools=${depotToolsDir} revision=${depotToolsRevision || "(unknown)"}`
+);
 
 // autoninja runs depot_tools' bundled python (>=3.9), not the container's
-// system python3 (3.8). configure_reclient must use the same interpreter,
-// otherwise it hits/skips different code paths.
+// system python3 (3.8). configure_reclient and our probe must use the same
+// interpreter, otherwise they hit/skip different code paths.
 const depotPython = path.join(depotToolsDir, "python-bin", "python3");
+console.log(
+  `[reclient] depotPython=${depotPython} exists=${fs.existsSync(depotPython)}`
+);
+
+// Resolve the cfg path EXACTLY as autoninja does, and report what
+// autoninja's own logic resolves the RBE project to. This verifies, end to
+// end, which file autoninja reads and which instance it derives from it.
+function probeReclient(phase) {
+  const py = [
+    "import sys, os",
+    `sys.path.insert(0, ${JSON.stringify(depotToolsDir)})`,
+    "import reclient_helper, gclient_paths",
+    "cfg = reclient_helper.find_reclient_cfg() or ''",
+    "print('PHASE=' + " + JSON.stringify(phase) + ")",
+    "print('buildtools_path=' + (gclient_paths.GetBuildtoolsPath() or '(none)'))",
+    "print('primary_solution=' + (gclient_paths.GetPrimarySolutionPath() or '(none)'))",
+    "print('find_reclient_cfg=' + (cfg or '(none)'))",
+    "print('exists=' + str(bool(cfg and os.path.isfile(cfg))))",
+    "lines = open(cfg).read().splitlines() if cfg and os.path.isfile(cfg) else []",
+    "inst = [l for l in lines if l.strip().startswith('instance')]",
+    "print('instance_lines=' + repr(inst))",
+  ].join("; ");
+  const out = spawnSync(depotPython, ["-c", py], { cwd: process.cwd() });
+  process.stdout.write(
+    "[reclient] " +
+      out.stdout.toString().trim().split("\n").join("\n[reclient] ") +
+      "\n"
+  );
+  const err = out.stderr.toString().trim();
+  if (err) {
+    console.log(`[reclient] probe stderr: ${err}`);
+  }
+}
+
+// Report autoninja's actual remote-build decision: which backend (siso vs
+// reclient) it picks and which RBE project that backend resolves to. This is
+// the real source of the rbe-chrome-untrusted error when siso is selected.
+function probeBackend(phase, outDir) {
+  const py = [
+    "import sys, os",
+    `sys.path.insert(0, ${JSON.stringify(depotToolsDir)})`,
+    "import autoninja, gclient_paths",
+    `out = ${JSON.stringify(outDir)}`,
+    "print('PHASE=' + " + JSON.stringify(phase) + ")",
+    "print('use_siso_default=' + str(autoninja._get_use_siso_default(out)))",
+    "print('SISO_PROJECT_env=' + (os.environ.get('SISO_PROJECT') or '(unset)'))",
+    "print('siso_rbe_project=' + (autoninja._siso_rbe_project(out) or '(none)'))",
+    "print('reclient_rbe_project=' + (autoninja._reclient_rbe_project() or '(none)'))",
+    "print('has_internal_checkout=' + str(autoninja._has_internal_checkout(out)))",
+    "import gn_helper",
+    "parsed = dict(gn_helper.args(out)) if gn_helper.exists(out) else {}",
+    "print('args.use_siso=' + str(parsed.get('use_siso', '(absent)')))",
+    "print('args.use_reclient=' + str(parsed.get('use_reclient', '(absent)')))",
+    "print('args.use_remoteexec=' + str(parsed.get('use_remoteexec', '(absent)')))",
+    "argp = os.path.join(out, 'args.gn')",
+    "print('args.gn=' + (open(argp).read().strip() if os.path.isfile(argp) else '(missing)'))",
+  ].join("; ");
+  const res = spawnSync(depotPython, ["-c", py], { cwd: process.cwd() });
+  process.stdout.write(
+    "[reclient] " +
+      res.stdout.toString().trim().split("\n").join("\n[reclient] ") +
+      "\n"
+  );
+  const err = res.stderr.toString().trim();
+  if (err) {
+    console.log(`[reclient] backend probe stderr: ${err}`);
+  }
+}
+
+const reproxyCfgPath = path.join(
+  __dirname,
+  "buildtools",
+  "reclient_cfgs",
+  "reproxy.cfg"
+);
+console.log(`[reclient] expected configure_reclient output=${reproxyCfgPath}`);
 
 spawnChecked(
   depotPython,
@@ -153,9 +248,29 @@ spawnChecked(
   { stdio: "inherit" }
 );
 
+probeReclient("after configure_reclient");
+
+// Force the reclient (EngFlow) remote-build path. At this depot_tools
+// revision autoninja defaults to siso, which reads its RBE project from
+// .sisoenv (Google's corp-only rbe-chrome-untrusted) and ignores our reproxy
+// cfg. Disabling siso routes through reclient + our reproxy.cfg instead. The
+// args.gn placed by the buck export does not include these, so append them
+// here right before gn gen.
+const argsGnPath = path.join(__dirname, outdir, "args.gn");
+if (fs.existsSync(argsGnPath)) {
+  let argsGn = fs.readFileSync(argsGnPath, "utf8");
+  if (!/^\s*use_reclient\s*=/m.test(argsGn)) {
+    argsGn += "\nuse_reclient = true\nuse_siso = false\n";
+    fs.writeFileSync(argsGnPath, argsGn);
+  }
+}
+
 // ensure that build configuration is written with correct paths
 const gn = currentPlatform() == "windows" ? "gn.bat" : "gn";
 spawnChecked(gn, ["gen", outdir], { stdio: "inherit" });
+
+probeReclient("after gn gen");
+probeBackend("after gn gen", outdir);
 
 // only lint when not in buildkite (since buildkite does the linting at a different stage)
 if (!process.env["BUILDKITE"]) {
@@ -172,6 +287,9 @@ if (!process.env["BUILDKITE"]) {
     stdio: "inherit",
   });
 }
+
+probeReclient("before autoninja");
+probeBackend("before autoninja", outdir);
 
 console.log(`Building...`);
 const autoninja =
