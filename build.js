@@ -210,6 +210,13 @@ function probeBackend(phase, outDir) {
     "print('siso_rbe_project=' + (autoninja._siso_rbe_project(out) or '(none)'))",
     "print('reclient_rbe_project=' + (autoninja._reclient_rbe_project() or '(none)'))",
     "print('has_internal_checkout=' + str(autoninja._has_internal_checkout(out)))",
+    "import gn_helper",
+    "parsed = dict(gn_helper.args(out)) if gn_helper.exists(out) else {}",
+    "print('args.use_siso=' + str(parsed.get('use_siso', '(absent)')))",
+    "print('args.use_reclient=' + str(parsed.get('use_reclient', '(absent)')))",
+    "print('args.use_remoteexec=' + str(parsed.get('use_remoteexec', '(absent)')))",
+    "argp = os.path.join(out, 'args.gn')",
+    "print('args.gn=' + (open(argp).read().strip() if os.path.isfile(argp) else '(missing)'))",
   ].join("; ");
   const res = spawnSync(depotPython, ["-c", py], { cwd: process.cwd() });
   process.stdout.write(
