@@ -250,6 +250,21 @@ spawnChecked(
 
 probeReclient("after configure_reclient");
 
+// Force the reclient (EngFlow) remote-build path. At this depot_tools
+// revision autoninja defaults to siso, which reads its RBE project from
+// .sisoenv (Google's corp-only rbe-chrome-untrusted) and ignores our reproxy
+// cfg. Disabling siso routes through reclient + our reproxy.cfg instead. The
+// args.gn placed by the buck export does not include these, so append them
+// here right before gn gen.
+const argsGnPath = path.join(__dirname, outdir, "args.gn");
+if (fs.existsSync(argsGnPath)) {
+  let argsGn = fs.readFileSync(argsGnPath, "utf8");
+  if (!/^\s*use_reclient\s*=/m.test(argsGn)) {
+    argsGn += "\nuse_reclient = true\nuse_siso = false\n";
+    fs.writeFileSync(argsGnPath, argsGn);
+  }
+}
+
 // ensure that build configuration is written with correct paths
 const gn = currentPlatform() == "windows" ? "gn.bat" : "gn";
 spawnChecked(gn, ["gen", outdir], { stdio: "inherit" });
