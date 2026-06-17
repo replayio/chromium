@@ -128,31 +128,6 @@ fs.writeFileSync(
 `
 );
 
-// regenerate reclient/reproxy config so it targets the EngFlow RBE_* env
-// vars that are set inside this build container. reclient_custom.py overrides
-// the instance away from Chromium's corp-only 'rbe-chrome-untrusted'.
-const autoninjaPath = spawnSync("which", ["autoninja"])
-  .stdout.toString()
-  .trim();
-const depotToolsDir = autoninjaPath
-  ? path.dirname(autoninjaPath)
-  : "/depot_tools";
-
-// autoninja runs depot_tools' bundled python (>=3.9), not the container's
-// system python3 (3.8). configure_reclient must use the same interpreter,
-// otherwise it hits/skips different code paths.
-const depotPython = path.join(depotToolsDir, "python-bin", "python3");
-
-spawnChecked(
-  depotPython,
-  [
-    "third_party/reclient_configs/configure_reclient.py",
-    "--src_dir=.",
-    `--custom_py=${path.join(__dirname, "replay_build_scripts", "reclient_custom.py")}`,
-  ],
-  { stdio: "inherit" }
-);
-
 // ensure that build configuration is written with correct paths
 const gn = currentPlatform() == "windows" ? "gn.bat" : "gn";
 spawnChecked(gn, ["gen", outdir], { stdio: "inherit" });
