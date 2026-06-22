@@ -26,6 +26,8 @@
 #include "partition_alloc/partition_alloc_constants.h"
 #include "partition_alloc/thread_isolation/thread_isolation.h"
 
+#include "base/record_replay_partition_alloc.h"
+
 #if PA_BUILDFLAG(IS_IOS)
 #include <mach-o/dyld.h>
 #endif
@@ -153,6 +155,12 @@ bool PartitionAddressSpace::IsIOSTestProcess() {
 #endif  // PA_CONFIG(DYNAMICALLY_SELECT_POOL_SIZE)
 
 void PartitionAddressSpace::Init() {
+  recordreplay::Assert(
+      "[thread-isolation] PartitionAddressSpace::Init build kPoolMaxSize %zu pointer_compression %d",
+      kPoolMaxSize, PA_BUILDFLAG(ENABLE_POINTER_COMPRESSION));
+  recordreplay::Assert(
+      "[thread-isolation] PartitionAddressSpace::Init entry IsInitialized %d core_pool_size %zu",
+      IsInitialized(), CorePoolSize());
   if (IsInitialized()) {
     return;
   }
@@ -160,6 +168,9 @@ void PartitionAddressSpace::Init() {
   const size_t core_pool_size = CorePoolSize();
 
   size_t glued_pool_sizes = core_pool_size * 2;
+  recordreplay::Assert(
+      "[thread-isolation] PartitionAddressSpace::Init before AllocPages IsInitialized %d core_pool_size %zu glued_pool_sizes %zu",
+      IsInitialized(), core_pool_size, glued_pool_sizes);
   // Note, BRP pool requires to be preceded by a "forbidden zone", which is
   // conveniently taken care of by the last guard page of the regular pool.
   setup_.regular_pool_base_address_ =

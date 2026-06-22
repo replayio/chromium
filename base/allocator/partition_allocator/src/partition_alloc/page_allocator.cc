@@ -16,6 +16,8 @@
 #include "partition_alloc/partition_alloc_check.h"
 #include "partition_alloc/partition_lock.h"
 
+#include "base/record_replay_partition_alloc.h"
+
 #if PA_BUILDFLAG(IS_WIN)
 #include <windows.h>
 
@@ -220,34 +222,40 @@ uintptr_t AllocPagesWithAlignOffset(
   constexpr int kExactSizeTries = 3;
 #endif
 
-  for (int i = 0; i < kExactSizeTries; ++i) {
-    uintptr_t ret =
-        AllocPagesIncludingReserved(address, length, accessibility, page_tag,
-                                    file_descriptor_for_shared_alloc);
-    if (ret) {
-      // If the alignment is to our liking, we're done.
-      if ((ret & align_offset_mask) == align_offset) {
-        return ret;
+  // Skip the exact-size loop under record/replay: its iteration count depends
+  // on mmap alignment (a divergent address property) and emits a divergent
+  // number of recorded prctl(PR_SET_VMA) calls. Use the deterministic
+  // over-allocate-and-trim path below instead.
+  if (!recordreplay::IsRecordingOrReplaying()) {
+    for (int i = 0; i < kExactSizeTries; ++i) {
+      uintptr_t ret =
+          AllocPagesIncludingReserved(address, length, accessibility, page_tag,
+                                      file_descriptor_for_shared_alloc);
+      if (ret) {
+        // If the alignment is to our liking, we're done.
+        if ((ret & align_offset_mask) == align_offset) {
+          return ret;
+        }
+        // Free the memory and try again.
+        FreePages(ret, length);
+      } else {
+        // |ret| is null; if this try was unhinted, we're OOM.
+        if (internal::kHintIsAdvisory || !address) {
+          return 0;
+        }
       }
-      // Free the memory and try again.
-      FreePages(ret, length);
-    } else {
-      // |ret| is null; if this try was unhinted, we're OOM.
-      if (internal::kHintIsAdvisory || !address) {
-        return 0;
-      }
-    }
 
 #if PA_BUILDFLAG(PA_ARCH_CPU_32_BITS)
-    // For small address spaces, try the first aligned address >= |ret|. Note
-    // |ret| may be null, in which case |address| becomes null. If
-    // |align_offset| is non-zero, this calculation may get us not the first,
-    // but the next matching address.
-    address = ((ret + align_offset_mask) & align_base_mask) + align_offset;
+      // For small address spaces, try the first aligned address >= |ret|. Note
+      // |ret| may be null, in which case |address| becomes null. If
+      // |align_offset| is non-zero, this calculation may get us not the first,
+      // but the next matching address.
+      address = ((ret + align_offset_mask) & align_base_mask) + align_offset;
 #else  // PA_BUILDFLAG(PA_ARCH_CPU_64_BITS)
-    // Keep trying random addresses on systems that have a large address space.
-    address = NextAlignedWithOffset(GetRandomPageBase(), align, align_offset);
+      // Keep trying random addresses on systems that have a large address space.
+      address = NextAlignedWithOffset(GetRandomPageBase(), align, align_offset);
 #endif
+    }
   }
 
   // Make a larger allocation so we can force alignment.

@@ -14,6 +14,7 @@
 
 #include "base/check.h"
 #include "base/check_op.h"
+#include "base/record_replay.h"
 
 namespace ui {
 
@@ -58,6 +59,10 @@ void SetSupportedResourceScaleFactors(
               return kResourceScaleFactorScales[lhs] <
                      kResourceScaleFactorScales[rhs];
             });
+  recordreplay::Assert(
+      "SetSupportedResourceScaleFactors size=%zu k200Percent=%d",
+      g_supported_resource_scale_factors->size(),
+      std::ranges::contains(*g_supported_resource_scale_factors, k200Percent));
 }
 
 const std::vector<ResourceScaleFactor>& GetSupportedResourceScaleFactors() {

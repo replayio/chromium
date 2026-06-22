@@ -17,6 +17,7 @@
 #include "base/memory/page_size.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/no_destructor.h"
+#include "base/record_replay.h"
 #include "partition_alloc/thread_isolation/alignment.h"
 
 WEAK_SYMBOL extern int pkey_alloc(unsigned int flags,
@@ -55,7 +56,11 @@ int PkeyAlloc(int access_rights) {
     return -1;
   }
 
-  return pkey_alloc(0, access_rights);
+  // pkey_alloc is a syscall; its result drives thread-isolation enablement and
+  // a record/replay divergence here flips a partition_alloc branch downstream.
+  int pkey = pkey_alloc(0, access_rights);
+  recordreplay::Assert("[thread-isolation] PkeyAlloc %d", pkey);
+  return pkey;
 }
 
 uint32_t Rdpkru() {
@@ -94,6 +99,7 @@ void ThreadIsolationData::InitializeBeforeThreadCreation() {
   }
 
   pkey = PkeyAlloc(0);
+  recordreplay::Assert("[thread-isolation] InitializeBeforeThreadCreation pkey %d", pkey);
   if (pkey == -1) {
     return;
   }

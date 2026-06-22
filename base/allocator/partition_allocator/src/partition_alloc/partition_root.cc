@@ -34,6 +34,8 @@
 #include "partition_alloc/tagging.h"
 #include "partition_alloc/thread_isolation/thread_isolation.h"
 
+#include "base/record_replay_partition_alloc.h"
+
 #if PA_BUILDFLAG(IS_MAC)
 #include "partition_alloc/partition_alloc_base/mac/mac_util.h"
 #endif
@@ -988,6 +990,21 @@ void PartitionRoot::Init(PartitionOptions opts) {
     }
 
 #if PA_BUILDFLAG(HAS_64_BIT_POINTERS)
+#if PA_BUILDFLAG(ENABLE_THREAD_ISOLATION)
+#if PA_BUILDFLAG(ENABLE_PKEYS)
+    recordreplay::Assert(
+        "[thread-isolation] PartitionRoot::Init before PartitionAddressSpace::Init enabled %d pkey %d",
+        opts.thread_isolation.enabled, opts.thread_isolation.pkey);
+#endif
+    recordreplay::Assert(
+        "[thread-isolation] PartitionRoot::Init before PartitionAddressSpace::Init thread_isolation.enabled %d use_configurable_pool %d",
+        opts.thread_isolation.enabled,
+        static_cast<int>(opts.use_configurable_pool));
+#else
+    recordreplay::Assert(
+        "[thread-isolation] PartitionRoot::Init before PartitionAddressSpace::Init use_configurable_pool %d",
+        static_cast<int>(opts.use_configurable_pool));
+#endif
     // Reserve address space for PartitionAlloc.
     internal::PartitionAddressSpace::Init();
 #endif
@@ -1039,6 +1056,13 @@ void PartitionRoot::Init(PartitionOptions opts) {
 
 #if PA_BUILDFLAG(ENABLE_THREAD_ISOLATION)
     settings_.thread_isolation = opts.thread_isolation;
+#if PA_BUILDFLAG(ENABLE_PKEYS)
+    recordreplay::Assert("[thread-isolation] PartitionRoot::Init enabled %d pkey %d",
+                         opts.thread_isolation.enabled, opts.thread_isolation.pkey);
+#else
+    recordreplay::Assert("[thread-isolation] PartitionRoot::Init enabled %d",
+                         opts.thread_isolation.enabled);
+#endif
     if (opts.thread_isolation.enabled) {
       // BRP and thread isolated mode use different pools, so they can't be
       // enabled at the same time.

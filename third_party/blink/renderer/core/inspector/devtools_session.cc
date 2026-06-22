@@ -175,12 +175,8 @@ DevToolsSession::DevToolsSession(
 
   bool restore = !!session_state_.ReattachState();
   v8_session_state_.InitFrom(&session_state_);
-  // Replay intervention (force-determinism): assign our record/replay id BEFORE
-  // AttachSession(). AttachSession() inserts `this` as a Member<DevToolsSession>
-  // key into WebDevToolsAgentImpl::network_agents_ (and sibling HeapHashMaps),
-  // which hashes the key via MemberHashTraits<DevToolsSession> and
-  // CHECK(id > 0)s. If left at the original ctor-final position, the id is still
-  // 0 at insert time and the CHECK aborts during recording (not diverged).
+  // Replay intervention: assign our id before AttachSession(), which inserts
+  // `this` as a HeapHashMap key whose hash CHECK(id > 0)s.
   record_replay_id_ = recordreplay::NewIdAnyThread("DevToolsSession");
   agent_->client_->AttachSession(this, restore);
   agent_->probe_sink_->AddDevToolsSession(this);

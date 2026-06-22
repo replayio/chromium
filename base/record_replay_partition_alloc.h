@@ -25,6 +25,8 @@ namespace recordreplay {
 bool IsRecordingOrReplaying(const char* feature = nullptr,
                             const char* subfeature = nullptr);
 
+void Assert(const char* format, ...);
+
 void BeginDisallowEventsWithLabel(const char* label);
 void EndDisallowEvents();
 

@@ -25,6 +25,7 @@
 #include "base/logging.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
+#include "base/record_replay.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
@@ -542,9 +543,22 @@ std::string GetApplicationLocaleInternalNonMac(std::string_view pref_locale) {
   // We used to use our custom parsing code along with ICU for this purpose.
   // If we have a port that does not depend on GTK, we have to
   // restore our custom code for that port.
+  // Diagnose divergent g_get_language_names call count between record and replay.
+  static int n = 0;
+  recordreplay::Assert(
+      "GetApplicationLocaleInternalNonMac pref_locale=%s n=%d",
+      std::string(pref_locale).c_str(), n++);
   const char* const* languages = g_get_language_names();
   DCHECK(languages);  // A valid pointer is guaranteed.
   DCHECK(*languages);  // At least one entry, "C", is guaranteed.
+
+  if (recordreplay::IsRecordingOrReplaying()) {
+    int language_count = 0;
+    for (const char* const* it = languages; *it; UNSAFE_BUFFERS(++it))
+      ++language_count;
+    recordreplay::Assert("GetApplicationLocaleInternalNonMac languages count=%d",
+                         language_count);
+  }
 
   // SAFETY: g_get_language_names returns a valid NULL-terminated array.
   // See: https://docs.gtk.org/glib/func.get_language_names.html
@@ -558,9 +572,19 @@ std::string GetApplicationLocaleInternalNonMac(std::string_view pref_locale) {
     candidates.emplace_back(pref_locale);
 #endif  // BUILDFLAG(IS_WIN)
 
-  for (const std::string& candidate : candidates) {
+  if (recordreplay::IsRecordingOrReplaying()) {
+    recordreplay::Assert("GetApplicationLocaleInternalNonMac candidates count=%d",
+                         static_cast<int>(candidates.size()));
+  }
+
+  for (size_t i = 0; i < candidates.size(); ++i) {
     if (std::optional<std::string> resolved_locale =
-            CheckAndResolveLocale(candidate)) {
+            CheckAndResolveLocale(candidates[i])) {
+      if (recordreplay::IsRecordingOrReplaying()) {
+        recordreplay::Assert(
+            "GetApplicationLocaleInternalNonMac resolved index=%d",
+            static_cast<int>(i));
+      }
       return *resolved_locale;
     }
   }

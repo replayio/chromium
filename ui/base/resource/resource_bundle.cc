@@ -28,6 +28,7 @@
 #include "base/numerics/byte_conversions.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/path_service.h"
+#include "base/record_replay.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
@@ -298,6 +299,11 @@ std::string ResourceBundle::InitSharedInstanceWithLocale(
     Delegate* delegate,
     LoadResources load_resources) {
   InitSharedInstance(delegate);
+  // Anchor the common frame before the LoadCommonResources/LoadLocaleResources
+  // branches diverge between record and replay.
+  static int n = 0;
+  recordreplay::Assert("InitSharedInstanceWithLocale n=%d load_resources=%d",
+                       n++, static_cast<int>(load_resources));
   if (load_resources == LOAD_COMMON_RESOURCES)
     g_shared_instance_->LoadCommonResources();
   std::string result =
@@ -504,6 +510,10 @@ std::string ResourceBundle::LoadLocaleResources(const std::string& pref_locale,
                                                 bool crash_on_failure) {
   DCHECK_EQ(locale_resources_data_.size(), 0u) << "locale.pak already loaded";
   std::string app_locale = l10n_util::GetApplicationLocale(pref_locale);
+  // Diagnose divergent g_get_language_names call count (see GetApplicationLocale).
+  static int n = 0;
+  recordreplay::Assert("LoadLocaleResources app_locale=%s n=%d",
+                       app_locale.c_str(), n++);
   base::FilePath locale_file_path = GetOverriddenPakPath();
   if (locale_file_path.empty())
     locale_file_path = GetLocaleFilePath(app_locale);
@@ -528,6 +538,9 @@ std::string ResourceBundle::LoadLocaleResources(const std::string& pref_locale,
   }
 
   auto data_pack = std::make_unique<DataPack>(k100Percent);
+  recordreplay::Assert("LoadLocaleResources loading app_locale=%s path=%s",
+                       app_locale.c_str(),
+                       locale_file_path.AsUTF8Unsafe().c_str());
   if (auto result = data_pack->LoadFromPathWithError(locale_file_path);
       !result.has_value() && crash_on_failure) {
     DataPack::ErrorState& error = result.error();
@@ -1046,6 +1059,50 @@ void ResourceBundle::InitSharedInstance(Delegate* delegate) {
   supported_scale_factors.push_back(k200Percent);
 #endif
 #endif
+  if (recordreplay::IsRecordingOrReplaying()) {
+    // Isolate whether the k200Percent divergence is in the backing buffer or in
+    // the std::ranges::contains/wmemchr path of the combined Assert below.
+    const ResourceScaleFactor* data = supported_scale_factors.data();
+    int has_k200 = 0;
+    for (size_t i = 0; i < supported_scale_factors.size(); ++i) {
+      if (UNSAFE_TODO(data[i]) == k200Percent) {
+        has_k200 = 1;
+      }
+    }
+    recordreplay::Assert(
+        "InitSharedInstance supported_scale_factors raw size=%zu data[0]=%d "
+        "data[1]=%d k200PercentLoop=%d",
+        supported_scale_factors.size(),
+        supported_scale_factors.size() > 0 ? static_cast<int>(UNSAFE_TODO(data[0]))
+                                            : -1,
+        supported_scale_factors.size() > 1 ? static_cast<int>(UNSAFE_TODO(data[1]))
+                                            : -1,
+        has_k200);
+  }
+  recordreplay::Assert(
+      "InitSharedInstance supported_scale_factors combined size=%zu [0]=%d "
+      "[1]=%d k200Percent=%d",
+      supported_scale_factors.size(),
+      supported_scale_factors.size() > 0
+          ? static_cast<int>(supported_scale_factors[0])
+          : -1,
+      supported_scale_factors.size() > 1
+          ? static_cast<int>(supported_scale_factors[1])
+          : -1,
+      std::ranges::contains(supported_scale_factors, k200Percent));
+  recordreplay::Assert(
+      "InitSharedInstance supported_scale_factors elems size=%zu [0]=%d [1]=%d",
+      supported_scale_factors.size(),
+      supported_scale_factors.size() > 0
+          ? static_cast<int>(supported_scale_factors[0])
+          : -1,
+      supported_scale_factors.size() > 1
+          ? static_cast<int>(supported_scale_factors[1])
+          : -1);
+  recordreplay::Assert(
+      "InitSharedInstance supported_scale_factors size=%zu k200Percent=%d",
+      supported_scale_factors.size(),
+      std::ranges::contains(supported_scale_factors, k200Percent));
   ui::SetSupportedResourceScaleFactors(supported_scale_factors);
 
 // Register Png Decoder for use by DataURIResourceProviderProxy for embedded
@@ -1063,14 +1120,22 @@ void ResourceBundle::FreeImages() {
 }
 
 void ResourceBundle::LoadChromeResources() {
+  // Replay branches inside LoadChromeResources diverge from the recording
+  // (replay advanced into LoadLocaleResources early); anchor the supported
+  // scale-factor decisions that drive how many data packs load.
+  recordreplay::Assert("LoadChromeResources");
   // Always load the 1x data pack first as the 2x data pack contains both 1x and
   // 2x images. The 1x data pack only has 1x images, thus passes in an accurate
   // scale factor to gfx::ImageSkia::AddRepresentation.
+  recordreplay::Assert("LoadChromeResources k100Percent=%d",
+                       IsScaleFactorSupported(k100Percent));
   if (IsScaleFactorSupported(k100Percent)) {
     AddDataPackFromPath(GetResourcesPakFilePath("chrome_100_percent.pak"),
                         k100Percent);
   }
 
+  recordreplay::Assert("LoadChromeResources k200Percent=%d",
+                       IsScaleFactorSupported(k200Percent));
   if (IsScaleFactorSupported(k200Percent)) {
     AddOptionalDataPackFromPath(
         GetResourcesPakFilePath("chrome_200_percent.pak"), k200Percent);
@@ -1081,6 +1146,11 @@ void ResourceBundle::AddDataPackFromPathInternal(
     const base::FilePath& path,
     ResourceScaleFactor scale_factor,
     bool optional) {
+  // Anchor the record-side LoadCommonResources phase ahead of the data-pack
+  // file load that diverges from replay's LoadLocaleResources phase.
+  static int n = 0;
+  recordreplay::Assert("AddDataPackFromPathInternal n=%d", n++);
+
   // Do not pass an empty |path| value to this method. If the absolute path is
   // unknown pass just the pack file name.
   DCHECK(!path.empty());
