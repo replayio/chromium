@@ -883,7 +883,13 @@ def make_bindings_trace_event(cg_context):
         event_name = "{}.{}".format(cg_context.class_like.identifier,
                                     "constructor")
 
-    return TextNode("BLINK_BINDINGS_TRACE_EVENT(\"{}\");".format(event_name))
+    # Advance the record/replay progress counter on entry to every binding
+    # callback so JS->C++ binding calls count toward execution progress (JS
+    # bytecode opcodes alone do not capture them). Gating lives entirely in V8.
+    return SequenceNode([
+        TextNode("BLINK_BINDINGS_TRACE_EVENT(\"{}\");".format(event_name)),
+        TextNode("RecordReplayOnBindingProgress();"),
+    ])
 
 
 def make_check_argument_length(cg_context):
@@ -7655,6 +7661,7 @@ def generate_class_like(class_like):
         "third_party/blink/renderer/bindings/core/v8/v8_set_return_value_for_core.h",
         "third_party/blink/renderer/platform/bindings/exception_messages.h",
         "third_party/blink/renderer/platform/bindings/idl_member_installer.h",
+        "third_party/blink/renderer/platform/bindings/record_replay_progress.h",
         "third_party/blink/renderer/platform/bindings/runtime_call_stats.h",
         "third_party/blink/renderer/platform/bindings/v8_binding.h",
     ])

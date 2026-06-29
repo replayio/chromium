@@ -412,6 +412,7 @@ component("platform") {
     "bindings/parkable_string.h",
     "bindings/parkable_string_manager.cc",
     "bindings/parkable_string_manager.h",
+    "bindings/record_replay_progress.h",
     "bindings/runtime_call_stats.cc",
     "bindings/runtime_call_stats.h",
     "bindings/scoped_persistent.h",
