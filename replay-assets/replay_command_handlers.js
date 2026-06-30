@@ -18,6 +18,7 @@ const {
   setClearPauseDataCallback,
   addNewScriptHandler,
   getCurrentError,
+  forceCheckpoint,
 
   layoutDom,
 
@@ -3300,6 +3301,7 @@ Object.assign(__RECORD_REPLAY__, {
   getFrameArgumentsArray,
   getCurrentEvaluateFrame,
   replayEval,
+  forceCheckpoint,
   forTestingSerializeValueToArray
 });
 

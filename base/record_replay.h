@@ -60,6 +60,7 @@ struct AutoOrderedLock {
 
 void InvalidateRecording(const char* why);
 void NewCheckpoint();
+void NewCheckpointFlushed();
 
 uint64_t NewBookmark();
 void OnAnnotation(const char* kind, const char* contents);
