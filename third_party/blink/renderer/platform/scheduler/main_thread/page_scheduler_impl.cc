@@ -855,12 +855,19 @@ FrameSchedulerImpl* PageSchedulerImpl::SelectFrameForUkmAttribution() {
   std::sort(frame_scheduler_vector.begin(), frame_scheduler_vector.end(),
             recordreplay::CompareByPointerId());
 
-  for (FrameSchedulerImpl* frame_scheduler : frame_scheduler_vector) {
-    if (frame_scheduler->GetUkmRecorder()) {
-      return frame_scheduler;
+  int first_non_null = -1;
+  FrameSchedulerImpl* selected = nullptr;
+  for (int i = 0; i < static_cast<int>(frame_scheduler_vector.size()); ++i) {
+    if (frame_scheduler_vector[i]->GetUkmRecorder()) {
+      first_non_null = i;
+      selected = frame_scheduler_vector[i];
+      break;
     }
   }
-  return nullptr;
+  REPLAY_ASSERT(
+      "PageSchedulerImpl::SelectFrameForUkmAttribution size=%zu firstNonNull=%d",
+      frame_scheduler_vector.size(), first_non_null);
+  return selected;
 }
 
 bool PageSchedulerImpl::HasWakeUpBudgetPools() const {
