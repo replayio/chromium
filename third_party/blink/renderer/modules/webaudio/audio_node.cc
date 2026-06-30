@@ -90,10 +90,15 @@ void AudioNode::Dispose() {
   // being processed, the handler must be added.  If the context is suspended,
   // the handler still needs to be added in case the context is resumed.
   DCHECK(context());
-  if (context()->IsPullingAudioGraph() ||
-      context()->ContextState() == BaseAudioContext::kSuspended) {
-    context()->GetDeferredTaskHandler().AddRenderingOrphanHandler(
-        std::move(handler_));
+  // Skip the GC-controlled orphan-handler mutation read by the audio thread.
+  if (!(recordreplay::AreEventsDisallowed() &&
+        recordreplay::IsRecordingOrReplaying("leak-references",
+                                             "AudioNode::Dispose"))) {
+    if (context()->IsPullingAudioGraph() ||
+        context()->ContextState() == BaseAudioContext::kSuspended) {
+      context()->GetDeferredTaskHandler().AddRenderingOrphanHandler(
+          std::move(handler_));
+    }
   }
 
   // Notify the inspector that this node is going away. The actual clean up
