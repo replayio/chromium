@@ -681,6 +681,17 @@ static void LogWarningCallback(const v8::FunctionCallbackInfo<v8::Value>& args) 
   recordreplay::Warning("%s", *text);
 }
 
+static void fromJsForceCheckpoint(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 0 && "must be called without arguments");
+  if (recordreplay::IsInReplayCode("forceCheckpoint")) {
+    return;
+  }
+
+  // Use a flushed checkpoint so explicit test checkpoints are not dropped by
+  // the normal time-based checkpoint throttle.
+  recordreplay::NewCheckpointFlushed();
+}
+
 void
 RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
                                 v8::Isolate* isolate) {
@@ -2613,6 +2624,7 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
   SetFunctionProperty(isolate, args, "getPersistentId", fromJsGetPersistentId);
   SetFunctionProperty(isolate, args, "checkPersistentId", fromJsCheckPersistentId);
   SetFunctionProperty(isolate, args, "getProgressCounter", fromJsGetProgressCounter);
+  SetFunctionProperty(isolate, args, "forceCheckpoint", fromJsForceCheckpoint);
   SetFunctionProperty(isolate, args, "registerRootFrameScript",
                       fromJsRegisterRootFrameScript);
 
