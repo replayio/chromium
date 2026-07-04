@@ -744,18 +744,6 @@ function isBlinkObject(x) {
   return fromJsIsBlinkObject(x);
 }
 
-function isBlinkNodeObject(x) {
-  return fromJsIsBlinkNodeObject(x);
-}
-
-function isBlinkElementObject(x) {
-  return fromJsIsBlinkElementObject(x);
-}
-
-function isBlinkCSSStyleDeclarationObject(x) {
-  return fromJsIsBlinkCSSStyleDeclarationObject(x);
-}
-
 
 
 
@@ -1503,13 +1491,13 @@ function getExtraObjectPreviewData(cdpObject, cdpProperties) {
     };
   } else {
     const plainObject = getPlainObjectByRrpId(rrpId);
-    if (isBlinkNodeObject(plainObject)) {
+    if (fromJsIsBlinkNodeObject(plainObject)) {
       return {
         node: previewBlinkNode(plainObject)
       }
     }
 
-    if (isBlinkCSSStyleDeclarationObject(plainObject)) {
+    if (fromJsIsBlinkCSSStyleDeclarationObject(plainObject)) {
       return {
         style: previewBlinkStyle(plainObject)
       }
@@ -1519,7 +1507,7 @@ function getExtraObjectPreviewData(cdpObject, cdpProperties) {
 
 function previewBlinkNode(node) {
   let attributes, pseudoType;
-  if (isBlinkElementObject(node)) {
+  if (fromJsIsBlinkElementObject(node)) {
     attributes = [];
     for (const { name, value } of node.attributes || []) {
       Array_push.call(attributes, { name, value });
@@ -2234,7 +2222,7 @@ function DOM_getBoxModel({ node: nodeRrpId }) {
     node: nodeRrpId
   };
 
-  if (isBlinkElementObject(nodeObj)) {
+  if (fromJsIsBlinkElementObject(nodeObj)) {
     const nodeId = getBlinkNodeIdByRrpId(nodeRrpId);
     /**
      * @see https://chromedevtools.github.io/devtools-protocol/tot/DOM/#type-BoxModel
@@ -2347,7 +2335,7 @@ function CSS_getComputedStyle({ node }) {
   const nodeObj = getPlainObjectByRrpId(node);
 
   const computedStyle = [];
-  if (isBlinkElementObject(nodeObj)) {
+  if (fromJsIsBlinkElementObject(nodeObj)) {
     // NOTE: tested successfully for same-CSP elements of different iframes
     const ownerGlobal = window;
 
@@ -2573,12 +2561,12 @@ function CSS_getAppliedRules({ node: nodeRrpId }) {
   let rules = gCssRulesByNodeRrpId.get(nodeRrpId);
   const data = {};
 
-  if (!rules && isBlinkNodeObject(nodeObj)) {
+  if (!rules && fromJsIsBlinkNodeObject(nodeObj)) {
     const nodeId = getBlinkNodeIdByRrpId(nodeRrpId);
 
     // NOTE: CDP CSS domain commands are not enabled, so we have to get the data indirectly.
     // const cdpMatchedStyles = sendCDPMessage('CSS.getMatchedStylesForNode', { nodeId });
-    if (isBlinkElementObject(nodeObj)) {
+    if (fromJsIsBlinkElementObject(nodeObj)) {
       const cdpMatchedStyles = fromJsGetMatchedStylesForElement(nodeId) || { };
       rules = convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles);
     } else {
@@ -3018,7 +3006,7 @@ StackingContext.prototype = {
 
   addChildren(parentNode) {
     for (const child of parentNode.children) {
-      if (!isBlinkElementObject(child)) {
+      if (!fromJsIsBlinkElementObject(child)) {
         continue;
       }
       this.add(child, undefined, this.offset);
@@ -3030,7 +3018,7 @@ StackingContext.prototype = {
       // [TT-253] `cx.raw` should always be an Element and
       // Element.prototype.children should always return an `HTMLCollection`.
       // Not sure why it sometimes complains about not being iterable.
-      if (!isBlinkElementObject(cx.raw) && !gStackingContextWarn) {
+      if (!fromJsIsBlinkElementObject(cx.raw) && !gStackingContextWarn) {
         ++gStackingContextWarn;
         warning(
           `[TT-253] cx.raw should be Element but is not: ${cx.raw} (${typeof cx.raw}), ${cx.raw.children} (${typeof cx.raw.children}})`
@@ -3039,7 +3027,7 @@ StackingContext.prototype = {
       return;
     }
     for (const child of cx.raw.children) {
-      if (!isBlinkElementObject(child)) {
+      if (!fromJsIsBlinkElementObject(child)) {
         continue;
       }
       this.add(child, cx, this.offset);
@@ -3160,7 +3148,7 @@ function parseCssTransformStringToMatrix(transform) {
 function computeTransformMatrix(element, window) {
   let curMatrix = [1,0,0,1,0,0]; // start with identity matrix
   let curElem = element;
-  while(curElem && isBlinkElementObject(curElem)) {
+  while(curElem && fromJsIsBlinkElementObject(curElem)) {
     const transformStr = window.getComputedStyle(curElem).transform;
     const transformMatrix = parseCssTransformStringToMatrix(transformStr);
     if (transformMatrix) {
