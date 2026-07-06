@@ -825,6 +825,8 @@ void WorkerThread::PerformShutdownOnWorkerThread() {
   console_message_storage_.Clear();
   inspector_issue_storage_.Clear();
 
+  RecordReplayAssert("WorkerThread::PerformShutdownOnWorkerThread %d %p",
+                      IsOwningBackingThread(), this);
   if (IsOwningBackingThread())
     GetWorkerBackingThread().ShutdownOnBackingThread();
   // We must not touch GetWorkerBackingThread() from now on.
