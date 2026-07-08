@@ -57,6 +57,7 @@
 #include "third_party/blink/renderer/core/inspector/inspector_task_runner.h"
 #include "third_party/blink/renderer/core/inspector/main_thread_debugger.h"
 #include "third_party/blink/renderer/core/loader/frame_loader.h"
+#include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/core/script/modulator.h"
 #include "third_party/blink/renderer/platform/bindings/dom_wrapper_world.h"
 #include "third_party/blink/renderer/platform/bindings/extensions_registry.h"
@@ -245,7 +246,9 @@ void LocalWindowProxy::Initialize() {
     bool initGlobally = !gRecordReplayStateInitialized;
 
     // Whether this is the relative root frame of this process.
-    bool isMainFrame = GetFrame()->IsLocalRoot() && world_->IsMainWorld();
+    // IsOrdinary() excludes internal pages like the in-process <select> popup.
+    bool isMainFrame = GetFrame()->IsLocalRoot() && world_->IsMainWorld() &&
+                       GetFrame()->GetPage() && GetFrame()->GetPage()->IsOrdinary();
     if (initGlobally) {
       gRecordReplayStateInitialized = true;
 
