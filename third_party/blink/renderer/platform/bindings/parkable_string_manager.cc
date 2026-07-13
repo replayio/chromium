@@ -10,6 +10,7 @@
 #include "base/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/record_replay.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/trace_event/memory_allocator_dump.h"
@@ -373,6 +374,8 @@ void ParkableStringManager::AgeStringsAndPark() {
   // is important to make sure that this will not reschedule tasks forever.
   bool reschedule = (!unparked_strings_.empty() || !parked_strings_.empty()) &&
                     can_make_progress;
+  recordreplay::Assert("ParkableStringManager::AgeStringsAndPark reschedule %d",
+                       reschedule);
   if (reschedule)
     ScheduleAgingTaskIfNeeded();
 }
