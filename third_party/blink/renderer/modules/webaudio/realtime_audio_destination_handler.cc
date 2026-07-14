@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/modules/webaudio/realtime_audio_destination_handler.h"
 
 #include "base/feature_list.h"
+#include "base/record_replay.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/platform/web_audio_latency_hint.h"
 #include "third_party/blink/public/web/web_local_frame.h"
@@ -198,6 +199,9 @@ void RealtimeAudioDestinationHandler::Render(
   // Only pull on the audio graph if we have not stopped the destination.  It
   // takes time for the destination to stop, but we want to stop pulling before
   // the destination has actually stopped.
+  recordreplay::Assert(
+      "RealtimeAudioDestinationHandler::Render allow_pulling_audio_graph %d",
+      IsPullingAudioGraphAllowed());
   if (IsPullingAudioGraphAllowed()) {
     // Renders the graph by pulling all the inputs to this node. This will in
     // turn pull on their inputs, all the way backwards through the graph.
