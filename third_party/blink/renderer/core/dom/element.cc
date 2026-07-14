@@ -1102,6 +1102,8 @@ bool Element::HasAttributeIgnoringNamespace(
 }
 
 void Element::SynchronizeAllAttributes() const {
+  recordreplay::Assert("[RUN-2424-3238] Element::SynchronizeAllAttributes %d",
+                        !!GetElementData());
   if (!GetElementData())
     return;
   // NOTE: AnyAttributeMatches in selector_checker.cc currently assumes that all
@@ -3819,6 +3821,8 @@ scoped_refptr<ComputedStyle> Element::StyleForLayoutObject(
     element_animations->CssAnimations().ClearPendingUpdate();
 
   bool has_custom_style_callbacks = HasCustomStyleCallbacks();
+  recordreplay::Assert("[RUN-2424-3227] Element::StyleForLayoutObject %d",
+    has_custom_style_callbacks);
   scoped_refptr<ComputedStyle> style =
       has_custom_style_callbacks
           ? CustomStyleForLayoutObject(style_recalc_context)
