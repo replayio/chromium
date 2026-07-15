@@ -80,6 +80,7 @@ extern v8::Local<v8::Object> RecordReplayGetBytecode(
     v8::Local<v8::Object> paramsObj);
 
 extern int gPauseContextGroupId;
+std::string RecordReplayContextAddressToken(v8::Isolate* isolate, uintptr_t ctxAddr);
 
 } // namespace internal
 } // namespace v8
@@ -101,9 +102,6 @@ using RemoteObjectIdType = WTF::String;
 
 extern "C" void V8RecordReplaySetDefaultContext(v8::Isolate* isolate, v8::Local<v8::Context> cx);
 extern "C" uintptr_t V8RecordReplayGetDefaultContextAddress(v8::Isolate* isolate);
-namespace v8 { namespace internal {
-std::string RecordReplayContextAddressToken(v8::Isolate* isolate, uintptr_t ctxAddr);
-} }
 extern "C" void V8RecordReplayFinishRecording();
 extern "C" void V8RecordReplaySetCrashReason(const char* reason);
 extern "C" char* V8RecordReplayReadAssetFileContents(const char* aPath, size_t* aLength);
