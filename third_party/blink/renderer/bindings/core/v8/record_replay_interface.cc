@@ -79,6 +79,8 @@ extern v8::Local<v8::Object> RecordReplayGetBytecode(
     v8::Isolate* isolate_,
     v8::Local<v8::Object> paramsObj);
 
+extern int gPauseContextGroupId;
+
 } // namespace internal
 } // namespace v8
 
@@ -98,6 +100,10 @@ using RemoteObjectIdTypeRaw = std::u16string;
 using RemoteObjectIdType = WTF::String;
 
 extern "C" void V8RecordReplaySetDefaultContext(v8::Isolate* isolate, v8::Local<v8::Context> cx);
+extern "C" uintptr_t V8RecordReplayGetDefaultContextAddress(v8::Isolate* isolate);
+namespace v8 { namespace internal {
+std::string RecordReplayContextAddressToken(v8::Isolate* isolate, uintptr_t ctxAddr);
+} }
 extern "C" void V8RecordReplayFinishRecording();
 extern "C" void V8RecordReplaySetCrashReason(const char* reason);
 extern "C" char* V8RecordReplayReadAssetFileContents(const char* aPath, size_t* aLength);
@@ -719,10 +725,12 @@ void RecordReplayClearContexts(const char* reason, LocalFrame* frame) {
   if (!gReplayScriptsAlive || frame != gRootLocalFrame) {
     return;
   }
-  recordreplay::Print("ReplayScript STATUS_CHANGE_UNALIVE - %s iso=%" PRIxPTR " frame=%d",
-      reason,
-      reinterpret_cast<uintptr_t>(V8PerIsolateData::MainThreadIsolate()),
-      frame->RecordReplayId());
+  v8::Isolate* isolate = V8PerIsolateData::MainThreadIsolate();
+  recordreplay::Print(
+      "ReplayScript STATUS_CHANGE_UNALIVE - %s iso=%" PRIxPTR
+      " new-default-ctx=%" PRIxPTR " frame=%d",
+      reason, reinterpret_cast<uintptr_t>(isolate),
+      V8RecordReplayGetDefaultContextAddress(isolate), frame->RecordReplayId());
   gReplayScriptsAlive = false;
 }
 
@@ -2725,9 +2733,10 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
   
   // 2. Initialize sourcemap worker, command handlers etc.
   gReplayScriptsAlive = true;
-  recordreplay::Print("ReplayScript STATUS_CHANGE_ALIVE iso=%" PRIxPTR " ctx=%" PRIxPTR " win=%d frame=%d",
-      reinterpret_cast<uintptr_t>(isolate),
-      *reinterpret_cast<v8::internal::Address*>(*context),
+  recordreplay::Print("ReplayScript STATUS_CHANGE_ALIVE %s group=%d win=%d frame=%d",
+      v8::internal::RecordReplayContextAddressToken(
+          isolate, *reinterpret_cast<v8::internal::Address*>(*context)).c_str(),
+      v8::internal::gPauseContextGroupId,
       localFrame->DomWindow()->RecordReplayId(),
       localFrame->RecordReplayId());
   InitializeReplayScripts(isolate, localFrame, context);
