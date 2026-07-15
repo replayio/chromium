@@ -400,10 +400,6 @@ ParkableStringImpl::AgeOrParkResult ParkableStringImpl::MaybeAgeOrParkString() {
 
   Status status = CurrentStatus();
   Age age = metadata_->age_;
-  recordreplay::Assert(
-      "ParkableStringImpl::MaybeAgeOrParkString digest=%s status=%d age=%d",
-      base::HexEncode(digest()->data(), digest()->size()).c_str(),
-      static_cast<int>(status), static_cast<int>(age));
   if (age == Age::kYoung) {
     if (status == Status::kUnreferencedExternally)
       metadata_->age_ = MakeOlder(age);
