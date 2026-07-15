@@ -41,10 +41,12 @@
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
 #include "third_party/blink/renderer/platform/bindings/v8_dom_wrapper.h"
+#include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
 #include "third_party/inspector_protocol/crdtp/maybe.h"
 #include "v8/include/v8-inspector.h"
 
 #include <array>
+#include <cinttypes>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -717,7 +719,10 @@ void RecordReplayClearContexts(const char* reason, LocalFrame* frame) {
   if (!gReplayScriptsAlive || frame != gRootLocalFrame) {
     return;
   }
-  recordreplay::Print("ReplayScript STATUS_CHANGE_UNALIVE - %s", reason);
+  recordreplay::Print("ReplayScript STATUS_CHANGE_UNALIVE - %s iso=%" PRIxPTR " frame=%d",
+      reason,
+      reinterpret_cast<uintptr_t>(V8PerIsolateData::MainThreadIsolate()),
+      frame->RecordReplayId());
   gReplayScriptsAlive = false;
 }
 
@@ -2720,7 +2725,11 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
   
   // 2. Initialize sourcemap worker, command handlers etc.
   gReplayScriptsAlive = true;
-  recordreplay::Print("ReplayScript STATUS_CHANGE_ALIVE");
+  recordreplay::Print("ReplayScript STATUS_CHANGE_ALIVE iso=%" PRIxPTR " ctx=%" PRIxPTR " win=%d frame=%d",
+      reinterpret_cast<uintptr_t>(isolate),
+      *reinterpret_cast<v8::internal::Address*>(*context),
+      localFrame->DomWindow()->RecordReplayId(),
+      localFrame->RecordReplayId());
   InitializeReplayScripts(isolate, localFrame, context);
 }
 
