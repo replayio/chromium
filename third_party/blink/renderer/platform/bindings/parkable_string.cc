@@ -12,6 +12,8 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/process/memory.h"
+#include "base/record_replay.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
@@ -398,6 +400,10 @@ ParkableStringImpl::AgeOrParkResult ParkableStringImpl::MaybeAgeOrParkString() {
 
   Status status = CurrentStatus();
   Age age = metadata_->age_;
+  recordreplay::Assert(
+      "ParkableStringImpl::MaybeAgeOrParkString digest=%s status=%d age=%d",
+      base::HexEncode(digest()->data(), digest()->size()).c_str(),
+      static_cast<int>(status), static_cast<int>(age));
   if (age == Age::kYoung) {
     if (status == Status::kUnreferencedExternally)
       metadata_->age_ = MakeOlder(age);

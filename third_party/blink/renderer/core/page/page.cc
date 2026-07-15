@@ -1030,9 +1030,9 @@ void Page::WillBeDestroyed() {
   page_visibility_observer_set_.Clear();
 
   if (recordreplay::AreEventsDisallowed("Page::WillBeDestroyed")) {
-    // If the dtor is called during GC (usually from |~SVGImage|),
-    // we leak the scheduler, so the finalizer does not touch the recording
-    // stream.
+    // If the dtor is called during GC (usually from |~SVGImage|):
+    // leak the scheduler, to avoid calling
+    // MainThreadSchedulerImpl::RemovePageScheduler.
     // https://linear.app/replay/issue/RUN-1347#comment-bc4e3f9d
     PageScheduler* s = page_scheduler_.release();
 

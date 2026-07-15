@@ -2435,6 +2435,10 @@ void MainThreadSchedulerImpl::RecordTaskUkm(
     return;
 
   if (queue && queue->GetFrameScheduler()) {
+    REPLAY_ASSERT(
+        "MainThreadSchedulerImpl::RecordTaskUkm precise frame=%d sourceId=%lld",
+        recordreplay::PointerId(queue->GetFrameScheduler()),
+        queue->GetFrameScheduler()->GetUkmSourceId());
     auto status = RecordTaskUkmImpl(queue, task, task_timing,
                                     queue->GetFrameScheduler(), true);
     UMA_HISTOGRAM_ENUMERATION(
@@ -2450,10 +2454,21 @@ void MainThreadSchedulerImpl::RecordTaskUkm(
   std::sort(page_schedulers.begin(), page_schedulers.end(),
             recordreplay::CompareByPointerId());
 
+  REPLAY_ASSERT("MainThreadSchedulerImpl::RecordTaskUkm fallback count=%zu",
+                page_schedulers.size());
+
+  int i = 0;
   for (PageSchedulerImpl* page_scheduler : page_schedulers) {
-    auto status = RecordTaskUkmImpl(
-        queue, task, task_timing,
-        page_scheduler->SelectFrameForUkmAttribution(), false);
+    FrameSchedulerImpl* frame_scheduler =
+        page_scheduler->SelectFrameForUkmAttribution();
+    REPLAY_ASSERT(
+        "MainThreadSchedulerImpl::RecordTaskUkm fallback i=%d page=%d frame=%d "
+        "sourceId=%lld",
+        i++, recordreplay::PointerId(page_scheduler),
+        frame_scheduler ? recordreplay::PointerId(frame_scheduler) : -1,
+        frame_scheduler ? frame_scheduler->GetUkmSourceId() : int64_t{-1});
+    auto status =
+        RecordTaskUkmImpl(queue, task, task_timing, frame_scheduler, false);
     UMA_HISTOGRAM_ENUMERATION(
         "Scheduler.Experimental.Renderer.UkmRecordingStatus", status,
         UkmRecordingStatus::kCount);

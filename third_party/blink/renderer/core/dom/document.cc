@@ -7542,6 +7542,10 @@ ukm::UkmRecorder* Document::UkmRecorder() {
       recorder.InitWithNewPipeAndPassReceiver());
   ukm_recorder_ = std::make_unique<ukm::MojoUkmRecorder>(std::move(recorder));
 
+  recordreplay::Assert("Document::UkmRecorder mint doc=%d sourceId=%lld",
+                       recordreplay::PointerId(this),
+                       (long long)UkmSourceID());
+
   return ukm_recorder_.get();
 }
 
