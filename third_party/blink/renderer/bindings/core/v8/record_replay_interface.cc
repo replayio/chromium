@@ -2478,6 +2478,7 @@ static std::string GetStackTrace(v8::Isolate* isolate, v8::TryCatch& try_catch) 
 }
 
 static void RunScript(v8::Isolate* isolate, v8::Local<v8::Context> context, const char* source_raw, const char* filename) {
+  v8::Isolate::AllowJavascriptExecutionScope allow_js(isolate);
   v8::Local<v8::String> filename_string = ToV8String(isolate, filename);
   v8::ScriptOrigin origin(isolate, filename_string);
 
