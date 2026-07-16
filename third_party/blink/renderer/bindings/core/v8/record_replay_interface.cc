@@ -80,7 +80,8 @@ extern v8::Local<v8::Object> RecordReplayGetBytecode(
     v8::Local<v8::Object> paramsObj);
 
 extern int gPauseContextGroupId;
-std::string RecordReplayContextAddressToken(v8::Isolate* isolate, uintptr_t ctxAddr);
+std::string RecordReplayContextAddressToken(v8::Isolate* isolate,
+                                            uintptr_t ctxAddr, bool includeId);
 
 } // namespace internal
 } // namespace v8
@@ -725,10 +726,11 @@ void RecordReplayClearContexts(const char* reason, LocalFrame* frame) {
   }
   v8::Isolate* isolate = V8PerIsolateData::MainThreadIsolate();
   recordreplay::Print(
-      "ReplayScript STATUS_CHANGE_UNALIVE - %s iso=%" PRIxPTR
-      " new-default-ctx=%" PRIxPTR " frame=%d",
-      reason, reinterpret_cast<uintptr_t>(isolate),
-      V8RecordReplayGetDefaultContextAddress(isolate), frame->RecordReplayId());
+      "ReplayScript STATUS_CHANGE_UNALIVE - %s %s frame=%d", reason,
+      v8::internal::RecordReplayContextAddressToken(
+          isolate, V8RecordReplayGetDefaultContextAddress(isolate), true)
+          .c_str(),
+      frame->RecordReplayId());
   gReplayScriptsAlive = false;
 }
 
@@ -2735,7 +2737,8 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
   gReplayScriptsAlive = true;
   recordreplay::Print("ReplayScript STATUS_CHANGE_ALIVE %s group=%d win=%d frame=%d",
       v8::internal::RecordReplayContextAddressToken(
-          isolate, *reinterpret_cast<v8::internal::Address*>(*context)).c_str(),
+          isolate, *reinterpret_cast<v8::internal::Address*>(*context), true)
+          .c_str(),
       v8::internal::gPauseContextGroupId,
       localFrame->DomWindow()->RecordReplayId(),
       localFrame->RecordReplayId());

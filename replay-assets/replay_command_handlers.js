@@ -400,7 +400,7 @@ function Target_getCurrentMessageContents() {
     return {
       source: "UnknownMessageError",
       level: "error",
-      text: "Could not look up message contents"
+      text: "[RuntimeError] Could not look up message contents"
     };
   }
 
