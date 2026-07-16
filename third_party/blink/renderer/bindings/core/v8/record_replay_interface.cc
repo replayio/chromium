@@ -780,6 +780,7 @@ static void SendMessageToFrontend(const v8_inspector::StringView& message) {
                                                         (int)message.length()).ToLocalChecked();
   }
   v8::Local<v8::Function> callback = gCDPMessageCallback->Get(isolate);
+  v8::Isolate::AllowJavascriptExecutionScope allow_js(isolate);
   v8::MaybeLocal<v8::Value> rv = callback->Call(context, v8::Undefined(isolate), 1, &arg);
   CHECK(!rv.IsEmpty());
 
