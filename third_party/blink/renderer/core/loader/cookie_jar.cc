@@ -8,6 +8,7 @@
 #include "base/feature_list.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/record_replay.h"
 #include "base/strings/strcat.h"
 #include "net/base/features.h"
 #include "net/cookies/parsed_cookie.h"
@@ -93,6 +94,9 @@ void CookieJar::SetCookie(const String& value) {
   if (cookie_url.IsEmpty())
     return;
 
+  if (recordreplay::AreEventsUnavailable("CookieJar::SetCookie"))
+    return;
+
   base::ElapsedTimer timer;
   bool requested = RequestRestrictedCookieManagerIfNeeded();
   bool site_for_cookies_ok = true;
@@ -148,6 +152,9 @@ void CookieJar::SetCookie(const String& value) {
 String CookieJar::Cookies() {
   KURL cookie_url = document_->CookieURL();
   if (cookie_url.IsEmpty())
+    return String();
+
+  if (recordreplay::AreEventsUnavailable("CookieJar::Cookies"))
     return String();
 
   base::ElapsedTimer timer;
