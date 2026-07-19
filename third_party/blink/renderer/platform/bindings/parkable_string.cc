@@ -524,7 +524,6 @@ ParkableStringImpl::CaptureAgeStateSnapshot() {
   AssertOnValidThread();
   DCHECK(may_be_parked());
   AgeStateSnapshot snapshot;
-  snapshot.digest = metadata_->digest_;
   snapshot.status = static_cast<int>(CurrentStatus());
   snapshot.age = static_cast<int>(metadata_->age_);
   snapshot.has_one_ref =

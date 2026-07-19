@@ -12,19 +12,10 @@ namespace blink {
 void AssertParkableStringAgeState(ParkableStringImpl* str) {
   ParkableStringImpl::AgeStateSnapshot snapshot = str->CaptureAgeStateSnapshot();
 
-  // Hex-encode the digest so the call site stays a single Assert line.
-  char digest_hex[2 * ParkableStringImpl::kDigestSize + 1];
-  static const char kHex[] = "0123456789abcdef";
-  for (wtf_size_t i = 0; i < snapshot.digest.size(); ++i) {
-    digest_hex[2 * i] = kHex[(snapshot.digest[i] >> 4) & 0xf];
-    digest_hex[2 * i + 1] = kHex[snapshot.digest[i] & 0xf];
-  }
-  digest_hex[2 * snapshot.digest.size()] = '\0';
-
   recordreplay::Assert(
-      "ParkableStringManager::AgeStringsAndPark str digest=%s status=%d "
-      "age=%d hasOneRef=%d",
-      digest_hex, snapshot.status, snapshot.age, snapshot.has_one_ref);
+      "ParkableStringManager::AgeStringsAndPark str status=%d age=%d "
+      "hasOneRef=%d",
+      snapshot.status, snapshot.age, snapshot.has_one_ref);
 }
 
 }  // namespace blink

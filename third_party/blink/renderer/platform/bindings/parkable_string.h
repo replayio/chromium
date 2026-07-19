@@ -167,7 +167,6 @@ class PLATFORM_EXPORT ParkableStringImpl final
   // Record/replay diagnostics: a lock-free-to-consume snapshot of the state
   // feeding |MaybeAgeOrParkString()|. Captured under |lock_|, no Assert inside.
   struct AgeStateSnapshot {
-    SecureDigest digest;
     int status;  // Status ordinal.
     int age;     // Age ordinal.
     int has_one_ref;  // 1/0, or -1 when |string_| is null.
