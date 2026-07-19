@@ -15,7 +15,7 @@ void AssertParkableStringAgeState(ParkableStringImpl* str) {
   // Hex-encode the digest so the call site stays a single Assert line.
   char digest_hex[2 * ParkableStringImpl::kDigestSize + 1];
   static const char kHex[] = "0123456789abcdef";
-  for (size_t i = 0; i < snapshot.digest.size(); ++i) {
+  for (wtf_size_t i = 0; i < snapshot.digest.size(); ++i) {
     digest_hex[2 * i] = kHex[(snapshot.digest[i] >> 4) & 0xf];
     digest_hex[2 * i + 1] = kHex[snapshot.digest[i] & 0xf];
   }
