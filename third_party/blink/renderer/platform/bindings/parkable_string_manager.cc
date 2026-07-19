@@ -19,6 +19,7 @@
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/platform/bindings/parkable_string.h"
+#include "third_party/blink/renderer/platform/bindings/parkable_string_record_replay.h"
 #include "third_party/blink/renderer/platform/disk_data_allocator.h"
 #include "third_party/blink/renderer/platform/instrumentation/memory_pressure_listener.h"
 #include "third_party/blink/renderer/platform/scheduler/public/main_thread.h"
@@ -350,6 +351,7 @@ void ParkableStringManager::AgeStringsAndPark() {
 
   bool can_make_progress = false;
   for (ParkableStringImpl* str : unparked) {
+    AssertParkableStringAgeState(str);
     if (str->MaybeAgeOrParkString() ==
         ParkableStringImpl::AgeOrParkResult::kSuccessOrTransientFailure) {
       can_make_progress = true;
@@ -357,6 +359,7 @@ void ParkableStringManager::AgeStringsAndPark() {
   }
 
   for (ParkableStringImpl* str : parked) {
+    AssertParkableStringAgeState(str);
     if (str->MaybeAgeOrParkString() ==
         ParkableStringImpl::AgeOrParkResult::kSuccessOrTransientFailure) {
       can_make_progress = true;

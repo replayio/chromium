@@ -518,6 +518,20 @@ ParkableStringImpl::Status ParkableStringImpl::CurrentStatus() const {
   return Status::kUnreferencedExternally;
 }
 
+ParkableStringImpl::AgeStateSnapshot
+ParkableStringImpl::CaptureAgeStateSnapshot() {
+  base::AutoLock locker(metadata_->lock_);
+  AssertOnValidThread();
+  DCHECK(may_be_parked());
+  AgeStateSnapshot snapshot;
+  snapshot.digest = metadata_->digest_;
+  snapshot.status = static_cast<int>(CurrentStatus());
+  snapshot.age = static_cast<int>(metadata_->age_);
+  snapshot.has_one_ref =
+      string_.IsNull() ? -1 : (string_.Impl()->HasOneRef() ? 1 : 0);
+  return snapshot;
+}
+
 bool ParkableStringImpl::CanParkNow() const {
   return CurrentStatus() == Status::kUnreferencedExternally &&
          metadata_->age_ != Age::kYoung &&
