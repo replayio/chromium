@@ -44,7 +44,8 @@ struct ParkableStringManager::Statistics {
 namespace {
 
 bool CompressionEnabled() {
-  return base::FeatureList::IsEnabled(features::kCompressParkableStrings);
+  return base::FeatureList::IsEnabled(features::kCompressParkableStrings) &&
+         !recordreplay::IsRecordingOrReplaying("no-park-strings");
 }
 
 class OnPurgeMemoryListener : public GarbageCollected<OnPurgeMemoryListener>,

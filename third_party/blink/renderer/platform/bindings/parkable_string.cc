@@ -12,7 +12,6 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/process/memory.h"
-#include "base/record_replay.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
@@ -533,11 +532,7 @@ ParkableStringImpl::CaptureAgeStateSnapshot() {
 
 bool ParkableStringImpl::CanParkNow() const {
   return CurrentStatus() == Status::kUnreferencedExternally &&
-         metadata_->age_ != Age::kYoung &&
-         // Never park strings when recording/replaying, as they can be unparked
-         // at non-deterministic points (e.g. during script compilation) and
-         // perform file accesses.
-         !recordreplay::IsRecordingOrReplaying("no-park-strings");
+         metadata_->age_ != Age::kYoung;
 }
 
 void ParkableStringImpl::Unpark() {
