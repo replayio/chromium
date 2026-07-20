@@ -12,7 +12,6 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/process/memory.h"
-#include "base/record_replay.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
@@ -400,10 +399,6 @@ ParkableStringImpl::AgeOrParkResult ParkableStringImpl::MaybeAgeOrParkString() {
 
   Status status = CurrentStatus();
   Age age = metadata_->age_;
-  recordreplay::Assert(
-      "ParkableStringImpl::MaybeAgeOrParkString digest=%s status=%d age=%d",
-      base::HexEncode(digest()->data(), digest()->size()).c_str(),
-      static_cast<int>(status), static_cast<int>(age));
   if (age == Age::kYoung) {
     if (status == Status::kUnreferencedExternally)
       metadata_->age_ = MakeOlder(age);
@@ -522,13 +517,22 @@ ParkableStringImpl::Status ParkableStringImpl::CurrentStatus() const {
   return Status::kUnreferencedExternally;
 }
 
+ParkableStringImpl::AgeStateSnapshot
+ParkableStringImpl::CaptureAgeStateSnapshot() {
+  base::AutoLock locker(metadata_->lock_);
+  AssertOnValidThread();
+  DCHECK(may_be_parked());
+  AgeStateSnapshot snapshot;
+  snapshot.status = static_cast<int>(CurrentStatus());
+  snapshot.age = static_cast<int>(metadata_->age_);
+  snapshot.has_one_ref =
+      string_.IsNull() ? -1 : (string_.Impl()->HasOneRef() ? 1 : 0);
+  return snapshot;
+}
+
 bool ParkableStringImpl::CanParkNow() const {
   return CurrentStatus() == Status::kUnreferencedExternally &&
-         metadata_->age_ != Age::kYoung &&
-         // Never park strings when recording/replaying, as they can be unparked
-         // at non-deterministic points (e.g. during script compilation) and
-         // perform file accesses.
-         !recordreplay::IsRecordingOrReplaying("no-park-strings");
+         metadata_->age_ != Age::kYoung;
 }
 
 void ParkableStringImpl::Unpark() {

@@ -43,10 +43,12 @@
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
 #include "third_party/blink/renderer/platform/bindings/v8_dom_wrapper.h"
+#include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
 #include "third_party/inspector_protocol/crdtp/maybe.h"
 #include "v8/include/v8-inspector.h"
 
 #include <array>
+#include <cinttypes>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -79,6 +81,10 @@ extern v8::Local<v8::Object> RecordReplayGetBytecode(
     v8::Isolate* isolate_,
     v8::Local<v8::Object> paramsObj);
 
+extern int gPauseContextGroupId;
+std::string RecordReplayContextAddressToken(v8::Isolate* isolate,
+                                            uintptr_t ctxAddr, bool includeId);
+
 } // namespace internal
 } // namespace v8
 
@@ -98,6 +104,7 @@ using RemoteObjectIdTypeRaw = std::u16string;
 using RemoteObjectIdType = WTF::String;
 
 extern "C" void V8RecordReplaySetDefaultContext(v8::Isolate* isolate, v8::Local<v8::Context> cx);
+extern "C" uintptr_t V8RecordReplayGetDefaultContextAddress(v8::Isolate* isolate);
 extern "C" void V8RecordReplayFinishRecording();
 extern "C" void V8RecordReplaySetCrashReason(const char* reason);
 extern "C" char* V8RecordReplayReadAssetFileContents(const char* aPath, size_t* aLength);
@@ -719,7 +726,13 @@ void RecordReplayClearContexts(const char* reason, LocalFrame* frame) {
   if (!gReplayScriptsAlive || frame != gRootLocalFrame) {
     return;
   }
-  recordreplay::Print("ReplayScript STATUS_CHANGE_UNALIVE - %s", reason);
+  v8::Isolate* isolate = V8PerIsolateData::MainThreadIsolate();
+  recordreplay::Print(
+      "ReplayScript STATUS_CHANGE_UNALIVE - %s %s frame=%d", reason,
+      v8::internal::RecordReplayContextAddressToken(
+          isolate, V8RecordReplayGetDefaultContextAddress(isolate), true)
+          .c_str(),
+      frame->RecordReplayId());
   gReplayScriptsAlive = false;
 }
 
@@ -769,6 +782,7 @@ static void SendMessageToFrontend(const v8_inspector::StringView& message) {
                                                         (int)message.length()).ToLocalChecked();
   }
   v8::Local<v8::Function> callback = gCDPMessageCallback->Get(isolate);
+  v8::Isolate::AllowJavascriptExecutionScope allow_js(isolate);
   v8::MaybeLocal<v8::Value> rv = callback->Call(context, v8::Undefined(isolate), 1, &arg);
   CHECK(!rv.IsEmpty());
 
@@ -2494,6 +2508,7 @@ static std::string GetStackTrace(v8::Isolate* isolate, v8::TryCatch& try_catch) 
 }
 
 static void RunScript(v8::Isolate* isolate, v8::Local<v8::Context> context, const char* source_raw, const char* filename) {
+  v8::Isolate::AllowJavascriptExecutionScope allow_js(isolate);
   v8::Local<v8::String> filename_string = ToV8String(isolate, filename);
   v8::ScriptOrigin origin(isolate, filename_string);
 
@@ -2756,7 +2771,13 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
   
   // 2. Initialize sourcemap worker, command handlers etc.
   gReplayScriptsAlive = true;
-  recordreplay::Print("ReplayScript STATUS_CHANGE_ALIVE");
+  recordreplay::Print("ReplayScript STATUS_CHANGE_ALIVE %s group=%d win=%d frame=%d",
+      v8::internal::RecordReplayContextAddressToken(
+          isolate, *reinterpret_cast<v8::internal::Address*>(*context), true)
+          .c_str(),
+      v8::internal::gPauseContextGroupId,
+      localFrame->DomWindow()->RecordReplayId(),
+      localFrame->RecordReplayId());
   InitializeReplayScripts(isolate, localFrame, context);
 }
 
