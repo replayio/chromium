@@ -32,6 +32,8 @@ TaskQueueThrottler::TaskQueueThrottler(
     : task_queue_(task_queue), tick_clock_(tick_clock) {
   // Pointer registration is needed for sorting in BudgetPool::UpdateThrottlingStateForAllQueues
   recordreplay::RegisterPointer("TaskQueueThrottler", this);
+  REPLAY_ASSERT("TaskQueueThrottler::TaskQueueThrottler %d",
+                recordreplay::PointerId(this));
 }
 
 TaskQueueThrottler::~TaskQueueThrottler() {
