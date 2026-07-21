@@ -262,6 +262,7 @@ void OnNetworkResourceRedirect(uint64_t inspector_id, const blink::KURL& new_url
     return;
   }
 
+  blink::ScriptForbiddenScope::AllowUserAgentScript allow_script;
   base::DictionaryValue dict;
   dict.SetString("requestId", RecordReplayNetworkRequestId(inspector_id));
   dict.SetString("requestUrl", new_url.GetString().Utf8());
@@ -287,6 +288,7 @@ void OnNetworkReceiveResponse(uint64_t inspector_id,
     return;
   }
 
+  blink::ScriptForbiddenScope::AllowUserAgentScript allow_script;
   base::DictionaryValue dict;
   dict.SetString("requestId", RecordReplayNetworkRequestId(inspector_id));
   const char* http_version = HttpVersionToString(response.HttpVersion());
@@ -311,6 +313,7 @@ void OnNetworkReceiveData(uint64_t inspector_id, const char* data, int length) {
     return;
   }
 
+  blink::ScriptForbiddenScope::AllowUserAgentScript allow_script;
   std::string requestId = RecordReplayNetworkRequestId(inspector_id);
 
   if (recordreplay::DependencyGraphEnabled()) {
@@ -345,6 +348,7 @@ void OnNetworkFinishLoading(uint64_t inspector_id,
     return;
   }
 
+  blink::ScriptForbiddenScope::AllowUserAgentScript allow_script;
   std::string requestId = RecordReplayNetworkRequestId(inspector_id);
 
   if (recordreplay::DependencyGraphEnabled()) {
@@ -368,6 +372,7 @@ void OnNetworkFail(uint64_t inspector_id, const blink::WebURLError& error) {
     return;
   }
 
+  blink::ScriptForbiddenScope::AllowUserAgentScript allow_script;
   std::string requestId = RecordReplayNetworkRequestId(inspector_id);
 
   if (recordreplay::DependencyGraphEnabled()) {
