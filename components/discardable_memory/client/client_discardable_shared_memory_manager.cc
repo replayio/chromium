@@ -16,6 +16,8 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/process/memory.h"
+#include "base/record_replay.h"
+#include "base/record_replay_atomic_sequence_num.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/system/sys_info.h"
@@ -26,7 +28,9 @@
 #include "build/build_config.h"
 #include "components/crash/core/common/crash_key.h"
 
-#include "base/record_replay_atomic_sequence_num.h"
+#if BUILDFLAG(IS_POSIX)
+#include "base/memory/madv_free_discardable_memory_posix.h"
+#endif
 
 namespace discardable_memory {
 namespace {
@@ -354,6 +358,15 @@ ClientDiscardableSharedMemoryManager::AllocateLockedDiscardableMemory(
   // Make sure crash keys are up to date in case allocation fails.
   if (heap_->GetSize() != heap_size_prior_to_releasing_purged_memory)
     MemoryUsageChanged(heap_->GetSize(), heap_->GetFreelistSize());
+
+  // After diverging use simple local allocation to avoid IPC.
+#if BUILDFLAG(IS_POSIX)
+  if (recordreplay::AreEventsUnavailable()) {
+    static std::atomic<size_t> diverge_bytes_allocated{0};
+    return std::make_unique<base::MadvFreeDiscardableMemoryPosix>(
+        size, &diverge_bytes_allocated);
+  }
+#endif
 
   size_t pages_to_allocate =
       std::max(allocation_size / base::GetPageSize(), pages);
