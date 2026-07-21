@@ -1672,7 +1672,7 @@ static void GetCurrentNetworkStreamData(const v8::FunctionCallbackInfo<v8::Value
     return;
   }
 
-  uint8_t* bytes = &(*gCurrentNetworkStreamData)[index];
+  const uint8_t* bytes = gCurrentNetworkStreamData->data() + index;
   std::string encoded = base::Base64Encode(
     base::span<const uint8_t>(bytes, length)
   );
