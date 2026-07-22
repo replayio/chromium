@@ -21,7 +21,9 @@
 #include "content/public/renderer/render_thread.h"
 #include "content/public/renderer/v8_value_converter.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_css_style_declaration.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_document.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_element.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_node.h"
 #include "third_party/blink/renderer/bindings/core/v8/serialization/serialized_script_value.h"
 #include "third_party/blink/renderer/core/css/css_style_declaration.h"
@@ -80,7 +82,8 @@ extern v8::Local<v8::Object> RecordReplayGetBytecode(
     v8::Local<v8::Object> paramsObj);
 
 extern int gPauseContextGroupId;
-std::string RecordReplayContextAddressToken(v8::Isolate* isolate, uintptr_t ctxAddr);
+std::string RecordReplayContextAddressToken(v8::Isolate* isolate,
+                                            uintptr_t ctxAddr, bool includeId);
 
 } // namespace internal
 } // namespace v8
@@ -725,10 +728,11 @@ void RecordReplayClearContexts(const char* reason, LocalFrame* frame) {
   }
   v8::Isolate* isolate = V8PerIsolateData::MainThreadIsolate();
   recordreplay::Print(
-      "ReplayScript STATUS_CHANGE_UNALIVE - %s iso=%" PRIxPTR
-      " new-default-ctx=%" PRIxPTR " frame=%d",
-      reason, reinterpret_cast<uintptr_t>(isolate),
-      V8RecordReplayGetDefaultContextAddress(isolate), frame->RecordReplayId());
+      "ReplayScript STATUS_CHANGE_UNALIVE - %s %s frame=%d", reason,
+      v8::internal::RecordReplayContextAddressToken(
+          isolate, V8RecordReplayGetDefaultContextAddress(isolate), true)
+          .c_str(),
+      frame->RecordReplayId());
   gReplayScriptsAlive = false;
 }
 
@@ -778,6 +782,7 @@ static void SendMessageToFrontend(const v8_inspector::StringView& message) {
                                                         (int)message.length()).ToLocalChecked();
   }
   v8::Local<v8::Function> callback = gCDPMessageCallback->Get(isolate);
+  v8::Isolate::AllowJavascriptExecutionScope allow_js(isolate);
   v8::MaybeLocal<v8::Value> rv = callback->Call(context, v8::Undefined(isolate), 1, &arg);
   CHECK(!rv.IsEmpty());
 
@@ -1522,6 +1527,34 @@ static void fromJsIsBlinkObject(
   args.GetReturnValue().Set(result);
 }
 
+static void fromJsIsBlinkNodeObject(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 &&
+        "[RuntimeError] must be called with a single value");
+
+  v8::Isolate* isolate = args.GetIsolate();
+  args.GetReturnValue().Set(!!V8Node::ToImplWithTypeCheck(isolate, args[0]));
+}
+
+static void fromJsIsBlinkElementObject(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 &&
+        "[RuntimeError] must be called with a single value");
+
+  v8::Isolate* isolate = args.GetIsolate();
+  args.GetReturnValue().Set(!!V8Element::ToImplWithTypeCheck(isolate, args[0]));
+}
+
+static void fromJsIsBlinkCSSStyleDeclarationObject(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 &&
+        "[RuntimeError] must be called with a single value");
+
+  v8::Isolate* isolate = args.GetIsolate();
+  args.GetReturnValue().Set(
+      !!V8CSSStyleDeclaration::ToImplWithTypeCheck(isolate, args[0]));
+}
+
 /**
  * Return whether there is a return value available for the topmost frame,
  * when stopped at an "exit" return site.
@@ -1669,7 +1702,7 @@ static void GetCurrentNetworkStreamData(const v8::FunctionCallbackInfo<v8::Value
     return;
   }
 
-  uint8_t* bytes = &(*gCurrentNetworkStreamData)[index];
+  const uint8_t* bytes = gCurrentNetworkStreamData->data() + index;
   std::string encoded = base::Base64Encode(
     base::span<const uint8_t>(bytes, length)
   );
@@ -2475,6 +2508,7 @@ static std::string GetStackTrace(v8::Isolate* isolate, v8::TryCatch& try_catch) 
 }
 
 static void RunScript(v8::Isolate* isolate, v8::Local<v8::Context> context, const char* source_raw, const char* filename) {
+  v8::Isolate::AllowJavascriptExecutionScope allow_js(isolate);
   v8::Local<v8::String> filename_string = ToV8String(isolate, filename);
   v8::ScriptOrigin origin(isolate, filename_string);
 
@@ -2564,6 +2598,12 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
                       fromJsGetObjectByCdpId);
   SetFunctionProperty(isolate, args, "fromJsIsBlinkObject",
                       fromJsIsBlinkObject);
+  SetFunctionProperty(isolate, args, "fromJsIsBlinkNodeObject",
+                      fromJsIsBlinkNodeObject);
+  SetFunctionProperty(isolate, args, "fromJsIsBlinkElementObject",
+                      fromJsIsBlinkElementObject);
+  SetFunctionProperty(isolate, args, "fromJsIsBlinkCSSStyleDeclarationObject",
+                      fromJsIsBlinkCSSStyleDeclarationObject);
   SetFunctionProperty(isolate, args, "fromJsHasReturnValue",
                       fromJsHasReturnValue);
   SetFunctionProperty(isolate, args, "fromJsGetReturnValue",
@@ -2733,7 +2773,8 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
   gReplayScriptsAlive = true;
   recordreplay::Print("ReplayScript STATUS_CHANGE_ALIVE %s group=%d win=%d frame=%d",
       v8::internal::RecordReplayContextAddressToken(
-          isolate, *reinterpret_cast<v8::internal::Address*>(*context)).c_str(),
+          isolate, *reinterpret_cast<v8::internal::Address*>(*context), true)
+          .c_str(),
       v8::internal::gPauseContextGroupId,
       localFrame->DomWindow()->RecordReplayId(),
       localFrame->RecordReplayId());
