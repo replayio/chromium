@@ -297,7 +297,7 @@ void LocalWindowProxy::Initialize() {
 
   if (recordreplay::IsRecordingOrReplaying("commands") &&
       world_->IsIsolatedWorld()) {
-    InstallRecordReplayGlobals(GetIsolate(), context);
+    InstallRecordReplayGlobals(GetIsolate(), GetFrame(), context);
   }
 
   {

@@ -2543,11 +2543,11 @@ static bool TestEnv(const char* env) {
 }
 
 static v8::Eternal<v8::Object>* gRecordReplayEternalState;
-static v8::Global<v8::Object>* gReplayApi;
-static v8::Global<v8::Object>* gReplayArguments;
 
-static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* localFrame) {
-  v8::Local<v8::Context> context = isolate->GetCurrentContext();
+void InstallRecordReplayGlobals(v8::Isolate* isolate,
+                                LocalFrame* localFrame,
+                                v8::Local<v8::Context> context) {
+  v8::Context::Scope scope(context);
 
   // Add __RECORD_REPLAY_ANNOTATION_HOOK__ as a global.
   SetFunctionProperty(isolate, context->Global(), AnnotationHookJSName,
@@ -2555,18 +2555,10 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
 
   v8::Local<v8::Object> jsrrApi = v8::Object::New(isolate);
   DefineProperty(isolate, context->Global(), "__RECORD_REPLAY__", jsrrApi);
-  if (gReplayApi == nullptr) {
-    gReplayApi = new v8::Global<v8::Object>();
-  }
-  gReplayApi->Reset(isolate, jsrrApi);
 
   v8::Local<v8::Object> args = v8::Object::New(isolate);
   DefineProperty(isolate, context->Global(), "__RECORD_REPLAY_ARGUMENTS__",
                  args);
-  if (gReplayArguments == nullptr) {
-    gReplayArguments = new v8::Global<v8::Object>();
-  }
-  gReplayArguments->Reset(isolate, args);
 
   DefineProperty(isolate, args, "REPLAY_CDT_PAUSE_OBJECT_GROUP",
                  ToV8String(isolate, REPLAY_CDT_PAUSE_OBJECT_GROUP));
@@ -2702,19 +2694,6 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
                  gRecordReplayEternalState->Get(isolate));
 }
 
-void InstallRecordReplayGlobals(v8::Isolate* isolate, v8::Local<v8::Context> target_context) {
-  if (gReplayApi == nullptr || gReplayApi->IsEmpty() ||
-      gReplayArguments == nullptr || gReplayArguments->IsEmpty()) {
-    return;
-  }
-
-  v8::Context::Scope scope(target_context);
-  DefineProperty(isolate, target_context->Global(), "__RECORD_REPLAY__",
-                 gReplayApi->Get(isolate));
-  DefineProperty(isolate, target_context->Global(), "__RECORD_REPLAY_ARGUMENTS__",
-                 gReplayArguments->Get(isolate));
-}
-
 void InitializeRecordReplay(
   const char* processType,
   v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
@@ -2742,7 +2721,7 @@ static void InitializeReplayScripts(v8::Isolate* isolate, LocalFrame* localFrame
   V8RecordReplaySetDefaultContext(isolate, context);
   
   // Initialize __RECORD_REPLAY__ things.
-  InitializeRecordReplayApiObjects(isolate, localFrame);
+  InstallRecordReplayGlobals(isolate, localFrame, context);
 
   if (recordreplay::FeatureEnabled("collect-source-maps") &&
       !TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_COLLECTION")) {
