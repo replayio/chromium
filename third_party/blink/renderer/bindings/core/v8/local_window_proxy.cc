@@ -300,8 +300,7 @@ void LocalWindowProxy::Initialize() {
   // debugger-created worlds may be null/hostless.
   if (recordreplay::IsRecordingOrReplaying("commands") &&
       world_->IsIsolatedWorld()) {
-    InstallRecordReplayGlobals(GetIsolate(), context,
-                               /*is_root_main_world=*/false);
+    InstallRecordReplayGlobals(GetIsolate(), context);
   }
 
   {

@@ -717,8 +717,6 @@ RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
 // Whether the frame that our globally registered script(s)
 // were run in is alive.
 static bool gReplayScriptsAlive = false;
-static v8::Global<v8::Object>* gReplayApi;
-static bool gReplayApiReady = false;
 
 /**
  * This is called when our local root frame is about to shut down.
@@ -736,10 +734,6 @@ void RecordReplayClearContexts(const char* reason, LocalFrame* frame) {
           .c_str(),
       frame->RecordReplayId());
   gReplayScriptsAlive = false;
-  gReplayApiReady = false;
-  if (gReplayApi) {
-    gReplayApi->Reset();
-  }
 }
 
 static void fromJsIsReplayScriptAlive(const v8::FunctionCallbackInfo<v8::Value>& args) {
@@ -2550,49 +2544,16 @@ static bool TestEnv(const char* env) {
 
 static v8::Eternal<v8::Object>* gRecordReplayEternalState;
 
-static void GetRecordReplayApi(
-    v8::Local<v8::Name>,
-    const v8::PropertyCallbackInfo<v8::Value>& info) {
-  if (gReplayApiReady && gReplayApi && !gReplayApi->IsEmpty()) {
-    info.GetReturnValue().Set(gReplayApi->Get(info.GetIsolate()));
-  }
-}
-
-static void InstallRecordReplayApiAccessor(v8::Isolate* isolate,
-                                           v8::Local<v8::Context> context) {
-  context->Global()
-      ->SetAccessor(context, ToV8String(isolate, "__RECORD_REPLAY__"),
-                    GetRecordReplayApi, nullptr, v8::MaybeLocal<v8::Value>(),
-                    v8::AccessControl::DEFAULT,
-                    static_cast<v8::PropertyAttribute>(
-                        v8::ReadOnly | v8::DontEnum | v8::DontDelete),
-                    v8::SideEffectType::kHasNoSideEffect)
-      .Check();
-}
-
 void InstallRecordReplayGlobals(v8::Isolate* isolate,
-                                v8::Local<v8::Context> context,
-                                bool is_root_main_world) {
+                                v8::Local<v8::Context> context) {
   v8::Context::Scope scope(context);
 
   // Add __RECORD_REPLAY_ANNOTATION_HOOK__ as a global.
   SetFunctionProperty(isolate, context->Global(), AnnotationHookJSName,
                       InvokeOnAnnotation);
 
-  // The public API closes over command-handler state, so isolated worlds must
-  // use the canonical root object. The native arguments below are recreated so
-  // their callbacks use this context.
-  if (is_root_main_world) {
-    v8::Local<v8::Object> jsrrApi = v8::Object::New(isolate);
-    DefineProperty(isolate, context->Global(), "__RECORD_REPLAY__", jsrrApi);
-    if (!gReplayApi) {
-      gReplayApi = new v8::Global<v8::Object>();
-    }
-    gReplayApiReady = false;
-    gReplayApi->Reset(isolate, jsrrApi);
-  } else {
-    InstallRecordReplayApiAccessor(isolate, context);
-  }
+  v8::Local<v8::Object> jsrrApi = v8::Object::New(isolate);
+  DefineProperty(isolate, context->Global(), "__RECORD_REPLAY__", jsrrApi);
 
   v8::Local<v8::Object> args = v8::Object::New(isolate);
   DefineProperty(isolate, context->Global(), "__RECORD_REPLAY_ARGUMENTS__",
@@ -2759,8 +2720,7 @@ static void InitializeReplayScripts(v8::Isolate* isolate, LocalFrame* localFrame
   V8RecordReplaySetDefaultContext(isolate, context);
   
   // Initialize __RECORD_REPLAY__ things.
-  InstallRecordReplayGlobals(isolate, context,
-                             /*is_root_main_world=*/true);
+  InstallRecordReplayGlobals(isolate, context);
 
   if (recordreplay::FeatureEnabled("collect-source-maps") &&
       !TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_COLLECTION")) {
@@ -2784,10 +2744,6 @@ static void InitializeReplayScripts(v8::Isolate* isolate, LocalFrame* localFrame
       RunScript(isolate, context, commandHandlerScript.Utf8().c_str(), kInternalScriptURL);
     }
   }
-
-  // Isolated worlds resolve this object lazily. Do not expose it until the
-  // command handler has finished populating the public API.
-  gReplayApiReady = true;
 }
 
 void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
