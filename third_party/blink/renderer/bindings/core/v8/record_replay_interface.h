@@ -34,6 +34,9 @@ void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame
 // This is the last Replay code that we run for a new Window object.
 void OnNewWindowAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context);
 
+// Install the canonical Record Replay globals into an additional V8 context.
+void InstallRecordReplayGlobals(v8::Isolate* isolate, v8::Local<v8::Context> target_context);
+
 // Notify the driver that we're adding an error to the console.
 void RecordReplayOnErrorEvent(ErrorEvent* error_event);
 

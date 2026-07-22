@@ -2543,6 +2543,8 @@ static bool TestEnv(const char* env) {
 }
 
 static v8::Eternal<v8::Object>* gRecordReplayEternalState;
+static v8::Global<v8::Object>* gReplayApi;
+static v8::Global<v8::Object>* gReplayArguments;
 
 static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* localFrame) {
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
@@ -2553,10 +2555,18 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
 
   v8::Local<v8::Object> jsrrApi = v8::Object::New(isolate);
   DefineProperty(isolate, context->Global(), "__RECORD_REPLAY__", jsrrApi);
+  if (gReplayApi == nullptr) {
+    gReplayApi = new v8::Global<v8::Object>();
+  }
+  gReplayApi->Reset(isolate, jsrrApi);
 
   v8::Local<v8::Object> args = v8::Object::New(isolate);
   DefineProperty(isolate, context->Global(), "__RECORD_REPLAY_ARGUMENTS__",
                  args);
+  if (gReplayArguments == nullptr) {
+    gReplayArguments = new v8::Global<v8::Object>();
+  }
+  gReplayArguments->Reset(isolate, args);
 
   DefineProperty(isolate, args, "REPLAY_CDT_PAUSE_OBJECT_GROUP",
                  ToV8String(isolate, REPLAY_CDT_PAUSE_OBJECT_GROUP));
@@ -2690,6 +2700,19 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
   }
   DefineProperty(isolate, context->Global(), "__RECORD_REPLAY_ETERNAL_STATE__",
                  gRecordReplayEternalState->Get(isolate));
+}
+
+void InstallRecordReplayGlobals(v8::Isolate* isolate, v8::Local<v8::Context> target_context) {
+  if (gReplayApi == nullptr || gReplayApi->IsEmpty() ||
+      gReplayArguments == nullptr || gReplayArguments->IsEmpty()) {
+    return;
+  }
+
+  v8::Context::Scope scope(target_context);
+  DefineProperty(isolate, target_context->Global(), "__RECORD_REPLAY__",
+                 gReplayApi->Get(isolate));
+  DefineProperty(isolate, target_context->Global(), "__RECORD_REPLAY_ARGUMENTS__",
+                 gReplayArguments->Get(isolate));
 }
 
 void InitializeRecordReplay(

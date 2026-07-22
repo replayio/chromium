@@ -295,6 +295,11 @@ void LocalWindowProxy::Initialize() {
     OnNewWindowAfterCheckpoint(GetIsolate(), GetFrame(), context);
   }
 
+  if (recordreplay::IsRecordingOrReplaying("commands") &&
+      world_->IsIsolatedWorld()) {
+    InstallRecordReplayGlobals(GetIsolate(), context);
+  }
+
   {
     TRACE_EVENT2("v8", "ContextCreatedNotification", "IsMainFrame",
                  GetFrame()->IsMainFrame(), "IsOutermostMainFrame",
