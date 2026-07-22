@@ -47,6 +47,7 @@ const {
   CDPERROR_MISSINGCONTEXT,
   CDPERROR_NOTALIVE,
   REPLAY_CDT_PAUSE_OBJECT_GROUP,
+  ownsCommandService,
 
   // for testing
   forTestingSerializeValueToArray
@@ -208,7 +209,10 @@ function sendCDPMessage(method, params) {
   Array_push.call(gCdpRequestStack, cdpRequest);
   const cdpArgs = JSON_stringify({ method, params, id });
   try {
-    sendCDPMessageRaw(cdpArgs);
+    // The root command service receives asynchronous CDP notifications. Pass
+    // this context's callback explicitly so that synchronous responses return
+    // to the handler instance which initiated the request.
+    sendCDPMessageRaw(cdpArgs, messageCallback);
   } catch (err) {
     if (!cdpRequest.result) {
       throw err;
@@ -3308,29 +3312,31 @@ function wrapReplayApiFunction(fn) {
 ///////////////////////////////////////////////////////////////////////////////
 
 patchReplayApi();
-initMessages();
-addEventListener("Runtime.consoleAPICalled", onConsoleAPICall);
-addEventListener("Runtime.executionContextCreated", ({ context }) => {
-  gExecutionContexts.set(context.id, context);
-  for (const callback of gContextChangeCallbacks) {
-    callback(context, "add");
-  }
-});
-addEventListener("Runtime.executionContextDestroyed", ({ executionContextId }) => {
-  const context = gExecutionContexts.get(executionContextId);
-  for (const callback of gContextChangeCallbacks) {
-    callback(context, "remove");
-  }
-  gExecutionContexts.delete(executionContextId);
-});
-addEventListener("Runtime.executionContextsCleared", () => {
-  for (const context of gExecutionContexts.values()) {
+if (ownsCommandService) {
+  initMessages();
+  addEventListener("Runtime.consoleAPICalled", onConsoleAPICall);
+  addEventListener("Runtime.executionContextCreated", ({ context }) => {
+    gExecutionContexts.set(context.id, context);
+    for (const callback of gContextChangeCallbacks) {
+      callback(context, "add");
+    }
+  });
+  addEventListener("Runtime.executionContextDestroyed", ({ executionContextId }) => {
+    const context = gExecutionContexts.get(executionContextId);
     for (const callback of gContextChangeCallbacks) {
       callback(context, "remove");
     }
-  }
-  gExecutionContexts.clear();
-});
-sendCDPMessage("Runtime.enable");
+    gExecutionContexts.delete(executionContextId);
+  });
+  addEventListener("Runtime.executionContextsCleared", () => {
+    for (const context of gExecutionContexts.values()) {
+      for (const callback of gContextChangeCallbacks) {
+        callback(context, "remove");
+      }
+    }
+    gExecutionContexts.clear();
+  });
+  sendCDPMessage("Runtime.enable");
+}
 
 })();
