@@ -295,8 +295,11 @@ void LocalWindowProxy::Initialize() {
     OnNewWindowAfterCheckpoint(GetIsolate(), GetFrame(), context);
   }
 
-  if (recordreplay::IsRecordingOrReplaying("commands") && origin &&
-      !origin->Host().empty() && world_->IsIsolatedWorld()) {
+  // Do not require a non-empty host here: for isolated worlds, |origin| comes
+  // from IsolatedWorldSecurityOrigin, not the main page's document origin, and
+  // debugger-created worlds may be null/hostless.
+  if (recordreplay::IsRecordingOrReplaying("commands") &&
+      world_->IsIsolatedWorld()) {
     InstallRecordReplayGlobals(GetIsolate(), context,
                                /*is_root_main_world=*/false);
   }
