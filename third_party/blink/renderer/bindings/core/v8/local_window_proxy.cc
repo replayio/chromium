@@ -79,6 +79,17 @@
 
 namespace blink {
 
+// Record/replay state is initialized along with the root main-world
+// LocalWindowProxy.
+static bool gRecordReplayStateInitialized;
+
+// We keep track of recently created local window proxies for ensuring that
+// record/replay state is initialized when the first paint is triggered. FIXME
+// clean up reference.
+static LocalWindowProxy* gLatestLocalWindowProxy;
+
+bool RecordReplayStateEnsureInitialized();
+
 void LocalWindowProxy::Trace(Visitor* visitor) const {
   visitor->Trace(script_state_);
   visitor->Trace(record_replay_listener_);
@@ -91,6 +102,10 @@ void LocalWindowProxy::DisposeContext(Lifecycle next_status,
          next_status == Lifecycle::kGlobalObjectIsDetached ||
          next_status == Lifecycle::kFrameIsDetached ||
          next_status == Lifecycle::kFrameIsDetachedAndV8MemoryIsPurged);
+
+  if (gLatestLocalWindowProxy == this) {
+    gLatestLocalWindowProxy = nullptr;
+  }
 
   // If the current lifecycle is kV8MemoryIsForciblyPurged, next status should
   // be either kFrameIsDetachedAndV8MemoryIsPurged, or kGlobalObjectIsDetached.
@@ -180,9 +195,6 @@ static const char* RecordReplayGetProcessType(
   return "iframe";
 }
 
-// Record/replay state is initialized along with the first LocalWindowProxy.
-static bool gRecordReplayStateInitialized;
-
 void LocalWindowProxy::Initialize() {
   // https://linear.app/replay/issue/RUN-749
   recordreplay::Assert("LocalWindowProxy::Initialize Start");
@@ -241,29 +253,22 @@ void LocalWindowProxy::Initialize() {
     SetSecurityToken(origin.get());
   }
 
-  if (recordreplay::IsRecordingOrReplaying("commands") &&
-      origin && !origin->Host().empty()) {
-    bool initGlobally = !gRecordReplayStateInitialized;
+  // Whether this is the relative root frame of this process.
+  // IsOrdinary() excludes internal pages like the in-process <select> popup.
+  bool isRootMainWorld = GetFrame()->IsLocalRoot() && world_->IsMainWorld() &&
+                         GetFrame()->GetPage() &&
+                         GetFrame()->GetPage()->IsOrdinary();
 
-    // Whether this is the relative root frame of this process.
-    // IsOrdinary() excludes internal pages like the in-process <select> popup.
-    bool isMainFrame = GetFrame()->IsLocalRoot() && world_->IsMainWorld() &&
-                       GetFrame()->GetPage() && GetFrame()->GetPage()->IsOrdinary();
+  if (recordreplay::IsRecordingOrReplaying("commands") &&
+      origin && !origin->Host().empty() && world_->IsMainWorld()) {
+    bool initGlobally = !gRecordReplayStateInitialized && isRootMainWorld;
+
     if (initGlobally) {
       gRecordReplayStateInitialized = true;
 
-      if (!isMainFrame) {
-        recordreplay::Warning(
-            "LocalWindowProxy::Initialize Called on non-root frame first: %d %d origin=%s url=%s",
-            GetFrame()->IsLocalRoot(),
-            world_->IsMainWorld(),
-            origin->ToRawString().Utf8().c_str(),
-            GetFrame()->GetDocument()->Url().GetString().Utf8().c_str());
-      }
-
-      // After creating the first context that is associated with a non-empty
-      // origin, we are ready to set up the state used to process driver
-      // commands when recording/replaying, and to create checkpoints.
+      // After creating the root main-world context for a non-empty origin, we
+      // are ready to set up the state used to process driver commands when
+      // recording/replaying, and to create checkpoints.
       InitializeRecordReplay(
         RecordReplayGetProcessType(
           GetFrame(),
@@ -273,7 +278,7 @@ void LocalWindowProxy::Initialize() {
       );
     }
 
-    if (isMainFrame) {
+    if (isRootMainWorld) {
       // Root-level navigation event, initially happens before
       // first checkpoint.
       OnRootFrameInit(GetIsolate(), GetFrame(), context);
@@ -286,13 +291,15 @@ void LocalWindowProxy::Initialize() {
       InitializeRecordReplayAfterCheckpoint();
     }
     
-    if (isMainFrame) {
+    if (isRootMainWorld) {
       // Root-level navigation event, after first checkpoint.
       OnRootFrameInitAfterCheckpoint(GetIsolate(), GetFrame(), context);
     }
 
-    // Event for all new windows.
-    OnNewWindowAfterCheckpoint(GetIsolate(), GetFrame(), context);
+    if (gRecordReplayStateInitialized) {
+      // Event for all new windows.
+      OnNewWindowAfterCheckpoint(GetIsolate(), GetFrame(), context);
+    }
   }
 
   // Do not require a non-empty host here: for isolated worlds, |origin| comes
@@ -302,7 +309,6 @@ void LocalWindowProxy::Initialize() {
       world_->IsIsolatedWorld()) {
     InstallRecordReplayGlobals(GetIsolate(), context,
                                /*owns_command_service=*/false);
-    InstallRecordReplayContextApi(GetIsolate(), context);
   }
 
   {
@@ -701,11 +707,6 @@ void LocalWindowProxy::SetAbortScriptExecution(
   InitializeIfNeeded();
   script_state_->GetContext()->SetAbortScriptExecution(callback);
 }
-
-// We keep track of the most recently created local window proxy
-// for ensuring that record/replay state is initialized when
-// the first paint is triggered. FIXME clean up reference.
-static LocalWindowProxy* gLatestLocalWindowProxy;
 
 LocalWindowProxy::LocalWindowProxy(v8::Isolate* isolate,
                                    LocalFrame& frame,

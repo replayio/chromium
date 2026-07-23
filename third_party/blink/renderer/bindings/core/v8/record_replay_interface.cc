@@ -256,10 +256,10 @@ static String ReadReplayCommandAssetFile(const char* fname) {
 
   // Important: Treat as UTF-8.
   String result = String::FromUTF8(
-    IsCommandHandlingEnabledWhenRecording()
-      // Recording + Replay.
+    !recordreplay::IsReplaying()
+      // Recording.
       ? ReadReplayAssetFile(fname, len).c_str()
-      // Replay only.
+      // Replay.
       : V8RecordReplayReadAssetFileContents(fname, &len),
     len
   );
@@ -631,9 +631,6 @@ const char* gOnNewWindowScript = R""""(
   window.__REDUX_DEVTOOLS_EXTENSION__ = window.top.__REDUX_DEVTOOLS_EXTENSION__;
   window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ = window.top.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__;
 
-  // TODO: Feels like this cross-context function usage can cause trouble, especially when
-  //      the user pauses inside the iframe's JS and tries to access something inside the iframe via 
-  //      __RECORD_REPLAY__?
   window.__RECORD_REPLAY__ = window.top.__RECORD_REPLAY__;
   window.__RECORD_REPLAY_ARGUMENTS__ = window.top.__RECORD_REPLAY_ARGUMENTS__;
   window.__RECORD_REPLAY_ETERNAL_STATE__ = window.top.__RECORD_REPLAY_ETERNAL_STATE__;
