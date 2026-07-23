@@ -180,7 +180,7 @@ static const char* RecordReplayGetProcessType(
   return "iframe";
 }
 
-// Record/replay state is initialized along with the root main-world
+// Record/replay state is initialized along with the first main-world
 // LocalWindowProxy.
 static bool gRecordReplayStateInitialized;
 
@@ -242,22 +242,31 @@ void LocalWindowProxy::Initialize() {
     SetSecurityToken(origin.get());
   }
 
-  // Whether this is the relative root frame of this process.
-  // IsOrdinary() excludes internal pages like the in-process <select> popup.
-  bool isRootMainWorld = GetFrame()->IsLocalRoot() && world_->IsMainWorld() &&
-                         GetFrame()->GetPage() &&
-                         GetFrame()->GetPage()->IsOrdinary();
-
   if (recordreplay::IsRecordingOrReplaying("commands") &&
       origin && !origin->Host().empty() && world_->IsMainWorld()) {
-    bool initGlobally = !gRecordReplayStateInitialized && isRootMainWorld;
+    bool initGlobally = !gRecordReplayStateInitialized;
+
+    // Whether this is the relative root frame of this process.
+    // IsOrdinary() excludes internal pages like the in-process <select> popup.
+    bool isMainFrame = GetFrame()->IsLocalRoot() && world_->IsMainWorld() &&
+                       GetFrame()->GetPage() &&
+                       GetFrame()->GetPage()->IsOrdinary();
 
     if (initGlobally) {
       gRecordReplayStateInitialized = true;
 
-      // After creating the root main-world context for a non-empty origin, we
-      // are ready to set up the state used to process driver commands when
-      // recording/replaying, and to create checkpoints.
+      if (!isMainFrame) {
+        recordreplay::Warning(
+            "LocalWindowProxy::Initialize Called on non-root frame first: %d %d origin=%s url=%s",
+            GetFrame()->IsLocalRoot(),
+            world_->IsMainWorld(),
+            origin->ToRawString().Utf8().c_str(),
+            GetFrame()->GetDocument()->Url().GetString().Utf8().c_str());
+      }
+
+      // After creating the first main-world context that is associated with a
+      // non-empty origin, we are ready to set up the state used to process
+      // driver commands when recording/replaying, and to create checkpoints.
       InitializeRecordReplay(
         RecordReplayGetProcessType(
           GetFrame(),
@@ -267,7 +276,7 @@ void LocalWindowProxy::Initialize() {
       );
     }
 
-    if (isRootMainWorld) {
+    if (isMainFrame) {
       // Root-level navigation event, initially happens before
       // first checkpoint.
       OnRootFrameInit(GetIsolate(), GetFrame(), context);
@@ -280,15 +289,13 @@ void LocalWindowProxy::Initialize() {
       InitializeRecordReplayAfterCheckpoint();
     }
     
-    if (isRootMainWorld) {
+    if (isMainFrame) {
       // Root-level navigation event, after first checkpoint.
       OnRootFrameInitAfterCheckpoint(GetIsolate(), GetFrame(), context);
     }
 
-    if (gRecordReplayStateInitialized) {
-      // Event for all new windows.
-      OnNewWindowAfterCheckpoint(GetIsolate(), GetFrame(), context);
-    }
+    // Event for all new windows.
+    OnNewWindowAfterCheckpoint(GetIsolate(), GetFrame(), context);
   }
 
   // Do not require a non-empty host here: for isolated worlds, |origin| comes
