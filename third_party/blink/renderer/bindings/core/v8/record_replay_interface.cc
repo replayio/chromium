@@ -2583,11 +2583,14 @@ static bool TestEnv(const char* env) {
   return v && v[0] && v[0] != '0';
 }
 
+// Share aggregate instrumentation state across realms so that it remains
+// reachable from global evaluations in the main world.
 static v8::Eternal<v8::Object>* gRecordReplayEternalState;
 
 void InstallRecordReplayGlobals(v8::Isolate* isolate,
                                 v8::Local<v8::Context> context,
                                 bool owns_command_service) {
+  // Create the objects and functions below in this context's realm.
   v8::Context::Scope scope(context);
 
   // Add __RECORD_REPLAY_ANNOTATION_HOOK__ as a global.
@@ -2731,8 +2734,10 @@ void InstallRecordReplayGlobals(v8::Isolate* isolate,
     ForTestingSerializeValueToArray);
 
   if (gRecordReplayEternalState == nullptr) {
+    v8::Local<v8::Object> eternal_state = v8::Object::New(isolate);
+    eternal_state->SetPrototype(context, v8::Null(isolate)).Check();
     gRecordReplayEternalState =
-        new v8::Eternal<v8::Object>(isolate, v8::Object::New(isolate));
+        new v8::Eternal<v8::Object>(isolate, eternal_state);
   }
   DefineProperty(isolate, context->Global(), "__RECORD_REPLAY_ETERNAL_STATE__",
                  gRecordReplayEternalState->Get(isolate));
