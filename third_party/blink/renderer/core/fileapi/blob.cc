@@ -33,6 +33,7 @@
 #include <memory>
 #include <utility>
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_blob_property_bag.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_arraybuffer_arraybufferview_blob_usvstring.h"
@@ -50,6 +51,15 @@
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace blink {
+
+namespace {
+
+constexpr char kReplayBlobReadUnavailableMessage[] =
+    "This evaluation tried to read file or blob contents that were not "
+    "captured in the recording. Replay cannot perform fresh file/blob reads "
+    "during replay.";
+
+}  // namespace
 
 // TODO(https://crbug.com/989876): This is not used any more, refactor
 // PublicURLManager to deprecate this.
@@ -239,6 +249,14 @@ static ScriptPromise ReadBlobHelper(
   ScriptPromiseResolver* resolver =
       MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   auto promise = resolver->Promise();
+
+  if (recordreplay::IsReplaying() &&
+      recordreplay::HasDivergedFromRecording()) {
+    resolver->Reject(MakeGarbageCollected<DOMException>(
+        DOMExceptionCode::kNotReadableError,
+        kReplayBlobReadUnavailableMessage));
+    return promise;
+  }
 
   new BlobFileReaderClient(blob_data_handle,
                            ExecutionContext::From(script_state)
