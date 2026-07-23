@@ -129,12 +129,6 @@ void MainThreadDebugger::SetClientMessageLoop(
 
 void MainThreadDebugger::DidClearContextsForFrame(LocalFrame* frame) {
   DCHECK(IsMainThread());
-  int isRoot = frame->LocalFrameRoot() == frame;
-  ScriptState* main_world_script_state = ToScriptStateForMainWorld(frame);
-  int isMainWorld =
-      main_world_script_state && main_world_script_state->World().IsMainWorld();
-  REPLAY_ASSERT_MAYBE_EVENTS_DISALLOWED(
-      "MainThreadDebugger::DidClearContextsForFrame %d %d", isRoot, isMainWorld);
   if (frame->LocalFrameRoot() == frame) {
     if (recordreplay::IsRecordingOrReplaying("DidClearContextsForFrame")) {
       RecordReplayClearContexts("MainThreadDebugger::DidClearContextsForFrame", frame);
