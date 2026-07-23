@@ -129,6 +129,9 @@ void MainThreadDebugger::SetClientMessageLoop(
 
 void MainThreadDebugger::DidClearContextsForFrame(LocalFrame* frame) {
   DCHECK(IsMainThread());
+  int isRoot = frame->LocalFrameRoot() == frame;
+  REPLAY_ASSERT_MAYBE_EVENTS_DISALLOWED(
+      "MainThreadDebugger::DidClearContextsForFrame %d", isRoot);
   if (frame->LocalFrameRoot() == frame) {
     if (recordreplay::IsRecordingOrReplaying("DidClearContextsForFrame")) {
       RecordReplayClearContexts("MainThreadDebugger::DidClearContextsForFrame", frame);
