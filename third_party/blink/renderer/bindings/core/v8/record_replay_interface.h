@@ -35,16 +35,9 @@ void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame
 void OnNewWindowAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context);
 
 // Install Record Replay globals into a V8 context. Native bindings and the JS
-// API object are created in each context; eternal state is shared. Only the
-// root main-world context owns renderer-wide command service callbacks.
+// API object are created in each context; eternal state is shared.
 void InstallRecordReplayGlobals(v8::Isolate* isolate,
-                                v8::Local<v8::Context> target_context,
-                                bool owns_command_service);
-
-// Populate the context-local Replay API without changing which context owns
-// renderer-wide command service callbacks.
-void InstallRecordReplayContextApi(v8::Isolate* isolate,
-                                   v8::Local<v8::Context> target_context);
+                                v8::Local<v8::Context> target_context);
 
 // Notify the driver that we're adding an error to the console.
 void RecordReplayOnErrorEvent(ErrorEvent* error_event);

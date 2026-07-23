@@ -256,10 +256,10 @@ static String ReadReplayCommandAssetFile(const char* fname) {
 
   // Important: Treat as UTF-8.
   String result = String::FromUTF8(
-    !recordreplay::IsReplaying()
-      // Recording.
+    IsCommandHandlingEnabledWhenRecording()
+      // Recording + Replay.
       ? ReadReplayAssetFile(fname, len).c_str()
-      // Replay.
+      // Replay only.
       : V8RecordReplayReadAssetFileContents(fname, &len),
     len
   );
@@ -631,6 +631,9 @@ const char* gOnNewWindowScript = R""""(
   window.__REDUX_DEVTOOLS_EXTENSION__ = window.top.__REDUX_DEVTOOLS_EXTENSION__;
   window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ = window.top.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__;
 
+  // TODO: Feels like this cross-context function usage can cause trouble, especially when
+  //      the user pauses inside the iframe's JS and tries to access something inside the iframe via 
+  //      __RECORD_REPLAY__?
   window.__RECORD_REPLAY__ = window.top.__RECORD_REPLAY__;
   window.__RECORD_REPLAY_ARGUMENTS__ = window.top.__RECORD_REPLAY_ARGUMENTS__;
   window.__RECORD_REPLAY_ETERNAL_STATE__ = window.top.__RECORD_REPLAY_ETERNAL_STATE__;
@@ -746,26 +749,6 @@ static void fromJsHasDiverged(const v8::FunctionCallbackInfo<v8::Value>& args) {
 // Function to invoke on CDP responses and events.
 static v8::Eternal<v8::Function>* gCDPMessageCallback;
 
-// While a context-local Replay API call is dispatching a synchronous CDP
-// message, route its response back to that context's handler. Notifications
-// continue to use the root command service callback.
-static v8::Global<v8::Function>* gScopedCDPMessageCallback;
-
-class ScopedCDPMessageCallback {
- public:
-  ScopedCDPMessageCallback(v8::Isolate* isolate,
-                           v8::Local<v8::Function> callback)
-      : callback_(isolate, callback), previous_(gScopedCDPMessageCallback) {
-    gScopedCDPMessageCallback = &callback_;
-  }
-
-  ~ScopedCDPMessageCallback() { gScopedCDPMessageCallback = previous_; }
-
- private:
-  v8::Global<v8::Function> callback_;
-  v8::Global<v8::Function>* previous_;
-};
-
 static void SetCDPMessageCallback(const v8::FunctionCallbackInfo<v8::Value>& args) {
   v8::Isolate* isolate = args.GetIsolate();
   CHECK(args[0]->IsFunction());
@@ -777,7 +760,7 @@ static void SendMessageToFrontend(const v8_inspector::StringView& message) {
   recordreplay::AutoDisallowEvents disallow("RecordReplay_SendMessageToFrontend");
   CHECK(v8::IsMainThread());
 
-  CHECK(gScopedCDPMessageCallback || gCDPMessageCallback);
+  CHECK(gCDPMessageCallback);
 
   v8::Isolate* isolate = v8::Isolate::GetCurrent();
   if (!isolate->InContext() || ScriptForbiddenScope::IsScriptForbidden()) {
@@ -798,24 +781,7 @@ static void SendMessageToFrontend(const v8_inspector::StringView& message) {
                                                         v8::NewStringType::kNormal,
                                                         (int)message.length()).ToLocalChecked();
   }
-  v8::Local<v8::Value> parsed_message =
-      v8::JSON::Parse(context, arg.As<v8::String>()).ToLocalChecked();
-  CHECK(parsed_message->IsObject());
-  bool is_response =
-      parsed_message.As<v8::Object>()
-          ->Has(context, ToV8String(isolate, "id"))
-          .ToChecked();
-  bool use_scoped_callback = gScopedCDPMessageCallback && is_response;
-
-  v8::Local<v8::Function> callback =
-      use_scoped_callback
-          ? gScopedCDPMessageCallback->Get(isolate)
-          : gCDPMessageCallback
-                ? gCDPMessageCallback->Get(isolate)
-                : gScopedCDPMessageCallback->Get(isolate);
-  if (use_scoped_callback) {
-    context = callback->GetCreationContext().ToLocalChecked();
-  }
+  v8::Local<v8::Function> callback = gCDPMessageCallback->Get(isolate);
   v8::Isolate::AllowJavascriptExecutionScope allow_js(isolate);
   v8::MaybeLocal<v8::Value> rv = callback->Call(context, v8::Undefined(isolate), 1, &arg);
   CHECK(!rv.IsEmpty());
@@ -948,19 +914,12 @@ static int GetPersistentId(v8::Local<v8::Object> object) {
  * do not provide too much value if they are not hooked up to a `DevToolsSession` and the `UberDispatcher`.
  */
 static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
-  CHECK((args.Length() == 1 || args.Length() == 2) && args[0]->IsString() &&
-        (args.Length() == 1 || args[1]->IsFunction()) &&
-        "must be called with a string and an optional response callback");
+  CHECK(args.Length() == 1 && args[0]->IsString() &&
+        "must be called with a single string");
 
   recordreplay::AutoDisallowEvents disallow("SendCDPMessage");
 
   v8::Isolate* isolate = args.GetIsolate();
-  std::unique_ptr<ScopedCDPMessageCallback> scoped_callback;
-  if (args.Length() == 2) {
-    scoped_callback = std::make_unique<ScopedCDPMessageCallback>(
-        isolate, args[1].As<v8::Function>());
-  }
-
   absl::optional<int> contextGroupId = gContextGroupIdForSendCDPMessage;
   if (!contextGroupId.has_value()) {
     contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
@@ -969,7 +928,7 @@ static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
   // It can be the case that we simply don't have a context group id (a local frame) at this
   // time; just log it and inform the client.
   if (!contextGroupId.has_value()) {
-    if (gScopedCDPMessageCallback || gCDPMessageCallback != nullptr) {
+    if (gCDPMessageCallback != nullptr) {
       // Ensure the message has an ID. If not, handle the error in JavaScript.
       v8::String::Utf8Value inmessage(args.GetIsolate(), args[0]);
       std::string nmessage(*inmessage);
@@ -2588,8 +2547,7 @@ static bool TestEnv(const char* env) {
 static v8::Eternal<v8::Object>* gRecordReplayEternalState;
 
 void InstallRecordReplayGlobals(v8::Isolate* isolate,
-                                v8::Local<v8::Context> context,
-                                bool owns_command_service) {
+                                v8::Local<v8::Context> context) {
   // Create the objects and functions below in this context's realm.
   v8::Context::Scope scope(context);
 
@@ -2617,9 +2575,6 @@ void InstallRecordReplayGlobals(v8::Isolate* isolate,
 
   DefineProperty(isolate, args, "CDPERROR_NOTALIVE",
                  v8::Number::New(isolate, (double)CDPERROR_NOTALIVE));
-
-  DefineProperty(isolate, args, "ownsCommandService",
-                 v8::Boolean::New(isolate, owns_command_service));
 
   SetFunctionProperty(isolate, args, "log", LogCallback);
   SetFunctionProperty(isolate, args, "logTrace", LogTraceCallback);
@@ -2743,20 +2698,6 @@ void InstallRecordReplayGlobals(v8::Isolate* isolate,
                  gRecordReplayEternalState->Get(isolate));
 }
 
-void InstallRecordReplayContextApi(v8::Isolate* isolate,
-                                   v8::Local<v8::Context> context) {
-  if (!IsCommandHandlingEnabled()) {
-    return;
-  }
-
-  recordreplay::AutoMarkReplayCode amrc;
-  recordreplay::AutoDisallowEvents disallow(
-      "InstallRecordReplayContextApi");
-  String command_handler_script = ReadReplayCommandHandlerScript();
-  RunScript(isolate, context, command_handler_script.Utf8().c_str(),
-            kInternalScriptURL);
-}
-
 void InitializeRecordReplay(
   const char* processType,
   v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
@@ -2784,8 +2725,7 @@ static void InitializeReplayScripts(v8::Isolate* isolate, LocalFrame* localFrame
   V8RecordReplaySetDefaultContext(isolate, context);
   
   // Initialize __RECORD_REPLAY__ things.
-  InstallRecordReplayGlobals(isolate, context,
-                             /*owns_command_service=*/true);
+  InstallRecordReplayGlobals(isolate, context);
 
   if (recordreplay::FeatureEnabled("collect-source-maps") &&
       !TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_COLLECTION")) {
@@ -2799,7 +2739,16 @@ static void InitializeReplayScripts(v8::Isolate* isolate, LocalFrame* localFrame
     localFrame->GetSettings()->SetForceMainWorldInitialization(true);
   }
 
-  InstallRecordReplayContextApi(isolate, context);
+  if (IsCommandHandlingEnabled()) {
+    recordreplay::AutoMarkReplayCode amrc;
+    String commandHandlerScript = ReadReplayCommandHandlerScript();
+    {
+      recordreplay::AutoDisallowEvents disallow("InitializeReplayScripts");
+
+      // Run `commandHandlerScript`.
+      RunScript(isolate, context, commandHandlerScript.Utf8().c_str(), kInternalScriptURL);
+    }
+  }
 }
 
 void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {

@@ -299,8 +299,7 @@ void LocalWindowProxy::Initialize() {
     // Isolated worlds need the native bindings used by evaluations, but the
     // __RECORD_REPLAY__ command API is populated only in the root main world
     // so that the renderer-wide command service has a single owner.
-    InstallRecordReplayGlobals(GetIsolate(), context,
-                               /*owns_command_service=*/false);
+    InstallRecordReplayGlobals(GetIsolate(), context);
   }
 
   {
