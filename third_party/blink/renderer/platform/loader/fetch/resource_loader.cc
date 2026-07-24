@@ -114,11 +114,6 @@ const char* RequestOutcomeToString(RequestOutcome outcome) {
   }
 }
 
-bool RecordReplayShouldBlockFreshResourceLoad() {
-  return recordreplay::IsReplaying() &&
-         recordreplay::HasDivergedFromRecording();
-}
-
 bool IsThrottlableRequestContext(mojom::blink::RequestContextType context) {
   // Requests that could run long should not be throttled as they
   // may stay there forever and avoid other requests from making
@@ -1415,7 +1410,7 @@ void ResourceLoader::RequestSynchronously(const ResourceRequestHead& request) {
       response_out = WrappedResourceResponse(response);
       data_out = WebData(std::move(data));
     }
-  } else if (RecordReplayShouldBlockFreshResourceLoad()) {
+  } else if (recordreplay::HasDivergedFromRecording()) {
     DidFail(WebURLError(net::ERR_FAILED, resource_->Url()),
             base::TimeTicks::Now(),
             WebURLLoaderClient::kUnknownEncodedDataLength, 0, 0);
@@ -1470,7 +1465,7 @@ void ResourceLoader::RequestSynchronously(const ResourceRequestHead& request) {
 
 void ResourceLoader::RequestAsynchronously(const ResourceRequestHead& request) {
   // After diverging from the recording we can't access system resources anymore.
-  if (RecordReplayShouldBlockFreshResourceLoad()) {
+  if (recordreplay::HasDivergedFromRecording()) {
     DidFail(WebURLError(net::ERR_FAILED, resource_->Url()),
             base::TimeTicks::Now(),
             WebURLLoaderClient::kUnknownEncodedDataLength, 0, 0);
