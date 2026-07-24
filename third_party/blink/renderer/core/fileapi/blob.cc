@@ -250,6 +250,11 @@ static ScriptPromise ReadBlobHelper(
       MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   auto promise = resolver->Promise();
 
+  // Blob reads go through FileReaderLoader and the browser-side Blob service,
+  // which uses async Mojo callbacks and data pipes. Even byte-backed blobs can
+  // hit that machinery, so after divergence we reject consistently instead of
+  // trying to distinguish supposedly safe in-memory blobs from file-backed
+  // blobs here.
   if (recordreplay::IsReplaying() &&
       recordreplay::HasDivergedFromRecording()) {
     resolver->Reject(MakeGarbageCollected<DOMException>(
