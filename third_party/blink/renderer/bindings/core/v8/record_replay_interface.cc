@@ -757,7 +757,6 @@ static void SetCDPMessageCallback(const v8::FunctionCallbackInfo<v8::Value>& arg
 }
 
 static void SendMessageToFrontend(const v8_inspector::StringView& message) {
-  recordreplay::AutoMarkReplayCode mark;
   recordreplay::AutoDisallowEvents disallow("RecordReplay_SendMessageToFrontend");
   CHECK(v8::IsMainThread());
 
@@ -873,7 +872,6 @@ v8_inspector::V8InspectorSession* getInspectorSession(v8::Isolate* isolate, int 
   InspectorData* data = getInspectorFor(isolate, contextGroupId);
 
   if (!data->inspectorSession) {
-    recordreplay::AutoMarkReplayCode mark;
     recordreplay::AutoDisallowEvents disallow("RecordReplayRegisterV8Inspector");
     data->inspectorSession = inspector->connect(contextGroupId,
                                             new InspectorChannel(),
@@ -919,7 +917,6 @@ static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
   CHECK(args.Length() == 1 && args[0]->IsString() &&
         "must be called with a single string");
 
-  recordreplay::AutoMarkReplayCode mark;
   recordreplay::AutoDisallowEvents disallow("SendCDPMessage");
 
   v8::Isolate* isolate = args.GetIsolate();
