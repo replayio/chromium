@@ -184,13 +184,12 @@ steps:
   #     - "os=linux"
   #     - "queue=runtime"
 
-  # - label: "📝 Command Tests (macos-arm64)"
-  #   trigger: "runtime-command-tests"
-  #   build:
-  #     commit: "${REPLAY_BACKEND_REV}"
-  #   depends_on:
-  #     - "build-chromium-mac-x86_64"
-  #     - "build-chromium-mac-arm64"
+  - label: "📝 Command Tests (linux-x86_64)"
+    trigger: "runtime-command-tests"
+    build:
+      commit: "${REPLAY_BACKEND_REV}"
+    depends_on:
+      - "build-chromium-linux-x86_64"
 
   # # - label: "📝 Live Tests"
   # #   trigger: "testing-runtime-e2e"
