@@ -1509,8 +1509,12 @@ function previewBlinkNode(node) {
   let attributes, pseudoType;
   if (fromJsIsBlinkElementObject(node)) {
     attributes = [];
-    for (const { name, value } of node.attributes || []) {
-      Array_push.call(attributes, { name, value });
+    const attrs = node.attributes;
+    if (attrs) {
+      for (let i = 0; i < attrs.length; i++) {
+        const { name, value } = attrs[i];
+        Array_push.call(attributes, { name, value });
+      }
     }
     // TODO: We cannot access pseudo elements using the JS DOM API - https://linear.app/replay/issue/RUN-953/
     // pseudoType = node.localName;
@@ -1539,7 +1543,13 @@ function previewBlinkNode(node) {
     const iframes = node.defaultView.parent.document.getElementsByTagName(
       "iframe"
     );
-    const iframe = [...iframes].find((f) => f.contentDocument == node);
+    let iframe;
+    for (let i = 0; i < iframes.length; i++) {
+      if (iframes[i].contentDocument == node) {
+        iframe = iframes[i];
+        break;
+      }
+    }
     if (iframe) {
       parentNode = registerPlainObject(iframe);
     }
@@ -1568,7 +1578,10 @@ function previewBlinkNode(node) {
     // Treat an iframe's content document as one of its child nodes.
     childNodes = [registerPlainObject(node.contentDocument)];
   } else if (node.childNodes?.length) {
-    childNodes = [...node.childNodes].map((n) => registerPlainObject(n));
+    childNodes = [];
+    for (let i = 0; i < node.childNodes.length; i++) {
+      Array_push.call(childNodes, registerPlainObject(node.childNodes[i]));
+    }
   }
 
   if (childNodes) {
