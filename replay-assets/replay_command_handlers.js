@@ -121,6 +121,51 @@ const JSON_parse = JSON.parse;
 
 // RUN-3067
 const Array_push = Array.prototype.push;
+const Object_toString = Object.prototype.toString;
+const String_ = String;
+const String_slice = String.prototype.slice;
+
+function isArrayLike(obj) {
+  return obj != null && typeof obj.length === "number";
+}
+
+function describeValueShape(value) {
+  let str;
+  try {
+    str = String_(value);
+  } catch {
+    str = "<String failed>";
+  }
+  if (str.length > 120) {
+    str = String_slice.call(str, 0, 120) + "...";
+  }
+  let tag;
+  try {
+    tag = Object_toString.call(value);
+  } catch {
+    tag = "<toString failed>";
+  }
+  return `${str} (typeof=${typeof value}, ctor=${value?.constructor?.name}, tag=${tag}, length=${value?.length}, blink=${!!fromJsIsBlinkObject(value)})`;
+}
+
+function iterateArrayLike(obj, fn, label) {
+  if (isIterable(obj)) {
+    for (const item of obj) {
+      fn(item);
+    }
+  } else if (isArrayLike(obj)) {
+    warning(
+      `[RuntimeWarning] iterateArrayLike not iterable, using index (${label}): ${describeValueShape(obj)}`
+    );
+    for (let i = 0; i < obj.length; i++) {
+      fn(obj[i]);
+    }
+  } else if (obj != null) {
+    warning(
+      `[RuntimeWarning] iterateArrayLike expected iterable/array-like (${label}): ${describeValueShape(obj)}`
+    );
+  }
+}
 
 function getSourceMapURLs(sourceURL, relativeSourceMapURL) {
   let sourceBaseURL;
@@ -1509,9 +1554,9 @@ function previewBlinkNode(node) {
   let attributes, pseudoType;
   if (fromJsIsBlinkElementObject(node)) {
     attributes = [];
-    for (const { name, value } of node.attributes || []) {
+    iterateArrayLike(node.attributes, ({ name, value }) => {
       Array_push.call(attributes, { name, value });
-    }
+    }, "Element.attributes");
     // TODO: We cannot access pseudo elements using the JS DOM API - https://linear.app/replay/issue/RUN-953/
     // pseudoType = node.localName;
   }
@@ -1539,7 +1584,12 @@ function previewBlinkNode(node) {
     const iframes = node.defaultView.parent.document.getElementsByTagName(
       "iframe"
     );
-    const iframe = [...iframes].find((f) => f.contentDocument == node);
+    let iframe;
+    iterateArrayLike(iframes, (f) => {
+      if (!iframe && f.contentDocument == node) {
+        iframe = f;
+      }
+    }, "Document.getElementsByTagName(iframe)");
     if (iframe) {
       parentNode = registerPlainObject(iframe);
     }
@@ -1568,7 +1618,10 @@ function previewBlinkNode(node) {
     // Treat an iframe's content document as one of its child nodes.
     childNodes = [registerPlainObject(node.contentDocument)];
   } else if (node.childNodes?.length) {
-    childNodes = [...node.childNodes].map((n) => registerPlainObject(n));
+    childNodes = [];
+    iterateArrayLike(node.childNodes, (n) => {
+      Array_push.call(childNodes, registerPlainObject(n));
+    }, "Node.childNodes");
   }
 
   if (childNodes) {
@@ -2124,11 +2177,12 @@ function DOM_getAllBoundingClientRects() {
       }
 
       // Get all client rects.
-      const clientRects = [...elem.raw.getClientRects()].map(r => {
+      const clientRects = [];
+      iterateArrayLike(elem.raw.getClientRects(), (r) => {
         const { left, top, right, bottom } =
           shiftRect(r, elem.offset, transformMatrix);
-        return [left, top, right, bottom];
-      });
+        Array_push.call(clientRects, [left, top, right, bottom]);
+      }, "Element.getClientRects");
 
       const clipBounds =
         shiftRect(elem.clipBounds, elem.offset, transformMatrix);
@@ -3005,33 +3059,34 @@ StackingContext.prototype = {
   },
 
   addChildren(parentNode) {
-    for (const child of parentNode.children) {
+    iterateArrayLike(parentNode.children, (child) => {
       if (!fromJsIsBlinkElementObject(child)) {
-        continue;
+        return;
       }
       this.add(child, undefined, this.offset);
-    }
+    }, "Element.children");
   },
 
   addChildrenWithParent(cx) {
-    if (!isIterable(cx.raw.children)) {
+    const children = cx.raw.children;
+    if (!isIterable(children) && !isArrayLike(children)) {
       // [TT-253] `cx.raw` should always be an Element and
       // Element.prototype.children should always return an `HTMLCollection`.
       // Not sure why it sometimes complains about not being iterable.
       if (!fromJsIsBlinkElementObject(cx.raw) && !gStackingContextWarn) {
         ++gStackingContextWarn;
         warning(
-          `[TT-253] cx.raw should be Element but is not: ${cx.raw} (${typeof cx.raw}), ${cx.raw.children} (${typeof cx.raw.children}})`
+          `[TT-253] cx.raw should be Element but is not: ${describeValueShape(cx.raw)}, children=${describeValueShape(children)}`
         );
       }
       return;
     }
-    for (const child of cx.raw.children) {
+    iterateArrayLike(children, (child) => {
       if (!fromJsIsBlinkElementObject(child)) {
-        continue;
+        return;
       }
       this.add(child, cx, this.offset);
-    }
+    }, "StackingContext Element.children");
   },
 
   // Get the elements in this context ordered back-to-front.
