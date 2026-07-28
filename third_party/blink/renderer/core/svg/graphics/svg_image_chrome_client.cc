@@ -67,6 +67,8 @@ void SVGImageChromeClient::InvalidateContainer() {
 }
 
 void SVGImageChromeClient::SuspendAnimation() {
+  if (!image_)
+    return;
   if (image_->MaybeAnimated()) {
     timeline_state_ = kSuspendedWithAnimationPending;
   } else {
@@ -89,7 +91,7 @@ void SVGImageChromeClient::ResumeAnimation() {
 
 void SVGImageChromeClient::RestoreAnimationIfNeeded() {
   // If the timeline is not suspended we needn't attempt to restore.
-  if (!IsSuspended())
+  if (!image_ || !IsSuspended())
     return;
   image_->RestoreAnimation();
 }
@@ -102,6 +104,8 @@ void SVGImageChromeClient::ScheduleAnimation(const LocalFrameView*,
   // run this fake animation timer to trigger layout in SVGImages. The name,
   // "animationTimer", is to match the new requestAnimationFrame-based layout
   // approach.
+  if (!image_)
+    return;
   if (animation_timer_->Value().IsActive())
     return;
   // Schedule the 'animation' ASAP if the image does not contain any
