@@ -1,10 +1,45 @@
 import json
+import urllib.error
+import urllib.request
 
 
 def read_commit_hash(file_path):
     """Reads the commit hash from the given file."""
     with open(file_path, "r") as file:
         return file.read().strip()
+
+
+def driver_archive_present(driver_revision):
+    """DriverBuildCheck: True if linux driver archive for this rev is already on S3."""
+    url = f"https://static.replay.io/downloads/linux-recordreplay-{driver_revision}.tgz"
+    req = urllib.request.Request(url, method="HEAD")
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return 200 <= resp.status < 300
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError):
+        return False
+
+
+def driver_step(backend_commit_hash, driver_revision):
+    """trigger build-driver-linker, or DriverBuildCheck noop if archive already on S3."""
+    if driver_archive_present(driver_revision):
+        return {
+            "label": "DriverBuildCheck (archive present)",
+            "key": "build-driver-linker",
+            "command": (
+                f'echo "DriverBuildCheck: linux-recordreplay-{driver_revision}.tgz already on S3"'
+            ),
+            "agents": ["deploy=true"],
+            "plugins": [{"thedyrt/skip-checkout#v0.1.1": None}],
+        }
+    return {
+        "trigger": "build-driver-linker",
+        "key": "build-driver-linker",
+        "build": {
+            "commit": backend_commit_hash,
+            "message": "Triggered from chromium: ${BUILDKITE_MESSAGE}",
+        },
+    }
 
 
 def generate_buildkite_pipeline(backend_commit_hash):
@@ -14,14 +49,7 @@ def generate_buildkite_pipeline(backend_commit_hash):
     driver_revision = backend_commit_hash.split()[0][:12]
     pipeline = {
         "steps": [
-            {
-                "trigger": "build-driver-linker",
-                "key": "build-driver-linker",
-                "build": {
-                    "commit": backend_commit_hash,
-                    "message": "Triggered from chromium: ${BUILDKITE_MESSAGE}",
-                },
-            },
+            driver_step(backend_commit_hash, driver_revision),
             {
                 "trigger": "chromium-build",
                 "build": {
