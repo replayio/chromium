@@ -64,6 +64,7 @@ ImageDecodingStore::~ImageDecodingStore() {
 }
 
 ImageDecodingStore& ImageDecodingStore::Instance() {
+  REPLAY_ASSERT("ImageDecodingStore::Instance %d", HasInstance());
   DEFINE_THREAD_SAFE_STATIC_LOCAL(ImageDecodingStore, store, ());
   return store;
 }
