@@ -48,8 +48,9 @@ StructTraits<mojo_base::mojom::FileDataView, base::File>::fd(base::File& file) {
 bool StructTraits<mojo_base::mojom::FileDataView, base::File>::Read(
     mojo_base::mojom::FileDataView data,
     base::File* file) {
-  *file = base::File(RecordReplayPlatformFile(data.TakeFd().TakePlatformFile()),
-                     data.async());
+  *file = base::File(
+      RecordReplayPlatformFile(data.TakeFd().ReleasePlatformFile()),
+      data.async());
   return true;
 }
 
