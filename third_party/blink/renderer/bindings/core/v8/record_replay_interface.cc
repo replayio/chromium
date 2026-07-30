@@ -958,10 +958,14 @@ static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
     contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
   }
 
-  // No group, or the LocalFrame for that group is already gone (post-nav /
-  // teardown). Do not connect a session to a dead context group.
-  if (!contextGroupId.has_value() ||
-      !WeakIdentifierMap<LocalFrame>::Lookup(*contextGroupId)) {
+  // No group, or its main-world V8 Context is already gone (post-nav /
+  // DidClearContextsForFrame). ContextIfInitialized does not create.
+  LocalFrame* frame =
+      contextGroupId.has_value()
+          ? WeakIdentifierMap<LocalFrame>::Lookup(*contextGroupId)
+          : nullptr;
+  if (!frame ||
+      ToV8ContextMaybeEmpty(frame, DOMWrapperWorld::MainWorld()).IsEmpty()) {
     SendCDPMissingContextError(isolate, args[0]);
     return;
   }
