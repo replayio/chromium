@@ -262,6 +262,15 @@ void ClientDiscardableSharedMemoryManager::OnBackgrounded() {
 std::unique_ptr<base::DiscardableMemory>
 ClientDiscardableSharedMemoryManager::AllocateLockedDiscardableMemory(
     size_t size) {
+  // When events unavailable, local alloc before lock_ (avoid waiting on Mojo holders).
+#if BUILDFLAG(IS_POSIX)
+  if (recordreplay::AreEventsUnavailable()) {
+    static std::atomic<size_t> diverge_bytes_allocated{0};
+    return std::make_unique<base::MadvFreeDiscardableMemoryPosix>(
+        size, &diverge_bytes_allocated);
+  }
+#endif
+
   base::AutoLock lock(lock_);
 
   if (!is_purge_scheduled_) {
@@ -358,15 +367,6 @@ ClientDiscardableSharedMemoryManager::AllocateLockedDiscardableMemory(
   // Make sure crash keys are up to date in case allocation fails.
   if (heap_->GetSize() != heap_size_prior_to_releasing_purged_memory)
     MemoryUsageChanged(heap_->GetSize(), heap_->GetFreelistSize());
-
-  // After diverging use simple local allocation to avoid IPC.
-#if BUILDFLAG(IS_POSIX)
-  if (recordreplay::AreEventsUnavailable()) {
-    static std::atomic<size_t> diverge_bytes_allocated{0};
-    return std::make_unique<base::MadvFreeDiscardableMemoryPosix>(
-        size, &diverge_bytes_allocated);
-  }
-#endif
 
   size_t pages_to_allocate =
       std::max(allocation_size / base::GetPageSize(), pages);
