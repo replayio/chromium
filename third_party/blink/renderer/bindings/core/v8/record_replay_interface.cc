@@ -812,18 +812,23 @@ struct InspectorChannel final : public v8_inspector::V8Inspector::Channel {
 // Nestable override for SendCDPMessage context-group routing.
 // Console → OnConsoleMessage can re-enter via pause evaluate that emits
 // another console API call; a single optional cannot model that.
-static std::vector<int> gContextGroupIdForSendCDPMessageStack;
+// POD stack: no global ctor / exit-time dtor (-Werror).
+static constexpr size_t kMaxContextGroupIdOverrideDepth = 16;
+static int gContextGroupIdForSendCDPMessageStack[kMaxContextGroupIdOverrideDepth];
+static size_t gContextGroupIdForSendCDPMessageDepth = 0;
 
 extern "C" void SetContextGroupIdForSendCDPMessage(int contextGroupId) {
   CHECK(v8::IsMainThread());
   CHECK_GT(contextGroupId, 0);
-  gContextGroupIdForSendCDPMessageStack.push_back(contextGroupId);
+  CHECK_LT(gContextGroupIdForSendCDPMessageDepth, kMaxContextGroupIdOverrideDepth);
+  gContextGroupIdForSendCDPMessageStack[gContextGroupIdForSendCDPMessageDepth++] =
+      contextGroupId;
 }
 
 extern "C" void ClearContextGroupIdForSendCDPMessage() {
   CHECK(v8::IsMainThread());
-  CHECK(!gContextGroupIdForSendCDPMessageStack.empty());
-  gContextGroupIdForSendCDPMessageStack.pop_back();
+  CHECK_GT(gContextGroupIdForSendCDPMessageDepth, 0u);
+  gContextGroupIdForSendCDPMessageDepth--;
 }
 
 absl::optional<int> GetCurrentContextGroupIdForIsolate(v8::Isolate* isolate) {
@@ -952,8 +957,9 @@ static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
 
   v8::Isolate* isolate = args.GetIsolate();
   absl::optional<int> contextGroupId;
-  if (!gContextGroupIdForSendCDPMessageStack.empty()) {
-    contextGroupId = gContextGroupIdForSendCDPMessageStack.back();
+  if (gContextGroupIdForSendCDPMessageDepth > 0) {
+    contextGroupId =
+        gContextGroupIdForSendCDPMessageStack[gContextGroupIdForSendCDPMessageDepth - 1];
   } else {
     contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
   }
