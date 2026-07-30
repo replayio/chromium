@@ -1420,6 +1420,11 @@ ProtocolObjectPreview.prototype = {
         if (e.code == CDPERROR_MISSINGCONTEXT) {
           warning(`[RUN-2600] JS ProtocolObjectPreview.fill has no context.`);
           cdpProperties = { result: [] };
+        } else if (e.code == -32603) {
+          // CDP INTERNAL_ERROR: Proxy ownKeys / divergent user JS under
+          // EventsDisallowed. Match Chrome expand ("No properties").
+          warning(`[crash-0050] ProtocolObjectPreview.fill CDP INTERNAL_ERROR: ${e.cdpMessage || e.message}`);
+          cdpProperties = { result: [] };
         } else {
           throw e;
         }
