@@ -1416,14 +1416,12 @@ ProtocolObjectPreview.prototype = {
           objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
         });
       } catch (e) {
-        // No available context group; this can happen, so just return nothing.
-        if (e.code == CDPERROR_MISSINGCONTEXT) {
-          warning(`[RUN-2600] JS ProtocolObjectPreview.fill has no context.`);
-          cdpProperties = { result: [] };
-        } else if (e.code == -32603) {
-          // CDP INTERNAL_ERROR: Proxy ownKeys / divergent user JS under
-          // EventsDisallowed. Match Chrome expand ("No properties").
-          warning(`[crash-0050] ProtocolObjectPreview.fill CDP INTERNAL_ERROR: ${e.cdpMessage || e.message}`);
+        // Preview is best-effort: any CDP failure → empty props (match Chrome expand).
+        // Rethrow would become commandCallback is_error → Command.cpp Die.
+        if (e instanceof CDPMessageError) {
+          warning(
+            `[crash-0050] ProtocolObjectPreview.fill CDP error ${e.code}: ${e.cdpMessage || e.message}`,
+          );
           cdpProperties = { result: [] };
         } else {
           throw e;
