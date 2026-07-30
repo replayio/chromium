@@ -4,12 +4,34 @@
 
 #include "mojo/public/cpp/bindings/lib/handle_serialization.h"
 
+#include "base/files/scoped_file.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
+#include "build/build_config.h"
 #include "mojo/public/cpp/bindings/lib/bindings_internal.h"
 #include "mojo/public/cpp/bindings/lib/pending_receiver_state.h"
 
 namespace mojo {
 namespace internal {
+
+PlatformHandle RecordReplayIncomingPlatformHandle(PlatformHandle handle) {
+#if BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
+  if (!handle.is_valid_fd()) {
+    return handle;
+  }
+  int fd = handle.ReleaseFD();
+  int recorded_fd = static_cast<int>(recordreplay::RecordReplayValue(
+      "Serializer<PlatformHandle>::Deserialize",
+      static_cast<uintptr_t>(fd)));
+  // Opaque syscall identity only; discard live fd when substituting.
+  if (recorded_fd != fd) {
+    base::ScopedFD discard(fd);
+  }
+  return PlatformHandle(base::ScopedFD(recorded_fd));
+#else
+  return handle;
+#endif
+}
 
 void SerializeHandle(ScopedHandle handle, Message& message, Handle_Data& data) {
   if (!handle.is_valid()) {
