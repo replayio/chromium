@@ -28,6 +28,7 @@
 #include <memory>
 
 #include "base/bind.h"
+#include "base/record_replay_ordered_atomic.h"
 #include "base/synchronization/lock.h"
 #include "third_party/blink/renderer/platform/graphics/image_frame_generator.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
@@ -41,7 +42,7 @@ static const size_t kDefaultMaxTotalSizeOfHeapEntries = 32 * 1024 * 1024;
 
 }  // namespace
 
-static std::atomic<bool> gHasInstance{false};
+static recordreplay::OrderedAtomic<bool> gHasInstance{false};
 
 ImageDecodingStore::ImageDecodingStore()
     : heap_limit_in_bytes_(kDefaultMaxTotalSizeOfHeapEntries),
