@@ -809,19 +809,21 @@ struct InspectorChannel final : public v8_inspector::V8Inspector::Channel {
   void flushProtocolNotifications() final {}
 };
 
-static absl::optional<int> gContextGroupIdForSendCDPMessage;
+// Nestable override for SendCDPMessage context-group routing.
+// Console → OnConsoleMessage can re-enter via pause evaluate that emits
+// another console API call; a single optional cannot model that.
+static std::vector<int> gContextGroupIdForSendCDPMessageStack;
 
 extern "C" void SetContextGroupIdForSendCDPMessage(int contextGroupId) {
   CHECK(v8::IsMainThread());
   CHECK_GT(contextGroupId, 0);
-  CHECK(!gContextGroupIdForSendCDPMessage.has_value());
-  gContextGroupIdForSendCDPMessage = contextGroupId;
+  gContextGroupIdForSendCDPMessageStack.push_back(contextGroupId);
 }
 
 extern "C" void ClearContextGroupIdForSendCDPMessage() {
   CHECK(v8::IsMainThread());
-  CHECK(gContextGroupIdForSendCDPMessage.has_value());
-  gContextGroupIdForSendCDPMessage.reset();
+  CHECK(!gContextGroupIdForSendCDPMessageStack.empty());
+  gContextGroupIdForSendCDPMessageStack.pop_back();
 }
 
 absl::optional<int> GetCurrentContextGroupIdForIsolate(v8::Isolate* isolate) {
@@ -914,6 +916,33 @@ static int GetPersistentId(v8::Local<v8::Object> object) {
  * However, we might also opt to forego that option entirely, and do it all manually, since many inspectors/agents
  * do not provide too much value if they are not hooked up to a `DevToolsSession` and the `UberDispatcher`.
  */
+static void SendCDPMissingContextError(v8::Isolate* isolate,
+                                       v8::Local<v8::Value> message_arg) {
+  if (gCDPMessageCallback == nullptr) {
+    return;
+  }
+  // Ensure the message has an ID. If not, handle the error in JavaScript.
+  v8::String::Utf8Value inmessage(isolate, message_arg);
+  std::string nmessage(*inmessage);
+  absl::optional<base::Value> jsonMessage = base::JSONReader::Read(nmessage);
+  base::Value::Dict* messageDict = jsonMessage->GetIfDict();
+  CHECK(messageDict != nullptr);
+  CHECK(messageDict->FindInt("id").has_value());
+
+  std::unique_ptr<base::DictionaryValue> error(new base::DictionaryValue);
+  error->SetStringKey("message", "[RUN-2600] No context group available for Isolate.");
+  error->SetIntKey("code", CDPERROR_MISSINGCONTEXT);
+
+  base::DictionaryValue result;
+  result.SetKey("error", base::Value::FromUniquePtrValue(std::move(error)));
+  result.SetIntKey("id", *(messageDict->FindInt("id")));
+
+  std::string json;
+  base::JSONWriter::Write(result, &json);
+  auto message = v8_inspector::StringView((const uint8_t*)json.c_str(), json.length());
+  SendMessageToFrontend(message);
+}
+
 static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
   CHECK(args.Length() == 1 && args[0]->IsString() &&
         "must be called with a single string");
@@ -922,37 +951,18 @@ static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
   recordreplay::AutoDisallowEvents disallow("SendCDPMessage");
 
   v8::Isolate* isolate = args.GetIsolate();
-  absl::optional<int> contextGroupId = gContextGroupIdForSendCDPMessage;
-  if (!contextGroupId.has_value()) {
+  absl::optional<int> contextGroupId;
+  if (!gContextGroupIdForSendCDPMessageStack.empty()) {
+    contextGroupId = gContextGroupIdForSendCDPMessageStack.back();
+  } else {
     contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
   }
 
-  // It can be the case that we simply don't have a context group id (a local frame) at this
-  // time; just log it and inform the client.
-  if (!contextGroupId.has_value()) {
-    if (gCDPMessageCallback != nullptr) {
-      // Ensure the message has an ID. If not, handle the error in JavaScript.
-      v8::String::Utf8Value inmessage(args.GetIsolate(), args[0]);
-      std::string nmessage(*inmessage);
-      absl::optional<base::Value> jsonMessage = base::JSONReader::Read(nmessage);
-      base::Value::Dict* messageDict = jsonMessage->GetIfDict();
-      CHECK(messageDict != nullptr);
-      CHECK(messageDict->FindInt("id").has_value());
-
-      // Construct our error result.
-      std::unique_ptr<base::DictionaryValue> error(new base::DictionaryValue);
-      error->SetStringKey("message", "[RUN-2600] No context group available for Isolate.");
-      error->SetIntKey("code", CDPERROR_MISSINGCONTEXT);
-
-      base::DictionaryValue result;
-      result.SetKey("error", base::Value::FromUniquePtrValue(std::move(error)));
-      result.SetIntKey("id", *(messageDict->FindInt("id")));
-
-      std::string json;
-      base::JSONWriter::Write(result, &json);
-      auto message = v8_inspector::StringView((const uint8_t*)json.c_str(), json.length());
-      SendMessageToFrontend(message);
-    }
+  // No group, or the LocalFrame for that group is already gone (post-nav /
+  // teardown). Do not connect a session to a dead context group.
+  if (!contextGroupId.has_value() ||
+      !WeakIdentifierMap<LocalFrame>::Lookup(*contextGroupId)) {
+    SendCDPMissingContextError(isolate, args[0]);
     return;
   }
 
