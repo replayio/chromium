@@ -189,6 +189,7 @@ class PLATFORM_EXPORT FrameSchedulerImpl : public FrameScheduler,
 
   std::unique_ptr<WebSchedulingTaskQueue> CreateWebSchedulingTaskQueue(
       WebSchedulingPriority) override;
+  void SetReplaySchedulingOwnerRelease(base::OnceClosure) override;
   void OnWebSchedulingTaskQueuePriorityChanged(MainThreadTaskQueue*);
   void OnWebSchedulingTaskQueueDestroyed(MainThreadTaskQueue*);
 
@@ -347,6 +348,8 @@ class PLATFORM_EXPORT FrameSchedulerImpl : public FrameScheduler,
   TraceableState<bool, TracingCategory::kInfo> waiting_for_meaningful_paint_;
 
   recordreplay::unique_leaky_ptr<power_scheduler::PowerModeVoter> loading_power_mode_voter_;
+
+  base::OnceClosure replay_scheduling_owner_release_;
 
   // TODO(altimin): Remove after we have have 1:1 relationship between frames
   // and documents.

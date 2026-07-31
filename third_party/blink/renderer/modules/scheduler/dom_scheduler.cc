@@ -13,6 +13,7 @@
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
+#include "third_party/blink/renderer/core/record_replay/deterministic_retainer.h"
 #include "third_party/blink/renderer/modules/scheduler/dom_task.h"
 #include "third_party/blink/renderer/modules/scheduler/dom_task_signal.h"
 #include "third_party/blink/renderer/platform/bindings/enumeration_base.h"
@@ -22,7 +23,18 @@
 #include "third_party/blink/renderer/platform/scheduler/public/web_scheduling_priority.h"
 #include "third_party/blink/renderer/platform/scheduler/public/web_scheduling_task_queue.h"
 
+#include "base/functional/bind.h"
+
 namespace blink {
+namespace {
+
+recordreplay::DeterministicRetainer<DOMScheduler>& DomSchedulerRetainer() {
+  DEFINE_STATIC_LOCAL(recordreplay::DeterministicRetainer<DOMScheduler>,
+                      retainer, ("DOMScheduler"));
+  return retainer;
+}
+
+}  // namespace
 
 const char DOMScheduler::kSupplementName[] = "DOMScheduler";
 
@@ -43,6 +55,10 @@ DOMScheduler::DOMScheduler(ExecutionContext* context)
     return;
   DCHECK(context->GetScheduler());
   CreateFixedPriorityTaskQueues(context);
+  DomSchedulerRetainer().Retain(this);
+  context->GetScheduler()->SetReplaySchedulingOwnerRelease(base::BindOnce(
+      [](DOMScheduler* self) { DomSchedulerRetainer().Release(self); },
+      base::Unretained(this)));
 }
 
 void DOMScheduler::ContextDestroyed() {
