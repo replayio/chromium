@@ -28,6 +28,9 @@
 namespace blink {
 namespace {
 
+// KeepAlive OwnerGraph: Retain DOMScheduler (Oilpan root) until
+// ~FrameSchedulerImpl after Detach-ordered StreamTouch + CleanUpQueue.
+// ContextDestroyed is too early (before frame_scheduler_.reset()).
 recordreplay::DeterministicRetainer<DOMScheduler>& DomSchedulerRetainer() {
   DEFINE_STATIC_LOCAL(recordreplay::DeterministicRetainer<DOMScheduler>,
                       retainer, ("DOMScheduler"));
