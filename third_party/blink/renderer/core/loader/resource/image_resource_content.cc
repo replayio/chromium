@@ -442,8 +442,9 @@ ImageResourceContent::UpdateImageResult ImageResourceContent::UpdateImage(
       // anything now, but will delay decoding until queried for info (like size
       // or specific image frames).
       if (data) {
-        if (!image_)
+        if (!image_) {
           image_ = CreateImage(is_multipart);
+        }
         DCHECK(image_);
         size_available_ = image_->SetData(std::move(data), all_data_received);
         DCHECK(all_data_received ||

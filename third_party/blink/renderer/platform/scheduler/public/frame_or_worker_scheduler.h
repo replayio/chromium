@@ -139,6 +139,10 @@ class PLATFORM_EXPORT FrameOrWorkerScheduler {
   virtual std::unique_ptr<WebSchedulingTaskQueue> CreateWebSchedulingTaskQueue(
       WebSchedulingPriority) = 0;
 
+  // Runs after FrameSchedulerImpl teardown (budget pools cleaned). Used to
+  // Release a DeterministicRetainer pin on the WebScheduling Oilpan owner.
+  virtual void SetReplaySchedulingOwnerRelease(base::OnceClosure) {}
+
   virtual FrameScheduler* ToFrameScheduler() { return nullptr; }
 
   base::WeakPtr<FrameOrWorkerScheduler> GetWeakPtr();
