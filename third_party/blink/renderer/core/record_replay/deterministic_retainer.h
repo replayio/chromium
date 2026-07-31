@@ -14,14 +14,11 @@
 
 namespace recordreplay {
 
-// Off-graph Oilpan root: Retain before divergent cleanup side-effects; Release
-// only where those side-effects can no longer reintroduce this divergence.
-// Release site may be non-deterministic.
+// Off-graph Oilpan root (leak-references).
+// Retain before GC-controlled cleanup side-effects.
+// Release where that cleanup cannot reintroduce the divergence.
 //
-// Lifecycle (leak-references):
-//   empty --Retain--> held --Release--> empty
-//                 \-------Clear-------/
-// No-op when not recording/replaying.
+// Lifecycle: empty --Retain--> held --Release|Clear--> empty
 template <typename T>
 class DeterministicRetainer {
   DISALLOW_NEW();
