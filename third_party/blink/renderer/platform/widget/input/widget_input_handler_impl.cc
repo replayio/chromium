@@ -216,6 +216,8 @@ void WidgetInputHandlerImpl::Release() {
   // invoked. Note, this method will always be called on the Mojo-bound thread
   // first and then again on the main thread, the callback will always be
   // called on the Mojo-bound thread though.
+  recordreplay::Assert("WidgetInputHandlerImpl::Release %d",
+                       !!input_processed_ack_);
   if (input_processed_ack_)
     std::move(input_processed_ack_).Run();
 
