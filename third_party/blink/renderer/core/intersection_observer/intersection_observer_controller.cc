@@ -94,7 +94,7 @@ bool IntersectionObserverController::ComputeIntersections(
         needs_occlusion_tracking_ |= observer->trackVisibility();
       } else {
         tracked_explicit_root_observers_.erase(observer);
-        if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "IntersectionObserverController")) {
+        if (recordreplay::IsRecordingOrReplaying("leak-references", "IntersectionObserverController")) {
           replay_strong_tracked_explicit_root_observers_.erase(observer);
         }
       }
@@ -126,7 +126,7 @@ void IntersectionObserverController::AddTrackedObserver(
   if (observer.RootIsImplicit() || !observer.HasObservations())
     return;
   tracked_explicit_root_observers_.insert(&observer);
-  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "IntersectionObserverController")) {
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "IntersectionObserverController")) {
     replay_strong_tracked_explicit_root_observers_.insert(&observer);
   }
   if (observer.trackVisibility()) {
@@ -151,7 +151,7 @@ void IntersectionObserverController::RemoveTrackedObserver(
   // compelling reason to do it here, so we avoid the iteration through
   // observers and observations here.
   tracked_explicit_root_observers_.erase(&observer);
-  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "IntersectionObserverController")) {
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "IntersectionObserverController")) {
     replay_strong_tracked_explicit_root_observers_.erase(&observer);
   }
 }
@@ -163,7 +163,7 @@ void IntersectionObserverController::AddTrackedObservation(
   if (!observer->RootIsImplicit())
     return;
   tracked_implicit_root_observations_.insert(&observation);
-  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "IntersectionObserverController")) {
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "IntersectionObserverController")) {
     replay_strong_tracked_implicit_root_observations_.insert(&observation);
   }
   if (observer->trackVisibility()) {
@@ -184,7 +184,7 @@ void IntersectionObserverController::RemoveTrackedObservation(
   if (!observer->RootIsImplicit())
     return;
   tracked_implicit_root_observations_.erase(&observation);
-  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "IntersectionObserverController")) {
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "IntersectionObserverController")) {
     replay_strong_tracked_implicit_root_observations_.erase(&observation);
   }
 }

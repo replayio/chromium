@@ -298,7 +298,7 @@ void Resource::TriggerNotificationForFinishObservers(
   // [RUN-1457 cleanup]
   HeapVector<Member<ResourceFinishObserver>>* new_collections_strong =
       MakeGarbageCollected<HeapVector<Member<ResourceFinishObserver>>>();
-  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "Resource")) {
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "Resource")) {
     new_collections_strong->AppendRange(replay_finish_observers_strong_.begin(), replay_finish_observers_strong_.end());
     replay_finish_observers_strong_.clear();
   }
@@ -648,7 +648,7 @@ void Resource::AddClient(ResourceClient* client,
 
   if (is_revalidating_) {
     clients_.insert(client);
-    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "Resource"))
+    if (recordreplay::IsRecordingOrReplaying("leak-references", "Resource"))
       replay_clients_strong_.insert(client);
     return;
   }
@@ -658,7 +658,7 @@ void Resource::AddClient(ResourceClient* client,
   if ((ErrorOccurred() || !GetResponse().IsNull()) &&
       !NeedsSynchronousCacheHit(GetType(), options_)) {
     clients_awaiting_callback_.insert(client);
-    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "Resource"))
+    if (recordreplay::IsRecordingOrReplaying("leak-references", "Resource"))
         replay_clients_strong_.insert(client);
     if (!async_finish_pending_clients_task_.IsActive()) {
       async_finish_pending_clients_task_ =
@@ -670,7 +670,7 @@ void Resource::AddClient(ResourceClient* client,
   }
 
   clients_.insert(client);
-  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "Resource"))
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "Resource"))
     replay_clients_strong_.insert(client);
   DidAddClient(client);
   return;
@@ -685,7 +685,7 @@ void Resource::RemoveClient(ResourceClient* client) {
     clients_awaiting_callback_.erase(client);
   else
     clients_.erase(client);
-  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "Resource"))
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "Resource"))
     replay_clients_strong_.erase(client);
 
   if (clients_awaiting_callback_.empty() &&
@@ -703,7 +703,7 @@ void Resource::AddFinishObserver(ResourceFinishObserver* client,
 
   WillAddClientOrObserver();
   finish_observers_.insert(client);
-  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "Resource"))
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "Resource"))
     replay_finish_observers_strong_.insert(client);
   if (IsLoaded())
     TriggerNotificationForFinishObservers(task_runner);
@@ -713,7 +713,7 @@ void Resource::RemoveFinishObserver(ResourceFinishObserver* client) {
   CHECK(!is_add_remove_client_prohibited_);
 
   finish_observers_.erase(client);
-  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "Resource"))
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "Resource"))
     replay_finish_observers_strong_.erase(client);
   DidRemoveClientOrObserver();
 }

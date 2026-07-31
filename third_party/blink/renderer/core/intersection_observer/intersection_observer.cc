@@ -352,7 +352,7 @@ void IntersectionObserver::observe(Element* target,
       MakeGarbageCollected<IntersectionObservation>(*this, *target);
   target->EnsureIntersectionObserverData().AddObservation(*observation);
   observations_.insert(observation);
-  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "IntersectionObserver")) {
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "IntersectionObserver")) {
     replay_strong_observations_.insert(observation);
   }
   if (root() && root()->isConnected()) {
@@ -398,7 +398,7 @@ void IntersectionObserver::unobserve(Element* target,
 
   observation->Disconnect();
   observations_.erase(observation);
-  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "IntersectionObserver")) {
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "IntersectionObserver")) {
     replay_strong_observations_.erase(observation);
   }
   active_observations_.erase(observation);
@@ -414,7 +414,7 @@ void IntersectionObserver::disconnect(ExceptionState& exception_state) {
   for (auto& observation : observations_)
     observation->Disconnect();
   observations_.clear();
-  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "IntersectionObserver")) {
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "IntersectionObserver")) {
     replay_strong_observations_.clear();
   }
   active_observations_.clear();
