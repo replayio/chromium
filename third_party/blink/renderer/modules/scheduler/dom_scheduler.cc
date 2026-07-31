@@ -50,10 +50,10 @@ void DOMScheduler::ContextDestroyed() {
     fixed_priority_task_queues_.size(),
     signal_to_task_queue_map_.size());
 
-  fixed_priority_task_queues_.clear();
-  // Keep queue alive via pinned signal until DOMScheduler itself is GC-collected.
+  // Keep queues alive until DOMScheduler itself is GC-collected.
   if (!recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
                                             "DOMScheduler")) {
+    fixed_priority_task_queues_.clear();
     signal_to_task_queue_map_.clear();
   }
 }
