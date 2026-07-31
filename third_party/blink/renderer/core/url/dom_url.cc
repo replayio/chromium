@@ -102,7 +102,7 @@ URLSearchParams* DOMURL::searchParams() {
     }
 
     search_params_ = URLSearchParams::Create(Url().Query(), this);
-    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "DOMURL::searchParams_")) {
+    if (recordreplay::IsRecordingOrReplaying("leak-references", "DOMURL::searchParams_")) {
       replay_strong_search_params_ = search_params_;
     }
   }

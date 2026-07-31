@@ -82,7 +82,7 @@ class IdleRequestCallbackWrapper
   IdleRequestCallbackWrapper(ScriptedIdleTaskController::CallbackId id,
                              ScriptedIdleTaskController* controller)
       : id_(id), controller_(controller) {
-    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+    if (recordreplay::IsRecordingOrReplaying("leak-references",
                                              "IdleRequestCallbackWrapper"))
       replay_strong_controller_ = controller;
   }

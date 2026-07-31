@@ -747,7 +747,11 @@ void InterfaceEndpointClient::NotifyError(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   // https://linear.app/replay/issue/RUN-965
-  recordreplay::Assert("InterfaceEndpointClient::NotifyError %d", encountered_error_);
+  recordreplay::Assert(
+      "InterfaceEndpointClient::NotifyError %d %d %s %d %d",
+      encountered_error_, recordreplay::PointerId(this),
+      interface_name_ ? interface_name_ : "", !!error_handler_,
+      !!error_with_reason_handler_);
 
   if (encountered_error_)
     return;

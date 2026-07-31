@@ -52,7 +52,7 @@ void CachedMatchedProperties::Set(const ComputedStyle& style,
     matched_properties.push_back(new_matched_properties.properties);
     matched_properties_types.push_back(new_matched_properties.types_);
 
-    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+    if (recordreplay::IsRecordingOrReplaying("leak-references",
                                              "CachedMatchedProperties"))
       replay_matched_properties_strong_.push_back(
           new_matched_properties.properties);

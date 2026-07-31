@@ -25,7 +25,7 @@ class PLATFORM_EXPORT HeapObserverSet {
     CHECK(iteration_state_ & kAllowingAddition);
     DCHECK(!HasObserver(observer));
     observers_.insert(observer);
-    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+    if (recordreplay::IsRecordingOrReplaying("leak-references",
                                              "HeapObserverSet"))
       replay_observers_strong_.insert(observer);
   }
@@ -35,7 +35,7 @@ class PLATFORM_EXPORT HeapObserverSet {
   void RemoveObserver(ObserverType* observer) {
     CHECK(iteration_state_ & kAllowingRemoval);
     observers_.erase(observer);
-    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+    if (recordreplay::IsRecordingOrReplaying("leak-references",
                                              "HeapObserverSet"))
       replay_observers_strong_.erase(observer);
   }
@@ -55,7 +55,7 @@ class PLATFORM_EXPORT HeapObserverSet {
   void Clear() {
     CHECK(iteration_state_ & kAllowingRemoval);
     observers_.clear();
-    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+    if (recordreplay::IsRecordingOrReplaying("leak-references",
                                              "HeapObserverSet"))
       replay_observers_strong_.clear();
   }
