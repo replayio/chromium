@@ -290,7 +290,6 @@ void ImageResource::AllClientsAndObserversRemoved() {
   CHECK(is_during_finish_as_error_ || !GetContent()->HasImage() ||
         !ErrorOccurred());
   GetContent()->DoResetAnimation();
-  GetContent()->DeterministicRelease();
   if (multipart_parser_)
     multipart_parser_->Cancel();
   Resource::AllClientsAndObserversRemoved();

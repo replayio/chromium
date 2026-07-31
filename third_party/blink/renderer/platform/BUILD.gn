@@ -1126,7 +1126,6 @@ component("platform") {
     "graphics/web_graphics_context_3d_provider_wrapper.h",
     "graphics/web_graphics_context_3d_video_frame_pool.cc",
     "graphics/web_graphics_context_3d_video_frame_pool.h",
-    "deterministic_retainer.h",
     "heap_observer_set.h",
     "image-decoders/bmp/bmp_image_decoder.cc",
     "image-decoders/bmp/bmp_image_decoder.h",

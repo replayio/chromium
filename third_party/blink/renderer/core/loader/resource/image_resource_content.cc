@@ -17,7 +17,7 @@
 #include "third_party/blink/renderer/core/loader/resource/image_resource_info.h"
 #include "third_party/blink/renderer/core/loader/resource/image_resource_observer.h"
 #include "third_party/blink/renderer/core/svg/graphics/svg_image.h"
-#include "third_party/blink/renderer/platform/deterministic_retainer.h"
+#include "third_party/blink/renderer/core/record_replay/deterministic_retainer.h"
 #include "third_party/blink/renderer/platform/graphics/bitmap_image.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
@@ -78,8 +78,8 @@ class NullImageResourceInfo final
 };
 
 // OwnerGraph = ImageResourceContent → BitmapImage → decoder → ImageFrameGenerator.
-// Retain at image_ assign; Release at ClearImage / last RemoveObserver / unused Resource.
-// Gates young-GC finalize of Content (else ~BitmapImage races paint SkPixelRef teardown).
+// Retain at image_ assign; Release only at ClearImage (image_ gone → later finalize
+// cannot redo ~BitmapImage vs paint SkPixelRef teardown).
 recordreplay::DeterministicRetainer<ImageResourceContent>&
 ImageContentOwnerGraphRetainer() {
   DEFINE_STATIC_LOCAL(
@@ -219,16 +219,10 @@ void ImageResourceContent::RemoveObserver(ImageResourceObserver* observer) {
   DidRemoveObserver();
   if (fully_erased)
     observer->NotifyImageFullyRemoved(this);
-  if (!HasObservers())
-    ReleaseOwnerGraph(this);
 }
 
 void ImageResourceContent::DidRemoveObserver() {
   info_->DidRemoveClientOrObserver();
-}
-
-void ImageResourceContent::DeterministicRelease() {
-  ReleaseOwnerGraph(this);
 }
 
 static void PriorityFromObserver(const ImageResourceObserver* observer,

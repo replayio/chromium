@@ -89,9 +89,6 @@ class CORE_EXPORT ImageResourceContent final
   void RemoveObserver(ImageResourceObserver*);
   void DidRemoveObserver();
 
-  // Replay DeterministicRetainer: Release at unused-Resource SafeFree.
-  void DeterministicRelease();
-
   // The device pixel ratio we got from the server for this image, or 1.0.
   float DevicePixelRatioHeaderValue() const;
   bool HasDevicePixelRatioHeaderValue() const;

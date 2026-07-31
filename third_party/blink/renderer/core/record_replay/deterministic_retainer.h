@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_DETERMINISTIC_RETAINER_H_
-#define THIRD_PARTY_BLINK_RENDERER_PLATFORM_DETERMINISTIC_RETAINER_H_
+#ifndef THIRD_PARTY_BLINK_RENDERER_CORE_RECORD_REPLAY_DETERMINISTIC_RETAINER_H_
+#define THIRD_PARTY_BLINK_RENDERER_CORE_RECORD_REPLAY_DETERMINISTIC_RETAINER_H_
 
 #include "base/record_replay.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
@@ -14,8 +14,9 @@
 
 namespace recordreplay {
 
-// Off-graph root for Oilpan objects: keep alive past GC-only teardown; drop at
-// a deterministic Chromium unused/teardown site.
+// Off-graph Oilpan root: Retain before divergent cleanup side-effects; Release
+// only where those side-effects can no longer reintroduce this divergence.
+// Release site may be non-deterministic.
 //
 // Lifecycle (leak-references):
 //   empty --Retain--> held --Release--> empty
@@ -58,4 +59,4 @@ class DeterministicRetainer {
 
 }  // namespace recordreplay
 
-#endif  // THIRD_PARTY_BLINK_RENDERER_PLATFORM_DETERMINISTIC_RETAINER_H_
+#endif  // THIRD_PARTY_BLINK_RENDERER_CORE_RECORD_REPLAY_DETERMINISTIC_RETAINER_H_
