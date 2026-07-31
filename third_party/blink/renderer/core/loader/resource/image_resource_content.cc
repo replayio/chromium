@@ -79,7 +79,7 @@ class NullImageResourceInfo final
 
 // OwnerGraph = ImageResourceContent → BitmapImage → decoder → ImageFrameGenerator.
 // Retain at image_ assign; Release only at ClearImage (image_ gone → later finalize
-// cannot redo ~BitmapImage vs paint SkPixelRef teardown).
+// cannot redo GC-timed ~BitmapImage that forks later ~SkPixelRef stacks).
 recordreplay::DeterministicRetainer<ImageResourceContent>&
 ImageContentOwnerGraphRetainer() {
   DEFINE_STATIC_LOCAL(
