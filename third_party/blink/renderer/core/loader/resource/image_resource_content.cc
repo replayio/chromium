@@ -17,6 +17,7 @@
 #include "third_party/blink/renderer/core/loader/resource/image_resource_info.h"
 #include "third_party/blink/renderer/core/loader/resource/image_resource_observer.h"
 #include "third_party/blink/renderer/core/svg/graphics/svg_image.h"
+#include "third_party/blink/renderer/platform/deterministic_retainer.h"
 #include "third_party/blink/renderer/platform/graphics/bitmap_image.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
@@ -76,6 +77,27 @@ class NullImageResourceInfo final
   const ResourceResponse response_;
 };
 
+// OwnerGraph = ImageResourceContent → BitmapImage → decoder → ImageFrameGenerator.
+// Retain at image_ assign; Release at ClearImage / last RemoveObserver / unused Resource.
+// Gates young-GC finalize of Content (else ~BitmapImage races paint SkPixelRef teardown).
+recordreplay::DeterministicRetainer<ImageResourceContent>&
+ImageContentOwnerGraphRetainer() {
+  DEFINE_STATIC_LOCAL(
+      recordreplay::DeterministicRetainer<ImageResourceContent>, retainer,
+      ("ImageResourceContent"));
+  return retainer;
+}
+
+void RetainOwnerGraphIfBitmap(ImageResourceContent* content) {
+  if (content && content->HasImage() && content->GetImage()->IsBitmapImage())
+    ImageContentOwnerGraphRetainer().Retain(content);
+}
+
+void ReleaseOwnerGraph(ImageResourceContent* content) {
+  if (content)
+    ImageContentOwnerGraphRetainer().Release(content);
+}
+
 }  // namespace
 
 ImageResourceContent::ImageResourceContent(scoped_refptr<blink::Image> image)
@@ -86,6 +108,7 @@ ImageResourceContent::ImageResourceContent(scoped_refptr<blink::Image> image)
   DEFINE_STATIC_LOCAL(Persistent<NullImageResourceInfo>, null_info,
                       (MakeGarbageCollected<NullImageResourceInfo>()));
   info_ = null_info;
+  RetainOwnerGraphIfBitmap(this);
 }
 
 ImageResourceContent* ImageResourceContent::CreateLoaded(
@@ -196,10 +219,16 @@ void ImageResourceContent::RemoveObserver(ImageResourceObserver* observer) {
   DidRemoveObserver();
   if (fully_erased)
     observer->NotifyImageFullyRemoved(this);
+  if (!HasObservers())
+    ReleaseOwnerGraph(this);
 }
 
 void ImageResourceContent::DidRemoveObserver() {
   info_->DidRemoveClientOrObserver();
+}
+
+void ImageResourceContent::DeterministicRelease() {
+  ReleaseOwnerGraph(this);
 }
 
 static void PriorityFromObserver(const ImageResourceObserver* observer,
@@ -340,6 +369,7 @@ void ImageResourceContent::ClearImage() {
 
   // If our Image has an observer, it's always us so we need to clear the back
   // pointer before dropping our reference.
+  ReleaseOwnerGraph(this);
   image_->ClearImageObserver();
   image_ = nullptr;
   size_available_ = Image::kSizeUnavailable;
@@ -442,8 +472,10 @@ ImageResourceContent::UpdateImageResult ImageResourceContent::UpdateImage(
       // anything now, but will delay decoding until queried for info (like size
       // or specific image frames).
       if (data) {
-        if (!image_)
+        if (!image_) {
           image_ = CreateImage(is_multipart);
+          RetainOwnerGraphIfBitmap(this);
+        }
         DCHECK(image_);
         size_available_ = image_->SetData(std::move(data), all_data_received);
         DCHECK(all_data_received ||
