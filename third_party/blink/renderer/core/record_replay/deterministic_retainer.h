@@ -10,7 +10,6 @@
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/heap/persistent.h"
-#include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 
 namespace recordreplay {
 
@@ -21,8 +20,6 @@ namespace recordreplay {
 // Lifecycle: empty --Retain--> held --Release|Clear--> empty
 template <typename T>
 class DeterministicRetainer {
-  DISALLOW_NEW();
-
  public:
   explicit DeterministicRetainer(const char* label) : label_(label) {}
 
