@@ -252,11 +252,10 @@ static ScriptPromise ReadBlobHelper(
 
   // Blob reads go through FileReaderLoader and the browser-side Blob service,
   // which uses async Mojo callbacks and data pipes. Even byte-backed blobs can
-  // hit that machinery, so after divergence we reject consistently instead of
-  // trying to distinguish supposedly safe in-memory blobs from file-backed
-  // blobs here.
-  if (recordreplay::IsReplaying() &&
-      recordreplay::HasDivergedFromRecording()) {
+  // hit that machinery, so when events are unavailable we reject consistently
+  // instead of trying to distinguish supposedly safe in-memory blobs from
+  // file-backed blobs here.
+  if (recordreplay::AreEventsUnavailable()) {
     resolver->Reject(MakeGarbageCollected<DOMException>(
         DOMExceptionCode::kNotReadableError,
         kReplayBlobReadUnavailableMessage));
