@@ -86,7 +86,7 @@ export function toNumber(str) {
 export function syncRepo(dir, treeish) {
   log(`Syncing ${dir} to ${treeish}`);
   try {
-    spawnChecked("git", ["fetch", "--all"], { cwd: dir, stdio: "inherit" });
+    spawnChecked("git", ["fetch", "origin"], { cwd: dir, stdio: "inherit" });
   } catch (e) {
     // Ignore errors due to being at a detached head.
   }
