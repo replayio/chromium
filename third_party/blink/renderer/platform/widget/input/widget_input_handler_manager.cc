@@ -278,7 +278,13 @@ void WidgetInputHandlerManager::InitInputHandler() {
   InputThreadTaskRunner()->PostTask(FROM_HERE, std::move(init_closure));
 }
 
-WidgetInputHandlerManager::~WidgetInputHandlerManager() = default;
+WidgetInputHandlerManager::~WidgetInputHandlerManager() {
+  // leak-references: skip OnVoterDestroyed at divergent last-ref (events-allowed).
+  if (recordreplay::IsRecordingOrReplaying(
+          "leak-references", "WidgetInputHandlerManager")) {
+    response_power_mode_voter_.release();
+  }
+}
 
 void WidgetInputHandlerManager::AddInterface(
     mojo::PendingReceiver<mojom::blink::WidgetInputHandler> receiver,
