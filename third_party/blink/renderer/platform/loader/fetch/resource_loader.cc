@@ -1410,7 +1410,7 @@ void ResourceLoader::RequestSynchronously(const ResourceRequestHead& request) {
       response_out = WrappedResourceResponse(response);
       data_out = WebData(std::move(data));
     }
-  } else if (recordreplay::HasDivergedFromRecording()) {
+  } else if (recordreplay::AreEventsUnavailable()) {
     DidFail(WebURLError(net::ERR_FAILED, resource_->Url()),
             base::TimeTicks::Now(),
             WebURLLoaderClient::kUnknownEncodedDataLength, 0, 0);
@@ -1464,8 +1464,8 @@ void ResourceLoader::RequestSynchronously(const ResourceRequestHead& request) {
 }
 
 void ResourceLoader::RequestAsynchronously(const ResourceRequestHead& request) {
-  // After diverging from the recording we can't access system resources anymore.
-  if (recordreplay::HasDivergedFromRecording()) {
+  // When events are unavailable we can't access system resources anymore.
+  if (recordreplay::AreEventsUnavailable()) {
     DidFail(WebURLError(net::ERR_FAILED, resource_->Url()),
             base::TimeTicks::Now(),
             WebURLLoaderClient::kUnknownEncodedDataLength, 0, 0);

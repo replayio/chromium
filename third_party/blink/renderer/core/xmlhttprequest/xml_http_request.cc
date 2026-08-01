@@ -1196,7 +1196,7 @@ void XMLHttpRequest::CreateRequest(scoped_refptr<EncodedFormData> http_body,
     resource_loader_options.synchronous_policy = kRequestSynchronously;
   }
 
-  if (recordreplay::HasDivergedFromRecording()) {
+  if (recordreplay::AreEventsUnavailable()) {
     HandleNetworkError();
     ThrowForLoadFailureIfNeeded(
         exception_state,
