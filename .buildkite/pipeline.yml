@@ -16,7 +16,7 @@ steps:
   #           BUILDEVENT_BUILDKITE_API_TOKEN: buildkite-api-token-buildevents
   #     - replayio/buildevents#76b6f57: ~
   #   commands:
-  #     - "be_cmd git-fetch-all -- git fetch --all"
+  #     - "be_cmd git-fetch-origin -- git fetch origin"
   #     - "be_cmd git-reset-branch -- git reset --hard origin/$BUILDKITE_BRANCH"
   #     - "be_cmd update-all-repos -- node replay_build_scripts/update-all-repos.mjs"
   #     - "pushd replay_build_scripts"
@@ -50,7 +50,7 @@ steps:
               secret-id: engflow-key
       - replayio/buildevents#76b6f57: ~
     commands:
-      - "be_cmd git-fetch-all -- git fetch --all"
+      - "be_cmd git-fetch-origin -- git fetch origin"
       - "be_cmd git-reset-branch -- git reset --hard origin/$BUILDKITE_BRANCH"
       - "be_cmd clean-artifacts-dir -- node replay_build_scripts/clean_artifacts.mjs"
       - "be_cmd update-all-repos -- node replay_build_scripts/update-all-repos.mjs"
@@ -100,7 +100,7 @@ steps:
   #             secret-id: engflow-key
   #     - replayio/buildevents#76b6f57: ~
   #   commands:
-  #     - "be_cmd git-fetch-all -- git fetch --all"
+  #     - "be_cmd git-fetch-origin -- git fetch origin"
   #     - "be_cmd git-reset-branch -- git reset --hard origin/$BUILDKITE_BRANCH"
   #     - "be_cmd clean-artifacts-dir -- node replay_build_scripts/clean_artifacts.mjs"
   #     - "be_cmd update-all-repos -- node replay_build_scripts/update-all-repos.mjs"
@@ -137,7 +137,7 @@ steps:
   #             secret-id: engflow-key
   #     - replayio/buildevents#76b6f57: ~
   #   commands:
-  #     - "be_cmd git-fetch-all -- git fetch --all"
+  #     - "be_cmd git-fetch-origin -- git fetch origin"
   #     - "be_cmd git-reset-branch -- git reset --hard origin/$BUILDKITE_BRANCH"
   #     - "be_cmd clean-artifacts-dir -- node replay_build_scripts/clean_artifacts.mjs"
   #     - "be_cmd update-all-repos -- node replay_build_scripts/update-all-repos.mjs"
