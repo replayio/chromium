@@ -879,12 +879,24 @@ v8_inspector::V8InspectorSession* getInspectorSession(v8::Isolate* isolate, int 
   InspectorData* data = getInspectorFor(isolate, contextGroupId);
 
   if (!data->inspectorSession) {
-    recordreplay::AutoMarkReplayCode mark;
-    recordreplay::AutoDisallowEvents disallow("RecordReplayRegisterV8Inspector");
-    data->inspectorSession = inspector->connect(contextGroupId,
-                                            new InspectorChannel(),
-                                            v8_inspector::StringView(),
-                                            v8_inspector::V8Inspector::kFullyTrusted).release();
+    // RecorderCommandHandling creates the session at record and replay the
+    // same way — not divergent. Only Mark+Disallow when the session is
+    // replay-only; AreEventsDisallowed() then seeds m_replay_owned.
+    auto connect = [&]() {
+      return inspector
+          ->connect(contextGroupId, new InspectorChannel(),
+                    v8_inspector::StringView(),
+                    v8_inspector::V8Inspector::kFullyTrusted)
+          .release();
+    };
+    if (IsCommandHandlingEnabledWhenRecording()) {
+      data->inspectorSession = connect();
+    } else {
+      recordreplay::AutoMarkReplayCode mark;
+      recordreplay::AutoDisallowEvents disallow(
+          "RecordReplayRegisterV8Inspector");
+      data->inspectorSession = connect();
+    }
   }
   return data->inspectorSession;
 }
