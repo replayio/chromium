@@ -1410,6 +1410,11 @@ void ResourceLoader::RequestSynchronously(const ResourceRequestHead& request) {
       response_out = WrappedResourceResponse(response);
       data_out = WebData(std::move(data));
     }
+  } else if (recordreplay::AreEventsUnavailable()) {
+    DidFail(WebURLError(net::ERR_FAILED, resource_->Url()),
+            base::TimeTicks::Now(),
+            WebURLLoaderClient::kUnknownEncodedDataLength, 0, 0);
+    return;
   } else {
     // Don't do mime sniffing for fetch (crbug.com/2016)
     bool no_mime_sniffing = request.GetRequestContext() ==
@@ -1459,9 +1464,13 @@ void ResourceLoader::RequestSynchronously(const ResourceRequestHead& request) {
 }
 
 void ResourceLoader::RequestAsynchronously(const ResourceRequestHead& request) {
-  // After diverging from the recording we can't access system resources anymore.
-  if (recordreplay::HasDivergedFromRecording())
+  // When events are unavailable we can't access system resources anymore.
+  if (recordreplay::AreEventsUnavailable()) {
+    DidFail(WebURLError(net::ERR_FAILED, resource_->Url()),
+            base::TimeTicks::Now(),
+            WebURLLoaderClient::kUnknownEncodedDataLength, 0, 0);
     return;
+  }
 
   DCHECK(loader_);
   if (CanHandleDataURLRequestLocally(request)) {
