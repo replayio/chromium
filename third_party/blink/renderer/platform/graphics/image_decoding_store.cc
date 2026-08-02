@@ -28,11 +28,12 @@
 #include <memory>
 
 #include "base/bind.h"
-#include "base/record_replay_ordered_atomic.h"
 #include "base/synchronization/lock.h"
 #include "third_party/blink/renderer/platform/graphics/image_frame_generator.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
 #include "third_party/blink/renderer/platform/wtf/threading.h"
+
+#include <atomic>
 
 namespace blink {
 
@@ -40,10 +41,7 @@ namespace {
 
 static const size_t kDefaultMaxTotalSizeOfHeapEntries = 32 * 1024 * 1024;
 
-recordreplay::OrderedAtomic<bool>& GetHasInstanceFlag() {
-  static recordreplay::OrderedAtomic<bool> flag{false};
-  return flag;
-}
+static std::atomic<bool> gHasInstance{false};
 
 }  // namespace
 
@@ -55,7 +53,7 @@ ImageDecodingStore::ImageDecodingStore()
           base::BindRepeating(&ImageDecodingStore::OnMemoryPressure,
                               base::Unretained(this))) {
   REPLAY_ASSERT("[TT-1524-1526] ImageDecodingStore::ImageDecodingStore");
-  GetHasInstanceFlag() = true;
+  gHasInstance = true;
 }
 
 ImageDecodingStore::~ImageDecodingStore() {
@@ -74,7 +72,7 @@ ImageDecodingStore& ImageDecodingStore::Instance() {
 }
 
 bool ImageDecodingStore::HasInstance() {
-  return GetHasInstanceFlag();
+  return gHasInstance;
 }
 
 bool ImageDecodingStore::LockDecoder(
