@@ -879,12 +879,24 @@ v8_inspector::V8InspectorSession* getInspectorSession(v8::Isolate* isolate, int 
   InspectorData* data = getInspectorFor(isolate, contextGroupId);
 
   if (!data->inspectorSession) {
-    recordreplay::AutoMarkReplayCode mark;
-    recordreplay::AutoDisallowEvents disallow("RecordReplayRegisterV8Inspector");
-    data->inspectorSession = inspector->connect(contextGroupId,
-                                            new InspectorChannel(),
-                                            v8_inspector::StringView(),
-                                            v8_inspector::V8Inspector::kFullyTrusted).release();
+    // RecorderCommandHandling creates the session at record and replay the
+    // same way — not divergent. Only Mark+Disallow when the session is
+    // replay-only; AreEventsDisallowed() then seeds m_replay_owned.
+    auto connect = [&]() {
+      return inspector
+          ->connect(contextGroupId, new InspectorChannel(),
+                    v8_inspector::StringView(),
+                    v8_inspector::V8Inspector::kFullyTrusted)
+          .release();
+    };
+    if (IsCommandHandlingEnabledWhenRecording()) {
+      data->inspectorSession = connect();
+    } else {
+      recordreplay::AutoMarkReplayCode mark;
+      recordreplay::AutoDisallowEvents disallow(
+          "RecordReplayRegisterV8Inspector");
+      data->inspectorSession = connect();
+    }
   }
   return data->inspectorSession;
 }
@@ -2563,10 +2575,14 @@ static bool TestEnv(const char* env) {
   return v && v[0] && v[0] != '0';
 }
 
+// Share aggregate instrumentation state across realms so that it remains
+// reachable from global evaluations in the main world.
 static v8::Eternal<v8::Object>* gRecordReplayEternalState;
 
-static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* localFrame) {
-  v8::Local<v8::Context> context = isolate->GetCurrentContext();
+void InstallRecordReplayGlobals(v8::Isolate* isolate,
+                                v8::Local<v8::Context> context) {
+  // Create the objects and functions below in this context's realm.
+  v8::Context::Scope scope(context);
 
   // Add __RECORD_REPLAY_ANNOTATION_HOOK__ as a global.
   SetFunctionProperty(isolate, context->Global(), AnnotationHookJSName,
@@ -2706,8 +2722,10 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
     ForTestingSerializeValueToArray);
 
   if (gRecordReplayEternalState == nullptr) {
+    v8::Local<v8::Object> eternal_state = v8::Object::New(isolate);
+    eternal_state->SetPrototype(context, v8::Null(isolate)).Check();
     gRecordReplayEternalState =
-        new v8::Eternal<v8::Object>(isolate, v8::Object::New(isolate));
+        new v8::Eternal<v8::Object>(isolate, eternal_state);
   }
   DefineProperty(isolate, context->Global(), "__RECORD_REPLAY_ETERNAL_STATE__",
                  gRecordReplayEternalState->Get(isolate));
@@ -2740,7 +2758,7 @@ static void InitializeReplayScripts(v8::Isolate* isolate, LocalFrame* localFrame
   V8RecordReplaySetDefaultContext(isolate, context);
   
   // Initialize __RECORD_REPLAY__ things.
-  InitializeRecordReplayApiObjects(isolate, localFrame);
+  InstallRecordReplayGlobals(isolate, context);
 
   if (recordreplay::FeatureEnabled("collect-source-maps") &&
       !TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_COLLECTION")) {

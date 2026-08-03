@@ -10,6 +10,7 @@
 #include "base/feature_list.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "base/strings/strcat.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/unguessable_token.h"
@@ -982,6 +983,12 @@ ScriptPromise FetchManager::Fetch(ScriptState* script_state,
 
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   ScriptPromise promise = resolver->Promise();
+  if (recordreplay::AreEventsUnavailable()) {
+    resolver->Reject(V8ThrowException::CreateTypeError(
+        script_state->GetIsolate(),
+        "This evaluation tried to read network contents that were not captured in the recording. Replay cannot perform fresh network reads during replay."));
+    return promise;
+  }
 
   auto* loader =
       MakeGarbageCollected<Loader>(GetExecutionContext(), this, resolver,

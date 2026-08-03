@@ -91,6 +91,9 @@ class ScopedInterfaceEndpointHandle::State
       }
     }
 
+    recordreplay::Assert(
+        "ScopedInterfaceEndpointHandle::State::Close cached_group_controller %d",
+        !!cached_group_controller);
     if (cached_group_controller) {
       cached_group_controller->CloseEndpointHandle(cached_id, reason);
     } else if (cached_peer_state) {

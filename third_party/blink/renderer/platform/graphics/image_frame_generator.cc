@@ -99,10 +99,9 @@ ImageFrameGenerator::ImageFrameGenerator(const SkISize& full_size,
 }
 
 ImageFrameGenerator::~ImageFrameGenerator() {
-  // Creating the store interacts with the recording so avoid instantiating
-  // it at non-deterministic points. If the store doesn't exist then it won't
-  // have any references to this generator.
-  if (recordreplay::AreEventsDisallowed() && !ImageDecodingStore::HasInstance())
+  // Sweeper / other EventsDisallowed paths must not StreamTouch the store
+  // (HasInstance / Instance / RemoveCacheIndexedByGenerator).
+  if (recordreplay::AreEventsDisallowed())
     return;
 
   // We expect all image decoders to be unlocked and catch with DCHECKs if not.

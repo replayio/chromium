@@ -1196,6 +1196,14 @@ void XMLHttpRequest::CreateRequest(scoped_refptr<EncodedFormData> http_body,
     resource_loader_options.synchronous_policy = kRequestSynchronously;
   }
 
+  if (recordreplay::AreEventsUnavailable()) {
+    HandleNetworkError();
+    ThrowForLoadFailureIfNeeded(
+        exception_state,
+        "This evaluation tried to read network contents that were not captured in the recording. Replay cannot perform fresh network reads during replay.");
+    return;
+  }
+
   exception_code_ = DOMExceptionCode::kNoError;
   error_ = false;
 
