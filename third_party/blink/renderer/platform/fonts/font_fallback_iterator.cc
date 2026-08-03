@@ -161,6 +161,10 @@ scoped_refptr<FontDataForRangeSet> FontFallbackIterator::Next(
         return UniqueOrNext(base::AdoptRef(new FontDataForRangeSet(system_font)),
                             hint_list);
       }
+      // [RecordReplay] crash-0079: match upstream kOutOfLuck — empty set, never
+      // null. Diverged UniqueSystemFontForHintList can leave first_candidate_
+      // unset; returning null made ShapeSegment skipCheck-break without clear.
+      return base::AdoptRef(new FontDataForRangeSet());
     }
     return first_candidate_;
   }
