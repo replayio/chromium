@@ -40,7 +40,6 @@
 
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
-#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "third_party/blink/renderer/platform/fonts/font.h"
 #include "third_party/blink/renderer/platform/fonts/font_description.h"
@@ -790,15 +789,10 @@ void HarfBuzzShaper::ShapeSegment(
       current_font_data_for_range_set =
           fallback_iterator.Next(fallback_chars_hint);
 
-      // [RecordReplay] https://linear.app/replay/issue/RUN-1302#comment-0930eb4f
-      // When replaying and diverged from the recording, the `fallback_iterator.Next()`
-      // call can return null.
-      bool skipCheck =
-        recordreplay::HasDivergedFromRecording() &&
-        !current_font_data_for_range_set;
-
-      if (skipCheck || !current_font_data_for_range_set->FontData()) {
-        DCHECK(range_data->reshape_queue.empty());
+      if (!current_font_data_for_range_set->FontData()) {
+        // [RecordReplay] crash-0079: clear leftover kReshapeQueueRange so the
+        // next ShapeSegment does not drain it with a null/empty font.
+        range_data->reshape_queue.clear();
         break;
       }
       font_cycle_queued = false;
