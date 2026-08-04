@@ -124,14 +124,11 @@ const Array_push = Array.prototype.push;
 const Object_toString = Object.prototype.toString;
 const String_ = String;
 const String_slice = String.prototype.slice;
-const Window_innerWidth_get = Object.getOwnPropertyDescriptor(
-  Window.prototype,
-  "innerWidth",
-).get;
-const Window_devicePixelRatio_get = Object.getOwnPropertyDescriptor(
-  Window.prototype,
-  "devicePixelRatio",
-).get;
+
+// Not at top-level: Window.prototype accessors absent during InitializeReplayScripts.
+function nativeWindowGetter(name) {
+  return Object.getOwnPropertyDescriptor(Window.prototype, name).get;
+}
 
 function isArrayLike(obj) {
   return obj != null && typeof obj.length === "number";
@@ -765,13 +762,13 @@ function Graphics_getDevicePixelRatio() {
     // Note1: This size might not yet have been initialized, in which case,
     //          it will default to {0,0}.
     // Note2: X and Y ratios should be the same.
-    const ratioX = size.width / Window_innerWidth_get.call(window);
+    const ratioX = size.width / nativeWindowGetter("innerWidth").call(window);
     return {
       ratio: ratioX
     };
   }
   return {
-    ratio: Window_devicePixelRatio_get.call(window) || 0
+    ratio: nativeWindowGetter("devicePixelRatio").call(window) || 0
   };
 }
 
