@@ -219,13 +219,15 @@ SVGImage::~SVGImage() {
 
   // Leak the agent_group_scheduler_ when removed during GC.
   // See https://linear.app/replay/issue/RUN-2056#comment-f827701f.
-  if (recordreplay::AreEventsDisallowed("~SVGImage"))
+  if (recordreplay::AreEventsDisallowed("~SVGImage") &&
+      recordreplay::EnterLeakMemory("SVGImage"))
     agent_group_scheduler_.release();
 
   if (page_) {
     // Leak the Page during nondeterministic GC sweep: WillBeDestroyed() would
     // erase it from AllPages(), diverging membership at iteration time.
-    if (recordreplay::AreEventsDisallowed("~SVGImage")) {
+    if (recordreplay::AreEventsDisallowed("~SVGImage") &&
+        recordreplay::EnterLeakMemory("SVGImage")) {
       DEFINE_STATIC_LOCAL(Persistent<HeapHashSet<Member<Page>>>, leaked_pages,
                           (MakeGarbageCollected<HeapHashSet<Member<Page>>>()));
       leaked_pages->insert(page_.Release());
