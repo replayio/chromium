@@ -31,7 +31,7 @@
 #include "base/synchronization/lock.h"
 #include "third_party/blink/renderer/platform/graphics/image_frame_generator.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
-#include "third_party/blink/renderer/platform/wtf/threading.h"
+#include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 
 #include <atomic>
 
@@ -66,6 +66,8 @@ ImageDecodingStore::~ImageDecodingStore() {
 }
 
 ImageDecodingStore& ImageDecodingStore::Instance() {
+  DEFINE_ORDERED_THREAD_SAFE_STATIC_LOCAL_LOCK(ImageDecodingStore,
+                                               "ImageDecodingStore");
   REPLAY_ASSERT("ImageDecodingStore::Instance %d", HasInstance());
   DEFINE_THREAD_SAFE_STATIC_LOCAL(ImageDecodingStore, store, ());
   return store;
