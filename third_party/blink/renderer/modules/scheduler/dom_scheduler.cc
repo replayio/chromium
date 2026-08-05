@@ -70,8 +70,7 @@ void DOMScheduler::ContextDestroyed() {
     signal_to_task_queue_map_.size());
 
   // Keep queues alive until DOMScheduler itself is GC-collected.
-  if (!recordreplay::IsRecordingOrReplaying("leak-references",
-                                            "DOMScheduler")) {
+  if (!recordreplay::EnterLeakMemory("DOMScheduler")) {
     fixed_priority_task_queues_.clear();
     signal_to_task_queue_map_.clear();
   }
@@ -199,8 +198,7 @@ void DOMScheduler::CreateTaskQueueFor(DOMTaskSignal* signal) {
   signal_to_task_queue_map_.insert(
       signal,
       MakeGarbageCollected<DOMTaskQueue>(std::move(task_queue), priority));
-  if (recordreplay::IsRecordingOrReplaying("leak-references",
-                                            "DOMScheduler")) {
+  if (recordreplay::EnterLeakMemory("DOMScheduler")) {
     replay_strong_signal_.insert(signal);
   }
   signal->AddPriorityChangeAlgorithm(

@@ -89,6 +89,14 @@ void ExitReplayCode();
 bool FeatureEnabled(const char* feature, const char* subfeature = nullptr);
 bool HasDisabledFeatures();
 
+// Gate a LeakMemory intervention and breadcrumb it into crash-report diagnostics.
+inline bool EnterLeakMemory(const char* label) {
+  if (!IsRecordingOrReplaying("leak-references", label))
+    return false;
+  Diagnostic("LeakMemory %s", label);
+  return true;
+}
+
 /**
  * Get the current JS stack, if there is any.
  */
