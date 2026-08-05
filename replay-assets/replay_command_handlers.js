@@ -37,7 +37,7 @@ const {
   fromJsCssGetStylesheetByCpdId,
   fromJsCollectEventListeners,
   fromJsDomPerformSearch,
-  getCurrentViewportPixelSize,
+  fromJsGetDevicePixelRatio,
 
   // network
   getCurrentNetworkRequestEvent,
@@ -124,11 +124,6 @@ const Array_push = Array.prototype.push;
 const Object_toString = Object.prototype.toString;
 const String_ = String;
 const String_slice = String.prototype.slice;
-
-// Not at top-level: Window.prototype accessors absent during InitializeReplayScripts.
-function nativeWindowGetter(name) {
-  return Object.getOwnPropertyDescriptor(Window.prototype, name).get;
-}
 
 function isArrayLike(obj) {
   return obj != null && typeof obj.length === "number";
@@ -754,22 +749,7 @@ function Pause_getScope({ scope }) {
 }
 
 function Graphics_getDevicePixelRatio() {
-  // RUN-2989: On Mac, devicePixelRatio is incorrect in the early lifetime
-  // of the process, so we need to compute the actual pixel ratio of hardware
-  // pixels to page pixels.
-  const size = getCurrentViewportPixelSize();
-  if (size.width) {
-    // Note1: This size might not yet have been initialized, in which case,
-    //          it will default to {0,0}.
-    // Note2: X and Y ratios should be the same.
-    const ratioX = size.width / nativeWindowGetter("innerWidth").call(window);
-    return {
-      ratio: ratioX
-    };
-  }
-  return {
-    ratio: nativeWindowGetter("devicePixelRatio").call(window) || 0
-  };
+  return { ratio: fromJsGetDevicePixelRatio() || 0 };
 }
 
 
