@@ -31,6 +31,7 @@
 
 #include "base/check.h"
 #include "base/dcheck_is_on.h"
+#include "base/synchronization/lock.h"
 #include "build/build_config.h"
 #include "third_party/blink/renderer/platform/wtf/leak_annotations.h"
 #include "third_party/blink/renderer/platform/wtf/sanitizers.h"
@@ -64,6 +65,18 @@
 //
 // TODO: rename as DEFINE_CROSS_THREAD_STATIC_LOCAL() ?
 #define DEFINE_THREAD_SAFE_STATIC_LOCAL(Type, Name, Arguments) \
+  DEFINE_STATIC_LOCAL_IMPL(Type, Name, Arguments, true)
+
+// Named |base::Lock| before magic-static init. Replay's |__cxa_guard_acquire|
+// is unordered; the named lock provides Replay ordering.
+#define DEFINE_ORDERED_THREAD_SAFE_STATIC_LOCAL_LOCK(Name, ordered_name)      \
+  static base::Lock& s_##Name##_ordered_lock = *new base::Lock(ordered_name);  \
+  base::AutoLock s_##Name##_ordered_autolock(s_##Name##_ordered_lock)
+
+// Like |DEFINE_THREAD_SAFE_STATIC_LOCAL()| with a named ordered lock around init.
+#define DEFINE_ORDERED_THREAD_SAFE_STATIC_LOCAL(Type, Name, Arguments,         \
+                                                ordered_name)                  \
+  DEFINE_ORDERED_THREAD_SAFE_STATIC_LOCAL_LOCK(Name, ordered_name);            \
   DEFINE_STATIC_LOCAL_IMPL(Type, Name, Arguments, true)
 
 namespace WTF {

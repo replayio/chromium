@@ -2433,6 +2433,28 @@ static void fromJsGetCurrentViewportPixelSize(const v8::FunctionCallbackInfo<v8:
   args.GetReturnValue().Set(jsSize);
 }
 
+// Blink LocalDOMWindow accessors — never page-owned Window getters.
+static void fromJsGetDevicePixelRatio(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  v8::Isolate* isolate = args.GetIsolate();
+  LocalDOMWindow* window = CurrentDOMWindow(isolate);
+  if (!window) {
+    args.GetReturnValue().Set(0);
+    return;
+  }
+
+  // RUN-2989: early Mac devicePixelRatio is wrong; prefer viewport/CSS px.
+  gfx::Size size = recordreplay::GetCurrentViewportPixelSize();
+  if (size.width()) {
+    const int inner_width = window->innerWidth();
+    if (inner_width > 0) {
+      args.GetReturnValue().Set(static_cast<double>(size.width()) / inner_width);
+      return;
+    }
+  }
+  args.GetReturnValue().Set(window->devicePixelRatio());
+}
+
 /** ###########################################################################
  * misc
  * ##########################################################################*/
@@ -2687,6 +2709,8 @@ void InstallRecordReplayGlobals(v8::Isolate* isolate,
   // Graphics.
   SetFunctionProperty(isolate, args, "getCurrentViewportPixelSize",
                       fromJsGetCurrentViewportPixelSize);
+  SetFunctionProperty(isolate, args, "fromJsGetDevicePixelRatio",
+                      fromJsGetDevicePixelRatio);
 
   // unsorted Replay stuff
   SetFunctionProperty(
