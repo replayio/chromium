@@ -14,6 +14,7 @@
 #include "base/files/file_path.h"
 #include "base/logging.h"
 #include "base/notreached.h"
+#include "base/record_replay.h"
 #include "base/threading/platform_thread.h"
 #include "build/build_config.h"
 #include "sql/initialization.h"
@@ -136,6 +137,9 @@ void SandboxedVfsFile::Create(base::File file,
 #endif  // DCHECK_IS_ON()
                               SandboxedVfs* vfs,
                               sqlite3_file& buffer) {
+  recordreplay::Assert("SandboxedVfsFile::Create %s %d",
+                       file_path.AsUTF8Unsafe().c_str(),
+                       file.GetPlatformFile());
   SandboxedVfsFileSqliteBridge& bridge =
       SandboxedVfsFileSqliteBridge::FromSqliteFile(buffer);
   bridge.sandboxed_vfs_file =
@@ -154,6 +158,10 @@ SandboxedVfsFile& SandboxedVfsFile::FromSqliteFile(sqlite3_file& sqlite_file) {
 }
 
 int SandboxedVfsFile::Close() {
+  recordreplay::Assert("SandboxedVfsFile::Close %d %s %d",
+                       recordreplay::PointerId(this),
+                       file_path_.AsUTF8Unsafe().c_str(),
+                       file_.GetPlatformFile());
   file_.Close();
   delete this;
   return SQLITE_OK;

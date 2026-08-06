@@ -27,6 +27,7 @@
 #include "third_party/blink/renderer/modules/webdatabase/sqlite/sqlite_database.h"
 
 #include "base/notreached.h"
+#include "base/record_replay.h"
 #include "sql/sandboxed_vfs.h"
 #include "third_party/blink/renderer/modules/webdatabase/database_authorizer.h"
 #include "third_party/blink/renderer/modules/webdatabase/sqlite/sandboxed_vfs_delegate.h"
@@ -130,6 +131,8 @@ bool SQLiteDatabase::Open(const String& filename) {
 }
 
 void SQLiteDatabase::Close() {
+  recordreplay::Assert("SQLiteDatabase::Close %d",
+                       recordreplay::PointerId(this));
   if (db_) {
     // FIXME: This is being called on the main thread during JS GC.
     // <rdar://problem/5739818>
