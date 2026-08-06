@@ -428,12 +428,11 @@ const char* Database::DatabaseInfoTableName() {
 
 void Database::CloseDatabase() {
   bool opened = opened_.load(std::memory_order_relaxed);
-  recordreplay::Assert("Database::CloseDatabase %d %d", RecordReplayId(),
-                       opened);
+  REPLAY_ASSERT("Database::CloseDatabase %d %d", RecordReplayId(), opened);
   if (!opened)
     return;
 
-  recordreplay::Assert("Database::opened_ store %d 0", RecordReplayId());
+  REPLAY_ASSERT("Database::opened_ store %d 0", RecordReplayId());
   opened_.store(false, std::memory_order_release);
   sqlite_database_.Close();
   // See comment at the top this file regarding calling removeOpenDatabase().
@@ -447,7 +446,7 @@ void Database::CloseDatabase() {
 
 bool Database::Opened() {
   bool opened = opened_.load(std::memory_order_acquire);
-  recordreplay::Assert("Database::Opened %d %d", RecordReplayId(), opened);
+  REPLAY_ASSERT("Database::Opened %d %d", RecordReplayId(), opened);
   return opened;
 }
 
@@ -615,7 +614,7 @@ bool Database::PerformOpenAndVerify(bool should_set_version_in_new_database,
 
   // See comment at the top this file regarding calling addOpenDatabase().
   DatabaseTracker::Tracker().AddOpenDatabase(this);
-  recordreplay::Assert("Database::opened_ store %d 1", RecordReplayId());
+  REPLAY_ASSERT("Database::opened_ store %d 1", RecordReplayId());
   opened_.store(true, std::memory_order_release);
 
   // Declare success:

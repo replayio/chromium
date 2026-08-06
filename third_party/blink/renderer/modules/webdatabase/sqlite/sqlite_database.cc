@@ -131,8 +131,7 @@ bool SQLiteDatabase::Open(const String& filename) {
 }
 
 void SQLiteDatabase::Close() {
-  recordreplay::Assert("SQLiteDatabase::Close %d",
-                       recordreplay::PointerId(this));
+  REPLAY_ASSERT("SQLiteDatabase::Close %d", recordreplay::PointerId(this));
   if (db_) {
     // FIXME: This is being called on the main thread during JS GC.
     // <rdar://problem/5739818>
