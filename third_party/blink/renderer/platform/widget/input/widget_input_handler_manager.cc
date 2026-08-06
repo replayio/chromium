@@ -279,7 +279,7 @@ void WidgetInputHandlerManager::InitInputHandler() {
 }
 
 WidgetInputHandlerManager::~WidgetInputHandlerManager() {
-  recordreplay::Assert("WidgetInputHandlerManager::~WidgetInputHandlerManager");
+  REPLAY_ASSERT("WidgetInputHandlerManager::~WidgetInputHandlerManager");
   // leak-references: skip OnVoterDestroyed at divergent last-ref (events-allowed).
   if (recordreplay::IsRecordingOrReplaying(
           "leak-references", "WidgetInputHandlerManager")) {
