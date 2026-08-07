@@ -760,6 +760,8 @@ void SequenceManagerImpl::DidRunTask(LazyNow& lazy_now) {
   NotifyDidProcessTask(&executing_task, &lazy_now);
   main_thread_only().task_execution_stack.pop_back();
 
+  recordreplay::Assert("SequenceManagerImpl::DidRunTask nesting_depth %d",
+                       main_thread_only().nesting_depth);
   if (main_thread_only().nesting_depth == 0)
     CleanUpQueues();
 }

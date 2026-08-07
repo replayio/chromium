@@ -638,6 +638,8 @@ void DoDeriveKeyReply(std::unique_ptr<DeriveKeyState> state) {
 void DoDeriveKey(std::unique_ptr<DeriveKeyState> passed_state) {
   TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("devtools.timeline"), "DoDeriveKey");
   DeriveKeyState* state = passed_state.get();
+  recordreplay::Assert("webcrypto::DoDeriveKey cancelled %d",
+                       state->cancelled());
   if (state->cancelled())
     return;
   state->status = webcrypto::DeriveKey(
