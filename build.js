@@ -34,11 +34,6 @@ spawnChecked(
   }
 );
 
-if (currentPlatform() == "macOS") {
-  // Make sure the main executable gets rebuilt with the new build ID.
-  spawnChecked("touch", [`${__dirname}/chrome/app/chrome_exe_main_mac.cc`]);
-}
-
 const archSuffix = buildArm ? "-arm" : "";
 
 if (!REPLAY_LOCAL_DRIVER_DIR) {
@@ -105,7 +100,7 @@ const buildSuffix =
     : process.env["LOCAL_DEVELOPER_BUILD_EXTENSION"] || "";
 const buildId = `${computeBuildId(driverDate, driverRevision)}${buildSuffix}`;
 
-fs.writeFileSync(
+writeFileSyncIfChanged(
   `${__dirname}/base/record_replay_driver.cc`,
   `
 namespace recordreplay {
@@ -116,7 +111,7 @@ namespace recordreplay {
 `
 );
 
-fs.writeFileSync(
+const driver_h_changed = writeFileSyncIfChanged(
   `${__dirname}/base/record_replay_driver.h`,
   `
 #ifndef BASE_RECORD_REPLAY_DRIVER_H_
@@ -127,6 +122,11 @@ fs.writeFileSync(
 #endif // BASE_RECORD_REPLAY_DRIVER_H_
 `
 );
+
+if (currentPlatform() == "macOS" && driver_h_changed) {
+  // Make sure the main executable gets rebuilt with the new build ID.
+  spawnChecked("touch", [`${__dirname}/chrome/app/chrome_exe_main_mac.cc`]);
+}
 
 // ensure that build configuration is written with correct paths
 const gn = currentPlatform() == "windows" ? "gn.bat" : "gn";
@@ -158,6 +158,24 @@ spawnChecked(autoninja, [...platformAutoNinjaArgs, "-C", outdir, "chrome"], {
 });
 
 console.log(`Build finished.`);
+
+function writeFileSyncIfChanged(filename, newContents) {
+  let changed = false;
+  try {
+    const oldContents = fs.readFileSync(filename, "utf8");
+    changed = oldContents != newContents;
+  } catch (e) {
+    changed = true;
+  }
+
+  if (!changed) {
+    console.log(`Skipping ${filename} because it hasn't changed.`);
+  } else {
+    fs.writeFileSync(filename, newContents);
+  }
+
+  return changed;
+}
 
 function spawnChecked(cmd, args, options) {
   const prettyCmd = [cmd].concat(args).join(" ");
