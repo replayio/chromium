@@ -572,12 +572,12 @@ bool InterfaceEndpointClient::AcceptWithResponder(
 // aren't resize the message to its size when recording so that we are
 // more likely to be able to continue replaying.
 static void RecordReplayEnsureConsistentMessageSize(Message* message) {
-  recordreplay::Assert("EnsureConsistentMessageSize %zu",
-                       message->data_num_bytes());
-
   size_t recorded_bytes =
     recordreplay::RecordReplayValue("EnsureConsistentMessageSize",
                                     message->data_num_bytes());
+
+  recordreplay::Assert("EnsureConsistentMessageSize %zu %zu",
+                       recorded_bytes, message->data_num_bytes());
 
   if (recorded_bytes != message->data_num_bytes()) {
     char* new_payload = new char[recorded_bytes];
