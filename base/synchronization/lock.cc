@@ -16,12 +16,7 @@
 
 namespace base {
 
-Lock::Lock(const char* ordered_name) : lock_(ordered_name) {
-}
-
-Lock::~Lock() {
-  DCHECK(owning_thread_ref_.is_null());
-}
+Lock::Lock(const char* ordered_name) : lock_(ordered_name) {}
 
 void Lock::AssertAcquired() const {
   DCHECK_EQ(owning_thread_ref_, PlatformThread::CurrentRef());

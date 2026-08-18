@@ -107,11 +107,6 @@ LockImpl::LockImpl(const char* ordered_name) {
   }
 }
 
-LockImpl::~LockImpl() {
-  int rv = pthread_mutex_destroy(&native_handle_);
-  DCHECK_EQ(rv, 0) << ". " << SystemErrorCodeToString(rv);
-}
-
 void LockImpl::LockInternalWithTracking() {
   base::debug::ScopedLockAcquireActivity lock_activity(this);
   int rv = pthread_mutex_lock(&native_handle_);
