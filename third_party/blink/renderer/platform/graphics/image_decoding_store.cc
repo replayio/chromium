@@ -28,7 +28,6 @@
 #include <memory>
 
 #include "base/bind.h"
-#include "base/no_destructor.h"
 #include "base/synchronization/lock.h"
 #include "third_party/blink/renderer/platform/graphics/image_frame_generator.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
@@ -43,15 +42,6 @@ namespace {
 static const size_t kDefaultMaxTotalSizeOfHeapEntries = 32 * 1024 * 1024;
 
 static std::atomic<bool> gHasInstance{false};
-
-#if defined(__clang__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wglobal-constructors"
-#endif
-base::NoDestructor<base::Lock> gLock("ImageDecodingStore");
-#if defined(__clang__)
-#pragma clang diagnostic pop
-#endif
 
 }  // namespace
 
@@ -76,8 +66,6 @@ ImageDecodingStore::~ImageDecodingStore() {
 }
 
 ImageDecodingStore& ImageDecodingStore::Instance() {
-  base::AutoLock lock(*gLock);
-  REPLAY_ASSERT("ImageDecodingStore::Instance %d", HasInstance());
   DEFINE_THREAD_SAFE_STATIC_LOCAL(ImageDecodingStore, store, ());
   return store;
 }
