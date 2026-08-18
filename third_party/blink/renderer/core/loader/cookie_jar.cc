@@ -177,6 +177,9 @@ bool CookieJar::CookiesEnabled() {
   if (cookie_url.IsEmpty())
     return false;
 
+  if (recordreplay::AreEventsUnavailable("CookieJar::CookiesEnabled"))
+    return false;
+
   base::ElapsedTimer timer;
   bool requested = RequestRestrictedCookieManagerIfNeeded();
   bool cookies_enabled = false;
