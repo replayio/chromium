@@ -375,7 +375,7 @@ SoftwareImageDecodeCache::DecodeImageIfNecessary(const CacheKey& key,
       return TaskProcessingResult::kLockOnly;
   }
 
-  recordreplay::Assert(
+  REPLAY_ASSERT(
       "[RUN-593-1824] SoftwareImageDecodeCache::DecodeImageIfNecessary B %d %d",
       (int)key.type(), paint_image.stable_id());
 
