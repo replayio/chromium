@@ -43,7 +43,15 @@ static const size_t kDefaultMaxTotalSizeOfHeapEntries = 32 * 1024 * 1024;
 
 static std::atomic<bool> gHasInstance{false};
 
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wglobal-constructors"
+#endif
+// TU-init: function-local static raced CreateOrderedLock vs TryLock.
 base::Lock gLock("ImageDecodingStore");
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 }  // namespace
 
