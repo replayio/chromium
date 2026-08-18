@@ -246,6 +246,12 @@ Task WorkQueue::TakeTaskFromWorkQueue() {
 
   Task pending_task = std::move(tasks_.front());
   tasks_.pop_front();
+  if (!recordreplay::AreEventsUnavailable() &&
+      !recordreplay::AreEventsPassedThrough() &&
+      !pending_task.RecordReplayId()) {
+    recordreplay::Warning("WorkQueue::TakeTaskFromWorkQueue DivergentTask %s",
+                          pending_task.posted_from.ToString().c_str());
+  }
   // NB immediate tasks have a different pipeline to delayed ones.
   if (tasks_.empty()) {
     // NB delayed tasks are inserted via Push, no don't need to reload those.

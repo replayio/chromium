@@ -90,20 +90,19 @@ void TaskState::DidCancel() {
 }
 
 Task::Task() {
-  if (!recordreplay::AreEventsDisallowed() &&
-      !recordreplay::AreEventsPassedThrough() &&
-      !recordreplay::HasDivergedFromRecording()) {
-    record_replay_created_with_events_ = true;
+  if (!recordreplay::AreEventsUnavailable() &&
+      !recordreplay::AreEventsPassedThrough()) {
+    record_replay_id_ = recordreplay::NewIdAnyThread("Task");
   }
 }
 
 Task::~Task() = default;
 
 void Task::RecordReplayEnter() {
-  if (!record_replay_created_with_events_)
-    return;
-  if (!record_replay_id_)
-    record_replay_id_ = recordreplay::NewIdAnyThread("Task");
+  if (!recordreplay::AreEventsUnavailable() &&
+      !recordreplay::AreEventsPassedThrough() && !record_replay_id_) {
+    recordreplay::Warning("cc::Task dequeue RecordReplayId 0");
+  }
   REPLAY_ASSERT("cc::Task::Enter %d", record_replay_id_);
 }
 

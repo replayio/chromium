@@ -97,7 +97,6 @@ class CC_EXPORT Task : public base::RefCountedThreadSafe<Task> {
  private:
   TaskState state_;
   int64_t frame_number_ = -1;
-  bool record_replay_created_with_events_ = false;
   int record_replay_id_ = 0;
 };
 
