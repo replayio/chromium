@@ -13,6 +13,7 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/rand_util.h"
+#include "base/record_replay.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/platform/scheduler/public/main_thread.h"
@@ -592,6 +593,11 @@ void CachedStorageArea::MaybeApplyNonLocalMutationForKey(
 void CachedStorageArea::EnsureLoaded() {
   if (map_)
     return;
+  if (recordreplay::AreEventsUnavailable()) {
+    map_ = std::make_unique<StorageAreaMap>(
+        mojom::blink::StorageArea::kPerStorageAreaQuota);
+    return;
+  }
   if (!remote_area_)
     BindStorageArea();
 
