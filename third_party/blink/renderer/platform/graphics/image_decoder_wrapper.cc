@@ -4,7 +4,6 @@
 
 #include "third_party/blink/renderer/platform/graphics/image_decoder_wrapper.h"
 
-#include "base/record_replay.h"
 #include "base/trace_event/trace_event.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/platform/graphics/image_decoding_store.h"
@@ -100,9 +99,6 @@ bool ImageDecoderWrapper::Decode(ImageDecoderFactory* factory,
   ImageDecoder* decoder = nullptr;
   std::unique_ptr<ImageDecoder> new_decoder;
 
-  REPLAY_ASSERT("ImageDecoderWrapper::Decode %d %d %u %d %d",
-                ImageDecodingStore::HasInstance(), client_id_, frame_index_,
-                scaled_size_.width(), scaled_size_.height());
   const bool resume_decoding = ImageDecodingStore::Instance().LockDecoder(
       generator_, scaled_size_, alpha_option_, client_id_, &decoder);
   DCHECK(!resume_decoding || decoder);
