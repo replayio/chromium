@@ -52,7 +52,7 @@ class BASE_EXPORT LockImpl {
 #endif
 
   LockImpl(const char* ordered_name = nullptr);
-  ~LockImpl() = default;
+  ~LockImpl();
 
   // If the lock is not held, take it and return true.  If the lock is already
   // held by something else, immediately return false.

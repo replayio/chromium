@@ -29,6 +29,8 @@ class LOCKABLE BASE_EXPORT Lock {
   Lock(const Lock&) = delete;
   Lock& operator=(const Lock&) = delete;
 
+  ~Lock() {}
+
   void Acquire() EXCLUSIVE_LOCK_FUNCTION() { lock_.Lock(); }
   void Release() UNLOCK_FUNCTION() { lock_.Unlock(); }
 
@@ -42,6 +44,7 @@ class LOCKABLE BASE_EXPORT Lock {
   void AssertAcquired() const ASSERT_EXCLUSIVE_LOCK() {}
 #else
   Lock(const char* ordered_name = nullptr);
+  ~Lock();
 
   // NOTE: We do not permit recursive locks and will commonly fire a DCHECK() if
   // a thread attempts to acquire the lock a second time (while already holding
