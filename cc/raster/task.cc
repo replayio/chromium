@@ -9,6 +9,7 @@
 
 #include "base/check.h"
 #include "base/notreached.h"
+#include "base/record_replay.h"
 
 namespace cc {
 
@@ -88,9 +89,22 @@ void TaskState::DidCancel() {
   value_ = Value::CANCELED;
 }
 
-Task::Task() = default;
+Task::Task() {
+  if (!recordreplay::AreEventsUnavailable() &&
+      !recordreplay::AreEventsPassedThrough()) {
+    record_replay_id_ = recordreplay::NewIdAnyThread("Task");
+  }
+}
 
 Task::~Task() = default;
+
+void Task::RecordReplayEnter() {
+  if (!recordreplay::AreEventsUnavailable() &&
+      !recordreplay::AreEventsPassedThrough() && !record_replay_id_) {
+    recordreplay::Warning("cc::Task dequeue RecordReplayId 0");
+  }
+  REPLAY_ASSERT("cc::Task::Enter %d", record_replay_id_);
+}
 
 TaskGraph::TaskGraph() = default;
 

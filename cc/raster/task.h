@@ -80,6 +80,9 @@ class CC_EXPORT Task : public base::RefCountedThreadSafe<Task> {
   void set_frame_number(int64_t frame_number) { frame_number_ = frame_number; }
   int64_t frame_number() { return frame_number_; }
 
+  int RecordReplayId() const { return record_replay_id_; }
+  void RecordReplayEnter();
+
   // Subclasses should implement this method. RunOnWorkerThread may be called
   // on any thread, and subclasses are responsible for locking and thread
   // safety.
@@ -94,6 +97,7 @@ class CC_EXPORT Task : public base::RefCountedThreadSafe<Task> {
  private:
   TaskState state_;
   int64_t frame_number_ = -1;
+  int record_replay_id_ = 0;
 };
 
 // A task dependency graph describes the order in which to execute a set

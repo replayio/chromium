@@ -686,8 +686,10 @@ SequenceManagerImpl::SelectNextTaskImpl(LazyNow& lazy_now,
     if (!work_queue)
       return absl::nullopt;
 
-    recordreplay::Assert(
-        "[RUN-1124-1803] SequenceManagerImpl::SelectNextTaskImpl A %zu %s", work_queue->Size(), work_queue->name());
+    REPLAY_ASSERT(
+        "[RUN-1124-1803] SequenceManagerImpl::SelectNextTaskImpl A %zu %s %d",
+        work_queue->Size(), work_queue->name(),
+        work_queue->GetFrontTask()->RecordReplayId());
 
     // If the head task was canceled, remove it and run the selector again.
     if (UNLIKELY(work_queue->RemoveAllCanceledTasksFromFront()))
@@ -737,9 +739,10 @@ SequenceManagerImpl::SelectNextTaskImpl(LazyNow& lazy_now,
     // be valid here (not canceled).
     executing_task.pending_task.WillRunTask();
 
-    recordreplay::Assert(
-        "[RUN-1124-1803] SequenceManagerImpl::SelectNextTaskImpl D %zu %s",
-        work_queue->Size(), work_queue->name());
+    REPLAY_ASSERT(
+        "[RUN-1124-1803] SequenceManagerImpl::SelectNextTaskImpl D %zu %s %d",
+        work_queue->Size(), work_queue->name(),
+        executing_task.pending_task.RecordReplayId());
 
     return SelectedTask(
         executing_task.pending_task,
@@ -758,10 +761,10 @@ void SequenceManagerImpl::DidRunTask(LazyNow& lazy_now) {
       *main_thread_only().task_execution_stack.rbegin();
 
   NotifyDidProcessTask(&executing_task, &lazy_now);
+  REPLAY_ASSERT("SequenceManagerImpl::DidRunTask nesting_depth %d %d",
+                       main_thread_only().nesting_depth,
+                       executing_task.pending_task.RecordReplayId());
   main_thread_only().task_execution_stack.pop_back();
-
-  recordreplay::Assert("SequenceManagerImpl::DidRunTask nesting_depth %d",
-                       main_thread_only().nesting_depth);
   if (main_thread_only().nesting_depth == 0)
     CleanUpQueues();
 }

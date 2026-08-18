@@ -97,7 +97,8 @@ class SoftwareImageDecodeTaskImpl : public TileTask {
         devtools_instrumentation::ScopedImageDecodeTask::kSoftware,
         ImageDecodeCache::ToScopedTaskType(tracing_info_.task_type),
         ImageDecodeCache::ToScopedImageType(image_type));
-    recordreplay::Assert("[RUN-593-1824] RunOnWorkerThread %s", image_key_.ToString().c_str());
+    REPLAY_ASSERT("[RUN-593-1824] RunOnWorkerThread %s %d",
+                         image_key_.ToString().c_str(), RecordReplayId());
     SoftwareImageDecodeCache::TaskProcessingResult result =
         cache_->DecodeImageInTask(image_key_, paint_image_, task_type_);
 
