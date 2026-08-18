@@ -43,6 +43,8 @@ static const size_t kDefaultMaxTotalSizeOfHeapEntries = 32 * 1024 * 1024;
 
 static std::atomic<bool> gHasInstance{false};
 
+base::Lock gLock("ImageDecodingStore");
+
 }  // namespace
 
 ImageDecodingStore::ImageDecodingStore()
@@ -66,8 +68,7 @@ ImageDecodingStore::~ImageDecodingStore() {
 }
 
 ImageDecodingStore& ImageDecodingStore::Instance() {
-  DEFINE_ORDERED_THREAD_SAFE_STATIC_LOCAL_LOCK(ImageDecodingStore,
-                                               "ImageDecodingStore");
+  base::AutoLock lock(gLock);
   REPLAY_ASSERT("ImageDecodingStore::Instance %d", HasInstance());
   DEFINE_THREAD_SAFE_STATIC_LOCAL(ImageDecodingStore, store, ());
   return store;
