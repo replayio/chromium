@@ -9,6 +9,7 @@
 
 #include "base/check.h"
 #include "base/notreached.h"
+#include "base/record_replay.h"
 
 namespace cc {
 
@@ -88,9 +89,23 @@ void TaskState::DidCancel() {
   value_ = Value::CANCELED;
 }
 
-Task::Task() = default;
+Task::Task() {
+  if (!recordreplay::AreEventsDisallowed() &&
+      !recordreplay::AreEventsPassedThrough() &&
+      !recordreplay::HasDivergedFromRecording()) {
+    record_replay_created_with_events_ = true;
+  }
+}
 
 Task::~Task() = default;
+
+void Task::RecordReplayEnter() {
+  if (!record_replay_created_with_events_)
+    return;
+  if (!record_replay_id_)
+    record_replay_id_ = recordreplay::NewIdAnyThread("Task");
+  REPLAY_ASSERT("cc::Task::Enter %d", record_replay_id_);
+}
 
 TaskGraph::TaskGraph() = default;
 

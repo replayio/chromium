@@ -258,8 +258,8 @@ Task WorkQueue::TakeTaskFromWorkQueue() {
     }
 
     // https://linear.app/replay/issue/RUN-1150
-    recordreplay::Assert("[RUN-1150] WorkQueue::TakeTaskFromWorkQueue #2 %zu",
-                         tasks_.size());
+    REPLAY_ASSERT("[RUN-1150] WorkQueue::TakeTaskFromWorkQueue #2 %zu %d",
+                         tasks_.size(), pending_task.RecordReplayId());
 
     // Since the queue is empty, now is a good time to consider reducing it's
     // capacity if we're wasting memory.
