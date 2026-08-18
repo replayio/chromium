@@ -376,11 +376,8 @@ SoftwareImageDecodeCache::DecodeImageIfNecessary(const CacheKey& key,
   }
 
   recordreplay::Assert(
-      "[RUN-593-1824] SoftwareImageDecodeCache::DecodeImageIfNecessary B %d",
-      (int)key.type());
-  recordreplay::Assert(
-      "SoftwareImageDecodeCache::DecodeImageIfNecessary %d",
-      paint_image.stable_id());
+      "[RUN-593-1824] SoftwareImageDecodeCache::DecodeImageIfNecessary B %d %d",
+      (int)key.type(), paint_image.stable_id());
 
   std::unique_ptr<CacheEntry> local_cache_entry;
   // If we can use the original decode, we'll definitely need a decode.
