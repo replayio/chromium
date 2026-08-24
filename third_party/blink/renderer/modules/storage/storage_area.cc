@@ -264,8 +264,12 @@ bool StorageArea::CanAccessStorage() const {
 }
 
 bool StorageArea::CanAccessStorageOrThrow(ExceptionState& exception_state) const {
-  if (RecordReplayThrowIfEventsUnavailable(exception_state,
-                                           kReplayUnavailableStorageMessage)) {
+  // Storage IPC never completes after diverge.
+  if (RecordReplayThrowIfEventsUnavailable(
+          exception_state,
+          "This evaluation tried to access web storage that requires IPC not "
+          "available during replay. Replay cannot perform fresh storage reads "
+          "or writes during replay.")) {
     return false;
   }
   if (!CanAccessStorage()) {

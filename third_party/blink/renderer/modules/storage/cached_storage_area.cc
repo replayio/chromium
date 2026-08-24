@@ -595,7 +595,10 @@ void CachedStorageArea::EnsureLoaded() {
   if (map_)
     return;
   // Sync GetAll never completes after diverge; throw instead of empty map.
-  if (RecordReplayThrowIfEventsUnavailable(kReplayUnavailableStorageMessage)) {
+  if (RecordReplayThrowIfEventsUnavailable(
+          "This evaluation tried to access web storage that requires IPC not "
+          "available during replay. Replay cannot perform fresh storage reads "
+          "or writes during replay.")) {
     map_ = std::make_unique<StorageAreaMap>(
         mojom::blink::StorageArea::kPerStorageAreaQuota);
     return;

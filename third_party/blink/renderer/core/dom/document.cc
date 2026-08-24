@@ -5863,7 +5863,7 @@ String Document::cookie(ExceptionState& exception_state) const {
     CountUse(WebFeature::kFileAccessedCookies);
   }
 
-  return cookie_jar_->Cookies(exception_state);
+  return cookie_jar_->Cookies();
 }
 
 void Document::setCookie(const String& value, ExceptionState& exception_state) {
@@ -5892,7 +5892,7 @@ void Document::setCookie(const String& value, ExceptionState& exception_state) {
     UseCounter::Count(*this, WebFeature::kFileAccessedCookies);
   }
 
-  cookie_jar_->SetCookie(value, exception_state);
+  cookie_jar_->SetCookie(value);
 }
 
 bool Document::CookiesEnabled() const {

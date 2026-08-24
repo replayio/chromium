@@ -11,13 +11,6 @@ namespace blink {
 
 class ExceptionState;
 
-// Pause-eval messages when recordreplay::AreEventsUnavailable().
-PLATFORM_EXPORT extern const char kReplayUnavailableNetworkMessage[];
-PLATFORM_EXPORT extern const char kReplayUnavailableBlobMessage[];
-PLATFORM_EXPORT extern const char kReplayUnavailableCookieMessage[];
-PLATFORM_EXPORT extern const char kReplayUnavailableStorageMessage[];
-PLATFORM_EXPORT extern const char kReplayUnavailableScrollMessage[];
-
 // If events are unavailable: throw `message` and return true (caller returns).
 PLATFORM_EXPORT bool RecordReplayThrowIfEventsUnavailable(
     ExceptionState& exception_state,

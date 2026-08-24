@@ -11,29 +11,6 @@
 
 namespace blink {
 
-const char kReplayUnavailableNetworkMessage[] =
-    "This evaluation tried to read network contents that were not captured in "
-    "the recording. Replay cannot perform fresh network reads during replay.";
-
-const char kReplayUnavailableBlobMessage[] =
-    "This evaluation tried to read file or blob contents that were not "
-    "captured in the recording. Replay cannot perform fresh file/blob reads "
-    "during replay.";
-
-const char kReplayUnavailableCookieMessage[] =
-    "This evaluation tried to access cookies that require IPC not available "
-    "during replay. Replay cannot perform fresh cookie reads or writes during "
-    "replay.";
-
-const char kReplayUnavailableStorageMessage[] =
-    "This evaluation tried to access web storage that requires IPC not "
-    "available during replay. Replay cannot perform fresh storage reads or "
-    "writes during replay.";
-
-const char kReplayUnavailableScrollMessage[] =
-    "This evaluation tried to programmatically scroll. Replay cannot perform "
-    "compositor scroll commits during replay.";
-
 bool RecordReplayThrowIfEventsUnavailable(ExceptionState& exception_state,
                                           const char* message) {
   if (!recordreplay::AreEventsUnavailable())

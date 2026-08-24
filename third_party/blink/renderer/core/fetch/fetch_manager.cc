@@ -53,7 +53,6 @@
 #include "third_party/blink/renderer/core/probe/core_probes.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_array_buffer.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
-#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/thread_debugger.h"
@@ -986,7 +985,8 @@ ScriptPromise FetchManager::Fetch(ScriptState* script_state,
   ScriptPromise promise = resolver->Promise();
   if (recordreplay::AreEventsUnavailable()) {
     resolver->Reject(V8ThrowException::CreateTypeError(
-        script_state->GetIsolate(), kReplayUnavailableNetworkMessage));
+        script_state->GetIsolate(),
+        "This evaluation tried to read network contents that were not captured in the recording. Replay cannot perform fresh network reads during replay."));
     return promise;
   }
 

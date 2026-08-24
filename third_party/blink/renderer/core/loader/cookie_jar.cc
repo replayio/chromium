@@ -28,6 +28,11 @@
 namespace blink {
 namespace {
 
+constexpr char kReplayCookieUnavailableMessage[] =
+    "This evaluation tried to access cookies that require IPC not available "
+    "during replay. Replay cannot perform fresh cookie reads or writes during "
+    "replay.";
+
 enum class CookieCacheLookupResult {
   kCacheMissFirstAccess = 0,
   kCacheHitAfterGet = 1,
@@ -89,14 +94,13 @@ void CookieJar::Trace(Visitor* visitor) const {
   visitor->Trace(document_);
 }
 
-void CookieJar::SetCookie(const String& value,
-                          ExceptionState& exception_state) {
+void CookieJar::SetCookie(const String& value) {
   KURL cookie_url = document_->CookieURL();
   if (cookie_url.IsEmpty())
     return;
 
-  if (RecordReplayThrowIfEventsUnavailable(exception_state,
-                                           kReplayUnavailableCookieMessage)) {
+  // Cookie IPC never completes after diverge.
+  if (RecordReplayThrowIfEventsUnavailable(kReplayCookieUnavailableMessage)) {
     return;
   }
 
@@ -152,13 +156,13 @@ void CookieJar::SetCookie(const String& value,
   }
 }
 
-String CookieJar::Cookies(ExceptionState& exception_state) {
+String CookieJar::Cookies() {
   KURL cookie_url = document_->CookieURL();
   if (cookie_url.IsEmpty())
     return String();
 
-  if (RecordReplayThrowIfEventsUnavailable(exception_state,
-                                           kReplayUnavailableCookieMessage)) {
+  // Cookie IPC never completes after diverge.
+  if (RecordReplayThrowIfEventsUnavailable(kReplayCookieUnavailableMessage)) {
     return String();
   }
 
@@ -182,8 +186,10 @@ bool CookieJar::CookiesEnabled() {
   if (cookie_url.IsEmpty())
     return false;
 
-  if (RecordReplayThrowIfEventsUnavailable(kReplayUnavailableCookieMessage))
+  // Cookie IPC never completes after diverge.
+  if (RecordReplayThrowIfEventsUnavailable(kReplayCookieUnavailableMessage)) {
     return false;
+  }
 
   base::ElapsedTimer timer;
   bool requested = RequestRestrictedCookieManagerIfNeeded();

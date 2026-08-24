@@ -355,8 +355,11 @@ void ScrollableArea::ProgrammaticScrollHelper(
     ScrollCallback on_finish) {
   // Programmatic scroll can WaitForCommitCompletion on the compositor; that
   // wait never completes after diverge.
-  if (RecordReplayThrowIfEventsUnavailable(kReplayUnavailableScrollMessage))
+  if (RecordReplayThrowIfEventsUnavailable(
+          "This evaluation tried to programmatically scroll. Replay cannot "
+          "perform compositor scroll commits during replay.")) {
     return;
+  }
 
   bool should_use_animation =
       scroll_behavior == mojom::blink::ScrollBehavior::kSmooth &&

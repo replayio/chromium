@@ -8,7 +8,6 @@
 #include "services/network/public/mojom/restricted_cookie_manager.mojom-blink.h"
 
 #include "third_party/abseil-cpp/absl/types/optional.h"
-#include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_response.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
@@ -24,8 +23,8 @@ class CookieJar : public GarbageCollected<CookieJar> {
   virtual ~CookieJar();
   void Trace(Visitor* visitor) const;
 
-  void SetCookie(const String& value, ExceptionState& exception_state);
-  String Cookies(ExceptionState& exception_state);
+  void SetCookie(const String& value);
+  String Cookies();
   bool CookiesEnabled();
   void SetCookieManager(
       mojo::PendingRemote<network::mojom::blink::RestrictedCookieManager>
