@@ -129,8 +129,7 @@ scoped_refptr<SimpleFontData> FontCache::PlatformFallbackFontForCharacter(
       return emoji_font;
   }
 
-  if (recordreplay::AreEventsDisallowed("PlatformFallbackFontForCharacter") ||
-      recordreplay::HasDivergedFromRecording()) {
+  if (recordreplay::AreEventsUnavailable("PlatformFallbackFontForCharacter")) {
     // [RUN-2765] Circumvent a rabbit hole of MAC-related font calls.
     return nullptr;
   }
