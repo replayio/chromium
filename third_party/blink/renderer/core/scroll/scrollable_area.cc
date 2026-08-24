@@ -358,6 +358,8 @@ void ScrollableArea::ProgrammaticScrollHelper(
   if (RecordReplayThrowIfEventsUnavailable(
           "This evaluation tried to programmatically scroll. Replay cannot "
           "perform compositor scroll commits divergently.")) {
+    if (on_finish)
+      std::move(on_finish).Run();
     return;
   }
 

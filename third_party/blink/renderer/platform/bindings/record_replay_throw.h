@@ -16,8 +16,8 @@ PLATFORM_EXPORT bool RecordReplayThrowIfEventsUnavailable(
     ExceptionState& exception_state,
     const char* message);
 
-// Same, for sites without an ExceptionState. The throw is best-effort: it only
-// happens when script is on the stack; the `true` return still bails out.
+// Same, for sites without an ExceptionState. The throw needs an entered V8
+// context; the `true` return bails out either way.
 PLATFORM_EXPORT bool RecordReplayThrowIfEventsUnavailable(const char* message);
 
 }  // namespace blink

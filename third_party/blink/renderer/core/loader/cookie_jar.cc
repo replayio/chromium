@@ -8,6 +8,7 @@
 #include "base/feature_list.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/record_replay.h"
 #include "base/strings/strcat.h"
 #include "net/base/features.h"
 #include "net/cookies/parsed_cookie.h"
@@ -189,10 +190,10 @@ bool CookieJar::CookiesEnabled() {
   if (cookie_url.IsEmpty())
     return false;
 
-  // Cookie IPC never completes after diverge.
-  if (RecordReplayThrowIfEventsUnavailable(kReplayCookieUnavailableMessage)) {
+  // Cookie IPC never completes after diverge. No throw: the promise-returning
+  // callers of Document::CookiesEnabled must reject, not throw.
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect"))
     return false;
-  }
 
   base::ElapsedTimer timer;
   bool requested = RequestRestrictedCookieManagerIfNeeded();
