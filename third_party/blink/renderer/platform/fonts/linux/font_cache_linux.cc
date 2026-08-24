@@ -68,8 +68,7 @@ scoped_refptr<SimpleFontData> FontCache::PlatformFallbackFontForCharacter(
     UChar32 c,
     const SimpleFontData*,
     FontFallbackPriority fallback_priority) {
-  if (recordreplay::AreEventsDisallowed("PlatformFallbackFontForCharacter") ||
-      recordreplay::HasDivergedFromRecording()) {
+  if (recordreplay::AreEventsUnavailable("PlatformFallbackFontForCharacter")) {
     // Post-diverge font-service Mojo cannot complete; return no fallback.
     return nullptr;
   }
