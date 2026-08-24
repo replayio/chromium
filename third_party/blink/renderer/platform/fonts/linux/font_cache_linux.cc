@@ -24,6 +24,7 @@
 
 #include "third_party/blink/renderer/platform/fonts/font_cache.h"
 
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "third_party/blink/public/platform/linux/web_sandbox_support.h"
 #include "third_party/blink/public/platform/platform.h"
@@ -67,6 +68,12 @@ scoped_refptr<SimpleFontData> FontCache::PlatformFallbackFontForCharacter(
     UChar32 c,
     const SimpleFontData*,
     FontFallbackPriority fallback_priority) {
+  if (recordreplay::AreEventsDisallowed("PlatformFallbackFontForCharacter") ||
+      recordreplay::HasDivergedFromRecording()) {
+    // Post-diverge font-service Mojo cannot complete; return no fallback.
+    return nullptr;
+  }
+
   // The m_fontManager is set only if it was provided by the embedder with
   // WebFontRendering::setSkiaFontManager. This is used to emulate android fonts
   // on linux so we always request the family from the font manager and if none
