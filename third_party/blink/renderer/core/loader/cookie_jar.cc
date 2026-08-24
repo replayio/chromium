@@ -30,8 +30,8 @@ namespace {
 
 constexpr char kReplayCookieUnavailableMessage[] =
     "This evaluation tried to access cookies that require IPC not available "
-    "during replay. Replay cannot perform fresh cookie reads or writes during "
-    "replay.";
+    "divergently. Replay cannot perform fresh cookie reads or writes "
+    "divergently.";
 
 enum class CookieCacheLookupResult {
   kCacheMissFirstAccess = 0,

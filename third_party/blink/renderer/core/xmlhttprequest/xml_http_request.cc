@@ -1200,7 +1200,9 @@ void XMLHttpRequest::CreateRequest(scoped_refptr<EncodedFormData> http_body,
     HandleNetworkError();
     ThrowForLoadFailureIfNeeded(
         exception_state,
-        "This evaluation tried to read network contents that were not captured in the recording. Replay cannot perform fresh network reads during replay.");
+        "This evaluation tried to read network contents that were not captured "
+        "in the recording. Replay cannot perform fresh network reads "
+        "divergently.");
     return;
   }
 

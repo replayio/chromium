@@ -357,7 +357,7 @@ void ScrollableArea::ProgrammaticScrollHelper(
   // wait never completes after diverge.
   if (RecordReplayThrowIfEventsUnavailable(
           "This evaluation tried to programmatically scroll. Replay cannot "
-          "perform compositor scroll commits during replay.")) {
+          "perform compositor scroll commits divergently.")) {
     return;
   }
 

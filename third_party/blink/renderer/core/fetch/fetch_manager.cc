@@ -986,7 +986,9 @@ ScriptPromise FetchManager::Fetch(ScriptState* script_state,
   if (recordreplay::AreEventsUnavailable()) {
     resolver->Reject(V8ThrowException::CreateTypeError(
         script_state->GetIsolate(),
-        "This evaluation tried to read network contents that were not captured in the recording. Replay cannot perform fresh network reads during replay."));
+        "This evaluation tried to read network contents that were not captured "
+        "in the recording. Replay cannot perform fresh network reads "
+        "divergently."));
     return promise;
   }
 

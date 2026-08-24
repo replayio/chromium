@@ -57,7 +57,7 @@ namespace {
 constexpr char kReplayBlobReadUnavailableMessage[] =
     "This evaluation tried to read file or blob contents that were not "
     "captured in the recording. Replay cannot perform fresh file/blob reads "
-    "during replay.";
+    "divergently.";
 
 }  // namespace
 
