@@ -102,8 +102,8 @@ void CookieJar::SetCookie(const String& value,
     return;
 
   // Cookie IPC never completes after diverge.
-  if (RecordReplayThrowIfEventsUnavailable(exception_state,
-                                           kReplayCookieUnavailableMessage)) {
+  if (RecordReplayThrowIfEventsUnavailable(kReplayCookieUnavailableMessage,
+                                           &exception_state)) {
     return;
   }
 
@@ -165,8 +165,8 @@ String CookieJar::Cookies(ExceptionState& exception_state) {
     return String();
 
   // Cookie IPC never completes after diverge.
-  if (RecordReplayThrowIfEventsUnavailable(exception_state,
-                                           kReplayCookieUnavailableMessage)) {
+  if (RecordReplayThrowIfEventsUnavailable(kReplayCookieUnavailableMessage,
+                                           &exception_state)) {
     return String();
   }
 
@@ -190,8 +190,8 @@ bool CookieJar::CookiesEnabled() {
   if (cookie_url.IsEmpty())
     return false;
 
-  // Cookie IPC never completes after diverge. No throw: the promise-returning
-  // callers of Document::CookiesEnabled must reject, not throw.
+  // Cookie IPC never completes after diverge. No throw: callers are
+  // promise-returning.
   if (recordreplay::AreEventsUnavailable("divergent-side-effect"))
     return false;
 

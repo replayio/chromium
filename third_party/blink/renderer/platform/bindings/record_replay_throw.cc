@@ -12,17 +12,14 @@
 
 namespace blink {
 
-bool RecordReplayThrowIfEventsUnavailable(ExceptionState& exception_state,
-                                          const char* message) {
+bool RecordReplayThrowIfEventsUnavailable(const char* message,
+                                          ExceptionState* exception_state) {
   if (!recordreplay::AreEventsUnavailable("divergent-side-effect"))
     return false;
-  exception_state.ThrowTypeError(message);
-  return true;
-}
-
-bool RecordReplayThrowIfEventsUnavailable(const char* message) {
-  if (!recordreplay::AreEventsUnavailable("divergent-side-effect"))
-    return false;
+  if (exception_state) {
+    exception_state->ThrowTypeError(message);
+    return true;
+  }
   // Without an entered context there is no JS frame to receive the exception,
   // and it would surface at an unrelated later V8 entry.
   v8::Isolate* isolate = v8::Isolate::TryGetCurrent();
