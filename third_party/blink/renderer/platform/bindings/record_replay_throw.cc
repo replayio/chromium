@@ -5,19 +5,10 @@
 #include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 
 #include "base/record_replay.h"
-#include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/v8_throw_exception.h"
 #include "v8/include/v8-isolate.h"
 
 namespace blink {
-
-bool RecordReplayThrowIfEventsUnavailable(ExceptionState& exception_state,
-                                          const char* message) {
-  if (!recordreplay::AreEventsUnavailable())
-    return false;
-  exception_state.ThrowTypeError(message);
-  return true;
-}
 
 bool RecordReplayThrowIfEventsUnavailable(const char* message) {
   if (!recordreplay::AreEventsUnavailable())

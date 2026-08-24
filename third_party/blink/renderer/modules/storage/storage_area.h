@@ -94,9 +94,6 @@ class StorageArea final : public ScriptWrappable,
   LocalDOMWindow* GetDOMWindow() override;
 
  private:
-  // Throws on diverge or security deny; false means caller must return.
-  bool CanAccessStorageOrThrow(ExceptionState& exception_state) const;
-
   void RecordModificationInMetrics();
 
   void OnDocumentActivatedForPrerendering();
