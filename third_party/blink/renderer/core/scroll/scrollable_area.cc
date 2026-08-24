@@ -54,6 +54,7 @@
 #include "third_party/blink/renderer/core/scroll/scroll_animator_base.h"
 #include "third_party/blink/renderer/core/scroll/scrollbar_theme.h"
 #include "third_party/blink/renderer/core/scroll/smooth_scroll_sequencer.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/graphics/color.h"
 #include "third_party/blink/renderer/platform/graphics/compositing/paint_artifact_compositor.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
@@ -352,6 +353,16 @@ void ScrollableArea::ProgrammaticScrollHelper(
     bool is_sequenced_scroll,
     gfx::Vector2d animation_adjustment,
     ScrollCallback on_finish) {
+  // Programmatic scroll can WaitForCommitCompletion on the compositor; that
+  // wait never completes after diverge.
+  if (RecordReplayThrowIfEventsUnavailable(
+          "This evaluation tried to programmatically scroll. Replay cannot "
+          "perform compositor scroll commits divergently.")) {
+    if (on_finish)
+      std::move(on_finish).Run();
+    return;
+  }
+
   bool should_use_animation =
       scroll_behavior == mojom::blink::ScrollBehavior::kSmooth &&
       ScrollAnimatorEnabled();

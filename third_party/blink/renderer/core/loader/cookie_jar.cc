@@ -20,6 +20,7 @@
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/web_feature.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl_hash.h"
 #include "third_party/blink/renderer/platform/wtf/hash_functions.h"
@@ -27,6 +28,11 @@
 
 namespace blink {
 namespace {
+
+constexpr char kReplayCookieUnavailableMessage[] =
+    "This evaluation tried to access cookies that require IPC not available "
+    "divergently. Replay cannot perform fresh cookie reads or writes "
+    "divergently.";
 
 enum class CookieCacheLookupResult {
   kCacheMissFirstAccess = 0,
@@ -89,13 +95,17 @@ void CookieJar::Trace(Visitor* visitor) const {
   visitor->Trace(document_);
 }
 
-void CookieJar::SetCookie(const String& value) {
+void CookieJar::SetCookie(const String& value,
+                          ExceptionState& exception_state) {
   KURL cookie_url = document_->CookieURL();
   if (cookie_url.IsEmpty())
     return;
 
-  if (recordreplay::AreEventsUnavailable("CookieJar::SetCookie"))
+  // Cookie IPC never completes after diverge.
+  if (RecordReplayThrowIfEventsUnavailable(kReplayCookieUnavailableMessage,
+                                           &exception_state)) {
     return;
+  }
 
   base::ElapsedTimer timer;
   bool requested = RequestRestrictedCookieManagerIfNeeded();
@@ -149,13 +159,16 @@ void CookieJar::SetCookie(const String& value) {
   }
 }
 
-String CookieJar::Cookies() {
+String CookieJar::Cookies(ExceptionState& exception_state) {
   KURL cookie_url = document_->CookieURL();
   if (cookie_url.IsEmpty())
     return String();
 
-  if (recordreplay::AreEventsUnavailable("CookieJar::Cookies"))
+  // Cookie IPC never completes after diverge.
+  if (RecordReplayThrowIfEventsUnavailable(kReplayCookieUnavailableMessage,
+                                           &exception_state)) {
     return String();
+  }
 
   base::ElapsedTimer timer;
   bool requested = RequestRestrictedCookieManagerIfNeeded();
@@ -177,7 +190,9 @@ bool CookieJar::CookiesEnabled() {
   if (cookie_url.IsEmpty())
     return false;
 
-  if (recordreplay::AreEventsUnavailable("CookieJar::CookiesEnabled"))
+  // Cookie IPC never completes after diverge. No throw: callers are
+  // promise-returning.
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect"))
     return false;
 
   base::ElapsedTimer timer;
