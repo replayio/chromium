@@ -9,7 +9,15 @@
 
 namespace blink {
 
-// If events are unavailable: throw `message` via current isolate and return true.
+class ExceptionState;
+
+// If events are unavailable: throw `message` and return true (caller returns).
+PLATFORM_EXPORT bool RecordReplayThrowIfEventsUnavailable(
+    ExceptionState& exception_state,
+    const char* message);
+
+// Same, for sites without an ExceptionState. The throw is best-effort: it only
+// happens when script is on the stack; the `true` return still bails out.
 PLATFORM_EXPORT bool RecordReplayThrowIfEventsUnavailable(const char* message);
 
 }  // namespace blink

@@ -94,13 +94,15 @@ void CookieJar::Trace(Visitor* visitor) const {
   visitor->Trace(document_);
 }
 
-void CookieJar::SetCookie(const String& value) {
+void CookieJar::SetCookie(const String& value,
+                          ExceptionState& exception_state) {
   KURL cookie_url = document_->CookieURL();
   if (cookie_url.IsEmpty())
     return;
 
   // Cookie IPC never completes after diverge.
-  if (RecordReplayThrowIfEventsUnavailable(kReplayCookieUnavailableMessage)) {
+  if (RecordReplayThrowIfEventsUnavailable(exception_state,
+                                           kReplayCookieUnavailableMessage)) {
     return;
   }
 
@@ -156,13 +158,14 @@ void CookieJar::SetCookie(const String& value) {
   }
 }
 
-String CookieJar::Cookies() {
+String CookieJar::Cookies(ExceptionState& exception_state) {
   KURL cookie_url = document_->CookieURL();
   if (cookie_url.IsEmpty())
     return String();
 
   // Cookie IPC never completes after diverge.
-  if (RecordReplayThrowIfEventsUnavailable(kReplayCookieUnavailableMessage)) {
+  if (RecordReplayThrowIfEventsUnavailable(exception_state,
+                                           kReplayCookieUnavailableMessage)) {
     return String();
   }
 
