@@ -1196,7 +1196,7 @@ void XMLHttpRequest::CreateRequest(scoped_refptr<EncodedFormData> http_body,
     resource_loader_options.synchronous_policy = kRequestSynchronously;
   }
 
-  if (recordreplay::AreEventsUnavailable()) {
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
     HandleNetworkError();
     ThrowForLoadFailureIfNeeded(
         exception_state,

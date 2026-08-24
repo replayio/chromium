@@ -255,7 +255,7 @@ static ScriptPromise ReadBlobHelper(
   // hit that machinery, so when events are unavailable we reject consistently
   // instead of trying to distinguish supposedly safe in-memory blobs from
   // file-backed blobs here.
-  if (recordreplay::AreEventsUnavailable()) {
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
     resolver->Reject(MakeGarbageCollected<DOMException>(
         DOMExceptionCode::kNotReadableError,
         kReplayBlobReadUnavailableMessage));

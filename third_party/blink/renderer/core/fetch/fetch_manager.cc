@@ -983,7 +983,7 @@ ScriptPromise FetchManager::Fetch(ScriptState* script_state,
 
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   ScriptPromise promise = resolver->Promise();
-  if (recordreplay::AreEventsUnavailable()) {
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
     resolver->Reject(V8ThrowException::CreateTypeError(
         script_state->GetIsolate(),
         "This evaluation tried to read network contents that were not captured "
