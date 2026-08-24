@@ -41,6 +41,7 @@
 #include "third_party/blink/renderer/modules/storage/storage_event.h"
 #include "third_party/blink/renderer/modules/storage/storage_namespace.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/storage/blink_storage_key.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
@@ -92,27 +93,21 @@ StorageArea::~StorageArea() {
 }
 
 unsigned StorageArea::length(ExceptionState& exception_state) const {
-  if (!CanAccessStorage()) {
-    exception_state.ThrowSecurityError("access is denied for this document.");
+  if (!CanAccessStorageOrThrow(exception_state))
     return 0;
-  }
   return cached_area_->GetLength();
 }
 
 String StorageArea::key(unsigned index, ExceptionState& exception_state) const {
-  if (!CanAccessStorage()) {
-    exception_state.ThrowSecurityError("access is denied for this document.");
+  if (!CanAccessStorageOrThrow(exception_state))
     return String();
-  }
   return cached_area_->GetKey(index);
 }
 
 String StorageArea::getItem(const String& key,
                             ExceptionState& exception_state) const {
-  if (!CanAccessStorage()) {
-    exception_state.ThrowSecurityError("access is denied for this document.");
+  if (!CanAccessStorageOrThrow(exception_state))
     return String();
-  }
   String rval = cached_area_->GetItem(key);
 
   if (recordreplay::IsRecordingOrReplaying() && v8::IsMainThread()) {
@@ -149,10 +144,8 @@ NamedPropertySetterResult StorageArea::setItem(
   }
 
   recordreplay::Assert("[RUN-1307-1773] StorageArea::setItem A %s", key.Utf8().c_str());
-  if (!CanAccessStorage()) {
-    exception_state.ThrowSecurityError("access is denied for this document.");
+  if (!CanAccessStorageOrThrow(exception_state))
     return NamedPropertySetterResult::kIntercepted;
-  }
   if (!cached_area_->SetItem(key, value, this)) {
     recordreplay::Assert("[RUN-1307-1773] StorageArea::setItem B %s",
                          key.Utf8().c_str());
@@ -182,10 +175,8 @@ NamedPropertyDeleterResult StorageArea::removeItem(
     recordreplay::OnAnnotation("StorageArea", annotationContents.c_str());
   }
 
-  if (!CanAccessStorage()) {
-    exception_state.ThrowSecurityError("access is denied for this document.");
+  if (!CanAccessStorageOrThrow(exception_state))
     return NamedPropertyDeleterResult::kDidNotDelete;
-  }
   RecordModificationInMetrics();
   cached_area_->RemoveItem(key, this);
   return NamedPropertyDeleterResult::kDeleted;
@@ -203,20 +194,16 @@ void StorageArea::clear(ExceptionState& exception_state) {
     recordreplay::OnAnnotation("StorageArea", annotationContents.c_str());
   }
 
-  if (!CanAccessStorage()) {
-    exception_state.ThrowSecurityError("access is denied for this document.");
+  if (!CanAccessStorageOrThrow(exception_state))
     return;
-  }
   RecordModificationInMetrics();
   cached_area_->Clear(this);
 }
 
 bool StorageArea::Contains(const String& key,
                            ExceptionState& exception_state) const {
-  if (!CanAccessStorage()) {
-    exception_state.ThrowSecurityError("access is denied for this document.");
+  if (!CanAccessStorageOrThrow(exception_state))
     return false;
-  }
   return !cached_area_->GetItem(key).IsNull();
 }
 
@@ -274,6 +261,18 @@ bool StorageArea::CanAccessStorage() const {
       DomWindow()->GetFrame(), storage_type_);
   did_check_can_access_storage_ = true;
   return can_access_storage_cached_result_;
+}
+
+bool StorageArea::CanAccessStorageOrThrow(ExceptionState& exception_state) const {
+  if (RecordReplayThrowIfEventsUnavailable(exception_state,
+                                           kReplayUnavailableStorageMessage)) {
+    return false;
+  }
+  if (!CanAccessStorage()) {
+    exception_state.ThrowSecurityError("access is denied for this document.");
+    return false;
+  }
+  return true;
 }
 
 void StorageArea::RecordModificationInMetrics() {

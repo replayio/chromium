@@ -1,0 +1,31 @@
+// Copyright 2026 Record Replay Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+#ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_BINDINGS_RECORD_REPLAY_THROW_H_
+#define THIRD_PARTY_BLINK_RENDERER_PLATFORM_BINDINGS_RECORD_REPLAY_THROW_H_
+
+#include "third_party/blink/renderer/platform/platform_export.h"
+
+namespace blink {
+
+class ExceptionState;
+
+// Pause-eval messages when recordreplay::AreEventsUnavailable().
+PLATFORM_EXPORT extern const char kReplayUnavailableNetworkMessage[];
+PLATFORM_EXPORT extern const char kReplayUnavailableBlobMessage[];
+PLATFORM_EXPORT extern const char kReplayUnavailableCookieMessage[];
+PLATFORM_EXPORT extern const char kReplayUnavailableStorageMessage[];
+PLATFORM_EXPORT extern const char kReplayUnavailableScrollMessage[];
+
+// If events are unavailable: throw `message` and return true (caller returns).
+PLATFORM_EXPORT bool RecordReplayThrowIfEventsUnavailable(
+    ExceptionState& exception_state,
+    const char* message);
+
+// Same, via the current V8 isolate when there is no ExceptionState.
+PLATFORM_EXPORT bool RecordReplayThrowIfEventsUnavailable(const char* message);
+
+}  // namespace blink
+
+#endif  // THIRD_PARTY_BLINK_RENDERER_PLATFORM_BINDINGS_RECORD_REPLAY_THROW_H_

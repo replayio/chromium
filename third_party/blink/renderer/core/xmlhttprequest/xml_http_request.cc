@@ -79,6 +79,7 @@
 #include "third_party/blink/renderer/core/xmlhttprequest/xml_http_request_upload.h"
 #include "third_party/blink/renderer/platform/bindings/dom_wrapper_world.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/blob/blob_data.h"
 #include "third_party/blink/renderer/platform/file_metadata.h"
@@ -1198,9 +1199,8 @@ void XMLHttpRequest::CreateRequest(scoped_refptr<EncodedFormData> http_body,
 
   if (recordreplay::AreEventsUnavailable()) {
     HandleNetworkError();
-    ThrowForLoadFailureIfNeeded(
-        exception_state,
-        "This evaluation tried to read network contents that were not captured in the recording. Replay cannot perform fresh network reads during replay.");
+    ThrowForLoadFailureIfNeeded(exception_state,
+                                kReplayUnavailableNetworkMessage);
     return;
   }
 

@@ -16,6 +16,7 @@
 #include "base/record_replay.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/scheduler/public/main_thread.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
@@ -593,7 +594,8 @@ void CachedStorageArea::MaybeApplyNonLocalMutationForKey(
 void CachedStorageArea::EnsureLoaded() {
   if (map_)
     return;
-  if (recordreplay::AreEventsUnavailable()) {
+  // Sync GetAll never completes after diverge; throw instead of empty map.
+  if (RecordReplayThrowIfEventsUnavailable(kReplayUnavailableStorageMessage)) {
     map_ = std::make_unique<StorageAreaMap>(
         mojom::blink::StorageArea::kPerStorageAreaQuota);
     return;

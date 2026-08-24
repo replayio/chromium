@@ -45,21 +45,13 @@
 #include "third_party/blink/renderer/core/frame/web_feature.h"
 #include "third_party/blink/renderer/core/url/dom_url.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/blob/blob_url.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace blink {
-
-namespace {
-
-constexpr char kReplayBlobReadUnavailableMessage[] =
-    "This evaluation tried to read file or blob contents that were not "
-    "captured in the recording. Replay cannot perform fresh file/blob reads "
-    "during replay.";
-
-}  // namespace
 
 // TODO(https://crbug.com/989876): This is not used any more, refactor
 // PublicURLManager to deprecate this.
@@ -257,8 +249,7 @@ static ScriptPromise ReadBlobHelper(
   // file-backed blobs here.
   if (recordreplay::AreEventsUnavailable()) {
     resolver->Reject(MakeGarbageCollected<DOMException>(
-        DOMExceptionCode::kNotReadableError,
-        kReplayBlobReadUnavailableMessage));
+        DOMExceptionCode::kNotReadableError, kReplayUnavailableBlobMessage));
     return promise;
   }
 

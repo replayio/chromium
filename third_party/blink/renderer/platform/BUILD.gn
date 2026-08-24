@@ -461,6 +461,8 @@ component("platform") {
     "bindings/v8_private_property.h",
     "bindings/v8_set_return_value.cc",
     "bindings/v8_set_return_value.h",
+    "bindings/record_replay_throw.cc",
+    "bindings/record_replay_throw.h",
     "bindings/v8_throw_exception.cc",
     "bindings/v8_throw_exception.h",
     "bindings/v8_value_cache.cc",
