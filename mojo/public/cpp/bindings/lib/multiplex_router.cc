@@ -845,6 +845,8 @@ void MultiplexRouter::OnPipeConnectionError(bool force_async_dispatch) {
     endpoint_vector.push_back(pair.second);
 
   for (const auto& endpoint : endpoint_vector) {
+    REPLAY_ASSERT("MultiplexRouter::OnPipeConnectionError %u %d",
+                  endpoint->id(), !!endpoint->client());
     if (endpoint->client()) {
       base::flat_set<uint64_t> request_ids =
           endpoint->UnregisterAllExternalSyncWaiters();
