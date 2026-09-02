@@ -119,7 +119,7 @@ Blob::~Blob() = default;
 Blob* Blob::Create(ExecutionContext* context,
                    const HeapVector<Member<V8BlobPart>>& blob_parts,
                    const BlobPropertyBag* options) {
-  if (RecordReplayThrowIfEventsUnavailable("Blob"))
+  if (RecordReplayThrowIfEventsUnavailable("Blob.constructor"))
     return nullptr;
 
   DCHECK(options->hasType());
@@ -240,7 +240,8 @@ ReadableStream* Blob::stream(ScriptState* script_state) const {
 static ScriptPromise ReadBlobHelper(
     const scoped_refptr<BlobDataHandle>& blob_data_handle,
     ScriptState* script_state,
-    FileReaderLoader::ReadType read_type) {
+    FileReaderLoader::ReadType read_type,
+    const char* operation_name) {
   ScriptPromiseResolver* resolver =
       MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   auto promise = resolver->Promise();
@@ -248,7 +249,8 @@ static ScriptPromise ReadBlobHelper(
   if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
     resolver->Reject(MakeGarbageCollected<DOMException>(
         DOMExceptionCode::kNotReadableError,
-        "Cannot replay operation Blob.read because it was not recorded."));
+        String("Cannot replay operation ") + operation_name +
+            " because it was not recorded."));
     return promise;
   }
 
@@ -261,13 +263,14 @@ static ScriptPromise ReadBlobHelper(
 }
 
 blink::ScriptPromise Blob::text(ScriptState* script_state) {
-  auto read_type = FileReaderLoader::kReadAsText;
-  return ReadBlobHelper(blob_data_handle_, script_state, read_type);
+  return ReadBlobHelper(blob_data_handle_, script_state,
+                        FileReaderLoader::kReadAsText, "Blob.text");
 }
 
 blink::ScriptPromise Blob::arrayBuffer(ScriptState* script_state) {
-  auto read_type = FileReaderLoader::kReadAsArrayBuffer;
-  return ReadBlobHelper(blob_data_handle_, script_state, read_type);
+  return ReadBlobHelper(blob_data_handle_, script_state,
+                        FileReaderLoader::kReadAsArrayBuffer,
+                        "Blob.arrayBuffer");
 }
 
 void Blob::AppendTo(BlobData& blob_data) const {

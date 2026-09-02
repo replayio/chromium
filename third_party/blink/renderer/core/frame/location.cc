@@ -282,7 +282,8 @@ void Location::SetLocation(const String& url,
     activity_logger->LogEvent("blinkSetAttribute", argv.size(), argv.data());
   }
 
-  if (RecordReplayThrowIfEventsUnavailable("location", exception_state)) {
+  // Shared by Location.assign / replace / href and URL-part setters.
+  if (RecordReplayThrowIfEventsUnavailable("Location.set", exception_state)) {
     return;
   }
 
