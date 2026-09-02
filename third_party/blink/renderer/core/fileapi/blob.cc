@@ -45,21 +45,13 @@
 #include "third_party/blink/renderer/core/frame/web_feature.h"
 #include "third_party/blink/renderer/core/url/dom_url.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/blob/blob_url.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace blink {
-
-namespace {
-
-constexpr char kReplayBlobReadUnavailableMessage[] =
-    "This evaluation tried to read file or blob contents that were not "
-    "captured in the recording. Replay cannot perform fresh file/blob reads "
-    "divergently.";
-
-}  // namespace
 
 // TODO(https://crbug.com/989876): This is not used any more, refactor
 // PublicURLManager to deprecate this.
@@ -127,6 +119,9 @@ Blob::~Blob() = default;
 Blob* Blob::Create(ExecutionContext* context,
                    const HeapVector<Member<V8BlobPart>>& blob_parts,
                    const BlobPropertyBag* options) {
+  if (RecordReplayThrowIfEventsUnavailable("Blob.constructor"))
+    return nullptr;
+
   DCHECK(options->hasType());
   DCHECK(options->hasEndings());
   bool normalize_line_endings_to_native = (options->endings() == "native");
@@ -245,20 +240,17 @@ ReadableStream* Blob::stream(ScriptState* script_state) const {
 static ScriptPromise ReadBlobHelper(
     const scoped_refptr<BlobDataHandle>& blob_data_handle,
     ScriptState* script_state,
-    FileReaderLoader::ReadType read_type) {
+    FileReaderLoader::ReadType read_type,
+    const char* operation_name) {
   ScriptPromiseResolver* resolver =
       MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   auto promise = resolver->Promise();
 
-  // Blob reads go through FileReaderLoader and the browser-side Blob service,
-  // which uses async Mojo callbacks and data pipes. Even byte-backed blobs can
-  // hit that machinery, so when events are unavailable we reject consistently
-  // instead of trying to distinguish supposedly safe in-memory blobs from
-  // file-backed blobs here.
   if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
     resolver->Reject(MakeGarbageCollected<DOMException>(
         DOMExceptionCode::kNotReadableError,
-        kReplayBlobReadUnavailableMessage));
+        String("Cannot replay operation ") + operation_name +
+            " because it was not recorded."));
     return promise;
   }
 
@@ -271,13 +263,14 @@ static ScriptPromise ReadBlobHelper(
 }
 
 blink::ScriptPromise Blob::text(ScriptState* script_state) {
-  auto read_type = FileReaderLoader::kReadAsText;
-  return ReadBlobHelper(blob_data_handle_, script_state, read_type);
+  return ReadBlobHelper(blob_data_handle_, script_state,
+                        FileReaderLoader::kReadAsText, "Blob.text");
 }
 
 blink::ScriptPromise Blob::arrayBuffer(ScriptState* script_state) {
-  auto read_type = FileReaderLoader::kReadAsArrayBuffer;
-  return ReadBlobHelper(blob_data_handle_, script_state, read_type);
+  return ReadBlobHelper(blob_data_handle_, script_state,
+                        FileReaderLoader::kReadAsArrayBuffer,
+                        "Blob.arrayBuffer");
 }
 
 void Blob::AppendTo(BlobData& blob_data) const {
