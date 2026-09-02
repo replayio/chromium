@@ -45,6 +45,7 @@
 #include "third_party/blink/renderer/core/frame/web_feature.h"
 #include "third_party/blink/renderer/core/url/dom_url.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/blob/blob_url.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
@@ -58,6 +59,10 @@ constexpr char kReplayBlobReadUnavailableMessage[] =
     "This evaluation tried to read file or blob contents that were not "
     "captured in the recording. Replay cannot perform fresh file/blob reads "
     "divergently.";
+
+constexpr char kReplayBlobCreateUnavailableMessage[] =
+    "This evaluation tried to construct a Blob that requires IPC not "
+    "available divergently. Replay cannot register blobs divergently.";
 
 }  // namespace
 
@@ -127,6 +132,11 @@ Blob::~Blob() = default;
 Blob* Blob::Create(ExecutionContext* context,
                    const HeapVector<Member<V8BlobPart>>& blob_parts,
                    const BlobPropertyBag* options) {
+  // BlobDataHandle registration uses sync Mojo IPC that never completes after
+  // diverge.
+  if (RecordReplayThrowIfEventsUnavailable(kReplayBlobCreateUnavailableMessage))
+    return nullptr;
+
   DCHECK(options->hasType());
   DCHECK(options->hasEndings());
   bool normalize_line_endings_to_native = (options->endings() == "native");

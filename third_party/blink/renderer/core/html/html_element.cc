@@ -89,6 +89,7 @@
 #include "third_party/blink/renderer/core/trustedtypes/trusted_script.h"
 #include "third_party/blink/renderer/core/xml_names.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/text/bidi_resolver.h"
@@ -109,6 +110,10 @@ struct AttributeTriggers {
 };
 
 namespace {
+
+constexpr char kReplayHtmlElementClickUnavailableMessage[] =
+    "This evaluation tried to synthesize a click that is not available "
+    "divergently. Replay cannot dispatch simulated clicks divergently.";
 
 // https://html.spec.whatwg.org/multipage/interaction.html#editing-host
 // An editing host is either an HTML element with its contenteditable attribute
@@ -1180,6 +1185,13 @@ void HTMLElement::setSpellcheck(bool enable) {
 }
 
 void HTMLElement::click() {
+  // Simulated click fires arbitrary script; no usable in-process substitute
+  // after diverge.
+  if (RecordReplayThrowIfEventsUnavailable(
+          kReplayHtmlElementClickUnavailableMessage)) {
+    return;
+  }
+
   DispatchSimulatedClick(nullptr, SimulatedClickCreationScope::kFromScript);
   if (IsA<HTMLInputElement>(this)) {
     UseCounter::Count(GetDocument(),

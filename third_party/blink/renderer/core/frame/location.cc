@@ -39,11 +39,20 @@
 #include "third_party/blink/renderer/core/loader/frame_loader.h"
 #include "third_party/blink/renderer/core/url/dom_url_utils_read_only.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/bindings/v8_dom_activity_logger.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 
 namespace blink {
+namespace {
+
+constexpr char kReplayLocationNavigateUnavailableMessage[] =
+    "This evaluation tried to navigate that requires frame load machinery "
+    "not available divergently. Replay cannot perform location navigation "
+    "divergently.";
+
+}  // namespace
 
 Location::Location(DOMWindow* dom_window) : dom_window_(dom_window) {}
 
@@ -279,6 +288,13 @@ void Location::SetLocation(const String& url,
     argv.push_back(entered_document->Url());
     argv.push_back(completed_url);
     activity_logger->LogEvent("blinkSetAttribute", argv.size(), argv.data());
+  }
+
+  // Frame::Navigate never completes after diverge and can sync-dispatch
+  // navigate listeners that reach other unguarded DivergedOps.
+  if (RecordReplayThrowIfEventsUnavailable(
+          kReplayLocationNavigateUnavailableMessage, exception_state)) {
+    return;
   }
 
   FrameLoadRequest request(incumbent_window, ResourceRequest(completed_url));
