@@ -11,11 +11,12 @@ namespace blink {
 
 class ExceptionState;
 
-// If events are unavailable: throw `message` and return true (caller returns).
-// Without an `exception_state` the throw needs an entered V8 context; the
-// `true` return bails out either way.
+// If events are unavailable: throw
+// "Cannot replay operation <operation_name> because it was not recorded."
+// and return true (caller returns). Without an `exception_state` the throw
+// needs an entered V8 context; the `true` return bails out either way.
 PLATFORM_EXPORT bool RecordReplayThrowIfEventsUnavailable(
-    const char* message,
+    const char* operation_name,
     ExceptionState* exception_state = nullptr);
 
 }  // namespace blink

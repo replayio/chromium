@@ -111,10 +111,6 @@ struct AttributeTriggers {
 
 namespace {
 
-constexpr char kReplayHtmlElementClickUnavailableMessage[] =
-    "This evaluation tried to synthesize a click that is not available "
-    "divergently. Replay cannot dispatch simulated clicks divergently.";
-
 // https://html.spec.whatwg.org/multipage/interaction.html#editing-host
 // An editing host is either an HTML element with its contenteditable attribute
 // in the true state, or a child HTML element of a Document whose design mode
@@ -1185,10 +1181,7 @@ void HTMLElement::setSpellcheck(bool enable) {
 }
 
 void HTMLElement::click() {
-  // Simulated click fires arbitrary script; no usable in-process substitute
-  // after diverge.
-  if (RecordReplayThrowIfEventsUnavailable(
-          kReplayHtmlElementClickUnavailableMessage)) {
+  if (RecordReplayThrowIfEventsUnavailable("HTMLElement.click")) {
     return;
   }
 

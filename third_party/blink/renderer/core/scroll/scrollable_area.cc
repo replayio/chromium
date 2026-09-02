@@ -353,11 +353,7 @@ void ScrollableArea::ProgrammaticScrollHelper(
     bool is_sequenced_scroll,
     gfx::Vector2d animation_adjustment,
     ScrollCallback on_finish) {
-  // Programmatic scroll can WaitForCommitCompletion on the compositor; that
-  // wait never completes after diverge.
-  if (RecordReplayThrowIfEventsUnavailable(
-          "This evaluation tried to programmatically scroll. Replay cannot "
-          "perform compositor scroll commits divergently.")) {
+  if (RecordReplayThrowIfEventsUnavailable("programmatic scroll")) {
     if (on_finish)
       std::move(on_finish).Run();
     return;

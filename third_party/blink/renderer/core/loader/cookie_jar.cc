@@ -29,11 +29,6 @@
 namespace blink {
 namespace {
 
-constexpr char kReplayCookieUnavailableMessage[] =
-    "This evaluation tried to access cookies that require IPC not available "
-    "divergently. Replay cannot perform fresh cookie reads or writes "
-    "divergently.";
-
 enum class CookieCacheLookupResult {
   kCacheMissFirstAccess = 0,
   kCacheHitAfterGet = 1,
@@ -101,8 +96,7 @@ void CookieJar::SetCookie(const String& value,
   if (cookie_url.IsEmpty())
     return;
 
-  // Cookie IPC never completes after diverge.
-  if (RecordReplayThrowIfEventsUnavailable(kReplayCookieUnavailableMessage,
+  if (RecordReplayThrowIfEventsUnavailable("document.cookie",
                                            &exception_state)) {
     return;
   }
@@ -164,8 +158,7 @@ String CookieJar::Cookies(ExceptionState& exception_state) {
   if (cookie_url.IsEmpty())
     return String();
 
-  // Cookie IPC never completes after diverge.
-  if (RecordReplayThrowIfEventsUnavailable(kReplayCookieUnavailableMessage,
+  if (RecordReplayThrowIfEventsUnavailable("document.cookie",
                                            &exception_state)) {
     return String();
   }

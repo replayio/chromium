@@ -53,19 +53,6 @@
 
 namespace blink {
 
-namespace {
-
-constexpr char kReplayBlobReadUnavailableMessage[] =
-    "This evaluation tried to read file or blob contents that were not "
-    "captured in the recording. Replay cannot perform fresh file/blob reads "
-    "divergently.";
-
-constexpr char kReplayBlobCreateUnavailableMessage[] =
-    "This evaluation tried to construct a Blob that requires IPC not "
-    "available divergently. Replay cannot register blobs divergently.";
-
-}  // namespace
-
 // TODO(https://crbug.com/989876): This is not used any more, refactor
 // PublicURLManager to deprecate this.
 class NullURLRegistry final : public URLRegistry {
@@ -132,9 +119,7 @@ Blob::~Blob() = default;
 Blob* Blob::Create(ExecutionContext* context,
                    const HeapVector<Member<V8BlobPart>>& blob_parts,
                    const BlobPropertyBag* options) {
-  // BlobDataHandle registration uses sync Mojo IPC that never completes after
-  // diverge.
-  if (RecordReplayThrowIfEventsUnavailable(kReplayBlobCreateUnavailableMessage))
+  if (RecordReplayThrowIfEventsUnavailable("Blob"))
     return nullptr;
 
   DCHECK(options->hasType());
@@ -260,15 +245,10 @@ static ScriptPromise ReadBlobHelper(
       MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   auto promise = resolver->Promise();
 
-  // Blob reads go through FileReaderLoader and the browser-side Blob service,
-  // which uses async Mojo callbacks and data pipes. Even byte-backed blobs can
-  // hit that machinery, so when events are unavailable we reject consistently
-  // instead of trying to distinguish supposedly safe in-memory blobs from
-  // file-backed blobs here.
   if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
     resolver->Reject(MakeGarbageCollected<DOMException>(
         DOMExceptionCode::kNotReadableError,
-        kReplayBlobReadUnavailableMessage));
+        "Cannot replay operation Blob.read because it was not recorded."));
     return promise;
   }
 
