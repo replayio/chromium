@@ -16,14 +16,16 @@ const dockerArgs = [
   "DRIVER_REVISION",
   "-e",
   "RBE_service",
+  // reproxy authenticates via the engflow_auth credential helper instead of mTLS
+  // certs. the binary + imported token store both live on the mounted /chromium
+  // dir; XDG_CONFIG_HOME points engflow_auth at that store inside the container.
+  // see replay_build_scripts/setup_engflow_auth.sh
   "-e",
-  "RBE_service_no_auth",
+  "RBE_experimental_credentials_helper=/chromium/engflow_auth",
   "-e",
-  "RBE_use_application_default_credentials",
+  "RBE_experimental_credentials_helper_args=get",
   "-e",
-  "RBE_tls_client_auth_cert=/chromium/engflow.crt",
-  "-e",
-  "RBE_tls_client_auth_key=/chromium/engflow.key",
+  "XDG_CONFIG_HOME=/chromium/.engflow",
   "-v",
   `${path.join(process.env.HOME, "chromium")}:/chromium`,
   "-v",
