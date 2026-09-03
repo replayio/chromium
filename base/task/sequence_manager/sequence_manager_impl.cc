@@ -563,10 +563,6 @@ void SequenceManagerImpl::SetNextWakeUp(LazyNow* lazy_now,
                                         absl::optional<WakeUp> wake_up) {
   auto next_wake_up = AdjustWakeUp(wake_up, lazy_now);
 
-  recordreplay::Assert(
-    "[RUN-2801-2978] SequenceManagerImpl::SetNextWakeUp %d",
-    next_wake_up && next_wake_up->is_immediate());
-
   if (next_wake_up && next_wake_up->is_immediate()) {
     ScheduleWork();
   } else {
@@ -833,6 +829,13 @@ absl::optional<WakeUp> SequenceManagerImpl::AdjustWakeUp(
     absl::optional<WakeUp> wake_up,
     LazyNow* lazy_now) const {
   DCHECK_CALLED_ON_VALID_THREAD(associated_thread_->thread_checker);
+
+  REPLAY_ASSERT_MAYBE_EVENTS_DISALLOWED(
+    "[TT-1504-1505] SequenceManagerImpl::AdjustWakeUp A %d %d %llu",
+    !!wake_up,
+    wake_up && wake_up->is_immediate(),
+    wake_up->earliest_time().ToInternalValue());
+
   if (!wake_up)
     return absl::nullopt;
 
@@ -843,6 +846,10 @@ absl::optional<WakeUp> SequenceManagerImpl::AdjustWakeUp(
   // up scheduled, so pretend we have no more work. This will result in
   // appearing idle and |time_domain| will decide what to do in
   // MaybeFastForwardToWakeUp().
+  REPLAY_ASSERT_MAYBE_EVENTS_DISALLOWED(
+    "[TT-1504-1505] SequenceManagerImpl::AdjustWakeUp B %d",
+    !!main_thread_only().time_domain);
+
   if (main_thread_only().time_domain)
     return absl::nullopt;
   return *wake_up;
