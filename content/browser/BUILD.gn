@@ -1520,6 +1520,7 @@ source_set("browser") {
     "quota/quota_internals_ui.h",
     "quota/quota_manager_host.cc",
     "quota/quota_manager_host.h",
+    "recording_utils.cc",
     "reduce_accept_language/reduce_accept_language_throttle.cc",
     "reduce_accept_language/reduce_accept_language_throttle.h",
     "reduce_accept_language/reduce_accept_language_utils.cc",

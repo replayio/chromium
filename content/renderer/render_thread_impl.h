@@ -441,6 +441,7 @@ class CONTENT_EXPORT RenderThreadImpl
   void WriteClangProfilingProfile(
       WriteClangProfilingProfileCallback callback) override;
 #endif
+  void FinishRecording(FinishRecordingCallback callback) override;
   void SetIsCrossOriginIsolated(bool value) override;
   void RecordReplayBrowserEvent(const std::string& name, base::Value::Dict value) override;
   void SetIsIsolatedApplication(bool value) override;

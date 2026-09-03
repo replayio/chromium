@@ -146,6 +146,8 @@ interface Renderer {
   [EnableIf=clang_profiling_inside_sandbox]
   WriteClangProfilingProfile() => ();
 
+  FinishRecording() => ();
+
   // Set whether this renderer process is "cross-origin isolated". This
   // corresponds to agent cluster's "cross-origin isolated" concept.
   // TODO(yhirano): Have the spec URL.
