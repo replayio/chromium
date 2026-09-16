@@ -998,8 +998,15 @@ static absl::optional<int> ContextGroupIdFromInspectorContextId(
   if (!execution_context)
     return absl::nullopt;
 
-  int group =
-      MainThreadDebugger::Instance()->ContextGroupId(execution_context);
+  LocalDOMWindow* window = DynamicTo<LocalDOMWindow>(execution_context);
+  if (!window)
+    return absl::nullopt;
+  LocalFrame* frame = window->GetFrame();
+  if (!frame)
+    return absl::nullopt;
+
+  // Public overload is ContextGroupId(LocalFrame*); ExecutionContext* is private.
+  int group = MainThreadDebugger::Instance()->ContextGroupId(frame);
   if (group <= 0)
     return absl::nullopt;
   return group;
