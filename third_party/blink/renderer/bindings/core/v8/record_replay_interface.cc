@@ -16,17 +16,16 @@
 #include "base/path_service.h"
 #include "base/process/process_handle.h"
 #include "base/record_replay.h"
-#include "base/strings/string_number_conversions.h"
 #include "base/record_replay_paint_surface.h"
 #include "base/record_replay_render_interface.h"
 #include "content/public/renderer/render_thread.h"
 #include "content/public/renderer/v8_value_converter.h"
+#include "third_party/blink/renderer/bindings/core/v8/serialization/serialized_script_value.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_css_style_declaration.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_document.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_element.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_node.h"
-#include "third_party/blink/renderer/bindings/core/v8/serialization/serialized_script_value.h"
 #include "third_party/blink/renderer/core/css/css_style_declaration.h"
 #include "third_party/blink/renderer/core/dom/dom_node_ids.h"
 #include "third_party/blink/renderer/core/dom/events/custom_event.h"
@@ -961,28 +960,11 @@ static void SendCDPMissingContextError(v8::Isolate* isolate,
   SendMessageToFrontend(message);
 }
 
-// V8 RemoteCallFrameId is "isolateId.contextId.ordinal".
-static absl::optional<int> ContextGroupIdFromCallFrameId(
+static absl::optional<int> ContextGroupIdFromInspectorContextId(
     v8::Isolate* isolate,
-    const std::string& call_frame_id) {
-  if (!gV8Inspectors)
+    int context_id) {
+  if (context_id <= 0 || !gV8Inspectors)
     return absl::nullopt;
-
-  size_t first = call_frame_id.find('.');
-  if (first == std::string::npos)
-    return absl::nullopt;
-  size_t second = call_frame_id.find('.', first + 1);
-  if (second == std::string::npos)
-    return absl::nullopt;
-
-  int context_id = 0;
-  if (!base::StringToInt(
-          base::StringPiece(call_frame_id.data() + first + 1,
-                            second - first - 1),
-          &context_id) ||
-      context_id <= 0) {
-    return absl::nullopt;
-  }
 
   auto it = gV8Inspectors->find(isolate);
   if (it == gV8Inspectors->end() || !it->second)
@@ -1006,28 +988,10 @@ static absl::optional<int> ContextGroupIdFromCallFrameId(
   return WeakIdentifierMap<LocalFrame>::Identifier(&root);
 }
 
-// Prefer the call frame's window group for evaluateOnCallFrame; else nullopt.
-static absl::optional<int> ContextGroupIdFromEvaluateOnCallFrameMessage(
-    v8::Isolate* isolate,
-    const std::string& nmessage) {
-  absl::optional<base::Value> json = base::JSONReader::Read(nmessage);
-  if (!json || !json->is_dict())
-    return absl::nullopt;
-  const base::Value::Dict& message = json->GetDict();
-  const std::string* method = message.FindString("method");
-  if (!method || *method != "Debugger.evaluateOnCallFrame")
-    return absl::nullopt;
-  const base::Value::Dict* params = message.FindDict("params");
-  const std::string* call_frame_id =
-      params ? params->FindString("callFrameId") : nullptr;
-  if (!call_frame_id)
-    return absl::nullopt;
-  return ContextGroupIdFromCallFrameId(isolate, *call_frame_id);
-}
-
 static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
-  CHECK(args.Length() == 1 && args[0]->IsString() &&
-        "must be called with a single string");
+  CHECK((args.Length() == 1 || (args.Length() == 2 && args[1]->IsInt32())) &&
+        args[0]->IsString() &&
+        "must be called with a string and optional context id");
 
   recordreplay::AutoMarkReplayCode mark;
   recordreplay::AutoDisallowEvents disallow("SendCDPMessage");
@@ -1040,11 +1004,18 @@ static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
   if (gContextGroupIdForSendCDPMessageDepth > 0) {
     contextGroupId =
         gContextGroupIdForSendCDPMessageStack[gContextGroupIdForSendCDPMessageDepth - 1];
+  } else if (args.Length() == 2) {
+    contextGroupId = ContextGroupIdFromInspectorContextId(
+        isolate, args[1].As<v8::Int32>()->Value());
+    if (!contextGroupId.has_value()) {
+      SendCDPMissingContextError(isolate, args[0]);
+      return;
+    }
+  } else if (recordreplay::HasDivergedFromRecording() &&
+             v8::internal::gPauseContextGroupId > 0) {
+    contextGroupId = v8::internal::gPauseContextGroupId;
   } else {
-    contextGroupId =
-        ContextGroupIdFromEvaluateOnCallFrameMessage(isolate, nmessage);
-    if (!contextGroupId.has_value())
-      contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
+    contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
   }
 
   // No group, or its main-world V8 Context is already gone (post-nav /
