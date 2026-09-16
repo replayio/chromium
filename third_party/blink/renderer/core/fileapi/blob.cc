@@ -116,10 +116,20 @@ Blob::Blob(scoped_refptr<BlobDataHandle> data_handle)
 Blob::~Blob() = default;
 
 // static
+Blob* Blob::Create(ExecutionContext*, ExceptionState& exception_state) {
+  if (RecordReplayThrowIfEventsUnavailable("Blob.constructor",
+                                           &exception_state))
+    return nullptr;
+  return MakeGarbageCollected<Blob>(BlobDataHandle::Create());
+}
+
+// static
 Blob* Blob::Create(ExecutionContext* context,
                    const HeapVector<Member<V8BlobPart>>& blob_parts,
-                   const BlobPropertyBag* options) {
-  if (RecordReplayThrowIfEventsUnavailable("Blob.constructor"))
+                   const BlobPropertyBag* options,
+                   ExceptionState& exception_state) {
+  if (RecordReplayThrowIfEventsUnavailable("Blob.constructor",
+                                           &exception_state))
     return nullptr;
 
   DCHECK(options->hasType());
