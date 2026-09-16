@@ -734,6 +734,7 @@ void RecordReplayClearContexts(const char* reason, LocalFrame* frame) {
           .c_str(),
       frame->RecordReplayId());
   gReplayScriptsAlive = false;
+  recordreplay::SetScriptAlive(false);
 }
 
 static void fromJsIsReplayScriptAlive(const v8::FunctionCallbackInfo<v8::Value>& args) {
@@ -2837,6 +2838,7 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
   
   // 2. Initialize sourcemap worker, command handlers etc.
   gReplayScriptsAlive = true;
+  recordreplay::SetScriptAlive(true);
   recordreplay::Print("ReplayScript STATUS_CHANGE_ALIVE %s group=%d win=%d frame=%d",
       v8::internal::RecordReplayContextAddressToken(
           isolate, *reinterpret_cast<v8::internal::Address*>(*context), true)

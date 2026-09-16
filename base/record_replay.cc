@@ -87,6 +87,7 @@ namespace recordreplay {
   Macro(V8RecordReplayOrderedUnlock, (int lock), (lock))                \
   Macro(V8RecordReplayNewCheckpoint, (), ())                            \
   Macro(V8RecordReplayNewCheckpointFlushed, (), ())                     \
+  Macro(V8RecordReplaySetScriptAlive, (bool alive), (alive))            \
   Macro(V8RecordReplayOnAnnotation,                                     \
         (const char* kind, const char* contents),                       \
         (kind, contents))                                               \
@@ -365,6 +366,10 @@ void NewCheckpoint() {
 
 void NewCheckpointFlushed() {
   V8RecordReplayNewCheckpointFlushed();
+}
+
+void SetScriptAlive(bool alive) {
+  V8RecordReplaySetScriptAlive(alive);
 }
 
 uint64_t NewBookmark() {
