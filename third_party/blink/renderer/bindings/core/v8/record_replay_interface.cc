@@ -44,6 +44,7 @@
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
 #include "third_party/blink/renderer/platform/bindings/v8_dom_wrapper.h"
 #include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
+#include "third_party/blink/renderer/platform/fonts/font_cache.h"
 #include "third_party/inspector_protocol/crdtp/maybe.h"
 #include "v8/include/v8-inspector.h"
 
@@ -2831,6 +2832,9 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
   
   // NOTE: The root `LocalFrame` can change over time.
   gRootLocalFrame = localFrame;
+
+  // Retain last-resort font before first checkpoint for post-diverge PF inject.
+  FontCache::WarmReplayLastResortFont();
 
   // 1. Reset paint surface so that paints to the new root's surface are not ignored.
   // See: https://linear.app/replay/issue/RUN-2400
