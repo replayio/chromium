@@ -961,30 +961,29 @@ static void SendCDPMissingContextError(v8::Isolate* isolate,
   SendMessageToFrontend(message);
 }
 
-// RemoteCallFrameId: isolateId.contextId.ordinal; middle field is contextId.
-static absl::optional<int> ParseCallFrameIdContextId(
+// V8 RemoteCallFrameId is "isolateId.contextId.ordinal".
+static absl::optional<int> ContextGroupIdFromCallFrameId(
+    v8::Isolate* isolate,
     const std::string& call_frame_id) {
+  if (!gV8Inspectors)
+    return absl::nullopt;
+
   size_t first = call_frame_id.find('.');
   if (first == std::string::npos)
     return absl::nullopt;
   size_t second = call_frame_id.find('.', first + 1);
   if (second == std::string::npos)
     return absl::nullopt;
+
   int context_id = 0;
   if (!base::StringToInt(
           base::StringPiece(call_frame_id.data() + first + 1,
                             second - first - 1),
-          &context_id)) {
+          &context_id) ||
+      context_id <= 0) {
     return absl::nullopt;
   }
-  return context_id;
-}
 
-static absl::optional<int> ContextGroupIdFromInspectorContextId(
-    v8::Isolate* isolate,
-    int context_id) {
-  if (context_id <= 0 || !gV8Inspectors)
-    return absl::nullopt;
   auto it = gV8Inspectors->find(isolate);
   if (it == gV8Inspectors->end() || !it->second)
     return absl::nullopt;
@@ -994,32 +993,23 @@ static absl::optional<int> ContextGroupIdFromInspectorContextId(
   if (!it->second->contextById(context_id).ToLocal(&context))
     return absl::nullopt;
 
-  ExecutionContext* execution_context = ToExecutionContext(context);
-  if (!execution_context)
-    return absl::nullopt;
-
-  LocalDOMWindow* window = DynamicTo<LocalDOMWindow>(execution_context);
-  if (!window)
-    return absl::nullopt;
-  LocalFrame* frame = window->GetFrame();
+  LocalDOMWindow* window =
+      DynamicTo<LocalDOMWindow>(ToExecutionContext(context));
+  LocalFrame* frame = window ? window->GetFrame() : nullptr;
   if (!frame)
     return absl::nullopt;
 
-  // Public overload is ContextGroupId(LocalFrame*); ExecutionContext* is private.
-  int group = MainThreadDebugger::Instance()->ContextGroupId(frame);
-  if (group <= 0)
+  // Same map GetCurrentContextGroupIdForIsolate uses; do not create.
+  LocalFrame& root = frame->LocalFrameRoot();
+  if (!WeakIdentifierMap<LocalFrame>::HasIdentifier(&root))
     return absl::nullopt;
-  return group;
+  return WeakIdentifierMap<LocalFrame>::Identifier(&root);
 }
 
-// Debugger.evaluateOnCallFrame only: route session to callFrameId's context
-// group. Parse/unmapped/0 -> nullopt (caller keeps LocalFrameRoot).
-static absl::optional<int> ContextGroupIdForEvaluateOnCallFrame(
+// Prefer the call frame's window group for evaluateOnCallFrame; else nullopt.
+static absl::optional<int> ContextGroupIdFromEvaluateOnCallFrameMessage(
     v8::Isolate* isolate,
     const std::string& nmessage) {
-  if (nmessage.find("Debugger.evaluateOnCallFrame") == std::string::npos)
-    return absl::nullopt;
-
   absl::optional<base::Value> json = base::JSONReader::Read(nmessage);
   if (!json || !json->is_dict())
     return absl::nullopt;
@@ -1027,18 +1017,12 @@ static absl::optional<int> ContextGroupIdForEvaluateOnCallFrame(
   const std::string* method = message.FindString("method");
   if (!method || *method != "Debugger.evaluateOnCallFrame")
     return absl::nullopt;
-
   const base::Value::Dict* params = message.FindDict("params");
-  if (!params)
-    return absl::nullopt;
-  const std::string* call_frame_id = params->FindString("callFrameId");
+  const std::string* call_frame_id =
+      params ? params->FindString("callFrameId") : nullptr;
   if (!call_frame_id)
     return absl::nullopt;
-
-  absl::optional<int> context_id = ParseCallFrameIdContextId(*call_frame_id);
-  if (!context_id.has_value())
-    return absl::nullopt;
-  return ContextGroupIdFromInspectorContextId(isolate, *context_id);
+  return ContextGroupIdFromCallFrameId(isolate, *call_frame_id);
 }
 
 static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
@@ -1057,8 +1041,9 @@ static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
     contextGroupId =
         gContextGroupIdForSendCDPMessageStack[gContextGroupIdForSendCDPMessageDepth - 1];
   } else {
-    contextGroupId = ContextGroupIdForEvaluateOnCallFrame(isolate, nmessage);
-    if (!contextGroupId.has_value() || *contextGroupId <= 0)
+    contextGroupId =
+        ContextGroupIdFromEvaluateOnCallFrameMessage(isolate, nmessage);
+    if (!contextGroupId.has_value())
       contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
   }
 
