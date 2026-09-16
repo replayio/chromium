@@ -131,6 +131,7 @@
 #include "third_party/blink/renderer/core/trustedtypes/trusted_types_util.h"
 #include "third_party/blink/renderer/platform/back_forward_cache_buffer_limit_tracker.h"
 #include "third_party/blink/renderer/platform/bindings/exception_messages.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/source_location.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -1690,6 +1691,10 @@ void LocalDOMWindow::scrollBy(double x, double y) const {
 }
 
 void LocalDOMWindow::scrollBy(const ScrollToOptions* scroll_to_options) const {
+  if (RecordReplayThrowIfEventsUnavailable("Window.scrollBy")) {
+    return;
+  }
+
   if (!IsCurrentlyDisplayedInFrame())
     return;
 
@@ -1747,6 +1752,10 @@ void LocalDOMWindow::scrollTo(double x, double y) const {
 }
 
 void LocalDOMWindow::scrollTo(const ScrollToOptions* scroll_to_options) const {
+  if (RecordReplayThrowIfEventsUnavailable("Window.scrollTo")) {
+    return;
+  }
+
   if (!IsCurrentlyDisplayedInFrame())
     return;
 

@@ -32,6 +32,7 @@
 #include "third_party/blink/renderer/core/scroll/scrollable_area.h"
 
 #include "build/build_config.h"
+#include "base/record_replay.h"
 #include "cc/input/main_thread_scrolling_reason.h"
 #include "cc/input/scroll_utils.h"
 #include "cc/input/scrollbar.h"
@@ -54,7 +55,6 @@
 #include "third_party/blink/renderer/core/scroll/scroll_animator_base.h"
 #include "third_party/blink/renderer/core/scroll/scrollbar_theme.h"
 #include "third_party/blink/renderer/core/scroll/smooth_scroll_sequencer.h"
-#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/graphics/color.h"
 #include "third_party/blink/renderer/platform/graphics/compositing/paint_artifact_compositor.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
@@ -353,7 +353,8 @@ void ScrollableArea::ProgrammaticScrollHelper(
     bool is_sequenced_scroll,
     gfx::Vector2d animation_adjustment,
     ScrollCallback on_finish) {
-  if (RecordReplayThrowIfEventsUnavailable("programmatic scroll")) {
+  // Layout C++ callers share this; JS APIs throw at their IDL entry points.
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
     if (on_finish)
       std::move(on_finish).Run();
     return;
