@@ -38,6 +38,7 @@
 #include "third_party/blink/renderer/core/frame/web_feature.h"
 #include "third_party/blink/renderer/core/html/forms/form_controller.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/to_v8.h"
 #include "third_party/blink/renderer/platform/blob/blob_data.h"
@@ -117,7 +118,12 @@ static std::unique_ptr<BlobData> CreateBlobDataForFileWithMetadata(
 File* File::Create(ExecutionContext* context,
                    const HeapVector<Member<V8BlobPart>>& file_bits,
                    const String& file_name,
-                   const FilePropertyBag* options) {
+                   const FilePropertyBag* options,
+                   ExceptionState& exception_state) {
+  if (RecordReplayThrowIfEventsUnavailable("File.constructor",
+                                           &exception_state))
+    return nullptr;
+
   DCHECK(options->hasType());
 
   base::Time last_modified;
