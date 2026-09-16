@@ -34,6 +34,7 @@
 
 #include "base/debug/alias.h"
 #include "base/feature_list.h"
+#include "base/no_destructor.h"
 #include "base/timer/elapsed_timer.h"
 #include "base/trace_event/process_memory_dump.h"
 #include "base/trace_event/trace_event.h"
@@ -73,8 +74,13 @@ extern const char kNotoColorEmojiCompat[] = "Noto Color Emoji Compat";
 SkFontMgr* FontCache::static_font_manager_ = nullptr;
 
 namespace {
-scoped_refptr<SimpleFontData> g_replay_last_resort_simple_font_data;
+
+scoped_refptr<SimpleFontData>& ReplayLastResortSimpleFontDataStorage() {
+  static base::NoDestructor<scoped_refptr<SimpleFontData>> font_data;
+  return *font_data;
 }
+
+}  // namespace
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 float FontCache::device_scale_factor_ = 1.0;
@@ -279,14 +285,16 @@ SimpleFontData* FontCache::GetNonRetainedLastResortFallbackFont(
 }
 
 void FontCache::WarmReplayLastResortFont() {
-  if (g_replay_last_resort_simple_font_data)
+  scoped_refptr<SimpleFontData>& font_data =
+      ReplayLastResortSimpleFontDataStorage();
+  if (font_data)
     return;
-  g_replay_last_resort_simple_font_data =
+  font_data =
       FontCache::Get().GetLastResortFallbackFont(FontDescription(), kRetain);
 }
 
 const SimpleFontData* FontCache::ReplayLastResortSimpleFontData() {
-  return g_replay_last_resort_simple_font_data.get();
+  return ReplayLastResortSimpleFontDataStorage().get();
 }
 
 scoped_refptr<SimpleFontData> FontCache::FallbackFontForCharacter(
