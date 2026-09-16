@@ -16,6 +16,7 @@
 #include "base/path_service.h"
 #include "base/process/process_handle.h"
 #include "base/record_replay.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/record_replay_paint_surface.h"
 #include "base/record_replay_render_interface.h"
 #include "content/public/renderer/render_thread.h"
@@ -960,6 +961,79 @@ static void SendCDPMissingContextError(v8::Isolate* isolate,
   SendMessageToFrontend(message);
 }
 
+// RemoteCallFrameId: isolateId.contextId.ordinal; middle field is contextId.
+static absl::optional<int> ParseCallFrameIdContextId(
+    const std::string& call_frame_id) {
+  size_t first = call_frame_id.find('.');
+  if (first == std::string::npos)
+    return absl::nullopt;
+  size_t second = call_frame_id.find('.', first + 1);
+  if (second == std::string::npos)
+    return absl::nullopt;
+  int context_id = 0;
+  if (!base::StringToInt(
+          base::StringPiece(call_frame_id.data() + first + 1,
+                            second - first - 1),
+          &context_id)) {
+    return absl::nullopt;
+  }
+  return context_id;
+}
+
+static absl::optional<int> ContextGroupIdFromInspectorContextId(
+    v8::Isolate* isolate,
+    int context_id) {
+  if (context_id <= 0 || !gV8Inspectors)
+    return absl::nullopt;
+  auto it = gV8Inspectors->find(isolate);
+  if (it == gV8Inspectors->end() || !it->second)
+    return absl::nullopt;
+
+  v8::HandleScope handle_scope(isolate);
+  v8::Local<v8::Context> context;
+  if (!it->second->contextById(context_id).ToLocal(&context))
+    return absl::nullopt;
+
+  ExecutionContext* execution_context = ToExecutionContext(context);
+  if (!execution_context)
+    return absl::nullopt;
+
+  int group =
+      MainThreadDebugger::Instance()->ContextGroupId(execution_context);
+  if (group <= 0)
+    return absl::nullopt;
+  return group;
+}
+
+// Debugger.evaluateOnCallFrame only: route session to callFrameId's context
+// group. Parse/unmapped/0 -> nullopt (caller keeps LocalFrameRoot).
+static absl::optional<int> ContextGroupIdForEvaluateOnCallFrame(
+    v8::Isolate* isolate,
+    const std::string& nmessage) {
+  if (nmessage.find("Debugger.evaluateOnCallFrame") == std::string::npos)
+    return absl::nullopt;
+
+  absl::optional<base::Value> json = base::JSONReader::Read(nmessage);
+  if (!json || !json->is_dict())
+    return absl::nullopt;
+  const base::Value::Dict& message = json->GetDict();
+  const std::string* method = message.FindString("method");
+  if (!method || *method != "Debugger.evaluateOnCallFrame")
+    return absl::nullopt;
+
+  const base::Value::Dict* params = message.FindDict("params");
+  if (!params)
+    return absl::nullopt;
+  const std::string* call_frame_id = params->FindString("callFrameId");
+  if (!call_frame_id)
+    return absl::nullopt;
+
+  absl::optional<int> context_id = ParseCallFrameIdContextId(*call_frame_id);
+  if (!context_id.has_value())
+    return absl::nullopt;
+  return ContextGroupIdFromInspectorContextId(isolate, *context_id);
+}
+
 static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
   CHECK(args.Length() == 1 && args[0]->IsString() &&
         "must be called with a single string");
@@ -968,12 +1042,17 @@ static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
   recordreplay::AutoDisallowEvents disallow("SendCDPMessage");
 
   v8::Isolate* isolate = args.GetIsolate();
+  v8::String::Utf8Value message(isolate, args[0]);
+  std::string nmessage(*message);
+
   absl::optional<int> contextGroupId;
   if (gContextGroupIdForSendCDPMessageDepth > 0) {
     contextGroupId =
         gContextGroupIdForSendCDPMessageStack[gContextGroupIdForSendCDPMessageDepth - 1];
   } else {
-    contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
+    contextGroupId = ContextGroupIdForEvaluateOnCallFrame(isolate, nmessage);
+    if (!contextGroupId.has_value() || *contextGroupId <= 0)
+      contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
   }
 
   // No group, or its main-world V8 Context is already gone (post-nav /
@@ -988,10 +1067,8 @@ static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
     return;
   }
 
-  v8::String::Utf8Value message(args.GetIsolate(), args[0]);
-
-  std::string nmessage(*message);
-  v8_inspector::StringView messageView((const uint8_t*)nmessage.c_str(), nmessage.length());
+  v8_inspector::StringView messageView((const uint8_t*)nmessage.c_str(),
+                                       nmessage.length());
   getInspectorSession(isolate, *contextGroupId)->dispatchProtocolMessage(messageView);
 }
 
