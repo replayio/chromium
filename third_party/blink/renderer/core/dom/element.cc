@@ -193,6 +193,7 @@
 #include "third_party/blink/renderer/core/xml_names.h"
 #include "third_party/blink/renderer/platform/bindings/dom_data_store.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/bindings/v8_dom_activity_logger.h"
 #include "third_party/blink/renderer/platform/bindings/v8_dom_wrapper.h"
 #include "third_party/blink/renderer/platform/bindings/v8_per_context_data.h"
@@ -1170,6 +1171,10 @@ void Element::scrollIntoView(bool align_to_top) {
 }
 
 void Element::scrollIntoViewWithOptions(const ScrollIntoViewOptions* options) {
+  if (RecordReplayThrowIfEventsUnavailable("Element.scrollIntoView")) {
+    return;
+  }
+
   if (auto* ds_controller = DeferredShapingController::From(GetDocument()))
     ds_controller->ReshapeAllDeferred(ReshapeReason::kScrollingApi);
   ActivateDisplayLockIfNeeded(DisplayLockActivationReason::kScrollIntoView);
@@ -1204,6 +1209,10 @@ void Element::ScrollIntoViewNoVisualUpdate(
 }
 
 void Element::scrollIntoViewIfNeeded(bool center_if_needed) {
+  if (RecordReplayThrowIfEventsUnavailable("Element.scrollIntoViewIfNeeded")) {
+    return;
+  }
+
   GetDocument().EnsurePaintLocationDataValidForNode(
       this, DocumentUpdateReason::kJavaScript);
 
@@ -1578,6 +1587,10 @@ double Element::scrollTop() {
 }
 
 void Element::setScrollLeft(double new_left) {
+  if (RecordReplayThrowIfEventsUnavailable("Element.scrollLeft")) {
+    return;
+  }
+
   if (!InActiveDocument())
     return;
 
@@ -1631,6 +1644,10 @@ void Element::setScrollLeft(double new_left) {
 }
 
 void Element::setScrollTop(double new_top) {
+  if (RecordReplayThrowIfEventsUnavailable("Element.scrollTop")) {
+    return;
+  }
+
   if (!InActiveDocument())
     return;
 
@@ -1738,6 +1755,10 @@ void Element::scrollBy(double x, double y) {
 }
 
 void Element::scrollBy(const ScrollToOptions* scroll_to_options) {
+  if (RecordReplayThrowIfEventsUnavailable("Element.scrollBy")) {
+    return;
+  }
+
   if (!InActiveDocument())
     return;
 
@@ -1761,6 +1782,10 @@ void Element::scrollTo(double x, double y) {
 }
 
 void Element::scrollTo(const ScrollToOptions* scroll_to_options) {
+  if (RecordReplayThrowIfEventsUnavailable("Element.scrollTo")) {
+    return;
+  }
+
   if (!InActiveDocument())
     return;
 
