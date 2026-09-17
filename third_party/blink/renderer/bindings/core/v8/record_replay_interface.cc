@@ -991,8 +991,9 @@ static absl::optional<int> ContextGroupIdFromInspectorContextId(
 static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
   // The optional second argument is an inspector context id used to route
   // frame evaluations; existing callers only pass the serialized message.
-  CHECK((args.Length() == 1 || (args.Length() == 2 && args[1]->IsInt32())) &&
-        args[0]->IsString() &&
+  const bool has_context_id = args.Length() == 2 && !args[1]->IsUndefined();
+  CHECK((args.Length() == 1 || args.Length() == 2) && args[0]->IsString() &&
+        (!has_context_id || args[1]->IsInt32()) &&
         "must be called with a string and optional context id");
 
   recordreplay::AutoMarkReplayCode mark;
@@ -1006,7 +1007,7 @@ static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
   if (gContextGroupIdForSendCDPMessageDepth > 0) {
     contextGroupId =
         gContextGroupIdForSendCDPMessageStack[gContextGroupIdForSendCDPMessageDepth - 1];
-  } else if (args.Length() == 2) {
+  } else if (has_context_id) {
     contextGroupId = ContextGroupIdFromInspectorContextId(
         isolate, args[1].As<v8::Int32>()->Value());
     if (!contextGroupId.has_value()) {
