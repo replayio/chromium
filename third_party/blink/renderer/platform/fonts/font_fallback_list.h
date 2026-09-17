@@ -94,6 +94,11 @@ class PLATFORM_EXPORT FontFallbackList : public RefCounted<FontFallbackList> {
     if (!cached_primary_simple_font_data_) {
       cached_primary_simple_font_data_ =
           DeterminePrimarySimpleFontData(font_description);
+      // Inject warmed last-resort when Determine yields null.
+      if (!cached_primary_simple_font_data_) {
+        cached_primary_simple_font_data_ =
+            FontCache::ReplayLastResortSimpleFontData();
+      }
       DCHECK(cached_primary_simple_font_data_);
     }
     return cached_primary_simple_font_data_;
