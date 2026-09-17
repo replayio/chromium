@@ -245,7 +245,7 @@ class CDPMessageError extends Error {
   }
 }
 
-function sendCDPMessage(method, params) {
+function sendCDPMessage(method, params, contextId) {
   CHECK_ALIVE(`sendCDPMessage ${method}`);
 
   const id = gNextMessageId++;
@@ -253,7 +253,11 @@ function sendCDPMessage(method, params) {
   Array_push.call(gCdpRequestStack, cdpRequest);
   const cdpArgs = JSON_stringify({ method, params, id });
   try {
-    sendCDPMessageRaw(cdpArgs);
+    if (contextId === undefined) {
+      sendCDPMessageRaw(cdpArgs);
+    } else {
+      sendCDPMessageRaw(cdpArgs, contextId);
+    }
   } catch (err) {
     if (!cdpRequest.result) {
       throw err;
@@ -670,7 +674,8 @@ function Pause_evaluateInFrame({ frameId: frameIndexStr, expression }) {
         callFrameId: frame.callFrameId,
         expression,
         objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
-      }
+      },
+      frame.contextId
     );
   }
 }

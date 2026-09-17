@@ -20,12 +20,12 @@
 #include "base/record_replay_render_interface.h"
 #include "content/public/renderer/render_thread.h"
 #include "content/public/renderer/v8_value_converter.h"
+#include "third_party/blink/renderer/bindings/core/v8/serialization/serialized_script_value.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_css_style_declaration.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_document.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_element.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_node.h"
-#include "third_party/blink/renderer/bindings/core/v8/serialization/serialized_script_value.h"
 #include "third_party/blink/renderer/core/css/css_style_declaration.h"
 #include "third_party/blink/renderer/core/dom/dom_node_ids.h"
 #include "third_party/blink/renderer/core/dom/events/custom_event.h"
@@ -962,18 +962,65 @@ static void SendCDPMissingContextError(v8::Isolate* isolate,
   SendMessageToFrontend(message);
 }
 
+static absl::optional<int> ContextGroupIdFromInspectorContextId(
+    v8::Isolate* isolate,
+    int context_id) {
+  if (context_id <= 0 || !gV8Inspectors)
+    return absl::nullopt;
+
+  auto it = gV8Inspectors->find(isolate);
+  if (it == gV8Inspectors->end() || !it->second)
+    return absl::nullopt;
+
+  v8::HandleScope handle_scope(isolate);
+  v8::Local<v8::Context> context;
+  if (!it->second->contextById(context_id).ToLocal(&context))
+    return absl::nullopt;
+
+  LocalDOMWindow* window =
+      DynamicTo<LocalDOMWindow>(ToExecutionContext(context));
+  LocalFrame* frame = window ? window->GetFrame() : nullptr;
+  if (!frame)
+    return absl::nullopt;
+
+  // Same map GetCurrentContextGroupIdForIsolate uses; do not create.
+  LocalFrame& root = frame->LocalFrameRoot();
+  if (!WeakIdentifierMap<LocalFrame>::HasIdentifier(&root))
+    return absl::nullopt;
+  return WeakIdentifierMap<LocalFrame>::Identifier(&root);
+}
+
 static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
-  CHECK(args.Length() == 1 && args[0]->IsString() &&
-        "must be called with a single string");
+  // The optional second argument is an inspector context id used to route
+  // frame evaluations; existing callers only pass the serialized message.
+  const bool has_context_id = args.Length() == 2 && !args[1]->IsUndefined();
+  CHECK((args.Length() == 1 || args.Length() == 2) && args[0]->IsString() &&
+        (!has_context_id || args[1]->IsInt32()) &&
+        "must be called with a string and optional context id");
 
   recordreplay::AutoMarkReplayCode mark;
   recordreplay::AutoDisallowEvents disallow("SendCDPMessage");
 
   v8::Isolate* isolate = args.GetIsolate();
+  v8::String::Utf8Value message(isolate, args[0]);
+  std::string nmessage(*message);
+
   absl::optional<int> contextGroupId;
   if (gContextGroupIdForSendCDPMessageDepth > 0) {
     contextGroupId =
         gContextGroupIdForSendCDPMessageStack[gContextGroupIdForSendCDPMessageDepth - 1];
+  } else if (has_context_id) {
+    contextGroupId = ContextGroupIdFromInspectorContextId(
+        isolate, args[1].As<v8::Int32>()->Value());
+    if (!contextGroupId.has_value()) {
+      SendCDPMissingContextError(isolate, args[0]);
+      return;
+    }
+  } else if (recordreplay::HasDivergedFromRecording() &&
+             v8::internal::gPauseContextGroupId > 0) {
+    // CommandCallback has already translated the paused inspector context id
+    // into a context group id, so no further lookup is needed here.
+    contextGroupId = v8::internal::gPauseContextGroupId;
   } else {
     contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
   }
@@ -990,10 +1037,8 @@ static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
     return;
   }
 
-  v8::String::Utf8Value message(args.GetIsolate(), args[0]);
-
-  std::string nmessage(*message);
-  v8_inspector::StringView messageView((const uint8_t*)nmessage.c_str(), nmessage.length());
+  v8_inspector::StringView messageView((const uint8_t*)nmessage.c_str(),
+                                       nmessage.length());
   getInspectorSession(isolate, *contextGroupId)->dispatchProtocolMessage(messageView);
 }
 
