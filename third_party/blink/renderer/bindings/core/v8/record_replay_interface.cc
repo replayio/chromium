@@ -989,6 +989,8 @@ static absl::optional<int> ContextGroupIdFromInspectorContextId(
 }
 
 static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  // The optional second argument is an inspector context id used to route
+  // frame evaluations; existing callers only pass the serialized message.
   CHECK((args.Length() == 1 || (args.Length() == 2 && args[1]->IsInt32())) &&
         args[0]->IsString() &&
         "must be called with a string and optional context id");
@@ -1013,6 +1015,8 @@ static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
     }
   } else if (recordreplay::HasDivergedFromRecording() &&
              v8::internal::gPauseContextGroupId > 0) {
+    // CommandCallback has already translated the paused inspector context id
+    // into a context group id, so no further lookup is needed here.
     contextGroupId = v8::internal::gPauseContextGroupId;
   } else {
     contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
