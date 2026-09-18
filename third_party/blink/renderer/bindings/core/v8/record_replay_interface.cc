@@ -727,6 +727,8 @@ void RecordReplayClearContexts(const char* reason, LocalFrame* frame) {
   if (!gReplayScriptsAlive || frame != gRootLocalFrame) {
     return;
   }
+  // Last live window state; must precede SetScriptAlive(false) so the gate allows it.
+  recordreplay::NewCheckpointFlushed();
   v8::Isolate* isolate = V8PerIsolateData::MainThreadIsolate();
   recordreplay::Print(
       "ReplayScript STATUS_CHANGE_UNALIVE - %s %s frame=%d", reason,
