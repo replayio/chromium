@@ -118,6 +118,7 @@ const gSourceMapData = new Map();
 
 const JSON_stringify = JSON.stringify;
 const JSON_parse = JSON.parse;
+const URL_ = URL;
 
 // RUN-3067
 const Array_push = Array.prototype.push;
@@ -177,7 +178,7 @@ function getSourceMapURLs(sourceURL, relativeSourceMapURL) {
 
   let sourceMapURL;
   try {
-    sourceMapURL = new URL(relativeSourceMapURL, sourceBaseURL).toString();
+    sourceMapURL = new URL_(relativeSourceMapURL, sourceBaseURL).toString();
   } catch (err) {
     log("[RuntimeError] Failed to process sourcemap url: " + err.message);
     return null;
@@ -193,7 +194,7 @@ function getSourceMapURLs(sourceURL, relativeSourceMapURL) {
 
 function isValidBaseURL(url) {
   try {
-    new URL("", url);
+    new URL_("", url);
     return true;
   } catch {
     return false;
