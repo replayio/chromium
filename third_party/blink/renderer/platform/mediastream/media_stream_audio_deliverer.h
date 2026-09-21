@@ -7,6 +7,7 @@
 
 #include "base/containers/contains.h"
 #include "base/ranges/algorithm.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "base/threading/thread_checker.h"
 #include "base/trace_event/trace_event.h"
@@ -118,6 +119,9 @@ class MediaStreamAudioDeliverer {
                  "reference time (ms)",
                  (reference_time - base::TimeTicks()).InMillisecondsF());
     base::AutoLock auto_lock(consumers_lock_);
+    REPLAY_ASSERT("MediaStreamAudioDeliverer::OnData %u %u",
+                  (unsigned)consumers_.size(),
+                  (unsigned)pending_consumers_.size());
 
     // Call OnSetFormat() for all pending consumers and move them to the
     // active-delivery list.
