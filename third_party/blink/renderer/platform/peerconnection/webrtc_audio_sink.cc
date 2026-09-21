@@ -11,6 +11,7 @@
 #include "base/containers/contains.h"
 #include "base/location.h"
 #include "base/ranges/algorithm.h"
+#include "base/record_replay.h"
 #include "base/strings/stringprintf.h"
 #include "base/trace_event/trace_event.h"
 #include "media/base/audio_timestamp_helper.h"
@@ -112,6 +113,7 @@ void WebRtcAudioSink::OnData(const media::AudioBus& audio_bus,
   // will be a joint effort, and should be carefully carried out.
   last_estimated_capture_time_ = estimated_capture_time;
 
+  REPLAY_ASSERT("WebRtcAudioSink::OnData %d", audio_bus.frames());
   adapter_->UpdateTimestampAligner(estimated_capture_time);
 
   // The following will result in zero, one, or multiple synchronous calls to

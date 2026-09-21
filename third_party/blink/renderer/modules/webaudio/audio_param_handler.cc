@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/modules/webaudio/audio_param_handler.h"
 
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
@@ -306,6 +307,8 @@ void AudioParamHandler::CalculateFinalValues(float* values,
   // If there are any connections, sum all of the audio-rate connections
   // together (unity-gain summing junction).  Note that connections would
   // normally be mono, but we mix down to mono if necessary.
+  REPLAY_ASSERT("AudioParamHandler::CalculateFinalValues connections %u %d",
+                NumberOfRenderingConnections(), sample_accurate);
   if (NumberOfRenderingConnections() > 0) {
     DCHECK_LE(number_of_values, GetDeferredTaskHandler().RenderQuantumFrames());
 

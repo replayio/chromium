@@ -28,6 +28,7 @@
 #include <algorithm>
 
 #include "base/metrics/histogram_functions.h"
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "third_party/blink/public/mojom/devtools/console_message.mojom-blink.h"
 #include "third_party/blink/public/mojom/frame/lifecycle.mojom-shared.h"
@@ -728,12 +729,17 @@ void BaseAudioContext::HandleStoppableSourceNodes() {
   HashSet<scoped_refptr<AudioHandler>, recordreplay::ReplayRefPointerIdHash<AudioHandler>>* active_source_handlers =
       GetDeferredTaskHandler().GetActiveSourceHandlers();
 
+  REPLAY_ASSERT("BaseAudioContext::HandleStoppableSourceNodes size %u",
+                active_source_handlers->size());
   if (active_source_handlers->size()) {
     // Find source handlers to see if we can stop playing them.  Note: this
     // check doesn't have to be done every render quantum, if this checking
     // becomes to expensive.  It's ok to do this on a less frequency basis as
     // long as the active nodes eventually get stopped if they're done.
     for (auto handler : *active_source_handlers) {
+      REPLAY_ASSERT("BaseAudioContext::HandleStoppableSourceNodes %d %d",
+                    recordreplay::PointerId(handler.get()),
+                    (int)handler->GetNodeType());
       switch (handler->GetNodeType()) {
         case AudioHandler::kNodeTypeAudioBufferSource:
         case AudioHandler::kNodeTypeOscillator:

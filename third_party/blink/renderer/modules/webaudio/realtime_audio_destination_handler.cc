@@ -208,6 +208,10 @@ void RealtimeAudioDestinationHandler::Render(
     scoped_refptr<AudioBus> rendered_bus =
         Input(0).Pull(destination_bus, number_of_frames);
 
+    REPLAY_ASSERT(
+        "RealtimeAudioDestinationHandler::Render afterPull %d %d %d %u",
+        !!rendered_bus.get(), rendered_bus.get() == destination_bus,
+        destination_bus->IsSilent(), destination_bus->NumberOfChannels());
     DCHECK(rendered_bus);
     if (!rendered_bus) {
       // AudioNodeInput might be in the middle of destruction. Then the internal

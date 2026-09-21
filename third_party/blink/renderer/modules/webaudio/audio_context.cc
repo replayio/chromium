@@ -6,6 +6,7 @@
 
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
@@ -798,7 +799,12 @@ void AudioContext::HandleAudibility(AudioBus* destination_bus) {
     ++total_audible_renders_;
   }
 
-  recordreplay::Assert("[RUN-1506] AudioContext::HandleAudibility %d %d", was_audible_, is_audible);
+  REPLAY_ASSERT("AudioContext::HandleAudibility bus %d %u %u",
+                destination_bus && destination_bus->IsSilent(),
+                destination_bus ? destination_bus->NumberOfChannels() : 0u,
+                destination_bus ? destination_bus->length() : 0u);
+  REPLAY_ASSERT("AudioContext::HandleAudibility %d %d", was_audible_,
+                is_audible);
   if (was_audible_ != is_audible) {
     // Audibility changed in this render, so report the change.
     was_audible_ = is_audible;
