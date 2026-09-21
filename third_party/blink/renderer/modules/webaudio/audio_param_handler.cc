@@ -322,10 +322,6 @@ void AudioParamHandler::CalculateFinalValues(float* values,
       AudioNodeOutput* output = RenderingOutput(i);
       DCHECK(output);
 
-      REPLAY_ASSERT(
-          "AudioParamHandler::CalculateFinalValues output %u %d %d", i,
-          recordreplay::PointerId(&output->Handler()),
-          (int)output->Handler().GetNodeType());
       // Render audio from this output.
       AudioBus* connection_bus =
           output->Pull(nullptr, GetDeferredTaskHandler().RenderQuantumFrames());
