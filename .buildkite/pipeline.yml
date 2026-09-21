@@ -61,7 +61,10 @@ steps:
       RBE_service: simpsonite.cluster.engflow.com:443
       RBE_service_no_auth: "true"
       RBE_use_application_default_credentials: "true"
+    # build-runtime=true: shared heavy-build capacity (Node + Chromium).
+    # runtimeType=chromiumbuild: host has /home/ubuntu/chromium checkout (skip-checkout).
     agents:
+      - "build-runtime=true"
       - "runtimeType=chromiumbuild"
       - "os=linux"
       - "queue=runtime"
