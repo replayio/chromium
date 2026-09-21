@@ -287,6 +287,9 @@ bool OscillatorHandler::CalculateSampleAccuratePhaseIncrements(
 
   float final_scale = periodic_wave_->RateScale();
 
+  REPLAY_ASSERT("OscillatorHandler::CalculateSampleAccuratePhaseIncrements %d %d",
+                frequency_->HasSampleAccurateValues(),
+                frequency_->IsAudioRate());
   if (frequency_->HasSampleAccurateValues() && frequency_->IsAudioRate()) {
     has_sample_accurate_values = true;
     has_frequency_changes = true;
