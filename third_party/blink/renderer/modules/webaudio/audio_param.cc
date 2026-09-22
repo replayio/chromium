@@ -166,6 +166,9 @@ String AudioParam::automationRate() const {
 
 void AudioParam::setAutomationRate(const String& rate,
                                    ExceptionState& exception_state) {
+  REPLAY_ASSERT("AudioParam::setAutomationRate %d %d %d",
+                Handler().IsAutomationRateFixed(), rate == "a-rate",
+                rate == "k-rate");
   if (Handler().IsAutomationRateFixed()) {
     exception_state.ThrowDOMException(
         DOMExceptionCode::kInvalidStateError,
@@ -175,18 +178,11 @@ void AudioParam::setAutomationRate(const String& rate,
     return;
   }
 
-  AudioParamHandler::AutomationRate automation_rate;
   if (rate == "a-rate") {
-    automation_rate = AudioParamHandler::AutomationRate::kAudio;
+    Handler().SetAutomationRate(AudioParamHandler::AutomationRate::kAudio);
   } else if (rate == "k-rate") {
-    automation_rate = AudioParamHandler::AutomationRate::kControl;
-  } else {
-    return;
+    Handler().SetAutomationRate(AudioParamHandler::AutomationRate::kControl);
   }
-
-  REPLAY_ASSERT("AudioParam::setAutomationRate %d",
-                static_cast<int>(automation_rate));
-  Handler().SetAutomationRate(automation_rate);
 }
 
 AudioParam* AudioParam::setValueAtTime(float value,
