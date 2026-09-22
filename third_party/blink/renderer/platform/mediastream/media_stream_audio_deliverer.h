@@ -54,6 +54,9 @@ class MediaStreamAudioDeliverer {
     base::AutoLock auto_lock(consumers_lock_);
     DCHECK(!base::Contains(consumers_, consumer));
     DCHECK(!base::Contains(pending_consumers_, consumer));
+    REPLAY_ASSERT("MediaStreamAudioDeliverer::AddConsumer %u %u",
+                  (unsigned)consumers_.size(),
+                  (unsigned)pending_consumers_.size());
     pending_consumers_.push_back(consumer);
     SendLogMessage(
         String::Format("%s => (number of consumer: active=%u, pending=%u)",
@@ -70,6 +73,11 @@ class MediaStreamAudioDeliverer {
     const bool had_consumers =
         !consumers_.empty() || !pending_consumers_.empty();
     auto it = base::ranges::find(consumers_, consumer);
+    REPLAY_ASSERT("MediaStreamAudioDeliverer::RemoveConsumer %u %u %d %d",
+                  (unsigned)consumers_.size(),
+                  (unsigned)pending_consumers_.size(),
+                  (int)(it != consumers_.end()),
+                  (int)base::Contains(pending_consumers_, consumer));
     if (it != consumers_.end()) {
       consumers_.erase(it);
     } else {
@@ -102,6 +110,9 @@ class MediaStreamAudioDeliverer {
     base::AutoLock auto_lock(consumers_lock_);
     {
       base::AutoLock auto_params_lock(params_lock_);
+      REPLAY_ASSERT("MediaStreamAudioDeliverer::OnSetFormat %d %u %u",
+                    (int)params_.Equals(params), (unsigned)consumers_.size(),
+                    (unsigned)pending_consumers_.size());
       if (params_.Equals(params))
         return;
       SendLogMessage(String::Format("%s({params=[%s]})", __func__,
