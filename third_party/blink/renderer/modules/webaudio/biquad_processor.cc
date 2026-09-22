@@ -25,7 +25,6 @@
 
 #include <memory>
 
-#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "third_party/blink/renderer/modules/webaudio/biquad_dsp_kernel.h"
 #include "third_party/blink/renderer/modules/webaudio/biquad_processor.h"
@@ -77,14 +76,6 @@ void BiquadProcessor::CheckForDirtyCoefficients() {
     has_sample_accurate_values_ = true;
     // If any parameter is a-rate, then the filter must do a-rate processing for
     // everything.
-    REPLAY_ASSERT(
-        "BiquadProcessor::CheckForDirtyCoefficients %d %d %d %d %d %d %d %d",
-        static_cast<int>(parameter1_->GetAutomationRate()),
-        static_cast<int>(parameter2_->GetAutomationRate()),
-        static_cast<int>(parameter3_->GetAutomationRate()),
-        static_cast<int>(parameter4_->GetAutomationRate()),
-        parameter1_->IsAudioRate(), parameter2_->IsAudioRate(),
-        parameter3_->IsAudioRate(), parameter4_->IsAudioRate());
     is_audio_rate_ = parameter1_->IsAudioRate() || parameter2_->IsAudioRate() ||
                      parameter3_->IsAudioRate() || parameter4_->IsAudioRate();
   } else {

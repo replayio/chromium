@@ -25,6 +25,7 @@
 
 #include "third_party/blink/renderer/modules/webaudio/audio_param.h"
 
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
@@ -174,11 +175,18 @@ void AudioParam::setAutomationRate(const String& rate,
     return;
   }
 
+  AudioParamHandler::AutomationRate automation_rate;
   if (rate == "a-rate") {
-    Handler().SetAutomationRate(AudioParamHandler::AutomationRate::kAudio);
+    automation_rate = AudioParamHandler::AutomationRate::kAudio;
   } else if (rate == "k-rate") {
-    Handler().SetAutomationRate(AudioParamHandler::AutomationRate::kControl);
+    automation_rate = AudioParamHandler::AutomationRate::kControl;
+  } else {
+    return;
   }
+
+  REPLAY_ASSERT("AudioParam::setAutomationRate %d",
+                static_cast<int>(automation_rate));
+  Handler().SetAutomationRate(automation_rate);
 }
 
 AudioParam* AudioParam::setValueAtTime(float value,
