@@ -82,6 +82,9 @@ void BiquadProcessor::CheckForDirtyCoefficients() {
                   static_cast<int>(parameter2_->GetAutomationRate()),
                   static_cast<int>(parameter3_->GetAutomationRate()),
                   static_cast<int>(parameter4_->GetAutomationRate()));
+    REPLAY_ASSERT("BiquadProcessor::CheckForDirtyCoefficients IsAudioRate %d %d %d %d",
+                  parameter1_->IsAudioRate(), parameter2_->IsAudioRate(),
+                  parameter3_->IsAudioRate(), parameter4_->IsAudioRate());
     is_audio_rate_ = parameter1_->IsAudioRate() || parameter2_->IsAudioRate() ||
                      parameter3_->IsAudioRate() || parameter4_->IsAudioRate();
   } else {
