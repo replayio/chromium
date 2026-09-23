@@ -129,6 +129,11 @@ void FakeAudioWorker::Worker::Start(FakeAudioWorker::Callback worker_cb) {
 void FakeAudioWorker::Worker::DoStart() {
   DCHECK(worker_task_runner_->BelongsToCurrentThread());
   first_read_time_ = base::TimeTicks::Now();
+  first_read_time_ =
+      base::TimeTicks() +
+      base::Microseconds(recordreplay::RecordReplayValue(
+          "FakeAudioWorker::DoStart first_read_time_us",
+          (first_read_time_ - base::TimeTicks()).InMicroseconds()));
   frames_elapsed_ = 0;
   worker_task_cb_.Reset(base::BindRepeating(&Worker::DoRead, this));
   worker_task_cb_.callback().Run();
