@@ -129,6 +129,13 @@ class MediaStreamAudioDeliverer {
     TRACE_EVENT1("audio", "MediaStreamAudioDeliverer::OnData",
                  "reference time (ms)",
                  (reference_time - base::TimeTicks()).InMillisecondsF());
+    // StubPolicy: both-sides OnData early-out under ProperFakeAudio.
+    // ResidualAT: belt if residual AT still enters.
+    if (recordreplay::IsRecordingOrReplaying()) {
+      recordreplay::AutoDisallowEvents disallow(
+          "MediaStreamAudioDeliverer::OnData ResidualAT");
+      return;
+    }
     base::AutoLock auto_lock(consumers_lock_);
     REPLAY_ASSERT("MediaStreamAudioDeliverer::OnData %u %u",
                   (unsigned)consumers_.size(),
