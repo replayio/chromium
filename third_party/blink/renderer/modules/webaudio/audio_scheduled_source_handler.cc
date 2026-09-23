@@ -10,7 +10,9 @@
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/modules/event_modules.h"
+#include "third_party/blink/renderer/modules/webaudio/audio_context.h"
 #include "third_party/blink/renderer/modules/webaudio/base_audio_context.h"
+#include "third_party/blink/renderer/modules/webaudio/deferred_task_handler.h"
 #include "third_party/blink/renderer/platform/audio/audio_utilities.h"
 #include "third_party/blink/renderer/platform/bindings/exception_messages.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
@@ -203,6 +205,8 @@ void AudioScheduledSourceHandler::Start(double when,
   start_time_ = std::max(when, Context()->currentTime());
 
   SetPlaybackState(SCHEDULED_STATE);
+  RegisterSourceScheduleStart();
+  RegisterNaturalEndBoundIfAny();
 }
 
 void AudioScheduledSourceHandler::Stop(double when,
@@ -230,6 +234,7 @@ void AudioScheduledSourceHandler::Stop(double when,
   // No exceptions are thrown in any case.
   when = std::max(0.0, when);
   end_time_ = when;
+  RegisterSourceScheduleStop();
 }
 
 void AudioScheduledSourceHandler::FinishWithoutOnEnded() {
@@ -264,6 +269,58 @@ void AudioScheduledSourceHandler::NotifyEnded() {
     }
   }
   on_ended_notification_pending_ = false;
+}
+
+void AudioScheduledSourceHandler::FireStartDue() {
+  DCHECK(IsMainThread());
+  if (GetPlaybackState() == SCHEDULED_STATE) {
+    SetPlaybackState(PLAYING_STATE);
+  }
+}
+
+void AudioScheduledSourceHandler::FireEndedDue() {
+  DCHECK(IsMainThread());
+  if (HasFinished()) {
+    return;
+  }
+  SetPlaybackState(FINISHED_STATE);
+  if (Context()->HasRealtimeConstraint()) {
+    DeferredTaskHandler::GraphAutoLocker locker(Context());
+    static_cast<AudioContext*>(Context())->FinishSourceOnMainThread(this);
+  }
+  NotifyEnded();
+}
+
+void AudioScheduledSourceHandler::RegisterSourceScheduleStart() {
+  DCHECK(IsMainThread());
+  if (!recordreplay::IsRecordingOrReplaying() ||
+      !Context()->HasRealtimeConstraint()) {
+    return;
+  }
+  size_t start_bound = audio_utilities::TimeToSampleFrame(
+      start_time_, Context()->sampleRate());
+  static_cast<AudioContext*>(Context())->GetSourceScheduleTable().InsertStart(
+      this, start_bound);
+}
+
+void AudioScheduledSourceHandler::RegisterSourceScheduleStop() {
+  DCHECK(IsMainThread());
+  if (!recordreplay::IsRecordingOrReplaying() ||
+      !Context()->HasRealtimeConstraint() || end_time_ == kUnknownTime) {
+    return;
+  }
+  size_t stop_bound =
+      audio_utilities::TimeToSampleFrame(end_time_, Context()->sampleRate());
+  static_cast<AudioContext*>(Context())
+      ->GetSourceScheduleTable()
+      .InsertOrSupersedeStop(this, stop_bound);
+}
+
+void AudioScheduledSourceHandler::RegisterNaturalEndBoundIfAny() {
+  DCHECK(IsMainThread());
+  if (end_time_ != kUnknownTime) {
+    RegisterSourceScheduleStop();
+  }
 }
 
 }  // namespace blink
