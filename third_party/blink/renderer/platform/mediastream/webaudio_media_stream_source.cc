@@ -8,6 +8,7 @@
 
 #include "base/callback_helpers.h"
 #include "base/logging.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 
 namespace blink {
@@ -82,6 +83,14 @@ void WebAudioMediaStreamSource::ConsumeAudio(
   TRACE_EVENT1(TRACE_DISABLED_BY_DEFAULT("mediastream"),
                "WebAudioMediaStreamSource::ConsumeAudio", "frames",
                number_of_frames);
+
+  // StubPolicy: MSDest OnData early-out (WebAudio→tracks only; not shared
+  // MediaStreamAudioDeliverer). ResidualAT belt if Process still fans out.
+  if (recordreplay::IsRecordingOrReplaying()) {
+    recordreplay::AutoDisallowEvents disallow(
+        "WebAudioMediaStreamSource::ConsumeAudio ResidualAT");
+    return;
+  }
 
   //  TODO(https://crbug.com/1302080): this should use the actual audio
   // playout stamp instead of Now().

@@ -133,8 +133,10 @@ double AnalyserNode::smoothingTimeConstant() const {
 }
 
 void AnalyserNode::getFloatFrequencyData(NotShared<DOMFloat32Array> array) {
-  // StubPolicy: defined silent read; no FFT under ProperFakeAudio.
-  if (recordreplay::IsRecordingOrReplaying()) {
+  // StubPolicy: defined silent read; no FFT under ProperFakeAudio realtime.
+  // OfflineAudio FolderExempt.
+  if (recordreplay::IsRecordingOrReplaying() &&
+      context()->HasRealtimeConstraint()) {
     ZeroStubDestination(array.Get());
     return;
   }
@@ -143,7 +145,8 @@ void AnalyserNode::getFloatFrequencyData(NotShared<DOMFloat32Array> array) {
 }
 
 void AnalyserNode::getByteFrequencyData(NotShared<DOMUint8Array> array) {
-  if (recordreplay::IsRecordingOrReplaying()) {
+  if (recordreplay::IsRecordingOrReplaying() &&
+      context()->HasRealtimeConstraint()) {
     ZeroStubDestination(array.Get());
     return;
   }
@@ -152,7 +155,8 @@ void AnalyserNode::getByteFrequencyData(NotShared<DOMUint8Array> array) {
 }
 
 void AnalyserNode::getFloatTimeDomainData(NotShared<DOMFloat32Array> array) {
-  if (recordreplay::IsRecordingOrReplaying()) {
+  if (recordreplay::IsRecordingOrReplaying() &&
+      context()->HasRealtimeConstraint()) {
     ZeroStubDestination(array.Get());
     return;
   }
@@ -160,7 +164,8 @@ void AnalyserNode::getFloatTimeDomainData(NotShared<DOMFloat32Array> array) {
 }
 
 void AnalyserNode::getByteTimeDomainData(NotShared<DOMUint8Array> array) {
-  if (recordreplay::IsRecordingOrReplaying()) {
+  if (recordreplay::IsRecordingOrReplaying() &&
+      context()->HasRealtimeConstraint()) {
     ZeroStubDestination(array.Get());
     return;
   }

@@ -43,7 +43,9 @@ void AnalyserHandler::Process(uint32_t frames_to_process) {
   AudioBus* output_bus = Output(0).Bus();
 
   // ResidualAT: ThinRender should not enter; belt if pulled.
-  if (recordreplay::IsRecordingOrReplaying()) {
+  // OfflineAudio FolderExempt.
+  if (recordreplay::IsRecordingOrReplaying() &&
+      Context()->HasRealtimeConstraint()) {
     recordreplay::AutoDisallowEvents disallow(
         "AnalyserHandler::Process ResidualAT");
     output_bus->Zero();
