@@ -68,8 +68,6 @@ void FakeAudioOutputStream::GetVolume(double* volume) {
 void FakeAudioOutputStream::CallOnMoreData(base::TimeTicks ideal_time,
                                            base::TimeTicks now) {
   DCHECK(audio_manager_->GetWorkerTaskRunner()->BelongsToCurrentThread());
-  recordreplay::AutoDisallowEvents disallow(
-      "FakeAudioOutputStream::CallOnMoreData");
   // Real streams provide small tweaks to their delay values, alongside the
   // current system time; and so the same is done here.
   base::TimeDelta delay =
@@ -80,7 +78,11 @@ void FakeAudioOutputStream::CallOnMoreData(base::TimeTicks ideal_time,
   now = base::TimeTicks() + base::Microseconds(recordreplay::RecordReplayValue(
       "FakeAudioOutputStream::CallOnMoreData now_us",
       (now - base::TimeTicks()).InMicroseconds()));
-  callback_->OnMoreData(delay, now, 0, audio_bus_.get());
+  {
+    recordreplay::AutoDisallowEvents disallow(
+        "FakeAudioOutputStream::CallOnMoreData");
+    callback_->OnMoreData(delay, now, 0, audio_bus_.get());
+  }
 }
 
 void FakeAudioOutputStream::SetMute(bool muted) {}
