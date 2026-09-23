@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/modules/webaudio/audio_handler.h"
 
+#include "absl/types/optional.h"
 #include "base/record_replay.h"
 #include "base/trace_event/trace_event.h"
 #include "third_party/blink/public/platform/modules/webrtc/webrtc_logging.h"
@@ -314,6 +315,14 @@ void AudioHandler::UpdateChannelsForInputs() {
 
 void AudioHandler::ProcessIfNecessary(uint32_t frames_to_process) {
   DCHECK(Context()->IsAudioThread());
+
+  // ResidualAT: ThinRender abandons Pull/Process; belt if residual AT enters.
+  // OfflineAudio FolderExempt — realtime only.
+  absl::optional<recordreplay::AutoDisallowEvents> residual_at;
+  if (recordreplay::IsRecordingOrReplaying() &&
+      Context()->HasRealtimeConstraint()) {
+    residual_at.emplace("AudioHandler::ProcessIfNecessary ResidualAT");
+  }
 
   if (!IsInitialized()) {
     REPLAY_ASSERT("AudioHandler::ProcessIfNecessary uninit %d %d",
