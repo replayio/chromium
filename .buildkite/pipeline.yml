@@ -122,6 +122,13 @@ steps:
       test -n "$$BUILD_ID"
       cd "$$BACKEND_DIR"
       unset REPLAY_LOCAL_DRIVER_DIR || true
+      # e2e pods still ship Node 18; Dockerfile.buildkite-e2e-agent is Node 25 (nodesource)
+      # but needs root. No live agent has e2e+node25. User-space tarball = backend .nvmrc.
+      NODE_VERSION=25.8.1
+      NODE_PREFIX="$$WORKDIR/node-v$${NODE_VERSION}-linux-x64"
+      curl -fsSL "https://nodejs.org/dist/v$${NODE_VERSION}/node-v$${NODE_VERSION}-linux-x64.tar.xz" | tar -xJ -C "$$WORKDIR"
+      export PATH="$${NODE_PREFIX}/bin:$$PATH"
+      hash -r
       node --version
       # packageManager pnpm@10.11.0; agents lack global npm write (EACCES).
       npx --yes pnpm@10.11.0 install --frozen-lockfile
