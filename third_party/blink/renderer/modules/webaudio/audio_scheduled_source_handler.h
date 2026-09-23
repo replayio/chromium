@@ -122,9 +122,10 @@ class AudioScheduledSourceHandler
   void NotifyEnded();
 
   // SourceScheduleTable writers (main; R/R realtime only).
-  void RegisterSourceScheduleStart();
-  void RegisterSourceScheduleStop();
-  virtual void RegisterNaturalEndBoundIfAny();
+  void RegisterSourceScheduleStart() EXCLUSIVE_LOCKS_REQUIRED(process_lock_);
+  void RegisterSourceScheduleStop() EXCLUSIVE_LOCKS_REQUIRED(process_lock_);
+  virtual void RegisterNaturalEndBoundIfAny()
+      EXCLUSIVE_LOCKS_REQUIRED(process_lock_);
 
   // This synchronizes with process() and any other method that needs to be
   // synchronized like setBuffer for AudioBufferSource.
