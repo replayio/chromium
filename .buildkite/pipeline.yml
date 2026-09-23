@@ -85,22 +85,45 @@ steps:
         RECORD_REPLAY_METADATA_SOURCE_MERGE_ID: "${BUILDKITE_PULL_REQUEST}"
         RUNTIME_REPO: "${BUILDKITE_PULL_REQUEST_REPO}"
 
-  # Parallel with E2E: dedicated chromium-recording suite on backend.
-  # Requires BK pipeline runtime-chromium-recording-tests → .buildkite/runtime-chromium-recording-tests.yml
+  # Parallel with E2E: inline chromium-recording on can_replay (mirrors node test-node).
   - label: "📝 Chromium Recording Tests (linux-x86_64)"
-    trigger: "runtime-chromium-recording-tests"
+    key: "chromium-recording-linux-x86_64"
     depends_on:
       - "build-chromium-linux-x86_64"
-    build:
-      commit: "${REPLAY_BACKEND_REV}"
-      env:
-        OS: "linux"
-        ARCH: "x86_64"
-        RECORD_REPLAY_METADATA_SOURCE_COMMIT_TITLE: "${BUILDKITE_MESSAGE}"
-        RECORD_REPLAY_METADATA_SOURCE_COMMIT_ID: "${BUILDKITE_COMMIT}"
-        RECORD_REPLAY_METADATA_SOURCE_BRANCH: "${BUILDKITE_BRANCH}"
-        RECORD_REPLAY_METADATA_SOURCE_MERGE_ID: "${BUILDKITE_PULL_REQUEST}"
-        RUNTIME_REPO: "${BUILDKITE_PULL_REQUEST_REPO}"
+    agents:
+      - "can_replay=true"
+    plugins:
+      - thedyrt/skip-checkout#v0.1.1: ~
+      - seek-oss/aws-sm#v2.3.1:
+          region: us-east-2
+          env:
+            HASURA_ADMIN_SECRET: "prod/hasura-admin-secret"
+            RECORD_REPLAY_API_KEY: "prod/public-api-key"
+    env:
+      PLAYWRIGHT_HEADLESS: "true"
+      CI: "1"
+    command: |
+      set -euo pipefail
+      PIN="$$REPLAY_BACKEND_REV"
+      test -n "$$PIN"
+      WORKDIR=$$(mktemp -d "/tmp/chromium-recording-$${BUILDKITE_JOB_ID}.XXXXXX")
+      BACKEND_DIR="$$WORKDIR/backend"
+      mkdir -p "$$BACKEND_DIR"
+      git -C "$$BACKEND_DIR" init
+      git -C "$$BACKEND_DIR" remote add origin git@github.com:replayio/backend.git
+      git -C "$$BACKEND_DIR" fetch --depth 1 origin "$$PIN"
+      git -C "$$BACKEND_DIR" checkout FETCH_HEAD
+      # LinkerZombieLeak: sweep before tests + always after (even on failure).
+      "$$BACKEND_DIR/scripts/kill-linker-processes.sh"
+      trap '"$$BACKEND_DIR/scripts/kill-linker-processes.sh"; rm -rf "$$WORKDIR"' EXIT
+      buildkite-agent artifact download build_id/linux/x86_64/build_id "$$WORKDIR/"
+      BUILD_ID="$$(cat "$$WORKDIR/build_id/linux/x86_64/build_id")"
+      test -n "$$BUILD_ID"
+      cd "$$BACKEND_DIR"
+      unset REPLAY_LOCAL_DRIVER_DIR || true
+      # packageManager pnpm@10.11.0; can_replay agents lack global npm write (EACCES).
+      npx --yes pnpm@10.11.0 install --frozen-lockfile
+      npx tsx src/build/buildChromium.ts test-chromium-recording --build-id "$$BUILD_ID"
 
   # - label: "🔨 Chromium (mac-x86_64)"
   #   key: "build-chromium-mac-x86_64"
@@ -203,14 +226,6 @@ steps:
   #     - "runtimeType=chromiumbuild"
   #     - "os=linux"
   #     - "queue=runtime"
-
-  # - label: "📝 Command Tests (macos-arm64)"
-  #   trigger: "runtime-command-tests"
-  #   build:
-  #     commit: "${REPLAY_BACKEND_REV}"
-  #   depends_on:
-  #     - "build-chromium-mac-x86_64"
-  #     - "build-chromium-mac-arm64"
 
   # # - label: "📝 Live Tests"
   # #   trigger: "testing-runtime-e2e"
