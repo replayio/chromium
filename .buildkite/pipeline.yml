@@ -85,13 +85,14 @@ steps:
         RECORD_REPLAY_METADATA_SOURCE_MERGE_ID: "${BUILDKITE_PULL_REQUEST}"
         RUNTIME_REPO: "${BUILDKITE_PULL_REQUEST_REPO}"
 
-  # Parallel with E2E: inline chromium-recording on can_replay (mirrors node test-node).
+  # Parallel with E2E: inline chromium-recording (mirrors node test-node).
+  # e2e=true: only linux class with Replay Chromium runtime libs (libnss3); can_replay lacks them.
   - label: "📝 Chromium Recording Tests (linux-x86_64)"
     key: "chromium-recording-linux-x86_64"
     depends_on:
       - "build-chromium-linux-x86_64"
     agents:
-      - "can_replay=true"
+      - "e2e=true"
     plugins:
       - thedyrt/skip-checkout#v0.1.1: ~
       - seek-oss/aws-sm#v2.3.1:
@@ -121,7 +122,8 @@ steps:
       test -n "$$BUILD_ID"
       cd "$$BACKEND_DIR"
       unset REPLAY_LOCAL_DRIVER_DIR || true
-      # packageManager pnpm@10.11.0; can_replay agents lack global npm write (EACCES).
+      node --version
+      # packageManager pnpm@10.11.0; agents lack global npm write (EACCES).
       npx --yes pnpm@10.11.0 install --frozen-lockfile
       npx tsx src/build/buildChromium.ts test-chromium-recording --build-id "$$BUILD_ID"
 
