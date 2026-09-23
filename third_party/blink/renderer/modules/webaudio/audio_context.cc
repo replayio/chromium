@@ -742,11 +742,15 @@ bool AudioContext::HandlePreRenderTasks(const AudioIOPosition* output_position,
   if (TryLock()) {
     GetDeferredTaskHandler().HandleDeferredTasks();
 
-    ResolvePromisesForUnpause();
+    // MainThreadSubstitute: under R/R ThinRender this method is unreachable;
+    // also disable TryLock-driven resume / stoppable (QuantumEdge owns them).
+    if (!recordreplay::IsRecordingOrReplaying()) {
+      ResolvePromisesForUnpause();
 
-    // Check to see if source nodes can be stopped because the end time has
-    // passed.
-    HandleStoppableSourceNodes();
+      // Check to see if source nodes can be stopped because the end time has
+      // passed.
+      HandleStoppableSourceNodes();
+    }
 
     // Update the dirty state of the listener.
     listener()->UpdateState();
@@ -855,11 +859,15 @@ void AudioContext::EnqueueQuantumEdge() {
 
 void AudioContext::PerformDeferredMainDelivery() {
   DCHECK(IsMainThread());
-  quantum_edge_pending_.store(false, std::memory_order_release);
 
   if (!GetExecutionContext()) {
+    quantum_edge_pending_.store(false, std::memory_order_release);
     return;
   }
+
+  // Clear before FireDues so AT Advances during delivery can post a follow-up
+  // edge (coalesce must not stall dues until an unrelated later Advance).
+  quantum_edge_pending_.store(false, std::memory_order_release);
 
   {
     GraphAutoLocker locker(this);

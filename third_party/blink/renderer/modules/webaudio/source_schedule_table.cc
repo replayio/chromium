@@ -6,6 +6,7 @@
 
 #include "third_party/blink/renderer/modules/webaudio/audio_scheduled_source_handler.h"
 #include "third_party/blink/renderer/platform/wtf/threading.h"
+#include "third_party/blink/renderer/platform/wtf/vector.h"
 
 namespace blink {
 
@@ -32,22 +33,27 @@ void SourceScheduleTable::InsertOrSupersedeStop(
 void SourceScheduleTable::FireDues(size_t fake_audio_clock) {
   DCHECK(IsMainThread());
 
+  // Retire under DueRule first, then fire outside the map walk. NotifyEnded
+  // may re-enter Start/Stop and mutate rows_.
+  Vector<AudioScheduledSourceHandler*> start_due;
+  Vector<AudioScheduledSourceHandler*> stop_due;
   Vector<AudioScheduledSourceHandler*> stale;
+
   for (auto& entry : rows_) {
     AudioScheduledSourceHandler* source = entry.key;
     Row& row = entry.value;
 
     if (row.start_live && row.start_bound <= fake_audio_clock) {
-      source->FireStartDue();
       row.start_live = false;
+      start_due.push_back(source);
     }
 
     if (row.stop_live && row.stop_bound <= fake_audio_clock) {
+      row.stop_live = false;
       if (!row.ended_latched) {
         row.ended_latched = true;
-        source->FireEndedDue();
+        stop_due.push_back(source);
       }
-      row.stop_live = false;
     }
 
     if (!row.start_live && !row.stop_live) {
@@ -57,6 +63,13 @@ void SourceScheduleTable::FireDues(size_t fake_audio_clock) {
 
   for (AudioScheduledSourceHandler* source : stale) {
     rows_.erase(source);
+  }
+
+  for (AudioScheduledSourceHandler* source : start_due) {
+    source->FireStartDue();
+  }
+  for (AudioScheduledSourceHandler* source : stop_due) {
+    source->FireEndedDue();
   }
 }
 

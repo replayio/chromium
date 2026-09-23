@@ -297,8 +297,9 @@ void AudioScheduledSourceHandler::RegisterSourceScheduleStart() {
       !Context()->HasRealtimeConstraint()) {
     return;
   }
+  // Match UpdateSchedulingInfo: RoundUp so start is not early.
   size_t start_bound = audio_utilities::TimeToSampleFrame(
-      start_time_, Context()->sampleRate());
+      start_time_, Context()->sampleRate(), audio_utilities::kRoundUp);
   static_cast<AudioContext*>(Context())->GetSourceScheduleTable().InsertStart(
       this, start_bound);
 }
@@ -309,8 +310,10 @@ void AudioScheduledSourceHandler::RegisterSourceScheduleStop() {
       !Context()->HasRealtimeConstraint() || end_time_ == kUnknownTime) {
     return;
   }
-  size_t stop_bound =
-      audio_utilities::TimeToSampleFrame(end_time_, Context()->sampleRate());
+  // Match UpdateSchedulingInfo exclusive end (RoundUp). Covers Oscillator /
+  // ConstantSource stoppable paths; those have no natural end binder.
+  size_t stop_bound = audio_utilities::TimeToSampleFrame(
+      end_time_, Context()->sampleRate(), audio_utilities::kRoundUp);
   static_cast<AudioContext*>(Context())
       ->GetSourceScheduleTable()
       .InsertOrSupersedeStop(this, stop_bound);
@@ -318,6 +321,8 @@ void AudioScheduledSourceHandler::RegisterSourceScheduleStop() {
 
 void AudioScheduledSourceHandler::RegisterNaturalEndBoundIfAny() {
   DCHECK(IsMainThread());
+  // Default: only an explicit stop() bound. Oscillator/ConstantSource rely on
+  // RegisterSourceScheduleStop; AudioBufferSource overrides for buffer end.
   if (end_time_ != kUnknownTime) {
     RegisterSourceScheduleStop();
   }
