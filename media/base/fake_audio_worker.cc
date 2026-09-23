@@ -153,7 +153,6 @@ void FakeAudioWorker::Worker::DoCancel() {
 
 void FakeAudioWorker::Worker::DoRead() {
   DCHECK(worker_task_runner_->BelongsToCurrentThread());
-  recordreplay::AutoDisallowEvents disallow("FakeAudioWorker::DoRead");
 
   const base::TimeTicks read_time =
       first_read_time_ +
