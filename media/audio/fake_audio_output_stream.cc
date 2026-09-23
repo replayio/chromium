@@ -7,6 +7,7 @@
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/check.h"
+#include "base/record_replay.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "media/audio/audio_manager_base.h"
@@ -67,10 +68,18 @@ void FakeAudioOutputStream::GetVolume(double* volume) {
 void FakeAudioOutputStream::CallOnMoreData(base::TimeTicks ideal_time,
                                            base::TimeTicks now) {
   DCHECK(audio_manager_->GetWorkerTaskRunner()->BelongsToCurrentThread());
+  recordreplay::AutoDisallowEvents disallow(
+      "FakeAudioOutputStream::CallOnMoreData");
   // Real streams provide small tweaks to their delay values, alongside the
   // current system time; and so the same is done here.
-  const auto delay =
+  base::TimeDelta delay =
       fixed_data_delay_ + std::max(base::TimeDelta(), ideal_time - now);
+  delay = base::Microseconds(recordreplay::RecordReplayValue(
+      "FakeAudioOutputStream::CallOnMoreData delay_us",
+      delay.InMicroseconds()));
+  now = base::TimeTicks() + base::Microseconds(recordreplay::RecordReplayValue(
+      "FakeAudioOutputStream::CallOnMoreData now_us",
+      (now - base::TimeTicks()).InMicroseconds()));
   callback_->OnMoreData(delay, now, 0, audio_bus_.get());
 }
 

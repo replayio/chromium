@@ -13,6 +13,7 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/observer_list.h"
 #include "base/ranges/algorithm.h"
+#include "base/record_replay.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
@@ -199,29 +200,33 @@ AudioOutputStream* AudioManagerBase::MakeAudioOutputStream(
   }
 
   AudioOutputStream* stream;
-  switch (params.format()) {
-    case AudioParameters::AUDIO_PCM_LINEAR:
-      DCHECK(AudioDeviceDescription::IsDefaultDevice(device_id))
-          << "AUDIO_PCM_LINEAR supports only the default device.";
-      stream = MakeLinearOutputStream(params, log_callback);
-      break;
-    case AudioParameters::AUDIO_PCM_LOW_LATENCY:
-      stream = MakeLowLatencyOutputStream(params, device_id, log_callback);
-      break;
-    case AudioParameters::AUDIO_BITSTREAM_AC3:
-    case AudioParameters::AUDIO_BITSTREAM_EAC3:
-    case AudioParameters::AUDIO_BITSTREAM_DTS:
-    case AudioParameters::AUDIO_BITSTREAM_DTS_HD:
-    case AudioParameters::AUDIO_BITSTREAM_DTSX_P2:
-    case AudioParameters::AUDIO_BITSTREAM_IEC61937:
-      stream = MakeBitstreamOutputStream(params, device_id, log_callback);
-      break;
-    case AudioParameters::AUDIO_FAKE:
-      stream = FakeAudioOutputStream::MakeFakeStream(this, params);
-      break;
-    default:
-      stream = nullptr;
-      break;
+  if (recordreplay::IsRecordingOrReplaying()) {
+    stream = FakeAudioOutputStream::MakeFakeStream(this, params);
+  } else {
+    switch (params.format()) {
+      case AudioParameters::AUDIO_PCM_LINEAR:
+        DCHECK(AudioDeviceDescription::IsDefaultDevice(device_id))
+            << "AUDIO_PCM_LINEAR supports only the default device.";
+        stream = MakeLinearOutputStream(params, log_callback);
+        break;
+      case AudioParameters::AUDIO_PCM_LOW_LATENCY:
+        stream = MakeLowLatencyOutputStream(params, device_id, log_callback);
+        break;
+      case AudioParameters::AUDIO_BITSTREAM_AC3:
+      case AudioParameters::AUDIO_BITSTREAM_EAC3:
+      case AudioParameters::AUDIO_BITSTREAM_DTS:
+      case AudioParameters::AUDIO_BITSTREAM_DTS_HD:
+      case AudioParameters::AUDIO_BITSTREAM_DTSX_P2:
+      case AudioParameters::AUDIO_BITSTREAM_IEC61937:
+        stream = MakeBitstreamOutputStream(params, device_id, log_callback);
+        break;
+      case AudioParameters::AUDIO_FAKE:
+        stream = FakeAudioOutputStream::MakeFakeStream(this, params);
+        break;
+      default:
+        stream = nullptr;
+        break;
+    }
   }
 
   if (stream) {
@@ -346,7 +351,8 @@ AudioOutputStream* AudioManagerBase::MakeAudioOutputStreamProxy(
 
   // If audio has been disabled force usage of a fake audio stream.
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-          switches::kDisableAudioOutput)) {
+          switches::kDisableAudioOutput) ||
+      recordreplay::IsRecordingOrReplaying()) {
     output_params.set_format(AudioParameters::AUDIO_FAKE);
   }
 
