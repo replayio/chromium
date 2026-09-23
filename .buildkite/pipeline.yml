@@ -85,6 +85,23 @@ steps:
         RECORD_REPLAY_METADATA_SOURCE_MERGE_ID: "${BUILDKITE_PULL_REQUEST}"
         RUNTIME_REPO: "${BUILDKITE_PULL_REQUEST_REPO}"
 
+  # Parallel with E2E: dedicated chromium-recording suite on backend.
+  # Requires BK pipeline runtime-chromium-recording-tests → .buildkite/runtime-chromium-recording-tests.yml
+  - label: "📝 Chromium Recording Tests (linux-x86_64)"
+    trigger: "runtime-chromium-recording-tests"
+    depends_on:
+      - "build-chromium-linux-x86_64"
+    build:
+      commit: "${REPLAY_BACKEND_REV}"
+      env:
+        OS: "linux"
+        ARCH: "x86_64"
+        RECORD_REPLAY_METADATA_SOURCE_COMMIT_TITLE: "${BUILDKITE_MESSAGE}"
+        RECORD_REPLAY_METADATA_SOURCE_COMMIT_ID: "${BUILDKITE_COMMIT}"
+        RECORD_REPLAY_METADATA_SOURCE_BRANCH: "${BUILDKITE_BRANCH}"
+        RECORD_REPLAY_METADATA_SOURCE_MERGE_ID: "${BUILDKITE_PULL_REQUEST}"
+        RUNTIME_REPO: "${BUILDKITE_PULL_REQUEST_REPO}"
+
   # - label: "🔨 Chromium (mac-x86_64)"
   #   key: "build-chromium-mac-x86_64"
   #   timeout_in_minutes: 360
