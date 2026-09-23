@@ -194,6 +194,12 @@ void RealtimeAudioDestinationHandler::Render(
     return;
   }
 
+  if (recordreplay::IsRecordingOrReplaying()) {
+    destination_bus->Zero();
+    AdvanceCurrentSampleFrame(number_of_frames);
+    return;
+  }
+
   context->HandlePreRenderTasks(&output_position, &metric);
 
   // Only pull on the audio graph if we have not stopped the destination.  It
