@@ -13,6 +13,7 @@
 #include "third_party/blink/renderer/core/html/media/autoplay_policy.h"
 #include "third_party/blink/renderer/modules/webaudio/base_audio_context.h"
 #include "third_party/blink/renderer/modules/webaudio/setsinkid_resolver.h"
+#include "third_party/blink/renderer/modules/webaudio/source_schedule_table.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_deque.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/self_keep_alive.h"
@@ -20,9 +21,12 @@
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
+#include <atomic>
+
 namespace blink {
 
 class AudioContextOptions;
+class AudioScheduledSourceHandler;
 class AudioTimestamp;
 class Document;
 class ExceptionState;
@@ -93,6 +97,14 @@ class MODULES_EXPORT AudioContext : public BaseAudioContext,
   void HandlePostRenderTasks() final;
 
   void HandleAudibility(AudioBus* destination_bus);
+
+  // MainThreadSubstitute: QuantumEdge enqueue (AT, lock-free post).
+  void EnqueueQuantumEdge();
+  SourceScheduleTable& GetSourceScheduleTable() {
+    return source_schedule_table_;
+  }
+  // Main-thread BreakConnection + active-set erase (ThinRender has no AT Finish).
+  void FinishSourceOnMainThread(AudioScheduledSourceHandler*);
 
   AudioCallbackMetric GetCallbackMetric() const;
 
@@ -176,6 +188,9 @@ class MODULES_EXPORT AudioContext : public BaseAudioContext,
   // posting a main thread task to perform the actual resolving, if needed.
   void ResolvePromisesForUnpause();
 
+  // DeferredMainDelivery on QuantumEdge MainThreadTask.
+  void PerformDeferredMainDelivery();
+
   AudioIOPosition OutputPosition() const;
 
   // Send notification to browser that an AudioContext has started or stopped
@@ -249,6 +264,9 @@ class MODULES_EXPORT AudioContext : public BaseAudioContext,
   // A queue for setSinkId() Promise resolvers. Requests are handled in the
   // order it was received and only one request is handled at a time.
   HeapDeque<Member<SetSinkIdResolver>> set_sink_id_resolvers_;
+
+  SourceScheduleTable source_schedule_table_;
+  std::atomic_bool quantum_edge_pending_{false};
 };
 
 }  // namespace blink

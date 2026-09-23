@@ -70,6 +70,8 @@ class AudioBufferSourceHandler final : public AudioScheduledSourceHandler {
   void HandleStoppableSourceNode() override;
 
  private:
+  void RegisterNaturalEndBoundIfAny() override;
+
   AudioBufferSourceHandler(AudioNode&,
                            float sample_rate,
                            AudioParamHandler& playback_rate,
