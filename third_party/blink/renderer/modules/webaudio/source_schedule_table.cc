@@ -30,13 +30,19 @@ void SourceScheduleTable::InsertOrSupersedeStop(
   row.stop_live = true;
 }
 
+void SourceScheduleTable::Clear() {
+  DCHECK(IsMainThread());
+  rows_.clear();
+}
+
 void SourceScheduleTable::FireDues(size_t fake_audio_clock) {
   DCHECK(IsMainThread());
 
   // Retire under DueRule first, then fire outside the map walk. NotifyEnded
-  // may re-enter Start/Stop and mutate rows_.
-  Vector<AudioScheduledSourceHandler*> start_due;
-  Vector<AudioScheduledSourceHandler*> stop_due;
+  // may re-enter Start/Stop and mutate rows_. Hold refs across fire so
+  // FinishSourceOnMainThread / close cannot UAF peer dues.
+  Vector<scoped_refptr<AudioScheduledSourceHandler>> start_due;
+  Vector<scoped_refptr<AudioScheduledSourceHandler>> stop_due;
   Vector<AudioScheduledSourceHandler*> stale;
 
   for (auto& entry : rows_) {
@@ -65,10 +71,10 @@ void SourceScheduleTable::FireDues(size_t fake_audio_clock) {
     rows_.erase(source);
   }
 
-  for (AudioScheduledSourceHandler* source : start_due) {
+  for (auto& source : start_due) {
     source->FireStartDue();
   }
-  for (AudioScheduledSourceHandler* source : stop_due) {
+  for (auto& source : stop_due) {
     source->FireEndedDue();
   }
 }
