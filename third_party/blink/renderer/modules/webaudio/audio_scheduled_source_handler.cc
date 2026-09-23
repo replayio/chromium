@@ -260,6 +260,10 @@ void AudioScheduledSourceHandler::NotifyEnded() {
   // let DispatchEvent take are of sending the event to the right
   // place,
   DCHECK(IsMainThread());
+  // RetireRule: ≤1 ended dispatch per source.
+  if (!on_ended_notification_pending_) {
+    return;
+  }
 
   if (GetNode()) {
     DispatchEventResult result =
@@ -283,6 +287,11 @@ void AudioScheduledSourceHandler::FireEndedDue() {
   if (HasFinished()) {
     return;
   }
+  // Close/teardown: ReleaseActiveSourceNodes owns BreakConnection; skip fire.
+  if (Context()->IsContextCleared() || !Context()->IsDestinationInitialized()) {
+    SetPlaybackState(FINISHED_STATE);
+    return;
+  }
   SetPlaybackState(FINISHED_STATE);
   if (Context()->HasRealtimeConstraint()) {
     DeferredTaskHandler::GraphAutoLocker locker(Context());
@@ -294,7 +303,7 @@ void AudioScheduledSourceHandler::FireEndedDue() {
 void AudioScheduledSourceHandler::RegisterSourceScheduleStart() {
   DCHECK(IsMainThread());
   if (!recordreplay::IsRecordingOrReplaying() ||
-      !Context()->HasRealtimeConstraint()) {
+      !Context()->HasRealtimeConstraint() || HasFinished()) {
     return;
   }
   // Match UpdateSchedulingInfo: RoundUp so start is not early.
@@ -307,7 +316,8 @@ void AudioScheduledSourceHandler::RegisterSourceScheduleStart() {
 void AudioScheduledSourceHandler::RegisterSourceScheduleStop() {
   DCHECK(IsMainThread());
   if (!recordreplay::IsRecordingOrReplaying() ||
-      !Context()->HasRealtimeConstraint() || end_time_ == kUnknownTime) {
+      !Context()->HasRealtimeConstraint() || end_time_ == kUnknownTime ||
+      HasFinished()) {
     return;
   }
   // Match UpdateSchedulingInfo exclusive end (RoundUp). Covers Oscillator /

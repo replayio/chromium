@@ -273,6 +273,8 @@ void AudioContext::Uninitialize() {
   DCHECK_NE(hardware_context_count, 0u);
   SendLogMessage(String::Format("%s", __func__));
   --hardware_context_count;
+  // Drop schedule binders before ReleaseActiveSourceNodes / pending QuantumEdge.
+  source_schedule_table_.Clear();
   StopRendering();
   DidClose();
   RecordAutoplayMetrics();
@@ -860,7 +862,7 @@ void AudioContext::EnqueueQuantumEdge() {
 void AudioContext::PerformDeferredMainDelivery() {
   DCHECK(IsMainThread());
 
-  if (!GetExecutionContext()) {
+  if (!GetExecutionContext() || IsContextCleared()) {
     quantum_edge_pending_.store(false, std::memory_order_release);
     return;
   }
@@ -890,6 +892,11 @@ void AudioContext::PerformDeferredMainDelivery() {
     }
   }
 
+  // Closing / Tear-down: ReleaseActiveSourceNodes owns BreakConnection.
+  if (IsContextCleared() || !IsDestinationInitialized() || !destination()) {
+    return;
+  }
+
   // Fire SourceScheduleTable dues under DueRule + RetireRule.
   source_schedule_table_.FireDues(
       destination()->GetAudioDestinationHandler().CurrentSampleFrame());
@@ -900,8 +907,12 @@ void AudioContext::FinishSourceOnMainThread(
   DCHECK(IsMainThread());
   AssertGraphOwner();
   DCHECK(source);
+  auto* active = GetDeferredTaskHandler().GetActiveSourceHandlers();
+  if (!active->Contains(source)) {
+    return;
+  }
   source->BreakConnectionWithLock();
-  GetDeferredTaskHandler().GetActiveSourceHandlers()->erase(source);
+  active->erase(source);
 }
 
 AudioIOPosition AudioContext::OutputPosition() const {

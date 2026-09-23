@@ -453,6 +453,11 @@ void AudioBufferSourceHandler::SetBuffer(AudioBuffer* buffer,
   }
 
   virtual_read_index_ = 0;
+
+  // start()-before-setBuffer: register natural end once buffer exists.
+  if (buffer && IsPlayingOrScheduled()) {
+    RegisterNaturalEndBoundIfAny();
+  }
 }
 
 unsigned AudioBufferSourceHandler::NumberOfChannels() {

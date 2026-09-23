@@ -32,6 +32,9 @@ class MODULES_EXPORT SourceScheduleTable {
   // DueRule + RetireRule. Must run on main.
   void FireDues(size_t fake_audio_clock);
 
+  // Drop all binders (context close / teardown).
+  void Clear();
+
  private:
   struct Row {
     size_t start_bound = 0;
