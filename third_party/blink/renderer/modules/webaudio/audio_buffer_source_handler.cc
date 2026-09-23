@@ -759,8 +759,8 @@ void AudioBufferSourceHandler::RegisterNaturalEndBoundIfAny() {
   double stop_time =
       start_time_ + Buffer()->duration() +
       kExtraStopFrames / static_cast<double>(Context()->sampleRate());
-  size_t stop_bound =
-      audio_utilities::TimeToSampleFrame(stop_time, Context()->sampleRate());
+  size_t stop_bound = audio_utilities::TimeToSampleFrame(
+      stop_time, Context()->sampleRate(), audio_utilities::kRoundUp);
   static_cast<AudioContext*>(Context())
       ->GetSourceScheduleTable()
       .InsertOrSupersedeStop(this, stop_bound);
