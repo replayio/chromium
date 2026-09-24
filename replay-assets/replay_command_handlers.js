@@ -844,11 +844,18 @@ function clearPauseDataCallback() {
     gCssRulesByNodeRrpId.clear();
     gLastRrpId = 0;
 
+    if (!isReplayScriptAlive()) {
+      return;
+    }
+
     // RUN-1832
     sendCDPMessage("Runtime.releaseObjectGroup", {
       objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP,
     });
   } catch (e) {
+    if (e instanceof CDPMessageError && e.code == CDPERROR_MISSINGCONTEXT) {
+      return;
+    }
     warning(`JS clearPauseDataCallback exception: ${e}`);
   }
 }
