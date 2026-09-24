@@ -25,12 +25,27 @@
 
 #include "third_party/blink/renderer/modules/webaudio/analyser_node.h"
 
+#include <cstring>
+
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_analyser_options.h"
 #include "third_party/blink/renderer/modules/webaudio/analyser_handler.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_graph_tracer.h"
 #include "third_party/blink/renderer/modules/webaudio/base_audio_context.h"
 
 namespace blink {
+
+namespace {
+
+template <typename Array>
+void ZeroStubDestination(Array* destination) {
+  if (!destination || !destination->Data() || !destination->length()) {
+    return;
+  }
+  std::memset(destination->Data(), 0, destination->byteLength());
+}
+
+}  // namespace
 
 AnalyserNode::AnalyserNode(BaseAudioContext& context)
     : AudioBasicInspectorNode(context) {
@@ -118,20 +133,42 @@ double AnalyserNode::smoothingTimeConstant() const {
 }
 
 void AnalyserNode::getFloatFrequencyData(NotShared<DOMFloat32Array> array) {
+  // StubPolicy: defined silent read; no FFT under ProperFakeAudio realtime.
+  // OfflineAudio FolderExempt.
+  if (recordreplay::IsRecordingOrReplaying() &&
+      context()->HasRealtimeConstraint()) {
+    ZeroStubDestination(array.Get());
+    return;
+  }
   GetAnalyserHandler().GetFloatFrequencyData(array.Get(),
                                              context()->currentTime());
 }
 
 void AnalyserNode::getByteFrequencyData(NotShared<DOMUint8Array> array) {
+  if (recordreplay::IsRecordingOrReplaying() &&
+      context()->HasRealtimeConstraint()) {
+    ZeroStubDestination(array.Get());
+    return;
+  }
   GetAnalyserHandler().GetByteFrequencyData(array.Get(),
                                             context()->currentTime());
 }
 
 void AnalyserNode::getFloatTimeDomainData(NotShared<DOMFloat32Array> array) {
+  if (recordreplay::IsRecordingOrReplaying() &&
+      context()->HasRealtimeConstraint()) {
+    ZeroStubDestination(array.Get());
+    return;
+  }
   GetAnalyserHandler().GetFloatTimeDomainData(array.Get());
 }
 
 void AnalyserNode::getByteTimeDomainData(NotShared<DOMUint8Array> array) {
+  if (recordreplay::IsRecordingOrReplaying() &&
+      context()->HasRealtimeConstraint()) {
+    ZeroStubDestination(array.Get());
+    return;
+  }
   GetAnalyserHandler().GetByteTimeDomainData(array.Get());
 }
 
