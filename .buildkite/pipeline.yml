@@ -94,6 +94,8 @@ steps:
     # Non-blocking: nothing may depend on this step.
     soft_fail: true
     timeout_in_minutes: 30
+    # Yield shared e2e agents to blocking E2E jobs.
+    priority: -1
     agents:
       - "e2e=true"
     plugins:
@@ -111,15 +113,18 @@ steps:
       PIN="$$REPLAY_BACKEND_REV"
       test -n "$$PIN"
       WORKDIR=$$(mktemp -d "/tmp/chromium-recording-$${BUILDKITE_JOB_ID}.XXXXXX")
+      # Short path: unix socket paths under TMPDIR are length-limited.
+      export TMPDIR=$$(mktemp -d /tmp/crt.XXXXXX)
+      export RECORD_REPLAY_DIRECTORY="$$WORKDIR/replay"
       BACKEND_DIR="$$WORKDIR/backend"
-      mkdir -p "$$BACKEND_DIR"
+      mkdir -p "$$BACKEND_DIR" "$$RECORD_REPLAY_DIRECTORY"
       git -C "$$BACKEND_DIR" init
       git -C "$$BACKEND_DIR" remote add origin git@github.com:replayio/backend.git
       git -C "$$BACKEND_DIR" fetch --depth 1 origin "$$PIN"
       git -C "$$BACKEND_DIR" checkout FETCH_HEAD
       # LinkerZombieLeak: sweep before tests + always after (even on failure).
       "$$BACKEND_DIR/scripts/kill-linker-processes.sh"
-      trap '"$$BACKEND_DIR/scripts/kill-linker-processes.sh"; rm -rf "$$WORKDIR"' EXIT
+      trap '"$$BACKEND_DIR/scripts/kill-linker-processes.sh"; rm -rf "$$WORKDIR" "$$TMPDIR"' EXIT
       buildkite-agent artifact download build_id/linux/x86_64/build_id "$$WORKDIR/"
       BUILD_ID="$$(cat "$$WORKDIR/build_id/linux/x86_64/build_id")"
       test -n "$$BUILD_ID"
