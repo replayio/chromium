@@ -10,7 +10,9 @@
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/modules/event_modules.h"
+#include "third_party/blink/renderer/modules/webaudio/audio_context.h"
 #include "third_party/blink/renderer/modules/webaudio/base_audio_context.h"
+#include "third_party/blink/renderer/modules/webaudio/deferred_task_handler.h"
 #include "third_party/blink/renderer/platform/audio/audio_utilities.h"
 #include "third_party/blink/renderer/platform/bindings/exception_messages.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
@@ -203,6 +205,8 @@ void AudioScheduledSourceHandler::Start(double when,
   start_time_ = std::max(when, Context()->currentTime());
 
   SetPlaybackState(SCHEDULED_STATE);
+  RegisterSourceScheduleStart();
+  RegisterNaturalEndBoundIfAny();
 }
 
 void AudioScheduledSourceHandler::Stop(double when,
@@ -230,6 +234,7 @@ void AudioScheduledSourceHandler::Stop(double when,
   // No exceptions are thrown in any case.
   when = std::max(0.0, when);
   end_time_ = when;
+  RegisterSourceScheduleStop();
 }
 
 void AudioScheduledSourceHandler::FinishWithoutOnEnded() {
@@ -255,6 +260,10 @@ void AudioScheduledSourceHandler::NotifyEnded() {
   // let DispatchEvent take are of sending the event to the right
   // place,
   DCHECK(IsMainThread());
+  // RetireRule: ≤1 ended dispatch per source.
+  if (!on_ended_notification_pending_) {
+    return;
+  }
 
   if (GetNode()) {
     DispatchEventResult result =
@@ -264,6 +273,69 @@ void AudioScheduledSourceHandler::NotifyEnded() {
     }
   }
   on_ended_notification_pending_ = false;
+}
+
+void AudioScheduledSourceHandler::FireStartDue() {
+  DCHECK(IsMainThread());
+  if (GetPlaybackState() == SCHEDULED_STATE) {
+    SetPlaybackState(PLAYING_STATE);
+  }
+}
+
+void AudioScheduledSourceHandler::FireEndedDue() {
+  DCHECK(IsMainThread());
+  if (HasFinished()) {
+    return;
+  }
+  // Close/teardown: ReleaseActiveSourceNodes owns BreakConnection; skip fire.
+  if (Context()->IsContextCleared() || !Context()->IsDestinationInitialized()) {
+    SetPlaybackState(FINISHED_STATE);
+    return;
+  }
+  SetPlaybackState(FINISHED_STATE);
+  if (Context()->HasRealtimeConstraint()) {
+    DeferredTaskHandler::GraphAutoLocker locker(Context());
+    static_cast<AudioContext*>(Context())->FinishSourceOnMainThread(this);
+  }
+  NotifyEnded();
+}
+
+void AudioScheduledSourceHandler::RegisterSourceScheduleStart() {
+  DCHECK(IsMainThread());
+  if (!recordreplay::IsRecordingOrReplaying() ||
+      !Context()->HasRealtimeConstraint() || HasFinished()) {
+    return;
+  }
+  // Match UpdateSchedulingInfo: RoundUp so start is not early.
+  size_t start_bound = audio_utilities::TimeToSampleFrame(
+      start_time_, Context()->sampleRate(), audio_utilities::kRoundUp);
+  static_cast<AudioContext*>(Context())->GetSourceScheduleTable().InsertStart(
+      this, start_bound);
+}
+
+void AudioScheduledSourceHandler::RegisterSourceScheduleStop() {
+  DCHECK(IsMainThread());
+  if (!recordreplay::IsRecordingOrReplaying() ||
+      !Context()->HasRealtimeConstraint() || end_time_ == kUnknownTime ||
+      HasFinished()) {
+    return;
+  }
+  // Match UpdateSchedulingInfo exclusive end (RoundUp). Covers Oscillator /
+  // ConstantSource stoppable paths; those have no natural end binder.
+  size_t stop_bound = audio_utilities::TimeToSampleFrame(
+      end_time_, Context()->sampleRate(), audio_utilities::kRoundUp);
+  static_cast<AudioContext*>(Context())
+      ->GetSourceScheduleTable()
+      .InsertOrSupersedeStop(this, stop_bound);
+}
+
+void AudioScheduledSourceHandler::RegisterNaturalEndBoundIfAny() {
+  DCHECK(IsMainThread());
+  // Default: only an explicit stop() bound. Oscillator/ConstantSource rely on
+  // RegisterSourceScheduleStop; AudioBufferSource overrides for buffer end.
+  if (end_time_ != kUnknownTime) {
+    RegisterSourceScheduleStop();
+  }
 }
 
 }  // namespace blink
