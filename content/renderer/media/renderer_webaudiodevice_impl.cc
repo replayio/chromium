@@ -13,6 +13,7 @@
 #include "base/check_op.h"
 #include "base/command_line.h"
 #include "base/notreached.h"
+#include "base/record_replay.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
@@ -150,6 +151,9 @@ RendererWebAudioDeviceImpl::RendererWebAudioDeviceImpl(
   if (!hardware_params.IsValid()) {
     hardware_params.Reset(media::AudioParameters::AUDIO_FAKE,
                           media::ChannelLayoutConfig::Stereo(), 48000, 480);
+  }
+  if (recordreplay::IsRecordingOrReplaying()) {
+    hardware_params.set_format(media::AudioParameters::AUDIO_FAKE);
   }
   SendLogMessage(
       base::StringPrintf("%s => (hardware_params=[%s])", __func__,
