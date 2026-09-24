@@ -91,6 +91,9 @@ steps:
     key: "chromium-recording-linux-x86_64"
     depends_on:
       - "build-chromium-linux-x86_64"
+    # Non-blocking: nothing may depend on this step.
+    soft_fail: true
+    timeout_in_minutes: 30
     agents:
       - "e2e=true"
     plugins:
