@@ -139,7 +139,9 @@ namespace recordreplay {
   Macro(V8RecordReplayExitReplayCode, (), ())                           \
   Macro(V8RecordReplayBeginAssertBufferAllocations,                     \
     (const char* issueLabel), (issueLabel))                             \
-  Macro(V8RecordReplayEndAssertBufferAllocations, (), ())
+  Macro(V8RecordReplayEndAssertBufferAllocations, (), ())                \
+  Macro(V8RecordReplaySetPossibleBreakpointsEnabled,                    \
+        (bool enabled), (enabled))
   
 
 #if BUILDFLAG(IS_WIN)
@@ -613,6 +615,10 @@ void EnterReplayCode() {
 
 void ExitReplayCode() {
   V8RecordReplayExitReplayCode();
+}
+
+void SetPossibleBreakpointsEnabled(bool enabled) {
+  V8RecordReplaySetPossibleBreakpointsEnabled(enabled);
 }
 
 bool AreEventsUnavailable(const char* why) {
