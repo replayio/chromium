@@ -114,7 +114,9 @@ steps:
       test -n "$$PIN"
       WORKDIR=$$(mktemp -d "/tmp/chromium-recording-$${BUILDKITE_JOB_ID}.XXXXXX")
       # Short path: unix socket paths under TMPDIR are length-limited.
-      export TMPDIR=$$(mktemp -d /tmp/crt.XXXXXX)
+      TMPDIR=$$(mktemp -d /tmp/crt.XXXXXX)
+      export TMPDIR
+      trap 'rm -rf "$$WORKDIR" "$$TMPDIR"' EXIT
       export RECORD_REPLAY_DIRECTORY="$$WORKDIR/replay"
       BACKEND_DIR="$$WORKDIR/backend"
       mkdir -p "$$BACKEND_DIR" "$$RECORD_REPLAY_DIRECTORY"
