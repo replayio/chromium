@@ -132,7 +132,7 @@ steps:
       node --version
       # packageManager pnpm@10.11.0; agents lack global npm write (EACCES).
       npx --yes pnpm@10.11.0 install --frozen-lockfile
-      npx tsx src/build/buildChromium.ts test-chromium-recording --build-id "$$BUILD_ID"
+      npx tsx src/build/buildRuntime.ts test-chromium-recording --build-id "$$BUILD_ID"
 
   # - label: "🔨 Chromium (mac-x86_64)"
   #   key: "build-chromium-mac-x86_64"
