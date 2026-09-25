@@ -86,10 +86,6 @@ bool AreEventsDisallowed(const char* why = nullptr);
 void EnterReplayCode();
 void ExitReplayCode();
 
-// Arm or disarm V8's SFI retention for a run which may request possible
-// breakpoints after execution completes.
-void SetPossibleBreakpointsEnabled(bool enabled);
-
 bool FeatureEnabled(const char* feature, const char* subfeature = nullptr);
 bool HasDisabledFeatures();
 
