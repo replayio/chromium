@@ -207,6 +207,35 @@ bool IsPagePopupRunningInWebTest(LocalFrame* frame) {
          WebTestSupport::IsRunningWebTest();
 }
 
+ResourceRequest BuildRecordReplayNavigationRequest(
+    const KURL& url,
+    const LocalFrame* frame,
+    uint64_t inspector_id,
+    const AtomicString& http_method,
+    const scoped_refptr<EncodedFormData>& http_body,
+    const AtomicString& http_content_type,
+    const AtomicString& referrer) {
+  ResourceRequest request(url);
+  if (inspector_id) {
+    request.SetInspectorId(inspector_id);
+  }
+  request.SetHttpMethod(http_method);
+  if (http_body) {
+    request.SetHttpBody(http_body);
+  }
+  if (!http_content_type.IsNull()) {
+    request.SetHTTPContentType(http_content_type);
+  }
+  if (!referrer.IsNull()) {
+    request.SetReferrerString(referrer);
+  }
+  request.SetMode(network::mojom::RequestMode::kNavigate);
+  request.SetRequestDestination(frame && frame->Owner()
+                                    ? network::mojom::RequestDestination::kIframe
+                                    : network::mojom::RequestDestination::kDocument);
+  return request;
+}
+
 struct SameSizeAsDocumentLoader
     : public GarbageCollected<SameSizeAsDocumentLoader>,
       public WebDocumentLoader,
@@ -1229,7 +1258,15 @@ void DocumentLoader::HandleRedirect(
   probe::WillSendNavigationRequest(
       probe::ToCoreProbeSink(GetFrame()), main_resource_identifier_, this,
       url_after_redirect, http_method_, http_body_.get());
-  recordreplay::OnNetworkResourceRedirect(main_resource_identifier_, url_after_redirect, nullptr);
+  if (recordreplay::IsRecordingOrReplaying("notify-network")) {
+    ResourceRequest request = BuildRecordReplayNavigationRequest(
+        url_after_redirect, frame_.Get(), 0, http_method_, http_body_,
+        http_content_type_, referrer_);
+    recordreplay::OnNetworkNavigationRedirect(main_resource_identifier_,
+                                              url_after_redirect,
+                                              request,
+                                              redirect_response);
+  }
 
   navigation_timing_info_->AddRedirect(redirect_response, url_after_redirect);
 
@@ -1704,8 +1741,9 @@ void DocumentLoader::StartLoadingInternal() {
   main_resource_identifier_ = CreateUniqueIdentifier();
 
   if (recordreplay::IsRecordingOrReplaying("notify-network")) {
-    ResourceRequest request(url_);
-    request.SetInspectorId(main_resource_identifier_);
+    ResourceRequest request = BuildRecordReplayNavigationRequest(
+        url_, frame_.Get(), main_resource_identifier_, http_method_, http_body_,
+        http_content_type_, referrer_);
     recordreplay::OnNetworkPrepareRequest(nullptr, nullptr, request);
   }
 

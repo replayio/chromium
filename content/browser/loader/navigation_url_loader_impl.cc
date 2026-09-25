@@ -467,29 +467,6 @@ void NavigationURLLoaderImpl::StartImpl(
   // events for RecordReplay to observe.  Content processes are
   // not recorded so this event will be lost otherwise.
   base::Value::Dict dict;
-  char request_id[64];
-  snprintf(request_id, 64, "%d.%d",
-    global_request_id_.child_id,
-    global_request_id_.request_id
-  );
-  dict.Set("requestId", request_id);
-  dict.Set("requestMethod", resource_request_->method);
-  dict.Set("requestUrl", url_.spec());
-
-  base::ListValue headers;
-  for (auto header_entry : resource_request_->headers.GetHeaderVector()) {
-    base::Value::Dict header_obj;
-    header_obj.Set("name", header_entry.key);
-    header_obj.Set("value", header_entry.value);
-    headers.Append(std::move(header_obj));
-  }
-  dict.Set("requestHeaders", std::move(headers));
-
-  FrameTreeNode* frame_tree_node = FrameTreeNode::GloballyFindByID(frame_tree_node_id_);
-  RenderFrameHostImpl* render_frame_host = frame_tree_node->current_frame_host();
-  RenderProcessHost* render_process_host = render_frame_host->GetProcess();
-  mojom::Renderer* renderer = render_process_host->GetRendererInterface();
-  renderer->RecordReplayBrowserEvent("Network.Navigation", std::move(dict));
 }
 
 void NavigationURLLoaderImpl::CreateInterceptors(
@@ -967,37 +944,6 @@ void NavigationURLLoaderImpl::CallOnReceivedResponse(
 void NavigationURLLoaderImpl::OnReceiveRedirect(
     const net::RedirectInfo& redirect_info,
     network::mojom::URLResponseHeadPtr head) {
-  // Notify the render process about the redirect, to allow
-  // for RecordReplay network monitor to register it.
-  {
-    base::Value::Dict dict;
-    char request_id[64];
-    snprintf(request_id, 64, "%d.%d",
-      (int) global_request_id_.child_id,
-      (int) global_request_id_.request_id
-    );
-    dict.Set("requestId", request_id);
-    dict.Set("originalUrl", url_chain_.size() > 0 ? url_chain_[0].spec()
-                                                  : url_.spec());
-    dict.Set("requestMethod", resource_request_->method);
-    dict.Set("requestUrl", redirect_info.new_url.spec());
-
-    base::ListValue headers;
-    for (auto header_entry : resource_request_->headers.GetHeaderVector()) {
-      base::DictionaryValue header_obj;
-      header_obj.SetString("name", header_entry.key);
-      header_obj.SetString("value", header_entry.value);
-      headers.Append(std::move(header_obj));
-    }
-    dict.Set("requestHeaders", std::move(headers));
-
-    FrameTreeNode* frame_tree_node = FrameTreeNode::GloballyFindByID(frame_tree_node_id_);
-    RenderFrameHostImpl* render_frame_host = frame_tree_node->current_frame_host();
-    RenderProcessHost* render_process_host = render_frame_host->GetProcess();
-    mojom::Renderer* renderer = render_process_host->GetRendererInterface();
-    renderer->RecordReplayBrowserEvent("Network.NavigationRedirect", std::move(dict));
-  }
-
   LogQueueTimeHistogram("Navigation.QueueTime.OnReceiveRedirect",
                         resource_request_->is_outermost_main_frame);
   net::Error error = net::OK;
