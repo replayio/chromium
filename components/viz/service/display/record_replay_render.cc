@@ -4,11 +4,15 @@
 
 #include "components/viz/service/display/record_replay_render.h"
 
+#include <atomic>
+#include <cstdlib>
+
 #include "base/base64.h"
 #include "base/record_replay.h"
 #include "base/record_replay_paint_surface.h"
 #include "base/record_replay_render_interface.h"
 #include "base/strings/stringprintf.h"
+#include "base/time/time.h"
 #include "cc/animation/animation_events.h"
 #include "cc/trees/compositor_commit_data.h"
 #include "components/viz/common/display/renderer_settings.h"
@@ -251,6 +255,38 @@ static std::atomic<char*> gRepaintResult;
 
 // Real size of |gRepaintResult|.
 static std::atomic<gfx::Size> gDeviceViewportSize;
+
+// Most recent decision from RecordReplayShouldSamplePaint(), readable from
+// other threads without advancing the throttle window.
+static std::atomic<bool> gLastPaintSampleDecision{false};
+
+bool RecordReplayShouldSamplePaint() {
+  if (AreEventsDisallowed()) {
+    return false;
+  }
+
+  static const base::TimeDelta delay = base::Milliseconds([] {
+    const char* env = getenv("RECORD_REPLAY_MIN_PAINT_DELAY");
+    return env ? atoi(env) : 200;
+  }());
+
+  static base::TimeTicks last;
+  base::TimeTicks now = base::TimeTicks::Now();
+  bool should = (now - last) >= delay;
+
+  // RecordReplayValue takes/returns uintptr_t; bool converts implicitly both
+  // ways (same pattern as js_based_event_listener.cc:85), no cast needed.
+  should = RecordReplayValue("RecordReplayShouldSamplePaint", should);
+  if (should) {
+    last = now;
+  }
+  gLastPaintSampleDecision.store(should, std::memory_order_relaxed);
+  return should;
+}
+
+bool RecordReplayLastPaintSampleDecision() {
+  return gLastPaintSampleDecision.load(std::memory_order_relaxed);
+}
 
 void OnPaintFinished(const SkPixmap& pixmap) {
   gCurrentPixmap = &pixmap;
