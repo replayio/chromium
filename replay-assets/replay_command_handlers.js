@@ -121,6 +121,7 @@ const JSONParse = JSON.parse;
 const { bind, call } = Function.prototype;
 const uncurryThis = bind.bind(call);
 const URL_ = URL;
+const URLPrototypeToString = uncurryThis(URL_.prototype.toString);
 
 // RUN-3067
 const ArrayPrototypePush = uncurryThis(Array.prototype.push);
@@ -180,7 +181,7 @@ function getSourceMapURLs(sourceURL, relativeSourceMapURL) {
 
   let sourceMapURL;
   try {
-    sourceMapURL = new URL_(relativeSourceMapURL, sourceBaseURL).toString();
+    sourceMapURL = URLPrototypeToString(new URL_(relativeSourceMapURL, sourceBaseURL));
   } catch (err) {
     log("[RuntimeError] Failed to process sourcemap url: " + err.message);
     return null;
