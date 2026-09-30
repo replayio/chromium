@@ -4,6 +4,7 @@
 
 // Avoid monkey patching.
 const { fetch, URL, Error, Response, queueMicrotask } = window;
+const ArrayIsArray = Array.isArray;
 const DateNow = Date.now;
 const { parse: JSONParse, stringify: JSONStringify } = JSON;
 const { bind, call } = Function.prototype;
@@ -211,12 +212,12 @@ function collectUnresolvedSourceMapResources(mapText, mapURL) {
   if (obj.sources != null) {
     const { sourceRoot, sources, sourcesContent } = obj;
 
-    if (Array.isArray(sources)) {
+    if (ArrayIsArray(sources)) {
       for (let i = 0; i < sources.length; i++) {
         const offset = sourceOffset++;
 
         if (
-          !Array.isArray(sourcesContent) ||
+          !ArrayIsArray(sourcesContent) ||
           typeof sourcesContent[i] !== "string"
         ) {
           let url = sources[i];
