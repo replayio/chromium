@@ -5,6 +5,7 @@
 // Avoid monkey patching.
 const { fetch, URL, Error, Response, queueMicrotask } = window;
 const DateNow = Date.now;
+const { parse: JSONParse, stringify: JSONStringify } = JSON;
 const { bind, call } = Function.prototype;
 const uncurryThis = bind.bind(call);
 const StringPrototypeStartsWith = uncurryThis(String.prototype.startsWith);
@@ -102,7 +103,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   let sources;
   if (recordingDirectoryFileExists(name) && recordingDirectoryFileExists(lookupName)) {
     try {
-      sources = JSON.parse(readFromRecordingDirectory(lookupName));
+      sources = JSONParse(readFromRecordingDirectory(lookupName));
     } catch (err) {
       log(`[RuntimeError][sourcemaps] Failed to load sourcemaps from file: ${lookupName} - ${err.message}`);
     }
@@ -113,12 +114,12 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     writeToRecordingDirectory(name, sourceMap);
 
     sources = collectUnresolvedSourceMapResources(sourceMap, sourceMapURL);
-    writeToRecordingDirectory(lookupName, JSON.stringify(sources));
+    writeToRecordingDirectory(lookupName, JSONStringify(sources));
   }
 
   log(`[sourcemaps] Wrote sourcemap to file. Found ${sources.length} unresolved sources for "${sourceMapURL}". Downloading...`);
 
-  addRecordingEvent(JSON.stringify({
+  addRecordingEvent(JSONStringify({
     kind: "sourcemapAdded",
     path: getRecordingFilePath(name),
     recordingId,
@@ -148,7 +149,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     if (!recordingDirectoryFileExists(name)) {
       writeToRecordingDirectory(name, sourceContent);
     }
-    addRecordingEvent(JSON.stringify({
+    addRecordingEvent(JSONStringify({
       kind: "originalSourceAdded",
       path: getRecordingFilePath(name),
       recordingId,
@@ -178,7 +179,7 @@ function collectUnresolvedSourceMapResources(mapText, mapURL) {
   }
 
   try {
-    obj = JSON.parse(mapText);
+    obj = JSONParse(mapText);
     if (typeof obj !== "object" || !obj) {
       return [];
     }
