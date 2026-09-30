@@ -128,6 +128,19 @@ const ArrayPrototypePush = uncurryThis(Array.prototype.push);
 const ObjectPrototypeToString = uncurryThis(Object.prototype.toString);
 const String_ = String;
 const StringPrototypeSlice = uncurryThis(String.prototype.slice);
+const ObjectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const uncurryGetter = (proto, key) =>
+  uncurryThis(ObjectGetOwnPropertyDescriptor(proto, key).get);
+const MapPrototypeGet = uncurryThis(Map.prototype.get);
+const MapPrototypeSet = uncurryThis(Map.prototype.set);
+const MapPrototypeHas = uncurryThis(Map.prototype.has);
+const MapPrototypeDelete = uncurryThis(Map.prototype.delete);
+const MapPrototypeClear = uncurryThis(Map.prototype.clear);
+const MapPrototypeKeys = uncurryThis(Map.prototype.keys);
+const MapPrototypeValues = uncurryThis(Map.prototype.values);
+const MapPrototypeGetSize = uncurryGetter(Map.prototype, "size");
+const SetPrototypeAdd = uncurryThis(Set.prototype.add);
+const SetPrototypeHas = uncurryThis(Set.prototype.has);
 
 function isArrayLike(obj) {
   return obj != null && typeof obj.length === "number";
@@ -298,7 +311,7 @@ const sendMessage = sendCDPMessage;
 
 
 function addEventListener(method, callback) {
-  gEventListeners.set(method, callback);
+  MapPrototypeSet(gEventListeners, method, callback);
 }
 
 // TODO: rename all these CDP-related symbols to also have CDP in the name
@@ -310,7 +323,7 @@ function messageCallback(message) {
       assert(message.id === request.messageId, "CDP request stack corrupted");
       request.result = message;
     } else {
-      const listener = gEventListeners.get(message.method);
+      const listener = MapPrototypeGet(gEventListeners, message.method);
       if (listener) {
         listener(message.params);
       }
@@ -466,7 +479,7 @@ function Target_getCurrentMessageContents() {
     ArrayPrototypePush(argumentValues, buildRrpObjectFromCdpObject(arg));
   }
 
-  const level = cdpToRrpConsoleLevels.get(gLastConsoleAPICall.type) || "info";
+  const level = MapPrototypeGet(cdpToRrpConsoleLevels, gLastConsoleAPICall.type) || "info";
 
   let url, sourceId, line, column;
   if (gLastConsoleAPICall.stackTrace) {
@@ -500,14 +513,14 @@ addNewScriptHandler((scriptId, sourceURL, relativeSourceMapURL) => {
     return;
 
   const { sourceMapURL, sourceMapBaseURL } = urls;
-  gSourceMapData.set(scriptId, {
+  MapPrototypeSet(gSourceMapData, scriptId, {
     url: sourceMapURL,
     baseUrl: sourceMapBaseURL
   });
 }, /* disallowEvents */ true);
 
 function Target_getSourceMapURL({ sourceId }) {
-  return gSourceMapData.get(sourceId) || {};
+  return MapPrototypeGet(gSourceMapData, sourceId) || {};
 }
 
 function Target_getStepOffsets() {
@@ -837,14 +850,14 @@ const gCssRulesByNodeRrpId = new Map();
 
 function clearPauseDataCallback() {
   try {
-    gCdpObjectsByRrpId.clear();
-    gRrpIdByCdpId.clear();
-    gRrpIdByPlainObject.clear();
-    gPlainObjectByRrpId.clear();
-    gObjectPreviewByRrpId.clear();
-    gCdpScopesByRrpId.clear();
-    gLastBoundingClientRectsByNodeRrpId.clear();
-    gCssRulesByNodeRrpId.clear();
+    MapPrototypeClear(gCdpObjectsByRrpId);
+    MapPrototypeClear(gRrpIdByCdpId);
+    MapPrototypeClear(gRrpIdByPlainObject);
+    MapPrototypeClear(gPlainObjectByRrpId);
+    MapPrototypeClear(gObjectPreviewByRrpId);
+    MapPrototypeClear(gCdpScopesByRrpId);
+    MapPrototypeClear(gLastBoundingClientRectsByNodeRrpId);
+    MapPrototypeClear(gCssRulesByNodeRrpId);
     gLastRrpId = 0;
 
     if (!isReplayScriptAlive()) {
@@ -886,21 +899,21 @@ function createRrpValueRaw(plainValue) {
 function registerPlainObject(plainObject) {
   assert(isObject(plainObject),
     `value is not an object: ${typeofMaybeNull(plainObject)}`);
-  let rrpId = gRrpIdByPlainObject.get(plainObject);
+  let rrpId = MapPrototypeGet(gRrpIdByPlainObject, plainObject);
   if (!rrpId) {
     // → ask V8InspectorSession to wrap plainObject (gets CDP.Runtime.RemoteObject)
     const cdpObject = makeDebuggeeValue(plainObject);
     if (cdpObject) {
       rrpId = registerCdpObject(cdpObject);
-      gRrpIdByPlainObject.set(plainObject, rrpId);
-      gPlainObjectByRrpId.set(rrpId, plainObject);
+      MapPrototypeSet(gRrpIdByPlainObject, plainObject, rrpId);
+      MapPrototypeSet(gPlainObjectByRrpId, rrpId, plainObject);
     }
   }
   return rrpId;
 }
 
 function getPlainObjectByCdpId(cdpId) {
-  const rrpId = gRrpIdByCdpId.get(cdpId);
+  const rrpId = MapPrototypeGet(gRrpIdByCdpId, cdpId);
   assert(rrpId);
   return getPlainObjectByRrpId(rrpId);
 }
@@ -911,7 +924,7 @@ function getPlainObjectByCdpId(cdpId) {
  */
 function getPlainObjectByRrpId(rrpId) {
   rrpId += '';
-  let plainObject = gPlainObjectByRrpId.get(rrpId);
+  let plainObject = MapPrototypeGet(gPlainObjectByRrpId, rrpId);
   if (!plainObject) {
     // (if this was a ref type, registration should already have been handled in `registerCdpObject` ↓)
     // → ask V8InspectorSession to unwrap cdpObject (gets plainObject)
@@ -920,8 +933,8 @@ function getPlainObjectByRrpId(rrpId) {
     assert(cdpObject);
     const cdpId = cdpObject.objectId;
     plainObject = fromJsGetObjectByCdpId(cdpId);
-    gRrpIdByPlainObject.set(plainObject, rrpId);
-    gPlainObjectByRrpId.set(rrpId, plainObject);
+    MapPrototypeSet(gRrpIdByPlainObject, plainObject, rrpId);
+    MapPrototypeSet(gPlainObjectByRrpId, rrpId, plainObject);
   }
   return plainObject;
 }
@@ -934,7 +947,7 @@ function registerCdpObject(cdpObject) {
   const cdpId = cdpObject.objectId;
   assert(cdpId);
 
-  let rrpId = gRrpIdByCdpId.get(cdpId);
+  let rrpId = MapPrototypeGet(gRrpIdByCdpId, cdpId);
   if (rrpId) {
     return rrpId;
   }
@@ -944,7 +957,7 @@ function registerCdpObject(cdpObject) {
     // NOTE: the same object might generate multiple cdpIds
     plainObject = fromJsGetObjectByCdpId(cdpId);
     if (plainObject) {
-      rrpId = gRrpIdByPlainObject.get(plainObject);
+      rrpId = MapPrototypeGet(gRrpIdByPlainObject, plainObject);
     }
   }
 
@@ -957,7 +970,7 @@ function registerCdpObject(cdpObject) {
  * @return {CDP.Runtime.RemoteObject | Object}
  */
 function getCdpObjectByRrpId(rrpId) {
-  const cdpObject = gCdpObjectsByRrpId.get(rrpId);
+  const cdpObject = MapPrototypeGet(gCdpObjectsByRrpId, rrpId);
   if (!cdpObject) {
     throw new Error(`getCdpObjectByRrpId failed - rrpId not found: ${JSONStringify(rrpId)}`);
   }
@@ -981,7 +994,7 @@ function getCdpObjectByRrpId(rrpId) {
 function registerRrpPreview(rrpObjectPreview, plainObject) {
   let rrpId;
   if (plainObject) {
-    rrpId = gRrpIdByPlainObject.get(plainObject);
+    rrpId = MapPrototypeGet(gRrpIdByPlainObject, plainObject);
   }
 
   // NOTE: we built a custom "preview object" without a cdpObject, and sometimes without a plainObject
@@ -1005,21 +1018,21 @@ function registerNewRrpObject(rrpId, cdpObject, rrpObjectPreview, plainObject) {
   }
   if (rrpObjectPreview) {
     // preview objects, already built from specialized CDP objects
-    gObjectPreviewByRrpId.set(rrpId, rrpObjectPreview);
+    MapPrototypeSet(gObjectPreviewByRrpId, rrpId, rrpObjectPreview);
     rrpObjectPreview.objectId = rrpId; // set `objectId`
   }
   if (plainObject && !existingRrpId) {
-    gRrpIdByPlainObject.set(plainObject, rrpId);
-    gPlainObjectByRrpId.set(rrpId, plainObject);
+    MapPrototypeSet(gRrpIdByPlainObject, plainObject, rrpId);
+    MapPrototypeSet(gPlainObjectByRrpId, rrpId, plainObject);
   }
 
   return rrpId;
 }
 
 function registerRrpCpdId(rrpId, cdpId, cdpObject = null) {
-  gRrpIdByCdpId.set(cdpId, rrpId);
+  MapPrototypeSet(gRrpIdByCdpId, cdpId, rrpId);
   if (cdpObject) {
-    gCdpObjectsByRrpId.set(rrpId, cdpObject);
+    MapPrototypeSet(gCdpObjectsByRrpId, rrpId, cdpObject);
   }
 }
 
@@ -1124,12 +1137,12 @@ function buildRrpObjectFromCdpObject(cdpObject) {
  */
 function registerCdpScope(scope) {
   const rrpId = registerCdpObject(scope.object);
-  gCdpScopesByRrpId.set(rrpId, scope);
+  MapPrototypeSet(gCdpScopesByRrpId, rrpId, scope);
   return rrpId;
 }
 
 function getCdpScopeByRrpId(rrpScopeId) {
-  const scope = gCdpScopesByRrpId.get(rrpScopeId);
+  const scope = MapPrototypeGet(gCdpScopesByRrpId, rrpScopeId);
   assert(scope);
   return scope;
 }
@@ -1162,7 +1175,7 @@ function isCdpObjectPromise(cdpObj) {
  */
 function createPauseObject(rrpId, level, pageSizeForTesting) {
   rrpId = rrpId + ""; // Must be a string.
-  const existingPreview = gObjectPreviewByRrpId.get(rrpId);
+  const existingPreview = MapPrototypeGet(gObjectPreviewByRrpId, rrpId);
   if (existingPreview) {
     return existingPreview;
   }
@@ -1261,7 +1274,7 @@ ProtocolObjectPreview.prototype = {
     if (isObjectPropertyBlacklisted(ownerCdpObject, name)) {
       return false;
     }
-    if (this.getterValues?.has(name)) {
+    if (this.getterValues && MapPrototypeHas(this.getterValues, name)) {
       return false;
     }
     return true;
@@ -1291,7 +1304,7 @@ ProtocolObjectPreview.prototype = {
     if (!this.getterValues) {
       this.getterValues = new Map();
     }
-    if (this.getterValues.has(propKey)) {
+    if (MapPrototypeHas(this.getterValues, propKey)) {
       return;
     }
 
@@ -1305,7 +1318,7 @@ ProtocolObjectPreview.prototype = {
     if (!this.getterValues) {
       this.getterValues = new Map();
     }
-    if (this.getterValues.has(propKey)) {
+    if (MapPrototypeHas(this.getterValues, propKey)) {
       return;
     }
 
@@ -1324,7 +1337,7 @@ ProtocolObjectPreview.prototype = {
     if (!this.getterValues) {
       this.getterValues = new Map();
     }
-    this.getterValues.set(key, { name: key, ...valueObject });
+    MapPrototypeSet(this.getterValues, key, { name: key, ...valueObject });
   },
 
 
@@ -1441,18 +1454,18 @@ ProtocolObjectPreview.prototype = {
       for (let i = 0; i < cdpProperties.result.length; ++i) {
         const cdpProp = cdpProperties.result[i];
         const { name: propKey } = cdpProp;
-        if (propKey === "__proto__" || foundProps.has(propKey)) {
+        if (propKey === "__proto__" || SetPrototypeHas(foundProps, propKey)) {
           continue;
         }
         if (this.shouldAddProp(cdpProp)) {
-          foundProps.add(propKey);
+          SetPrototypeAdd(foundProps, propKey);
         }
       }
     }
     
     for (const cdpProp of cdpProperties.result) {
       const { name: propKey } = cdpProp;
-      if (!foundProps.has(propKey)) {
+      if (!SetPrototypeHas(foundProps, propKey)) {
         continue;
       }
       const rrpProp = createRrpPropertyDescriptor(cdpProp);
@@ -1503,7 +1516,7 @@ ProtocolObjectPreview.prototype = {
       prototypeId: prototypeRrpId,
       overflow: (this.overflow && this.level != "full") ? true : undefined,
       properties: this.properties,
-      getterValues: this.getterValues ? [...this.getterValues.values()] : undefined,
+      getterValues: this.getterValues ? [...MapPrototypeValues(this.getterValues)] : undefined,
       containerEntries: this.containerEntries,
       ...this.extra,
     };
@@ -1514,7 +1527,7 @@ ProtocolObjectPreview.prototype = {
 
 function getExtraObjectPreviewData(cdpObject, cdpProperties) {
   const cdpId = cdpObject.objectId;
-  const rrpId = gRrpIdByCdpId.get(cdpId);
+  const rrpId = MapPrototypeGet(gRrpIdByCdpId, cdpId);
   assert(rrpId);
   
   if (isCdpObjectProxy(cdpObject)) {
@@ -2145,7 +2158,7 @@ function DOM_getDocument() {
  * ##########################################################################*/
 
 function getLastBoundingClientRect(nodeRrpId) {
-  return gLastBoundingClientRectsByNodeRrpId.get(nodeRrpId);
+  return MapPrototypeGet(gLastBoundingClientRectsByNodeRrpId, nodeRrpId);
 }
 
 /**
@@ -2230,7 +2243,7 @@ function DOM_getAllBoundingClientRects() {
         v.pointerEvents = "none";
       }
 
-      gLastBoundingClientRectsByNodeRrpId.set(id, v);
+      MapPrototypeSet(gLastBoundingClientRectsByNodeRrpId, id, v);
 
       return v;
     })
@@ -2247,7 +2260,7 @@ function DOM_getAllBoundingClientRects() {
  * @see https://static.replay.io/protocol/tot/DOM/#type-BoxModel
  */
 function DOM_getBoundingClientRect({ node }) {
-  if (!gLastBoundingClientRectsByNodeRrpId.size) {
+  if (!MapPrototypeGetSize(gLastBoundingClientRectsByNodeRrpId)) {
     // compute all basic bounding client rect sizes
     DOM_getAllBoundingClientRects();
   }
@@ -2450,7 +2463,7 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
 
   let styleSheetRrpId;
   if (styleSheetCpdId) {
-    styleSheetRrpId = gRrpIdByCdpId.get(styleSheetCpdId);
+    styleSheetRrpId = MapPrototypeGet(gRrpIdByCdpId, styleSheetCpdId);
     if (!styleSheetRrpId) {
       const nativeSheet = fromJsCssGetStylesheetByCpdId(styleSheetCpdId);
 
@@ -2616,7 +2629,7 @@ function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
 function CSS_getAppliedRules({ node: nodeRrpId }) {
   const nodeObj = getPlainObjectByRrpId(nodeRrpId);
 
-  let rules = gCssRulesByNodeRrpId.get(nodeRrpId);
+  let rules = MapPrototypeGet(gCssRulesByNodeRrpId, nodeRrpId);
   const data = {};
 
   if (!rules && fromJsIsBlinkNodeObject(nodeObj)) {
@@ -2630,7 +2643,7 @@ function CSS_getAppliedRules({ node: nodeRrpId }) {
     } else {
       rules = [];
     }
-    gCssRulesByNodeRrpId.set(nodeRrpId, rules);
+    MapPrototypeSet(gCssRulesByNodeRrpId, nodeRrpId, rules);
   } else {
     // The target is not a node.
     log(`[RuntimeWarning] CSS.getAppliedRules called with non-node: ${nodeRrpId} ${isBlinkObject(nodeObj)} ${typeof nodeObj}.`);
@@ -3042,11 +3055,11 @@ StackingContext.prototype = {
   },
 
   addZIndexElement(elem, index) {
-    const existing = this.zIndexElements.get(index);
+    const existing = MapPrototypeGet(this.zIndexElements, index);
     if (existing) {
       ArrayPrototypePush(existing, elem);
     } else {
-      this.zIndexElements.set(index, [elem]);
+      MapPrototypeSet(this.zIndexElements, index, [elem]);
     }
   },
 
@@ -3113,12 +3126,12 @@ StackingContext.prototype = {
     const pushZIndexElements = (filter) => {
       for (const z of zIndexes) {
         if (filter(z)) {
-          pushElements(this.zIndexElements.get(z));
+          pushElements(MapPrototypeGet(this.zIndexElements, z));
         }
       }
     };
 
-    const zIndexes = [...this.zIndexElements.keys()];
+    const zIndexes = [...MapPrototypeKeys(this.zIndexElements)];
     zIndexes.sort((a, b) => a - b);
 
     if (this.root) {
@@ -3370,25 +3383,25 @@ patchReplayApi();
 initMessages();
 addEventListener("Runtime.consoleAPICalled", onConsoleAPICall);
 addEventListener("Runtime.executionContextCreated", ({ context }) => {
-  gExecutionContexts.set(context.id, context);
+  MapPrototypeSet(gExecutionContexts, context.id, context);
   for (const callback of gContextChangeCallbacks) {
     callback(context, "add");
   }
 });
 addEventListener("Runtime.executionContextDestroyed", ({ executionContextId }) => {
-  const context = gExecutionContexts.get(executionContextId);
+  const context = MapPrototypeGet(gExecutionContexts, executionContextId);
   for (const callback of gContextChangeCallbacks) {
     callback(context, "remove");
   }
-  gExecutionContexts.delete(executionContextId);
+  MapPrototypeDelete(gExecutionContexts, executionContextId);
 });
 addEventListener("Runtime.executionContextsCleared", () => {
-  for (const context of gExecutionContexts.values()) {
+  for (const context of MapPrototypeValues(gExecutionContexts)) {
     for (const callback of gContextChangeCallbacks) {
       callback(context, "remove");
     }
   }
-  gExecutionContexts.clear();
+  MapPrototypeClear(gExecutionContexts);
 });
 sendCDPMessage("Runtime.enable");
 
