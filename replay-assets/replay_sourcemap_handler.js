@@ -3,11 +3,15 @@
 (() => {
 
 // Avoid monkey patching.
-const { fetch, URL, Error } = window;
+const { fetch, URL, Error, queueMicrotask } = window;
 const DateNow = Date.now;
 const { bind, call } = Function.prototype;
 const uncurryThis = bind.bind(call);
 const StringPrototypeStartsWith = uncurryThis(String.prototype.startsWith);
+
+// Awaiting this yields for one microtask. Awaiting a real promise would read
+// its `constructor`, which the page can patch; `then` here is our own property.
+const nextMicrotask = { then(resolve) { queueMicrotask(resolve); } };
 
 const {
   log,
@@ -66,7 +70,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     return;
 
   // Yield so full-source SHA256 runs after sync script registration, not under ProcessCompileEvent.
-  await Promise.resolve();
+  await nextMicrotask;
 
   const scriptSource = getScriptSource(scriptId);
   const generatedScriptHash = sha256DigestHex(scriptSource);
