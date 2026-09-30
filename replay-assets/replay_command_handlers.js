@@ -158,6 +158,22 @@ const ObjectKeys = Object.keys;
 const NumberIsNaN = Number.isNaN;
 const MathMax = Math.max;
 const MathMin = Math.min;
+
+// DOM and CSSOM members, stored so page patches of the web-platform prototypes
+// aren't reached. Blink checks a receiver against the interface's per-isolate
+// template, so these also work on nodes and windows of same-process iframes.
+const WindowGetComputedStyle = uncurryThis(window.getComputedStyle);
+const DocumentPrototypeQuerySelector = uncurryThis(Document.prototype.querySelector);
+const DocumentPrototypeGetElementsByTagName = uncurryThis(Document.prototype.getElementsByTagName);
+const DocumentFragmentPrototypeQuerySelector = uncurryThis(DocumentFragment.prototype.querySelector);
+const ElementPrototypeQuerySelector = uncurryThis(Element.prototype.querySelector);
+const ElementPrototypeGetBoundingClientRect = uncurryThis(Element.prototype.getBoundingClientRect);
+const ElementPrototypeGetClientRects = uncurryThis(Element.prototype.getClientRects);
+const CSSStyleDeclarationPrototypeItem = uncurryThis(CSSStyleDeclaration.prototype.item);
+const CSSStyleDeclarationPrototypeGetPropertyValue = uncurryThis(CSSStyleDeclaration.prototype.getPropertyValue);
+const CSSStyleDeclarationPrototypeGetPropertyPriority = uncurryThis(CSSStyleDeclaration.prototype.getPropertyPriority);
+const CSSStyleValueParse = CSSStyleValue.parse;
+const CSSTransformComponentPrototypeToMatrix = uncurryThis(CSSTransformComponent.prototype.toMatrix);
 const StringPrototypeIndexOf = uncurryThis(String.prototype.indexOf);
 const StringPrototypeSubstring = uncurryThis(String.prototype.substring);
 const StringPrototypeEndsWith = uncurryThis(String.prototype.endsWith);
@@ -1735,7 +1751,8 @@ function previewBlinkNode(node) {
      *   (properly handle `iframe`s and the case where `node.defaultView.parent.document` is missing)
      *   Issue: https://linear.app/replay/issue/RUN-954/dom-feature-support-multi-cspcross-origin-iframes
      */
-    const iframes = node.defaultView.parent.document.getElementsByTagName(
+    const iframes = DocumentPrototypeGetElementsByTagName(
+      node.defaultView.parent.document,
       "iframe"
     );
     let iframe;
@@ -1791,10 +1808,10 @@ function previewBlinkStyle(style) {
 
   const properties = [];
   for (let i = 0; i < style.length; i++) {
-    const name = style.item(i);
-    const value = style.getPropertyValue(name);
+    const name = CSSStyleDeclarationPrototypeItem(style, i);
+    const value = CSSStyleDeclarationPrototypeGetPropertyValue(style, name);
     if (value) {
-      const important = style.getPropertyPriority(name) == "important" ? true : undefined;
+      const important = CSSStyleDeclarationPrototypeGetPropertyPriority(style, name) == "important" ? true : undefined;
       ArrayPrototypePush(properties, { name, value, important });
     }
   }
@@ -2328,7 +2345,7 @@ function DOM_getAllBoundingClientRects() {
       // Offset the bounding client rect by the transform matrix
       // and containing iframe offset (if any).
       let { left, top, right, bottom } = shiftRect(
-        elem.raw.getBoundingClientRect(),
+        ElementPrototypeGetBoundingClientRect(elem.raw),
         elem.offset,
         transformMatrix
       );
@@ -2338,7 +2355,7 @@ function DOM_getAllBoundingClientRects() {
 
       // Get all client rects.
       const clientRects = [];
-      iterateArrayLike(elem.raw.getClientRects(), (r) => {
+      iterateArrayLike(ElementPrototypeGetClientRects(elem.raw), (r) => {
         const { left, top, right, bottom } =
           shiftRect(r, elem.offset, transformMatrix);
         ArrayPrototypePush(clientRects, [left, top, right, bottom]);
@@ -2379,10 +2396,10 @@ function DOM_getAllBoundingClientRects() {
       if (ObjectKeys(clipBounds).length > 0) {
         v.clipBounds = clipBounds;
       }
-      if (elem.style?.getPropertyValue("visibility") === "hidden") {
+      if (elem.style && CSSStyleDeclarationPrototypeGetPropertyValue(elem.style, "visibility") === "hidden") {
         v.visibility = "hidden";
       }
-      if (elem.style?.getPropertyValue("pointer-events") === "none") {
+      if (elem.style && CSSStyleDeclarationPrototypeGetPropertyValue(elem.style, "pointer-events") === "none") {
         v.pointerEvents = "none";
       }
 
@@ -2515,10 +2532,22 @@ function DOM_getEventListeners({ node }) {
  * {@link DOM_querySelector}
  * ##########################################################################*/
 
+// querySelector is a separate function on each interface that has it.
+function querySelectorOn(node, selector) {
+  if (fromJsIsBlinkElementObject(node)) {
+    return ElementPrototypeQuerySelector(node, selector);
+  }
+  try {
+    return DocumentPrototypeQuerySelector(node, selector);
+  } catch {
+    return DocumentFragmentPrototypeQuerySelector(node, selector);
+  }
+}
+
 function DOM_querySelector({ node, selector }) {
   const nodeObj = getPlainObjectByRrpId(node);
 
-  const resultObj = nodeObj.querySelector(selector);
+  const resultObj = querySelectorOn(nodeObj, selector);
   if (!resultObj) {
     return { data: {} };
   }
@@ -2564,11 +2593,11 @@ function CSS_getComputedStyle({ node }) {
     //   );
     // }
     // else {
-    styleInfo = ownerGlobal.getComputedStyle(nodeObj);
+    styleInfo = WindowGetComputedStyle(ownerGlobal, nodeObj);
     for (let i = 0; i < styleInfo.length; i++) {
       ArrayPrototypePush(computedStyle, {
-        name: styleInfo.item(i),
-        value: styleInfo.getPropertyValue(styleInfo.item(i)),
+        name: CSSStyleDeclarationPrototypeItem(styleInfo, i),
+        value: CSSStyleDeclarationPrototypeGetPropertyValue(styleInfo, CSSStyleDeclarationPrototypeItem(styleInfo, i)),
       });
     }
   }
@@ -2863,29 +2892,29 @@ function StackingContextElement(
 
 StackingContextElement.prototype = {
   isPositioned() {
-    return this.style.getPropertyValue("position") != "static";
+    return CSSStyleDeclarationPrototypeGetPropertyValue(this.style, "position") != "static";
   },
 
   isAbsolutelyPositioned() {
-    return ArrayPrototypeIncludes(["absolute", "fixed"], this.style.getPropertyValue("position"));
+    return ArrayPrototypeIncludes(["absolute", "fixed"], CSSStyleDeclarationPrototypeGetPropertyValue(this.style, "position"));
   },
 
   isTable() {
-    return ArrayPrototypeIncludes(["table", "inline-table"], this.style.getPropertyValue("display"));
+    return ArrayPrototypeIncludes(["table", "inline-table"], CSSStyleDeclarationPrototypeGetPropertyValue(this.style, "display"));
   },
 
   isFlexOrGridContainer() {
     return ArrayPrototypeIncludes(["flex", "inline-flex", "grid", "inline-grid"],
-      this.style.getPropertyValue("display")
+      CSSStyleDeclarationPrototypeGetPropertyValue(this.style, "display")
     );
   },
 
   isBlockElement() {
-    return ArrayPrototypeIncludes(["block", "table", "flex", "grid"], this.style.getPropertyValue("display"));
+    return ArrayPrototypeIncludes(["block", "table", "flex", "grid"], CSSStyleDeclarationPrototypeGetPropertyValue(this.style, "display"));
   },
 
   isFloat() {
-    return this.style.getPropertyValue("float") != "none";
+    return CSSStyleDeclarationPrototypeGetPropertyValue(this.style, "float") != "none";
   },
 
   getPositionedAncestor() {
@@ -2918,32 +2947,32 @@ StackingContextElement.prototype = {
         "table-footer-group",
         "inline-table",
         "flow-root",
-      ], this.style.getPropertyValue("display"))
+      ], CSSStyleDeclarationPrototypeGetPropertyValue(this.style, "display"))
     ) {
       return this;
     }
     if (
       this.isBlockElement() &&
       !(
-        ArrayPrototypeIncludes(["visible", "clip"], this.style.getPropertyValue("overflow-x")) &&
-        ArrayPrototypeIncludes(["visible", "clip"], this.style.getPropertyValue("overflow-y"))
+        ArrayPrototypeIncludes(["visible", "clip"], CSSStyleDeclarationPrototypeGetPropertyValue(this.style, "overflow-x")) &&
+        ArrayPrototypeIncludes(["visible", "clip"], CSSStyleDeclarationPrototypeGetPropertyValue(this.style, "overflow-y"))
       )
     ) {
       return this;
     }
-    if (ArrayPrototypeIncludes(["layout", "content", "paint"], this.style.getPropertyValue("contain"))) {
+    if (ArrayPrototypeIncludes(["layout", "content", "paint"], CSSStyleDeclarationPrototypeGetPropertyValue(this.style, "contain"))) {
       return this;
     }
     if (this.parent.isFlexOrGridContainer() && !this.isFlexOrGridContainer() && !this.isTable()) {
       return this;
     }
     if (
-      this.style.getPropertyValue("column-count") != "auto" ||
-      this.style.getPropertyValue("column-width") != "auto"
+      CSSStyleDeclarationPrototypeGetPropertyValue(this.style, "column-count") != "auto" ||
+      CSSStyleDeclarationPrototypeGetPropertyValue(this.style, "column-width") != "auto"
     ) {
       return this;
     }
-    if (this.style.getPropertyValue("column-span") == "all") {
+    if (CSSStyleDeclarationPrototypeGetPropertyValue(this.style, "column-span") == "all") {
       return this;
     }
     return this.parent.getFormattingContextElement();
@@ -3028,7 +3057,7 @@ StackingContext.prototype = {
 
   // Add node and its descendants to this stacking context.
   add(node, parentElem, offset) {
-    const style = this.window.getComputedStyle(node);
+    const style = WindowGetComputedStyle(this.window, node);
     if (!style) {
       // It's not 100% clear why this is sometimes null, but it seems like
       // this can happen if DOM commands are sent when the window is shutting
@@ -3036,7 +3065,7 @@ StackingContext.prototype = {
       return;
     }
 
-    const position = style.getPropertyValue("position");
+    const position = CSSStyleDeclarationPrototypeGetPropertyValue(style, "position");
     let clipBounds;
     if (position == "absolute") {
       clipBounds = parentElem?.getPositionedAncestor()?.clipBounds || {};
@@ -3048,8 +3077,8 @@ StackingContext.prototype = {
     clipBounds = ObjectAssign({}, clipBounds);
     const cx = new StackingContextElement(this, node, parentElem, offset, style, clipBounds);
     if (!ArrayPrototypeIncludes(["HTML", "BODY"], cx.raw.tagName)) {
-      if (style.getPropertyValue("overflow-x") != "visible") {
-        const clipBounds2 = cx.getFormattingContextElement().raw.getBoundingClientRect();
+      if (CSSStyleDeclarationPrototypeGetPropertyValue(style, "overflow-x") != "visible") {
+        const clipBounds2 = ElementPrototypeGetBoundingClientRect(cx.getFormattingContextElement().raw);
         cx.clipBounds.left =
           clipBounds.left !== undefined
             ? MathMax(clipBounds2.left, clipBounds.left)
@@ -3059,8 +3088,8 @@ StackingContext.prototype = {
             ? MathMin(clipBounds2.right, clipBounds.right)
             : clipBounds2.right;
       }
-      if (style.getPropertyValue("overflow-y") != "visible") {
-        const clipBounds2 = cx.getFormattingContextElement().raw.getBoundingClientRect();
+      if (CSSStyleDeclarationPrototypeGetPropertyValue(style, "overflow-y") != "visible") {
+        const clipBounds2 = ElementPrototypeGetBoundingClientRect(cx.getFormattingContextElement().raw);
         cx.clipBounds.top =
           clipBounds.top !== undefined
             ? MathMax(clipBounds2.top, clipBounds.top)
@@ -3074,7 +3103,7 @@ StackingContext.prototype = {
 
     // Create a new stacking context for any iframes.
     if (cx.raw.tagName == "IFRAME" && cx.raw.contentWindow?.document) {
-      let { left, top } = cx.raw.getBoundingClientRect();
+      let { left, top } = ElementPrototypeGetBoundingClientRect(cx.raw);
 
       // The left and top are adjusted by the transform matrix for
       // the containing iframe, if any.  For this, we just search up the
@@ -3112,12 +3141,12 @@ StackingContext.prototype = {
       return;
     }
 
-    const parentDisplay = cx.parent?.style?.getPropertyValue("display");
+    const parentDisplay = cx.parent?.style ? CSSStyleDeclarationPrototypeGetPropertyValue(cx.parent.style, "display") : undefined;
     if (
       position != "static" ||
       ArrayPrototypeIncludes(["flex", "inline-flex", "grid", "inline-grid"], parentDisplay)
     ) {
-      const zIndex = cx.style.getPropertyValue("z-index");
+      const zIndex = CSSStyleDeclarationPrototypeGetPropertyValue(cx.style, "z-index");
       if (zIndex != "auto") {
         this.addContext(cx, undefined, {});
         // Elements with a zero z-index have their own stacking context but are
@@ -3150,7 +3179,7 @@ StackingContext.prototype = {
       return;
     }
 
-    const display = cx.style.getPropertyValue("display");
+    const display = CSSStyleDeclarationPrototypeGetPropertyValue(cx.style, "display");
     if (display == "inline-block" || display == "inline-table") {
       // Group the element and its descendants.
       this.addContext(cx, this.realStackingContext, {});
@@ -3165,7 +3194,7 @@ StackingContext.prototype = {
 
     // Elements with `opacity < 1` get their own stacking context.
     let opacity = 1;
-    const opacityStr = cx.style.getPropertyValue("opacity");
+    const opacityStr = CSSStyleDeclarationPrototypeGetPropertyValue(cx.style, "opacity");
     if (opacityStr !== undefined && opacityStr !== "") {
       opacity = +opacityStr;
     }
@@ -3349,7 +3378,7 @@ function parseCssTransformStringToMatrix(transform) {
   }
   try {
     // see https://developer.mozilla.org/en-US/docs/Web/API/CSSStyleValue/parse_static
-    const parsedTransform = CSSStyleValue.parse(
+    const parsedTransform = CSSStyleValueParse(
       "transform",
       transform,
     );
@@ -3358,7 +3387,7 @@ function parseCssTransformStringToMatrix(transform) {
       return;
     }
     if (parsedTransform.length > 0) {
-      const { a, b, c, d, e, f } = parsedTransform[0].toMatrix();
+      const { a, b, c, d, e, f } = CSSTransformComponentPrototypeToMatrix(parsedTransform[0]);
       return [a, b, c, d, e, f];
     }
   } catch (err) {
@@ -3374,7 +3403,7 @@ function computeTransformMatrix(element, window) {
   let curMatrix = [1,0,0,1,0,0]; // start with identity matrix
   let curElem = element;
   while(curElem && fromJsIsBlinkElementObject(curElem)) {
-    const transformStr = window.getComputedStyle(curElem).transform;
+    const transformStr = CSSStyleDeclarationPrototypeGetPropertyValue(WindowGetComputedStyle(window, curElem), "transform");
     const transformMatrix = parseCssTransformStringToMatrix(transformStr);
     if (transformMatrix) {
       curMatrix = multiplyTransformMatrix(transformMatrix, curMatrix);
