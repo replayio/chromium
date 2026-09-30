@@ -222,7 +222,7 @@ function collectUnresolvedSourceMapResources(mapText, mapURL) {
         ) {
           let url = sources[i];
           if (typeof sourceRoot === "string" && sourceRoot) {
-            url = sourceRoot.replace(/\/?/, "/") + url;
+            url = (sourceRoot[0] === "/" ? "" : "/") + sourceRoot + url;
           }
           let sourceURL;
           try {
