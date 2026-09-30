@@ -156,6 +156,7 @@ const ObjectKeys = Object.keys;
 const NumberIsNaN = Number.isNaN;
 const MathMax = Math.max;
 const MathMin = Math.min;
+const DateParse = Date.parse;
 
 // DOM and CSSOM members, stored so page patches of the web-platform prototypes
 // aren't reached. Blink checks a receiver against the interface's per-isolate
@@ -201,6 +202,8 @@ const DocumentPrototypeGetDefaultView = uncurryGetter(Document.prototype, "defau
 const WindowGetDocument = uncurryGetter(window, "document");
 const WindowGetParent = uncurryGetter(window, "parent");
 const CSSStyleDeclarationPrototypeGetLength = uncurryGetter(CSSStyleDeclaration.prototype, "length");
+const CSSStyleDeclarationPrototypeGetCssText = uncurryGetter(CSSStyleDeclaration.prototype, "cssText");
+const StyleSheetPrototypeGetHref = uncurryGetter(StyleSheet.prototype, "href");
 const CSSTransformValuePrototypeGetLength = uncurryGetter(CSSTransformValue.prototype, "length");
 const CSSTransformValuePrototypeGetIs2D = uncurryGetter(CSSTransformValue.prototype, "is2D");
 const DOMRectListPrototypeGetLength = uncurryGetter(DOMRectList.prototype, "length");
@@ -1916,7 +1919,7 @@ function previewBlinkStyle(style) {
   }
 
   return {
-    cssText: style.cssText,
+    cssText: CSSStyleDeclarationPrototypeGetCssText(style),
     parentRule,
     properties
   };
@@ -2017,7 +2020,7 @@ function previewRegExp() {
 }
 
 function previewDate() {
-  const dateTime = Date.parse(ownProperty(this.cdpObj, "description"));
+  const dateTime = DateParse(ownProperty(this.cdpObj, "description"));
   if (!NumberIsNaN(dateTime)) {
     this.extra.dateTime = dateTime;
   }
@@ -2761,8 +2764,9 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
       //      (that is only accessible on the rule level in CDP, for some reason)
       const isSystem = origin !== 'regular';
       const styleSheet = { isSystem };
-      if (nativeSheet?.href) {
-        styleSheet.href = nativeSheet.href;
+      const href = nativeSheet ? StyleSheetPrototypeGetHref(nativeSheet) : undefined;
+      if (href) {
+        styleSheet.href = href;
       }
 
       const styleSheetPreview = {
