@@ -10,6 +10,7 @@ const { parse: JSONParse, stringify: JSONStringify } = JSON;
 const ObjectCreate = Object.create;
 const ObjectDefineProperty = Object.defineProperty;
 const ObjectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const ObjectHasOwn = Object.hasOwn;
 const ObjectSetPrototypeOf = Object.setPrototypeOf;
 const ReflectDeleteProperty = Reflect.deleteProperty;
 const { bind, call } = Function.prototype;
@@ -28,6 +29,10 @@ const ResponsePrototypeText = uncurryThis(Response.prototype.text);
 // Awaiting this yields for one microtask. Awaiting a real promise would read
 // its `constructor`, which the page can patch; `then` here is our own property.
 const nextMicrotask = { then(resolve) { queueMicrotask(resolve); } };
+
+// Data from JSON.parse only has own data properties, so anything found on
+// the prototype chain would be the page's.
+const ownProperty = (obj, key) => (ObjectHasOwn(obj, key) ? obj[key] : undefined);
 
 // `await promise` reads `promise.constructor`, normally found on
 // Promise.prototype where the page can redefine it. An own `constructor`
@@ -281,13 +286,15 @@ function collectUnresolvedSourceMapResources(mapText, mapURL) {
   }
 
   const unresolvedSources = [];
-  if (obj.version !== 3) {
+  if (ownProperty(obj, "version") !== 3) {
     logError("Invalid sourcemap version");
     return [];
   }
 
-  if (obj.sources != null) {
-    const { sourceRoot, sources, sourcesContent } = obj;
+  const sources = ownProperty(obj, "sources");
+  if (sources != null) {
+    const sourceRoot = ownProperty(obj, "sourceRoot");
+    const sourcesContent = ownProperty(obj, "sourcesContent");
 
     if (ArrayIsArray(sources)) {
       for (let i = 0; i < sources.length; i++) {
@@ -295,7 +302,7 @@ function collectUnresolvedSourceMapResources(mapText, mapURL) {
 
         if (
           !ArrayIsArray(sourcesContent) ||
-          typeof sourcesContent[i] !== "string"
+          typeof ownProperty(sourcesContent, i) !== "string"
         ) {
           let url = sources[i];
           if (typeof url !== "string") {
