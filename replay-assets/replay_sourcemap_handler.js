@@ -133,7 +133,8 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     timestamp: DateNow(),
   }));
 
-  for (const { offset, url } of sources) {
+  for (let i = 0; i < sources.length; i++) {
+    const { offset, url } = sources[i];
     let sourceContent;
     try {
       sourceContent = await fetchTextWithCache(url, generatedScriptHash);
