@@ -3,10 +3,11 @@
 (() => {
 
 // Avoid monkey patching.
-const { fetch, URL, Error, Response, queueMicrotask } = window;
+const { fetch, URL, Error, Promise, Response, queueMicrotask } = window;
 const ArrayIsArray = Array.isArray;
 const DateNow = Date.now;
 const { parse: JSONParse, stringify: JSONStringify } = JSON;
+const ObjectDefineProperty = Object.defineProperty;
 const { bind, call } = Function.prototype;
 const uncurryThis = bind.bind(call);
 const ArrayPrototypePush = uncurryThis(Array.prototype.push);
@@ -22,6 +23,12 @@ const ResponsePrototypeText = uncurryThis(Response.prototype.text);
 // Awaiting this yields for one microtask. Awaiting a real promise would read
 // its `constructor`, which the page can patch; `then` here is our own property.
 const nextMicrotask = { then(resolve) { queueMicrotask(resolve); } };
+
+// `await promise` reads `promise.constructor`, normally found on
+// Promise.prototype where the page can redefine it. An own `constructor`
+// keeps that read off the prototype.
+const withOwnConstructor = promise =>
+  ObjectDefineProperty(promise, "constructor", { __proto__: null, value: Promise });
 
 const {
   log,
@@ -41,11 +48,11 @@ const {
 const fetchPromiseCache = {};
 
 async function fetchText(url) {
-  const response = await fetch(url);
+  const response = await withOwnConstructor(fetch(url));
   if (!ResponsePrototypeGetOk(response)) {
     throw new Error(`Fetching ${url} failed with status code ${ResponsePrototypeGetStatus(response)} (${ResponsePrototypeGetStatusText(response)})`);
   }
-  return await ResponsePrototypeText(response);
+  return await withOwnConstructor(ResponsePrototypeText(response));
 }
 
 // Provide a cache for urls, salted with the supplied hash.  Practically, this
@@ -89,7 +96,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
 
   let sourceMap;
   try {
-    sourceMap = await fetchTextWithCache(sourceMapURL, generatedScriptHash);
+    sourceMap = await withOwnConstructor(fetchTextWithCache(sourceMapURL, generatedScriptHash));
   } catch (err) {
     log(`[RuntimeError][sourcemaps] Failed to read sourcemap ${sourceMapURL}: ${err.message}`);
   }
@@ -139,7 +146,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     const { offset, url } = sources[i];
     let sourceContent;
     try {
-      sourceContent = await fetchTextWithCache(url, generatedScriptHash);
+      sourceContent = await withOwnConstructor(fetchTextWithCache(url, generatedScriptHash));
     } catch (err) {
       log(`[RuntimeError][sourcemaps] Failed to read original source ${url}: ${err.message}`);
     }
