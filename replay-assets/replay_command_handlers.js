@@ -1,6 +1,9 @@
 (() => {
 // Script which defines handlers for recorder commands, 
 // and usually is only loaded while replaying.
+
+// Stored before any page script can reassign them.
+const { DOMException, Error, Map, Set, String, URL } = window;
 const EmptyArray = Object.freeze([]); // reduce unnecessary mem churn
 
 const Verbose = false;
@@ -96,7 +99,7 @@ function warning(...args) {
 function assert(v, msg = "") {
   if (!v) {
     const m = `Assertion failed when handling command (${msg})`;
-    log(`[RuntimeError] ${m} - ${defaultStack(new Error_())}`);
+    log(`[RuntimeError] ${m} - ${defaultStack(new Error())}`);
     throw new Error(m);
   }
 }
@@ -120,8 +123,7 @@ const JSONStringify = JSON.stringify;
 const JSONParse = JSON.parse;
 const { bind, call } = Function.prototype;
 const uncurryThis = bind.bind(call);
-const URL_ = URL;
-const URLPrototypeToString = uncurryThis(URL_.prototype.toString);
+const URLPrototypeToString = uncurryThis(URL.prototype.toString);
 
 // RUN-3067
 const ArrayPrototypeFilter = uncurryThis(Array.prototype.filter);
@@ -136,7 +138,6 @@ const ArrayPrototypeSlice = uncurryThis(Array.prototype.slice);
 const ArrayPrototypeSort = uncurryThis(Array.prototype.sort);
 const ArrayPrototypePush = uncurryThis(Array.prototype.push);
 const ObjectPrototypeToString = uncurryThis(Object.prototype.toString);
-const String_ = String;
 const StringPrototypeSlice = uncurryThis(String.prototype.slice);
 const ObjectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const uncurryGetter = (proto, key) =>
@@ -152,6 +153,11 @@ const SetPrototypeAdd = uncurryThis(Set.prototype.add);
 const SetPrototypeHas = uncurryThis(Set.prototype.has);
 const SetPrototypeForEach = uncurryThis(Set.prototype.forEach);
 const ReflectApply = Reflect.apply;
+const ObjectAssign = Object.assign;
+const ObjectKeys = Object.keys;
+const NumberIsNaN = Number.isNaN;
+const MathMax = Math.max;
+const MathMin = Math.min;
 const StringPrototypeIndexOf = uncurryThis(String.prototype.indexOf);
 const StringPrototypeSubstring = uncurryThis(String.prototype.substring);
 const StringPrototypeEndsWith = uncurryThis(String.prototype.endsWith);
@@ -162,9 +168,7 @@ const ObjectDefineProperty = Object.defineProperty;
 const ObjectHasOwn = Object.hasOwn;
 const ObjectSetPrototypeOf = Object.setPrototypeOf;
 const ReflectDeleteProperty = Reflect.deleteProperty;
-const Error_ = Error;
-const DOMException_ = DOMException;
-const DOMExceptionPrototypeGetMessage = uncurryGetter(DOMException_.prototype, "message");
+const DOMExceptionPrototypeGetMessage = uncurryGetter(DOMException.prototype, "message");
 
 // Reads `err.stack` without running the page's Error.prepareStackTrace.
 //
@@ -181,13 +185,13 @@ const DOMExceptionPrototypeGetMessage = uncurryGetter(DOMException_.prototype, "
 // realm's Error instead. Commands do run page code, so that can happen here;
 // the stack then comes out however that realm's hook formats it.
 function defaultStack(err) {
-  const hook = ObjectGetOwnPropertyDescriptor(Error_, "prepareStackTrace");
+  const hook = ObjectGetOwnPropertyDescriptor(Error, "prepareStackTrace");
   if (hook) {
     // Keeps Object.prototype out of the descriptor when it is handed back.
     ObjectSetPrototypeOf(hook, null);
   }
   try {
-    ObjectDefineProperty(Error_, "prepareStackTrace", {
+    ObjectDefineProperty(Error, "prepareStackTrace", {
       __proto__: null,
       value: undefined,
       configurable: true,
@@ -202,9 +206,9 @@ function defaultStack(err) {
     return typeof stack === "string" ? stack : undefined;
   } finally {
     if (hook) {
-      ObjectDefineProperty(Error_, "prepareStackTrace", hook);
+      ObjectDefineProperty(Error, "prepareStackTrace", hook);
     } else {
-      ReflectDeleteProperty(Error_, "prepareStackTrace");
+      ReflectDeleteProperty(Error, "prepareStackTrace");
     }
   }
 }
@@ -286,7 +290,7 @@ function mapValuesArray(map) {
 function describeValueShape(value) {
   let str;
   try {
-    str = String_(value);
+    str = String(value);
   } catch {
     str = "<String failed>";
   }
@@ -331,7 +335,7 @@ function getSourceMapURLs(sourceURL, relativeSourceMapURL) {
 
   let sourceMapURL;
   try {
-    sourceMapURL = URLPrototypeToString(new URL_(relativeSourceMapURL, sourceBaseURL));
+    sourceMapURL = URLPrototypeToString(new URL(relativeSourceMapURL, sourceBaseURL));
   } catch (err) {
     log("[RuntimeError] Failed to process sourcemap url: " + errorMessage(err));
     return null;
@@ -347,7 +351,7 @@ function getSourceMapURLs(sourceURL, relativeSourceMapURL) {
 
 function isValidBaseURL(url) {
   try {
-    new URL_("", url);
+    new URL("", url);
     return true;
   } catch {
     return false;
@@ -586,7 +590,7 @@ function Target_getCurrentMessageContents() {
       level: "error",
       text: message,
       url: filename,
-      sourceId: scriptId ? String_(scriptId) : undefined,
+      sourceId: scriptId ? String(scriptId) : undefined,
       line,
       column,
     };
@@ -860,7 +864,7 @@ function buildEvalResult(cdpResult) {
 function Pause_getAllFrames() {
   const frames = ArrayPrototypeMap(getStackFrames(), (frame, index) => {
     // Use our own IDs for frames.
-    const id = String_(index++);
+    const id = String(index++);
     const topmost = id == 0;
     return createProtocolFrame(id, frame, topmost);
   });
@@ -1636,7 +1640,7 @@ ProtocolObjectPreview.prototype = {
       }
     }
     // Add data for blink and other special objects.
-    Object.assign(this.extra, getExtraObjectPreviewData(this.cdpObj, cdpProperties));
+    ObjectAssign(this.extra, getExtraObjectPreviewData(this.cdpObj, cdpProperties));
     // Add Prototype data.
     let prototypeCdp = getInternalProp(cdpProperties, '[[Prototype]]')?.value;
     let prototypeRrpId;
@@ -1897,7 +1901,7 @@ function previewRegExp() {
 
 function previewDate() {
   const dateTime = Date.parse(this.cdpObj.description);
-  if (!Number.isNaN(dateTime)) {
+  if (!NumberIsNaN(dateTime)) {
     this.extra.dateTime = dateTime;
   }
 }
@@ -2372,7 +2376,7 @@ function DOM_getAllBoundingClientRects() {
       if (clientRects.length > 0) {
         v.rects = clientRects;
       }
-      if (Object.keys(clipBounds).length > 0) {
+      if (ObjectKeys(clipBounds).length > 0) {
         v.clipBounds = clipBounds;
       }
       if (elem.style?.getPropertyValue("visibility") === "hidden") {
@@ -2445,7 +2449,7 @@ function DOM_getBoxModel({ node: nodeRrpId }) {
         content, padding, border, margin,
         // width, height, shapeOutside
       } = cdpModel;
-      Object.assign(
+      ObjectAssign(
         model,
         {
           content,
@@ -3041,29 +3045,29 @@ StackingContext.prototype = {
     } else {
       clipBounds = parentElem?.clipBounds || {};
     }
-    clipBounds = Object.assign({}, clipBounds);
+    clipBounds = ObjectAssign({}, clipBounds);
     const cx = new StackingContextElement(this, node, parentElem, offset, style, clipBounds);
     if (!ArrayPrototypeIncludes(["HTML", "BODY"], cx.raw.tagName)) {
       if (style.getPropertyValue("overflow-x") != "visible") {
         const clipBounds2 = cx.getFormattingContextElement().raw.getBoundingClientRect();
         cx.clipBounds.left =
           clipBounds.left !== undefined
-            ? Math.max(clipBounds2.left, clipBounds.left)
+            ? MathMax(clipBounds2.left, clipBounds.left)
             : clipBounds2.left;
         cx.clipBounds.right =
           clipBounds.right !== undefined
-            ? Math.min(clipBounds2.right, clipBounds.right)
+            ? MathMin(clipBounds2.right, clipBounds.right)
             : clipBounds2.right;
       }
       if (style.getPropertyValue("overflow-y") != "visible") {
         const clipBounds2 = cx.getFormattingContextElement().raw.getBoundingClientRect();
         cx.clipBounds.top =
           clipBounds.top !== undefined
-            ? Math.max(clipBounds2.top, clipBounds.top)
+            ? MathMax(clipBounds2.top, clipBounds.top)
             : clipBounds2.top;
         cx.clipBounds.bottom =
           clipBounds.bottom !== undefined
-            ? Math.min(clipBounds2.bottom, clipBounds.bottom)
+            ? MathMin(clipBounds2.bottom, clipBounds.bottom)
             : clipBounds2.bottom;
       }
     }
