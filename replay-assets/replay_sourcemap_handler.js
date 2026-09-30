@@ -8,6 +8,7 @@ const DateNow = Date.now;
 const { bind, call } = Function.prototype;
 const uncurryThis = bind.bind(call);
 const StringPrototypeStartsWith = uncurryThis(String.prototype.startsWith);
+const URLPrototypeToString = uncurryThis(URL.prototype.toString);
 
 // Awaiting this yields for one microtask. Awaiting a real promise would read
 // its `constructor`, which the page can patch; `then` here is our own property.
@@ -203,7 +204,7 @@ function collectUnresolvedSourceMapResources(mapText, mapURL) {
           }
           let sourceURL;
           try {
-            sourceURL = new URL(url, mapURL).toString();
+            sourceURL = URLPrototypeToString(new URL(url, mapURL));
           } catch {
             logError("Unable to compute original source URL: " + url);
             continue;
@@ -241,7 +242,7 @@ function getSourceMapURLs(sourceURL, relativeSourceMapURL) {
 
   let sourceMapURL;
   try {
-    sourceMapURL = new URL(relativeSourceMapURL, sourceBaseURL).toString();
+    sourceMapURL = URLPrototypeToString(new URL(relativeSourceMapURL, sourceBaseURL));
   } catch (err) {
     log("Failed to process sourcemap url: " + err.message);
     return null;
