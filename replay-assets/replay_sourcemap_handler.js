@@ -7,6 +7,7 @@ const { fetch, URL, Error, Promise, Response, queueMicrotask } = window;
 const ArrayIsArray = Array.isArray;
 const DateNow = Date.now;
 const { parse: JSONParse, stringify: JSONStringify } = JSON;
+const ObjectCreate = Object.create;
 const ObjectDefineProperty = Object.defineProperty;
 const { bind, call } = Function.prototype;
 const uncurryThis = bind.bind(call);
@@ -45,7 +46,7 @@ const {
   RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE,
 } = __RECORD_REPLAY_ARGUMENTS__;
 
-const fetchPromiseCache = {};
+const fetchPromiseCache = ObjectCreate(null);
 
 async function fetchText(url) {
   const response = await withOwnConstructor(fetch(url));
