@@ -114,12 +114,13 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     writeToRecordingDirectory(name, sourceMap);
 
     sources = collectUnresolvedSourceMapResources(sourceMap, sourceMapURL);
-    writeToRecordingDirectory(lookupName, JSONStringify(sources));
+    writeToRecordingDirectory(lookupName, stringifySources(sources));
   }
 
   log(`[sourcemaps] Wrote sourcemap to file. Found ${sources.length} unresolved sources for "${sourceMapURL}". Downloading...`);
 
   addRecordingEvent(JSONStringify({
+    __proto__: null,
     kind: "sourcemapAdded",
     path: getRecordingFilePath(name),
     recordingId,
@@ -150,6 +151,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
       writeToRecordingDirectory(name, sourceContent);
     }
     addRecordingEvent(JSONStringify({
+      __proto__: null,
       kind: "originalSourceAdded",
       path: getRecordingFilePath(name),
       recordingId,
@@ -163,6 +165,17 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     warning(`[RuntimeError][sourcemaps] Exception - ${err?.stack || err}`);
   }
 });
+
+// JSON.stringify looks up `toJSON` on the objects and arrays it visits, which
+// the page can define on their prototypes.
+function stringifySources(sources) {
+  let json = "[";
+  for (let i = 0; i < sources.length; i++) {
+    const { offset, url } = sources[i];
+    json += (i ? "," : "") + JSONStringify({ __proto__: null, offset, url });
+  }
+  return json + "]";
+}
 
 function makeAPIHash(content) {
   assert(typeof content === "string");
