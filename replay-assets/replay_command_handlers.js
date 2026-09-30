@@ -81,16 +81,16 @@ function typeofMaybeNull(value) {
 }
 
 function log(...args) {
-  log_(args.join(' '));
+  log_(ArrayPrototypeJoin(args, ' '));
 }
 
 // eslint-disable-next-line no-unused-vars
 function logTrace(...args) {
-  logTrace_(args.join(' '));
+  logTrace_(ArrayPrototypeJoin(args, ' '));
 }
 
 function warning(...args) {
-  warning_(args.join(' '));
+  warning_(ArrayPrototypeJoin(args, ' '));
 }
 
 function assert(v, msg = "") {
@@ -124,6 +124,7 @@ const URL_ = URL;
 const URLPrototypeToString = uncurryThis(URL_.prototype.toString);
 
 // RUN-3067
+const ArrayPrototypeJoin = uncurryThis(Array.prototype.join);
 const ArrayPrototypePush = uncurryThis(Array.prototype.push);
 const ObjectPrototypeToString = uncurryThis(Object.prototype.toString);
 const String_ = String;
