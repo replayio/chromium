@@ -282,7 +282,7 @@ function collectUnresolvedSourceMapResources(mapText, mapURL) {
 
   const unresolvedSources = [];
   if (obj.version !== 3) {
-    logError("Invalid sourcemap version: " + obj.version);
+    logError("Invalid sourcemap version");
     return [];
   }
 
@@ -298,6 +298,10 @@ function collectUnresolvedSourceMapResources(mapText, mapURL) {
           typeof sourcesContent[i] !== "string"
         ) {
           let url = sources[i];
+          if (typeof url !== "string") {
+            logError("Invalid sourcemap source entry");
+            continue;
+          }
           if (typeof sourceRoot === "string" && sourceRoot) {
             url = (sourceRoot[0] === "/" ? "" : "/") + sourceRoot + url;
           }
