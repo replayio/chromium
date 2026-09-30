@@ -3,7 +3,7 @@
 (() => {
 
 // Avoid monkey patching.
-const { fetch, URL, Error, Promise, Response, queueMicrotask } = window;
+const { fetch, URL, DOMException, Error, Promise, Response, queueMicrotask } = window;
 const ArrayIsArray = Array.isArray;
 const DateNow = Date.now;
 const { parse: JSONParse, stringify: JSONStringify } = JSON;
@@ -19,6 +19,7 @@ const StringPrototypeStartsWith = uncurryThis(String.prototype.startsWith);
 const uncurryGetter = (proto, key) =>
   uncurryThis(ObjectGetOwnPropertyDescriptor(proto, key).get);
 const URLPrototypeToString = uncurryThis(URL.prototype.toString);
+const DOMExceptionPrototypeGetMessage = uncurryGetter(DOMException.prototype, "message");
 const ResponsePrototypeGetOk = uncurryGetter(Response.prototype, "ok");
 const ResponsePrototypeGetStatus = uncurryGetter(Response.prototype, "status");
 const ResponsePrototypeGetStatusText = uncurryGetter(Response.prototype, "statusText");
@@ -94,6 +95,24 @@ function defaultStack(err) {
   }
 }
 
+// `err.message` can be a getter the page installed on a prototype, and
+// string coercion runs its Error.prototype.toString. Only an own data
+// property or the built-in DOMException getter is read here.
+function errorMessage(err) {
+  if (typeof err === "string") return err;
+  if (typeof err !== "object" || err === null) return "<no message>";
+  const own = ObjectGetOwnPropertyDescriptor(err, "message");
+  if (own) {
+    ObjectSetPrototypeOf(own, null);
+    if (typeof own.value === "string") return own.value;
+  }
+  try {
+    return DOMExceptionPrototypeGetMessage(err);
+  } catch {
+    return "<no message>";
+  }
+}
+
 async function fetchText(url) {
   const response = await withOwnConstructor(fetch(url));
   if (!ResponsePrototypeGetOk(response)) {
@@ -148,7 +167,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   try {
     sourceMap = await withOwnConstructor(fetchTextWithCache(sourceMapURL, generatedScriptHash));
   } catch (err) {
-    log(`[RuntimeError][sourcemaps] Failed to read sourcemap ${sourceMapURL}: ${err.message}`);
+    log(`[RuntimeError][sourcemaps] Failed to read sourcemap ${sourceMapURL}: ${errorMessage(err)}`);
   }
   if (!sourceMap) {
     // Download failed or nothing there.
@@ -164,7 +183,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     try {
       sources = JSONParse(readFromRecordingDirectory(lookupName));
     } catch (err) {
-      log(`[RuntimeError][sourcemaps] Failed to load sourcemaps from file: ${lookupName} - ${err.message}`);
+      log(`[RuntimeError][sourcemaps] Failed to load sourcemaps from file: ${lookupName} - ${errorMessage(err)}`);
     }
   }
 
@@ -198,7 +217,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     try {
       sourceContent = await withOwnConstructor(fetchTextWithCache(url, generatedScriptHash));
     } catch (err) {
-      log(`[RuntimeError][sourcemaps] Failed to read original source ${url}: ${err.message}`);
+      log(`[RuntimeError][sourcemaps] Failed to read original source ${url}: ${errorMessage(err)}`);
     }
     if (!sourceContent) {
       // Download failed or nothing there.
@@ -222,7 +241,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   }
   log(`[sourcemaps] Finished downloading ${sources.length} sources for "${sourceMapURL}".`);
   } catch (err) {
-    warning(`[RuntimeError][sourcemaps] Exception - ${defaultStack(err) || err}`);
+    warning(`[RuntimeError][sourcemaps] Exception - ${defaultStack(err) || errorMessage(err)}`);
   }
 });
 
@@ -257,7 +276,7 @@ function collectUnresolvedSourceMapResources(mapText, mapURL) {
       return [];
     }
   } catch (err) {
-    logError(`Exception parsing sourcemap JSON (${mapURL}): ${err?.message || err}`);
+    logError(`Exception parsing sourcemap JSON (${mapURL}): ${errorMessage(err)}`);
     return [];
   }
 
@@ -324,7 +343,7 @@ function getSourceMapURLs(sourceURL, relativeSourceMapURL) {
   try {
     sourceMapURL = URLPrototypeToString(new URL(relativeSourceMapURL, sourceBaseURL));
   } catch (err) {
-    log("Failed to process sourcemap url: " + err.message);
+    log("Failed to process sourcemap url: " + errorMessage(err));
     return null;
   }
 
