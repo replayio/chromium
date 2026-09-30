@@ -96,7 +96,7 @@ function warning(...args) {
 function assert(v, msg = "") {
   if (!v) {
     const m = `Assertion failed when handling command (${msg})`;
-    log(`[RuntimeError] ${m} - ${Error().stack}`);
+    log(`[RuntimeError] ${m} - ${defaultStack(new Error_())}`);
     throw new Error(m);
   }
 }
@@ -141,6 +141,107 @@ const MapPrototypeValues = uncurryThis(Map.prototype.values);
 const MapPrototypeGetSize = uncurryGetter(Map.prototype, "size");
 const SetPrototypeAdd = uncurryThis(Set.prototype.add);
 const SetPrototypeHas = uncurryThis(Set.prototype.has);
+const StringPrototypeIndexOf = uncurryThis(String.prototype.indexOf);
+const ObjectDefineProperty = Object.defineProperty;
+const ObjectHasOwn = Object.hasOwn;
+const ObjectSetPrototypeOf = Object.setPrototypeOf;
+const ReflectDeleteProperty = Reflect.deleteProperty;
+const Error_ = Error;
+const DOMException_ = DOMException;
+const DOMExceptionPrototypeGetMessage = uncurryGetter(DOMException_.prototype, "message");
+
+// Reads `err.stack` without running the page's Error.prepareStackTrace.
+//
+// V8 formats a stack on its first read and calls the `prepareStackTrace` it
+// finds on the built-in Error function of the realm that created the error.
+// It doesn't use the `Error` global, so a replaced `window.Error` is ignored,
+// and the `Error` captured above is the function V8 looks at. The lookup is an
+// ordinary property read though, so the hook can also sit on Function.prototype,
+// Object.prototype or a Proxy the page put in Error's prototype chain. An own
+// property on Error stops the lookup before it gets there, so the hook is
+// shadowed for the read rather than removed.
+//
+// An error created in another realm (e.g. an iframe) would consult that
+// realm's Error instead. Commands do run page code, so that can happen here;
+// the stack then comes out however that realm's hook formats it.
+function defaultStack(err) {
+  const hook = ObjectGetOwnPropertyDescriptor(Error_, "prepareStackTrace");
+  if (hook) {
+    // Keeps Object.prototype out of the descriptor when it is handed back.
+    ObjectSetPrototypeOf(hook, null);
+  }
+  try {
+    ObjectDefineProperty(Error_, "prepareStackTrace", {
+      __proto__: null,
+      value: undefined,
+      configurable: true,
+    });
+  } catch {
+    // The page froze Error or made its hook non-configurable.
+    return undefined;
+  }
+  try {
+    // A stack the page has already read stays in whatever form its hook gave it.
+    const stack = err?.stack;
+    return typeof stack === "string" ? stack : undefined;
+  } finally {
+    if (hook) {
+      ObjectDefineProperty(Error_, "prepareStackTrace", hook);
+    } else {
+      ReflectDeleteProperty(Error_, "prepareStackTrace");
+    }
+  }
+}
+
+// `err.message` can be a getter the page installed on a prototype, and
+// string coercion runs its Error.prototype.toString. Only an own data
+// property or the built-in DOMException getter is read here.
+function errorMessage(err) {
+  if (typeof err === "string") return err;
+  if (typeof err !== "object" || err === null) return "<no message>";
+  const own = ObjectGetOwnPropertyDescriptor(err, "message");
+  if (own) {
+    ObjectSetPrototypeOf(own, null);
+    if (typeof own.value === "string") return own.value;
+  }
+  try {
+    return DOMExceptionPrototypeGetMessage(err);
+  } catch {
+    return "<no message>";
+  }
+}
+
+// Only our own errors carry a code, as an own property.
+function errorCode(err) {
+  if (typeof err !== "object" || err === null) return undefined;
+  return ObjectHasOwn(err, "code") ? err.code : undefined;
+}
+
+// String.prototype.split would also look up Symbol.split through the
+// separator's prototype chain.
+function splitLines(str) {
+  const lines = [];
+  let start = 0;
+  while (true) {
+    const end = StringPrototypeIndexOf(str, "\n", start);
+    if (end < 0) {
+      ArrayPrototypePush(lines, StringPrototypeSlice(str, start));
+      return lines;
+    }
+    ArrayPrototypePush(lines, StringPrototypeSlice(str, start, end));
+    start = end + 1;
+  }
+}
+
+function errorReport(err) {
+  const stack = defaultStack(err);
+  return {
+    is_error: true,
+    message: errorMessage(err),
+    stack: stack ? splitLines(stack) : [],
+    code: errorCode(err),
+  };
+}
 
 function isArrayLike(obj) {
   return obj != null && typeof obj.length === "number";
@@ -196,7 +297,7 @@ function getSourceMapURLs(sourceURL, relativeSourceMapURL) {
   try {
     sourceMapURL = URLPrototypeToString(new URL_(relativeSourceMapURL, sourceBaseURL));
   } catch (err) {
-    log("[RuntimeError] Failed to process sourcemap url: " + err.message);
+    log("[RuntimeError] Failed to process sourcemap url: " + errorMessage(err));
     return null;
   }
 
@@ -286,7 +387,7 @@ function sendCDPMessage(method, params, contextId) {
       // user JS which happen to still be pending and then get thrown upon CDP
       // result return.
       // E.g.: https://linear.app/replay/issue/RUN-1680#comment-1dfa142b
-      log(`[RuntimeError][RUN-1680] sendCDPMessage(${method}) failed: ${err?.message}`);
+      log(`[RuntimeError][RUN-1680] sendCDPMessage(${method}) failed: ${errorMessage(err)}`);
     }
   } finally {
     const req = gCdpRequestStack.pop();
@@ -329,14 +430,9 @@ function messageCallback(message) {
       }
     }
   } catch (e) {
-    warning(`JS Message callback exception: ${e?.stack || e}`);
+    warning(`JS Message callback exception: ${defaultStack(e) || errorMessage(e)}`);
 
-    return JSONStringify({
-      is_error: true,
-      message: e?.message || (e + ''),
-      stack: e?.stack?.split?.("\n") || e?.stack || [],
-      code: e?.code,
-    });
+    return JSONStringify(errorReport(e));
   }
 }
 
@@ -388,7 +484,7 @@ function CHECK_ALIVE(message) {
     } else {
       // Since we don't know enough about the circumstances here yet,
       // let's not crash an RTP for it.
-      warning(err.stack);
+      warning(defaultStack(err));
     }
   }
 }
@@ -413,16 +509,11 @@ function commandCallback(method, params) {
   try {
     return executeCommand(method, params);
   } catch (e) {
-    log(`[RuntimeError][Command ${method}]${getAliveLabel()} ${e?.stack || e}`);
+    log(`[RuntimeError][Command ${method}]${getAliveLabel()} ${defaultStack(e) || errorMessage(e)}`);
     // Pass the error up to V8; it can (for now) decide how to handle itself, whether
     // it should crash or not, etc.  Eventually, the caller of the command should make
     // that decision.
-    return {
-      is_error: true,
-      message: e?.message || (e + ''),
-      stack: e?.stack?.split?.("\n") || e?.stack || [],
-      code: e?.code,
-    };
+    return errorReport(e);
   }
 }
 
@@ -631,7 +722,7 @@ function handleEvalError(err) {
   // RUN-2042 workaround: This fails a lot due to evals on frames in contexts
   // that have been destroyed. We want to fix this if we know that this is
   // high-impact.
-  log(`[RuntimeError] in eval: ${err?.stack || err}`);
+  log(`[RuntimeError] in eval: ${defaultStack(err) || errorMessage(err)}`);
   return {
     failed: true
   };
@@ -1434,7 +1525,7 @@ ProtocolObjectPreview.prototype = {
         // Rethrow would become commandCallback is_error → Command.cpp Die.
         if (e instanceof CDPMessageError) {
           warning(
-            `[crash-0050] ProtocolObjectPreview.fill CDP error ${e.code}: ${e.cdpMessage || e.message}`,
+            `[crash-0050] ProtocolObjectPreview.fill CDP error ${errorCode(e)}: ${e.cdpMessage || errorMessage(e)}`,
           );
           cdpProperties = { result: [] };
         } else {
@@ -1942,7 +2033,7 @@ function extractFunctionParameterNames(s) {
     log(`[RuntimeError] extractFunctionParameterNames fell through for: ${s.slice(0, 80)}... header=${cleanHeader}`);
     return [];
   } catch (err) {
-    log(`[RuntimeError] extractFunctionParameterNames failed for: ${s.slice(0, 80)}...\n ${err?.stack || err}`);
+    log(`[RuntimeError] extractFunctionParameterNames failed for: ${s.slice(0, 80)}...\n ${defaultStack(err) || errorMessage(err)}`);
   }
 }
 
@@ -2012,11 +2103,11 @@ function evalPropRrpNotNull(owner, propKey) {
     if (plainValue === undefined || plainValue === null) {
       // [RUN-2223] This should not happen.
       const e = new Error("");
-      warning(`[RUN-2223] JS evalPropRrpNotNull got ${plainValue} when evaluating ${propKey} on ${typeof owner}, stack=${e.stack}`);
+      warning(`[RUN-2223] JS evalPropRrpNotNull got ${plainValue} when evaluating ${propKey} on ${typeof owner}, stack=${defaultStack(e)}`);
     }
     return createRrpValueRaw(plainValue);
   } catch (err) {
-    warning(`JS evalPropRrpNotNull exception - calling ${propKey?.toString?.()} on ${typeof owner} - ${err?.stack || err}`);
+    warning(`JS evalPropRrpNotNull exception - calling ${propKey?.toString?.()} on ${typeof owner} - ${defaultStack(err) || errorMessage(err)}`);
     return null;
   }
 }
@@ -3310,7 +3401,7 @@ function replayEval(fn) {
     // `Runtime_UnwindAndFindExceptionHandler`.
     // TODO: We should just crash here, since its the responsibility of the
     // caller of replayEval to make sure the cb won't throw.
-    warning(`replayEval ERROR: ${err?.stack || err}`);
+    warning(`replayEval ERROR: ${defaultStack(err) || errorMessage(err)}`);
   } finally {
     endReplayCode();
   }
