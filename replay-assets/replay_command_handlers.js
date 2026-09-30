@@ -132,6 +132,7 @@ const ArrayPrototypeJoin = uncurryThis(Array.prototype.join);
 const ArrayPrototypeMap = uncurryThis(Array.prototype.map);
 const ArrayPrototypePop = uncurryThis(Array.prototype.pop);
 const ArrayPrototypeReverse = uncurryThis(Array.prototype.reverse);
+const ArrayPrototypeSlice = uncurryThis(Array.prototype.slice);
 const ArrayPrototypeSort = uncurryThis(Array.prototype.sort);
 const ArrayPrototypePush = uncurryThis(Array.prototype.push);
 const ObjectPrototypeToString = uncurryThis(Object.prototype.toString);
@@ -145,11 +146,12 @@ const MapPrototypeSet = uncurryThis(Map.prototype.set);
 const MapPrototypeHas = uncurryThis(Map.prototype.has);
 const MapPrototypeDelete = uncurryThis(Map.prototype.delete);
 const MapPrototypeClear = uncurryThis(Map.prototype.clear);
-const MapPrototypeKeys = uncurryThis(Map.prototype.keys);
-const MapPrototypeValues = uncurryThis(Map.prototype.values);
+const MapPrototypeForEach = uncurryThis(Map.prototype.forEach);
 const MapPrototypeGetSize = uncurryGetter(Map.prototype, "size");
 const SetPrototypeAdd = uncurryThis(Set.prototype.add);
 const SetPrototypeHas = uncurryThis(Set.prototype.has);
+const SetPrototypeForEach = uncurryThis(Set.prototype.forEach);
+const ReflectApply = Reflect.apply;
 const StringPrototypeIndexOf = uncurryThis(String.prototype.indexOf);
 const ObjectDefineProperty = Object.defineProperty;
 const ObjectHasOwn = Object.hasOwn;
@@ -254,6 +256,26 @@ function errorReport(err) {
 
 function isArrayLike(obj) {
   return obj != null && typeof obj.length === "number";
+}
+
+// for...of, spread and Array.from go through the iterator protocol, whose
+// methods the page can patch; these iterate by index or via forEach instead.
+function pushAll(array, items) {
+  for (let i = 0; i < items.length; i++) {
+    ArrayPrototypePush(array, items[i]);
+  }
+}
+
+function mapKeysArray(map) {
+  const keys = [];
+  MapPrototypeForEach(map, (value, key) => ArrayPrototypePush(keys, key));
+  return keys;
+}
+
+function mapValuesArray(map) {
+  const values = [];
+  MapPrototypeForEach(map, value => ArrayPrototypePush(values, value));
+  return values;
 }
 
 function describeValueShape(value) {
@@ -575,7 +597,9 @@ function Target_getCurrentMessageContents() {
 
   // Get the protocol representation of the message arguments.
   const argumentValues = [];
-  for (const arg of gLastConsoleAPICall.args || []) {
+  const args = gLastConsoleAPICall.args || [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
     ArrayPrototypePush(argumentValues, buildRrpObjectFromCdpObject(arg));
   }
 
@@ -1169,7 +1193,7 @@ function getFrameArgumentsArray(frameOrFrameIndex) {
   }
   const frameId = frame.callFrameId;
   const args = fromJsGetArgumentsInFrame(frameId);
-  return args && [...args] || [];
+  return args ? ArrayPrototypeSlice(args) : [];
 }
 
 
@@ -1564,7 +1588,9 @@ ProtocolObjectPreview.prototype = {
       }
     }
     
-    for (const cdpProp of cdpProperties.result) {
+    const { result: cdpProps } = cdpProperties;
+    for (let i = 0; i < cdpProps.length; i++) {
+      const cdpProp = cdpProps[i];
       const { name: propKey } = cdpProp;
       if (!SetPrototypeHas(foundProps, propKey)) {
         continue;
@@ -1589,7 +1615,8 @@ ProtocolObjectPreview.prototype = {
     if (!isPrototype(this.raw)) { // Ignore prototype itself.
       const previewers = CustomPreviewers[this.cdpObj.className];
       if (previewers) {
-        for (const entry of previewers) {
+        for (let i = 0; i < previewers.length; i++) {
+          const entry = previewers[i];
           if (isFunction(entry)) {
             entry.call(this, cdpProperties);
           } else {
@@ -1617,7 +1644,7 @@ ProtocolObjectPreview.prototype = {
       prototypeId: prototypeRrpId,
       overflow: (this.overflow && this.level != "full") ? true : undefined,
       properties: this.properties,
-      getterValues: this.getterValues ? [...MapPrototypeValues(this.getterValues)] : undefined,
+      getterValues: this.getterValues ? mapValuesArray(this.getterValues) : undefined,
       containerEntries: this.containerEntries,
       ...this.extra,
     };
@@ -1835,7 +1862,8 @@ function previewSetMap(cdpProperties) {
     objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
   }).result;
 
-  for (const entry of entries) {
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
     if (entry?.value?.subtype == "internal#entry") {
       const entryProperties = sendCDPMessage("Runtime.getProperties", {
         objectId: entry.value.objectId,
@@ -2220,7 +2248,8 @@ function createRrpScope(scopeId) {
       generatePreview: false,
       objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
     }).result;
-    for (const { name, value: cdpProp } of properties) {
+    for (let i = 0; i < properties.length; i++) {
+      const { name, value: cdpProp } = properties[i];
       const rrpProp = buildRrpObjectFromCdpObject(cdpProp);
       ArrayPrototypePush(bindings, { ...rrpProp, name });
     }
@@ -2449,14 +2478,13 @@ function DOM_getEventListeners({ node }) {
 
   if (nodeObject.nodeName && nodeObject.nodeName == "HTML") {
     // Add event listeners for the document and window as well.
-    ArrayPrototypePush(listenerInfos,
-      ...fromJsCollectEventListeners(nodeObject.parentNode)   // document
-      // ...fromJsCollectEventListeners(nodeObject.ownerGlobal)  // window
-    );
+    pushAll(listenerInfos, fromJsCollectEventListeners(nodeObject.parentNode));   // document
+    // pushAll(listenerInfos, fromJsCollectEventListeners(nodeObject.ownerGlobal));  // window
   }
 
   const listeners = [];
-  for (const { type, handler, capture } of listenerInfos) {
+  for (let i = 0; i < listenerInfos.length; i++) {
+    const { type, handler, capture } = listenerInfos[i];
     if (!handler) {
       continue;
     }
@@ -2713,19 +2741,22 @@ function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
     ArrayPrototypePush(appliedRules, appliedRule);
   }
 
-  for (const cdpRule of ArrayPrototypeReverse(matchedRules)) {
-    addCdpRule(cdpRule.rule);
+  ArrayPrototypeReverse(matchedRules);
+  for (let i = 0; i < matchedRules.length; i++) {
+    addCdpRule(matchedRules[i].rule);
   }
 
-  for (const pseudoMatch of pseudoIdMatches) {
+  for (let i = 0; i < pseudoIdMatches.length; i++) {
+    const pseudoMatch = pseudoIdMatches[i];
     const {
       // see: https://chromedevtools.github.io/devtools-protocol/tot/DOM/#type-PseudoType
       pseudoType,
       // pseudoIdentifier,
       matches
     } = pseudoMatch;
-    for (const match of ArrayPrototypeReverse(matches)) {
-      addCdpRule(match.rule, pseudoType);
+    ArrayPrototypeReverse(matches);
+    for (let j = 0; j < matches.length; j++) {
+      addCdpRule(matches[j].rule, pseudoType);
     }
   }
 
@@ -3220,9 +3251,10 @@ StackingContext.prototype = {
     const rv = [];
 
     const pushElements = (elems) => {
-      for (const elem of elems) {
+      for (let i = 0; i < elems.length; i++) {
+        const elem = elems[i];
         if (elem.context && elem.context != this) {
-          ArrayPrototypePush(rv, ...elem.context.flatten());
+          pushAll(rv, elem.context.flatten());
         } else {
           ArrayPrototypePush(rv, elem);
         }
@@ -3230,14 +3262,15 @@ StackingContext.prototype = {
     };
 
     const pushZIndexElements = (filter) => {
-      for (const z of zIndexes) {
+      for (let i = 0; i < zIndexes.length; i++) {
+        const z = zIndexes[i];
         if (filter(z)) {
           pushElements(MapPrototypeGet(this.zIndexElements, z));
         }
       }
     };
 
-    const zIndexes = [...MapPrototypeKeys(this.zIndexElements)];
+    const zIndexes = mapKeysArray(this.zIndexElements);
     ArrayPrototypeSort(zIndexes, (a, b) => a - b);
 
     if (this.root) {
@@ -3263,18 +3296,20 @@ function shiftRect(rect, offset, transformMatrix) {
   let { left, top, right, bottom } = rect;
   if (transformMatrix) {
     if (left && top) {
-      const [ leftTrans, topTrans ] = adjustCoordinateByTransformMatrix(
+      const leftTop = adjustCoordinateByTransformMatrix(
         [ left, top ],
         transformMatrix
       );
+      const leftTrans = leftTop[0], topTrans = leftTop[1];
       left = leftTrans;
       top = topTrans;
     }
     if (right && bottom) {
-      const [ rightTrans, bottomTrans ] = adjustCoordinateByTransformMatrix(
+      const rightBottom = adjustCoordinateByTransformMatrix(
         [ right, bottom ],
         transformMatrix
       );
+      const rightTrans = rightBottom[0], bottomTrans = rightBottom[1];
       right = rightTrans;
       bottom = bottomTrans;
     }
@@ -3347,8 +3382,8 @@ function multiplyTransformMatrix(m1,m2) {
   //   b, d, ty,
   //   0, 0, 1
   // ]
-  const [a1, b1, c1, d1, tx1, ty1] = m1;
-  const [a2, b2, c2, d2, tx2, ty2] = m2;
+  const a1 = m1[0], b1 = m1[1], c1 = m1[2], d1 = m1[3], tx1 = m1[4], ty1 = m1[5];
+  const a2 = m2[0], b2 = m2[1], c2 = m2[2], d2 = m2[3], tx2 = m2[4], ty2 = m2[5];
 
   const a3 = a1 * a2 + c1 * b2;
   const b3 = b1 * a2 + d1 * b2;
@@ -3364,8 +3399,8 @@ function multiplyTransformMatrix(m1,m2) {
  * Adjust a { left, top } coordinate by a transform matrix
  * ##########################################################################*/
 function adjustCoordinateByTransformMatrix(coord, m) {
-  const [ x, y ] = coord;
-  const [scaleX, skewX, skewY, scaleY, translateX, translateY] = m;
+  const x = coord[0], y = coord[1];
+  const scaleX = m[0], skewX = m[1], skewY = m[2], scaleY = m[3], translateX = m[4], translateY = m[5];
 
   const x2 = x * scaleX + y * skewX + translateX;
   const y2 = x * skewY + y * scaleY + translateY;
@@ -3476,7 +3511,7 @@ function patchReplayApiObject(obj) {
 function wrapReplayApiFunction(fn) {
   return (...args) => {
     onReplayApiUsed();
-    return fn(...args);
+    return ReflectApply(fn, undefined, args);
   };
 }
 
@@ -3490,23 +3525,17 @@ initMessages();
 addEventListener("Runtime.consoleAPICalled", onConsoleAPICall);
 addEventListener("Runtime.executionContextCreated", ({ context }) => {
   MapPrototypeSet(gExecutionContexts, context.id, context);
-  for (const callback of gContextChangeCallbacks) {
-    callback(context, "add");
-  }
+  SetPrototypeForEach(gContextChangeCallbacks, callback => callback(context, "add"));
 });
 addEventListener("Runtime.executionContextDestroyed", ({ executionContextId }) => {
   const context = MapPrototypeGet(gExecutionContexts, executionContextId);
-  for (const callback of gContextChangeCallbacks) {
-    callback(context, "remove");
-  }
+  SetPrototypeForEach(gContextChangeCallbacks, callback => callback(context, "remove"));
   MapPrototypeDelete(gExecutionContexts, executionContextId);
 });
 addEventListener("Runtime.executionContextsCleared", () => {
-  for (const context of MapPrototypeValues(gExecutionContexts)) {
-    for (const callback of gContextChangeCallbacks) {
-      callback(context, "remove");
-    }
-  }
+  MapPrototypeForEach(gExecutionContexts, context => {
+    SetPrototypeForEach(gContextChangeCallbacks, callback => callback(context, "remove"));
+  });
   MapPrototypeClear(gExecutionContexts);
 });
 sendCDPMessage("Runtime.enable");
