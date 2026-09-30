@@ -5,7 +5,9 @@
 // Avoid monkey patching.
 const { fetch, URL, Error } = window;
 const DateNow = Date.now;
-const StringStartsWith = String.prototype.startsWith;
+const { bind, call } = Function.prototype;
+const uncurryThis = bind.bind(call);
+const StringPrototypeStartsWith = uncurryThis(String.prototype.startsWith);
 
 const {
   log,
@@ -50,7 +52,7 @@ async function fetchTextWithCache(url, hash) {
 
 addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   try {
-  if (!relativeSourceMapURL || StringStartsWith.call(relativeSourceMapURL, "data:"))
+  if (!relativeSourceMapURL || StringPrototypeStartsWith(relativeSourceMapURL, "data:"))
     return;
 
   const recordingId = getRecordingId();
