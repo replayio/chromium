@@ -3,12 +3,18 @@
 (() => {
 
 // Avoid monkey patching.
-const { fetch, URL, Error, queueMicrotask } = window;
+const { fetch, URL, Error, Response, queueMicrotask } = window;
 const DateNow = Date.now;
 const { bind, call } = Function.prototype;
 const uncurryThis = bind.bind(call);
 const StringPrototypeStartsWith = uncurryThis(String.prototype.startsWith);
+const uncurryGetter = (proto, key) =>
+  uncurryThis(Object.getOwnPropertyDescriptor(proto, key).get);
 const URLPrototypeToString = uncurryThis(URL.prototype.toString);
+const ResponsePrototypeGetOk = uncurryGetter(Response.prototype, "ok");
+const ResponsePrototypeGetStatus = uncurryGetter(Response.prototype, "status");
+const ResponsePrototypeGetStatusText = uncurryGetter(Response.prototype, "statusText");
+const ResponsePrototypeText = uncurryThis(Response.prototype.text);
 
 // Awaiting this yields for one microtask. Awaiting a real promise would read
 // its `constructor`, which the page can patch; `then` here is our own property.
@@ -33,10 +39,10 @@ const fetchPromiseCache = {};
 
 async function fetchText(url) {
   const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Fetching ${url} failed with status code ${response.status} (${response.statusText})`);
+  if (!ResponsePrototypeGetOk(response)) {
+    throw new Error(`Fetching ${url} failed with status code ${ResponsePrototypeGetStatus(response)} (${ResponsePrototypeGetStatusText(response)})`);
   }
-  return await response.text();
+  return await ResponsePrototypeText(response);
 }
 
 // Provide a cache for urls, salted with the supplied hash.  Practically, this
