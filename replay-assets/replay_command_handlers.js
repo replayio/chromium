@@ -259,6 +259,7 @@ const RegExpPrototypeExec = uncurryThis(RegExp.prototype.exec);
 const FunctionPrototypeToString = uncurryThis(Function.prototype.toString);
 const ObjectDefineProperty = Object.defineProperty;
 const ObjectHasOwn = Object.hasOwn;
+const ObjectCreate = Object.create;
 const ObjectSetPrototypeOf = Object.setPrototypeOf;
 const ReflectDeleteProperty = Reflect.deleteProperty;
 const DOMExceptionPrototypeGetMessage = uncurryGetter(DOMException.prototype, "message");
@@ -344,6 +345,24 @@ function splitBy(str, separator) {
     ArrayPrototypePush(parts, StringPrototypeSlice(str, start, end));
     start = end + separator.length;
   }
+}
+
+// Objects from CDP and the driver only have own data properties, so anything
+// found on their prototype chain would be the page's.
+function ownProperty(obj, key) {
+  return ObjectHasOwn(obj, key) ? obj[key] : undefined;
+}
+
+// The listed own properties of `obj` on a prototype-less object, for destructuring.
+function ownProperties(obj, keys) {
+  const rv = ObjectCreate(null);
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
+    if (ObjectHasOwn(obj, key)) {
+      rv[key] = obj[key];
+    }
+  }
+  return rv;
 }
 
 function errorReport(err) {
@@ -504,11 +523,17 @@ function sendCDPMessage(method, params, contextId) {
     assert(req === cdpRequest, "[RuntimeError] CDP request stack corrupted");
   }
 
-  if (cdpRequest.result?.result) {
-    return cdpRequest.result.result;
+  const { result: cdpMessage } = cdpRequest;
+  if (!cdpMessage) {
+    return undefined;
   }
-  if (cdpRequest.result?.error) {
-    throw new CDPMessageError(cdpRequest.result.error.message, cdpRequest.result.error.code);
+  const result = ownProperty(cdpMessage, "result");
+  if (result) {
+    return result;
+  }
+  const error = ownProperty(cdpMessage, "error");
+  if (error) {
+    throw new CDPMessageError(ownProperty(error, "message"), ownProperty(error, "code"));
   }
   return undefined;
 }
@@ -529,14 +554,15 @@ function addEventListener(method, callback) {
 function messageCallback(message) {
   try {
     message = JSONParse(message);
-    if (message.id) {
+    const id = ownProperty(message, "id");
+    if (id) {
       const request = gCdpRequestStack[gCdpRequestStack.length - 1];
-      assert(message.id === request.messageId, "CDP request stack corrupted");
+      assert(id === request.messageId, "CDP request stack corrupted");
       request.result = message;
     } else {
-      const listener = MapPrototypeGet(gEventListeners, message.method);
+      const listener = MapPrototypeGet(gEventListeners, ownProperty(message, "method"));
       if (listener) {
-        listener(message.params);
+        listener(ownProperty(message, "params"));
       }
     }
   } catch (e) {
@@ -655,7 +681,8 @@ function Target_getCurrentMessageContents() {
   const error = getCurrentError();
 
   if (error) {
-    const { message, filename, line, column, scriptId } = error;
+    const { message, filename, line, column, scriptId } =
+      ownProperties(error, ["message", "filename", "line", "column", "scriptId"]);
     return {
       source: "PageError",
       level: "error",
@@ -677,22 +704,23 @@ function Target_getCurrentMessageContents() {
 
   // Get the protocol representation of the message arguments.
   const argumentValues = [];
-  const args = gLastConsoleAPICall.args || [];
+  const args = ownProperty(gLastConsoleAPICall, "args") || [];
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     ArrayPrototypePush(argumentValues, buildRrpObjectFromCdpObject(arg));
   }
 
-  const level = MapPrototypeGet(cdpToRrpConsoleLevels, gLastConsoleAPICall.type) || "info";
+  const level = MapPrototypeGet(cdpToRrpConsoleLevels, ownProperty(gLastConsoleAPICall, "type")) || "info";
 
   let url, sourceId, line, column;
-  if (gLastConsoleAPICall.stackTrace) {
-    const frame = gLastConsoleAPICall.stackTrace.callFrames[0];
+  const stackTrace = ownProperty(gLastConsoleAPICall, "stackTrace");
+  if (stackTrace) {
+    const frame = ownProperty(stackTrace, "callFrames")[0];
     if (frame) {
-      url = frame.url;
-      sourceId = frame.scriptId;
-      line = frame.lineNumber;
-      column = frame.columnNumber;
+      url = ownProperty(frame, "url");
+      sourceId = ownProperty(frame, "scriptId");
+      line = ownProperty(frame, "lineNumber");
+      column = ownProperty(frame, "columnNumber");
     }
   }
 
@@ -756,10 +784,11 @@ function Target_topFrameLocation() {
       return {};
     }
     const rv = sendCDPMessage("Debugger.getTopFrameLocation");
-    if (!rv || !rv.location) {
+    const location = rv ? ownProperty(rv, "location") : undefined;
+    if (!location) {
       return {};
     }
-    return { location: createProtocolLocation(rv.location)[0] };
+    return { location: createProtocolLocation(location)[0] };
   } catch (e) {
     if (e instanceof CDPMessageError) {
       // No available context group; this can happen, so just return nothing.
@@ -785,10 +814,10 @@ function getStackFrames() {
     if (!isReplayScriptAlive()) {
       return [];
     }
-    const { callFrames } = sendCDPMessage("Debugger.getCallFrames", {
+    const rv = sendCDPMessage("Debugger.getCallFrames", {
       objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
     });
-    return callFrames;
+    return ownProperty(rv, "callFrames");
   } catch (e) {
     if (e instanceof CDPMessageError) {
       // No available context group; this can happen, so just return nothing.
@@ -806,14 +835,16 @@ function getStackFrames() {
 function buildRrpObjectResult(cdpReturnValue) {
   const rrpResult = { data: {} };
   if (cdpReturnValue) {
-    const { result: cdpResult, exceptionDetails } = cdpReturnValue;
+    const { result: cdpResult, exceptionDetails } =
+      ownProperties(cdpReturnValue, ["result", "exceptionDetails"]);
     if (exceptionDetails) {
       /**
        * @see https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#type-ExceptionDetails
        */
-      const rrpObject = exceptionDetails.exception ?
-        buildRrpObjectFromCdpObject(exceptionDetails.exception) :
-        registerPlainObject({ message: exceptionDetails.text })
+      const exception = ownProperty(exceptionDetails, "exception");
+      const rrpObject = exception ?
+        buildRrpObjectFromCdpObject(exception) :
+        registerPlainObject({ message: ownProperty(exceptionDetails, "text") })
       rrpResult.exception = rrpObject;
     } else if (cdpResult) {
       // cdpResult is the actual result RemoteObject.
@@ -857,7 +888,7 @@ function getFrameByLocation(cdpLocation) {
   const frames = getStackFrames();
   return ArrayPrototypeFind(
     frames,
-    f => JSONStringify(f.location) == JSONStringify(cdpLocation)
+    f => JSONStringify(ownProperty(f, "location")) == JSONStringify(cdpLocation)
   );
 }
 
@@ -893,11 +924,11 @@ function Pause_evaluateInFrame({ frameId: frameIndexStr, expression }) {
     return sendCDPMessage(
       "Debugger.evaluateOnCallFrame",
       {
-        callFrameId: frame.callFrameId,
+        callFrameId: ownProperty(frame, "callFrameId"),
         expression,
         objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
       },
-      frame.contextId
+      ownProperty(frame, "contextId")
     );
   }
 }
@@ -924,9 +955,11 @@ function onBeforeEval() {
 }
 
 function buildEvalResult(cdpResult) {
-  if (usedReplayApi && cdpResult?.exceptionDetails) {
+  const exceptionDetails = cdpResult ? ownProperty(cdpResult, "exceptionDetails") : undefined;
+  if (usedReplayApi && exceptionDetails) {
     // Emit warning if an eval that used the Replay API throws.
-    const cdpException = cdpResult.exceptionDetails.exception?.description || cdpResult.exceptionDetails;
+    const exception = ownProperty(exceptionDetails, "exception");
+    const cdpException = (exception && ownProperty(exception, "description")) || exceptionDetails;
     warning(`REPLAY_API_EVAL_ERROR ${JSONStringify(cdpException)}`);
   }
   return buildRrpObjectResult(cdpResult);
@@ -949,7 +982,8 @@ function Pause_getExceptionValue() {
   const rv = sendCDPMessage("Debugger.getPendingException", {
     objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
   });
-  return { exception: rv.exception ? buildRrpObjectFromCdpObject(rv.exception) : undefined, data: {} };
+  const exception = ownProperty(rv, "exception");
+  return { exception: exception ? buildRrpObjectFromCdpObject(exception) : undefined, data: {} };
 }
 
 function Pause_getObjectPreview({ object, level = "full", pageSizeForTesting = 0 }) {
@@ -963,7 +997,7 @@ function Pause_getObjectProperty({ object, name }) {
     "Runtime.callFunctionOn",
     {
       functionDeclaration: `function() { return this["${name}"] }`,
-      objectId: cdpObj.objectId,
+      objectId: ownProperty(cdpObj, "objectId"),
       objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
     }
   );
@@ -1136,7 +1170,7 @@ function getPlainObjectByRrpId(rrpId) {
     const cdpObject = getCdpObjectByRrpId(rrpId);
     // → NOTE if we have an rrpId, it means, we already should have registered the cdpObject
     assert(cdpObject);
-    const cdpId = cdpObject.objectId;
+    const cdpId = ownProperty(cdpObject, "objectId");
     plainObject = fromJsGetObjectByCdpId(cdpId);
     MapPrototypeSet(gRrpIdByPlainObject, plainObject, rrpId);
     MapPrototypeSet(gPlainObjectByRrpId, rrpId, plainObject);
@@ -1149,7 +1183,7 @@ function getPlainObjectByRrpId(rrpId) {
  * @return {number} rrpId
  */
 function registerCdpObject(cdpObject) {
-  const cdpId = cdpObject.objectId;
+  const cdpId = ownProperty(cdpObject, "objectId");
   assert(cdpId);
 
   let rrpId = MapPrototypeGet(gRrpIdByCdpId, cdpId);
@@ -1217,8 +1251,8 @@ function registerNewRrpObject(rrpId, cdpObject, rrpObjectPreview, plainObject) {
   rrpId ||= ++gLastRrpId + '';  // coerce to string
   if (cdpObject) {
     // CDP.Runtime.RemoteObject
-    assert(cdpObject.objectId);
-    const cdpId = cdpObject.objectId;
+    const cdpId = ownProperty(cdpObject, "objectId");
+    assert(cdpId);
     registerRrpCpdId(rrpId, cdpId, cdpObject);
   }
   if (rrpObjectPreview) {
@@ -1260,18 +1294,18 @@ function getFrameArgumentsArray(frameOrFrameIndex) {
     }
     // Get new frame instance, since the stack might have changed and V8 uses
     // frame index for look up.
-    frame = getFrameByLocation(gCurrentEvaluateFrame.location) 
+    frame = getFrameByLocation(ownProperty(gCurrentEvaluateFrame, "location"))
     if (!frame) {
       throw new Error(
         `getFrameArgumentsArray was called from within Pause.evaluateInFrame ` +
-        `but the frame is not on stack anymore: ${JSONStringify(ArrayPrototypeMap(frames, f => f.location))}`);
+        `but the frame is not on stack anymore: ${JSONStringify(ArrayPrototypeMap(getStackFrames(), f => ownProperty(f, "location")))}`);
     }
   } else if (typeof frameOrFrameIndex === "number") {
     frame = getFrameByIndex(frameOrFrameIndex);
-  } else if (isObject(frameOrFrameIndex) && frameOrFrameIndex.callFrameId) {
+  } else if (isObject(frameOrFrameIndex) && ownProperty(frameOrFrameIndex, "callFrameId")) {
     frame = frameOrFrameIndex;
   }
-  const frameId = frame.callFrameId;
+  const frameId = ownProperty(frame, "callFrameId");
   const args = fromJsGetArgumentsInFrame(frameId);
   return args ? ArrayPrototypeSlice(args) : [];
 }
@@ -1287,7 +1321,7 @@ const MaxStringLength = 10000;
 
 const cdpRefTypes = ['object', 'function'];
 function isCdpRefType(cdpObject) {
-  return ArrayPrototypeIncludes(cdpRefTypes, cdpObject.type);
+  return ArrayPrototypeIncludes(cdpRefTypes, ownProperty(cdpObject, "type"));
 }
 
 
@@ -1299,28 +1333,30 @@ function buildRrpObjectFromCdpObject(cdpObject) {
   if (!cdpObject) {
     return {};
   }
-  switch (cdpObject.type) {
+  const { type, value, unserializableValue } =
+    ownProperties(cdpObject, ["type", "value", "unserializableValue"]);
+  switch (type) {
     case "undefined":
       return {};
     case "string":
     case "number":
     case "boolean":
-      if (cdpObject.unserializableValue) {
-        assert(cdpObject.type == "number");
-        return { unserializableNumber: cdpObject.unserializableValue };
+      if (unserializableValue) {
+        assert(type == "number");
+        return { unserializableNumber: unserializableValue };
       }
-      if (typeof cdpObject.value == "string" && cdpObject.value.length > MaxStringLength) {
-        return { value: StringPrototypeSubstring(cdpObject.value, 0, MaxStringLength) + "…" };
+      if (typeof value == "string" && value.length > MaxStringLength) {
+        return { value: StringPrototypeSubstring(value, 0, MaxStringLength) + "…" };
       }
-      return { value: cdpObject.value };
+      return { value };
     case "bigint": {
-      const str = cdpObject.unserializableValue;
+      const str = unserializableValue;
       assert(str);
       return { bigint: StringPrototypeSubstring(str, 0, str.length - 1) };
     }
     case "object":
     case "function": {
-      if (!cdpObject.objectId) {    // TODO: how can this happen?
+      if (!ownProperty(cdpObject, "objectId")) {    // TODO: how can this happen?
         return { value: null };
       }
 
@@ -1328,7 +1364,7 @@ function buildRrpObjectFromCdpObject(cdpObject) {
       return { object: rrpId };
     }
     case "symbol":
-      return { symbol: cdpObject.description };
+      return { symbol: ownProperty(cdpObject, "description") };
     default:
       log(`[RuntimeError] invalid CDP type: ${JSONStringify(cdpObject)}`);
       return { unavailable: true };
@@ -1341,7 +1377,7 @@ function buildRrpObjectFromCdpObject(cdpObject) {
  * @param {CDP.Runtime.Scope} scope
  */
 function registerCdpScope(scope) {
-  const rrpId = registerCdpObject(scope.object);
+  const rrpId = registerCdpObject(ownProperty(scope, "object"));
   MapPrototypeSet(gCdpScopesByRrpId, rrpId, scope);
   return rrpId;
 }
@@ -1354,7 +1390,7 @@ function getCdpScopeByRrpId(rrpScopeId) {
 
 function getBlinkNodeIdByRrpId(nodeRrpId) {
   const cdpObject = getCdpObjectByRrpId(nodeRrpId);
-  const nodeId = fromJsGetNodeIdByCpdId(cdpObject.objectId);
+  const nodeId = fromJsGetNodeIdByCpdId(ownProperty(cdpObject, "objectId"));
   // Note: Don't generate assert message if assert did not fail.
   assert(nodeId, !nodeId && `${nodeRrpId}: ${JSONStringify(cdpObject)}`);
   return nodeId;
@@ -1367,11 +1403,11 @@ function getBlinkNodeIdByRrpId(nodeRrpId) {
 // Logic for creating object previews for the record/replay protocol.
 
 function isCdpObjectProxy(cdpObj) {
-  return cdpObj.subtype === "proxy";
+  return ownProperty(cdpObj, "subtype") === "proxy";
 }
 
 function isCdpObjectPromise(cdpObj) {
-  return cdpObj.subtype === "promise";
+  return ownProperty(cdpObj, "subtype") === "promise";
 }
 
 /**
@@ -1387,10 +1423,10 @@ function createPauseObject(rrpId, level, pageSizeForTesting) {
 
   const cdpObj = getCdpObjectByRrpId(rrpId);
   // NOTE: `subtype` is not reliably available, due to a divergence check in V8 → `value-mirror.cc`
-  const className = isCdpObjectProxy(cdpObj) ? "Proxy" : (cdpObj.className || "Function");
+  const className = isCdpObjectProxy(cdpObj) ? "Proxy" : (ownProperty(cdpObj, "className") || "Function");
 
   // NOTE: `persistentId` is added in V8 → `injected-script.cc`
-  const { persistentId } = cdpObj;
+  const persistentId = ownProperty(cdpObj, "persistentId");
   let preview;
   if (level != "none") {
     preview = new ProtocolObjectPreview(rrpId, cdpObj, level, pageSizeForTesting).fill();
@@ -1403,7 +1439,7 @@ function createPauseObject(rrpId, level, pageSizeForTesting) {
 function isObjectBlacklisted(cdpObj) {
   // Accessing Storage object properties can cause hangs when trying to
   // communicate with the non-existent parent process.
-  if (cdpObj.className == "Storage") {
+  if (ownProperty(cdpObj, "className") == "Storage") {
     return true;
   }
 
@@ -1459,7 +1495,7 @@ ProtocolObjectPreview.prototype = {
 
   get plainObject() {
     if (!this._plainObject) {
-      this._plainObject = getPlainObjectByCdpId(this.cdpObj.objectId);
+      this._plainObject = getPlainObjectByCdpId(ownProperty(this.cdpObj, "objectId"));
     }
     return this._plainObject;
   },
@@ -1597,14 +1633,16 @@ ProtocolObjectPreview.prototype = {
     if (isBlinkObject(this.raw, this.cdpObj)) {
       // for native objects we've explicitly asked for more than just ownProperties,
       // so we further filter them here.
-      if (!cdpProp.isOwn && !(cdpProp.configurable && cdpProp.enumerable)) {
+      const { isOwn, configurable, enumerable } =
+        ownProperties(cdpProp, ["isOwn", "configurable", "enumerable"]);
+      if (!isOwn && !(configurable && enumerable)) {
         // the property is both not our own, and it's also not on a prototype and configurable + enumerable.
         // XXX(toshok) do we really want to exclude non-configurable props?
         return false;
       }
     }
 
-    return this.checkAddProperty(this.cdpObj, cdpProp.name);
+    return this.checkAddProperty(this.cdpObj, ownProperty(cdpProp, "name"));
   },
 
   fill() {
@@ -1628,7 +1666,7 @@ ProtocolObjectPreview.prototype = {
       //    see: https://github.com/replayio/chromium-v8/pull/115/files#diff-72ee0a91d32565577bd78ed94b034ae3b4bf51676c5d42165e9363cad18dccf9R1328
       try {
         cdpProperties = sendCDPMessage("Runtime.getProperties", {
-          objectId: this.cdpObj.objectId,
+          objectId: ownProperty(this.cdpObj, "objectId"),
           ownProperties: !isBlinkObject(this.raw, this.cdpObj),
           generatePreview: false,
           pageIndex: 0, // Warning: NYI
@@ -1648,7 +1686,8 @@ ProtocolObjectPreview.prototype = {
         }
       }
 
-      if (!cdpProperties.result) {
+      const cdpProps = ownProperty(cdpProperties, "result");
+      if (!cdpProps) {
         return {
           prototypeId: undefined
         };
@@ -1657,9 +1696,9 @@ ProtocolObjectPreview.prototype = {
       /**
        * @see https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#type-PropertyDescriptor
        */
-      for (let i = 0; i < cdpProperties.result.length; ++i) {
-        const cdpProp = cdpProperties.result[i];
-        const { name: propKey } = cdpProp;
+      for (let i = 0; i < cdpProps.length; ++i) {
+        const cdpProp = cdpProps[i];
+        const propKey = ownProperty(cdpProp, "name");
         if (propKey === "__proto__" || SetPrototypeHas(foundProps, propKey)) {
           continue;
         }
@@ -1669,10 +1708,10 @@ ProtocolObjectPreview.prototype = {
       }
     }
     
-    const { result: cdpProps } = cdpProperties;
+    const cdpProps = ownProperty(cdpProperties, "result");
     for (let i = 0; i < cdpProps.length; i++) {
       const cdpProp = cdpProps[i];
-      const { name: propKey } = cdpProp;
+      const propKey = ownProperty(cdpProp, "name");
       if (!SetPrototypeHas(foundProps, propKey)) {
         continue;
       }
@@ -1694,7 +1733,7 @@ ProtocolObjectPreview.prototype = {
 
     // Add builtin-specific data.
     if (!isPrototype(this.raw)) { // Ignore prototype itself.
-      const previewers = CustomPreviewers[this.cdpObj.className];
+      const previewers = ownProperty(CustomPreviewers, ownProperty(this.cdpObj, "className"));
       if (previewers) {
         for (let i = 0; i < previewers.length; i++) {
           const entry = previewers[i];
@@ -1702,9 +1741,9 @@ ProtocolObjectPreview.prototype = {
             ReflectApply(entry, this, [cdpProperties]);
           } else {
             // entry should be string -> Look it up in results
-            const cdpEntry = ArrayPrototypeFind(cdpProperties.result, prop => prop.name === entry);
+            const cdpEntry = ArrayPrototypeFind(ownProperty(cdpProperties, "result"), prop => ownProperty(prop, "name") === entry);
             if (cdpEntry) {
-              const rrpEntry = buildRrpObjectFromCdpObject(cdpEntry.value);
+              const rrpEntry = buildRrpObjectFromCdpObject(ownProperty(cdpEntry, "value"));
               this.setGetterValueUnchecked(entry, rrpEntry);
             }
           }
@@ -1714,7 +1753,7 @@ ProtocolObjectPreview.prototype = {
     // Add data for blink and other special objects.
     ObjectAssign(this.extra, getExtraObjectPreviewData(this.cdpObj, cdpProperties));
     // Add Prototype data.
-    let prototypeCdp = getInternalProp(cdpProperties, '[[Prototype]]')?.value;
+    let prototypeCdp = internalPropValue(cdpProperties, '[[Prototype]]');
     let prototypeRrpId;
     if (prototypeCdp) {
       prototypeRrpId = registerCdpObject(prototypeCdp);
@@ -1735,13 +1774,13 @@ ProtocolObjectPreview.prototype = {
 };
 
 function getExtraObjectPreviewData(cdpObject, cdpProperties) {
-  const cdpId = cdpObject.objectId;
+  const cdpId = ownProperty(cdpObject, "objectId");
   const rrpId = MapPrototypeGet(gRrpIdByCdpId, cdpId);
   assert(rrpId);
   
   if (isCdpObjectProxy(cdpObject)) {
-    let targetCdpObj = getInternalProp(cdpProperties, '[[Target]]')?.value;
-    let handlerCdpObj = getInternalProp(cdpProperties, '[[Handler]]')?.value;
+    let targetCdpObj = internalPropValue(cdpProperties, '[[Target]]');
+    let handlerCdpObj = internalPropValue(cdpProperties, '[[Handler]]');
     return {
       proxyState: {
         target: buildRrpObjectFromCdpObject(targetCdpObj),
@@ -1749,10 +1788,10 @@ function getExtraObjectPreviewData(cdpObject, cdpProperties) {
       }
     };
   } else if (isCdpObjectPromise(cdpObject)) {
-    let stateCdpObj = getInternalProp(cdpProperties, '[[PromiseState]]')?.value;
-    let valueCdpObj = getInternalProp(cdpProperties, '[[PromiseResult]]')?.value;
+    let stateCdpObj = internalPropValue(cdpProperties, '[[PromiseState]]');
+    let valueCdpObj = internalPropValue(cdpProperties, '[[PromiseResult]]');
     const promiseState = {
-      state: stateCdpObj.value || undefined
+      state: ownProperty(stateCdpObj, "value") || undefined
     };
     if (promiseState.state !== "pending") {
       promiseState.value = buildRrpObjectFromCdpObject(valueCdpObj);
@@ -1893,7 +1932,7 @@ function getDescriptionCount(description) {
 
 function previewArray(_cdpProperties) {
   // TODO: [RUN-2223] Find out why Array.length does not always return a value.
-  const length = getDescriptionCount(this.cdpObj.description);
+  const length = getDescriptionCount(ownProperty(this.cdpObj, "description"));
   this.setGetterValueUnchecked("length", createRrpValueRaw(length));
 }
 
@@ -1910,26 +1949,25 @@ function previewTypedArray() {
  * containerEntries.
  */
 function previewSetMap(cdpProperties) {
-  if (!cdpProperties.internalProperties) {
-    return;
-  }
-
   const internal = getInternalProp(cdpProperties, "[[Entries]]");
-  if (!internal || !internal.value || !internal.value.objectId) {
+  const internalValue = internal ? ownProperty(internal, "value") : undefined;
+  const internalObjectId = internalValue ? ownProperty(internalValue, "objectId") : undefined;
+  if (!internalObjectId) {
     return;
   }
 
   // Get size from description.
   let size;
 
-  if (ArrayPrototypeIncludes(["Set", "Map"], this.cdpObj.className)) {
+  const className = ownProperty(this.cdpObj, "className");
+  if (ArrayPrototypeIncludes(["Set", "Map"], className)) {
     // NOTE: For some reason, the internal backing array size is capped to
     // pageSize for Set and Map.
     // This type of inconsistency is possible since *we* added paging to the
     // debugger (RUN-1315), and it might have (albeit small) negative impacts
     // like this.
     // SLN: Simply query the size getter instead.
-    size = this.cdpObj.className === "Map"
+    size = className === "Map"
       ? MapPrototypeGetSize(this.raw)
       : SetPrototypeGetSize(this.raw);
     const rrpSize = { name: "size", value: size };
@@ -1937,34 +1975,34 @@ function previewSetMap(cdpProperties) {
     this.setGetterValueUnchecked(rrpSize.name, rrpSize, /* force */ true);
   } else {
     // Weak{Set,Map}
-    size = getDescriptionCount(internal.value.description);
+    size = getDescriptionCount(ownProperty(internalValue, "description"));
   }
   this.extra.containerEntryCount = size;
 
-  const entries = sendCDPMessage("Runtime.getProperties", {
-    objectId: internal.value.objectId,
+  const entries = ownProperty(sendCDPMessage("Runtime.getProperties", {
+    objectId: internalObjectId,
     ownProperties: true,
     generatePreview: false,
     pageIndex: this.pageIndex,
     pageSize: this.pageSize,
     objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
-  }).result;
+  }), "result");
 
   for (let i = 0; i < entries.length; i++) {
-    const entry = entries[i];
-    if (entry?.value?.subtype == "internal#entry") {
-      const entryProperties = sendCDPMessage("Runtime.getProperties", {
-        objectId: entry.value.objectId,
+    const entryValue = entries[i] ? ownProperty(entries[i], "value") : undefined;
+    if (entryValue && ownProperty(entryValue, "subtype") == "internal#entry") {
+      const entryProperties = ownProperty(sendCDPMessage("Runtime.getProperties", {
+        objectId: ownProperty(entryValue, "objectId"),
         ownProperties: true,
         generatePreview: false,
         objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
-      }).result;
-      const key = ArrayPrototypeFind(entryProperties, eprop => eprop.name == "key");
-      const value = ArrayPrototypeFind(entryProperties, eprop => eprop.name == "value");
+      }), "result");
+      const key = ArrayPrototypeFind(entryProperties, eprop => ownProperty(eprop, "name") == "key");
+      const value = ArrayPrototypeFind(entryProperties, eprop => ownProperty(eprop, "name") == "value");
       if (value) {
         this.addContainerEntry({
-          key: key ? buildRrpObjectFromCdpObject(key.value) : undefined,
-          value: buildRrpObjectFromCdpObject(value.value),
+          key: key ? buildRrpObjectFromCdpObject(ownProperty(key, "value")) : undefined,
+          value: buildRrpObjectFromCdpObject(ownProperty(value, "value")),
         });
       }
     }
@@ -1975,18 +2013,18 @@ function previewSetMap(cdpProperties) {
 }
 
 function previewRegExp() {
-  this.extra.regexpString = this.cdpObj.description;
+  this.extra.regexpString = ownProperty(this.cdpObj, "description");
 }
 
 function previewDate() {
-  const dateTime = Date.parse(this.cdpObj.description);
+  const dateTime = Date.parse(ownProperty(this.cdpObj, "description"));
   if (!NumberIsNaN(dateTime)) {
     this.extra.dateTime = dateTime;
   }
 }
 
 function previewError() {
-  this.setGetterValueUnchecked("name", { value: this.cdpObj.className });
+  this.setGetterValueUnchecked("name", { value: ownProperty(this.cdpObj, "className") });
 }
 
 const ErrorProperties = [
@@ -1996,10 +2034,15 @@ const ErrorProperties = [
 ];
 
 function getInternalProp(cdpProperties, name) {
-  const { internalProperties } = cdpProperties;
+  const internalProperties = ownProperty(cdpProperties, "internalProperties");
   return internalProperties
-    ? ArrayPrototypeFind(internalProperties, prop => prop.name == name)
+    ? ArrayPrototypeFind(internalProperties, prop => ownProperty(prop, "name") == name)
     : undefined;
+}
+
+function internalPropValue(cdpProperties, name) {
+  const prop = getInternalProp(cdpProperties, name);
+  return prop ? ownProperty(prop, "value") : undefined;
 }
 
 function getInternalFunctionLocationProp(cdpProperties) {
@@ -2168,24 +2211,27 @@ function extractFunctionParameterNames(s) {
 }
 
 function previewFunction(cdpProperties) {
-  const nameProperty = ArrayPrototypeFind(cdpProperties.result, prop => prop.name == "name");
+  const nameProperty = ArrayPrototypeFind(ownProperty(cdpProperties, "result"), prop => ownProperty(prop, "name") == "name");
   const locationProperty = getInternalFunctionLocationProp(cdpProperties);
 
   if (nameProperty) {
     // RUN-1991: nameProperty.value might not always exist.
-    this.extra.functionName = nameProperty?.value?.value || "";
+    const nameValue = ownProperty(nameProperty, "value");
+    this.extra.functionName = (nameValue && ownProperty(nameValue, "value")) || "";
   }
 
   if (locationProperty) {
-    const loc = locationProperty?.value?.value || "";
+    const locationValue = ownProperty(locationProperty, "value");
+    const loc = (locationValue && ownProperty(locationValue, "value")) || "";
     if (!loc) {
       warning(`[RUN-1991] previewFunction missing location: ${JSONStringify(nameProperty)}, ${JSONStringify(locationProperty)}`);
     }
     this.extra.functionLocation = createProtocolLocation(loc);
   }
 
-  if (this.cdpObj.description) {
-    this.extra.functionParameterNames = extractFunctionParameterNames(this.cdpObj.description);
+  const description = ownProperty(this.cdpObj, "description");
+  if (description) {
+    this.extra.functionParameterNames = extractFunctionParameterNames(description);
   }
 }
 
@@ -2245,7 +2291,8 @@ function evalPropRrpNotNull(owner, propKey) {
 
 function createRrpPropertyDescriptor(cdpProp) {
   // https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#type-PropertyDescriptor
-  const { name, value: cdpValue, writable, get, set, configurable, enumerable, symbol } = cdpProp;
+  const { name, value: cdpValue, writable, get, set, configurable, enumerable, symbol } =
+    ownProperties(cdpProp, ["name", "value", "writable", "get", "set", "configurable", "enumerable", "symbol"]);
 
   let rv = buildRrpObjectFromCdpObject(cdpValue);
   rv.name = name;
@@ -2264,10 +2311,10 @@ function createRrpPropertyDescriptor(cdpProp) {
     rv.flags = flags;
   }
 
-  if (get && get.objectId) {
+  if (get && ownProperty(get, "objectId")) {
     rv.get = registerCdpObject(get);
   }
-  if (set && set.objectId) {
+  if (set && ownProperty(set, "objectId")) {
     rv.set = registerCdpObject(set);
   }
 
@@ -2282,7 +2329,8 @@ function createProtocolLocation(location) {
   if (!location) {
     return undefined;
   }
-  const { scriptId, lineNumber, columnNumber } = location;
+  const { scriptId, lineNumber, columnNumber } =
+    ownProperties(location, ["scriptId", "lineNumber", "columnNumber"]);
   return [{
     sourceId: scriptId,
     // CDP line numbers are 0-indexed, while RRP line numbers are 1-indexed.
@@ -2293,7 +2341,9 @@ function createProtocolLocation(location) {
 
 function createProtocolFrame(frameId, cdpFrame, topmost) {
   // CDP call frames don't provide detailed type information.
-  const type = cdpFrame.functionName ? "call" : "global";
+  const { functionName, functionLocation, location, scopeChain, this: cdpThis } =
+    ownProperties(cdpFrame, ["functionName", "functionLocation", "location", "scopeChain", "this"]);
+  const type = functionName ? "call" : "global";
 
   let returnValue;
   if (topmost && fromJsHasReturnValue()) {
@@ -2303,11 +2353,11 @@ function createProtocolFrame(frameId, cdpFrame, topmost) {
   return {
     frameId,
     type,
-    functionName: cdpFrame.functionName || undefined,
-    functionLocation: createProtocolLocation(cdpFrame.functionLocation),
-    location: createProtocolLocation(cdpFrame.location),
-    scopeChain: ArrayPrototypeMap(cdpFrame.scopeChain, registerCdpScope),
-    this: buildRrpObjectFromCdpObject(cdpFrame.this),
+    functionName: functionName || undefined,
+    functionLocation: createProtocolLocation(functionLocation),
+    location: createProtocolLocation(location),
+    scopeChain: ArrayPrototypeMap(scopeChain, registerCdpScope),
+    this: buildRrpObjectFromCdpObject(cdpThis),
     returnValue,
   };
 }
@@ -2315,8 +2365,10 @@ function createProtocolFrame(frameId, cdpFrame, topmost) {
 function createRrpScope(scopeId) {
   const cdpScope = getCdpScopeByRrpId(scopeId);
 
+  const { type: scopeType, name: scopeName, object: scopeObject } =
+    ownProperties(cdpScope, ["type", "name", "object"]);
   let type;
-  switch (cdpScope.type) {
+  switch (scopeType) {
     case "global":
       type = "global";
       break;
@@ -2324,24 +2376,24 @@ function createRrpScope(scopeId) {
       type = "with";
       break;
     default:
-      type = cdpScope.name ? "function" : "block";
+      type = scopeName ? "function" : "block";
       break;
   }
 
   let rrpId, bindings;
   if (type == "global" || type == "with") {
-    rrpId = registerCdpObject(cdpScope.object);
+    rrpId = registerCdpObject(scopeObject);
   } else {
     bindings = [];
 
-    const properties = sendCDPMessage("Runtime.getProperties", {
-      objectId: cdpScope.object.objectId,
+    const properties = ownProperty(sendCDPMessage("Runtime.getProperties", {
+      objectId: ownProperty(scopeObject, "objectId"),
       ownProperties: true,
       generatePreview: false,
       objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
-    }).result;
+    }), "result");
     for (let i = 0; i < properties.length; i++) {
-      const { name, value: cdpProp } = properties[i];
+      const { name, value: cdpProp } = ownProperties(properties[i], ["name", "value"]);
       const rrpProp = buildRrpObjectFromCdpObject(cdpProp);
       ArrayPrototypePush(bindings, { ...rrpProp, name });
     }
@@ -2351,7 +2403,7 @@ function createRrpScope(scopeId) {
     scopeId,
     type,
     object: rrpId,
-    functionName: cdpScope.name || undefined,
+    functionName: scopeName || undefined,
     bindings,
   };
 }
@@ -2528,7 +2580,7 @@ function DOM_getBoxModel({ node: nodeRrpId }) {
       const {
         content, padding, border, margin,
         // width, height, shapeOutside
-      } = cdpModel;
+      } = ownProperties(cdpModel, ["content", "padding", "border", "margin"]);
       ObjectAssign(
         model,
         {
@@ -2684,17 +2736,18 @@ function CSS_getComputedStyle({ node }) {
 function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
   // NOTE: type is deprecated -> don't care
   const type = 1;
-  let {
-    selectorList = {},
+  const {
+    selectorList,
     styleSheetId: styleSheetCpdId,
-    style: {
-      cssText: styleCssText,
-      range: styleRange,
-      cssProperties
-    } = {},
+    style: cdpStyle,
     range: ruleRange,
     origin
-  } = cdpRule || {};
+  } = ownProperties(cdpRule || {}, ["selectorList", "styleSheetId", "style", "range", "origin"]);
+  let {
+    cssText: styleCssText,
+    range: styleRange,
+    cssProperties
+  } = ownProperties(cdpStyle || {}, ["cssText", "range", "cssProperties"]);
 
 
   let styleSheetRrpId;
@@ -2729,9 +2782,9 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
 
   const properties = ArrayPrototypeMap(
     // ignore props without text presentation
-    ArrayPrototypeFilter(cssProperties || [], prop => !!prop.text),
+    ArrayPrototypeFilter(cssProperties || [], prop => !!ownProperty(prop, "text")),
     prop => {
-      const { name, value, important } = prop;
+      const { name, value, important } = ownProperties(prop, ["name", "value", "important"]);
       return {
         name,
         value,
@@ -2772,14 +2825,15 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
 
   // rulePreview
 
-  const maybeStartLine = (ruleRange || styleRange)?.startLine;
+  const range = ruleRange || styleRange;
+  const maybeStartLine = range ? ownProperty(range, "startLine") : undefined;
 
   // Lines from CDB data are zero-based.
   const startLine = maybeStartLine != null ? maybeStartLine + 1 : maybeStartLine;
-  const startColumn = (ruleRange || styleRange)?.startColumn;
+  const startColumn = range ? ownProperty(range, "startColumn") : undefined;
   // see https://static.replay.io/protocol/tot/CSS/#type-OriginalStyleSheetLocation
   const originalLocation = undefined; // TODO
-  const selectorText = selectorList?.text || '';
+  const selectorText = (selectorList && ownProperty(selectorList, "text")) || '';
 
   /**
    * Based on `CSSStyleRule::cssText()`.
@@ -2835,7 +2889,7 @@ function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
   const {
     matchedRules = EmptyArray,
     pseudoIdMatches = EmptyArray
-  } = cdpMatchedStyles;
+  } = ownProperties(cdpMatchedStyles, ["matchedRules", "pseudoIdMatches"]);
 
   function addCdpRule(cdpRule, pseudoElement = undefined) {
     const rrpRuleId = registerCdpAsRrpCssRule(nodeObj, cdpRule);
@@ -2848,7 +2902,7 @@ function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
 
   ArrayPrototypeReverse(matchedRules);
   for (let i = 0; i < matchedRules.length; i++) {
-    addCdpRule(matchedRules[i].rule);
+    addCdpRule(ownProperty(matchedRules[i], "rule"));
   }
 
   for (let i = 0; i < pseudoIdMatches.length; i++) {
@@ -2858,10 +2912,10 @@ function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
       pseudoType,
       // pseudoIdentifier,
       matches
-    } = pseudoMatch;
+    } = ownProperties(pseudoMatch, ["pseudoType", "matches"]);
     ArrayPrototypeReverse(matches);
     for (let j = 0; j < matches.length; j++) {
-      addCdpRule(matches[j].rule, pseudoType);
+      addCdpRule(ownProperty(matches[j], "rule"), pseudoType);
     }
   }
 
@@ -3634,11 +3688,13 @@ function wrapReplayApiFunction(fn) {
 patchReplayApi();
 initMessages();
 addEventListener("Runtime.consoleAPICalled", onConsoleAPICall);
-addEventListener("Runtime.executionContextCreated", ({ context }) => {
-  MapPrototypeSet(gExecutionContexts, context.id, context);
+addEventListener("Runtime.executionContextCreated", (params) => {
+  const context = ownProperty(params, "context");
+  MapPrototypeSet(gExecutionContexts, ownProperty(context, "id"), context);
   SetPrototypeForEach(gContextChangeCallbacks, callback => callback(context, "add"));
 });
-addEventListener("Runtime.executionContextDestroyed", ({ executionContextId }) => {
+addEventListener("Runtime.executionContextDestroyed", (params) => {
+  const executionContextId = ownProperty(params, "executionContextId");
   const context = MapPrototypeGet(gExecutionContexts, executionContextId);
   SetPrototypeForEach(gContextChangeCallbacks, callback => callback(context, "remove"));
   MapPrototypeDelete(gExecutionContexts, executionContextId);
