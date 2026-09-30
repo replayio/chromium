@@ -153,6 +153,11 @@ const SetPrototypeHas = uncurryThis(Set.prototype.has);
 const SetPrototypeForEach = uncurryThis(Set.prototype.forEach);
 const ReflectApply = Reflect.apply;
 const StringPrototypeIndexOf = uncurryThis(String.prototype.indexOf);
+const StringPrototypeSubstring = uncurryThis(String.prototype.substring);
+const StringPrototypeEndsWith = uncurryThis(String.prototype.endsWith);
+const StringPrototypeTrim = uncurryThis(String.prototype.trim);
+const RegExpPrototypeExec = uncurryThis(RegExp.prototype.exec);
+const FunctionPrototypeToString = uncurryThis(Function.prototype.toString);
 const ObjectDefineProperty = Object.defineProperty;
 const ObjectHasOwn = Object.hasOwn;
 const ObjectSetPrototypeOf = Object.setPrototypeOf;
@@ -230,17 +235,17 @@ function errorCode(err) {
 
 // String.prototype.split would also look up Symbol.split through the
 // separator's prototype chain.
-function splitLines(str) {
-  const lines = [];
+function splitBy(str, separator) {
+  const parts = [];
   let start = 0;
   while (true) {
-    const end = StringPrototypeIndexOf(str, "\n", start);
+    const end = StringPrototypeIndexOf(str, separator, start);
     if (end < 0) {
-      ArrayPrototypePush(lines, StringPrototypeSlice(str, start));
-      return lines;
+      ArrayPrototypePush(parts, StringPrototypeSlice(str, start));
+      return parts;
     }
-    ArrayPrototypePush(lines, StringPrototypeSlice(str, start, end));
-    start = end + 1;
+    ArrayPrototypePush(parts, StringPrototypeSlice(str, start, end));
+    start = end + separator.length;
   }
 }
 
@@ -249,7 +254,7 @@ function errorReport(err) {
   return {
     is_error: true,
     message: errorMessage(err),
-    stack: stack ? splitLines(stack) : [],
+    stack: stack ? splitBy(stack, "\n") : [],
     code: errorCode(err),
   };
 }
@@ -581,7 +586,7 @@ function Target_getCurrentMessageContents() {
       level: "error",
       text: message,
       url: filename,
-      sourceId: scriptId ? scriptId.toString() : undefined,
+      sourceId: scriptId ? String_(scriptId) : undefined,
       line,
       column,
     };
@@ -855,7 +860,7 @@ function buildEvalResult(cdpResult) {
 function Pause_getAllFrames() {
   const frames = ArrayPrototypeMap(getStackFrames(), (frame, index) => {
     // Use our own IDs for frames.
-    const id = (index++).toString();
+    const id = String_(index++);
     const topmost = id == 0;
     return createProtocolFrame(id, frame, topmost);
   });
@@ -1230,13 +1235,13 @@ function buildRrpObjectFromCdpObject(cdpObject) {
         return { unserializableNumber: cdpObject.unserializableValue };
       }
       if (typeof cdpObject.value == "string" && cdpObject.value.length > MaxStringLength) {
-        return { value: cdpObject.value.substring(0, MaxStringLength) + "…" };
+        return { value: StringPrototypeSubstring(cdpObject.value, 0, MaxStringLength) + "…" };
       }
       return { value: cdpObject.value };
     case "bigint": {
       const str = cdpObject.unserializableValue;
       assert(str);
-      return { bigint: str.substring(0, str.length - 1) };
+      return { bigint: StringPrototypeSubstring(str, 0, str.length - 1) };
     }
     case "object":
     case "function": {
@@ -1798,7 +1803,7 @@ function previewBlinkStyle(style) {
 }
 
 function getDescriptionCount(description) {
-  const match = /\((\d+)\)/.exec(description || "");
+  const match = RegExpPrototypeExec(/\((\d+)\)/, description || "");
   if (match) {
     return +match[1];
   }
@@ -1922,7 +1927,7 @@ function getInternalFunctionLocationProp(cdpProperties) {
  * String utility for function parameter parsing.
  */
 function substringEndsAt(haystack, needle, i) {
-  return haystack.substring(1 + i - needle.length, 1 + i) === needle;
+  return StringPrototypeSubstring(haystack, 1 + i - needle.length, 1 + i) === needle;
 }
 
 /**
@@ -1930,7 +1935,7 @@ function substringEndsAt(haystack, needle, i) {
  */
 function stringsEndWith(a, b, end) {
   // NOTE: This can be done more performantly.
-  return (a + b).endsWith(end);
+  return StringPrototypeEndsWith(a + b, end);
 }
 
 const complementaryTokensStart = "({[\"'`";
@@ -1991,7 +1996,7 @@ function extractFunctionParameterNames(s) {
       }
 
       // Not in a comment.
-      if (cleanHeader.endsWith("/") && (c === "/" || c === "*")) {
+      if (StringPrototypeEndsWith(cleanHeader, "/") && (c === "/" || c === "*")) {
         // Comment Start.
         if (c === "*") {
           expectedCommentEnd = "*/";
@@ -2016,7 +2021,7 @@ function extractFunctionParameterNames(s) {
 
         if (stringsEndWith(cleanHeader, c, "=>")) {
           // SINGLEARROW: Found the arrow → The last word in the header (sans "=") is the param.
-          const param = cleanHeader.trim().match(/([^\s]+)\s*=$/)?.[1];
+          const param = RegExpPrototypeExec(/([^\s]+)\s*=$/, StringPrototypeTrim(cleanHeader))?.[1];
           return param ? [param] : [];
         }
 
@@ -2045,7 +2050,10 @@ function extractFunctionParameterNames(s) {
 
       if (c === ")") {
         // PARENS: Params end.
-        return cleanHeader.substring(parensStart).split(",").map(p => p.trim());
+        return ArrayPrototypeMap(
+          splitBy(StringPrototypeSubstring(cleanHeader, parensStart), ","),
+          p => StringPrototypeTrim(p)
+        );
       }
 
       // initializers
@@ -2519,7 +2527,7 @@ function DOM_querySelector({ node, selector }) {
  * ##########################################################################*/
 
 function DOM_performSearch({ query }) {
-  query = query.trim();
+  query = StringPrototypeTrim(query);
   const nodeObjects = fromJsDomPerformSearch(query);
   const nodeRrpIds = nodeObjects
     ? ArrayPrototypeMap(nodeObjects, registerPlainObject)
@@ -3444,7 +3452,7 @@ function replayEval(fn) {
     // We cannot currently avoid a user-supplied function from getting
     // instrumented. Stringifying and evaling it with events disallowed
     // fixes that problem.
-    let fnExpr = fn.toString().trim();
+    let fnExpr = StringPrototypeTrim(FunctionPrototypeToString(fn));
     eval(`(${fnExpr})()`);
   } catch (err) {
     // Note: We MUST NOT let this error escape, or it will cause a mismatch in
