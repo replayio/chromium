@@ -57,7 +57,10 @@ async function fetchText(url) {
 
 // Provide a cache for urls, salted with the supplied hash.  Practically, this
 // means if the script content changes at the url, we will re-download the resource.
-async function fetchTextWithCache(url, hash) {
+//
+// Not async on purpose: returning a promise from an async function calls its
+// `then`, looked up on Promise.prototype where the page can patch it.
+function fetchTextWithCache(url, hash) {
   const key = `${url}:${hash}`;
   if (fetchPromiseCache[key] && !RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE) {
     // Return past or on-going work item.
