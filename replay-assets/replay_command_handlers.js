@@ -148,6 +148,8 @@ const MapPrototypeGetSize = uncurryGetter(Map.prototype, "size");
 const SetPrototypeAdd = uncurryThis(Set.prototype.add);
 const SetPrototypeHas = uncurryThis(Set.prototype.has);
 const SetPrototypeForEach = uncurryThis(Set.prototype.forEach);
+const SetPrototypeGetSize = uncurryGetter(Set.prototype, "size");
+const SymbolPrototypeToString = uncurryThis(Symbol.prototype.toString);
 const ReflectApply = Reflect.apply;
 const ObjectAssign = Object.assign;
 const ObjectKeys = Object.keys;
@@ -626,6 +628,7 @@ function commandCallback(method, params) {
 }
 
 function Target_evaluatePrivileged({ expression }) {
+  // Evaluating backend-supplied code in the page is the point of this command.
   const result = eval(expression);
   return { result };
 }
@@ -1524,7 +1527,8 @@ ProtocolObjectPreview.prototype = {
       return;
     }
 
-    const plainValue = this.raw[propKey].call(this.raw);
+    // Calling the previewed object's own method is intended here.
+    const plainValue = ReflectApply(this.raw[propKey], this.raw, []);
     const rrpValue = createRrpValueRaw(plainValue);
     if (rrpValue) {
       this.setGetterValueUnchecked(propKey, rrpValue, /* force */ true);
@@ -1695,7 +1699,7 @@ ProtocolObjectPreview.prototype = {
         for (let i = 0; i < previewers.length; i++) {
           const entry = previewers[i];
           if (isFunction(entry)) {
-            entry.call(this, cdpProperties);
+            ReflectApply(entry, this, [cdpProperties]);
           } else {
             // entry should be string -> Look it up in results
             const cdpEntry = ArrayPrototypeFind(cdpProperties.result, prop => prop.name === entry);
@@ -1925,7 +1929,9 @@ function previewSetMap(cdpProperties) {
     // debugger (RUN-1315), and it might have (albeit small) negative impacts
     // like this.
     // SLN: Simply query the size getter instead.
-    size = this.raw.size;
+    size = this.cdpObj.className === "Map"
+      ? MapPrototypeGetSize(this.raw)
+      : SetPrototypeGetSize(this.raw);
     const rrpSize = { name: "size", value: size };
     this.addPropertyUnchecked(rrpSize, /* force */ true);
     this.setGetterValueUnchecked(rrpSize.name, rrpSize, /* force */ true);
@@ -2223,6 +2229,7 @@ const CustomPreviewers = {
  */
 function evalPropRrpNotNull(owner, propKey) {
   try {
+    // Running the previewed object's getter is intended here.
     const plainValue = owner[propKey];
     if (plainValue === undefined || plainValue === null) {
       // [RUN-2223] This should not happen.
@@ -2231,7 +2238,7 @@ function evalPropRrpNotNull(owner, propKey) {
     }
     return createRrpValueRaw(plainValue);
   } catch (err) {
-    warning(`JS evalPropRrpNotNull exception - calling ${propKey?.toString?.()} on ${typeof owner} - ${defaultStack(err) || errorMessage(err)}`);
+    warning(`JS evalPropRrpNotNull exception - calling ${typeof propKey === "symbol" ? SymbolPrototypeToString(propKey) : String(propKey)} on ${typeof owner} - ${defaultStack(err) || errorMessage(err)}`);
     return null;
   }
 }
