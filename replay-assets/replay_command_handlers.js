@@ -124,7 +124,15 @@ const URL_ = URL;
 const URLPrototypeToString = uncurryThis(URL_.prototype.toString);
 
 // RUN-3067
+const ArrayPrototypeFilter = uncurryThis(Array.prototype.filter);
+const ArrayPrototypeFind = uncurryThis(Array.prototype.find);
+const ArrayPrototypeIncludes = uncurryThis(Array.prototype.includes);
+const ArrayPrototypeIndexOf = uncurryThis(Array.prototype.indexOf);
 const ArrayPrototypeJoin = uncurryThis(Array.prototype.join);
+const ArrayPrototypeMap = uncurryThis(Array.prototype.map);
+const ArrayPrototypePop = uncurryThis(Array.prototype.pop);
+const ArrayPrototypeReverse = uncurryThis(Array.prototype.reverse);
+const ArrayPrototypeSort = uncurryThis(Array.prototype.sort);
 const ArrayPrototypePush = uncurryThis(Array.prototype.push);
 const ObjectPrototypeToString = uncurryThis(Object.prototype.toString);
 const String_ = String;
@@ -391,7 +399,7 @@ function sendCDPMessage(method, params, contextId) {
       log(`[RuntimeError][RUN-1680] sendCDPMessage(${method}) failed: ${errorMessage(err)}`);
     }
   } finally {
-    const req = gCdpRequestStack.pop();
+    const req = ArrayPrototypePop(gCdpRequestStack);
     assert(req === cdpRequest, "[RuntimeError] CDP request stack corrupted");
   }
 
@@ -743,7 +751,8 @@ function getFrameByIndex(frameIndex) {
 
 function getFrameByLocation(cdpLocation) {
   const frames = getStackFrames();
-  return frames.find(
+  return ArrayPrototypeFind(
+    frames,
     f => JSONStringify(f.location) == JSONStringify(cdpLocation)
   );
 }
@@ -820,14 +829,14 @@ function buildEvalResult(cdpResult) {
 }
 
 function Pause_getAllFrames() {
-  const frames = getStackFrames().map((frame, index) => {
+  const frames = ArrayPrototypeMap(getStackFrames(), (frame, index) => {
     // Use our own IDs for frames.
     const id = (index++).toString();
     const topmost = id == 0;
     return createProtocolFrame(id, frame, topmost);
   });
   return {
-    frames: frames.map(f => f.frameId),
+    frames: ArrayPrototypeMap(frames, f => f.frameId),
     data: { frames },
   };
 }
@@ -1151,7 +1160,7 @@ function getFrameArgumentsArray(frameOrFrameIndex) {
     if (!frame) {
       throw new Error(
         `getFrameArgumentsArray was called from within Pause.evaluateInFrame ` +
-        `but the frame is not on stack anymore: ${JSONStringify(frames.map(f => f.location))}`);
+        `but the frame is not on stack anymore: ${JSONStringify(ArrayPrototypeMap(frames, f => f.location))}`);
     }
   } else if (typeof frameOrFrameIndex === "number") {
     frame = getFrameByIndex(frameOrFrameIndex);
@@ -1174,7 +1183,7 @@ const MaxStringLength = 10000;
 
 const cdpRefTypes = ['object', 'function'];
 function isCdpRefType(cdpObject) {
-  return cdpRefTypes.includes(cdpObject.type);
+  return ArrayPrototypeIncludes(cdpRefTypes, cdpObject.type);
 }
 
 
@@ -1585,7 +1594,7 @@ ProtocolObjectPreview.prototype = {
             entry.call(this, cdpProperties);
           } else {
             // entry should be string -> Look it up in results
-            const cdpEntry = cdpProperties.result.find(prop => prop.name === entry);
+            const cdpEntry = ArrayPrototypeFind(cdpProperties.result, prop => prop.name === entry);
             if (cdpEntry) {
               const rrpEntry = buildRrpObjectFromCdpObject(cdpEntry.value);
               this.setGetterValueUnchecked(entry, rrpEntry);
@@ -1800,7 +1809,7 @@ function previewSetMap(cdpProperties) {
   // Get size from description.
   let size;
 
-  if (["Set", "Map"].includes(this.cdpObj.className)) {
+  if (ArrayPrototypeIncludes(["Set", "Map"], this.cdpObj.className)) {
     // NOTE: For some reason, the internal backing array size is capped to
     // pageSize for Set and Map.
     // This type of inconsistency is possible since *we* added paging to the
@@ -1834,8 +1843,8 @@ function previewSetMap(cdpProperties) {
         generatePreview: false,
         objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
       }).result;
-      const key = entryProperties.find(eprop => eprop.name == "key");
-      const value = entryProperties.find(eprop => eprop.name == "value");
+      const key = ArrayPrototypeFind(entryProperties, eprop => eprop.name == "key");
+      const value = ArrayPrototypeFind(entryProperties, eprop => eprop.name == "value");
       if (value) {
         this.addContainerEntry({
           key: key ? buildRrpObjectFromCdpObject(key.value) : undefined,
@@ -1871,9 +1880,10 @@ const ErrorProperties = [
 ];
 
 function getInternalProp(cdpProperties, name) {
-  return cdpProperties.internalProperties?.find(
-    prop => prop.name == name
-  );
+  const { internalProperties } = cdpProperties;
+  return internalProperties
+    ? ArrayPrototypeFind(internalProperties, prop => prop.name == name)
+    : undefined;
 }
 
 function getInternalFunctionLocationProp(cdpProperties) {
@@ -1961,7 +1971,7 @@ function extractFunctionParameterNames(s) {
           expectedCommentEnd = "\n";
         }
         // Remove "/" from header:
-        cleanHeader = cleanHeader.slice(0, -1);
+        cleanHeader = StringPrototypeSlice(cleanHeader, 0, -1);
         continue;
       }
 
@@ -1988,18 +1998,18 @@ function extractFunctionParameterNames(s) {
       }
 
       // destructuring
-      if (complementaryTokensStart.includes(c)) {
+      if (ArrayPrototypeIncludes(complementaryTokensStart, c)) {
         // Inside destructuring argument or initializer expression:
         // Enter node. Push complementary (to be searched for) onto stack.
-        const tokenIdx = complementaryTokensStart.indexOf(c);
-        ignoreStack.push(complementaryTokensEnd[tokenIdx]);
+        const tokenIdx = ArrayPrototypeIndexOf(complementaryTokensStart, c);
+        ArrayPrototypePush(ignoreStack, complementaryTokensEnd[tokenIdx]);
         continue; // don't include destructuring in the header
       }
       if (ignoreStack.length) {
         // Inside destructuring or initializer expression.
         if (c === ignoreStack[ignoreStack.length - 1]) {
           // Exit node.
-          ignoreStack.pop();
+          ArrayPrototypePop(ignoreStack);
         }
 
         continue; // don't include the destructuring in the header
@@ -2031,15 +2041,15 @@ function extractFunctionParameterNames(s) {
     }
 
     // This should not happen, but might.
-    log(`[RuntimeError] extractFunctionParameterNames fell through for: ${s.slice(0, 80)}... header=${cleanHeader}`);
+    log(`[RuntimeError] extractFunctionParameterNames fell through for: ${StringPrototypeSlice(s, 0, 80)}... header=${cleanHeader}`);
     return [];
   } catch (err) {
-    log(`[RuntimeError] extractFunctionParameterNames failed for: ${s.slice(0, 80)}...\n ${defaultStack(err) || errorMessage(err)}`);
+    log(`[RuntimeError] extractFunctionParameterNames failed for: ${StringPrototypeSlice(s, 0, 80)}...\n ${defaultStack(err) || errorMessage(err)}`);
   }
 }
 
 function previewFunction(cdpProperties) {
-  const nameProperty = cdpProperties.result.find(prop => prop.name == "name");
+  const nameProperty = ArrayPrototypeFind(cdpProperties.result, prop => prop.name == "name");
   const locationProperty = getInternalFunctionLocationProp(cdpProperties);
 
   if (nameProperty) {
@@ -2176,7 +2186,7 @@ function createProtocolFrame(frameId, cdpFrame, topmost) {
     functionName: cdpFrame.functionName || undefined,
     functionLocation: createProtocolLocation(cdpFrame.functionLocation),
     location: createProtocolLocation(cdpFrame.location),
-    scopeChain: cdpFrame.scopeChain.map(registerCdpScope),
+    scopeChain: ArrayPrototypeMap(cdpFrame.scopeChain, registerCdpScope),
     this: buildRrpObjectFromCdpObject(cdpFrame.this),
     returnValue,
   };
@@ -2262,10 +2272,10 @@ function DOM_getAllBoundingClientRects() {
 
   const entries = cx.flatten();
   // Get elements in front-to-back order.
-  entries.reverse();
+  ArrayPrototypeReverse(entries);
 
-  const elements = entries
-    .map((elem, i) => {
+  const elements = ArrayPrototypeFilter(
+    ArrayPrototypeMap(entries, (elem, i) => {
       const id = registerPlainObject(elem.raw) || i;
 
       // Use the containing context of the element to find any
@@ -2338,8 +2348,9 @@ function DOM_getAllBoundingClientRects() {
       MapPrototypeSet(gLastBoundingClientRectsByNodeRrpId, id, v);
 
       return v;
-    })
-    .filter((v) => !!v);
+    }),
+    (v) => !!v
+  );
 
   return { elements };
 };
@@ -2483,8 +2494,8 @@ function DOM_performSearch({ query }) {
   query = query.trim();
   const nodeObjects = fromJsDomPerformSearch(query);
   const nodeRrpIds = nodeObjects
-    ?.map(registerPlainObject)
-    || [];
+    ? ArrayPrototypeMap(nodeObjects, registerPlainObject)
+    : [];
 
   return { nodes: nodeRrpIds, data: {} };
 }
@@ -2583,16 +2594,18 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
 
   // stylePreview
 
-  const properties = (cssProperties || [])
-    .filter(prop => !!prop.text) // ignore props without text presentation
-    .map(prop => {
+  const properties = ArrayPrototypeMap(
+    // ignore props without text presentation
+    ArrayPrototypeFilter(cssProperties || [], prop => !!prop.text),
+    prop => {
       const { name, value, important } = prop;
       return {
         name,
         value,
         important
       };
-    });
+    }
+  );
   /**
    * hackfix: for some reason, `user-agent` (and possibly other) styles don't have `cssText`.
    *    So, for now, we cook up a simple css serialization algo here.
@@ -2601,12 +2614,13 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
    * @see https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/css/style_property_serializer.cc;l=204;drc=3decef66bc4c08b142a19db9628e9efe68973e64
    */
   if (!styleCssText) {
-    styleCssText = '\n  ' + properties
-      .map(({ name, value, important }) => {
+    styleCssText = '\n  ' + ArrayPrototypeJoin(
+      ArrayPrototypeMap(properties, ({ name, value, important }) => {
         const suffix = important ? ' !important' : '';
         return `${name}: ${value}${suffix};`;
-      })
-      .join('\n  ');
+      }),
+      '\n  '
+    );
   }
   const stylePreview = {
     className: 'CSS2Properties', // `gecko` naming convention
@@ -2699,7 +2713,7 @@ function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
     ArrayPrototypePush(appliedRules, appliedRule);
   }
 
-  for (const cdpRule of matchedRules.reverse()) {
+  for (const cdpRule of ArrayPrototypeReverse(matchedRules)) {
     addCdpRule(cdpRule.rule);
   }
 
@@ -2710,7 +2724,7 @@ function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
       // pseudoIdentifier,
       matches
     } = pseudoMatch;
-    for (const match of matches.reverse()) {
+    for (const match of ArrayPrototypeReverse(matches)) {
       addCdpRule(match.rule, pseudoType);
     }
   }
@@ -2810,21 +2824,21 @@ StackingContextElement.prototype = {
   },
 
   isAbsolutelyPositioned() {
-    return ["absolute", "fixed"].includes(this.style.getPropertyValue("position"));
+    return ArrayPrototypeIncludes(["absolute", "fixed"], this.style.getPropertyValue("position"));
   },
 
   isTable() {
-    return ["table", "inline-table"].includes(this.style.getPropertyValue("display"));
+    return ArrayPrototypeIncludes(["table", "inline-table"], this.style.getPropertyValue("display"));
   },
 
   isFlexOrGridContainer() {
-    return ["flex", "inline-flex", "grid", "inline-grid"].includes(
+    return ArrayPrototypeIncludes(["flex", "inline-flex", "grid", "inline-grid"],
       this.style.getPropertyValue("display")
     );
   },
 
   isBlockElement() {
-    return ["block", "table", "flex", "grid"].includes(this.style.getPropertyValue("display"));
+    return ArrayPrototypeIncludes(["block", "table", "flex", "grid"], this.style.getPropertyValue("display"));
   },
 
   isFloat() {
@@ -2850,7 +2864,7 @@ StackingContextElement.prototype = {
       return this;
     }
     if (
-      [
+      ArrayPrototypeIncludes([
         "inline-block",
         "table-cell",
         "table-caption",
@@ -2861,20 +2875,20 @@ StackingContextElement.prototype = {
         "table-footer-group",
         "inline-table",
         "flow-root",
-      ].includes(this.style.getPropertyValue("display"))
+      ], this.style.getPropertyValue("display"))
     ) {
       return this;
     }
     if (
       this.isBlockElement() &&
       !(
-        ["visible", "clip"].includes(this.style.getPropertyValue("overflow-x")) &&
-        ["visible", "clip"].includes(this.style.getPropertyValue("overflow-y"))
+        ArrayPrototypeIncludes(["visible", "clip"], this.style.getPropertyValue("overflow-x")) &&
+        ArrayPrototypeIncludes(["visible", "clip"], this.style.getPropertyValue("overflow-y"))
       )
     ) {
       return this;
     }
-    if (["layout", "content", "paint"].includes(this.style.getPropertyValue("contain"))) {
+    if (ArrayPrototypeIncludes(["layout", "content", "paint"], this.style.getPropertyValue("contain"))) {
       return this;
     }
     if (this.parent.isFlexOrGridContainer() && !this.isFlexOrGridContainer() && !this.isTable()) {
@@ -2990,7 +3004,7 @@ StackingContext.prototype = {
     }
     clipBounds = Object.assign({}, clipBounds);
     const cx = new StackingContextElement(this, node, parentElem, offset, style, clipBounds);
-    if (!["HTML", "BODY"].includes(cx.raw.tagName)) {
+    if (!ArrayPrototypeIncludes(["HTML", "BODY"], cx.raw.tagName)) {
       if (style.getPropertyValue("overflow-x") != "visible") {
         const clipBounds2 = cx.getFormattingContextElement().raw.getBoundingClientRect();
         cx.clipBounds.left =
@@ -3058,7 +3072,7 @@ StackingContext.prototype = {
     const parentDisplay = cx.parent?.style?.getPropertyValue("display");
     if (
       position != "static" ||
-      ["flex", "inline-flex", "grid", "inline-grid"].includes(parentDisplay)
+      ArrayPrototypeIncludes(["flex", "inline-flex", "grid", "inline-grid"], parentDisplay)
     ) {
       const zIndex = cx.style.getPropertyValue("z-index");
       if (zIndex != "auto") {
@@ -3224,7 +3238,7 @@ StackingContext.prototype = {
     };
 
     const zIndexes = [...MapPrototypeKeys(this.zIndexElements)];
-    zIndexes.sort((a, b) => a - b);
+    ArrayPrototypeSort(zIndexes, (a, b) => a - b);
 
     if (this.root) {
       pushElements([this.root]);
