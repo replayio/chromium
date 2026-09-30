@@ -116,15 +116,17 @@ const gSourceMapData = new Map();
  * NOTE: We access many more monkey-patchable functions.
  * ##########################################################################*/
 
-const JSON_stringify = JSON.stringify;
-const JSON_parse = JSON.parse;
+const JSONStringify = JSON.stringify;
+const JSONParse = JSON.parse;
+const { bind, call } = Function.prototype;
+const uncurryThis = bind.bind(call);
 const URL_ = URL;
 
 // RUN-3067
-const Array_push = Array.prototype.push;
-const Object_toString = Object.prototype.toString;
+const ArrayPrototypePush = uncurryThis(Array.prototype.push);
+const ObjectPrototypeToString = uncurryThis(Object.prototype.toString);
 const String_ = String;
-const String_slice = String.prototype.slice;
+const StringPrototypeSlice = uncurryThis(String.prototype.slice);
 
 function isArrayLike(obj) {
   return obj != null && typeof obj.length === "number";
@@ -138,11 +140,11 @@ function describeValueShape(value) {
     str = "<String failed>";
   }
   if (str.length > 120) {
-    str = String_slice.call(str, 0, 120) + "...";
+    str = StringPrototypeSlice(str, 0, 120) + "...";
   }
   let tag;
   try {
-    tag = Object_toString.call(value);
+    tag = ObjectPrototypeToString(value);
   } catch {
     tag = "<toString failed>";
   }
@@ -251,8 +253,8 @@ function sendCDPMessage(method, params, contextId) {
 
   const id = gNextMessageId++;
   const cdpRequest = new CdpRequest(id);
-  Array_push.call(gCdpRequestStack, cdpRequest);
-  const cdpArgs = JSON_stringify({ method, params, id });
+  ArrayPrototypePush(gCdpRequestStack, cdpRequest);
+  const cdpArgs = JSONStringify({ method, params, id });
   try {
     if (contextId === undefined) {
       sendCDPMessageRaw(cdpArgs);
@@ -301,7 +303,7 @@ function addEventListener(method, callback) {
 // TODO: rename all these CDP-related symbols to also have CDP in the name
 function messageCallback(message) {
   try {
-    message = JSON_parse(message);
+    message = JSONParse(message);
     if (message.id) {
       const request = gCdpRequestStack[gCdpRequestStack.length - 1];
       assert(message.id === request.messageId, "CDP request stack corrupted");
@@ -315,7 +317,7 @@ function messageCallback(message) {
   } catch (e) {
     warning(`JS Message callback exception: ${e?.stack || e}`);
 
-    return JSON_stringify({
+    return JSONStringify({
       is_error: true,
       message: e?.message || (e + ''),
       stack: e?.stack?.split?.("\n") || e?.stack || [],
@@ -382,9 +384,9 @@ function getAliveLabel() {
 }
 
 function executeCommand(method, params) {
-  VerboseCommands && log(`[Command ${method}] Handling command, params=${JSON_stringify(params)}...`);
+  VerboseCommands && log(`[Command ${method}] Handling command, params=${JSONStringify(params)}...`);
   const result = CommandCallbacks[method](params);
-  VerboseCommands && log(`[Command ${method}] Handled command, result=${JSON_stringify(result)}`);
+  VerboseCommands && log(`[Command ${method}] Handled command, result=${JSONStringify(result)}`);
   return result;
 }
 
@@ -460,7 +462,7 @@ function Target_getCurrentMessageContents() {
   // Get the protocol representation of the message arguments.
   const argumentValues = [];
   for (const arg of gLastConsoleAPICall.args || []) {
-    Array_push.call(argumentValues, buildRrpObjectFromCdpObject(arg));
+    ArrayPrototypePush(argumentValues, buildRrpObjectFromCdpObject(arg));
   }
 
   const level = cdpToRrpConsoleLevels.get(gLastConsoleAPICall.type) || "info";
@@ -514,7 +516,7 @@ function Target_getStepOffsets() {
 
 function Target_getCurrentNetworkRequestEvent() {
   try {
-    const obj = JSON_parse(getCurrentNetworkRequestEvent());
+    const obj = JSONParse(getCurrentNetworkRequestEvent());
     return { data: obj };
   } catch (e) {
     warning(`JS Target.getCurrentNetworkRequestEvent exception: ${e}`);
@@ -636,7 +638,7 @@ function getFrameByIndex(frameIndex) {
 function getFrameByLocation(cdpLocation) {
   const frames = getStackFrames();
   return frames.find(
-    f => JSON_stringify(f.location) == JSON_stringify(cdpLocation)
+    f => JSONStringify(f.location) == JSONStringify(cdpLocation)
   );
 }
 
@@ -706,7 +708,7 @@ function buildEvalResult(cdpResult) {
   if (usedReplayApi && cdpResult?.exceptionDetails) {
     // Emit warning if an eval that used the Replay API throws.
     const cdpException = cdpResult.exceptionDetails.exception?.description || cdpResult.exceptionDetails;
-    warning(`REPLAY_API_EVAL_ERROR ${JSON_stringify(cdpException)}`);
+    warning(`REPLAY_API_EVAL_ERROR ${JSONStringify(cdpException)}`);
   }
   return buildRrpObjectResult(cdpResult);
 }
@@ -956,7 +958,7 @@ function registerCdpObject(cdpObject) {
 function getCdpObjectByRrpId(rrpId) {
   const cdpObject = gCdpObjectsByRrpId.get(rrpId);
   if (!cdpObject) {
-    throw new Error(`getCdpObjectByRrpId failed - rrpId not found: ${JSON_stringify(rrpId)}`);
+    throw new Error(`getCdpObjectByRrpId failed - rrpId not found: ${JSONStringify(rrpId)}`);
   }
   return cdpObject;
 }
@@ -1043,7 +1045,7 @@ function getFrameArgumentsArray(frameOrFrameIndex) {
     if (!frame) {
       throw new Error(
         `getFrameArgumentsArray was called from within Pause.evaluateInFrame ` +
-        `but the frame is not on stack anymore: ${JSON_stringify(frames.map(f => f.location))}`);
+        `but the frame is not on stack anymore: ${JSONStringify(frames.map(f => f.location))}`);
     }
   } else if (typeof frameOrFrameIndex === "number") {
     frame = getFrameByIndex(frameOrFrameIndex);
@@ -1109,7 +1111,7 @@ function buildRrpObjectFromCdpObject(cdpObject) {
     case "symbol":
       return { symbol: cdpObject.description };
     default:
-      log(`[RuntimeError] invalid CDP type: ${JSON_stringify(cdpObject)}`);
+      log(`[RuntimeError] invalid CDP type: ${JSONStringify(cdpObject)}`);
       return { unavailable: true };
   }
 }
@@ -1135,7 +1137,7 @@ function getBlinkNodeIdByRrpId(nodeRrpId) {
   const cdpObject = getCdpObjectByRrpId(nodeRrpId);
   const nodeId = fromJsGetNodeIdByCpdId(cdpObject.objectId);
   // Note: Don't generate assert message if assert did not fail.
-  assert(nodeId, !nodeId && `${nodeRrpId}: ${JSON_stringify(cdpObject)}`);
+  assert(nodeId, !nodeId && `${nodeRrpId}: ${JSONStringify(cdpObject)}`);
   return nodeId;
 }
 
@@ -1277,7 +1279,7 @@ ProtocolObjectPreview.prototype = {
     if (!this.properties) {
       this.properties = [];
     }
-    Array_push.call(this.properties, rrpProp);
+    ArrayPrototypePush(this.properties, rrpProp);
   },
 
   addGetterValue(propKey, ownerCdpObject, force = false) {
@@ -1332,7 +1334,7 @@ ProtocolObjectPreview.prototype = {
     if (!this.containerEntries) {
       this.containerEntries = [];
     }
-    Array_push.call(this.containerEntries, entry);
+    ArrayPrototypePush(this.containerEntries, entry);
   },
 
   get unlimitedItems() {
@@ -1556,7 +1558,7 @@ function previewBlinkNode(node) {
   if (fromJsIsBlinkElementObject(node)) {
     attributes = [];
     iterateArrayLike(node.attributes, ({ name, value }) => {
-      Array_push.call(attributes, { name, value });
+      ArrayPrototypePush(attributes, { name, value });
     }, "Element.attributes");
     // TODO: We cannot access pseudo elements using the JS DOM API - https://linear.app/replay/issue/RUN-953/
     // pseudoType = node.localName;
@@ -1621,7 +1623,7 @@ function previewBlinkNode(node) {
   } else if (node.childNodes?.length) {
     childNodes = [];
     iterateArrayLike(node.childNodes, (n) => {
-      Array_push.call(childNodes, registerPlainObject(n));
+      ArrayPrototypePush(childNodes, registerPlainObject(n));
     }, "Node.childNodes");
   }
 
@@ -1642,7 +1644,7 @@ function previewBlinkStyle(style) {
     const value = style.getPropertyValue(name);
     if (value) {
       const important = style.getPropertyPriority(name) == "important" ? true : undefined;
-      Array_push.call(properties, { name, value, important });
+      ArrayPrototypePush(properties, { name, value, important });
     }
   }
 
@@ -1942,7 +1944,7 @@ function previewFunction(cdpProperties) {
   if (locationProperty) {
     const loc = locationProperty?.value?.value || "";
     if (!loc) {
-      warning(`[RUN-1991] previewFunction missing location: ${JSON_stringify(nameProperty)}, ${JSON_stringify(locationProperty)}`);
+      warning(`[RUN-1991] previewFunction missing location: ${JSONStringify(nameProperty)}, ${JSONStringify(locationProperty)}`);
     }
     this.extra.functionLocation = createProtocolLocation(loc);
   }
@@ -2104,7 +2106,7 @@ function createRrpScope(scopeId) {
     }).result;
     for (const { name, value: cdpProp } of properties) {
       const rrpProp = buildRrpObjectFromCdpObject(cdpProp);
-      Array_push.call(bindings, { ...rrpProp, name });
+      ArrayPrototypePush(bindings, { ...rrpProp, name });
     }
   }
 
@@ -2182,7 +2184,7 @@ function DOM_getAllBoundingClientRects() {
       iterateArrayLike(elem.raw.getClientRects(), (r) => {
         const { left, top, right, bottom } =
           shiftRect(r, elem.offset, transformMatrix);
-        Array_push.call(clientRects, [left, top, right, bottom]);
+        ArrayPrototypePush(clientRects, [left, top, right, bottom]);
       }, "Element.getClientRects");
 
       const clipBounds =
@@ -2330,7 +2332,7 @@ function DOM_getEventListeners({ node }) {
 
   if (nodeObject.nodeName && nodeObject.nodeName == "HTML") {
     // Add event listeners for the document and window as well.
-    Array_push.call(listenerInfos,
+    ArrayPrototypePush(listenerInfos,
       ...fromJsCollectEventListeners(nodeObject.parentNode)   // document
       // ...fromJsCollectEventListeners(nodeObject.ownerGlobal)  // window
     );
@@ -2341,7 +2343,7 @@ function DOM_getEventListeners({ node }) {
     if (!handler) {
       continue;
     }
-    Array_push.call(listeners, {
+    ArrayPrototypePush(listeners, {
       node,
       handler: registerPlainObject(handler),
       type,
@@ -2407,7 +2409,7 @@ function CSS_getComputedStyle({ node }) {
     // else {
     styleInfo = ownerGlobal.getComputedStyle(nodeObj);
     for (let i = 0; i < styleInfo.length; i++) {
-      Array_push.call(computedStyle, {
+      ArrayPrototypePush(computedStyle, {
         name: styleInfo.item(i),
         value: styleInfo.getPropertyValue(styleInfo.item(i)),
       });
@@ -2588,7 +2590,7 @@ function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
       rule: rrpRuleId,
       pseudoElement
     };
-    Array_push.call(appliedRules, appliedRule);
+    ArrayPrototypePush(appliedRules, appliedRule);
   }
 
   for (const cdpRule of matchedRules.reverse()) {
@@ -3041,22 +3043,22 @@ StackingContext.prototype = {
   addZIndexElement(elem, index) {
     const existing = this.zIndexElements.get(index);
     if (existing) {
-      Array_push.call(existing, elem);
+      ArrayPrototypePush(existing, elem);
     } else {
       this.zIndexElements.set(index, [elem]);
     }
   },
 
   addPositionedElement(elem) {
-    Array_push.call(this.positionedElements, elem);
+    ArrayPrototypePush(this.positionedElements, elem);
   },
 
   addFloatingElement(elem) {
-    Array_push.call(this.floatingElements, elem);
+    ArrayPrototypePush(this.floatingElements, elem);
   },
 
   addNonPositionedElement(elem) {
-    Array_push.call(this.nonPositionedElements, elem);
+    ArrayPrototypePush(this.nonPositionedElements, elem);
   },
 
   addChildren(parentNode) {
@@ -3100,9 +3102,9 @@ StackingContext.prototype = {
     const pushElements = (elems) => {
       for (const elem of elems) {
         if (elem.context && elem.context != this) {
-          Array_push.call(rv, ...elem.context.flatten());
+          ArrayPrototypePush(rv, ...elem.context.flatten());
         } else {
-          Array_push.call(rv, elem);
+          ArrayPrototypePush(rv, elem);
         }
       }
     };
