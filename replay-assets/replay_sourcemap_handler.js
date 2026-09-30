@@ -9,12 +9,15 @@ const DateNow = Date.now;
 const { parse: JSONParse, stringify: JSONStringify } = JSON;
 const ObjectCreate = Object.create;
 const ObjectDefineProperty = Object.defineProperty;
+const ObjectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const ObjectSetPrototypeOf = Object.setPrototypeOf;
+const ReflectDeleteProperty = Reflect.deleteProperty;
 const { bind, call } = Function.prototype;
 const uncurryThis = bind.bind(call);
 const ArrayPrototypePush = uncurryThis(Array.prototype.push);
 const StringPrototypeStartsWith = uncurryThis(String.prototype.startsWith);
 const uncurryGetter = (proto, key) =>
-  uncurryThis(Object.getOwnPropertyDescriptor(proto, key).get);
+  uncurryThis(ObjectGetOwnPropertyDescriptor(proto, key).get);
 const URLPrototypeToString = uncurryThis(URL.prototype.toString);
 const ResponsePrototypeGetOk = uncurryGetter(Response.prototype, "ok");
 const ResponsePrototypeGetStatus = uncurryGetter(Response.prototype, "status");
@@ -47,6 +50,49 @@ const {
 } = __RECORD_REPLAY_ARGUMENTS__;
 
 const fetchPromiseCache = ObjectCreate(null);
+
+// Reads `err.stack` without running the page's Error.prepareStackTrace.
+//
+// V8 formats a stack on its first read and calls the `prepareStackTrace` it
+// finds on the built-in Error function of the realm that created the error.
+// It doesn't use the `Error` global, so a replaced `window.Error` is ignored,
+// and the `Error` captured above is the function V8 looks at. The lookup is an
+// ordinary property read though, so the hook can also sit on Function.prototype,
+// Object.prototype or a Proxy the page put in Error's prototype chain. An own
+// property on Error stops the lookup before it gets there, so the hook is
+// shadowed for the read rather than removed.
+//
+// An error created in another realm (e.g. an iframe) would consult that
+// realm's Error instead. Errors reaching this script come from its own code
+// or from built-ins of its own window, so that isn't expected here.
+function defaultStack(err) {
+  const hook = ObjectGetOwnPropertyDescriptor(Error, "prepareStackTrace");
+  if (hook) {
+    // Keeps Object.prototype out of the descriptor when it is handed back.
+    ObjectSetPrototypeOf(hook, null);
+  }
+  try {
+    ObjectDefineProperty(Error, "prepareStackTrace", {
+      __proto__: null,
+      value: undefined,
+      configurable: true,
+    });
+  } catch {
+    // The page froze Error or made its hook non-configurable.
+    return undefined;
+  }
+  try {
+    // A stack the page has already read stays in whatever form its hook gave it.
+    const stack = err?.stack;
+    return typeof stack === "string" ? stack : undefined;
+  } finally {
+    if (hook) {
+      ObjectDefineProperty(Error, "prepareStackTrace", hook);
+    } else {
+      ReflectDeleteProperty(Error, "prepareStackTrace");
+    }
+  }
+}
 
 async function fetchText(url) {
   const response = await withOwnConstructor(fetch(url));
@@ -176,7 +222,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   }
   log(`[sourcemaps] Finished downloading ${sources.length} sources for "${sourceMapURL}".`);
   } catch (err) {
-    warning(`[RuntimeError][sourcemaps] Exception - ${err?.stack || err}`);
+    warning(`[RuntimeError][sourcemaps] Exception - ${defaultStack(err) || err}`);
   }
 });
 
@@ -261,7 +307,7 @@ function collectUnresolvedSourceMapResources(mapText, mapURL) {
 function assert(v, msg = "") {
   if (!v) {
     const m = `Assertion failed when handling command (${msg})`;
-    log(`[RuntimeError] ${m} - ${Error().stack}`);
+    log(`[RuntimeError] ${m} - ${defaultStack(Error())}`);
     throw new Error(m);
   }
 }
