@@ -107,10 +107,6 @@ function assert(v, msg = "") {
 /**
  * @see https://stackoverflow.com/a/37837872
  */
-function isIterable(obj) {
-  return typeof obj?.[Symbol.iterator] === 'function';
-}
-
 const gSourceMapData = new Map();
 
 /** ###########################################################################
@@ -174,6 +170,85 @@ const CSSStyleDeclarationPrototypeGetPropertyValue = uncurryThis(CSSStyleDeclara
 const CSSStyleDeclarationPrototypeGetPropertyPriority = uncurryThis(CSSStyleDeclaration.prototype.getPropertyPriority);
 const CSSStyleValueParse = CSSStyleValue.parse;
 const CSSTransformComponentPrototypeToMatrix = uncurryThis(CSSTransformComponent.prototype.toMatrix);
+const NodeDocumentNode = Node.DOCUMENT_NODE;
+const NodePrototypeGetNodeType = uncurryGetter(Node.prototype, "nodeType");
+const NodePrototypeGetNodeName = uncurryGetter(Node.prototype, "nodeName");
+const NodePrototypeGetNodeValue = uncurryGetter(Node.prototype, "nodeValue");
+const NodePrototypeGetIsConnected = uncurryGetter(Node.prototype, "isConnected");
+const NodePrototypeGetParentNode = uncurryGetter(Node.prototype, "parentNode");
+const NodePrototypeGetChildNodes = uncurryGetter(Node.prototype, "childNodes");
+const NodeListPrototypeGetLength = uncurryGetter(NodeList.prototype, "length");
+const NodeListPrototypeItem = uncurryThis(NodeList.prototype.item);
+const ElementPrototypeGetTagName = uncurryGetter(Element.prototype, "tagName");
+const ElementPrototypeGetAttributes = uncurryGetter(Element.prototype, "attributes");
+const ElementPrototypeGetChildren = uncurryGetter(Element.prototype, "children");
+const DocumentPrototypeGetChildren = uncurryGetter(Document.prototype, "children");
+const NamedNodeMapPrototypeGetLength = uncurryGetter(NamedNodeMap.prototype, "length");
+const NamedNodeMapPrototypeItem = uncurryThis(NamedNodeMap.prototype.item);
+const AttrPrototypeGetName = uncurryGetter(Attr.prototype, "name");
+const AttrPrototypeGetValue = uncurryGetter(Attr.prototype, "value");
+const HTMLElementPrototypeGetStyle = uncurryGetter(HTMLElement.prototype, "style");
+const SVGElementPrototypeGetStyle = uncurryGetter(SVGElement.prototype, "style");
+const HTMLCollectionPrototypeGetLength = uncurryGetter(HTMLCollection.prototype, "length");
+const HTMLCollectionPrototypeItem = uncurryThis(HTMLCollection.prototype.item);
+const HTMLIFrameElementPrototypeGetContentDocument = uncurryGetter(HTMLIFrameElement.prototype, "contentDocument");
+const HTMLIFrameElementPrototypeGetContentWindow = uncurryGetter(HTMLIFrameElement.prototype, "contentWindow");
+const DocumentPrototypeGetURL = uncurryGetter(Document.prototype, "URL");
+const DocumentPrototypeGetDefaultView = uncurryGetter(Document.prototype, "defaultView");
+// Window attributes live on the window object itself, not on a prototype.
+const WindowGetDocument = uncurryGetter(window, "document");
+const WindowGetParent = uncurryGetter(window, "parent");
+const CSSStyleDeclarationPrototypeGetLength = uncurryGetter(CSSStyleDeclaration.prototype, "length");
+const CSSTransformValuePrototypeGetLength = uncurryGetter(CSSTransformValue.prototype, "length");
+const CSSTransformValuePrototypeGetIs2D = uncurryGetter(CSSTransformValue.prototype, "is2D");
+const DOMRectListPrototypeGetLength = uncurryGetter(DOMRectList.prototype, "length");
+const DOMRectListPrototypeItem = uncurryThis(DOMRectList.prototype.item);
+const DOMRectReadOnlyPrototypeGetLeft = uncurryGetter(DOMRectReadOnly.prototype, "left");
+const DOMRectReadOnlyPrototypeGetTop = uncurryGetter(DOMRectReadOnly.prototype, "top");
+const DOMRectReadOnlyPrototypeGetRight = uncurryGetter(DOMRectReadOnly.prototype, "right");
+const DOMRectReadOnlyPrototypeGetBottom = uncurryGetter(DOMRectReadOnly.prototype, "bottom");
+
+// The element's inline style, for the element interfaces that have one.
+function inlineStyleOf(node) {
+  try {
+    return HTMLElementPrototypeGetStyle(node);
+  } catch {}
+  try {
+    return SVGElementPrototypeGetStyle(node);
+  } catch {
+    return undefined;
+  }
+}
+
+// Element and Document each have their own children getter.
+function childrenOf(node) {
+  try {
+    return ElementPrototypeGetChildren(node);
+  } catch {}
+  try {
+    return DocumentPrototypeGetChildren(node);
+  } catch {
+    return undefined;
+  }
+}
+
+// A DOMRect as a plain object, read through the stored getters.
+function plainRect(rect) {
+  return {
+    left: DOMRectReadOnlyPrototypeGetLeft(rect),
+    top: DOMRectReadOnlyPrototypeGetTop(rect),
+    right: DOMRectReadOnlyPrototypeGetRight(rect),
+    bottom: DOMRectReadOnlyPrototypeGetBottom(rect),
+  };
+}
+
+// Index loop over a DOM collection through its stored length and item.
+function forEachItem(collection, getLength, item, fn) {
+  const length = getLength(collection);
+  for (let i = 0; i < length; i++) {
+    fn(item(collection, i));
+  }
+}
 const StringPrototypeIndexOf = uncurryThis(String.prototype.indexOf);
 const StringPrototypeSubstring = uncurryThis(String.prototype.substring);
 const StringPrototypeEndsWith = uncurryThis(String.prototype.endsWith);
@@ -279,10 +354,6 @@ function errorReport(err) {
   };
 }
 
-function isArrayLike(obj) {
-  return obj != null && typeof obj.length === "number";
-}
-
 // for...of, spread and Array.from go through the iterator protocol, whose
 // methods the page can patch; these iterate by index or via forEach instead.
 function pushAll(array, items) {
@@ -320,25 +391,6 @@ function describeValueShape(value) {
     tag = "<toString failed>";
   }
   return `${str} (typeof=${typeof value}, ctor=${value?.constructor?.name}, tag=${tag}, length=${value?.length}, blink=${!!fromJsIsBlinkObject(value)})`;
-}
-
-function iterateArrayLike(obj, fn, label) {
-  if (isIterable(obj)) {
-    for (const item of obj) {
-      fn(item);
-    }
-  } else if (isArrayLike(obj)) {
-    warning(
-      `[RuntimeWarning] iterateArrayLike not iterable, using index (${label}): ${describeValueShape(obj)}`
-    );
-    for (let i = 0; i < obj.length; i++) {
-      fn(obj[i]);
-    }
-  } else if (obj != null) {
-    warning(
-      `[RuntimeWarning] iterateArrayLike expected iterable/array-like (${label}): ${describeValueShape(obj)}`
-    );
-  }
 }
 
 function getSourceMapURLs(sourceURL, relativeSourceMapURL) {
@@ -1724,26 +1776,30 @@ function previewBlinkNode(node) {
   let attributes, pseudoType;
   if (fromJsIsBlinkElementObject(node)) {
     attributes = [];
-    iterateArrayLike(node.attributes, ({ name, value }) => {
-      ArrayPrototypePush(attributes, { name, value });
-    }, "Element.attributes");
+    forEachItem(ElementPrototypeGetAttributes(node), NamedNodeMapPrototypeGetLength, NamedNodeMapPrototypeItem, attr => {
+      ArrayPrototypePush(attributes, { name: AttrPrototypeGetName(attr), value: AttrPrototypeGetValue(attr) });
+    });
     // TODO: We cannot access pseudo elements using the JS DOM API - https://linear.app/replay/issue/RUN-953/
     // pseudoType = node.localName;
   }
 
+  const nodeType = NodePrototypeGetNodeType(node);
+  const nodeName = NodePrototypeGetNodeName(node);
+
   let style;
-  if (node.style) {
-    style = registerPlainObject(node.style);
+  const inlineStyle = inlineStyleOf(node);
+  if (inlineStyle) {
+    style = registerPlainObject(inlineStyle);
   }
 
   let parentNode;
-  if (node.parentNode) {
-    parentNode = registerPlainObject(node.parentNode);
-  } else if (
-    node.defaultView &&
-    node.defaultView.parent != node.defaultView &&
-    node.defaultView.parent?.document
-  ) {
+  const rawParentNode = NodePrototypeGetParentNode(node);
+  const defaultView = nodeType == NodeDocumentNode ? DocumentPrototypeGetDefaultView(node) : undefined;
+  const parentWindow = defaultView ? WindowGetParent(defaultView) : undefined;
+  const parentDocument = parentWindow && parentWindow != defaultView ? WindowGetDocument(parentWindow) : undefined;
+  if (rawParentNode) {
+    parentNode = registerPlainObject(rawParentNode);
+  } else if (parentDocument) {
     /**
      * Nested documents use the parent element instead of null.
      *
@@ -1751,31 +1807,28 @@ function previewBlinkNode(node) {
      *   (properly handle `iframe`s and the case where `node.defaultView.parent.document` is missing)
      *   Issue: https://linear.app/replay/issue/RUN-954/dom-feature-support-multi-cspcross-origin-iframes
      */
-    const iframes = DocumentPrototypeGetElementsByTagName(
-      node.defaultView.parent.document,
-      "iframe"
-    );
+    const iframes = DocumentPrototypeGetElementsByTagName(parentDocument, "iframe");
     let iframe;
-    iterateArrayLike(iframes, (f) => {
-      if (!iframe && f.contentDocument == node) {
+    forEachItem(iframes, HTMLCollectionPrototypeGetLength, HTMLCollectionPrototypeItem, f => {
+      if (!iframe && HTMLIFrameElementPrototypeGetContentDocument(f) == node) {
         iframe = f;
       }
-    }, "Document.getElementsByTagName(iframe)");
+    });
     if (iframe) {
       parentNode = registerPlainObject(iframe);
     }
   }
 
   let documentURL;
-  if (node.nodeType == Node.DOCUMENT_NODE) {
-    documentURL = node.URL;
+  if (nodeType == NodeDocumentNode) {
+    documentURL = DocumentPrototypeGetURL(node);
   }
 
   const rv = {
-    nodeType: node.nodeType,
-    nodeName: node.nodeName,
-    nodeValue: typeof node.nodeValue === "string" ? node.nodeValue : undefined,
-    isConnected: node.isConnected,
+    nodeType,
+    nodeName,
+    nodeValue: typeof NodePrototypeGetNodeValue(node) === "string" ? NodePrototypeGetNodeValue(node) : undefined,
+    isConnected: NodePrototypeGetIsConnected(node),
     attributes,
     pseudoType,
     style,
@@ -1785,14 +1838,16 @@ function previewBlinkNode(node) {
   
 
   let childNodes;
-  if (node.nodeName == "IFRAME" && node.contentDocument) {
+  const contentDocument = nodeName == "IFRAME" ? HTMLIFrameElementPrototypeGetContentDocument(node) : undefined;
+  const rawChildNodes = NodePrototypeGetChildNodes(node);
+  if (contentDocument) {
     // Treat an iframe's content document as one of its child nodes.
-    childNodes = [registerPlainObject(node.contentDocument)];
-  } else if (node.childNodes?.length) {
+    childNodes = [registerPlainObject(contentDocument)];
+  } else if (NodeListPrototypeGetLength(rawChildNodes)) {
     childNodes = [];
-    iterateArrayLike(node.childNodes, (n) => {
+    forEachItem(rawChildNodes, NodeListPrototypeGetLength, NodeListPrototypeItem, (n) => {
       ArrayPrototypePush(childNodes, registerPlainObject(n));
-    }, "Node.childNodes");
+    });
   }
 
   if (childNodes) {
@@ -1807,7 +1862,8 @@ function previewBlinkStyle(style) {
   let parentRule = undefined;
 
   const properties = [];
-  for (let i = 0; i < style.length; i++) {
+  const styleLength = CSSStyleDeclarationPrototypeGetLength(style);
+  for (let i = 0; i < styleLength; i++) {
     const name = CSSStyleDeclarationPrototypeItem(style, i);
     const value = CSSStyleDeclarationPrototypeGetPropertyValue(style, name);
     if (value) {
@@ -2305,7 +2361,7 @@ function DOM_forceLayout() {
  * {@link DOM_getDocument}
  * ##########################################################################*/
 function DOM_getDocument() {
-  const rrpId = registerPlainObject(window.document);
+  const rrpId = registerPlainObject(WindowGetDocument(window));
 
   return {
     data: {},
@@ -2326,7 +2382,7 @@ function getLastBoundingClientRect(nodeRrpId) {
  */
 function DOM_getAllBoundingClientRects() {
   const cx = new StackingContext(window);
-  cx.addChildren(window.document);
+  cx.addChildren(WindowGetDocument(window));
 
   const entries = cx.flatten();
   // Get elements in front-to-back order.
@@ -2345,7 +2401,7 @@ function DOM_getAllBoundingClientRects() {
       // Offset the bounding client rect by the transform matrix
       // and containing iframe offset (if any).
       let { left, top, right, bottom } = shiftRect(
-        ElementPrototypeGetBoundingClientRect(elem.raw),
+        plainRect(ElementPrototypeGetBoundingClientRect(elem.raw)),
         elem.offset,
         transformMatrix
       );
@@ -2355,11 +2411,11 @@ function DOM_getAllBoundingClientRects() {
 
       // Get all client rects.
       const clientRects = [];
-      iterateArrayLike(ElementPrototypeGetClientRects(elem.raw), (r) => {
+      forEachItem(ElementPrototypeGetClientRects(elem.raw), DOMRectListPrototypeGetLength, DOMRectListPrototypeItem, (r) => {
         const { left, top, right, bottom } =
-          shiftRect(r, elem.offset, transformMatrix);
+          shiftRect(plainRect(r), elem.offset, transformMatrix);
         ArrayPrototypePush(clientRects, [left, top, right, bottom]);
-      }, "Element.getClientRects");
+      });
 
       const clipBounds =
         shiftRect(elem.clipBounds, elem.offset, transformMatrix);
@@ -2505,9 +2561,9 @@ function DOM_getEventListeners({ node }) {
 
   const listenerInfos = fromJsCollectEventListeners(nodeObject);
 
-  if (nodeObject.nodeName && nodeObject.nodeName == "HTML") {
+  if (NodePrototypeGetNodeName(nodeObject) == "HTML") {
     // Add event listeners for the document and window as well.
-    pushAll(listenerInfos, fromJsCollectEventListeners(nodeObject.parentNode));   // document
+    pushAll(listenerInfos, fromJsCollectEventListeners(NodePrototypeGetParentNode(nodeObject)));   // document
     // pushAll(listenerInfos, fromJsCollectEventListeners(nodeObject.ownerGlobal));  // window
   }
 
@@ -2594,7 +2650,8 @@ function CSS_getComputedStyle({ node }) {
     // }
     // else {
     styleInfo = WindowGetComputedStyle(ownerGlobal, nodeObj);
-    for (let i = 0; i < styleInfo.length; i++) {
+    const styleInfoLength = CSSStyleDeclarationPrototypeGetLength(styleInfo);
+    for (let i = 0; i < styleInfoLength; i++) {
       ArrayPrototypePush(computedStyle, {
         name: CSSStyleDeclarationPrototypeItem(styleInfo, i),
         value: CSSStyleDeclarationPrototypeGetPropertyValue(styleInfo, CSSStyleDeclarationPrototypeItem(styleInfo, i)),
@@ -3012,7 +3069,7 @@ function StackingContext(window, options) {
   // Transform scale parameter.  This is only relevant for stacking
   // contexts for IFRAME elements.
   if (transformMatrix) {
-    assert(root && root.raw.tagName === "IFRAME");
+    assert(root && ElementPrototypeGetTagName(root.raw) === "IFRAME");
   }
   this.transformMatrix = transformMatrix;
 
@@ -3076,9 +3133,9 @@ StackingContext.prototype = {
     }
     clipBounds = ObjectAssign({}, clipBounds);
     const cx = new StackingContextElement(this, node, parentElem, offset, style, clipBounds);
-    if (!ArrayPrototypeIncludes(["HTML", "BODY"], cx.raw.tagName)) {
+    if (!ArrayPrototypeIncludes(["HTML", "BODY"], ElementPrototypeGetTagName(cx.raw))) {
       if (CSSStyleDeclarationPrototypeGetPropertyValue(style, "overflow-x") != "visible") {
-        const clipBounds2 = ElementPrototypeGetBoundingClientRect(cx.getFormattingContextElement().raw);
+        const clipBounds2 = plainRect(ElementPrototypeGetBoundingClientRect(cx.getFormattingContextElement().raw));
         cx.clipBounds.left =
           clipBounds.left !== undefined
             ? MathMax(clipBounds2.left, clipBounds.left)
@@ -3089,7 +3146,7 @@ StackingContext.prototype = {
             : clipBounds2.right;
       }
       if (CSSStyleDeclarationPrototypeGetPropertyValue(style, "overflow-y") != "visible") {
-        const clipBounds2 = ElementPrototypeGetBoundingClientRect(cx.getFormattingContextElement().raw);
+        const clipBounds2 = plainRect(ElementPrototypeGetBoundingClientRect(cx.getFormattingContextElement().raw));
         cx.clipBounds.top =
           clipBounds.top !== undefined
             ? MathMax(clipBounds2.top, clipBounds.top)
@@ -3102,8 +3159,10 @@ StackingContext.prototype = {
     }
 
     // Create a new stacking context for any iframes.
-    if (cx.raw.tagName == "IFRAME" && cx.raw.contentWindow?.document) {
-      let { left, top } = ElementPrototypeGetBoundingClientRect(cx.raw);
+    const contentWindow = ElementPrototypeGetTagName(cx.raw) == "IFRAME" ? HTMLIFrameElementPrototypeGetContentWindow(cx.raw) : undefined;
+    const contentDocument = contentWindow ? WindowGetDocument(contentWindow) : undefined;
+    if (contentDocument) {
+      let { left, top } = plainRect(ElementPrototypeGetBoundingClientRect(cx.raw));
 
       // The left and top are adjusted by the transform matrix for
       // the containing iframe, if any.  For this, we just search up the
@@ -3132,7 +3191,7 @@ StackingContext.prototype = {
       }
 
       this.addContext(cx, undefined, { left, top, transformMatrix });
-      cx.context.addChildren(cx.raw.contentWindow.document);
+      cx.context.addChildren(contentDocument);
     }
 
     if (!cx.style) {
@@ -3254,17 +3313,21 @@ StackingContext.prototype = {
   },
 
   addChildren(parentNode) {
-    iterateArrayLike(parentNode.children, (child) => {
+    const children = childrenOf(parentNode);
+    if (!children) {
+      return;
+    }
+    forEachItem(children, HTMLCollectionPrototypeGetLength, HTMLCollectionPrototypeItem, (child) => {
       if (!fromJsIsBlinkElementObject(child)) {
         return;
       }
       this.add(child, undefined, this.offset);
-    }, "Element.children");
+    });
   },
 
   addChildrenWithParent(cx) {
-    const children = cx.raw.children;
-    if (!isIterable(children) && !isArrayLike(children)) {
+    const children = childrenOf(cx.raw);
+    if (!children) {
       // [TT-253] `cx.raw` should always be an Element and
       // Element.prototype.children should always return an `HTMLCollection`.
       // Not sure why it sometimes complains about not being iterable.
@@ -3276,12 +3339,12 @@ StackingContext.prototype = {
       }
       return;
     }
-    iterateArrayLike(children, (child) => {
+    forEachItem(children, HTMLCollectionPrototypeGetLength, HTMLCollectionPrototypeItem, (child) => {
       if (!fromJsIsBlinkElementObject(child)) {
         return;
       }
       this.add(child, cx, this.offset);
-    }, "StackingContext Element.children");
+    });
   },
 
   // Get the elements in this context ordered back-to-front.
@@ -3383,10 +3446,10 @@ function parseCssTransformStringToMatrix(transform) {
       transform,
     );
     // FIXME: We only handle 2D transforms for now.
-    if (!parsedTransform.is2D) {
+    if (!CSSTransformValuePrototypeGetIs2D(parsedTransform)) {
       return;
     }
-    if (parsedTransform.length > 0) {
+    if (CSSTransformValuePrototypeGetLength(parsedTransform) > 0) {
       const { a, b, c, d, e, f } = CSSTransformComponentPrototypeToMatrix(parsedTransform[0]);
       return [a, b, c, d, e, f];
     }
@@ -3408,7 +3471,7 @@ function computeTransformMatrix(element, window) {
     if (transformMatrix) {
       curMatrix = multiplyTransformMatrix(transformMatrix, curMatrix);
     }
-    curElem = curElem.parentNode;
+    curElem = NodePrototypeGetParentNode(curElem);
   }
   return curMatrix;
 }
