@@ -9,6 +9,7 @@ const DateNow = Date.now;
 const { parse: JSONParse, stringify: JSONStringify } = JSON;
 const { bind, call } = Function.prototype;
 const uncurryThis = bind.bind(call);
+const ArrayPrototypePush = uncurryThis(Array.prototype.push);
 const StringPrototypeStartsWith = uncurryThis(String.prototype.startsWith);
 const uncurryGetter = (proto, key) =>
   uncurryThis(Object.getOwnPropertyDescriptor(proto, key).get);
@@ -232,7 +233,7 @@ function collectUnresolvedSourceMapResources(mapText, mapURL) {
             continue;
           }
 
-          unresolvedSources.push({
+          ArrayPrototypePush(unresolvedSources, {
             offset,
             url: sourceURL,
           });
