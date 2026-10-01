@@ -1,6 +1,9 @@
 (() => {
 // Script which defines handlers for recorder commands, 
 // and usually is only loaded while replaying.
+
+// Stored before any page script can reassign them.
+const { DOMException, Error, Map, Set, String, URL } = window;
 const EmptyArray = Object.freeze([]); // reduce unnecessary mem churn
 
 const Verbose = false;
@@ -81,22 +84,22 @@ function typeofMaybeNull(value) {
 }
 
 function log(...args) {
-  log_(args.join(' '));
+  log_(ArrayPrototypeJoin(args, ' '));
 }
 
 // eslint-disable-next-line no-unused-vars
 function logTrace(...args) {
-  logTrace_(args.join(' '));
+  logTrace_(ArrayPrototypeJoin(args, ' '));
 }
 
 function warning(...args) {
-  warning_(args.join(' '));
+  warning_(ArrayPrototypeJoin(args, ' '));
 }
 
 function assert(v, msg = "") {
   if (!v) {
     const m = `Assertion failed when handling command (${msg})`;
-    log(`[RuntimeError] ${m} - ${Error().stack}`);
+    log(`[RuntimeError] ${m} - ${defaultStack(new Error())}`);
     throw new Error(m);
   }
 }
@@ -104,10 +107,6 @@ function assert(v, msg = "") {
 /**
  * @see https://stackoverflow.com/a/37837872
  */
-function isIterable(obj) {
-  return typeof obj?.[Symbol.iterator] === 'function';
-}
-
 const gSourceMapData = new Map();
 
 /** ###########################################################################
@@ -116,56 +115,331 @@ const gSourceMapData = new Map();
  * NOTE: We access many more monkey-patchable functions.
  * ##########################################################################*/
 
-const JSON_stringify = JSON.stringify;
-const JSON_parse = JSON.parse;
-const URL_ = URL;
+const JSONStringify = JSON.stringify;
+const JSONParse = JSON.parse;
+const { bind, call } = Function.prototype;
+const uncurryThis = bind.bind(call);
+const URLPrototypeToString = uncurryThis(URL.prototype.toString);
 
 // RUN-3067
-const Array_push = Array.prototype.push;
-const Object_toString = Object.prototype.toString;
-const String_ = String;
-const String_slice = String.prototype.slice;
+const ArrayPrototypeFilter = uncurryThis(Array.prototype.filter);
+const ArrayPrototypeFind = uncurryThis(Array.prototype.find);
+const ArrayPrototypeIncludes = uncurryThis(Array.prototype.includes);
+const ArrayPrototypeIndexOf = uncurryThis(Array.prototype.indexOf);
+const ArrayPrototypeJoin = uncurryThis(Array.prototype.join);
+const ArrayPrototypeMap = uncurryThis(Array.prototype.map);
+const ArrayPrototypePop = uncurryThis(Array.prototype.pop);
+const ArrayPrototypeReverse = uncurryThis(Array.prototype.reverse);
+const ArrayPrototypeSlice = uncurryThis(Array.prototype.slice);
+const ArrayPrototypeSort = uncurryThis(Array.prototype.sort);
+const ArrayPrototypePush = uncurryThis(Array.prototype.push);
+const ObjectPrototypeToString = uncurryThis(Object.prototype.toString);
+const StringPrototypeSlice = uncurryThis(String.prototype.slice);
+const ObjectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const uncurryGetter = (proto, key) =>
+  uncurryThis(ObjectGetOwnPropertyDescriptor(proto, key).get);
+const MapPrototypeGet = uncurryThis(Map.prototype.get);
+const MapPrototypeSet = uncurryThis(Map.prototype.set);
+const MapPrototypeHas = uncurryThis(Map.prototype.has);
+const MapPrototypeDelete = uncurryThis(Map.prototype.delete);
+const MapPrototypeClear = uncurryThis(Map.prototype.clear);
+const MapPrototypeForEach = uncurryThis(Map.prototype.forEach);
+const MapPrototypeGetSize = uncurryGetter(Map.prototype, "size");
+const SetPrototypeAdd = uncurryThis(Set.prototype.add);
+const SetPrototypeHas = uncurryThis(Set.prototype.has);
+const SetPrototypeForEach = uncurryThis(Set.prototype.forEach);
+const SetPrototypeGetSize = uncurryGetter(Set.prototype, "size");
+const SymbolPrototypeToString = uncurryThis(Symbol.prototype.toString);
+const ReflectApply = Reflect.apply;
+const ObjectAssign = Object.assign;
+const ObjectKeys = Object.keys;
+const NumberIsNaN = Number.isNaN;
+const MathMax = Math.max;
+const MathMin = Math.min;
+const DateParse = Date.parse;
 
-function isArrayLike(obj) {
-  return obj != null && typeof obj.length === "number";
+// DOM and CSSOM members, stored so page patches of the web-platform prototypes
+// aren't reached. Blink checks a receiver against the interface's per-isolate
+// template, so these also work on nodes and windows of same-process iframes.
+const WindowGetComputedStyle = uncurryThis(window.getComputedStyle);
+const DocumentPrototypeQuerySelector = uncurryThis(Document.prototype.querySelector);
+const DocumentPrototypeGetElementsByTagName = uncurryThis(Document.prototype.getElementsByTagName);
+const DocumentFragmentPrototypeQuerySelector = uncurryThis(DocumentFragment.prototype.querySelector);
+const ElementPrototypeQuerySelector = uncurryThis(Element.prototype.querySelector);
+const ElementPrototypeGetBoundingClientRect = uncurryThis(Element.prototype.getBoundingClientRect);
+const ElementPrototypeGetClientRects = uncurryThis(Element.prototype.getClientRects);
+const CSSStyleDeclarationPrototypeItem = uncurryThis(CSSStyleDeclaration.prototype.item);
+const CSSStyleDeclarationPrototypeGetPropertyValue = uncurryThis(CSSStyleDeclaration.prototype.getPropertyValue);
+const CSSStyleDeclarationPrototypeGetPropertyPriority = uncurryThis(CSSStyleDeclaration.prototype.getPropertyPriority);
+const CSSStyleValueParse = CSSStyleValue.parse;
+const CSSTransformComponentPrototypeToMatrix = uncurryThis(CSSTransformComponent.prototype.toMatrix);
+const NodeDocumentNode = Node.DOCUMENT_NODE;
+const NodePrototypeGetNodeType = uncurryGetter(Node.prototype, "nodeType");
+const NodePrototypeGetNodeName = uncurryGetter(Node.prototype, "nodeName");
+const NodePrototypeGetNodeValue = uncurryGetter(Node.prototype, "nodeValue");
+const NodePrototypeGetIsConnected = uncurryGetter(Node.prototype, "isConnected");
+const NodePrototypeGetParentNode = uncurryGetter(Node.prototype, "parentNode");
+const NodePrototypeGetChildNodes = uncurryGetter(Node.prototype, "childNodes");
+const NodeListPrototypeGetLength = uncurryGetter(NodeList.prototype, "length");
+const NodeListPrototypeItem = uncurryThis(NodeList.prototype.item);
+const ElementPrototypeGetTagName = uncurryGetter(Element.prototype, "tagName");
+const ElementPrototypeGetAttributes = uncurryGetter(Element.prototype, "attributes");
+const ElementPrototypeGetChildren = uncurryGetter(Element.prototype, "children");
+const DocumentPrototypeGetChildren = uncurryGetter(Document.prototype, "children");
+const NamedNodeMapPrototypeGetLength = uncurryGetter(NamedNodeMap.prototype, "length");
+const NamedNodeMapPrototypeItem = uncurryThis(NamedNodeMap.prototype.item);
+const AttrPrototypeGetName = uncurryGetter(Attr.prototype, "name");
+const AttrPrototypeGetValue = uncurryGetter(Attr.prototype, "value");
+const HTMLElementPrototypeGetStyle = uncurryGetter(HTMLElement.prototype, "style");
+const SVGElementPrototypeGetStyle = uncurryGetter(SVGElement.prototype, "style");
+const HTMLCollectionPrototypeGetLength = uncurryGetter(HTMLCollection.prototype, "length");
+const HTMLCollectionPrototypeItem = uncurryThis(HTMLCollection.prototype.item);
+const HTMLIFrameElementPrototypeGetContentDocument = uncurryGetter(HTMLIFrameElement.prototype, "contentDocument");
+const HTMLIFrameElementPrototypeGetContentWindow = uncurryGetter(HTMLIFrameElement.prototype, "contentWindow");
+const DocumentPrototypeGetURL = uncurryGetter(Document.prototype, "URL");
+const DocumentPrototypeGetDefaultView = uncurryGetter(Document.prototype, "defaultView");
+// Window attributes live on the window object itself, not on a prototype.
+const WindowGetDocument = uncurryGetter(window, "document");
+const WindowGetParent = uncurryGetter(window, "parent");
+const CSSStyleDeclarationPrototypeGetLength = uncurryGetter(CSSStyleDeclaration.prototype, "length");
+const CSSStyleDeclarationPrototypeGetCssText = uncurryGetter(CSSStyleDeclaration.prototype, "cssText");
+const StyleSheetPrototypeGetHref = uncurryGetter(StyleSheet.prototype, "href");
+const CSSTransformValuePrototypeGetLength = uncurryGetter(CSSTransformValue.prototype, "length");
+const CSSTransformValuePrototypeGetIs2D = uncurryGetter(CSSTransformValue.prototype, "is2D");
+const DOMRectListPrototypeGetLength = uncurryGetter(DOMRectList.prototype, "length");
+const DOMRectListPrototypeItem = uncurryThis(DOMRectList.prototype.item);
+const DOMRectReadOnlyPrototypeGetLeft = uncurryGetter(DOMRectReadOnly.prototype, "left");
+const DOMRectReadOnlyPrototypeGetTop = uncurryGetter(DOMRectReadOnly.prototype, "top");
+const DOMRectReadOnlyPrototypeGetRight = uncurryGetter(DOMRectReadOnly.prototype, "right");
+const DOMRectReadOnlyPrototypeGetBottom = uncurryGetter(DOMRectReadOnly.prototype, "bottom");
+
+// The element's inline style, for the element interfaces that have one.
+function inlineStyleOf(node) {
+  try {
+    return HTMLElementPrototypeGetStyle(node);
+  } catch {}
+  try {
+    return SVGElementPrototypeGetStyle(node);
+  } catch {
+    return undefined;
+  }
+}
+
+// An element can be named IFRAME without being an HTMLIFrameElement, in which
+// case the stored getters reject it.
+function iframeContentDocument(node) {
+  try {
+    return HTMLIFrameElementPrototypeGetContentDocument(node);
+  } catch {
+    return undefined;
+  }
+}
+
+function iframeContentWindow(node) {
+  try {
+    return HTMLIFrameElementPrototypeGetContentWindow(node);
+  } catch {
+    return undefined;
+  }
+}
+
+// Element and Document each have their own children getter.
+function childrenOf(node) {
+  try {
+    return ElementPrototypeGetChildren(node);
+  } catch {}
+  try {
+    return DocumentPrototypeGetChildren(node);
+  } catch {
+    return undefined;
+  }
+}
+
+// A DOMRect as a plain object, read through the stored getters.
+function plainRect(rect) {
+  return {
+    left: DOMRectReadOnlyPrototypeGetLeft(rect),
+    top: DOMRectReadOnlyPrototypeGetTop(rect),
+    right: DOMRectReadOnlyPrototypeGetRight(rect),
+    bottom: DOMRectReadOnlyPrototypeGetBottom(rect),
+  };
+}
+
+// Index loop over a DOM collection through its stored length and item.
+//
+// Blink doesn't create new API objects for replay code that hasn't diverged
+// (RUN-1764), so getters like attributes and childNodes return null there and
+// item() can too. A missing collection is treated as empty.
+function forEachItem(collection, getLength, item, fn) {
+  if (collection == null) {
+    return;
+  }
+  const length = getLength(collection);
+  for (let i = 0; i < length; i++) {
+    fn(item(collection, i));
+  }
+}
+const StringPrototypeIndexOf = uncurryThis(String.prototype.indexOf);
+const StringPrototypeSubstring = uncurryThis(String.prototype.substring);
+const StringPrototypeEndsWith = uncurryThis(String.prototype.endsWith);
+const StringPrototypeTrim = uncurryThis(String.prototype.trim);
+const RegExpPrototypeExec = uncurryThis(RegExp.prototype.exec);
+const FunctionPrototypeToString = uncurryThis(Function.prototype.toString);
+const ObjectDefineProperty = Object.defineProperty;
+const ObjectHasOwn = Object.hasOwn;
+const ObjectCreate = Object.create;
+const ObjectSetPrototypeOf = Object.setPrototypeOf;
+const ReflectDeleteProperty = Reflect.deleteProperty;
+const DOMExceptionPrototypeGetMessage = uncurryGetter(DOMException.prototype, "message");
+
+// Reads `err.stack` without running the page's Error.prepareStackTrace.
+//
+// V8 formats a stack on its first read and calls the `prepareStackTrace` it
+// finds on the built-in Error function of the realm that created the error.
+// It doesn't use the `Error` global, so a replaced `window.Error` is ignored,
+// and the `Error` captured above is the function V8 looks at. The lookup is an
+// ordinary property read though, so the hook can also sit on Function.prototype,
+// Object.prototype or a Proxy the page put in Error's prototype chain. An own
+// property on Error stops the lookup before it gets there, so the hook is
+// shadowed for the read rather than removed.
+//
+// An error created in another realm (e.g. an iframe) would consult that
+// realm's Error instead. Commands do run page code, so that can happen here;
+// the stack then comes out however that realm's hook formats it.
+function defaultStack(err) {
+  const hook = ObjectGetOwnPropertyDescriptor(Error, "prepareStackTrace");
+  if (hook) {
+    // Keeps Object.prototype out of the descriptor when it is handed back.
+    ObjectSetPrototypeOf(hook, null);
+  }
+  try {
+    ObjectDefineProperty(Error, "prepareStackTrace", {
+      __proto__: null,
+      value: undefined,
+      configurable: true,
+    });
+  } catch {
+    // The page froze Error or made its hook non-configurable.
+    return undefined;
+  }
+  try {
+    // A stack the page has already read stays in whatever form its hook gave it.
+    const stack = err?.stack;
+    return typeof stack === "string" ? stack : undefined;
+  } finally {
+    if (hook) {
+      ObjectDefineProperty(Error, "prepareStackTrace", hook);
+    } else {
+      ReflectDeleteProperty(Error, "prepareStackTrace");
+    }
+  }
+}
+
+// `err.message` can be a getter the page installed on a prototype, and
+// string coercion runs its Error.prototype.toString. Only an own data
+// property or the built-in DOMException getter is read here.
+function errorMessage(err) {
+  if (typeof err === "string") return err;
+  if (typeof err !== "object" || err === null) return "<no message>";
+  const own = ObjectGetOwnPropertyDescriptor(err, "message");
+  if (own) {
+    ObjectSetPrototypeOf(own, null);
+    if (typeof own.value === "string") return own.value;
+  }
+  try {
+    return DOMExceptionPrototypeGetMessage(err);
+  } catch {
+    return "<no message>";
+  }
+}
+
+// Only our own errors carry a code, as an own property.
+function errorCode(err) {
+  if (typeof err !== "object" || err === null) return undefined;
+  return ObjectHasOwn(err, "code") ? err.code : undefined;
+}
+
+// String.prototype.split would also look up Symbol.split through the
+// separator's prototype chain.
+function splitBy(str, separator) {
+  const parts = [];
+  let start = 0;
+  while (true) {
+    const end = StringPrototypeIndexOf(str, separator, start);
+    if (end < 0) {
+      ArrayPrototypePush(parts, StringPrototypeSlice(str, start));
+      return parts;
+    }
+    ArrayPrototypePush(parts, StringPrototypeSlice(str, start, end));
+    start = end + separator.length;
+  }
+}
+
+// Objects from CDP and the driver only have own data properties, so anything
+// found on their prototype chain would be the page's.
+function ownProperty(obj, key) {
+  return ObjectHasOwn(obj, key) ? obj[key] : undefined;
+}
+
+// The listed own properties of `obj` on a prototype-less object, for destructuring.
+function ownProperties(obj, keys) {
+  const rv = ObjectCreate(null);
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
+    if (ObjectHasOwn(obj, key)) {
+      rv[key] = obj[key];
+    }
+  }
+  return rv;
+}
+
+function errorReport(err) {
+  const stack = defaultStack(err);
+  return {
+    is_error: true,
+    message: errorMessage(err),
+    stack: stack ? splitBy(stack, "\n") : [],
+    code: errorCode(err),
+  };
+}
+
+// for...of, spread and Array.from go through the iterator protocol, whose
+// methods the page can patch; these iterate by index or via forEach instead.
+function pushAll(array, items) {
+  for (let i = 0; i < items.length; i++) {
+    ArrayPrototypePush(array, items[i]);
+  }
+}
+
+function mapKeysArray(map) {
+  const keys = [];
+  MapPrototypeForEach(map, (value, key) => ArrayPrototypePush(keys, key));
+  return keys;
+}
+
+function mapValuesArray(map) {
+  const values = [];
+  MapPrototypeForEach(map, value => ArrayPrototypePush(values, value));
+  return values;
 }
 
 function describeValueShape(value) {
   let str;
   try {
-    str = String_(value);
+    str = String(value);
   } catch {
     str = "<String failed>";
   }
   if (str.length > 120) {
-    str = String_slice.call(str, 0, 120) + "...";
+    str = StringPrototypeSlice(str, 0, 120) + "...";
   }
   let tag;
   try {
-    tag = Object_toString.call(value);
+    tag = ObjectPrototypeToString(value);
   } catch {
     tag = "<toString failed>";
   }
   return `${str} (typeof=${typeof value}, ctor=${value?.constructor?.name}, tag=${tag}, length=${value?.length}, blink=${!!fromJsIsBlinkObject(value)})`;
-}
-
-function iterateArrayLike(obj, fn, label) {
-  if (isIterable(obj)) {
-    for (const item of obj) {
-      fn(item);
-    }
-  } else if (isArrayLike(obj)) {
-    warning(
-      `[RuntimeWarning] iterateArrayLike not iterable, using index (${label}): ${describeValueShape(obj)}`
-    );
-    for (let i = 0; i < obj.length; i++) {
-      fn(obj[i]);
-    }
-  } else if (obj != null) {
-    warning(
-      `[RuntimeWarning] iterateArrayLike expected iterable/array-like (${label}): ${describeValueShape(obj)}`
-    );
-  }
 }
 
 function getSourceMapURLs(sourceURL, relativeSourceMapURL) {
@@ -178,9 +452,9 @@ function getSourceMapURLs(sourceURL, relativeSourceMapURL) {
 
   let sourceMapURL;
   try {
-    sourceMapURL = new URL_(relativeSourceMapURL, sourceBaseURL).toString();
+    sourceMapURL = URLPrototypeToString(new URL(relativeSourceMapURL, sourceBaseURL));
   } catch (err) {
-    log("[RuntimeError] Failed to process sourcemap url: " + err.message);
+    log("[RuntimeError] Failed to process sourcemap url: " + errorMessage(err));
     return null;
   }
 
@@ -194,7 +468,7 @@ function getSourceMapURLs(sourceURL, relativeSourceMapURL) {
 
 function isValidBaseURL(url) {
   try {
-    new URL_("", url);
+    new URL("", url);
     return true;
   } catch {
     return false;
@@ -251,8 +525,8 @@ function sendCDPMessage(method, params, contextId) {
 
   const id = gNextMessageId++;
   const cdpRequest = new CdpRequest(id);
-  Array_push.call(gCdpRequestStack, cdpRequest);
-  const cdpArgs = JSON_stringify({ method, params, id });
+  ArrayPrototypePush(gCdpRequestStack, cdpRequest);
+  const cdpArgs = JSONStringify({ method, params, id });
   try {
     if (contextId === undefined) {
       sendCDPMessageRaw(cdpArgs);
@@ -270,18 +544,24 @@ function sendCDPMessage(method, params, contextId) {
       // user JS which happen to still be pending and then get thrown upon CDP
       // result return.
       // E.g.: https://linear.app/replay/issue/RUN-1680#comment-1dfa142b
-      log(`[RuntimeError][RUN-1680] sendCDPMessage(${method}) failed: ${err?.message}`);
+      log(`[RuntimeError][RUN-1680] sendCDPMessage(${method}) failed: ${errorMessage(err)}`);
     }
   } finally {
-    const req = gCdpRequestStack.pop();
+    const req = ArrayPrototypePop(gCdpRequestStack);
     assert(req === cdpRequest, "[RuntimeError] CDP request stack corrupted");
   }
 
-  if (cdpRequest.result?.result) {
-    return cdpRequest.result.result;
+  const { result: cdpMessage } = cdpRequest;
+  if (!cdpMessage) {
+    return undefined;
   }
-  if (cdpRequest.result?.error) {
-    throw new CDPMessageError(cdpRequest.result.error.message, cdpRequest.result.error.code);
+  const result = ownProperty(cdpMessage, "result");
+  if (result) {
+    return result;
+  }
+  const error = ownProperty(cdpMessage, "error");
+  if (error) {
+    throw new CDPMessageError(ownProperty(error, "message"), ownProperty(error, "code"));
   }
   return undefined;
 }
@@ -295,32 +575,28 @@ const sendMessage = sendCDPMessage;
 
 
 function addEventListener(method, callback) {
-  gEventListeners.set(method, callback);
+  MapPrototypeSet(gEventListeners, method, callback);
 }
 
 // TODO: rename all these CDP-related symbols to also have CDP in the name
 function messageCallback(message) {
   try {
-    message = JSON_parse(message);
-    if (message.id) {
+    message = JSONParse(message);
+    const id = ownProperty(message, "id");
+    if (id) {
       const request = gCdpRequestStack[gCdpRequestStack.length - 1];
-      assert(message.id === request.messageId, "CDP request stack corrupted");
+      assert(id === request.messageId, "CDP request stack corrupted");
       request.result = message;
     } else {
-      const listener = gEventListeners.get(message.method);
+      const listener = MapPrototypeGet(gEventListeners, ownProperty(message, "method"));
       if (listener) {
-        listener(message.params);
+        listener(ownProperty(message, "params"));
       }
     }
   } catch (e) {
-    warning(`JS Message callback exception: ${e?.stack || e}`);
+    warning(`JS Message callback exception: ${defaultStack(e) || errorMessage(e)}`);
 
-    return JSON_stringify({
-      is_error: true,
-      message: e?.message || (e + ''),
-      stack: e?.stack?.split?.("\n") || e?.stack || [],
-      code: e?.code,
-    });
+    return JSONStringify(errorReport(e));
   }
 }
 
@@ -372,7 +648,7 @@ function CHECK_ALIVE(message) {
     } else {
       // Since we don't know enough about the circumstances here yet,
       // let's not crash an RTP for it.
-      warning(err.stack);
+      warning(defaultStack(err));
     }
   }
 }
@@ -382,9 +658,9 @@ function getAliveLabel() {
 }
 
 function executeCommand(method, params) {
-  VerboseCommands && log(`[Command ${method}] Handling command, params=${JSON_stringify(params)}...`);
+  VerboseCommands && log(`[Command ${method}] Handling command, params=${JSONStringify(params)}...`);
   const result = CommandCallbacks[method](params);
-  VerboseCommands && log(`[Command ${method}] Handled command, result=${JSON_stringify(result)}`);
+  VerboseCommands && log(`[Command ${method}] Handled command, result=${JSONStringify(result)}`);
   return result;
 }
 
@@ -397,20 +673,16 @@ function commandCallback(method, params) {
   try {
     return executeCommand(method, params);
   } catch (e) {
-    log(`[RuntimeError][Command ${method}]${getAliveLabel()} ${e?.stack || e}`);
+    log(`[RuntimeError][Command ${method}]${getAliveLabel()} ${defaultStack(e) || errorMessage(e)}`);
     // Pass the error up to V8; it can (for now) decide how to handle itself, whether
     // it should crash or not, etc.  Eventually, the caller of the command should make
     // that decision.
-    return {
-      is_error: true,
-      message: e?.message || (e + ''),
-      stack: e?.stack?.split?.("\n") || e?.stack || [],
-      code: e?.code,
-    };
+    return errorReport(e);
   }
 }
 
 function Target_evaluatePrivileged({ expression }) {
+  // Evaluating backend-supplied code in the page is the point of this command.
   const result = eval(expression);
   return { result };
 }
@@ -437,13 +709,14 @@ function Target_getCurrentMessageContents() {
   const error = getCurrentError();
 
   if (error) {
-    const { message, filename, line, column, scriptId } = error;
+    const { message, filename, line, column, scriptId } =
+      ownProperties(error, ["message", "filename", "line", "column", "scriptId"]);
     return {
       source: "PageError",
       level: "error",
       text: message,
       url: filename,
-      sourceId: scriptId ? scriptId.toString() : undefined,
+      sourceId: scriptId ? String(scriptId) : undefined,
       line,
       column,
     };
@@ -459,20 +732,23 @@ function Target_getCurrentMessageContents() {
 
   // Get the protocol representation of the message arguments.
   const argumentValues = [];
-  for (const arg of gLastConsoleAPICall.args || []) {
-    Array_push.call(argumentValues, buildRrpObjectFromCdpObject(arg));
+  const args = ownProperty(gLastConsoleAPICall, "args") || [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    ArrayPrototypePush(argumentValues, buildRrpObjectFromCdpObject(arg));
   }
 
-  const level = cdpToRrpConsoleLevels.get(gLastConsoleAPICall.type) || "info";
+  const level = MapPrototypeGet(cdpToRrpConsoleLevels, ownProperty(gLastConsoleAPICall, "type")) || "info";
 
   let url, sourceId, line, column;
-  if (gLastConsoleAPICall.stackTrace) {
-    const frame = gLastConsoleAPICall.stackTrace.callFrames[0];
+  const stackTrace = ownProperty(gLastConsoleAPICall, "stackTrace");
+  if (stackTrace) {
+    const frame = ownProperty(stackTrace, "callFrames")[0];
     if (frame) {
-      url = frame.url;
-      sourceId = frame.scriptId;
-      line = frame.lineNumber;
-      column = frame.columnNumber;
+      url = ownProperty(frame, "url");
+      sourceId = ownProperty(frame, "scriptId");
+      line = ownProperty(frame, "lineNumber");
+      column = ownProperty(frame, "columnNumber");
     }
   }
 
@@ -497,14 +773,14 @@ addNewScriptHandler((scriptId, sourceURL, relativeSourceMapURL) => {
     return;
 
   const { sourceMapURL, sourceMapBaseURL } = urls;
-  gSourceMapData.set(scriptId, {
+  MapPrototypeSet(gSourceMapData, scriptId, {
     url: sourceMapURL,
     baseUrl: sourceMapBaseURL
   });
 }, /* disallowEvents */ true);
 
 function Target_getSourceMapURL({ sourceId }) {
-  return gSourceMapData.get(sourceId) || {};
+  return MapPrototypeGet(gSourceMapData, sourceId) || {};
 }
 
 function Target_getStepOffsets() {
@@ -514,7 +790,7 @@ function Target_getStepOffsets() {
 
 function Target_getCurrentNetworkRequestEvent() {
   try {
-    const obj = JSON_parse(getCurrentNetworkRequestEvent());
+    const obj = JSONParse(getCurrentNetworkRequestEvent());
     return { data: obj };
   } catch (e) {
     warning(`JS Target.getCurrentNetworkRequestEvent exception: ${e}`);
@@ -536,10 +812,11 @@ function Target_topFrameLocation() {
       return {};
     }
     const rv = sendCDPMessage("Debugger.getTopFrameLocation");
-    if (!rv || !rv.location) {
+    const location = rv ? ownProperty(rv, "location") : undefined;
+    if (!location) {
       return {};
     }
-    return { location: createProtocolLocation(rv.location)[0] };
+    return { location: createProtocolLocation(location)[0] };
   } catch (e) {
     if (e instanceof CDPMessageError) {
       // No available context group; this can happen, so just return nothing.
@@ -565,10 +842,10 @@ function getStackFrames() {
     if (!isReplayScriptAlive()) {
       return [];
     }
-    const { callFrames } = sendCDPMessage("Debugger.getCallFrames", {
+    const rv = sendCDPMessage("Debugger.getCallFrames", {
       objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
     });
-    return callFrames;
+    return ownProperty(rv, "callFrames");
   } catch (e) {
     if (e instanceof CDPMessageError) {
       // No available context group; this can happen, so just return nothing.
@@ -586,14 +863,16 @@ function getStackFrames() {
 function buildRrpObjectResult(cdpReturnValue) {
   const rrpResult = { data: {} };
   if (cdpReturnValue) {
-    const { result: cdpResult, exceptionDetails } = cdpReturnValue;
+    const { result: cdpResult, exceptionDetails } =
+      ownProperties(cdpReturnValue, ["result", "exceptionDetails"]);
     if (exceptionDetails) {
       /**
        * @see https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#type-ExceptionDetails
        */
-      const rrpObject = exceptionDetails.exception ?
-        buildRrpObjectFromCdpObject(exceptionDetails.exception) :
-        registerPlainObject({ message: exceptionDetails.text })
+      const exception = ownProperty(exceptionDetails, "exception");
+      const rrpObject = exception ?
+        buildRrpObjectFromCdpObject(exception) :
+        registerPlainObject({ message: ownProperty(exceptionDetails, "text") })
       rrpResult.exception = rrpObject;
     } else if (cdpResult) {
       // cdpResult is the actual result RemoteObject.
@@ -615,7 +894,7 @@ function handleEvalError(err) {
   // RUN-2042 workaround: This fails a lot due to evals on frames in contexts
   // that have been destroyed. We want to fix this if we know that this is
   // high-impact.
-  log(`[RuntimeError] in eval: ${err?.stack || err}`);
+  log(`[RuntimeError] in eval: ${defaultStack(err) || errorMessage(err)}`);
   return {
     failed: true
   };
@@ -635,8 +914,9 @@ function getFrameByIndex(frameIndex) {
 
 function getFrameByLocation(cdpLocation) {
   const frames = getStackFrames();
-  return frames.find(
-    f => JSON_stringify(f.location) == JSON_stringify(cdpLocation)
+  return ArrayPrototypeFind(
+    frames,
+    f => JSONStringify(ownProperty(f, "location")) == JSONStringify(cdpLocation)
   );
 }
 
@@ -672,11 +952,11 @@ function Pause_evaluateInFrame({ frameId: frameIndexStr, expression }) {
     return sendCDPMessage(
       "Debugger.evaluateOnCallFrame",
       {
-        callFrameId: frame.callFrameId,
+        callFrameId: ownProperty(frame, "callFrameId"),
         expression,
         objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
       },
-      frame.contextId
+      ownProperty(frame, "contextId")
     );
   }
 }
@@ -703,23 +983,25 @@ function onBeforeEval() {
 }
 
 function buildEvalResult(cdpResult) {
-  if (usedReplayApi && cdpResult?.exceptionDetails) {
+  const exceptionDetails = cdpResult ? ownProperty(cdpResult, "exceptionDetails") : undefined;
+  if (usedReplayApi && exceptionDetails) {
     // Emit warning if an eval that used the Replay API throws.
-    const cdpException = cdpResult.exceptionDetails.exception?.description || cdpResult.exceptionDetails;
-    warning(`REPLAY_API_EVAL_ERROR ${JSON_stringify(cdpException)}`);
+    const exception = ownProperty(exceptionDetails, "exception");
+    const cdpException = (exception && ownProperty(exception, "description")) || exceptionDetails;
+    warning(`REPLAY_API_EVAL_ERROR ${JSONStringify(cdpException)}`);
   }
   return buildRrpObjectResult(cdpResult);
 }
 
 function Pause_getAllFrames() {
-  const frames = getStackFrames().map((frame, index) => {
+  const frames = ArrayPrototypeMap(getStackFrames(), (frame, index) => {
     // Use our own IDs for frames.
-    const id = (index++).toString();
+    const id = String(index++);
     const topmost = id == 0;
     return createProtocolFrame(id, frame, topmost);
   });
   return {
-    frames: frames.map(f => f.frameId),
+    frames: ArrayPrototypeMap(frames, f => f.frameId),
     data: { frames },
   };
 }
@@ -728,7 +1010,8 @@ function Pause_getExceptionValue() {
   const rv = sendCDPMessage("Debugger.getPendingException", {
     objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
   });
-  return { exception: rv.exception ? buildRrpObjectFromCdpObject(rv.exception) : undefined, data: {} };
+  const exception = ownProperty(rv, "exception");
+  return { exception: exception ? buildRrpObjectFromCdpObject(exception) : undefined, data: {} };
 }
 
 function Pause_getObjectPreview({ object, level = "full", pageSizeForTesting = 0 }) {
@@ -742,7 +1025,7 @@ function Pause_getObjectProperty({ object, name }) {
     "Runtime.callFunctionOn",
     {
       functionDeclaration: `function() { return this["${name}"] }`,
-      objectId: cdpObj.objectId,
+      objectId: ownProperty(cdpObj, "objectId"),
       objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
     }
   );
@@ -834,14 +1117,14 @@ const gCssRulesByNodeRrpId = new Map();
 
 function clearPauseDataCallback() {
   try {
-    gCdpObjectsByRrpId.clear();
-    gRrpIdByCdpId.clear();
-    gRrpIdByPlainObject.clear();
-    gPlainObjectByRrpId.clear();
-    gObjectPreviewByRrpId.clear();
-    gCdpScopesByRrpId.clear();
-    gLastBoundingClientRectsByNodeRrpId.clear();
-    gCssRulesByNodeRrpId.clear();
+    MapPrototypeClear(gCdpObjectsByRrpId);
+    MapPrototypeClear(gRrpIdByCdpId);
+    MapPrototypeClear(gRrpIdByPlainObject);
+    MapPrototypeClear(gPlainObjectByRrpId);
+    MapPrototypeClear(gObjectPreviewByRrpId);
+    MapPrototypeClear(gCdpScopesByRrpId);
+    MapPrototypeClear(gLastBoundingClientRectsByNodeRrpId);
+    MapPrototypeClear(gCssRulesByNodeRrpId);
     gLastRrpId = 0;
 
     if (!isReplayScriptAlive()) {
@@ -883,21 +1166,21 @@ function createRrpValueRaw(plainValue) {
 function registerPlainObject(plainObject) {
   assert(isObject(plainObject),
     `value is not an object: ${typeofMaybeNull(plainObject)}`);
-  let rrpId = gRrpIdByPlainObject.get(plainObject);
+  let rrpId = MapPrototypeGet(gRrpIdByPlainObject, plainObject);
   if (!rrpId) {
     // → ask V8InspectorSession to wrap plainObject (gets CDP.Runtime.RemoteObject)
     const cdpObject = makeDebuggeeValue(plainObject);
     if (cdpObject) {
       rrpId = registerCdpObject(cdpObject);
-      gRrpIdByPlainObject.set(plainObject, rrpId);
-      gPlainObjectByRrpId.set(rrpId, plainObject);
+      MapPrototypeSet(gRrpIdByPlainObject, plainObject, rrpId);
+      MapPrototypeSet(gPlainObjectByRrpId, rrpId, plainObject);
     }
   }
   return rrpId;
 }
 
 function getPlainObjectByCdpId(cdpId) {
-  const rrpId = gRrpIdByCdpId.get(cdpId);
+  const rrpId = MapPrototypeGet(gRrpIdByCdpId, cdpId);
   assert(rrpId);
   return getPlainObjectByRrpId(rrpId);
 }
@@ -908,17 +1191,17 @@ function getPlainObjectByCdpId(cdpId) {
  */
 function getPlainObjectByRrpId(rrpId) {
   rrpId += '';
-  let plainObject = gPlainObjectByRrpId.get(rrpId);
+  let plainObject = MapPrototypeGet(gPlainObjectByRrpId, rrpId);
   if (!plainObject) {
     // (if this was a ref type, registration should already have been handled in `registerCdpObject` ↓)
     // → ask V8InspectorSession to unwrap cdpObject (gets plainObject)
     const cdpObject = getCdpObjectByRrpId(rrpId);
     // → NOTE if we have an rrpId, it means, we already should have registered the cdpObject
     assert(cdpObject);
-    const cdpId = cdpObject.objectId;
+    const cdpId = ownProperty(cdpObject, "objectId");
     plainObject = fromJsGetObjectByCdpId(cdpId);
-    gRrpIdByPlainObject.set(plainObject, rrpId);
-    gPlainObjectByRrpId.set(rrpId, plainObject);
+    MapPrototypeSet(gRrpIdByPlainObject, plainObject, rrpId);
+    MapPrototypeSet(gPlainObjectByRrpId, rrpId, plainObject);
   }
   return plainObject;
 }
@@ -928,10 +1211,10 @@ function getPlainObjectByRrpId(rrpId) {
  * @return {number} rrpId
  */
 function registerCdpObject(cdpObject) {
-  const cdpId = cdpObject.objectId;
+  const cdpId = ownProperty(cdpObject, "objectId");
   assert(cdpId);
 
-  let rrpId = gRrpIdByCdpId.get(cdpId);
+  let rrpId = MapPrototypeGet(gRrpIdByCdpId, cdpId);
   if (rrpId) {
     return rrpId;
   }
@@ -941,7 +1224,7 @@ function registerCdpObject(cdpObject) {
     // NOTE: the same object might generate multiple cdpIds
     plainObject = fromJsGetObjectByCdpId(cdpId);
     if (plainObject) {
-      rrpId = gRrpIdByPlainObject.get(plainObject);
+      rrpId = MapPrototypeGet(gRrpIdByPlainObject, plainObject);
     }
   }
 
@@ -954,9 +1237,9 @@ function registerCdpObject(cdpObject) {
  * @return {CDP.Runtime.RemoteObject | Object}
  */
 function getCdpObjectByRrpId(rrpId) {
-  const cdpObject = gCdpObjectsByRrpId.get(rrpId);
+  const cdpObject = MapPrototypeGet(gCdpObjectsByRrpId, rrpId);
   if (!cdpObject) {
-    throw new Error(`getCdpObjectByRrpId failed - rrpId not found: ${JSON_stringify(rrpId)}`);
+    throw new Error(`getCdpObjectByRrpId failed - rrpId not found: ${JSONStringify(rrpId)}`);
   }
   return cdpObject;
 }
@@ -978,7 +1261,7 @@ function getCdpObjectByRrpId(rrpId) {
 function registerRrpPreview(rrpObjectPreview, plainObject) {
   let rrpId;
   if (plainObject) {
-    rrpId = gRrpIdByPlainObject.get(plainObject);
+    rrpId = MapPrototypeGet(gRrpIdByPlainObject, plainObject);
   }
 
   // NOTE: we built a custom "preview object" without a cdpObject, and sometimes without a plainObject
@@ -996,27 +1279,27 @@ function registerNewRrpObject(rrpId, cdpObject, rrpObjectPreview, plainObject) {
   rrpId ||= ++gLastRrpId + '';  // coerce to string
   if (cdpObject) {
     // CDP.Runtime.RemoteObject
-    assert(cdpObject.objectId);
-    const cdpId = cdpObject.objectId;
+    const cdpId = ownProperty(cdpObject, "objectId");
+    assert(cdpId);
     registerRrpCpdId(rrpId, cdpId, cdpObject);
   }
   if (rrpObjectPreview) {
     // preview objects, already built from specialized CDP objects
-    gObjectPreviewByRrpId.set(rrpId, rrpObjectPreview);
+    MapPrototypeSet(gObjectPreviewByRrpId, rrpId, rrpObjectPreview);
     rrpObjectPreview.objectId = rrpId; // set `objectId`
   }
   if (plainObject && !existingRrpId) {
-    gRrpIdByPlainObject.set(plainObject, rrpId);
-    gPlainObjectByRrpId.set(rrpId, plainObject);
+    MapPrototypeSet(gRrpIdByPlainObject, plainObject, rrpId);
+    MapPrototypeSet(gPlainObjectByRrpId, rrpId, plainObject);
   }
 
   return rrpId;
 }
 
 function registerRrpCpdId(rrpId, cdpId, cdpObject = null) {
-  gRrpIdByCdpId.set(cdpId, rrpId);
+  MapPrototypeSet(gRrpIdByCdpId, cdpId, rrpId);
   if (cdpObject) {
-    gCdpObjectsByRrpId.set(rrpId, cdpObject);
+    MapPrototypeSet(gCdpObjectsByRrpId, rrpId, cdpObject);
   }
 }
 
@@ -1039,20 +1322,20 @@ function getFrameArgumentsArray(frameOrFrameIndex) {
     }
     // Get new frame instance, since the stack might have changed and V8 uses
     // frame index for look up.
-    frame = getFrameByLocation(gCurrentEvaluateFrame.location) 
+    frame = getFrameByLocation(ownProperty(gCurrentEvaluateFrame, "location"))
     if (!frame) {
       throw new Error(
         `getFrameArgumentsArray was called from within Pause.evaluateInFrame ` +
-        `but the frame is not on stack anymore: ${JSON_stringify(frames.map(f => f.location))}`);
+        `but the frame is not on stack anymore: ${JSONStringify(ArrayPrototypeMap(getStackFrames(), f => ownProperty(f, "location")))}`);
     }
   } else if (typeof frameOrFrameIndex === "number") {
     frame = getFrameByIndex(frameOrFrameIndex);
-  } else if (isObject(frameOrFrameIndex) && frameOrFrameIndex.callFrameId) {
+  } else if (isObject(frameOrFrameIndex) && ownProperty(frameOrFrameIndex, "callFrameId")) {
     frame = frameOrFrameIndex;
   }
-  const frameId = frame.callFrameId;
+  const frameId = ownProperty(frame, "callFrameId");
   const args = fromJsGetArgumentsInFrame(frameId);
-  return args && [...args] || [];
+  return args ? ArrayPrototypeSlice(args) : [];
 }
 
 
@@ -1066,7 +1349,7 @@ const MaxStringLength = 10000;
 
 const cdpRefTypes = ['object', 'function'];
 function isCdpRefType(cdpObject) {
-  return cdpRefTypes.includes(cdpObject.type);
+  return ArrayPrototypeIncludes(cdpRefTypes, ownProperty(cdpObject, "type"));
 }
 
 
@@ -1078,28 +1361,30 @@ function buildRrpObjectFromCdpObject(cdpObject) {
   if (!cdpObject) {
     return {};
   }
-  switch (cdpObject.type) {
+  const { type, value, unserializableValue } =
+    ownProperties(cdpObject, ["type", "value", "unserializableValue"]);
+  switch (type) {
     case "undefined":
       return {};
     case "string":
     case "number":
     case "boolean":
-      if (cdpObject.unserializableValue) {
-        assert(cdpObject.type == "number");
-        return { unserializableNumber: cdpObject.unserializableValue };
+      if (unserializableValue) {
+        assert(type == "number");
+        return { unserializableNumber: unserializableValue };
       }
-      if (typeof cdpObject.value == "string" && cdpObject.value.length > MaxStringLength) {
-        return { value: cdpObject.value.substring(0, MaxStringLength) + "…" };
+      if (typeof value == "string" && value.length > MaxStringLength) {
+        return { value: StringPrototypeSubstring(value, 0, MaxStringLength) + "…" };
       }
-      return { value: cdpObject.value };
+      return { value };
     case "bigint": {
-      const str = cdpObject.unserializableValue;
+      const str = unserializableValue;
       assert(str);
-      return { bigint: str.substring(0, str.length - 1) };
+      return { bigint: StringPrototypeSubstring(str, 0, str.length - 1) };
     }
     case "object":
     case "function": {
-      if (!cdpObject.objectId) {    // TODO: how can this happen?
+      if (!ownProperty(cdpObject, "objectId")) {    // TODO: how can this happen?
         return { value: null };
       }
 
@@ -1107,9 +1392,9 @@ function buildRrpObjectFromCdpObject(cdpObject) {
       return { object: rrpId };
     }
     case "symbol":
-      return { symbol: cdpObject.description };
+      return { symbol: ownProperty(cdpObject, "description") };
     default:
-      log(`[RuntimeError] invalid CDP type: ${JSON_stringify(cdpObject)}`);
+      log(`[RuntimeError] invalid CDP type: ${JSONStringify(cdpObject)}`);
       return { unavailable: true };
   }
 }
@@ -1120,22 +1405,22 @@ function buildRrpObjectFromCdpObject(cdpObject) {
  * @param {CDP.Runtime.Scope} scope
  */
 function registerCdpScope(scope) {
-  const rrpId = registerCdpObject(scope.object);
-  gCdpScopesByRrpId.set(rrpId, scope);
+  const rrpId = registerCdpObject(ownProperty(scope, "object"));
+  MapPrototypeSet(gCdpScopesByRrpId, rrpId, scope);
   return rrpId;
 }
 
 function getCdpScopeByRrpId(rrpScopeId) {
-  const scope = gCdpScopesByRrpId.get(rrpScopeId);
+  const scope = MapPrototypeGet(gCdpScopesByRrpId, rrpScopeId);
   assert(scope);
   return scope;
 }
 
 function getBlinkNodeIdByRrpId(nodeRrpId) {
   const cdpObject = getCdpObjectByRrpId(nodeRrpId);
-  const nodeId = fromJsGetNodeIdByCpdId(cdpObject.objectId);
+  const nodeId = fromJsGetNodeIdByCpdId(ownProperty(cdpObject, "objectId"));
   // Note: Don't generate assert message if assert did not fail.
-  assert(nodeId, !nodeId && `${nodeRrpId}: ${JSON_stringify(cdpObject)}`);
+  assert(nodeId, !nodeId && `${nodeRrpId}: ${JSONStringify(cdpObject)}`);
   return nodeId;
 }
 
@@ -1146,11 +1431,11 @@ function getBlinkNodeIdByRrpId(nodeRrpId) {
 // Logic for creating object previews for the record/replay protocol.
 
 function isCdpObjectProxy(cdpObj) {
-  return cdpObj.subtype === "proxy";
+  return ownProperty(cdpObj, "subtype") === "proxy";
 }
 
 function isCdpObjectPromise(cdpObj) {
-  return cdpObj.subtype === "promise";
+  return ownProperty(cdpObj, "subtype") === "promise";
 }
 
 /**
@@ -1159,17 +1444,17 @@ function isCdpObjectPromise(cdpObj) {
  */
 function createPauseObject(rrpId, level, pageSizeForTesting) {
   rrpId = rrpId + ""; // Must be a string.
-  const existingPreview = gObjectPreviewByRrpId.get(rrpId);
+  const existingPreview = MapPrototypeGet(gObjectPreviewByRrpId, rrpId);
   if (existingPreview) {
     return existingPreview;
   }
 
   const cdpObj = getCdpObjectByRrpId(rrpId);
   // NOTE: `subtype` is not reliably available, due to a divergence check in V8 → `value-mirror.cc`
-  const className = isCdpObjectProxy(cdpObj) ? "Proxy" : (cdpObj.className || "Function");
+  const className = isCdpObjectProxy(cdpObj) ? "Proxy" : (ownProperty(cdpObj, "className") || "Function");
 
   // NOTE: `persistentId` is added in V8 → `injected-script.cc`
-  const { persistentId } = cdpObj;
+  const persistentId = ownProperty(cdpObj, "persistentId");
   let preview;
   if (level != "none") {
     preview = new ProtocolObjectPreview(rrpId, cdpObj, level, pageSizeForTesting).fill();
@@ -1182,7 +1467,7 @@ function createPauseObject(rrpId, level, pageSizeForTesting) {
 function isObjectBlacklisted(cdpObj) {
   // Accessing Storage object properties can cause hangs when trying to
   // communicate with the non-existent parent process.
-  if (cdpObj.className == "Storage") {
+  if (ownProperty(cdpObj, "className") == "Storage") {
     return true;
   }
 
@@ -1238,7 +1523,7 @@ ProtocolObjectPreview.prototype = {
 
   get plainObject() {
     if (!this._plainObject) {
-      this._plainObject = getPlainObjectByCdpId(this.cdpObj.objectId);
+      this._plainObject = getPlainObjectByCdpId(ownProperty(this.cdpObj, "objectId"));
     }
     return this._plainObject;
   },
@@ -1258,7 +1543,7 @@ ProtocolObjectPreview.prototype = {
     if (isObjectPropertyBlacklisted(ownerCdpObject, name)) {
       return false;
     }
-    if (this.getterValues?.has(name)) {
+    if (this.getterValues && MapPrototypeHas(this.getterValues, name)) {
       return false;
     }
     return true;
@@ -1277,7 +1562,7 @@ ProtocolObjectPreview.prototype = {
     if (!this.properties) {
       this.properties = [];
     }
-    Array_push.call(this.properties, rrpProp);
+    ArrayPrototypePush(this.properties, rrpProp);
   },
 
   addGetterValue(propKey, ownerCdpObject, force = false) {
@@ -1288,7 +1573,7 @@ ProtocolObjectPreview.prototype = {
     if (!this.getterValues) {
       this.getterValues = new Map();
     }
-    if (this.getterValues.has(propKey)) {
+    if (MapPrototypeHas(this.getterValues, propKey)) {
       return;
     }
 
@@ -1302,11 +1587,12 @@ ProtocolObjectPreview.prototype = {
     if (!this.getterValues) {
       this.getterValues = new Map();
     }
-    if (this.getterValues.has(propKey)) {
+    if (MapPrototypeHas(this.getterValues, propKey)) {
       return;
     }
 
-    const plainValue = this.raw[propKey].call(this.raw);
+    // Calling the previewed object's own method is intended here.
+    const plainValue = ReflectApply(this.raw[propKey], this.raw, []);
     const rrpValue = createRrpValueRaw(plainValue);
     if (rrpValue) {
       this.setGetterValueUnchecked(propKey, rrpValue, /* force */ true);
@@ -1321,7 +1607,7 @@ ProtocolObjectPreview.prototype = {
     if (!this.getterValues) {
       this.getterValues = new Map();
     }
-    this.getterValues.set(key, { name: key, ...valueObject });
+    MapPrototypeSet(this.getterValues, key, { name: key, ...valueObject });
   },
 
 
@@ -1332,7 +1618,7 @@ ProtocolObjectPreview.prototype = {
     if (!this.containerEntries) {
       this.containerEntries = [];
     }
-    Array_push.call(this.containerEntries, entry);
+    ArrayPrototypePush(this.containerEntries, entry);
   },
 
   get unlimitedItems() {
@@ -1375,14 +1661,16 @@ ProtocolObjectPreview.prototype = {
     if (isBlinkObject(this.raw, this.cdpObj)) {
       // for native objects we've explicitly asked for more than just ownProperties,
       // so we further filter them here.
-      if (!cdpProp.isOwn && !(cdpProp.configurable && cdpProp.enumerable)) {
+      const { isOwn, configurable, enumerable } =
+        ownProperties(cdpProp, ["isOwn", "configurable", "enumerable"]);
+      if (!isOwn && !(configurable && enumerable)) {
         // the property is both not our own, and it's also not on a prototype and configurable + enumerable.
         // XXX(toshok) do we really want to exclude non-configurable props?
         return false;
       }
     }
 
-    return this.checkAddProperty(this.cdpObj, cdpProp.name);
+    return this.checkAddProperty(this.cdpObj, ownProperty(cdpProp, "name"));
   },
 
   fill() {
@@ -1406,7 +1694,7 @@ ProtocolObjectPreview.prototype = {
       //    see: https://github.com/replayio/chromium-v8/pull/115/files#diff-72ee0a91d32565577bd78ed94b034ae3b4bf51676c5d42165e9363cad18dccf9R1328
       try {
         cdpProperties = sendCDPMessage("Runtime.getProperties", {
-          objectId: this.cdpObj.objectId,
+          objectId: ownProperty(this.cdpObj, "objectId"),
           ownProperties: !isBlinkObject(this.raw, this.cdpObj),
           generatePreview: false,
           pageIndex: 0, // Warning: NYI
@@ -1418,7 +1706,7 @@ ProtocolObjectPreview.prototype = {
         // Rethrow would become commandCallback is_error → Command.cpp Die.
         if (e instanceof CDPMessageError) {
           warning(
-            `[crash-0050] ProtocolObjectPreview.fill CDP error ${e.code}: ${e.cdpMessage || e.message}`,
+            `[crash-0050] ProtocolObjectPreview.fill CDP error ${errorCode(e)}: ${e.cdpMessage || errorMessage(e)}`,
           );
           cdpProperties = { result: [] };
         } else {
@@ -1426,7 +1714,8 @@ ProtocolObjectPreview.prototype = {
         }
       }
 
-      if (!cdpProperties.result) {
+      const cdpProps = ownProperty(cdpProperties, "result");
+      if (!cdpProps) {
         return {
           prototypeId: undefined
         };
@@ -1435,21 +1724,23 @@ ProtocolObjectPreview.prototype = {
       /**
        * @see https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#type-PropertyDescriptor
        */
-      for (let i = 0; i < cdpProperties.result.length; ++i) {
-        const cdpProp = cdpProperties.result[i];
-        const { name: propKey } = cdpProp;
-        if (propKey === "__proto__" || foundProps.has(propKey)) {
+      for (let i = 0; i < cdpProps.length; ++i) {
+        const cdpProp = cdpProps[i];
+        const propKey = ownProperty(cdpProp, "name");
+        if (propKey === "__proto__" || SetPrototypeHas(foundProps, propKey)) {
           continue;
         }
         if (this.shouldAddProp(cdpProp)) {
-          foundProps.add(propKey);
+          SetPrototypeAdd(foundProps, propKey);
         }
       }
     }
     
-    for (const cdpProp of cdpProperties.result) {
-      const { name: propKey } = cdpProp;
-      if (!foundProps.has(propKey)) {
+    const cdpProps = ownProperty(cdpProperties, "result");
+    for (let i = 0; i < cdpProps.length; i++) {
+      const cdpProp = cdpProps[i];
+      const propKey = ownProperty(cdpProp, "name");
+      if (!SetPrototypeHas(foundProps, propKey)) {
         continue;
       }
       const rrpProp = createRrpPropertyDescriptor(cdpProp);
@@ -1470,16 +1761,17 @@ ProtocolObjectPreview.prototype = {
 
     // Add builtin-specific data.
     if (!isPrototype(this.raw)) { // Ignore prototype itself.
-      const previewers = CustomPreviewers[this.cdpObj.className];
+      const previewers = ownProperty(CustomPreviewers, ownProperty(this.cdpObj, "className"));
       if (previewers) {
-        for (const entry of previewers) {
+        for (let i = 0; i < previewers.length; i++) {
+          const entry = previewers[i];
           if (isFunction(entry)) {
-            entry.call(this, cdpProperties);
+            ReflectApply(entry, this, [cdpProperties]);
           } else {
             // entry should be string -> Look it up in results
-            const cdpEntry = cdpProperties.result.find(prop => prop.name === entry);
+            const cdpEntry = ArrayPrototypeFind(ownProperty(cdpProperties, "result"), prop => ownProperty(prop, "name") === entry);
             if (cdpEntry) {
-              const rrpEntry = buildRrpObjectFromCdpObject(cdpEntry.value);
+              const rrpEntry = buildRrpObjectFromCdpObject(ownProperty(cdpEntry, "value"));
               this.setGetterValueUnchecked(entry, rrpEntry);
             }
           }
@@ -1487,9 +1779,9 @@ ProtocolObjectPreview.prototype = {
       }
     }
     // Add data for blink and other special objects.
-    Object.assign(this.extra, getExtraObjectPreviewData(this.cdpObj, cdpProperties));
+    ObjectAssign(this.extra, getExtraObjectPreviewData(this.cdpObj, cdpProperties));
     // Add Prototype data.
-    let prototypeCdp = getInternalProp(cdpProperties, '[[Prototype]]')?.value;
+    let prototypeCdp = internalPropValue(cdpProperties, '[[Prototype]]');
     let prototypeRrpId;
     if (prototypeCdp) {
       prototypeRrpId = registerCdpObject(prototypeCdp);
@@ -1500,7 +1792,7 @@ ProtocolObjectPreview.prototype = {
       prototypeId: prototypeRrpId,
       overflow: (this.overflow && this.level != "full") ? true : undefined,
       properties: this.properties,
-      getterValues: this.getterValues ? [...this.getterValues.values()] : undefined,
+      getterValues: this.getterValues ? mapValuesArray(this.getterValues) : undefined,
       containerEntries: this.containerEntries,
       ...this.extra,
     };
@@ -1510,13 +1802,13 @@ ProtocolObjectPreview.prototype = {
 };
 
 function getExtraObjectPreviewData(cdpObject, cdpProperties) {
-  const cdpId = cdpObject.objectId;
-  const rrpId = gRrpIdByCdpId.get(cdpId);
+  const cdpId = ownProperty(cdpObject, "objectId");
+  const rrpId = MapPrototypeGet(gRrpIdByCdpId, cdpId);
   assert(rrpId);
   
   if (isCdpObjectProxy(cdpObject)) {
-    let targetCdpObj = getInternalProp(cdpProperties, '[[Target]]')?.value;
-    let handlerCdpObj = getInternalProp(cdpProperties, '[[Handler]]')?.value;
+    let targetCdpObj = internalPropValue(cdpProperties, '[[Target]]');
+    let handlerCdpObj = internalPropValue(cdpProperties, '[[Handler]]');
     return {
       proxyState: {
         target: buildRrpObjectFromCdpObject(targetCdpObj),
@@ -1524,10 +1816,10 @@ function getExtraObjectPreviewData(cdpObject, cdpProperties) {
       }
     };
   } else if (isCdpObjectPromise(cdpObject)) {
-    let stateCdpObj = getInternalProp(cdpProperties, '[[PromiseState]]')?.value;
-    let valueCdpObj = getInternalProp(cdpProperties, '[[PromiseResult]]')?.value;
+    let stateCdpObj = internalPropValue(cdpProperties, '[[PromiseState]]');
+    let valueCdpObj = internalPropValue(cdpProperties, '[[PromiseResult]]');
     const promiseState = {
-      state: stateCdpObj.value || undefined
+      state: ownProperty(stateCdpObj, "value") || undefined
     };
     if (promiseState.state !== "pending") {
       promiseState.value = buildRrpObjectFromCdpObject(valueCdpObj);
@@ -1555,26 +1847,32 @@ function previewBlinkNode(node) {
   let attributes, pseudoType;
   if (fromJsIsBlinkElementObject(node)) {
     attributes = [];
-    iterateArrayLike(node.attributes, ({ name, value }) => {
-      Array_push.call(attributes, { name, value });
-    }, "Element.attributes");
+    forEachItem(ElementPrototypeGetAttributes(node), NamedNodeMapPrototypeGetLength, NamedNodeMapPrototypeItem, attr => {
+      if (attr) {
+        ArrayPrototypePush(attributes, { name: AttrPrototypeGetName(attr), value: AttrPrototypeGetValue(attr) });
+      }
+    });
     // TODO: We cannot access pseudo elements using the JS DOM API - https://linear.app/replay/issue/RUN-953/
     // pseudoType = node.localName;
   }
 
+  const nodeType = NodePrototypeGetNodeType(node);
+  const nodeName = NodePrototypeGetNodeName(node);
+
   let style;
-  if (node.style) {
-    style = registerPlainObject(node.style);
+  const inlineStyle = inlineStyleOf(node);
+  if (inlineStyle) {
+    style = registerPlainObject(inlineStyle);
   }
 
   let parentNode;
-  if (node.parentNode) {
-    parentNode = registerPlainObject(node.parentNode);
-  } else if (
-    node.defaultView &&
-    node.defaultView.parent != node.defaultView &&
-    node.defaultView.parent?.document
-  ) {
+  const rawParentNode = NodePrototypeGetParentNode(node);
+  const defaultView = nodeType == NodeDocumentNode ? DocumentPrototypeGetDefaultView(node) : undefined;
+  const parentWindow = defaultView ? WindowGetParent(defaultView) : undefined;
+  const parentDocument = parentWindow && parentWindow != defaultView ? WindowGetDocument(parentWindow) : undefined;
+  if (rawParentNode) {
+    parentNode = registerPlainObject(rawParentNode);
+  } else if (parentDocument) {
     /**
      * Nested documents use the parent element instead of null.
      *
@@ -1582,30 +1880,28 @@ function previewBlinkNode(node) {
      *   (properly handle `iframe`s and the case where `node.defaultView.parent.document` is missing)
      *   Issue: https://linear.app/replay/issue/RUN-954/dom-feature-support-multi-cspcross-origin-iframes
      */
-    const iframes = node.defaultView.parent.document.getElementsByTagName(
-      "iframe"
-    );
+    const iframes = DocumentPrototypeGetElementsByTagName(parentDocument, "iframe");
     let iframe;
-    iterateArrayLike(iframes, (f) => {
-      if (!iframe && f.contentDocument == node) {
+    forEachItem(iframes, HTMLCollectionPrototypeGetLength, HTMLCollectionPrototypeItem, f => {
+      if (!iframe && iframeContentDocument(f) == node) {
         iframe = f;
       }
-    }, "Document.getElementsByTagName(iframe)");
+    });
     if (iframe) {
       parentNode = registerPlainObject(iframe);
     }
   }
 
   let documentURL;
-  if (node.nodeType == Node.DOCUMENT_NODE) {
-    documentURL = node.URL;
+  if (nodeType == NodeDocumentNode) {
+    documentURL = DocumentPrototypeGetURL(node);
   }
 
   const rv = {
-    nodeType: node.nodeType,
-    nodeName: node.nodeName,
-    nodeValue: typeof node.nodeValue === "string" ? node.nodeValue : undefined,
-    isConnected: node.isConnected,
+    nodeType,
+    nodeName,
+    nodeValue: typeof NodePrototypeGetNodeValue(node) === "string" ? NodePrototypeGetNodeValue(node) : undefined,
+    isConnected: NodePrototypeGetIsConnected(node),
     attributes,
     pseudoType,
     style,
@@ -1615,14 +1911,16 @@ function previewBlinkNode(node) {
   
 
   let childNodes;
-  if (node.nodeName == "IFRAME" && node.contentDocument) {
+  const contentDocument = nodeName == "IFRAME" ? iframeContentDocument(node) : undefined;
+  const rawChildNodes = NodePrototypeGetChildNodes(node);
+  if (contentDocument) {
     // Treat an iframe's content document as one of its child nodes.
-    childNodes = [registerPlainObject(node.contentDocument)];
-  } else if (node.childNodes?.length) {
+    childNodes = [registerPlainObject(contentDocument)];
+  } else if (rawChildNodes && NodeListPrototypeGetLength(rawChildNodes)) {
     childNodes = [];
-    iterateArrayLike(node.childNodes, (n) => {
-      Array_push.call(childNodes, registerPlainObject(n));
-    }, "Node.childNodes");
+    forEachItem(rawChildNodes, NodeListPrototypeGetLength, NodeListPrototypeItem, (n) => {
+      ArrayPrototypePush(childNodes, registerPlainObject(n));
+    });
   }
 
   if (childNodes) {
@@ -1637,24 +1935,25 @@ function previewBlinkStyle(style) {
   let parentRule = undefined;
 
   const properties = [];
-  for (let i = 0; i < style.length; i++) {
-    const name = style.item(i);
-    const value = style.getPropertyValue(name);
+  const styleLength = CSSStyleDeclarationPrototypeGetLength(style);
+  for (let i = 0; i < styleLength; i++) {
+    const name = CSSStyleDeclarationPrototypeItem(style, i);
+    const value = CSSStyleDeclarationPrototypeGetPropertyValue(style, name);
     if (value) {
-      const important = style.getPropertyPriority(name) == "important" ? true : undefined;
-      Array_push.call(properties, { name, value, important });
+      const important = CSSStyleDeclarationPrototypeGetPropertyPriority(style, name) == "important" ? true : undefined;
+      ArrayPrototypePush(properties, { name, value, important });
     }
   }
 
   return {
-    cssText: style.cssText,
+    cssText: CSSStyleDeclarationPrototypeGetCssText(style),
     parentRule,
     properties
   };
 }
 
 function getDescriptionCount(description) {
-  const match = /\((\d+)\)/.exec(description || "");
+  const match = RegExpPrototypeExec(/\((\d+)\)/, description || "");
   if (match) {
     return +match[1];
   }
@@ -1663,7 +1962,7 @@ function getDescriptionCount(description) {
 
 function previewArray(_cdpProperties) {
   // TODO: [RUN-2223] Find out why Array.length does not always return a value.
-  const length = getDescriptionCount(this.cdpObj.description);
+  const length = getDescriptionCount(ownProperty(this.cdpObj, "description"));
   this.setGetterValueUnchecked("length", createRrpValueRaw(length));
 }
 
@@ -1680,58 +1979,60 @@ function previewTypedArray() {
  * containerEntries.
  */
 function previewSetMap(cdpProperties) {
-  if (!cdpProperties.internalProperties) {
-    return;
-  }
-
   const internal = getInternalProp(cdpProperties, "[[Entries]]");
-  if (!internal || !internal.value || !internal.value.objectId) {
+  const internalValue = internal ? ownProperty(internal, "value") : undefined;
+  const internalObjectId = internalValue ? ownProperty(internalValue, "objectId") : undefined;
+  if (!internalObjectId) {
     return;
   }
 
   // Get size from description.
   let size;
 
-  if (["Set", "Map"].includes(this.cdpObj.className)) {
+  const className = ownProperty(this.cdpObj, "className");
+  if (ArrayPrototypeIncludes(["Set", "Map"], className)) {
     // NOTE: For some reason, the internal backing array size is capped to
     // pageSize for Set and Map.
     // This type of inconsistency is possible since *we* added paging to the
     // debugger (RUN-1315), and it might have (albeit small) negative impacts
     // like this.
     // SLN: Simply query the size getter instead.
-    size = this.raw.size;
+    size = className === "Map"
+      ? MapPrototypeGetSize(this.raw)
+      : SetPrototypeGetSize(this.raw);
     const rrpSize = { name: "size", value: size };
     this.addPropertyUnchecked(rrpSize, /* force */ true);
     this.setGetterValueUnchecked(rrpSize.name, rrpSize, /* force */ true);
   } else {
     // Weak{Set,Map}
-    size = getDescriptionCount(internal.value.description);
+    size = getDescriptionCount(ownProperty(internalValue, "description"));
   }
   this.extra.containerEntryCount = size;
 
-  const entries = sendCDPMessage("Runtime.getProperties", {
-    objectId: internal.value.objectId,
+  const entries = ownProperty(sendCDPMessage("Runtime.getProperties", {
+    objectId: internalObjectId,
     ownProperties: true,
     generatePreview: false,
     pageIndex: this.pageIndex,
     pageSize: this.pageSize,
     objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
-  }).result;
+  }), "result");
 
-  for (const entry of entries) {
-    if (entry?.value?.subtype == "internal#entry") {
-      const entryProperties = sendCDPMessage("Runtime.getProperties", {
-        objectId: entry.value.objectId,
+  for (let i = 0; i < entries.length; i++) {
+    const entryValue = entries[i] ? ownProperty(entries[i], "value") : undefined;
+    if (entryValue && ownProperty(entryValue, "subtype") == "internal#entry") {
+      const entryProperties = ownProperty(sendCDPMessage("Runtime.getProperties", {
+        objectId: ownProperty(entryValue, "objectId"),
         ownProperties: true,
         generatePreview: false,
         objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
-      }).result;
-      const key = entryProperties.find(eprop => eprop.name == "key");
-      const value = entryProperties.find(eprop => eprop.name == "value");
+      }), "result");
+      const key = ArrayPrototypeFind(entryProperties, eprop => ownProperty(eprop, "name") == "key");
+      const value = ArrayPrototypeFind(entryProperties, eprop => ownProperty(eprop, "name") == "value");
       if (value) {
         this.addContainerEntry({
-          key: key ? buildRrpObjectFromCdpObject(key.value) : undefined,
-          value: buildRrpObjectFromCdpObject(value.value),
+          key: key ? buildRrpObjectFromCdpObject(ownProperty(key, "value")) : undefined,
+          value: buildRrpObjectFromCdpObject(ownProperty(value, "value")),
         });
       }
     }
@@ -1742,18 +2043,18 @@ function previewSetMap(cdpProperties) {
 }
 
 function previewRegExp() {
-  this.extra.regexpString = this.cdpObj.description;
+  this.extra.regexpString = ownProperty(this.cdpObj, "description");
 }
 
 function previewDate() {
-  const dateTime = Date.parse(this.cdpObj.description);
-  if (!Number.isNaN(dateTime)) {
+  const dateTime = DateParse(ownProperty(this.cdpObj, "description"));
+  if (!NumberIsNaN(dateTime)) {
     this.extra.dateTime = dateTime;
   }
 }
 
 function previewError() {
-  this.setGetterValueUnchecked("name", { value: this.cdpObj.className });
+  this.setGetterValueUnchecked("name", { value: ownProperty(this.cdpObj, "className") });
 }
 
 const ErrorProperties = [
@@ -1763,9 +2064,15 @@ const ErrorProperties = [
 ];
 
 function getInternalProp(cdpProperties, name) {
-  return cdpProperties.internalProperties?.find(
-    prop => prop.name == name
-  );
+  const internalProperties = ownProperty(cdpProperties, "internalProperties");
+  return internalProperties
+    ? ArrayPrototypeFind(internalProperties, prop => ownProperty(prop, "name") == name)
+    : undefined;
+}
+
+function internalPropValue(cdpProperties, name) {
+  const prop = getInternalProp(cdpProperties, name);
+  return prop ? ownProperty(prop, "value") : undefined;
 }
 
 function getInternalFunctionLocationProp(cdpProperties) {
@@ -1776,7 +2083,7 @@ function getInternalFunctionLocationProp(cdpProperties) {
  * String utility for function parameter parsing.
  */
 function substringEndsAt(haystack, needle, i) {
-  return haystack.substring(1 + i - needle.length, 1 + i) === needle;
+  return StringPrototypeSubstring(haystack, 1 + i - needle.length, 1 + i) === needle;
 }
 
 /**
@@ -1784,7 +2091,7 @@ function substringEndsAt(haystack, needle, i) {
  */
 function stringsEndWith(a, b, end) {
   // NOTE: This can be done more performantly.
-  return (a + b).endsWith(end);
+  return StringPrototypeEndsWith(a + b, end);
 }
 
 const complementaryTokensStart = "({[\"'`";
@@ -1845,7 +2152,7 @@ function extractFunctionParameterNames(s) {
       }
 
       // Not in a comment.
-      if (cleanHeader.endsWith("/") && (c === "/" || c === "*")) {
+      if (StringPrototypeEndsWith(cleanHeader, "/") && (c === "/" || c === "*")) {
         // Comment Start.
         if (c === "*") {
           expectedCommentEnd = "*/";
@@ -1853,7 +2160,7 @@ function extractFunctionParameterNames(s) {
           expectedCommentEnd = "\n";
         }
         // Remove "/" from header:
-        cleanHeader = cleanHeader.slice(0, -1);
+        cleanHeader = StringPrototypeSlice(cleanHeader, 0, -1);
         continue;
       }
 
@@ -1870,7 +2177,7 @@ function extractFunctionParameterNames(s) {
 
         if (stringsEndWith(cleanHeader, c, "=>")) {
           // SINGLEARROW: Found the arrow → The last word in the header (sans "=") is the param.
-          const param = cleanHeader.trim().match(/([^\s]+)\s*=$/)?.[1];
+          const param = RegExpPrototypeExec(/([^\s]+)\s*=$/, StringPrototypeTrim(cleanHeader))?.[1];
           return param ? [param] : [];
         }
 
@@ -1880,18 +2187,18 @@ function extractFunctionParameterNames(s) {
       }
 
       // destructuring
-      if (complementaryTokensStart.includes(c)) {
+      if (ArrayPrototypeIncludes(complementaryTokensStart, c)) {
         // Inside destructuring argument or initializer expression:
         // Enter node. Push complementary (to be searched for) onto stack.
-        const tokenIdx = complementaryTokensStart.indexOf(c);
-        ignoreStack.push(complementaryTokensEnd[tokenIdx]);
+        const tokenIdx = ArrayPrototypeIndexOf(complementaryTokensStart, c);
+        ArrayPrototypePush(ignoreStack, complementaryTokensEnd[tokenIdx]);
         continue; // don't include destructuring in the header
       }
       if (ignoreStack.length) {
         // Inside destructuring or initializer expression.
         if (c === ignoreStack[ignoreStack.length - 1]) {
           // Exit node.
-          ignoreStack.pop();
+          ArrayPrototypePop(ignoreStack);
         }
 
         continue; // don't include the destructuring in the header
@@ -1899,7 +2206,10 @@ function extractFunctionParameterNames(s) {
 
       if (c === ")") {
         // PARENS: Params end.
-        return cleanHeader.substring(parensStart).split(",").map(p => p.trim());
+        return ArrayPrototypeMap(
+          splitBy(StringPrototypeSubstring(cleanHeader, parensStart), ","),
+          p => StringPrototypeTrim(p)
+        );
       }
 
       // initializers
@@ -1923,32 +2233,35 @@ function extractFunctionParameterNames(s) {
     }
 
     // This should not happen, but might.
-    log(`[RuntimeError] extractFunctionParameterNames fell through for: ${s.slice(0, 80)}... header=${cleanHeader}`);
+    log(`[RuntimeError] extractFunctionParameterNames fell through for: ${StringPrototypeSlice(s, 0, 80)}... header=${cleanHeader}`);
     return [];
   } catch (err) {
-    log(`[RuntimeError] extractFunctionParameterNames failed for: ${s.slice(0, 80)}...\n ${err?.stack || err}`);
+    log(`[RuntimeError] extractFunctionParameterNames failed for: ${StringPrototypeSlice(s, 0, 80)}...\n ${defaultStack(err) || errorMessage(err)}`);
   }
 }
 
 function previewFunction(cdpProperties) {
-  const nameProperty = cdpProperties.result.find(prop => prop.name == "name");
+  const nameProperty = ArrayPrototypeFind(ownProperty(cdpProperties, "result"), prop => ownProperty(prop, "name") == "name");
   const locationProperty = getInternalFunctionLocationProp(cdpProperties);
 
   if (nameProperty) {
     // RUN-1991: nameProperty.value might not always exist.
-    this.extra.functionName = nameProperty?.value?.value || "";
+    const nameValue = ownProperty(nameProperty, "value");
+    this.extra.functionName = (nameValue && ownProperty(nameValue, "value")) || "";
   }
 
   if (locationProperty) {
-    const loc = locationProperty?.value?.value || "";
+    const locationValue = ownProperty(locationProperty, "value");
+    const loc = (locationValue && ownProperty(locationValue, "value")) || "";
     if (!loc) {
-      warning(`[RUN-1991] previewFunction missing location: ${JSON_stringify(nameProperty)}, ${JSON_stringify(locationProperty)}`);
+      warning(`[RUN-1991] previewFunction missing location: ${JSONStringify(nameProperty)}, ${JSONStringify(locationProperty)}`);
     }
     this.extra.functionLocation = createProtocolLocation(loc);
   }
 
-  if (this.cdpObj.description) {
-    this.extra.functionParameterNames = extractFunctionParameterNames(this.cdpObj.description);
+  const description = ownProperty(this.cdpObj, "description");
+  if (description) {
+    this.extra.functionParameterNames = extractFunctionParameterNames(description);
   }
 }
 
@@ -1992,22 +2305,24 @@ const CustomPreviewers = {
  */
 function evalPropRrpNotNull(owner, propKey) {
   try {
+    // Running the previewed object's getter is intended here.
     const plainValue = owner[propKey];
     if (plainValue === undefined || plainValue === null) {
       // [RUN-2223] This should not happen.
       const e = new Error("");
-      warning(`[RUN-2223] JS evalPropRrpNotNull got ${plainValue} when evaluating ${propKey} on ${typeof owner}, stack=${e.stack}`);
+      warning(`[RUN-2223] JS evalPropRrpNotNull got ${plainValue} when evaluating ${propKey} on ${typeof owner}, stack=${defaultStack(e)}`);
     }
     return createRrpValueRaw(plainValue);
   } catch (err) {
-    warning(`JS evalPropRrpNotNull exception - calling ${propKey?.toString?.()} on ${typeof owner} - ${err?.stack || err}`);
+    warning(`JS evalPropRrpNotNull exception - calling ${typeof propKey === "symbol" ? SymbolPrototypeToString(propKey) : String(propKey)} on ${typeof owner} - ${defaultStack(err) || errorMessage(err)}`);
     return null;
   }
 }
 
 function createRrpPropertyDescriptor(cdpProp) {
   // https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#type-PropertyDescriptor
-  const { name, value: cdpValue, writable, get, set, configurable, enumerable, symbol } = cdpProp;
+  const { name, value: cdpValue, writable, get, set, configurable, enumerable, symbol } =
+    ownProperties(cdpProp, ["name", "value", "writable", "get", "set", "configurable", "enumerable", "symbol"]);
 
   let rv = buildRrpObjectFromCdpObject(cdpValue);
   rv.name = name;
@@ -2026,10 +2341,10 @@ function createRrpPropertyDescriptor(cdpProp) {
     rv.flags = flags;
   }
 
-  if (get && get.objectId) {
+  if (get && ownProperty(get, "objectId")) {
     rv.get = registerCdpObject(get);
   }
-  if (set && set.objectId) {
+  if (set && ownProperty(set, "objectId")) {
     rv.set = registerCdpObject(set);
   }
 
@@ -2044,7 +2359,8 @@ function createProtocolLocation(location) {
   if (!location) {
     return undefined;
   }
-  const { scriptId, lineNumber, columnNumber } = location;
+  const { scriptId, lineNumber, columnNumber } =
+    ownProperties(location, ["scriptId", "lineNumber", "columnNumber"]);
   return [{
     sourceId: scriptId,
     // CDP line numbers are 0-indexed, while RRP line numbers are 1-indexed.
@@ -2055,7 +2371,9 @@ function createProtocolLocation(location) {
 
 function createProtocolFrame(frameId, cdpFrame, topmost) {
   // CDP call frames don't provide detailed type information.
-  const type = cdpFrame.functionName ? "call" : "global";
+  const { functionName, functionLocation, location, scopeChain, this: cdpThis } =
+    ownProperties(cdpFrame, ["functionName", "functionLocation", "location", "scopeChain", "this"]);
+  const type = functionName ? "call" : "global";
 
   let returnValue;
   if (topmost && fromJsHasReturnValue()) {
@@ -2065,11 +2383,11 @@ function createProtocolFrame(frameId, cdpFrame, topmost) {
   return {
     frameId,
     type,
-    functionName: cdpFrame.functionName || undefined,
-    functionLocation: createProtocolLocation(cdpFrame.functionLocation),
-    location: createProtocolLocation(cdpFrame.location),
-    scopeChain: cdpFrame.scopeChain.map(registerCdpScope),
-    this: buildRrpObjectFromCdpObject(cdpFrame.this),
+    functionName: functionName || undefined,
+    functionLocation: createProtocolLocation(functionLocation),
+    location: createProtocolLocation(location),
+    scopeChain: ArrayPrototypeMap(scopeChain, registerCdpScope),
+    this: buildRrpObjectFromCdpObject(cdpThis),
     returnValue,
   };
 }
@@ -2077,8 +2395,10 @@ function createProtocolFrame(frameId, cdpFrame, topmost) {
 function createRrpScope(scopeId) {
   const cdpScope = getCdpScopeByRrpId(scopeId);
 
+  const { type: scopeType, name: scopeName, object: scopeObject } =
+    ownProperties(cdpScope, ["type", "name", "object"]);
   let type;
-  switch (cdpScope.type) {
+  switch (scopeType) {
     case "global":
       type = "global";
       break;
@@ -2086,25 +2406,26 @@ function createRrpScope(scopeId) {
       type = "with";
       break;
     default:
-      type = cdpScope.name ? "function" : "block";
+      type = scopeName ? "function" : "block";
       break;
   }
 
   let rrpId, bindings;
   if (type == "global" || type == "with") {
-    rrpId = registerCdpObject(cdpScope.object);
+    rrpId = registerCdpObject(scopeObject);
   } else {
     bindings = [];
 
-    const properties = sendCDPMessage("Runtime.getProperties", {
-      objectId: cdpScope.object.objectId,
+    const properties = ownProperty(sendCDPMessage("Runtime.getProperties", {
+      objectId: ownProperty(scopeObject, "objectId"),
       ownProperties: true,
       generatePreview: false,
       objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
-    }).result;
-    for (const { name, value: cdpProp } of properties) {
+    }), "result");
+    for (let i = 0; i < properties.length; i++) {
+      const { name, value: cdpProp } = ownProperties(properties[i], ["name", "value"]);
       const rrpProp = buildRrpObjectFromCdpObject(cdpProp);
-      Array_push.call(bindings, { ...rrpProp, name });
+      ArrayPrototypePush(bindings, { ...rrpProp, name });
     }
   }
 
@@ -2112,7 +2433,7 @@ function createRrpScope(scopeId) {
     scopeId,
     type,
     object: rrpId,
-    functionName: cdpScope.name || undefined,
+    functionName: scopeName || undefined,
     bindings,
   };
 }
@@ -2129,7 +2450,7 @@ function DOM_forceLayout() {
  * {@link DOM_getDocument}
  * ##########################################################################*/
 function DOM_getDocument() {
-  const rrpId = registerPlainObject(window.document);
+  const rrpId = registerPlainObject(WindowGetDocument(window));
 
   return {
     data: {},
@@ -2142,7 +2463,7 @@ function DOM_getDocument() {
  * ##########################################################################*/
 
 function getLastBoundingClientRect(nodeRrpId) {
-  return gLastBoundingClientRectsByNodeRrpId.get(nodeRrpId);
+  return MapPrototypeGet(gLastBoundingClientRectsByNodeRrpId, nodeRrpId);
 }
 
 /**
@@ -2150,14 +2471,14 @@ function getLastBoundingClientRect(nodeRrpId) {
  */
 function DOM_getAllBoundingClientRects() {
   const cx = new StackingContext(window);
-  cx.addChildren(window.document);
+  cx.addChildren(WindowGetDocument(window));
 
   const entries = cx.flatten();
   // Get elements in front-to-back order.
-  entries.reverse();
+  ArrayPrototypeReverse(entries);
 
-  const elements = entries
-    .map((elem, i) => {
+  const elements = ArrayPrototypeFilter(
+    ArrayPrototypeMap(entries, (elem, i) => {
       const id = registerPlainObject(elem.raw) || i;
 
       // Use the containing context of the element to find any
@@ -2169,7 +2490,7 @@ function DOM_getAllBoundingClientRects() {
       // Offset the bounding client rect by the transform matrix
       // and containing iframe offset (if any).
       let { left, top, right, bottom } = shiftRect(
-        elem.raw.getBoundingClientRect(),
+        plainRect(ElementPrototypeGetBoundingClientRect(elem.raw)),
         elem.offset,
         transformMatrix
       );
@@ -2179,11 +2500,11 @@ function DOM_getAllBoundingClientRects() {
 
       // Get all client rects.
       const clientRects = [];
-      iterateArrayLike(elem.raw.getClientRects(), (r) => {
+      forEachItem(ElementPrototypeGetClientRects(elem.raw), DOMRectListPrototypeGetLength, DOMRectListPrototypeItem, (r) => {
         const { left, top, right, bottom } =
-          shiftRect(r, elem.offset, transformMatrix);
-        Array_push.call(clientRects, [left, top, right, bottom]);
-      }, "Element.getClientRects");
+          shiftRect(plainRect(r), elem.offset, transformMatrix);
+        ArrayPrototypePush(clientRects, [left, top, right, bottom]);
+      });
 
       const clipBounds =
         shiftRect(elem.clipBounds, elem.offset, transformMatrix);
@@ -2217,21 +2538,22 @@ function DOM_getAllBoundingClientRects() {
       if (clientRects.length > 0) {
         v.rects = clientRects;
       }
-      if (Object.keys(clipBounds).length > 0) {
+      if (ObjectKeys(clipBounds).length > 0) {
         v.clipBounds = clipBounds;
       }
-      if (elem.style?.getPropertyValue("visibility") === "hidden") {
+      if (elem.style && CSSStyleDeclarationPrototypeGetPropertyValue(elem.style, "visibility") === "hidden") {
         v.visibility = "hidden";
       }
-      if (elem.style?.getPropertyValue("pointer-events") === "none") {
+      if (elem.style && CSSStyleDeclarationPrototypeGetPropertyValue(elem.style, "pointer-events") === "none") {
         v.pointerEvents = "none";
       }
 
-      gLastBoundingClientRectsByNodeRrpId.set(id, v);
+      MapPrototypeSet(gLastBoundingClientRectsByNodeRrpId, id, v);
 
       return v;
-    })
-    .filter((v) => !!v);
+    }),
+    (v) => !!v
+  );
 
   return { elements };
 };
@@ -2244,7 +2566,7 @@ function DOM_getAllBoundingClientRects() {
  * @see https://static.replay.io/protocol/tot/DOM/#type-BoxModel
  */
 function DOM_getBoundingClientRect({ node }) {
-  if (!gLastBoundingClientRectsByNodeRrpId.size) {
+  if (!MapPrototypeGetSize(gLastBoundingClientRectsByNodeRrpId)) {
     // compute all basic bounding client rect sizes
     DOM_getAllBoundingClientRects();
   }
@@ -2288,8 +2610,8 @@ function DOM_getBoxModel({ node: nodeRrpId }) {
       const {
         content, padding, border, margin,
         // width, height, shapeOutside
-      } = cdpModel;
-      Object.assign(
+      } = ownProperties(cdpModel, ["content", "padding", "border", "margin"]);
+      ObjectAssign(
         model,
         {
           content,
@@ -2328,20 +2650,19 @@ function DOM_getEventListeners({ node }) {
 
   const listenerInfos = fromJsCollectEventListeners(nodeObject);
 
-  if (nodeObject.nodeName && nodeObject.nodeName == "HTML") {
+  if (fromJsIsBlinkNodeObject(nodeObject) && NodePrototypeGetNodeName(nodeObject) == "HTML") {
     // Add event listeners for the document and window as well.
-    Array_push.call(listenerInfos,
-      ...fromJsCollectEventListeners(nodeObject.parentNode)   // document
-      // ...fromJsCollectEventListeners(nodeObject.ownerGlobal)  // window
-    );
+    pushAll(listenerInfos, fromJsCollectEventListeners(NodePrototypeGetParentNode(nodeObject)));   // document
+    // pushAll(listenerInfos, fromJsCollectEventListeners(nodeObject.ownerGlobal));  // window
   }
 
   const listeners = [];
-  for (const { type, handler, capture } of listenerInfos) {
+  for (let i = 0; i < listenerInfos.length; i++) {
+    const { type, handler, capture } = listenerInfos[i];
     if (!handler) {
       continue;
     }
-    Array_push.call(listeners, {
+    ArrayPrototypePush(listeners, {
       node,
       handler: registerPlainObject(handler),
       type,
@@ -2356,10 +2677,22 @@ function DOM_getEventListeners({ node }) {
  * {@link DOM_querySelector}
  * ##########################################################################*/
 
+// querySelector is a separate function on each interface that has it.
+function querySelectorOn(node, selector) {
+  if (fromJsIsBlinkElementObject(node)) {
+    return ElementPrototypeQuerySelector(node, selector);
+  }
+  try {
+    return DocumentPrototypeQuerySelector(node, selector);
+  } catch {
+    return DocumentFragmentPrototypeQuerySelector(node, selector);
+  }
+}
+
 function DOM_querySelector({ node, selector }) {
   const nodeObj = getPlainObjectByRrpId(node);
 
-  const resultObj = nodeObj.querySelector(selector);
+  const resultObj = querySelectorOn(nodeObj, selector);
   if (!resultObj) {
     return { data: {} };
   }
@@ -2372,11 +2705,11 @@ function DOM_querySelector({ node, selector }) {
  * ##########################################################################*/
 
 function DOM_performSearch({ query }) {
-  query = query.trim();
+  query = StringPrototypeTrim(query);
   const nodeObjects = fromJsDomPerformSearch(query);
   const nodeRrpIds = nodeObjects
-    ?.map(registerPlainObject)
-    || [];
+    ? ArrayPrototypeMap(nodeObjects, registerPlainObject)
+    : [];
 
   return { nodes: nodeRrpIds, data: {} };
 }
@@ -2405,11 +2738,12 @@ function CSS_getComputedStyle({ node }) {
     //   );
     // }
     // else {
-    styleInfo = ownerGlobal.getComputedStyle(nodeObj);
-    for (let i = 0; i < styleInfo.length; i++) {
-      Array_push.call(computedStyle, {
-        name: styleInfo.item(i),
-        value: styleInfo.getPropertyValue(styleInfo.item(i)),
+    styleInfo = WindowGetComputedStyle(ownerGlobal, nodeObj);
+    const styleInfoLength = CSSStyleDeclarationPrototypeGetLength(styleInfo);
+    for (let i = 0; i < styleInfoLength; i++) {
+      ArrayPrototypePush(computedStyle, {
+        name: CSSStyleDeclarationPrototypeItem(styleInfo, i),
+        value: CSSStyleDeclarationPrototypeGetPropertyValue(styleInfo, CSSStyleDeclarationPrototypeItem(styleInfo, i)),
       });
     }
   }
@@ -2432,22 +2766,23 @@ function CSS_getComputedStyle({ node }) {
 function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
   // NOTE: type is deprecated -> don't care
   const type = 1;
-  let {
-    selectorList = {},
+  const {
+    selectorList,
     styleSheetId: styleSheetCpdId,
-    style: {
-      cssText: styleCssText,
-      range: styleRange,
-      cssProperties
-    } = {},
+    style: cdpStyle,
     range: ruleRange,
     origin
-  } = cdpRule || {};
+  } = ownProperties(cdpRule || {}, ["selectorList", "styleSheetId", "style", "range", "origin"]);
+  let {
+    cssText: styleCssText,
+    range: styleRange,
+    cssProperties
+  } = ownProperties(cdpStyle || {}, ["cssText", "range", "cssProperties"]);
 
 
   let styleSheetRrpId;
   if (styleSheetCpdId) {
-    styleSheetRrpId = gRrpIdByCdpId.get(styleSheetCpdId);
+    styleSheetRrpId = MapPrototypeGet(gRrpIdByCdpId, styleSheetCpdId);
     if (!styleSheetRrpId) {
       const nativeSheet = fromJsCssGetStylesheetByCpdId(styleSheetCpdId);
 
@@ -2456,8 +2791,9 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
       //      (that is only accessible on the rule level in CDP, for some reason)
       const isSystem = origin !== 'regular';
       const styleSheet = { isSystem };
-      if (nativeSheet?.href) {
-        styleSheet.href = nativeSheet.href;
+      const href = nativeSheet ? StyleSheetPrototypeGetHref(nativeSheet) : undefined;
+      if (href) {
+        styleSheet.href = href;
       }
 
       const styleSheetPreview = {
@@ -2475,16 +2811,18 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
 
   // stylePreview
 
-  const properties = (cssProperties || [])
-    .filter(prop => !!prop.text) // ignore props without text presentation
-    .map(prop => {
-      const { name, value, important } = prop;
+  const properties = ArrayPrototypeMap(
+    // ignore props without text presentation
+    ArrayPrototypeFilter(cssProperties || [], prop => !!ownProperty(prop, "text")),
+    prop => {
+      const { name, value, important } = ownProperties(prop, ["name", "value", "important"]);
       return {
         name,
         value,
         important
       };
-    });
+    }
+  );
   /**
    * hackfix: for some reason, `user-agent` (and possibly other) styles don't have `cssText`.
    *    So, for now, we cook up a simple css serialization algo here.
@@ -2493,12 +2831,13 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
    * @see https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/css/style_property_serializer.cc;l=204;drc=3decef66bc4c08b142a19db9628e9efe68973e64
    */
   if (!styleCssText) {
-    styleCssText = '\n  ' + properties
-      .map(({ name, value, important }) => {
+    styleCssText = '\n  ' + ArrayPrototypeJoin(
+      ArrayPrototypeMap(properties, ({ name, value, important }) => {
         const suffix = important ? ' !important' : '';
         return `${name}: ${value}${suffix};`;
-      })
-      .join('\n  ');
+      }),
+      '\n  '
+    );
   }
   const stylePreview = {
     className: 'CSS2Properties', // `gecko` naming convention
@@ -2517,14 +2856,15 @@ function registerCdpAsRrpCssRule(nodeObj, cdpRule) {
 
   // rulePreview
 
-  const maybeStartLine = (ruleRange || styleRange)?.startLine;
+  const range = ruleRange || styleRange;
+  const maybeStartLine = range ? ownProperty(range, "startLine") : undefined;
 
   // Lines from CDB data are zero-based.
   const startLine = maybeStartLine != null ? maybeStartLine + 1 : maybeStartLine;
-  const startColumn = (ruleRange || styleRange)?.startColumn;
+  const startColumn = range ? ownProperty(range, "startColumn") : undefined;
   // see https://static.replay.io/protocol/tot/CSS/#type-OriginalStyleSheetLocation
   const originalLocation = undefined; // TODO
-  const selectorText = selectorList?.text || '';
+  const selectorText = (selectorList && ownProperty(selectorList, "text")) || '';
 
   /**
    * Based on `CSSStyleRule::cssText()`.
@@ -2580,7 +2920,7 @@ function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
   const {
     matchedRules = EmptyArray,
     pseudoIdMatches = EmptyArray
-  } = cdpMatchedStyles;
+  } = ownProperties(cdpMatchedStyles, ["matchedRules", "pseudoIdMatches"]);
 
   function addCdpRule(cdpRule, pseudoElement = undefined) {
     const rrpRuleId = registerCdpAsRrpCssRule(nodeObj, cdpRule);
@@ -2588,22 +2928,25 @@ function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
       rule: rrpRuleId,
       pseudoElement
     };
-    Array_push.call(appliedRules, appliedRule);
+    ArrayPrototypePush(appliedRules, appliedRule);
   }
 
-  for (const cdpRule of matchedRules.reverse()) {
-    addCdpRule(cdpRule.rule);
+  ArrayPrototypeReverse(matchedRules);
+  for (let i = 0; i < matchedRules.length; i++) {
+    addCdpRule(ownProperty(matchedRules[i], "rule"));
   }
 
-  for (const pseudoMatch of pseudoIdMatches) {
+  for (let i = 0; i < pseudoIdMatches.length; i++) {
+    const pseudoMatch = pseudoIdMatches[i];
     const {
       // see: https://chromedevtools.github.io/devtools-protocol/tot/DOM/#type-PseudoType
       pseudoType,
       // pseudoIdentifier,
       matches
-    } = pseudoMatch;
-    for (const match of matches.reverse()) {
-      addCdpRule(match.rule, pseudoType);
+    } = ownProperties(pseudoMatch, ["pseudoType", "matches"]);
+    ArrayPrototypeReverse(matches);
+    for (let j = 0; j < matches.length; j++) {
+      addCdpRule(ownProperty(matches[j], "rule"), pseudoType);
     }
   }
 
@@ -2613,7 +2956,7 @@ function convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles) {
 function CSS_getAppliedRules({ node: nodeRrpId }) {
   const nodeObj = getPlainObjectByRrpId(nodeRrpId);
 
-  let rules = gCssRulesByNodeRrpId.get(nodeRrpId);
+  let rules = MapPrototypeGet(gCssRulesByNodeRrpId, nodeRrpId);
   const data = {};
 
   if (!rules && fromJsIsBlinkNodeObject(nodeObj)) {
@@ -2627,7 +2970,7 @@ function CSS_getAppliedRules({ node: nodeRrpId }) {
     } else {
       rules = [];
     }
-    gCssRulesByNodeRrpId.set(nodeRrpId, rules);
+    MapPrototypeSet(gCssRulesByNodeRrpId, nodeRrpId, rules);
   } else {
     // The target is not a node.
     log(`[RuntimeWarning] CSS.getAppliedRules called with non-node: ${nodeRrpId} ${isBlinkObject(nodeObj)} ${typeof nodeObj}.`);
@@ -2698,29 +3041,29 @@ function StackingContextElement(
 
 StackingContextElement.prototype = {
   isPositioned() {
-    return this.style.getPropertyValue("position") != "static";
+    return CSSStyleDeclarationPrototypeGetPropertyValue(this.style, "position") != "static";
   },
 
   isAbsolutelyPositioned() {
-    return ["absolute", "fixed"].includes(this.style.getPropertyValue("position"));
+    return ArrayPrototypeIncludes(["absolute", "fixed"], CSSStyleDeclarationPrototypeGetPropertyValue(this.style, "position"));
   },
 
   isTable() {
-    return ["table", "inline-table"].includes(this.style.getPropertyValue("display"));
+    return ArrayPrototypeIncludes(["table", "inline-table"], CSSStyleDeclarationPrototypeGetPropertyValue(this.style, "display"));
   },
 
   isFlexOrGridContainer() {
-    return ["flex", "inline-flex", "grid", "inline-grid"].includes(
-      this.style.getPropertyValue("display")
+    return ArrayPrototypeIncludes(["flex", "inline-flex", "grid", "inline-grid"],
+      CSSStyleDeclarationPrototypeGetPropertyValue(this.style, "display")
     );
   },
 
   isBlockElement() {
-    return ["block", "table", "flex", "grid"].includes(this.style.getPropertyValue("display"));
+    return ArrayPrototypeIncludes(["block", "table", "flex", "grid"], CSSStyleDeclarationPrototypeGetPropertyValue(this.style, "display"));
   },
 
   isFloat() {
-    return this.style.getPropertyValue("float") != "none";
+    return CSSStyleDeclarationPrototypeGetPropertyValue(this.style, "float") != "none";
   },
 
   getPositionedAncestor() {
@@ -2742,7 +3085,7 @@ StackingContextElement.prototype = {
       return this;
     }
     if (
-      [
+      ArrayPrototypeIncludes([
         "inline-block",
         "table-cell",
         "table-caption",
@@ -2753,32 +3096,32 @@ StackingContextElement.prototype = {
         "table-footer-group",
         "inline-table",
         "flow-root",
-      ].includes(this.style.getPropertyValue("display"))
+      ], CSSStyleDeclarationPrototypeGetPropertyValue(this.style, "display"))
     ) {
       return this;
     }
     if (
       this.isBlockElement() &&
       !(
-        ["visible", "clip"].includes(this.style.getPropertyValue("overflow-x")) &&
-        ["visible", "clip"].includes(this.style.getPropertyValue("overflow-y"))
+        ArrayPrototypeIncludes(["visible", "clip"], CSSStyleDeclarationPrototypeGetPropertyValue(this.style, "overflow-x")) &&
+        ArrayPrototypeIncludes(["visible", "clip"], CSSStyleDeclarationPrototypeGetPropertyValue(this.style, "overflow-y"))
       )
     ) {
       return this;
     }
-    if (["layout", "content", "paint"].includes(this.style.getPropertyValue("contain"))) {
+    if (ArrayPrototypeIncludes(["layout", "content", "paint"], CSSStyleDeclarationPrototypeGetPropertyValue(this.style, "contain"))) {
       return this;
     }
     if (this.parent.isFlexOrGridContainer() && !this.isFlexOrGridContainer() && !this.isTable()) {
       return this;
     }
     if (
-      this.style.getPropertyValue("column-count") != "auto" ||
-      this.style.getPropertyValue("column-width") != "auto"
+      CSSStyleDeclarationPrototypeGetPropertyValue(this.style, "column-count") != "auto" ||
+      CSSStyleDeclarationPrototypeGetPropertyValue(this.style, "column-width") != "auto"
     ) {
       return this;
     }
-    if (this.style.getPropertyValue("column-span") == "all") {
+    if (CSSStyleDeclarationPrototypeGetPropertyValue(this.style, "column-span") == "all") {
       return this;
     }
     return this.parent.getFormattingContextElement();
@@ -2818,7 +3161,7 @@ function StackingContext(window, options) {
   // Transform scale parameter.  This is only relevant for stacking
   // contexts for IFRAME elements.
   if (transformMatrix) {
-    assert(root && root.raw.tagName === "IFRAME");
+    assert(root && ElementPrototypeGetTagName(root.raw) === "IFRAME");
   }
   this.transformMatrix = transformMatrix;
 
@@ -2863,7 +3206,7 @@ StackingContext.prototype = {
 
   // Add node and its descendants to this stacking context.
   add(node, parentElem, offset) {
-    const style = this.window.getComputedStyle(node);
+    const style = WindowGetComputedStyle(this.window, node);
     if (!style) {
       // It's not 100% clear why this is sometimes null, but it seems like
       // this can happen if DOM commands are sent when the window is shutting
@@ -2871,7 +3214,7 @@ StackingContext.prototype = {
       return;
     }
 
-    const position = style.getPropertyValue("position");
+    const position = CSSStyleDeclarationPrototypeGetPropertyValue(style, "position");
     let clipBounds;
     if (position == "absolute") {
       clipBounds = parentElem?.getPositionedAncestor()?.clipBounds || {};
@@ -2880,36 +3223,38 @@ StackingContext.prototype = {
     } else {
       clipBounds = parentElem?.clipBounds || {};
     }
-    clipBounds = Object.assign({}, clipBounds);
+    clipBounds = ObjectAssign({}, clipBounds);
     const cx = new StackingContextElement(this, node, parentElem, offset, style, clipBounds);
-    if (!["HTML", "BODY"].includes(cx.raw.tagName)) {
-      if (style.getPropertyValue("overflow-x") != "visible") {
-        const clipBounds2 = cx.getFormattingContextElement().raw.getBoundingClientRect();
+    if (!ArrayPrototypeIncludes(["HTML", "BODY"], ElementPrototypeGetTagName(cx.raw))) {
+      if (CSSStyleDeclarationPrototypeGetPropertyValue(style, "overflow-x") != "visible") {
+        const clipBounds2 = plainRect(ElementPrototypeGetBoundingClientRect(cx.getFormattingContextElement().raw));
         cx.clipBounds.left =
           clipBounds.left !== undefined
-            ? Math.max(clipBounds2.left, clipBounds.left)
+            ? MathMax(clipBounds2.left, clipBounds.left)
             : clipBounds2.left;
         cx.clipBounds.right =
           clipBounds.right !== undefined
-            ? Math.min(clipBounds2.right, clipBounds.right)
+            ? MathMin(clipBounds2.right, clipBounds.right)
             : clipBounds2.right;
       }
-      if (style.getPropertyValue("overflow-y") != "visible") {
-        const clipBounds2 = cx.getFormattingContextElement().raw.getBoundingClientRect();
+      if (CSSStyleDeclarationPrototypeGetPropertyValue(style, "overflow-y") != "visible") {
+        const clipBounds2 = plainRect(ElementPrototypeGetBoundingClientRect(cx.getFormattingContextElement().raw));
         cx.clipBounds.top =
           clipBounds.top !== undefined
-            ? Math.max(clipBounds2.top, clipBounds.top)
+            ? MathMax(clipBounds2.top, clipBounds.top)
             : clipBounds2.top;
         cx.clipBounds.bottom =
           clipBounds.bottom !== undefined
-            ? Math.min(clipBounds2.bottom, clipBounds.bottom)
+            ? MathMin(clipBounds2.bottom, clipBounds.bottom)
             : clipBounds2.bottom;
       }
     }
 
     // Create a new stacking context for any iframes.
-    if (cx.raw.tagName == "IFRAME" && cx.raw.contentWindow?.document) {
-      let { left, top } = cx.raw.getBoundingClientRect();
+    const contentWindow = ElementPrototypeGetTagName(cx.raw) == "IFRAME" ? iframeContentWindow(cx.raw) : undefined;
+    const contentDocument = contentWindow ? WindowGetDocument(contentWindow) : undefined;
+    if (contentDocument) {
+      let { left, top } = plainRect(ElementPrototypeGetBoundingClientRect(cx.raw));
 
       // The left and top are adjusted by the transform matrix for
       // the containing iframe, if any.  For this, we just search up the
@@ -2938,7 +3283,7 @@ StackingContext.prototype = {
       }
 
       this.addContext(cx, undefined, { left, top, transformMatrix });
-      cx.context.addChildren(cx.raw.contentWindow.document);
+      cx.context.addChildren(contentDocument);
     }
 
     if (!cx.style) {
@@ -2947,12 +3292,12 @@ StackingContext.prototype = {
       return;
     }
 
-    const parentDisplay = cx.parent?.style?.getPropertyValue("display");
+    const parentDisplay = cx.parent?.style ? CSSStyleDeclarationPrototypeGetPropertyValue(cx.parent.style, "display") : undefined;
     if (
       position != "static" ||
-      ["flex", "inline-flex", "grid", "inline-grid"].includes(parentDisplay)
+      ArrayPrototypeIncludes(["flex", "inline-flex", "grid", "inline-grid"], parentDisplay)
     ) {
-      const zIndex = cx.style.getPropertyValue("z-index");
+      const zIndex = CSSStyleDeclarationPrototypeGetPropertyValue(cx.style, "z-index");
       if (zIndex != "auto") {
         this.addContext(cx, undefined, {});
         // Elements with a zero z-index have their own stacking context but are
@@ -2985,7 +3330,7 @@ StackingContext.prototype = {
       return;
     }
 
-    const display = cx.style.getPropertyValue("display");
+    const display = CSSStyleDeclarationPrototypeGetPropertyValue(cx.style, "display");
     if (display == "inline-block" || display == "inline-table") {
       // Group the element and its descendants.
       this.addContext(cx, this.realStackingContext, {});
@@ -3000,7 +3345,7 @@ StackingContext.prototype = {
 
     // Elements with `opacity < 1` get their own stacking context.
     let opacity = 1;
-    const opacityStr = cx.style.getPropertyValue("opacity");
+    const opacityStr = CSSStyleDeclarationPrototypeGetPropertyValue(cx.style, "opacity");
     if (opacityStr !== undefined && opacityStr !== "") {
       opacity = +opacityStr;
     }
@@ -3039,38 +3384,42 @@ StackingContext.prototype = {
   },
 
   addZIndexElement(elem, index) {
-    const existing = this.zIndexElements.get(index);
+    const existing = MapPrototypeGet(this.zIndexElements, index);
     if (existing) {
-      Array_push.call(existing, elem);
+      ArrayPrototypePush(existing, elem);
     } else {
-      this.zIndexElements.set(index, [elem]);
+      MapPrototypeSet(this.zIndexElements, index, [elem]);
     }
   },
 
   addPositionedElement(elem) {
-    Array_push.call(this.positionedElements, elem);
+    ArrayPrototypePush(this.positionedElements, elem);
   },
 
   addFloatingElement(elem) {
-    Array_push.call(this.floatingElements, elem);
+    ArrayPrototypePush(this.floatingElements, elem);
   },
 
   addNonPositionedElement(elem) {
-    Array_push.call(this.nonPositionedElements, elem);
+    ArrayPrototypePush(this.nonPositionedElements, elem);
   },
 
   addChildren(parentNode) {
-    iterateArrayLike(parentNode.children, (child) => {
+    const children = childrenOf(parentNode);
+    if (!children) {
+      return;
+    }
+    forEachItem(children, HTMLCollectionPrototypeGetLength, HTMLCollectionPrototypeItem, (child) => {
       if (!fromJsIsBlinkElementObject(child)) {
         return;
       }
       this.add(child, undefined, this.offset);
-    }, "Element.children");
+    });
   },
 
   addChildrenWithParent(cx) {
-    const children = cx.raw.children;
-    if (!isIterable(children) && !isArrayLike(children)) {
+    const children = childrenOf(cx.raw);
+    if (!children) {
       // [TT-253] `cx.raw` should always be an Element and
       // Element.prototype.children should always return an `HTMLCollection`.
       // Not sure why it sometimes complains about not being iterable.
@@ -3082,12 +3431,12 @@ StackingContext.prototype = {
       }
       return;
     }
-    iterateArrayLike(children, (child) => {
+    forEachItem(children, HTMLCollectionPrototypeGetLength, HTMLCollectionPrototypeItem, (child) => {
       if (!fromJsIsBlinkElementObject(child)) {
         return;
       }
       this.add(child, cx, this.offset);
-    }, "StackingContext Element.children");
+    });
   },
 
   // Get the elements in this context ordered back-to-front.
@@ -3098,25 +3447,27 @@ StackingContext.prototype = {
     const rv = [];
 
     const pushElements = (elems) => {
-      for (const elem of elems) {
+      for (let i = 0; i < elems.length; i++) {
+        const elem = elems[i];
         if (elem.context && elem.context != this) {
-          Array_push.call(rv, ...elem.context.flatten());
+          pushAll(rv, elem.context.flatten());
         } else {
-          Array_push.call(rv, elem);
+          ArrayPrototypePush(rv, elem);
         }
       }
     };
 
     const pushZIndexElements = (filter) => {
-      for (const z of zIndexes) {
+      for (let i = 0; i < zIndexes.length; i++) {
+        const z = zIndexes[i];
         if (filter(z)) {
-          pushElements(this.zIndexElements.get(z));
+          pushElements(MapPrototypeGet(this.zIndexElements, z));
         }
       }
     };
 
-    const zIndexes = [...this.zIndexElements.keys()];
-    zIndexes.sort((a, b) => a - b);
+    const zIndexes = mapKeysArray(this.zIndexElements);
+    ArrayPrototypeSort(zIndexes, (a, b) => a - b);
 
     if (this.root) {
       pushElements([this.root]);
@@ -3141,18 +3492,20 @@ function shiftRect(rect, offset, transformMatrix) {
   let { left, top, right, bottom } = rect;
   if (transformMatrix) {
     if (left && top) {
-      const [ leftTrans, topTrans ] = adjustCoordinateByTransformMatrix(
+      const leftTop = adjustCoordinateByTransformMatrix(
         [ left, top ],
         transformMatrix
       );
+      const leftTrans = leftTop[0], topTrans = leftTop[1];
       left = leftTrans;
       top = topTrans;
     }
     if (right && bottom) {
-      const [ rightTrans, bottomTrans ] = adjustCoordinateByTransformMatrix(
+      const rightBottom = adjustCoordinateByTransformMatrix(
         [ right, bottom ],
         transformMatrix
       );
+      const rightTrans = rightBottom[0], bottomTrans = rightBottom[1];
       right = rightTrans;
       bottom = bottomTrans;
     }
@@ -3180,16 +3533,16 @@ function parseCssTransformStringToMatrix(transform) {
   }
   try {
     // see https://developer.mozilla.org/en-US/docs/Web/API/CSSStyleValue/parse_static
-    const parsedTransform = CSSStyleValue.parse(
+    const parsedTransform = CSSStyleValueParse(
       "transform",
       transform,
     );
     // FIXME: We only handle 2D transforms for now.
-    if (!parsedTransform.is2D) {
+    if (!CSSTransformValuePrototypeGetIs2D(parsedTransform)) {
       return;
     }
-    if (parsedTransform.length > 0) {
-      const { a, b, c, d, e, f } = parsedTransform[0].toMatrix();
+    if (CSSTransformValuePrototypeGetLength(parsedTransform) > 0) {
+      const { a, b, c, d, e, f } = CSSTransformComponentPrototypeToMatrix(parsedTransform[0]);
       return [a, b, c, d, e, f];
     }
   } catch (err) {
@@ -3205,12 +3558,12 @@ function computeTransformMatrix(element, window) {
   let curMatrix = [1,0,0,1,0,0]; // start with identity matrix
   let curElem = element;
   while(curElem && fromJsIsBlinkElementObject(curElem)) {
-    const transformStr = window.getComputedStyle(curElem).transform;
+    const transformStr = CSSStyleDeclarationPrototypeGetPropertyValue(WindowGetComputedStyle(window, curElem), "transform");
     const transformMatrix = parseCssTransformStringToMatrix(transformStr);
     if (transformMatrix) {
       curMatrix = multiplyTransformMatrix(transformMatrix, curMatrix);
     }
-    curElem = curElem.parentNode;
+    curElem = NodePrototypeGetParentNode(curElem);
   }
   return curMatrix;
 }
@@ -3225,8 +3578,8 @@ function multiplyTransformMatrix(m1,m2) {
   //   b, d, ty,
   //   0, 0, 1
   // ]
-  const [a1, b1, c1, d1, tx1, ty1] = m1;
-  const [a2, b2, c2, d2, tx2, ty2] = m2;
+  const a1 = m1[0], b1 = m1[1], c1 = m1[2], d1 = m1[3], tx1 = m1[4], ty1 = m1[5];
+  const a2 = m2[0], b2 = m2[1], c2 = m2[2], d2 = m2[3], tx2 = m2[4], ty2 = m2[5];
 
   const a3 = a1 * a2 + c1 * b2;
   const b3 = b1 * a2 + d1 * b2;
@@ -3242,8 +3595,8 @@ function multiplyTransformMatrix(m1,m2) {
  * Adjust a { left, top } coordinate by a transform matrix
  * ##########################################################################*/
 function adjustCoordinateByTransformMatrix(coord, m) {
-  const [ x, y ] = coord;
-  const [scaleX, skewX, skewY, scaleY, translateX, translateY] = m;
+  const x = coord[0], y = coord[1];
+  const scaleX = m[0], skewX = m[1], skewY = m[2], scaleY = m[3], translateX = m[4], translateY = m[5];
 
   const x2 = x * scaleX + y * skewX + translateX;
   const y2 = x * skewY + y * scaleY + translateY;
@@ -3287,14 +3640,14 @@ function replayEval(fn) {
     // We cannot currently avoid a user-supplied function from getting
     // instrumented. Stringifying and evaling it with events disallowed
     // fixes that problem.
-    let fnExpr = fn.toString().trim();
+    let fnExpr = StringPrototypeTrim(FunctionPrototypeToString(fn));
     eval(`(${fnExpr})()`);
   } catch (err) {
     // Note: We MUST NOT let this error escape, or it will cause a mismatch in
     // `Runtime_UnwindAndFindExceptionHandler`.
     // TODO: We should just crash here, since its the responsibility of the
     // caller of replayEval to make sure the cb won't throw.
-    warning(`replayEval ERROR: ${err?.stack || err}`);
+    warning(`replayEval ERROR: ${defaultStack(err) || errorMessage(err)}`);
   } finally {
     endReplayCode();
   }
@@ -3354,7 +3707,7 @@ function patchReplayApiObject(obj) {
 function wrapReplayApiFunction(fn) {
   return (...args) => {
     onReplayApiUsed();
-    return fn(...args);
+    return ReflectApply(fn, undefined, args);
   };
 }
 
@@ -3366,26 +3719,22 @@ function wrapReplayApiFunction(fn) {
 patchReplayApi();
 initMessages();
 addEventListener("Runtime.consoleAPICalled", onConsoleAPICall);
-addEventListener("Runtime.executionContextCreated", ({ context }) => {
-  gExecutionContexts.set(context.id, context);
-  for (const callback of gContextChangeCallbacks) {
-    callback(context, "add");
-  }
+addEventListener("Runtime.executionContextCreated", (params) => {
+  const context = ownProperty(params, "context");
+  MapPrototypeSet(gExecutionContexts, ownProperty(context, "id"), context);
+  SetPrototypeForEach(gContextChangeCallbacks, callback => callback(context, "add"));
 });
-addEventListener("Runtime.executionContextDestroyed", ({ executionContextId }) => {
-  const context = gExecutionContexts.get(executionContextId);
-  for (const callback of gContextChangeCallbacks) {
-    callback(context, "remove");
-  }
-  gExecutionContexts.delete(executionContextId);
+addEventListener("Runtime.executionContextDestroyed", (params) => {
+  const executionContextId = ownProperty(params, "executionContextId");
+  const context = MapPrototypeGet(gExecutionContexts, executionContextId);
+  SetPrototypeForEach(gContextChangeCallbacks, callback => callback(context, "remove"));
+  MapPrototypeDelete(gExecutionContexts, executionContextId);
 });
 addEventListener("Runtime.executionContextsCleared", () => {
-  for (const context of gExecutionContexts.values()) {
-    for (const callback of gContextChangeCallbacks) {
-      callback(context, "remove");
-    }
-  }
-  gExecutionContexts.clear();
+  MapPrototypeForEach(gExecutionContexts, context => {
+    SetPrototypeForEach(gContextChangeCallbacks, callback => callback(context, "remove"));
+  });
+  MapPrototypeClear(gExecutionContexts);
 });
 sendCDPMessage("Runtime.enable");
 

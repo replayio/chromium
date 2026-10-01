@@ -3,8 +3,42 @@
 (() => {
 
 // Avoid monkey patching.
-const { fetch, URL, Error } = window;
+const { fetch, URL, DOMException, Error, Promise, Response, queueMicrotask } = window;
+const ArrayIsArray = Array.isArray;
 const DateNow = Date.now;
+const { parse: JSONParse, stringify: JSONStringify } = JSON;
+const ObjectCreate = Object.create;
+const ObjectDefineProperty = Object.defineProperty;
+const ObjectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const ObjectHasOwn = Object.hasOwn;
+const ObjectSetPrototypeOf = Object.setPrototypeOf;
+const ReflectDeleteProperty = Reflect.deleteProperty;
+const { bind, call } = Function.prototype;
+const uncurryThis = bind.bind(call);
+const ArrayPrototypePush = uncurryThis(Array.prototype.push);
+const StringPrototypeStartsWith = uncurryThis(String.prototype.startsWith);
+const uncurryGetter = (proto, key) =>
+  uncurryThis(ObjectGetOwnPropertyDescriptor(proto, key).get);
+const URLPrototypeToString = uncurryThis(URL.prototype.toString);
+const DOMExceptionPrototypeGetMessage = uncurryGetter(DOMException.prototype, "message");
+const ResponsePrototypeGetOk = uncurryGetter(Response.prototype, "ok");
+const ResponsePrototypeGetStatus = uncurryGetter(Response.prototype, "status");
+const ResponsePrototypeGetStatusText = uncurryGetter(Response.prototype, "statusText");
+const ResponsePrototypeText = uncurryThis(Response.prototype.text);
+
+// Awaiting this yields for one microtask. Awaiting a real promise would read
+// its `constructor`, which the page can patch; `then` here is our own property.
+const nextMicrotask = { then(resolve) { queueMicrotask(resolve); } };
+
+// Data from JSON.parse only has own data properties, so anything found on
+// the prototype chain would be the page's.
+const ownProperty = (obj, key) => (ObjectHasOwn(obj, key) ? obj[key] : undefined);
+
+// `await promise` reads `promise.constructor`, normally found on
+// Promise.prototype where the page can redefine it. An own `constructor`
+// keeps that read off the prototype.
+const withOwnConstructor = promise =>
+  ObjectDefineProperty(promise, "constructor", { __proto__: null, value: Promise });
 
 const {
   log,
@@ -21,19 +55,83 @@ const {
   RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE,
 } = __RECORD_REPLAY_ARGUMENTS__;
 
-const fetchPromiseCache = {};
+const fetchPromiseCache = ObjectCreate(null);
+
+// Reads `err.stack` without running the page's Error.prepareStackTrace.
+//
+// V8 formats a stack on its first read and calls the `prepareStackTrace` it
+// finds on the built-in Error function of the realm that created the error.
+// It doesn't use the `Error` global, so a replaced `window.Error` is ignored,
+// and the `Error` captured above is the function V8 looks at. The lookup is an
+// ordinary property read though, so the hook can also sit on Function.prototype,
+// Object.prototype or a Proxy the page put in Error's prototype chain. An own
+// property on Error stops the lookup before it gets there, so the hook is
+// shadowed for the read rather than removed.
+//
+// An error created in another realm (e.g. an iframe) would consult that
+// realm's Error instead. Errors reaching this script come from its own code
+// or from built-ins of its own window, so that isn't expected here.
+function defaultStack(err) {
+  const hook = ObjectGetOwnPropertyDescriptor(Error, "prepareStackTrace");
+  if (hook) {
+    // Keeps Object.prototype out of the descriptor when it is handed back.
+    ObjectSetPrototypeOf(hook, null);
+  }
+  try {
+    ObjectDefineProperty(Error, "prepareStackTrace", {
+      __proto__: null,
+      value: undefined,
+      configurable: true,
+    });
+  } catch {
+    // The page froze Error or made its hook non-configurable.
+    return undefined;
+  }
+  try {
+    // A stack the page has already read stays in whatever form its hook gave it.
+    const stack = err?.stack;
+    return typeof stack === "string" ? stack : undefined;
+  } finally {
+    if (hook) {
+      ObjectDefineProperty(Error, "prepareStackTrace", hook);
+    } else {
+      ReflectDeleteProperty(Error, "prepareStackTrace");
+    }
+  }
+}
+
+// `err.message` can be a getter the page installed on a prototype, and
+// string coercion runs its Error.prototype.toString. Only an own data
+// property or the built-in DOMException getter is read here.
+function errorMessage(err) {
+  if (typeof err === "string") return err;
+  if (typeof err !== "object" || err === null) return "<no message>";
+  const own = ObjectGetOwnPropertyDescriptor(err, "message");
+  if (own) {
+    ObjectSetPrototypeOf(own, null);
+    if (typeof own.value === "string") return own.value;
+  }
+  try {
+    return DOMExceptionPrototypeGetMessage(err);
+  } catch {
+    return "<no message>";
+  }
+}
 
 async function fetchText(url) {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Fetching ${url} failed with status code ${response.status} (${response.statusText})`);
+  const response = await withOwnConstructor(fetch(url));
+  if (!ResponsePrototypeGetOk(response)) {
+    throw new Error(`Fetching ${url} failed with status code ${ResponsePrototypeGetStatus(response)} (${ResponsePrototypeGetStatusText(response)})`);
   }
-  return await response.text();
+  return await withOwnConstructor(ResponsePrototypeText(response));
 }
 
 // Provide a cache for urls, salted with the supplied hash.  Practically, this
 // means if the script content changes at the url, we will re-download the resource.
-async function fetchTextWithCache(url, hash) {
+//
+// Not async on purpose: returning a promise from an async function calls its
+// `then`, looked up on Promise.prototype where the page can patch it.
+function fetchTextWithCache(url, hash) {
   const key = `${url}:${hash}`;
   if (fetchPromiseCache[key] && !RECORD_REPLAY_DISABLE_SOURCEMAP_CACHE) {
     // Return past or on-going work item.
@@ -49,7 +147,7 @@ async function fetchTextWithCache(url, hash) {
 
 addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   try {
-  if (!relativeSourceMapURL || relativeSourceMapURL.startsWith("data:"))
+  if (!relativeSourceMapURL || StringPrototypeStartsWith(relativeSourceMapURL, "data:"))
     return;
 
   const recordingId = getRecordingId();
@@ -63,7 +161,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     return;
 
   // Yield so full-source SHA256 runs after sync script registration, not under ProcessCompileEvent.
-  await Promise.resolve();
+  await nextMicrotask;
 
   const scriptSource = getScriptSource(scriptId);
   const generatedScriptHash = sha256DigestHex(scriptSource);
@@ -72,9 +170,9 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
 
   let sourceMap;
   try {
-    sourceMap = await fetchTextWithCache(sourceMapURL, generatedScriptHash);
+    sourceMap = await withOwnConstructor(fetchTextWithCache(sourceMapURL, generatedScriptHash));
   } catch (err) {
-    log(`[RuntimeError][sourcemaps] Failed to read sourcemap ${sourceMapURL}: ${err.message}`);
+    log(`[RuntimeError][sourcemaps] Failed to read sourcemap ${sourceMapURL}: ${errorMessage(err)}`);
   }
   if (!sourceMap) {
     // Download failed or nothing there.
@@ -88,9 +186,9 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   let sources;
   if (recordingDirectoryFileExists(name) && recordingDirectoryFileExists(lookupName)) {
     try {
-      sources = JSON.parse(readFromRecordingDirectory(lookupName));
+      sources = JSONParse(readFromRecordingDirectory(lookupName));
     } catch (err) {
-      log(`[RuntimeError][sourcemaps] Failed to load sourcemaps from file: ${lookupName} - ${err.message}`);
+      log(`[RuntimeError][sourcemaps] Failed to load sourcemaps from file: ${lookupName} - ${errorMessage(err)}`);
     }
   }
 
@@ -99,12 +197,13 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     writeToRecordingDirectory(name, sourceMap);
 
     sources = collectUnresolvedSourceMapResources(sourceMap, sourceMapURL);
-    writeToRecordingDirectory(lookupName, JSON.stringify(sources));
+    writeToRecordingDirectory(lookupName, stringifySources(sources));
   }
 
   log(`[sourcemaps] Wrote sourcemap to file. Found ${sources.length} unresolved sources for "${sourceMapURL}". Downloading...`);
 
-  addRecordingEvent(JSON.stringify({
+  addRecordingEvent(JSONStringify({
+    __proto__: null,
     kind: "sourcemapAdded",
     path: getRecordingFilePath(name),
     recordingId,
@@ -117,12 +216,13 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     timestamp: DateNow(),
   }));
 
-  for (const { offset, url } of sources) {
+  for (let i = 0; i < sources.length; i++) {
+    const { offset, url } = sources[i];
     let sourceContent;
     try {
-      sourceContent = await fetchTextWithCache(url, generatedScriptHash);
+      sourceContent = await withOwnConstructor(fetchTextWithCache(url, generatedScriptHash));
     } catch (err) {
-      log(`[RuntimeError][sourcemaps] Failed to read original source ${url}: ${err.message}`);
+      log(`[RuntimeError][sourcemaps] Failed to read original source ${url}: ${errorMessage(err)}`);
     }
     if (!sourceContent) {
       // Download failed or nothing there.
@@ -134,7 +234,8 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
     if (!recordingDirectoryFileExists(name)) {
       writeToRecordingDirectory(name, sourceContent);
     }
-    addRecordingEvent(JSON.stringify({
+    addRecordingEvent(JSONStringify({
+      __proto__: null,
       kind: "originalSourceAdded",
       path: getRecordingFilePath(name),
       recordingId,
@@ -145,9 +246,20 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   }
   log(`[sourcemaps] Finished downloading ${sources.length} sources for "${sourceMapURL}".`);
   } catch (err) {
-    warning(`[RuntimeError][sourcemaps] Exception - ${err?.stack || err}`);
+    warning(`[RuntimeError][sourcemaps] Exception - ${defaultStack(err) || errorMessage(err)}`);
   }
 });
+
+// JSON.stringify looks up `toJSON` on the objects and arrays it visits, which
+// the page can define on their prototypes.
+function stringifySources(sources) {
+  let json = "[";
+  for (let i = 0; i < sources.length; i++) {
+    const { offset, url } = sources[i];
+    json += (i ? "," : "") + JSONStringify({ __proto__: null, offset, url });
+  }
+  return json + "]";
+}
 
 function makeAPIHash(content) {
   assert(typeof content === "string");
@@ -164,45 +276,51 @@ function collectUnresolvedSourceMapResources(mapText, mapURL) {
   }
 
   try {
-    obj = JSON.parse(mapText);
+    obj = JSONParse(mapText);
     if (typeof obj !== "object" || !obj) {
       return [];
     }
   } catch (err) {
-    logError(`Exception parsing sourcemap JSON (${mapURL}): ${err?.message || err}`);
+    logError(`Exception parsing sourcemap JSON (${mapURL}): ${errorMessage(err)}`);
     return [];
   }
 
   const unresolvedSources = [];
-  if (obj.version !== 3) {
-    logError("Invalid sourcemap version: " + obj.version);
+  if (ownProperty(obj, "version") !== 3) {
+    logError("Invalid sourcemap version");
     return [];
   }
 
-  if (obj.sources != null) {
-    const { sourceRoot, sources, sourcesContent } = obj;
+  const sources = ownProperty(obj, "sources");
+  if (sources != null) {
+    const sourceRoot = ownProperty(obj, "sourceRoot");
+    const sourcesContent = ownProperty(obj, "sourcesContent");
 
-    if (Array.isArray(sources)) {
+    if (ArrayIsArray(sources)) {
       for (let i = 0; i < sources.length; i++) {
         const offset = sourceOffset++;
 
         if (
-          !Array.isArray(sourcesContent) ||
-          typeof sourcesContent[i] !== "string"
+          !ArrayIsArray(sourcesContent) ||
+          typeof ownProperty(sourcesContent, i) !== "string"
         ) {
           let url = sources[i];
+          if (typeof url !== "string") {
+            logError("Invalid sourcemap source entry");
+            continue;
+          }
           if (typeof sourceRoot === "string" && sourceRoot) {
-            url = sourceRoot.replace(/\/?/, "/") + url;
+            url = (sourceRoot[0] === "/" ? "" : "/") + sourceRoot + url;
           }
           let sourceURL;
           try {
-            sourceURL = new URL(url, mapURL).toString();
+            sourceURL = URLPrototypeToString(new URL(url, mapURL));
           } catch {
             logError("Unable to compute original source URL: " + url);
             continue;
           }
 
-          unresolvedSources.push({
+          ArrayPrototypePush(unresolvedSources, {
             offset,
             url: sourceURL,
           });
@@ -219,7 +337,7 @@ function collectUnresolvedSourceMapResources(mapText, mapURL) {
 function assert(v, msg = "") {
   if (!v) {
     const m = `Assertion failed when handling command (${msg})`;
-    log(`[RuntimeError] ${m} - ${Error().stack}`);
+    log(`[RuntimeError] ${m} - ${defaultStack(Error())}`);
     throw new Error(m);
   }
 }
@@ -234,9 +352,9 @@ function getSourceMapURLs(sourceURL, relativeSourceMapURL) {
 
   let sourceMapURL;
   try {
-    sourceMapURL = new URL(relativeSourceMapURL, sourceBaseURL).toString();
+    sourceMapURL = URLPrototypeToString(new URL(relativeSourceMapURL, sourceBaseURL));
   } catch (err) {
-    log("Failed to process sourcemap url: " + err.message);
+    log("Failed to process sourcemap url: " + errorMessage(err));
     return null;
   }
 
