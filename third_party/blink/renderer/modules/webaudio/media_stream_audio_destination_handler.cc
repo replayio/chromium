@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/modules/webaudio/media_stream_audio_destination_handler.h"
 
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "third_party/blink/public/platform/modules/webrtc/webrtc_logging.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_node_input.h"
@@ -56,6 +57,13 @@ MediaStreamAudioDestinationHandler::~MediaStreamAudioDestinationHandler() {
 void MediaStreamAudioDestinationHandler::Process(uint32_t number_of_frames) {
   TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("webaudio.audionode"),
                "MediaStreamAudioDestinationHandler::Process");
+
+  // StubPolicy + ResidualAT: no MSDest fan-out under ProperFakeAudio.
+  if (recordreplay::IsRecordingOrReplaying()) {
+    recordreplay::AutoDisallowEvents disallow(
+        "MediaStreamAudioDestinationHandler::Process ResidualAT");
+    return;
+  }
 
   // Conform the input bus into the internal mix bus, which represents
   // MediaStreamDestination's channel count.
