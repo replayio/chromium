@@ -248,7 +248,14 @@ function plainRect(rect) {
 }
 
 // Index loop over a DOM collection through its stored length and item.
+//
+// Blink doesn't create new API objects for replay code that hasn't diverged
+// (RUN-1764), so getters like attributes and childNodes return null there and
+// item() can too. A missing collection is treated as empty.
 function forEachItem(collection, getLength, item, fn) {
+  if (collection == null) {
+    return;
+  }
   const length = getLength(collection);
   for (let i = 0; i < length; i++) {
     fn(item(collection, i));
@@ -1823,7 +1830,9 @@ function previewBlinkNode(node) {
   if (fromJsIsBlinkElementObject(node)) {
     attributes = [];
     forEachItem(ElementPrototypeGetAttributes(node), NamedNodeMapPrototypeGetLength, NamedNodeMapPrototypeItem, attr => {
-      ArrayPrototypePush(attributes, { name: AttrPrototypeGetName(attr), value: AttrPrototypeGetValue(attr) });
+      if (attr) {
+        ArrayPrototypePush(attributes, { name: AttrPrototypeGetName(attr), value: AttrPrototypeGetValue(attr) });
+      }
     });
     // TODO: We cannot access pseudo elements using the JS DOM API - https://linear.app/replay/issue/RUN-953/
     // pseudoType = node.localName;
@@ -1889,7 +1898,7 @@ function previewBlinkNode(node) {
   if (contentDocument) {
     // Treat an iframe's content document as one of its child nodes.
     childNodes = [registerPlainObject(contentDocument)];
-  } else if (NodeListPrototypeGetLength(rawChildNodes)) {
+  } else if (rawChildNodes && NodeListPrototypeGetLength(rawChildNodes)) {
     childNodes = [];
     forEachItem(rawChildNodes, NodeListPrototypeGetLength, NodeListPrototypeItem, (n) => {
       ArrayPrototypePush(childNodes, registerPlainObject(n));
