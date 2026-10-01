@@ -225,6 +225,24 @@ function inlineStyleOf(node) {
   }
 }
 
+// An element can be named IFRAME without being an HTMLIFrameElement, in which
+// case the stored getters reject it.
+function iframeContentDocument(node) {
+  try {
+    return HTMLIFrameElementPrototypeGetContentDocument(node);
+  } catch {
+    return undefined;
+  }
+}
+
+function iframeContentWindow(node) {
+  try {
+    return HTMLIFrameElementPrototypeGetContentWindow(node);
+  } catch {
+    return undefined;
+  }
+}
+
 // Element and Document each have their own children getter.
 function childrenOf(node) {
   try {
@@ -1865,7 +1883,7 @@ function previewBlinkNode(node) {
     const iframes = DocumentPrototypeGetElementsByTagName(parentDocument, "iframe");
     let iframe;
     forEachItem(iframes, HTMLCollectionPrototypeGetLength, HTMLCollectionPrototypeItem, f => {
-      if (!iframe && HTMLIFrameElementPrototypeGetContentDocument(f) == node) {
+      if (!iframe && iframeContentDocument(f) == node) {
         iframe = f;
       }
     });
@@ -1893,7 +1911,7 @@ function previewBlinkNode(node) {
   
 
   let childNodes;
-  const contentDocument = nodeName == "IFRAME" ? HTMLIFrameElementPrototypeGetContentDocument(node) : undefined;
+  const contentDocument = nodeName == "IFRAME" ? iframeContentDocument(node) : undefined;
   const rawChildNodes = NodePrototypeGetChildNodes(node);
   if (contentDocument) {
     // Treat an iframe's content document as one of its child nodes.
@@ -2632,7 +2650,7 @@ function DOM_getEventListeners({ node }) {
 
   const listenerInfos = fromJsCollectEventListeners(nodeObject);
 
-  if (NodePrototypeGetNodeName(nodeObject) == "HTML") {
+  if (fromJsIsBlinkNodeObject(nodeObject) && NodePrototypeGetNodeName(nodeObject) == "HTML") {
     // Add event listeners for the document and window as well.
     pushAll(listenerInfos, fromJsCollectEventListeners(NodePrototypeGetParentNode(nodeObject)));   // document
     // pushAll(listenerInfos, fromJsCollectEventListeners(nodeObject.ownerGlobal));  // window
@@ -3233,7 +3251,7 @@ StackingContext.prototype = {
     }
 
     // Create a new stacking context for any iframes.
-    const contentWindow = ElementPrototypeGetTagName(cx.raw) == "IFRAME" ? HTMLIFrameElementPrototypeGetContentWindow(cx.raw) : undefined;
+    const contentWindow = ElementPrototypeGetTagName(cx.raw) == "IFRAME" ? iframeContentWindow(cx.raw) : undefined;
     const contentDocument = contentWindow ? WindowGetDocument(contentWindow) : undefined;
     if (contentDocument) {
       let { left, top } = plainRect(ElementPrototypeGetBoundingClientRect(cx.raw));
