@@ -197,6 +197,11 @@ void RealtimeAudioDestinationHandler::Render(
   if (recordreplay::IsRecordingOrReplaying()) {
     destination_bus->Zero();
     AdvanceCurrentSampleFrame(number_of_frames);
+    // QuantumEdge: enqueue MainThreadTask; do not evaluate due on AT.
+    // Skip when execution context already destroyed (closing tear-down race).
+    if (!IsExecutionContextDestroyed()) {
+      context->EnqueueQuantumEdge();
+    }
     return;
   }
 

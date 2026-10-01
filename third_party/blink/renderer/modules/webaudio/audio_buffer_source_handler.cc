@@ -9,6 +9,7 @@
 #include "base/numerics/safe_conversions.h"
 #include "base/record_replay.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_audio_buffer_source_options.h"
+#include "third_party/blink/renderer/modules/webaudio/audio_context.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_graph_tracer.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_node_output.h"
 #include "third_party/blink/renderer/modules/webaudio/base_audio_context.h"
@@ -452,6 +453,11 @@ void AudioBufferSourceHandler::SetBuffer(AudioBuffer* buffer,
   }
 
   virtual_read_index_ = 0;
+
+  // start()-before-setBuffer: register natural end once buffer exists.
+  if (buffer && IsPlayingOrScheduled()) {
+    RegisterNaturalEndBoundIfAny();
+  }
 }
 
 unsigned AudioBufferSourceHandler::NumberOfChannels() {
@@ -574,6 +580,8 @@ void AudioBufferSourceHandler::StartSource(double when,
   }
 
   SetPlaybackState(SCHEDULED_STATE);
+  RegisterSourceScheduleStart();
+  RegisterNaturalEndBoundIfAny();
 }
 
 void AudioBufferSourceHandler::SetLoop(bool looping) {
@@ -738,6 +746,29 @@ void AudioBufferSourceHandler::HandleStoppableSourceNode() {
       Finish();
     }
   }
+}
+
+void AudioBufferSourceHandler::RegisterNaturalEndBoundIfAny() {
+  AudioScheduledSourceHandler::RegisterNaturalEndBoundIfAny();
+  if (end_time_ != kUnknownTime) {
+    return;
+  }
+  if (DidSetLooping() || !Buffer()) {
+    return;
+  }
+  if (!recordreplay::IsRecordingOrReplaying() ||
+      !Context()->HasRealtimeConstraint()) {
+    return;
+  }
+  // Silence-path estimate at rate 1; SoleTickSource FakeAudioClock is sole time.
+  double stop_time =
+      start_time_ + Buffer()->duration() +
+      kExtraStopFrames / static_cast<double>(Context()->sampleRate());
+  size_t stop_bound = audio_utilities::TimeToSampleFrame(
+      stop_time, Context()->sampleRate(), audio_utilities::kRoundUp);
+  static_cast<AudioContext*>(Context())
+      ->GetSourceScheduleTable()
+      .InsertOrSupersedeStop(this, stop_bound);
 }
 
 }  // namespace blink

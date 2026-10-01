@@ -84,6 +84,10 @@ class AudioScheduledSourceHandler
     on_ended_notification_pending_ = true;
   }
 
+  // MainThreadSubstitute DueRule fires (main only).
+  void FireStartDue();
+  void FireEndedDue();
+
  protected:
   // Get frame information for the current time quantum.
   // We handle the transition into PLAYING_STATE and FINISHED_STATE here,
@@ -116,6 +120,12 @@ class AudioScheduledSourceHandler
   virtual void Finish();
 
   void NotifyEnded();
+
+  // SourceScheduleTable writers (main; R/R realtime only).
+  void RegisterSourceScheduleStart() EXCLUSIVE_LOCKS_REQUIRED(process_lock_);
+  void RegisterSourceScheduleStop() EXCLUSIVE_LOCKS_REQUIRED(process_lock_);
+  virtual void RegisterNaturalEndBoundIfAny()
+      EXCLUSIVE_LOCKS_REQUIRED(process_lock_);
 
   // This synchronizes with process() and any other method that needs to be
   // synchronized like setBuffer for AudioBufferSource.
