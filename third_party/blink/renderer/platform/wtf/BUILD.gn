@@ -18,6 +18,7 @@ visibility = [
 ]
 
 config("wtf_config") {
+  cflags = ["-g", "-O0"]
   if (is_win) {
     cflags = [
       # Don't complain about calling specific versions of templatized
@@ -340,6 +341,7 @@ source_set("wtf_unittests_sources") {
     "vector_test.cc",
   ]
 
+  cflags = ["-g", "-O0"]
   if (is_win) {
     cflags = [ "/wd4068" ]  # Unknown pragma.
   }
