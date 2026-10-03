@@ -91,9 +91,8 @@ static void LoadRecordReplayMaxOldSpaceMb(void* handle) {
 #else
   void* sym = dlsym(handle, "RecordReplayMaxOldSpaceMb");
 #endif
-  if (sym) {
-    recordreplay::SetMaxOldSpaceMb(reinterpret_cast<size_t (*)()>(sym)());
-  }
+  CHECK(sym);
+  recordreplay::SetMaxOldSpaceMb(reinterpret_cast<size_t (*)()>(sym)());
 }
 
 #if BUILDFLAG(IS_WIN)
