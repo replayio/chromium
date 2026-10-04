@@ -238,6 +238,7 @@ AudioNode* AudioNode::connect(AudioNode* destination,
         MakeGarbageCollected<HeapHashSet<Member<AudioNode>>>();
   }
   connected_nodes_[output_index]->insert(destination);
+  UpdateKeptAliveWhileConnected();
 
   Handler().UpdatePullStatusIfNeeded();
 
@@ -283,6 +284,7 @@ void AudioNode::connect(AudioParam* param,
         MakeGarbageCollected<HeapHashSet<Member<AudioParam>>>();
   }
   connected_params_[output_index]->insert(param);
+  UpdateKeptAliveWhileConnected();
 
   Handler().UpdatePullStatusIfNeeded();
 
@@ -293,6 +295,7 @@ void AudioNode::DisconnectAllFromOutput(unsigned output_index) {
   Handler().Output(output_index).DisconnectAll();
   connected_nodes_[output_index] = nullptr;
   connected_params_[output_index] = nullptr;
+  UpdateKeptAliveWhileConnected();
 }
 
 bool AudioNode::DisconnectFromOutputIfConnected(
@@ -307,6 +310,7 @@ bool AudioNode::DisconnectFromOutputIfConnected(
   }
   AudioNodeWiring::Disconnect(output, input);
   connected_nodes_[output_index]->erase(&destination);
+  UpdateKeptAliveWhileConnected();
   return true;
 }
 
@@ -318,7 +322,23 @@ bool AudioNode::DisconnectFromOutputIfConnected(unsigned output_index,
   }
   AudioNodeWiring::Disconnect(output, param.Handler());
   connected_params_[output_index]->erase(&param);
+  UpdateKeptAliveWhileConnected();
   return true;
+}
+
+void AudioNode::UpdateKeptAliveWhileConnected() {
+  if (!recordreplay::IsRecordingOrReplaying("leak-references",
+                                            "AudioNode::connect")) {
+    return;
+  }
+  bool connected = false;
+  for (const auto& nodes : connected_nodes_) {
+    connected |= nodes && !nodes->empty();
+  }
+  for (const auto& params : connected_params_) {
+    connected |= params && !params->empty();
+  }
+  context()->SetKeptAliveWhileConnected(this, connected);
 }
 
 void AudioNode::disconnect() {

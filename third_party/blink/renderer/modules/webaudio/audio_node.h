@@ -131,6 +131,8 @@ class MODULES_EXPORT AudioNode : public EventTargetWithInlineData,
                                        unsigned input_index_of_destination);
   // Returns true if the specified AudioParam was connected.
   bool DisconnectFromOutputIfConnected(unsigned output_index, AudioParam&);
+  // Updates whether the context keeps this node alive for its connections.
+  void UpdateKeptAliveWhileConnected();
 
   void SendLogMessage(const String& message);
 
