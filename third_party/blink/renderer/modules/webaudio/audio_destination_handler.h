@@ -36,9 +36,9 @@ class AudioDestinationHandler : public AudioHandler {
   // restart of the context.
   virtual void RestartRendering() = 0;
 
-  size_t CurrentSampleFrame() const {
-    return current_sample_frame_.load(std::memory_order_acquire);
-  }
+  // The audio thread advances the frame while the main thread reads it, so
+  // reads on the main thread are recorded.
+  size_t CurrentSampleFrame() const;
 
   double CurrentTime() const { return CurrentSampleFrame() / SampleRate(); }
 
