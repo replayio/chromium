@@ -178,7 +178,7 @@ class MediaStreamAudioDeliverer {
   THREAD_CHECKER(thread_checker_);
 
   // Protects concurrent access to |pending_consumers_| and |consumers_|.
-  mutable base::Lock consumers_lock_;
+  mutable base::Lock consumers_lock_{"MediaStreamAudioDeliverer.consumers"};
 
   // Any consumers needing a call to OnSetFormat(), to be notified of the
   // changed audio format, are placed in this list. This includes consumers
@@ -192,7 +192,7 @@ class MediaStreamAudioDeliverer {
   Vector<Consumer*> consumers_;
 
   // Protects concurrent access to |params_|.
-  mutable base::Lock params_lock_;
+  mutable base::Lock params_lock_{"MediaStreamAudioDeliverer.params"};
 
   // Specifies the current format of the audio passing through this
   // MediaStreamAudioDeliverer.
