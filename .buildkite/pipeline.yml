@@ -70,6 +70,10 @@ steps:
       - "queue=runtime"
     artifact_paths:
       - "build_id/linux/x86_64/**"
+      # Preserve compiler-wrapper and reproxy diagnostics when the build fails
+      # before producing a build artifact.
+      - "out/Release/.reproxy_tmp/logs/**/*"
+      - "out/Release/.ninja_log"
 
   - label: "📝 E2E Tests (linux-x86_64)"
     trigger: "runtime-fe-end-to-end-tests"
