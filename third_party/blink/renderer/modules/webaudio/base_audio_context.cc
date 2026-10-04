@@ -843,6 +843,15 @@ void BaseAudioContext::StartRendering() {
   }
 }
 
+void BaseAudioContext::RecordReplaySetConnectedNode(AudioNode* node,
+                                                    bool connected) {
+  if (connected) {
+    replay_strong_connected_nodes_.insert(node);
+  } else {
+    replay_strong_connected_nodes_.erase(node);
+  }
+}
+
 void BaseAudioContext::Trace(Visitor* visitor) const {
   visitor->Trace(destination_node_);
   visitor->Trace(listener_);
@@ -853,6 +862,7 @@ void BaseAudioContext::Trace(Visitor* visitor) const {
   visitor->Trace(periodic_wave_sawtooth_);
   visitor->Trace(periodic_wave_triangle_);
   visitor->Trace(audio_worklet_);
+  visitor->Trace(replay_strong_connected_nodes_);
   InspectorHelperMixin::Trace(visitor);
   EventTargetWithInlineData::Trace(visitor);
   ExecutionContextLifecycleStateObserver::Trace(visitor);
