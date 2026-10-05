@@ -673,6 +673,13 @@ void BaseAudioContext::SetContextState(AudioContextState new_state) {
 
   if (new_state == kClosed) {
     GetDeferredTaskHandler().StopAcceptingTailProcessing();
+    // Nothing renders a closed context, so what was kept alive only for its
+    // rendering while recording or replaying can go.
+    if (recordreplay::IsRecordingOrReplaying()) {
+      replay_strong_connected_nodes_.clear();
+      GraphAutoLocker locker(this);
+      GetDeferredTaskHandler().RecordReplayReleaseDisposedHandlers();
+    }
   }
 
   // Notify context that state changed
@@ -845,10 +852,17 @@ void BaseAudioContext::StartRendering() {
 
 void BaseAudioContext::RecordReplaySetConnectedNode(AudioNode* node,
                                                     bool connected) {
-  if (connected) {
+  if (connected && context_state_ != kClosed) {
     replay_strong_connected_nodes_.insert(node);
   } else {
     replay_strong_connected_nodes_.erase(node);
+  }
+}
+
+void BaseAudioContext::RecordReplayKeepDisposedHandler(
+    scoped_refptr<AudioHandler> handler) {
+  if (context_state_ != kClosed) {
+    GetDeferredTaskHandler().RecordReplayKeepDisposedHandler(std::move(handler));
   }
 }
 

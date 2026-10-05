@@ -95,11 +95,9 @@ void AudioNode::Dispose() {
                                            "AudioNode::Dispose")) {
     // Skip the GC-controlled orphan-handler mutation read by the audio thread.
     // The audio thread can still render from the handler until it sees the
-    // node disconnected, so the handler is leaked instead of being freed with
-    // the node.
-    DEFINE_STATIC_LOCAL(Vector<scoped_refptr<AudioHandler>>,
-                        handlers_disposed_by_gc, ());
-    handlers_disposed_by_gc.push_back(std::move(handler_));
+    // node disconnected, so the context keeps the handler instead of it being
+    // freed with the node.
+    context()->RecordReplayKeepDisposedHandler(std::move(handler_));
   } else if (context()->IsPullingAudioGraph() ||
              context()->ContextState() == BaseAudioContext::kSuspended) {
     context()->GetDeferredTaskHandler().AddRenderingOrphanHandler(
