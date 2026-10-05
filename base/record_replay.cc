@@ -624,6 +624,16 @@ bool AreEventsUnavailable(const char* why) {
   return AreEventsDisallowed(why) || HasDivergedFromRecording();
 }
 
+static size_t gMaxOldSpaceMb;
+
+void SetMaxOldSpaceMb(size_t mb) {
+  gMaxOldSpaceMb = mb;
+}
+
+size_t MaxOldSpaceMb() {
+  return gMaxOldSpaceMb;
+}
+
 AutoMarkReplayCode::AutoMarkReplayCode() {
   V8RecordReplayEnterReplayCode();
 }

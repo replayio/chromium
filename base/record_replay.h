@@ -150,6 +150,12 @@ bool IsInReplayCode(const char* why = nullptr);
 // read/write the recording stream.
 bool AreEventsUnavailable(const char* why = nullptr);
 
+// Set/get the V8 old space size limit in MB requested by the driver via
+// REPLAY_RECORD_MAX_OLD_SPACE_MB / REPLAY_REPLAY_MAX_OLD_SPACE_MB, or 0 if
+// V8's default limit should be used.
+void SetMaxOldSpaceMb(size_t mb);
+size_t MaxOldSpaceMb();
+
 
 // Mark a region where record/replay specific scripts are executing.
 struct AutoMarkReplayCode {

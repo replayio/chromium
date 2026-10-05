@@ -83,6 +83,18 @@ namespace recordreplay { extern void InitBindings(); }
 #include "base/power_monitor/power_monitor.h"
 #include "base/record_replay.h"
 
+// Read the old space size limit the driver wants V8 to use. This is applied
+// via --js-flags in renderers, see blink_initializer.cc.
+static void LoadRecordReplayMaxOldSpaceMb(void* handle) {
+#if BUILDFLAG(IS_WIN)
+  void* sym = (void*)GetProcAddress((HMODULE)handle, "RecordReplayMaxOldSpaceMb");
+#else
+  void* sym = dlsym(handle, "RecordReplayMaxOldSpaceMb");
+#endif
+  CHECK(sym);
+  recordreplay::SetMaxOldSpaceMb(reinterpret_cast<size_t (*)()>(sym)());
+}
+
 #if BUILDFLAG(IS_WIN)
 DLLEXPORT int __cdecl ChromeMain(HINSTANCE instance,
                                  sandbox::SandboxInterfaceInfo* sandbox_info,
@@ -100,6 +112,7 @@ int ChromeMain(int argc, const char** argv) {
   void* handle = RecordReplayAttach(&argc, &argv);
   if (handle) {
     V8SetRecordingOrReplaying(handle);
+    LoadRecordReplayMaxOldSpaceMb(handle);
   } else {
     V8InitializeNotRecordingOrReplaying();
   }
@@ -112,6 +125,7 @@ int ChromeMain(int argc, const char** argv) {
   void* sym = dlsym(nullptr, "RecordReplayAttach");
   if (sym) {
     V8SetRecordingOrReplaying(nullptr);
+    LoadRecordReplayMaxOldSpaceMb(nullptr);
   }
 #elif BUILDFLAG(IS_WIN)
   // On windows the main function is in a different binary in chrome_exe_main_win.cc.
@@ -122,6 +136,7 @@ int ChromeMain(int argc, const char** argv) {
     HMODULE module = GetModuleHandleA("windows-recordreplay.dll");
     CHECK(module);
     V8SetRecordingOrReplaying((void*)module);
+    LoadRecordReplayMaxOldSpaceMb((void*)module);
     recordreplay::InitBindings();
   }
   // Fix warning.
