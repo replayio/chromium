@@ -52,11 +52,14 @@ bool HasConstantValues(float* values, int frames_to_process) {
 }  // namespace
 
 void BiquadDSPKernel::UpdateCoefficientsIfNecessary(int frames_to_process) {
+  // The processor only assigns its audio-rate flag along with sample-accurate
+  // values, so read it the way the code below does.
   REPLAY_ASSERT(
       "BiquadDSPKernel::UpdateCoefficientsIfNecessary %d %d %d",
       GetBiquadProcessor()->FilterCoefficientsDirty(),
       GetBiquadProcessor()->HasSampleAccurateValues(),
-      GetBiquadProcessor()->IsAudioRate());
+      GetBiquadProcessor()->HasSampleAccurateValues() &&
+          GetBiquadProcessor()->IsAudioRate());
   if (GetBiquadProcessor()->FilterCoefficientsDirty()) {
     float cutoff_frequency[RenderQuantumFrames()];
     float q[RenderQuantumFrames()];
