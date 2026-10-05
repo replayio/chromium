@@ -25,6 +25,7 @@
 
 #include "third_party/blink/renderer/modules/webaudio/analyser_node.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_analyser_options.h"
 #include "third_party/blink/renderer/modules/webaudio/analyser_handler.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_graph_tracer.h"
@@ -117,22 +118,37 @@ double AnalyserNode::smoothingTimeConstant() const {
   return GetAnalyserHandler().SmoothingTimeConstant();
 }
 
+namespace {
+
+// The render thread writes the analysed input while the main thread reads it,
+// so the data script receives is recorded.
+void RecordReplayData(const char* why, DOMArrayBufferView* array) {
+  recordreplay::RecordReplayBytes(why, array->BaseAddressMaybeShared(),
+                                  array->byteLength());
+}
+
+}  // namespace
+
 void AnalyserNode::getFloatFrequencyData(NotShared<DOMFloat32Array> array) {
   GetAnalyserHandler().GetFloatFrequencyData(array.Get(),
                                              context()->currentTime());
+  RecordReplayData("AnalyserNode::getFloatFrequencyData", array.Get());
 }
 
 void AnalyserNode::getByteFrequencyData(NotShared<DOMUint8Array> array) {
   GetAnalyserHandler().GetByteFrequencyData(array.Get(),
                                             context()->currentTime());
+  RecordReplayData("AnalyserNode::getByteFrequencyData", array.Get());
 }
 
 void AnalyserNode::getFloatTimeDomainData(NotShared<DOMFloat32Array> array) {
   GetAnalyserHandler().GetFloatTimeDomainData(array.Get());
+  RecordReplayData("AnalyserNode::getFloatTimeDomainData", array.Get());
 }
 
 void AnalyserNode::getByteTimeDomainData(NotShared<DOMUint8Array> array) {
   GetAnalyserHandler().GetByteTimeDomainData(array.Get());
+  RecordReplayData("AnalyserNode::getByteTimeDomainData", array.Get());
 }
 
 void AnalyserNode::ReportDidCreate() {
