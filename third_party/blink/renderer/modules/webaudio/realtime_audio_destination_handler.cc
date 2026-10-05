@@ -199,10 +199,12 @@ void RealtimeAudioDestinationHandler::Render(
   // Only pull on the audio graph if we have not stopped the destination.  It
   // takes time for the destination to stop, but we want to stop pulling before
   // the destination has actually stopped.
-  recordreplay::Assert(
-      "RealtimeAudioDestinationHandler::Render allow_pulling_audio_graph %d",
+  // The main thread allows or stops pulling while the audio thread renders, so
+  // which render quantum sees the change is recorded.
+  bool allow_pulling_audio_graph = recordreplay::RecordReplayValue(
+      "RealtimeAudioDestinationHandler::Render allow_pulling_audio_graph",
       IsPullingAudioGraphAllowed());
-  if (IsPullingAudioGraphAllowed()) {
+  if (allow_pulling_audio_graph) {
     // Renders the graph by pulling all the inputs to this node. This will in
     // turn pull on their inputs, all the way backwards through the graph.
     scoped_refptr<AudioBus> rendered_bus =
