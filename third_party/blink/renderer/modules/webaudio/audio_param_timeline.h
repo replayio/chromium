@@ -484,7 +484,7 @@ class AudioParamTimeline {
   // with `events_`.
   HashSet<ParamEvent*> new_events_ GUARDED_BY(events_lock_);
 
-  mutable base::Lock events_lock_;
+  mutable base::Lock events_lock_{"AudioParamTimeline"};
 
   // Smoothing (de-zippering)
   float smoothed_value_;
