@@ -114,6 +114,11 @@ class MODULES_EXPORT DeferredTaskHandler final
   void RequestToDeleteHandlersOnMainThread();
   void ClearHandlersToBeDeleted();
 
+  // Keeps the handler of a node the GC disposed while recording or replaying,
+  // until the context stops rendering. Both require the graph lock.
+  void RecordReplayKeepDisposedHandler(scoped_refptr<AudioHandler>);
+  void RecordReplayReleaseDisposedHandlers();
+
   // Clear the context from the rendering and deletable orphan handlers.
   void ClearContextFromOrphanHandlers();
 
@@ -250,6 +255,7 @@ class MODULES_EXPORT DeferredTaskHandler final
 
   Vector<scoped_refptr<AudioHandler>> rendering_orphan_handlers_;
   Vector<scoped_refptr<AudioHandler>> deletable_orphan_handlers_;
+  Vector<scoped_refptr<AudioHandler>> replay_strong_disposed_handlers_;
 
   // Nodes that are processing its tail.
   Vector<scoped_refptr<AudioHandler>> tail_processing_handlers_;
