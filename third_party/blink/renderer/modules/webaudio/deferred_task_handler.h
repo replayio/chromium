@@ -29,7 +29,9 @@
 #include <atomic>
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
+#include "base/thread_annotations.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
 #include "third_party/blink/renderer/platform/wtf/thread_safe_ref_counted.h"
@@ -82,6 +84,44 @@ class MODULES_EXPORT DeferredTaskHandler final
 
   // Return true if there is one or more nodes in the automatic pull node list.
   bool HasAutomaticPullNodes();
+
+  // While recording or replaying, timeline access is ordered once per render
+  // instead of on every access: a render holds this lock while it runs, the
+  // main thread takes it to change a timeline, and a render that couldn't take
+  // it treats every timeline as locked.
+  class RecordReplayRenderTimelinesLocker {
+   public:
+    explicit RecordReplayRenderTimelinesLocker(DeferredTaskHandler& handler)
+        NO_THREAD_SAFETY_ANALYSIS : handler_(handler) {
+      if (recordreplay::IsRecordingOrReplaying()) {
+        acquired_ = handler.record_replay_timelines_lock_.Try();
+        handler.record_replay_render_holds_timelines_ = acquired_;
+      }
+    }
+    ~RecordReplayRenderTimelinesLocker() NO_THREAD_SAFETY_ANALYSIS {
+      if (acquired_) {
+        handler_.record_replay_timelines_lock_.Release();
+      }
+      handler_.record_replay_render_holds_timelines_ = true;
+    }
+
+   private:
+    DeferredTaskHandler& handler_;
+    bool acquired_ = false;
+  };
+  class RecordReplayMainThreadTimelinesLocker {
+   public:
+    explicit RecordReplayMainThreadTimelinesLocker(DeferredTaskHandler& handler)
+        : locker_(recordreplay::IsRecordingOrReplaying()
+                      ? &handler.record_replay_timelines_lock_
+                      : nullptr) {}
+
+   private:
+    base::AutoLockMaybe locker_;
+  };
+  bool RecordReplayRenderHoldsTimelines() const {
+    return record_replay_render_holds_timelines_;
+  }
 
   // Called right before handlePostRenderTasks() to handle nodes which need to
   // be pulled even when they are not connected to anything.
@@ -293,6 +333,10 @@ class MODULES_EXPORT DeferredTaskHandler final
   // Protects `rendering_automatic_pull_handlers_` when updating, processing,
   // and clearing. (See crbug.com/1061018)
   mutable base::Lock automatic_pull_handlers_lock_;
+
+  base::Lock record_replay_timelines_lock_{"DeferredTaskHandler.timelines"};
+  // Only accessed on the audio thread.
+  bool record_replay_render_holds_timelines_ = true;
 
   std::atomic<base::PlatformThreadId> audio_thread_;
 };
