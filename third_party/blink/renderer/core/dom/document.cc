@@ -2859,10 +2859,7 @@ void Document::Shutdown() {
 
   // Replay: seal the last live root document state. Precedes the scopers
   // below, since command handling at the checkpoint can run script.
-  if (GetFrame() && !IsInitialEmptyDocument() &&
-      recordreplay::IsRecordingOrReplaying("Document::Shutdown")) {
-    RecordReplayBeforeDocumentShutdown(GetFrame());
-  }
+  RecordReplayBeforeDocumentShutdown(*this);
 
   // An active Document must have an associated window.
   CHECK(dom_window_);

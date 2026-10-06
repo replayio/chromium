@@ -27,6 +27,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_element.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_node.h"
 #include "third_party/blink/renderer/core/css/css_style_declaration.h"
+#include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/dom_node_ids.h"
 #include "third_party/blink/renderer/core/dom/events/custom_event.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
@@ -40,11 +41,13 @@
 #include "third_party/blink/renderer/core/inspector/inspector_resource_content_loader.h"
 #include "third_party/blink/renderer/core/inspector/main_thread_debugger.h"
 #include "third_party/blink/renderer/core/inspector/resolve_node.h"
+#include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
 #include "third_party/blink/renderer/platform/bindings/v8_dom_wrapper.h"
 #include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
 #include "third_party/blink/renderer/platform/fonts/font_cache.h"
+#include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 #include "third_party/inspector_protocol/crdtp/maybe.h"
 #include "v8/include/v8-inspector.h"
 
@@ -719,22 +722,43 @@ RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
 // were run in is alive.
 static bool gReplayScriptsAlive = false;
 
-// Whether the root document was shut down during the current alive period.
-static bool gReplayRootDocumentShutDown = false;
+bool RecordReplayIsReplayWindow(LocalFrame* frame) {
+  if (!recordreplay::IsRecordingOrReplaying("commands") || !frame ||
+      !frame->DomWindow()) {
+    return false;
+  }
+  const SecurityOrigin* origin = frame->DomWindow()->GetSecurityOrigin();
+  // IsOrdinary() excludes internal pages like the in-process <select> popup.
+  return origin && !origin->Host().empty() && frame->GetPage() &&
+         frame->GetPage()->IsOrdinary();
+}
 
-void RecordReplayBeforeDocumentShutdown(LocalFrame* frame) {
-  CHECK(v8::IsMainThread());
-  if (!gReplayScriptsAlive || frame != gRootLocalFrame ||
-      gReplayRootDocumentShutDown) {
+bool RecordReplayIsRootFrame(LocalFrame* frame) {
+  return RecordReplayIsReplayWindow(frame) && frame->IsLocalRoot();
+}
+
+// Whether `frame` is the root frame our replay scripts are alive in.
+static bool IsAliveRootFrame(LocalFrame* frame) {
+  return gReplayScriptsAlive && frame == gRootLocalFrame &&
+         RecordReplayIsRootFrame(frame);
+}
+
+void RecordReplayBeforeDocumentShutdown(Document& document) {
+  LocalFrame* frame = document.GetFrame();
+  if (!IsAliveRootFrame(frame)) {
     return;
   }
-  gReplayRootDocumentShutDown = true;
+  CHECK(v8::IsMainThread());
   recordreplay::Print("ReplayScript BeforeDocumentShutdown frame=%d",
                       frame->RecordReplayId());
   // Last live document state; must precede SetScriptAlive(false) so the gate
   // allows it.
   recordreplay::NewCheckpointFlushed();
-  recordreplay::SetScriptAlive(false);
+  // Skip initial empty documents: their window can be reused without
+  // ClearContexts or a new ALIVE, so nothing would undo the mute.
+  if (!document.IsInitialEmptyDocument()) {
+    recordreplay::SetScriptAlive(false);
+  }
 }
 
 /**
@@ -742,7 +766,7 @@ void RecordReplayBeforeDocumentShutdown(LocalFrame* frame) {
  */
 void RecordReplayClearContexts(const char* reason, LocalFrame* frame) {
   CHECK(v8::IsMainThread());
-  if (!gReplayScriptsAlive || frame != gRootLocalFrame) {
+  if (!IsAliveRootFrame(frame)) {
     return;
   }
   v8::Isolate* isolate = V8PerIsolateData::MainThreadIsolate();
@@ -2846,7 +2870,6 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
 
   // 2. Initialize sourcemap worker, command handlers etc.
   gReplayScriptsAlive = true;
-  gReplayRootDocumentShutDown = false;
   recordreplay::SetScriptAlive(true);
   recordreplay::Print("ReplayScript STATUS_CHANGE_ALIVE %s group=%d win=%d frame=%d",
       v8::internal::RecordReplayContextAddressToken(
