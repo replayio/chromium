@@ -21,6 +21,15 @@ void InitializeRecordReplay(
 // Do any remaining initialization after the first checkpoint is created.
 void InitializeRecordReplayAfterCheckpoint();
 
+// Whether `frame`'s window can run replay scripts: recording/replaying, an
+//   ordinary page, and an origin with a host. Callers also require the main
+//   world.
+bool RecordReplayIsReplayWindow(LocalFrame* frame);
+
+// Whether `frame` is a root frame our replay scripts run in. Gates
+//   OnRootFrameInit; the root is then tracked until ClearContexts.
+bool RecordReplayIsRootFrame(LocalFrame* frame);
+
 // Initialize everything that needs to be initialized with every root frame,
 // before the first Checkpoint.
 void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context);
@@ -48,6 +57,11 @@ void RecordReplayOnErrorEvent(ErrorEvent* error_event);
 //   until a new page is spawned.
 // Note: JS can still execute, even after this happened.
 void RecordReplayClearContexts(const char* reason, LocalFrame* frame);
+
+// Called at the start of Document::Shutdown(): after unload and child detach,
+//   before teardown. For the alive root frame, takes the last checkpoint and
+//   marks scripts unalive.
+void RecordReplayBeforeDocumentShutdown(Document& document);
 
 // Notify record/replay about new inspectors that have been created.
 void RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,

@@ -71,6 +71,7 @@
 #include "third_party/blink/public/platform/web_theme_engine.h"
 #include "third_party/blink/public/web/web_print_page_description.h"
 #include "third_party/blink/renderer/bindings/core/v8/isolated_world_csp.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_controller.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
@@ -2855,6 +2856,10 @@ void Document::Shutdown() {
         ConnectedSubframeCount() == 0);
   if (!IsActive())
     return;
+
+  // Replay: seal the last live root document state. Precedes the scopers
+  // below, since command handling at the checkpoint can run script.
+  RecordReplayBeforeDocumentShutdown(*this);
 
   // An active Document must have an associated window.
   CHECK(dom_window_);

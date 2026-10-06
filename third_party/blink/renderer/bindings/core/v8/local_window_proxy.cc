@@ -242,14 +242,11 @@ void LocalWindowProxy::Initialize() {
     SetSecurityToken(origin.get());
   }
 
-  // IsOrdinary() excludes internal pages like the in-process <select> popup.
-  if (recordreplay::IsRecordingOrReplaying("commands") &&
-      origin && !origin->Host().empty() && world_->IsMainWorld() &&
-      GetFrame()->GetPage() && GetFrame()->GetPage()->IsOrdinary()) {
+  if (world_->IsMainWorld() && RecordReplayIsReplayWindow(GetFrame())) {
     bool initGlobally = !gRecordReplayStateInitialized;
 
     // Whether this is the relative root frame of this process.
-    bool isMainFrame = GetFrame()->IsLocalRoot();
+    bool isMainFrame = RecordReplayIsRootFrame(GetFrame());
 
     if (initGlobally) {
       gRecordReplayStateInitialized = true;
