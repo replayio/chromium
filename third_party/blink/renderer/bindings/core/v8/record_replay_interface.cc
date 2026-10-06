@@ -719,6 +719,24 @@ RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
 // were run in is alive.
 static bool gReplayScriptsAlive = false;
 
+// Whether the root document was shut down during the current alive period.
+static bool gReplayRootDocumentShutDown = false;
+
+void RecordReplayBeforeDocumentShutdown(LocalFrame* frame) {
+  CHECK(v8::IsMainThread());
+  if (!gReplayScriptsAlive || frame != gRootLocalFrame ||
+      gReplayRootDocumentShutDown) {
+    return;
+  }
+  gReplayRootDocumentShutDown = true;
+  recordreplay::Print("ReplayScript BeforeDocumentShutdown frame=%d",
+                      frame->RecordReplayId());
+  // Last live document state; must precede SetScriptAlive(false) so the gate
+  // allows it.
+  recordreplay::NewCheckpointFlushed();
+  recordreplay::SetScriptAlive(false);
+}
+
 /**
  * This is called when our local root frame is about to shut down.
  */
@@ -727,8 +745,6 @@ void RecordReplayClearContexts(const char* reason, LocalFrame* frame) {
   if (!gReplayScriptsAlive || frame != gRootLocalFrame) {
     return;
   }
-  // Last live window state; must precede SetScriptAlive(false) so the gate allows it.
-  recordreplay::NewCheckpointFlushed();
   v8::Isolate* isolate = V8PerIsolateData::MainThreadIsolate();
   recordreplay::Print(
       "ReplayScript STATUS_CHANGE_UNALIVE - %s %s frame=%d", reason,
@@ -2830,6 +2846,7 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
 
   // 2. Initialize sourcemap worker, command handlers etc.
   gReplayScriptsAlive = true;
+  gReplayRootDocumentShutDown = false;
   recordreplay::SetScriptAlive(true);
   recordreplay::Print("ReplayScript STATUS_CHANGE_ALIVE %s group=%d win=%d frame=%d",
       v8::internal::RecordReplayContextAddressToken(

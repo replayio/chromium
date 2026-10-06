@@ -49,6 +49,11 @@ void RecordReplayOnErrorEvent(ErrorEvent* error_event);
 // Note: JS can still execute, even after this happened.
 void RecordReplayClearContexts(const char* reason, LocalFrame* frame);
 
+// Called at the start of Document::Shutdown(): after unload and child detach,
+//   before teardown. For the root frame, takes the last checkpoint and marks
+//   scripts unalive.
+void RecordReplayBeforeDocumentShutdown(LocalFrame* frame);
+
 // Notify record/replay about new inspectors that have been created.
 void RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
                                      v8::Isolate* isolate);
