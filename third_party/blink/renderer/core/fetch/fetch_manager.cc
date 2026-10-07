@@ -693,6 +693,21 @@ void FetchManager::Loader::Dispose() {
 }
 
 void FetchManager::Loader::Abort() {
+  // FetchManager::Fetch binds this to the signal through a WeakPersistent.
+  // While fetch_manager_ is set, its loaders_ holds this loader, so this runs
+  // at the same point when recording and replaying, and everything below
+  // interacts with the recording as usual. Dispose() clears fetch_manager_ once
+  // the loader finished, failed or lost its context, which happens at the same
+  // point in both. From then on nothing holds the loader strongly, and the GC,
+  // whose timing differs between recording and replaying, decides whether this
+  // runs at all. It must not interact with the recording then, and it has
+  // nothing to do: resolver_ is cleared, settled or belongs to a destroyed
+  // context, so Reject() would only allocate a DOMException it ignores,
+  // threadable_loader_ was cleared by Dispose(), and NotifyFinished() needs
+  // fetch_manager_. Returning early makes both outcomes of the GC identical.
+  if (recordreplay::IsRecordingOrReplaying() && !fetch_manager_)
+    return;
+
   if (resolver_) {
     resolver_->Reject(
         MakeGarbageCollected<DOMException>(DOMExceptionCode::kAbortError));
