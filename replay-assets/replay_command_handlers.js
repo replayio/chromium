@@ -1699,7 +1699,8 @@ function previewSetMap(cdpProperties) {
     // debugger (RUN-1315), and it might have (albeit small) negative impacts
     // like this.
     // SLN: Simply query the size getter instead.
-    size = this.raw.size;
+    // `raw` is null if the cdpId lookup fails post-divergence.
+    size = this.raw ? this.raw.size : 0;
     const rrpSize = { name: "size", value: size };
     this.addPropertyUnchecked(rrpSize, /* force */ true);
     this.setGetterValueUnchecked(rrpSize.name, rrpSize, /* force */ true);
