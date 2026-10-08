@@ -110,6 +110,19 @@ void ScriptProcessorHandler::Process(uint32_t frames_to_process) {
   TRACE_EVENT_BEGIN0(TRACE_DISABLED_BY_DEFAULT("webaudio.audionode"),
                      "ScriptProcessorHandler::Process");
 
+  // StubPolicy: no AT onaudioprocess under ProperFakeAudio realtime.
+  // OfflineAudio FolderExempt — leave offline Process alone.
+  // No QuantumEdge MainThreadStub (empty events not required).
+  if (recordreplay::IsRecordingOrReplaying() &&
+      Context()->HasRealtimeConstraint()) {
+    recordreplay::AutoDisallowEvents disallow(
+        "ScriptProcessorHandler::Process ResidualAT");
+    Output(0).Bus()->Zero();
+    TRACE_EVENT_END0(TRACE_DISABLED_BY_DEFAULT("webaudio.audionode"),
+                     "ScriptProcessorHandler::Process");
+    return;
+  }
+
   // As in other AudioNodes, ScriptProcessorNode uses an AudioBus for its input
   // and output (i.e. `input_bus` and `output_bus`). Additionally, there is a
   // double-buffering for input and output that are exposed directly to
@@ -236,6 +249,11 @@ void ScriptProcessorHandler::Process(uint32_t frames_to_process) {
 
 void ScriptProcessorHandler::FireProcessEvent(uint32_t double_buffer_index) {
   DCHECK(IsMainThread());
+
+  // StubPolicy: no onaudioprocess under ProperFakeAudio (queued AT posts).
+  if (recordreplay::IsRecordingOrReplaying()) {
+    return;
+  }
 
   if (!Context() || !Context()->GetExecutionContext()) {
     return;
