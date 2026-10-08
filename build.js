@@ -153,11 +153,61 @@ const autoninja =
   currentPlatform() == "windows" ? "autoninja.bat" : "autoninja";
 // make the windows build verbose so we can see what's going on
 const platformAutoNinjaArgs = currentPlatform() == "windows" ? ["-v"] : [];
-spawnChecked(autoninja, [...platformAutoNinjaArgs, "-C", outdir, "chrome"], {
-  stdio: "inherit",
-});
+const autoninjaArgs = [...platformAutoNinjaArgs, "-C", outdir, "chrome"];
+if (process.env["BUILDKITE"]) {
+  buildHealingNinjaState();
+} else {
+  spawnChecked(autoninja, autoninjaArgs, { stdio: "inherit" });
+}
 
 console.log(`Build finished.`);
+
+// CI agents build in a persistent checkout, where an interrupted or
+// overlapping ninja run can leave ninja state behind that makes every later
+// ninja crash at startup. Discard that state and then the whole out dir if
+// ninja crashes; RBE's cache keeps the rebuild cheap.
+function buildHealingNinjaState() {
+  const recoveries = [
+    () => {
+      spawnChecked("rm", [
+        "-f",
+        `${outdir}/.ninja_deps`,
+        `${outdir}/.ninja_log`,
+      ]);
+    },
+    () => {
+      spawnChecked("rm", ["-rf", outdir]);
+      spawnChecked(gn, ["gen", outdir], { stdio: "inherit" });
+    },
+  ];
+  for (let attempt = 0; ; attempt++) {
+    const prettyCmd = [autoninja].concat(autoninjaArgs).join(" ");
+    console.error("$ " + prettyCmd);
+    const rv = spawnSync(autoninja, autoninjaArgs, { stdio: "inherit" });
+    if (rv.status == 0 && !rv.error) {
+      return;
+    }
+    if (!ninjaCrashed(rv) || attempt == recoveries.length) {
+      console.error(
+        `Process failed: err=${rv.error || ""}, signal=${rv.signal || ""}`
+      );
+      throw new Error(`Spawned process failed with exit code ${rv.status}`);
+    }
+    console.error(
+      `ninja crashed (exit code ${rv.status}), discarding ninja state and retrying`
+    );
+    recoveries[attempt]();
+  }
+}
+
+// autoninja exits with ninja's negated signal number, so a ninja killed by
+// SIGSEGV exits with 245 (-11). A failed build step exits with 1.
+function ninjaCrashed(rv) {
+  const crashSignals = { SIGABRT: 6, SIGBUS: 7, SIGSEGV: 11 };
+  return Object.keys(crashSignals).some(
+    (name) => rv.status == 256 - crashSignals[name] || rv.signal == name
+  );
+}
 
 function writeFileSyncIfChanged(filename, newContents) {
   let changed = false;
