@@ -267,7 +267,7 @@ bool OfflineAudioDestinationHandler::RenderIfNotSuspended(
   }
 
   Context()->GetDeferredTaskHandler().SetAudioThreadToCurrentThread();
-  DeferredTaskHandler::RecordReplayRenderTimelinesLocker replay_timelines(
+  DeferredTaskHandler::RecordReplayRenderLocker replay_render_locker(
       Context()->GetDeferredTaskHandler());
 
   // If the destination node is not initialized, pass the silence to the final

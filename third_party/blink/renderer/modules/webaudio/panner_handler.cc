@@ -517,7 +517,7 @@ void PannerHandler::SetPosition(float x,
                                 ExceptionState& exceptionState) {
   // Orders the param timelines this changes with the render while recording
   // or replaying.
-  DeferredTaskHandler::RecordReplayMainThreadTimelinesLocker replay_locker(
+  DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
       Context()->GetDeferredTaskHandler());
   // This synchronizes with process().
   base::AutoLock process_locker(process_lock_);
@@ -538,7 +538,7 @@ void PannerHandler::SetOrientation(float x,
                                    ExceptionState& exceptionState) {
   // Orders the param timelines this changes with the render while recording
   // or replaying.
-  DeferredTaskHandler::RecordReplayMainThreadTimelinesLocker replay_locker(
+  DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
       Context()->GetDeferredTaskHandler());
   // This synchronizes with process().
   base::AutoLock process_locker(process_lock_);

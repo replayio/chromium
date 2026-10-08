@@ -96,10 +96,6 @@ AudioParamHandler::AudioParamHandler(BaseAudioContext& context,
           AudioBus::Create(1,
                            GetDeferredTaskHandler().RenderQuantumFrames(),
                            false)) {
-  if (recordreplay::IsRecordingOrReplaying()) {
-    timeline_.RecordReplaySetHandler(&GetDeferredTaskHandler());
-  }
-
   // An AudioParam needs the destination handler to run the timeline.  But the
   // destination may have been destroyed (e.g. page gone), so the destination is
   // null.  However, if the destination is gone, the AudioParam will never get

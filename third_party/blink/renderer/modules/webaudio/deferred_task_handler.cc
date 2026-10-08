@@ -40,6 +40,9 @@ namespace blink {
 void DeferredTaskHandler::lock() {
   // Don't allow regular lock in real-time audio thread.
   DCHECK(!IsAudioThread());
+  // Taken before the graph lock, which the offline render thread takes while
+  // holding the render lock.
+  RecordReplayLockRender();
   context_graph_mutex_.lock();
 }
 
@@ -58,6 +61,37 @@ bool DeferredTaskHandler::TryLock() {
 
 void DeferredTaskHandler::unlock() {
   context_graph_mutex_.unlock();
+  if (!IsAudioThread()) {
+    RecordReplayUnlockRender();
+  }
+}
+
+void DeferredTaskHandler::RecordReplayLockRender() NO_THREAD_SAFETY_ANALYSIS {
+  if (!recordreplay::IsRecordingOrReplaying()) {
+    return;
+  }
+  base::PlatformThreadId current = base::PlatformThread::CurrentId();
+  if (record_replay_render_owner_.load(std::memory_order_relaxed) == current) {
+    record_replay_render_depth_++;
+    return;
+  }
+  record_replay_render_lock_.Acquire();
+  record_replay_render_owner_.store(current, std::memory_order_relaxed);
+  record_replay_render_depth_ = 1;
+}
+
+void DeferredTaskHandler::RecordReplayUnlockRender()
+    NO_THREAD_SAFETY_ANALYSIS {
+  if (!recordreplay::IsRecordingOrReplaying()) {
+    return;
+  }
+  DCHECK_EQ(record_replay_render_owner_.load(std::memory_order_relaxed),
+            base::PlatformThread::CurrentId());
+  if (--record_replay_render_depth_ == 0) {
+    record_replay_render_owner_.store(base::kInvalidThreadId,
+                                      std::memory_order_relaxed);
+    record_replay_render_lock_.Release();
+  }
 }
 
 void DeferredTaskHandler::OfflineLock() {

@@ -185,7 +185,7 @@ void RealtimeAudioDestinationHandler::Render(
   }
 
   context->GetDeferredTaskHandler().SetAudioThreadToCurrentThread();
-  DeferredTaskHandler::RecordReplayRenderTimelinesLocker replay_timelines(
+  DeferredTaskHandler::RecordReplayRenderLocker replay_render_locker(
       context->GetDeferredTaskHandler());
 
   // If this node is not initialized yet, pass silence to the platform audio

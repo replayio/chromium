@@ -110,12 +110,6 @@ class AudioParamTimeline {
   float SmoothedValue() { return smoothed_value_; }
   void SetSmoothedValue(float v) { smoothed_value_ = v; }
 
-  // Orders this timeline's accesses through the handler's render-wide lock
-  // while recording or replaying.
-  void RecordReplaySetHandler(DeferredTaskHandler* handler) {
-    record_replay_handler_ = handler;
-  }
-
  private:
   class ParamEvent {
    public:
@@ -491,11 +485,6 @@ class AudioParamTimeline {
   HashSet<ParamEvent*> new_events_ GUARDED_BY(events_lock_);
 
   mutable base::Lock events_lock_;
-
-  DeferredTaskHandler* record_replay_handler_ = nullptr;
-
-  // Whether the audio thread may read the timeline in this render.
-  bool RecordReplayMayRead() const;
 
   // Smoothing (de-zippering)
   float smoothed_value_;
