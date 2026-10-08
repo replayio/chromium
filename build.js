@@ -153,11 +153,40 @@ const autoninja =
   currentPlatform() == "windows" ? "autoninja.bat" : "autoninja";
 // make the windows build verbose so we can see what's going on
 const platformAutoNinjaArgs = currentPlatform() == "windows" ? ["-v"] : [];
-spawnChecked(autoninja, [...platformAutoNinjaArgs, "-C", outdir, "chrome"], {
-  stdio: "inherit",
-});
+const autoninjaArgs = [...platformAutoNinjaArgs, "-C", outdir, "chrome"];
+if (process.env["BUILDKITE"]) {
+  buildHealingNinjaState();
+} else {
+  spawnChecked(autoninja, autoninjaArgs, { stdio: "inherit" });
+}
 
 console.log(`Build finished.`);
+
+// CI agents build in a persistent checkout, where an interrupted or
+// overlapping ninja run can leave state behind in the out dir that makes every
+// later ninja crash at startup. Clean the out dir and build again if ninja
+// crashes; RBE's cache keeps the rebuild cheap. gn clean keeps args.gn, which
+// CI doesn't write: it is the agent's own build config.
+function buildHealingNinjaState() {
+  const rv = spawnLogged(autoninja, autoninjaArgs, { stdio: "inherit" });
+  if (!ninjaCrashed(rv)) {
+    checkSpawnResult(rv);
+    return;
+  }
+  console.error(
+    `ninja crashed (exit code ${rv.status}), cleaning ${outdir} and retrying`
+  );
+  spawnChecked(gn, ["clean", outdir], { stdio: "inherit" });
+  spawnChecked(gn, ["gen", outdir], { stdio: "inherit" });
+  spawnChecked(autoninja, autoninjaArgs, { stdio: "inherit" });
+}
+
+// autoninja.py exits with sys.exit(-signal) when ninja dies from a signal,
+// i.e. 256 - signal: 245 for SIGSEGV. A failed build step exits with 1.
+function ninjaCrashed(rv) {
+  const crashSignals = [6 /* SIGABRT */, 7 /* SIGBUS */, 11 /* SIGSEGV */];
+  return crashSignals.some((signal) => rv.status == 256 - signal);
+}
 
 function writeFileSyncIfChanged(filename, newContents) {
   let changed = false;
@@ -178,11 +207,17 @@ function writeFileSyncIfChanged(filename, newContents) {
 }
 
 function spawnChecked(cmd, args, options) {
+  return checkSpawnResult(spawnLogged(cmd, args, options));
+}
+
+function spawnLogged(cmd, args, options) {
   const prettyCmd = [cmd].concat(args).join(" ");
   console.error("$ " + prettyCmd);
 
-  const rv = spawnSync(cmd, args, options);
+  return spawnSync(cmd, args, options);
+}
 
+function checkSpawnResult(rv) {
   if (rv.status != 0 || rv.error) {
     console.error(
       `Process failed: err=${rv.error || ""}, signal=${rv.signal || ""}`
