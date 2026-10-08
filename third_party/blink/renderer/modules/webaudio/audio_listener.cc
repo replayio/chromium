@@ -332,6 +332,8 @@ void AudioListener::setPosition(const gfx::Point3F& position,
                                 ExceptionState& exceptionState) {
   DCHECK(IsMainThread());
 
+  DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
+      position_x_->Context()->GetDeferredTaskHandler());
   // This synchronizes with panner's process().
   const base::AutoLock listener_locker(listener_lock_);
 
@@ -349,6 +351,8 @@ void AudioListener::setOrientation(const gfx::Vector3dF& orientation,
                                    ExceptionState& exceptionState) {
   DCHECK(IsMainThread());
 
+  DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
+      forward_x_->Context()->GetDeferredTaskHandler());
   // This synchronizes with panner's process().
   const base::AutoLock listener_locker(listener_lock_);
 
@@ -365,6 +369,8 @@ void AudioListener::SetUpVector(const gfx::Vector3dF& up_vector,
                                 ExceptionState& exceptionState) {
   DCHECK(IsMainThread());
 
+  DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
+      up_x_->Context()->GetDeferredTaskHandler());
   // This synchronizes with panner's process().
   const base::AutoLock listener_locker(listener_lock_);
 

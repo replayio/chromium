@@ -172,7 +172,7 @@ class PannerHandler final : public AudioHandler {
 
   // Synchronize process() with setting of the panning model, source's location
   // information, listener, distance parameters and sound cones.
-  mutable base::Lock process_lock_{"PannerHandler"};
+  mutable base::Lock process_lock_;
 };
 
 }  // namespace blink

@@ -431,6 +431,8 @@ bool PannerHandler::SetDistanceModel(unsigned model) {
     case DistanceEffect::kModelExponential:
       if (model != distance_model_) {
         // This synchronizes with process().
+        DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
+            Context()->GetDeferredTaskHandler());
         base::AutoLock process_locker(process_lock_);
         distance_effect_.SetModel(
             static_cast<DistanceEffect::ModelType>(model));
@@ -451,6 +453,8 @@ void PannerHandler::SetRefDistance(double distance) {
   }
 
   // This synchronizes with process().
+  DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
+      Context()->GetDeferredTaskHandler());
   base::AutoLock process_locker(process_lock_);
   distance_effect_.SetRefDistance(distance);
   MarkPannerAsDirty(PannerHandler::kDistanceConeGainDirty);
@@ -462,6 +466,8 @@ void PannerHandler::SetMaxDistance(double distance) {
   }
 
   // This synchronizes with process().
+  DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
+      Context()->GetDeferredTaskHandler());
   base::AutoLock process_locker(process_lock_);
   distance_effect_.SetMaxDistance(distance);
   MarkPannerAsDirty(PannerHandler::kDistanceConeGainDirty);
@@ -473,6 +479,8 @@ void PannerHandler::SetRolloffFactor(double factor) {
   }
 
   // This synchronizes with process().
+  DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
+      Context()->GetDeferredTaskHandler());
   base::AutoLock process_locker(process_lock_);
   distance_effect_.SetRolloffFactor(factor);
   MarkPannerAsDirty(PannerHandler::kDistanceConeGainDirty);
@@ -484,6 +492,8 @@ void PannerHandler::SetConeInnerAngle(double angle) {
   }
 
   // This synchronizes with process().
+  DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
+      Context()->GetDeferredTaskHandler());
   base::AutoLock process_locker(process_lock_);
   cone_effect_.SetInnerAngle(angle);
   MarkPannerAsDirty(PannerHandler::kDistanceConeGainDirty);
@@ -495,6 +505,8 @@ void PannerHandler::SetConeOuterAngle(double angle) {
   }
 
   // This synchronizes with process().
+  DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
+      Context()->GetDeferredTaskHandler());
   base::AutoLock process_locker(process_lock_);
   cone_effect_.SetOuterAngle(angle);
   MarkPannerAsDirty(PannerHandler::kDistanceConeGainDirty);
@@ -506,6 +518,8 @@ void PannerHandler::SetConeOuterGain(double angle) {
   }
 
   // This synchronizes with process().
+  DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
+      Context()->GetDeferredTaskHandler());
   base::AutoLock process_locker(process_lock_);
   cone_effect_.SetOuterGain(angle);
   MarkPannerAsDirty(PannerHandler::kDistanceConeGainDirty);
@@ -515,8 +529,6 @@ void PannerHandler::SetPosition(float x,
                                 float y,
                                 float z,
                                 ExceptionState& exceptionState) {
-  // Orders the param timelines this changes with the render while recording
-  // or replaying.
   DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
       Context()->GetDeferredTaskHandler());
   // This synchronizes with process().
@@ -536,8 +548,6 @@ void PannerHandler::SetOrientation(float x,
                                    float y,
                                    float z,
                                    ExceptionState& exceptionState) {
-  // Orders the param timelines this changes with the render while recording
-  // or replaying.
   DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
       Context()->GetDeferredTaskHandler());
   // This synchronizes with process().

@@ -302,6 +302,8 @@ ScriptPromise OfflineAudioContext::suspendContext(
   }
 
   {
+    DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
+        GetDeferredTaskHandler());
     base::AutoLock suspend_frames_locker(suspend_frames_lock_);
     scheduled_suspend_frames_.insert(frame);
   }
@@ -432,6 +434,8 @@ void OfflineAudioContext::ResolveSuspendOnMainThread(size_t frame) {
   SetContextState(kSuspended);
 
   {
+    DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
+        GetDeferredTaskHandler());
     base::AutoLock locker(suspend_frames_lock_);
     DCHECK(scheduled_suspend_frames_.Contains(frame));
     scheduled_suspend_frames_.erase(frame);
@@ -459,6 +463,8 @@ void OfflineAudioContext::RejectPendingResolvers() {
   DCHECK(IsMainThread());
 
   {
+    DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
+        GetDeferredTaskHandler());
     base::AutoLock locker(suspend_frames_lock_);
     scheduled_suspend_frames_.clear();
   }

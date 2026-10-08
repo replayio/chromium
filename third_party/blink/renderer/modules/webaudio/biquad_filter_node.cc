@@ -186,6 +186,8 @@ bool BiquadFilterNode::SetType(BiquadProcessor::FilterType type) {
 
   base::UmaHistogramEnumeration("WebAudio.BiquadFilter.Type", type);
 
+  DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
+      context()->GetDeferredTaskHandler());
   GetBiquadProcessor()->SetType(type);
   return true;
 }
@@ -227,6 +229,8 @@ void BiquadFilterNode::getFrequencyResponse(
 
   // If the length is 0, there's nothing to do.
   if (frequency_hz_length_as_int > 0) {
+    DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
+        context()->GetDeferredTaskHandler());
     GetBiquadProcessor()->GetFrequencyResponse(
         frequency_hz_length_as_int, frequency_hz->Data(), mag_response->Data(),
         phase_response->Data());
