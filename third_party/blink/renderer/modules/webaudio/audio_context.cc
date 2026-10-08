@@ -846,7 +846,11 @@ void AudioContext::ResolvePromisesForUnpause() {
 
 void AudioContext::EnqueueQuantumEdge() {
   DCHECK(IsAudioThread());
-  if (quantum_edge_pending_.exchange(true, std::memory_order_acq_rel)) {
+  // The main thread clears the flag while this runs, so whether this quantum
+  // posts a delivery is recorded.
+  if (recordreplay::RecordReplayValue(
+          "AudioContext::EnqueueQuantumEdge pending",
+          quantum_edge_pending_.exchange(true, std::memory_order_acq_rel))) {
     return;
   }
   if (!task_runner_) {
