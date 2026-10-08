@@ -163,50 +163,29 @@ if (process.env["BUILDKITE"]) {
 console.log(`Build finished.`);
 
 // CI agents build in a persistent checkout, where an interrupted or
-// overlapping ninja run can leave ninja state behind that makes every later
-// ninja crash at startup. Discard that state and then the whole out dir if
-// ninja crashes; RBE's cache keeps the rebuild cheap.
+// overlapping ninja run can leave state behind in the out dir that makes every
+// later ninja crash at startup. Clean the out dir and build again if ninja
+// crashes; RBE's cache keeps the rebuild cheap. gn clean keeps args.gn, which
+// CI doesn't write: it is the agent's own build config.
 function buildHealingNinjaState() {
-  const recoveries = [
-    () => {
-      spawnChecked("rm", [
-        "-f",
-        `${outdir}/.ninja_deps`,
-        `${outdir}/.ninja_log`,
-      ]);
-    },
-    () => {
-      spawnChecked("rm", ["-rf", outdir]);
-      spawnChecked(gn, ["gen", outdir], { stdio: "inherit" });
-    },
-  ];
-  for (let attempt = 0; ; attempt++) {
-    const prettyCmd = [autoninja].concat(autoninjaArgs).join(" ");
-    console.error("$ " + prettyCmd);
-    const rv = spawnSync(autoninja, autoninjaArgs, { stdio: "inherit" });
-    if (rv.status == 0 && !rv.error) {
-      return;
-    }
-    if (!ninjaCrashed(rv) || attempt == recoveries.length) {
-      console.error(
-        `Process failed: err=${rv.error || ""}, signal=${rv.signal || ""}`
-      );
-      throw new Error(`Spawned process failed with exit code ${rv.status}`);
-    }
-    console.error(
-      `ninja crashed (exit code ${rv.status}), discarding ninja state and retrying`
-    );
-    recoveries[attempt]();
+  const rv = spawnLogged(autoninja, autoninjaArgs, { stdio: "inherit" });
+  if (!ninjaCrashed(rv)) {
+    checkSpawnResult(rv);
+    return;
   }
+  console.error(
+    `ninja crashed (exit code ${rv.status}), cleaning ${outdir} and retrying`
+  );
+  spawnChecked(gn, ["clean", outdir], { stdio: "inherit" });
+  spawnChecked(gn, ["gen", outdir], { stdio: "inherit" });
+  spawnChecked(autoninja, autoninjaArgs, { stdio: "inherit" });
 }
 
-// autoninja exits with ninja's negated signal number, so a ninja killed by
-// SIGSEGV exits with 245 (-11). A failed build step exits with 1.
+// autoninja.py exits with sys.exit(-signal) when ninja dies from a signal,
+// i.e. 256 - signal: 245 for SIGSEGV. A failed build step exits with 1.
 function ninjaCrashed(rv) {
-  const crashSignals = { SIGABRT: 6, SIGBUS: 7, SIGSEGV: 11 };
-  return Object.keys(crashSignals).some(
-    (name) => rv.status == 256 - crashSignals[name] || rv.signal == name
-  );
+  const crashSignals = [6 /* SIGABRT */, 7 /* SIGBUS */, 11 /* SIGSEGV */];
+  return crashSignals.some((signal) => rv.status == 256 - signal);
 }
 
 function writeFileSyncIfChanged(filename, newContents) {
@@ -228,11 +207,17 @@ function writeFileSyncIfChanged(filename, newContents) {
 }
 
 function spawnChecked(cmd, args, options) {
+  return checkSpawnResult(spawnLogged(cmd, args, options));
+}
+
+function spawnLogged(cmd, args, options) {
   const prettyCmd = [cmd].concat(args).join(" ");
   console.error("$ " + prettyCmd);
 
-  const rv = spawnSync(cmd, args, options);
+  return spawnSync(cmd, args, options);
+}
 
+function checkSpawnResult(rv) {
   if (rv.status != 0 || rv.error) {
     console.error(
       `Process failed: err=${rv.error || ""}, signal=${rv.signal || ""}`
