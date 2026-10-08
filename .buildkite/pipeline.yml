@@ -50,9 +50,9 @@ steps:
               secret-id: engflow-key
       - replayio/buildevents#76b6f57: ~
     commands:
-      - "be_cmd remove-stale-build-containers -- replay_build_scripts/remove-stale-build-containers.sh"
       - "be_cmd git-fetch-origin -- git fetch origin"
       - "be_cmd git-reset-branch -- git reset --hard origin/$BUILDKITE_BRANCH"
+      - "be_cmd remove-stale-build-containers -- replay_build_scripts/remove-stale-build-containers.sh"
       - "be_cmd clean-artifacts-dir -- node replay_build_scripts/clean_artifacts.mjs"
       - "be_cmd update-all-repos -- node replay_build_scripts/update-all-repos.mjs"
       - "be_cmd chromium-build -- node buildLinux.mjs"
