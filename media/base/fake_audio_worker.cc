@@ -11,6 +11,7 @@
 #include "base/cancelable_callback.h"
 #include "base/check_op.h"
 #include "base/location.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/thread_annotations.h"
@@ -128,6 +129,11 @@ void FakeAudioWorker::Worker::Start(FakeAudioWorker::Callback worker_cb) {
 void FakeAudioWorker::Worker::DoStart() {
   DCHECK(worker_task_runner_->BelongsToCurrentThread());
   first_read_time_ = base::TimeTicks::Now();
+  first_read_time_ =
+      base::TimeTicks() +
+      base::Microseconds(recordreplay::RecordReplayValue(
+          "FakeAudioWorker::DoStart first_read_time_us",
+          (first_read_time_ - base::TimeTicks()).InMicroseconds()));
   frames_elapsed_ = 0;
   worker_task_cb_.Reset(base::BindRepeating(&Worker::DoRead, this));
   worker_task_cb_.callback().Run();
@@ -166,6 +172,10 @@ void FakeAudioWorker::Worker::DoRead() {
     base::AutoLock scoped_lock(worker_cb_lock_);
     // Important to sample the clock after waiting to acquire the lock.
     now = base::TimeTicks::Now();
+    now = base::TimeTicks() +
+          base::Microseconds(recordreplay::RecordReplayValue(
+              "FakeAudioWorker::DoRead now_us",
+              (now - base::TimeTicks()).InMicroseconds()));
 
     // Note: Even if we're late, this callback must be called. In many cases we
     // are driving an underlying "samples consumed" based clock with these

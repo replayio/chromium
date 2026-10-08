@@ -5,6 +5,7 @@
 #include "media/base/silent_sink_suspender.h"
 
 #include "base/bind.h"
+#include "base/record_replay.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 
@@ -94,7 +95,8 @@ int SilentSinkSuspender::Render(base::TimeDelta delay,
           base::BindOnce(sink_transition_callback_.callback(), false));
       return dest->frames();
     }
-  } else if (!is_using_fake_sink_) {
+  } else if (!is_using_fake_sink_ &&
+             !recordreplay::IsRecordingOrReplaying()) {
     const base::TimeTicks now = base::TimeTicks::Now();
     if (first_silence_time_.is_null())
       first_silence_time_ = now;
