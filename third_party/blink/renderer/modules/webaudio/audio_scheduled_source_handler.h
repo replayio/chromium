@@ -13,6 +13,7 @@
 #include "base/thread_annotations.h"
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_node.h"
+#include "third_party/blink/renderer/platform/wtf/threading.h"
 #include "third_party/blink/renderer/platform/wtf/threading_primitives.h"
 
 namespace blink {
@@ -52,11 +53,15 @@ class AudioScheduledSourceHandler
   double LatencyTime() const override { return 0; }
 
   PlaybackState GetPlaybackState() const {
-    // The main thread and the render thread both update the state, so reads
-    // are recorded.
-    return static_cast<PlaybackState>(recordreplay::RecordReplayValue(
-        "AudioScheduledSourceHandler::GetPlaybackState",
-        playback_state_.load(std::memory_order_acquire)));
+    PlaybackState state = playback_state_.load(std::memory_order_acquire);
+    // The render thread updates the state while the main thread reads it, so
+    // main-thread reads are recorded. The main thread updates it under the
+    // render lock, so the render thread's reads need no recording.
+    if (IsMainThread()) {
+      state = static_cast<PlaybackState>(recordreplay::RecordReplayValue(
+          "AudioScheduledSourceHandler::GetPlaybackState", state));
+    }
+    return state;
   }
 
   void SetPlaybackState(PlaybackState new_state) {

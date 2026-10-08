@@ -25,7 +25,6 @@ AudioScheduledSourceHandler::AudioScheduledSourceHandler(NodeType node_type,
                                                          AudioNode& node,
                                                          float sample_rate)
     : AudioHandler(node_type, node, sample_rate),
-      process_lock_("AudioScheduledSourceHandler"),
       end_time_(kUnknownTime),
       playback_state_(UNSCHEDULED_STATE) {
   if (Context()->GetExecutionContext()) {
@@ -195,6 +194,8 @@ void AudioScheduledSourceHandler::Start(double when,
 
   // This synchronizes with process(). updateSchedulingInfo will read some of
   // the variables being set here.
+  DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
+      Context()->GetDeferredTaskHandler());
   base::AutoLock process_locker(process_lock_);
 
   // If `when` < `currentTime()`, the source must start now according to the
@@ -223,6 +224,8 @@ void AudioScheduledSourceHandler::Stop(double when,
   }
 
   // This synchronizes with process()
+  DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
+      Context()->GetDeferredTaskHandler());
   base::AutoLock process_locker(process_lock_);
 
   // stop() can be called more than once, with the last call to stop taking

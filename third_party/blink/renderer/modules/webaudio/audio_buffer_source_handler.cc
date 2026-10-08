@@ -407,6 +407,8 @@ void AudioBufferSourceHandler::SetBuffer(AudioBuffer* buffer,
   BaseAudioContext::GraphAutoLocker context_locker(Context());
 
   // This synchronizes with process().
+  DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
+      Context()->GetDeferredTaskHandler());
   base::AutoLock process_locker(process_lock_);
 
   if (!buffer) {
@@ -557,6 +559,8 @@ void AudioBufferSourceHandler::StartSource(double when,
 
   // This synchronizes with process(). updateSchedulingInfo will read some of
   // the variables being set here.
+  DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
+      Context()->GetDeferredTaskHandler());
   base::AutoLock process_locker(process_lock_);
 
   is_duration_given_ = is_duration_given;
@@ -580,6 +584,8 @@ void AudioBufferSourceHandler::SetLoop(bool looping) {
   DCHECK(IsMainThread());
 
   // This synchronizes with `Process()`.
+  DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
+      Context()->GetDeferredTaskHandler());
   base::AutoLock process_locker(process_lock_);
 
   is_looping_ = looping;
@@ -590,6 +596,8 @@ void AudioBufferSourceHandler::SetLoopStart(double loop_start) {
   DCHECK(IsMainThread());
 
   // This synchronizes with `Process()`.
+  DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
+      Context()->GetDeferredTaskHandler());
   base::AutoLock process_locker(process_lock_);
 
   loop_start_ = loop_start;
@@ -599,6 +607,8 @@ void AudioBufferSourceHandler::SetLoopEnd(double loop_end) {
   DCHECK(IsMainThread());
 
   // This synchronizes with `Process()`.
+  DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
+      Context()->GetDeferredTaskHandler());
   base::AutoLock process_locker(process_lock_);
 
   loop_end_ = loop_end;

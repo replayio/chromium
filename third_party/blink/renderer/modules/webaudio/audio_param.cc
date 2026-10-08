@@ -117,6 +117,8 @@ void AudioParam::WarnIfOutsideRange(const String& param_method, float value) {
 
 void AudioParam::setValue(float value) {
   WarnIfOutsideRange("value", value);
+  DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
+      Context()->GetDeferredTaskHandler());
   Handler().SetValue(value);
 }
 
@@ -128,6 +130,8 @@ void AudioParam::setValue(float value, ExceptionState& exception_state) {
   setValueAtTime(value, Context()->currentTime(), exception_state);
   // This is to change the value so that an immediate query for the
   // value returns the expected values.
+  DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
+      Context()->GetDeferredTaskHandler());
   Handler().SetValue(value);
 }
 

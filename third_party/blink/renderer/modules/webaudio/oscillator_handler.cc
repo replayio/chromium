@@ -754,6 +754,8 @@ void OscillatorHandler::SetPeriodicWave(PeriodicWaveImpl* periodic_wave) {
   DCHECK(periodic_wave);
 
   // This synchronizes with process().
+  DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
+      Context()->GetDeferredTaskHandler());
   base::AutoLock process_locker(process_lock_);
   periodic_wave_ = periodic_wave;
   type_ = CUSTOM;

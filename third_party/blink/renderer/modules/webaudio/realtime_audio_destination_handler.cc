@@ -201,12 +201,10 @@ void RealtimeAudioDestinationHandler::Render(
   // Only pull on the audio graph if we have not stopped the destination.  It
   // takes time for the destination to stop, but we want to stop pulling before
   // the destination has actually stopped.
-  // The main thread allows or stops pulling while the audio thread renders, so
-  // which render quantum sees the change is recorded.
-  bool allow_pulling_audio_graph = recordreplay::RecordReplayValue(
-      "RealtimeAudioDestinationHandler::Render allow_pulling_audio_graph",
+  recordreplay::Assert(
+      "RealtimeAudioDestinationHandler::Render allow_pulling_audio_graph %d",
       IsPullingAudioGraphAllowed());
-  if (allow_pulling_audio_graph) {
+  if (IsPullingAudioGraphAllowed()) {
     // Renders the graph by pulling all the inputs to this node. This will in
     // turn pull on their inputs, all the way backwards through the graph.
     scoped_refptr<AudioBus> rendered_bus =
@@ -331,7 +329,11 @@ void RealtimeAudioDestinationHandler::StartPlatformDestination() {
 
   // Allow the graph to be pulled once the destination actually starts
   // requesting data.
-  EnablePullingAudioGraph();
+  {
+    DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
+        Context()->GetDeferredTaskHandler());
+    EnablePullingAudioGraph();
+  }
 }
 
 void RealtimeAudioDestinationHandler::StopPlatformDestination() {
@@ -339,7 +341,11 @@ void RealtimeAudioDestinationHandler::StopPlatformDestination() {
 
   // Stop pulling on the graph, even if the destination is still requesting data
   // for a while. (It may take a bit of time for the destination to stop.)
-  DisablePullingAudioGraph();
+  {
+    DeferredTaskHandler::RecordReplayRenderLocker replay_locker(
+        Context()->GetDeferredTaskHandler());
+    DisablePullingAudioGraph();
+  }
 
   if (platform_destination_->IsPlaying()) {
     platform_destination_->Stop();

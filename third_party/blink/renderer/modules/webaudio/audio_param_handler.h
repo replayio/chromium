@@ -14,6 +14,7 @@
 #include "third_party/blink/renderer/core/typed_arrays/dom_typed_array.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_param_timeline.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_summing_junction.h"
+#include "third_party/blink/renderer/platform/wtf/threading.h"
 #include "third_party/blink/renderer/modules/webaudio/base_audio_context.h"
 #include "third_party/blink/renderer/modules/webaudio/inspector_helper_mixin.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
@@ -174,10 +175,13 @@ class AudioParamHandler final : public ThreadSafeRefCounted<AudioParamHandler>,
 
   float IntrinsicValue() const {
     float value = intrinsic_value_.load(std::memory_order_relaxed);
-    // The main thread sets the value while the render thread computes it from
-    // the timeline, so reads are recorded.
-    recordreplay::RecordReplayBytes("AudioParamHandler::IntrinsicValue",
-                                    &value, sizeof(value));
+    // The render thread computes the value while the main thread reads it, so
+    // main-thread reads are recorded. The main thread sets it under the render
+    // lock, so the render thread's reads need no recording.
+    if (IsMainThread()) {
+      recordreplay::RecordReplayBytes("AudioParamHandler::IntrinsicValue",
+                                      &value, sizeof(value));
+    }
     return value;
   }
 
