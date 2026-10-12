@@ -44,6 +44,7 @@
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/system/sys_info.h"
+#include "base/threading/platform_thread.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/time/time.h"
 #include "build/branding_buildflags.h"
@@ -89,6 +90,25 @@ static bool RecordReplayHasDivergedFromRecording() {
     return reinterpret_cast<bool(*)()>(fnptr)();
   }
   return false;
+}
+
+// Test hook: while recording or replaying, sleep for
+// RECORD_REPLAY_TEST_ALLOCATE_FILE_REGION_DELAY_MS milliseconds inside every
+// AllocateFileRegion, after its divergence check. Tests use it to end a
+// recording while a thread is in there. getenv reads the recorded environment
+// when replaying, so the sleep is replayed too.
+static void RecordReplayMaybeDelayAllocateFileRegion() {
+  static void* fnptr = LookupRecordReplaySymbol("V8IsRecordingOrReplaying");
+  if (fnptr == reinterpret_cast<void*>(1) ||
+      !reinterpret_cast<bool (*)(const char*, const char*)>(fnptr)(nullptr,
+                                                                    nullptr)) {
+    return;
+  }
+  static const char* delay =
+      getenv("RECORD_REPLAY_TEST_ALLOCATE_FILE_REGION_DELAY_MS");
+  if (delay) {
+    base::PlatformThread::Sleep(base::Milliseconds(atoi(delay)));
+  }
 }
 
 namespace base {
@@ -933,6 +953,8 @@ bool AllocateFileRegion(File* file, int64_t offset, size_t size) {
   // memory backing anyways.
   if (RecordReplayHasDivergedFromRecording())
     return true;
+
+  RecordReplayMaybeDelayAllocateFileRegion();
 
   // Explicitly extend |file| to the maximum size. Zeros will fill the new
   // space. It is assumed that the existing file is fully realized as
