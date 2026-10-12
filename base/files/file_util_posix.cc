@@ -37,6 +37,7 @@
 #include "base/numerics/safe_conversions.h"
 #include "base/path_service.h"
 #include "base/posix/eintr_wrapper.h"
+#include "base/record_replay.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
@@ -98,10 +99,7 @@ static bool RecordReplayHasDivergedFromRecording() {
 // recording while a thread is in there. getenv reads the recorded environment
 // when replaying, so the sleep is replayed too.
 static void RecordReplayMaybeDelayAllocateFileRegion() {
-  static void* fnptr = LookupRecordReplaySymbol("V8IsRecordingOrReplaying");
-  if (fnptr == reinterpret_cast<void*>(1) ||
-      !reinterpret_cast<bool (*)(const char*, const char*)>(fnptr)(nullptr,
-                                                                    nullptr)) {
+  if (!recordreplay::IsRecordingOrReplaying()) {
     return;
   }
   static const char* delay =
