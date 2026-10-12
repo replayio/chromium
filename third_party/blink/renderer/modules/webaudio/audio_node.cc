@@ -90,15 +90,18 @@ void AudioNode::Dispose() {
   // being processed, the handler must be added.  If the context is suspended,
   // the handler still needs to be added in case the context is resumed.
   DCHECK(context());
-  // Skip the GC-controlled orphan-handler mutation read by the audio thread.
-  if (!(recordreplay::AreEventsDisallowed() &&
-        recordreplay::IsRecordingOrReplaying("leak-references",
-                                             "AudioNode::Dispose"))) {
-    if (context()->IsPullingAudioGraph() ||
-        context()->ContextState() == BaseAudioContext::kSuspended) {
-      context()->GetDeferredTaskHandler().AddRenderingOrphanHandler(
-          std::move(handler_));
-    }
+  if (recordreplay::AreEventsDisallowed() &&
+      recordreplay::IsRecordingOrReplaying("leak-references",
+                                           "AudioNode::Dispose")) {
+    // Skip the GC-controlled orphan-handler mutation read by the audio thread.
+    // The audio thread can still render from the handler until it sees the
+    // node disconnected, so the context keeps the handler instead of it being
+    // freed with the node.
+    context()->RecordReplayKeepDisposedHandler(std::move(handler_));
+  } else if (context()->IsPullingAudioGraph() ||
+             context()->ContextState() == BaseAudioContext::kSuspended) {
+    context()->GetDeferredTaskHandler().AddRenderingOrphanHandler(
+        std::move(handler_));
   }
 
   // Notify the inspector that this node is going away. The actual clean up
@@ -233,6 +236,7 @@ AudioNode* AudioNode::connect(AudioNode* destination,
         MakeGarbageCollected<HeapHashSet<Member<AudioNode>>>();
   }
   connected_nodes_[output_index]->insert(destination);
+  RecordReplayUpdateConnected();
 
   Handler().UpdatePullStatusIfNeeded();
 
@@ -278,6 +282,7 @@ void AudioNode::connect(AudioParam* param,
         MakeGarbageCollected<HeapHashSet<Member<AudioParam>>>();
   }
   connected_params_[output_index]->insert(param);
+  RecordReplayUpdateConnected();
 
   Handler().UpdatePullStatusIfNeeded();
 
@@ -288,6 +293,7 @@ void AudioNode::DisconnectAllFromOutput(unsigned output_index) {
   Handler().Output(output_index).DisconnectAll();
   connected_nodes_[output_index] = nullptr;
   connected_params_[output_index] = nullptr;
+  RecordReplayUpdateConnected();
 }
 
 bool AudioNode::DisconnectFromOutputIfConnected(
@@ -302,6 +308,7 @@ bool AudioNode::DisconnectFromOutputIfConnected(
   }
   AudioNodeWiring::Disconnect(output, input);
   connected_nodes_[output_index]->erase(&destination);
+  RecordReplayUpdateConnected();
   return true;
 }
 
@@ -313,7 +320,23 @@ bool AudioNode::DisconnectFromOutputIfConnected(unsigned output_index,
   }
   AudioNodeWiring::Disconnect(output, param.Handler());
   connected_params_[output_index]->erase(&param);
+  RecordReplayUpdateConnected();
   return true;
+}
+
+void AudioNode::RecordReplayUpdateConnected() {
+  if (!recordreplay::IsRecordingOrReplaying(
+          "leak-references", "AudioNode::RecordReplayUpdateConnected")) {
+    return;
+  }
+  bool connected = false;
+  for (const auto& nodes : connected_nodes_) {
+    connected |= nodes && !nodes->empty();
+  }
+  for (const auto& params : connected_params_) {
+    connected |= params && !params->empty();
+  }
+  context()->RecordReplaySetConnectedNode(this, connected);
 }
 
 void AudioNode::disconnect() {

@@ -8,7 +8,9 @@
 #include <atomic>
 
 #include "base/notreached.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_node.h"
+#include "third_party/blink/renderer/platform/wtf/threading.h"
 
 namespace blink {
 
@@ -37,7 +39,14 @@ class AudioDestinationHandler : public AudioHandler {
   virtual void RestartRendering() = 0;
 
   size_t CurrentSampleFrame() const {
-    return current_sample_frame_.load(std::memory_order_acquire);
+    size_t frame = current_sample_frame_.load(std::memory_order_acquire);
+    // The audio thread advances the frame while the main thread reads it, so
+    // reads on the main thread are recorded.
+    if (recordreplay::IsRecordingOrReplaying() && IsMainThread()) {
+      frame = recordreplay::RecordReplayValue(
+          "AudioDestinationHandler::CurrentSampleFrame", frame);
+    }
+    return frame;
   }
 
   double CurrentTime() const { return CurrentSampleFrame() / SampleRate(); }

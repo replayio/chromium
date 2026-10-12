@@ -59,7 +59,7 @@ class MODULES_EXPORT ConvolverHandler final : public AudioHandler {
 
   // This synchronizes dynamic changes to the convolution impulse response with
   // process().
-  mutable base::Lock process_lock_;
+  mutable base::Lock process_lock_{"ConvolverHandler"};
 
   // Normalize the impulse response or not. Must default to true.
   bool normalize_ = true;

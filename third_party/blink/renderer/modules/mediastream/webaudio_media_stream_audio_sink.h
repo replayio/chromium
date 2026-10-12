@@ -90,7 +90,7 @@ class MODULES_EXPORT WebAudioMediaStreamAudioSink
   media::AudioParameters sink_params_ GUARDED_BY(lock_);
 
   // Protects the above variables.
-  base::Lock lock_;
+  base::Lock lock_{"WebAudioMediaStreamAudioSink"};
 
   // No lock protection needed since only accessed in WebVector version of
   // ProvideInput().

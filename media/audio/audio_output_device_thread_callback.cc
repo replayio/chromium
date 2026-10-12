@@ -89,8 +89,24 @@ void AudioOutputDeviceThreadCallback::Process(uint32_t control_signal) {
   // frames, and ask client to render audio.  Since |output_bus_| is wrapping
   // the shared memory the Render() call is writing directly into the shared
   // memory.
-  render_callback_->Render(delay, delay_timestamp, frames_skipped,
-                           output_bus_.get());
+  // The audio service also writes this shared memory, which isn't recorded,
+  // so while recording or replaying the client renders into memory only this
+  // process writes, and the result is copied to the shared memory afterwards.
+  if (recordreplay::IsRecordingOrReplaying() &&
+      !audio_parameters_.IsBitstreamFormat()) {
+    if (!record_replay_bus_) {
+      record_replay_bus_ = media::AudioBus::Create(audio_parameters_);
+    }
+    // Like the audio service zeroing the shared memory, so a render that
+    // writes nothing outputs silence.
+    record_replay_bus_->Zero();
+    render_callback_->Render(delay, delay_timestamp, frames_skipped,
+                             record_replay_bus_.get());
+    record_replay_bus_->CopyTo(output_bus_.get());
+  } else {
+    render_callback_->Render(delay, delay_timestamp, frames_skipped,
+                             output_bus_.get());
+  }
 
   if (audio_parameters_.IsBitstreamFormat()) {
     buffer->params.bitstream_data_size = output_bus_->GetBitstreamDataSize();

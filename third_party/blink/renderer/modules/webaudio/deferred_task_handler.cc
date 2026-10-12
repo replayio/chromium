@@ -337,6 +337,17 @@ void DeferredTaskHandler::AddRenderingOrphanHandler(
   rendering_orphan_handlers_.push_back(std::move(handler));
 }
 
+void DeferredTaskHandler::RecordReplayKeepDisposedHandler(
+    scoped_refptr<AudioHandler> handler) {
+  AssertGraphOwner();
+  replay_strong_disposed_handlers_.push_back(std::move(handler));
+}
+
+void DeferredTaskHandler::RecordReplayReleaseDisposedHandlers() {
+  AssertGraphOwner();
+  replay_strong_disposed_handlers_.clear();
+}
+
 void DeferredTaskHandler::RequestToDeleteHandlersOnMainThread() {
   DCHECK(IsAudioThread());
   AssertGraphOwner();
@@ -377,6 +388,7 @@ void DeferredTaskHandler::ClearHandlersToBeDeleted() {
   tail_processing_handlers_.clear();
   rendering_orphan_handlers_.clear();
   deletable_orphan_handlers_.clear();
+  replay_strong_disposed_handlers_.clear();
   automatic_pull_handlers_.clear();
   finished_source_handlers_.clear();
   active_source_handlers_.clear();

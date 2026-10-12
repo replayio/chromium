@@ -139,6 +139,16 @@ class MODULES_EXPORT BaseAudioContext
   // does nothing useful because the context is closed.
   void WarnForConnectionIfContextClosed() const;
 
+  // The GC disposing a node disconnects it at a point the audio thread's
+  // rendering isn't ordered against, and only where the GC runs. So while
+  // recording or replaying, nodes with outgoing connections are kept alive
+  // until script disconnects them.
+  void RecordReplaySetConnectedNode(AudioNode*, bool connected);
+
+  // Keeps the handler of a node the GC disposed while recording or replaying
+  // until nothing can render it anymore.
+  void RecordReplayKeepDisposedHandler(scoped_refptr<AudioHandler>);
+
   // Return true if the destination is pulling on the audio graph.  Otherwise
   // return false.
   virtual bool IsPullingAudioGraph() const = 0;
@@ -433,6 +443,8 @@ class MODULES_EXPORT BaseAudioContext
   scoped_refptr<AudioDestinationHandler> destination_handler_;
 
   Member<AudioWorklet> audio_worklet_;
+
+  HeapHashSet<Member<AudioNode>> replay_strong_connected_nodes_;
 
   // In order to update some information (e.g. current frame) in
   // AudioWorkletGlobalScope *synchronously*, the context needs to keep the
