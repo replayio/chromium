@@ -383,12 +383,9 @@ LocalFrame::~LocalFrame() {
   DCHECK(!view_);
   DCHECK(!frame_color_overlay_);
 
-  if (!IsA<LocalFrame>(Tree().Parent())) {
-    recordreplay::CommandDiagnostic(
-        "[RUN-2486-2577] ~LocalFrame %d",
-        WeakIdentifierMap<LocalFrame>::HasIdentifier(this)
-            ? WeakIdentifierMap<LocalFrame>::ExistingIdentifier(this)
-            : -1);
+  if (record_replay_detached_local_root_id_) {
+    recordreplay::CommandDiagnostic("[RUN-2486-2577] ~LocalFrame %d",
+                                    *record_replay_detached_local_root_id_);
   }
   if (IsAdFrame())
     InstanceCounters::DecrementCounter(InstanceCounters::kAdSubframeCounter);
@@ -620,11 +617,13 @@ bool LocalFrame::DetachImpl(FrameDetachType type) {
   mojo_handler_->DidDetachFrame();
 
   if (!IsA<LocalFrame>(Tree().Parent())) {
-    recordreplay::CommandDiagnosticTrace(
-        "[RUN-2486-2577] LocalFrame::DetachImpl %d",
+    record_replay_detached_local_root_id_ =
         WeakIdentifierMap<LocalFrame>::HasIdentifier(this)
             ? WeakIdentifierMap<LocalFrame>::ExistingIdentifier(this)
-            : -1);
+            : -1;
+    recordreplay::CommandDiagnosticTrace(
+        "[RUN-2486-2577] LocalFrame::DetachImpl %d",
+        *record_replay_detached_local_root_id_);
   }
   WeakIdentifierMap<LocalFrame>::NotifyObjectDestroyed(this);
 
