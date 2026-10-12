@@ -37,7 +37,6 @@
 #include "base/numerics/safe_conversions.h"
 #include "base/path_service.h"
 #include "base/posix/eintr_wrapper.h"
-#include "base/record_replay.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
@@ -99,7 +98,9 @@ static bool RecordReplayHasDivergedFromRecording() {
 // recording while a thread is in there. getenv reads the recorded environment
 // when replaying, so the sleep is replayed too.
 static void RecordReplayMaybeDelayAllocateFileRegion() {
-  if (!recordreplay::IsRecordingOrReplaying()) {
+  // The driver's symbols are only there when recording or replaying.
+  static void* fnptr = LookupRecordReplaySymbol("RecordReplayIsReplaying");
+  if (fnptr == reinterpret_cast<void*>(1)) {
     return;
   }
   static const char* delay =
