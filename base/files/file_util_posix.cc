@@ -96,7 +96,8 @@ static bool RecordReplayHasDivergedFromRecording() {
 // RECORD_REPLAY_TEST_ALLOCATE_FILE_REGION_DELAY_MS milliseconds inside every
 // AllocateFileRegion, after its divergence check. Tests use it to end a
 // recording while a thread is in there. getenv reads the recorded environment
-// when replaying, so the sleep is replayed too.
+// when replaying, so the sleep is replayed too. It sleeps in short steps and
+// stops once the replay diverges, as a diverged sleep really waits.
 static void RecordReplayMaybeDelayAllocateFileRegion() {
   // The driver's symbols are only there when recording or replaying.
   static void* fnptr = LookupRecordReplaySymbol("RecordReplayIsReplaying");
@@ -106,7 +107,11 @@ static void RecordReplayMaybeDelayAllocateFileRegion() {
   static const char* delay =
       getenv("RECORD_REPLAY_TEST_ALLOCATE_FILE_REGION_DELAY_MS");
   if (delay) {
-    base::PlatformThread::Sleep(base::Milliseconds(atoi(delay)));
+    for (int slept = 0; slept < atoi(delay) &&
+                        !RecordReplayHasDivergedFromRecording();
+         slept += 10) {
+      base::PlatformThread::Sleep(base::Milliseconds(10));
+    }
   }
 }
 
