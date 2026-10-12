@@ -930,7 +930,9 @@ bool AllocateFileRegion(File* file, int64_t offset, size_t size) {
 
   // Trying to resize a file for e.g. shared memory will fail when diverged
   // from the recording. Pretend things worked, there isn't a file or shared
-  // memory backing anyways.
+  // memory backing anyways. A thread can also diverge while it's in here past
+  // this check, when a replay diverges after the thread's recorded data ended
+  // here, so the failures below are ignored when diverged too.
   if (RecordReplayHasDivergedFromRecording())
     return true;
 
@@ -940,7 +942,7 @@ bool AllocateFileRegion(File* file, int64_t offset, size_t size) {
   const int64_t original_file_len = file->GetLength();
   if (original_file_len < 0) {
     DPLOG(ERROR) << "fstat " << file->GetPlatformFile();
-    return false;
+    return RecordReplayHasDivergedFromRecording();
   }
 
   // Increase the actual length of the file, if necessary. This can fail if
@@ -953,7 +955,7 @@ bool AllocateFileRegion(File* file, int64_t offset, size_t size) {
       !IsValueInRangeForNumericType<off_t>(new_file_len) ||
       !file->SetLength(std::max(original_file_len, new_file_len))) {
     DPLOG(ERROR) << "ftruncate " << file->GetPlatformFile();
-    return false;
+    return RecordReplayHasDivergedFromRecording();
   }
 
   // Realize the extent of the file so that it can't fail (and crash) later
@@ -996,14 +998,16 @@ bool AllocateFileRegion(File* file, int64_t offset, size_t size) {
     char existing_byte;
     if (HANDLE_EINTR(pread(file->GetPlatformFile(), &existing_byte, 1,
                            static_cast<off_t>(i))) != 1) {
-      return false;  // Can't read? Not viable.
+      // Can't read? Not viable.
+      return RecordReplayHasDivergedFromRecording();
     }
     if (existing_byte != 0) {
       continue;  // Block has data so must already exist.
     }
     if (HANDLE_EINTR(pwrite(file->GetPlatformFile(), &existing_byte, 1,
                             static_cast<off_t>(i))) != 1) {
-      return false;  // Can't write? Not viable.
+      // Can't write? Not viable.
+      return RecordReplayHasDivergedFromRecording();
     }
   }
 
