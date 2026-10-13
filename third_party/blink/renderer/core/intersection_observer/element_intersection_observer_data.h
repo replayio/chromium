@@ -54,12 +54,16 @@ class CORE_EXPORT ElementIntersectionObserverData final
 
  private:
   // IntersectionObservations for which the Node owning this data is target.
-  HeapHashMap<Member<IntersectionObserver>, Member<IntersectionObservation>>
+  HeapHashMap<Member<IntersectionObserver>,
+              Member<IntersectionObservation>,
+              WTF::MemberHashRecordReplayRegisteredPointerId<IntersectionObserver>>
       observations_;
   // IntersectionObservers for which the Node owning this data is root.
   // Weak because once an observer is unreachable from javascript and has no
   // active observations, it should be allowed to die.
-  HeapHashSet<WeakMember<IntersectionObserver>> observers_;
+  HeapHashSet<WeakMember<IntersectionObserver>,
+              WTF::MemberHashRecordReplayRegisteredPointerId<IntersectionObserver>>
+      observers_;
 };
 
 }  // namespace blink
