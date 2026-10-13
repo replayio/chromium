@@ -91,23 +91,26 @@ static void RecordReplayEndDisallowEvents() {
   }
 }
 
+// Both are looked up before events are passed through: dlsym is passed
+// through as well then, and the real dlsym doesn't find the bindings.
+static void* gRecordReplayBeginPassThroughEvents;
+static void* gRecordReplayEndPassThroughEvents;
+
 static void RecordReplayBeginPassThroughEvents() {
-  static void* fnptr;
-  if (!fnptr) {
-    fnptr = LookupRecordReplaySymbol("RecordReplayBeginPassThroughEvents");
+  if (!gRecordReplayBeginPassThroughEvents) {
+    gRecordReplayBeginPassThroughEvents =
+        LookupRecordReplaySymbol("RecordReplayBeginPassThroughEvents");
+    gRecordReplayEndPassThroughEvents =
+        LookupRecordReplaySymbol("RecordReplayEndPassThroughEvents");
   }
-  if (fnptr != reinterpret_cast<void*>(1)) {
-    reinterpret_cast<void(*)()>(fnptr)();
+  if (gRecordReplayBeginPassThroughEvents != reinterpret_cast<void*>(1)) {
+    reinterpret_cast<void(*)()>(gRecordReplayBeginPassThroughEvents)();
   }
 }
 
 static void RecordReplayEndPassThroughEvents() {
-  static void* fnptr;
-  if (!fnptr) {
-    fnptr = LookupRecordReplaySymbol("RecordReplayEndPassThroughEvents");
-  }
-  if (fnptr != reinterpret_cast<void*>(1)) {
-    reinterpret_cast<void(*)()>(fnptr)();
+  if (gRecordReplayEndPassThroughEvents != reinterpret_cast<void*>(1)) {
+    reinterpret_cast<void(*)()>(gRecordReplayEndPassThroughEvents)();
   }
 }
 
