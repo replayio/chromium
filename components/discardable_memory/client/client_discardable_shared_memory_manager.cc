@@ -389,8 +389,8 @@ ClientDiscardableSharedMemoryManager::AllocateLockedDiscardableMemory(
   }
 
 #if BUILDFLAG(IS_POSIX)
-  // A thread queued on |lock_| when the replay diverged gets here after the
-  // check above.
+  // The replay can diverge after the check at the top of this function, e.g.
+  // while this thread waits on |lock_|.
   if (recordreplay::AreEventsUnavailable()) {
     return RecordReplayAllocateLocalDiscardableMemory(size);
   }
@@ -686,9 +686,11 @@ ClientDiscardableSharedMemoryManager::AllocateLockedDiscardableSharedMemory(
   // this process and the contents the browser wrote aren't restored. The zero
   // header reads as an unlocked, purged segment, which another thread's
   // ReleasePurgedMemory unmaps while it's in use.
+#if BUILDFLAG(IS_POSIX)
   if (recordreplay::HasDivergedFromRecording()) {
     return nullptr;
   }
+#endif
 
   discardable_memory_ipc_error_cause.Clear();
   discardable_memory_ipc_requested_size.Clear();
