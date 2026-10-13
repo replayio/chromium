@@ -557,7 +557,7 @@ NodeChannel::NodeChannel(
   if (recordreplay::IsRecordingOrReplaying() &&
       !recordreplay::AreEventsDisallowed()) {
     record_replay_release_ordered_lock_id_ =
-        recordreplay::CreateOrderedLock("NodeChannel.Release");
+        recordreplay::CreateOrderedLock("NodeChannel");
   }
   InitializeLocalCapabilities();
 }
