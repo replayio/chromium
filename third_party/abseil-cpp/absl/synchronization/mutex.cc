@@ -213,7 +213,7 @@ void RecordReplayInitializeMutexSlowPath() {
   // freelist and LowLevelAlloc's arenas.
   base_internal::SpinLock::RecordReplayInitializeSlowPath();
   // The thread identity key and LowLevelAlloc's global arenas, which the
-  // first thread to block creates.
+  // first thread to take the slow path or wait creates.
   GetOrCreateCurrentThreadIdentity();
 }
 

@@ -91,6 +91,7 @@ static void RecordReplayEndDisallowEvents() {
   }
 }
 
+#if defined(ABSL_INTERNAL_UNSCALED_CYCLECLOCK_FREQUENCY_IS_CPU_FREQUENCY)
 // Both are looked up before events are passed through: dlsym is passed
 // through as well then, and the real dlsym doesn't find the bindings.
 static void* gRecordReplayBeginPassThroughEvents;
@@ -113,6 +114,7 @@ static void RecordReplayEndPassThroughEvents() {
     reinterpret_cast<void(*)()>(gRecordReplayEndPassThroughEvents)();
   }
 }
+#endif  // ABSL_INTERNAL_UNSCALED_CYCLECLOCK_FREQUENCY_IS_CPU_FREQUENCY
 
 namespace absl {
 ABSL_NAMESPACE_BEGIN
