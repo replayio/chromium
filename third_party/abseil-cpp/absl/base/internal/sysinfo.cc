@@ -91,31 +91,6 @@ static void RecordReplayEndDisallowEvents() {
   }
 }
 
-#if defined(ABSL_INTERNAL_UNSCALED_CYCLECLOCK_FREQUENCY_IS_CPU_FREQUENCY)
-// Both are looked up before events are passed through: dlsym is passed
-// through as well then, and the real dlsym doesn't find the bindings.
-static void* gRecordReplayBeginPassThroughEvents;
-static void* gRecordReplayEndPassThroughEvents;
-
-static void RecordReplayBeginPassThroughEvents() {
-  if (!gRecordReplayBeginPassThroughEvents) {
-    gRecordReplayBeginPassThroughEvents =
-        LookupRecordReplaySymbol("RecordReplayBeginPassThroughEvents");
-    gRecordReplayEndPassThroughEvents =
-        LookupRecordReplaySymbol("RecordReplayEndPassThroughEvents");
-  }
-  if (gRecordReplayBeginPassThroughEvents != reinterpret_cast<void*>(1)) {
-    reinterpret_cast<void(*)()>(gRecordReplayBeginPassThroughEvents)();
-  }
-}
-
-static void RecordReplayEndPassThroughEvents() {
-  if (gRecordReplayEndPassThroughEvents != reinterpret_cast<void*>(1)) {
-    reinterpret_cast<void(*)()>(gRecordReplayEndPassThroughEvents)();
-  }
-}
-#endif  // ABSL_INTERNAL_UNSCALED_CYCLECLOCK_FREQUENCY_IS_CPU_FREQUENCY
-
 namespace absl {
 ABSL_NAMESPACE_BEGIN
 namespace base_internal {
@@ -356,6 +331,28 @@ static double MeasureTscFrequency() {
   return last_measurement;
 }
 
+// Passes events through for its lifetime. Both bindings are looked up before
+// events are passed through: dlsym is passed through as well then, and the real
+// dlsym doesn't find them.
+struct RecordReplayAutoPassThroughEvents {
+  void* begin;
+  void* end;
+
+  RecordReplayAutoPassThroughEvents() {
+    begin = LookupRecordReplaySymbol("RecordReplayBeginPassThroughEvents");
+    end = LookupRecordReplaySymbol("RecordReplayEndPassThroughEvents");
+    if (begin != reinterpret_cast<void*>(1)) {
+      reinterpret_cast<void(*)()>(begin)();
+    }
+  }
+
+  ~RecordReplayAutoPassThroughEvents() {
+    if (end != reinterpret_cast<void*>(1)) {
+      reinterpret_cast<void(*)()>(end)();
+    }
+  }
+};
+
 #endif  // ABSL_INTERNAL_UNSCALED_CYCLECLOCK_FREQUENCY_IS_CPU_FREQUENCY
 
 static double GetNominalCPUFrequency() {
@@ -387,10 +384,8 @@ static double GetNominalCPUFrequency() {
   //
   // How many clock reads and sleeps the measurement takes depends on the TSC,
   // so it can't be replayed; it runs outside the recording.
-  RecordReplayBeginPassThroughEvents();
-  double tsc_frequency = MeasureTscFrequency();
-  RecordReplayEndPassThroughEvents();
-  return tsc_frequency;
+  RecordReplayAutoPassThroughEvents pass_through;
+  return MeasureTscFrequency();
 #else
 
   // If CPU scaling is in effect, we want to use the *maximum*
