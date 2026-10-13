@@ -19,6 +19,7 @@
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "base/strings/pattern.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/sys_string_conversions.h"
@@ -178,6 +179,17 @@ RendererBlinkPlatformImpl::RendererBlinkPlatformImpl(
       sudden_termination_disables_(0),
       is_locked_to_site_(false),
       main_thread_scheduler_(main_thread_scheduler) {
+  // The WorkerThreadRegistry is otherwise created by whichever worker thread
+  // first reaches DidStartWorkerThread, a race between workers started
+  // together (its LazyInstance state is an unordered atomic). Its constructor
+  // registers a TaskRunner pointer, so the winning thread's recording has an
+  // event the replay's winner may lack: "Value RegisterPointer TaskRunner"
+  // replayed where getrandom from the worker's V8 inspector setup was
+  // recorded. Creating it here, on the main thread, makes that point fixed.
+  if (recordreplay::IsRecordingOrReplaying()) {
+    WorkerThreadRegistry::Instance();
+  }
+
   // RenderThread may not exist in some tests.
   if (RenderThreadImpl::current()) {
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
