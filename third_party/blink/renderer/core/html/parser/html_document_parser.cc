@@ -1323,6 +1323,17 @@ TextPosition HTMLDocumentParser::GetTextPosition() const {
   OrdinalNumber line = current_string.CurrentLine();
   OrdinalNumber column = current_string.CurrentColumn();
 
+  // Written text the parser only gets to after a document.write() call has
+  // returned (e.g. behind a parser-blocking script it wrote) is positioned so
+  // that the input after it keeps its column, so a long enough remainder starts
+  // at a negative column. Scripts and event handlers parsed from it would get
+  // negative column offsets, and so would every location the recording reports
+  // in them.
+  if (column.ZeroBasedInt() < 0 &&
+      recordreplay::IsRecordingOrReplaying("html-text-position")) {
+    column = OrdinalNumber::First();
+  }
+
   return TextPosition(line, column);
 }
 
