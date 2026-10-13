@@ -216,6 +216,15 @@ RendererBlinkPlatformImpl::RendererBlinkPlatformImpl(
     // Match the `Wait` in destructor even if there is no IO runner.
     io_thread_id_ready_event_.Signal();
   }
+
+  if (recordreplay::IsRecordingOrReplaying("eager-initialization",
+                                           "WorkerThreadRegistry")) {
+    // The registry is a LazyInstance, and which thread wins the unrecorded
+    // compare and swap creating it differs between recording and replaying
+    // when worker threads start at the same time. Create it here, on the main
+    // thread, before any worker thread starts.
+    WorkerThreadRegistry::Instance();
+  }
 }
 
 RendererBlinkPlatformImpl::~RendererBlinkPlatformImpl() {
