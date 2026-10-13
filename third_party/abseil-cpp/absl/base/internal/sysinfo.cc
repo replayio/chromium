@@ -91,6 +91,26 @@ static void RecordReplayEndDisallowEvents() {
   }
 }
 
+static void RecordReplayBeginPassThroughEvents() {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayBeginPassThroughEvents");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    reinterpret_cast<void(*)()>(fnptr)();
+  }
+}
+
+static void RecordReplayEndPassThroughEvents() {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayEndPassThroughEvents");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    reinterpret_cast<void(*)()>(fnptr)();
+  }
+}
+
 namespace absl {
 ABSL_NAMESPACE_BEGIN
 namespace base_internal {
@@ -359,7 +379,13 @@ static double GetNominalCPUFrequency() {
   // value with a higher frequency than that of the real TSC
   // rate. Because of this, we prefer to measure the TSC rate
   // ourselves on i386 and x86-64.
-  return MeasureTscFrequency();
+  //
+  // How many clock reads and sleeps the measurement takes depends on the TSC,
+  // so it can't be replayed; it runs outside the recording.
+  RecordReplayBeginPassThroughEvents();
+  double tsc_frequency = MeasureTscFrequency();
+  RecordReplayEndPassThroughEvents();
+  return tsc_frequency;
 #else
 
   // If CPU scaling is in effect, we want to use the *maximum*
