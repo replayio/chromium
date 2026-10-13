@@ -44,6 +44,7 @@
 #include "content/public/common/webplugininfo.h"
 #include "content/public/renderer/content_renderer_client.h"
 #include "content/public/renderer/render_frame.h"
+#include "content/public/renderer/worker_thread.h"
 #include "content/renderer/media/audio_decoder.h"
 #include "content/renderer/media/batching_media_log.h"
 #include "content/renderer/media/inspector_media_event_handler.h"
@@ -219,11 +220,13 @@ RendererBlinkPlatformImpl::RendererBlinkPlatformImpl(
 
   if (recordreplay::IsRecordingOrReplaying("eager-initialization",
                                            "WorkerThreadRegistry")) {
-    // The registry is a LazyInstance, and which thread wins the unrecorded
-    // compare and swap creating it differs between recording and replaying
-    // when worker threads start at the same time. Create it here, on the main
-    // thread, before any worker thread starts.
+    // The registry and the worker thread data TLS slot are LazyInstances, and
+    // which thread wins the unrecorded compare and swap creating them differs
+    // between recording and replaying when worker threads start at the same
+    // time. Create both here, on the main thread, before any worker thread
+    // starts (GetCurrentId() creates the slot and returns 0 here).
     WorkerThreadRegistry::Instance();
+    WorkerThread::GetCurrentId();
   }
 }
 
