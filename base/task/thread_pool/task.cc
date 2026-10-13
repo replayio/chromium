@@ -52,10 +52,13 @@ Task::Task(const Location& posted_from,
   // DelayedTaskManager and Sequence break ties between equal delayed run times
   // (common for WebRTC task queues, which snap to metronome ticks) with
   // |sequence_num|, so the replay needs the numbers the recording handed out
-  // across threads.
-  if (recordreplay::IsRecordingOrReplaying("values", "ThreadPoolTaskSequenceNum")) {
+  // across threads. Immediate tasks are never compared by it.
+  if (!this->delayed_run_time.is_null() &&
+      recordreplay::IsRecordingOrReplaying("values",
+                                           "ThreadPoolTaskSequenceNum")) {
     this->sequence_num = static_cast<int>(recordreplay::RecordReplayValue(
-        "ThreadPoolTaskSequenceNum", static_cast<uintptr_t>(this->sequence_num)));
+        "ThreadPoolTaskSequenceNum",
+        static_cast<uintptr_t>(this->sequence_num)));
   }
 }
 
