@@ -231,7 +231,7 @@ class MOJO_SYSTEM_IMPL_EXPORT NodeChannel
   // Orders reference count decrements while recording/replaying. Which thread
   // drops the last reference decides whether the channel is deleted inline on
   // the IO thread or through a DeleteSoon task posted to it.
-  int record_replay_release_ordered_lock_ = 0;
+  int record_replay_release_ordered_lock_id_ = 0;
 };
 
 }  // namespace core

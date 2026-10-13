@@ -556,7 +556,7 @@ NodeChannel::NodeChannel(
 {
   if (recordreplay::IsRecordingOrReplaying() &&
       !recordreplay::AreEventsDisallowed()) {
-    record_replay_release_ordered_lock_ =
+    record_replay_release_ordered_lock_id_ =
         recordreplay::CreateOrderedLock("NodeChannel.Release");
   }
   InitializeLocalCapabilities();
@@ -879,14 +879,15 @@ void NodeChannel::OfferChannelUpgrade() {
 }
 
 void NodeChannel::Release() {
-  if (!record_replay_release_ordered_lock_) {
+  if (!record_replay_release_ordered_lock_id_) {
     base::RefCountedDeleteOnSequence<NodeChannel>::Release();
     return;
   }
 
   bool last_reference;
   {
-    recordreplay::AutoOrderedLock ordered(record_replay_release_ordered_lock_);
+    recordreplay::AutoOrderedLock ordered(
+        record_replay_release_ordered_lock_id_);
     recordreplay::Assert("[RUN-1307-1830] NodeChannel::Release %d %d",
                          HasOneRef(),
                          owning_task_runner()->RunsTasksInCurrentSequence());
@@ -904,9 +905,9 @@ void NodeChannel::Release() {
 }
 
 bool NodeChannel::RecordReplayHasOneRef() const {
-  if (!record_replay_release_ordered_lock_)
+  if (!record_replay_release_ordered_lock_id_)
     return HasOneRef();
-  recordreplay::AutoOrderedLock ordered(record_replay_release_ordered_lock_);
+  recordreplay::AutoOrderedLock ordered(record_replay_release_ordered_lock_id_);
   return HasOneRef();
 }
 
