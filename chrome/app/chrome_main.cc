@@ -20,6 +20,7 @@
 #include "content/public/common/content_switches.h"
 #include "headless/app/headless_shell_switches.h"
 #include "headless/public/headless_shell.h"
+#include "third_party/abseil-cpp/absl/synchronization/mutex.h"
 #include "ui/gfx/switches.h"
 
 #if BUILDFLAG(IS_MAC)
@@ -148,6 +149,14 @@ int ChromeMain(int argc, const char** argv) {
   if (recordreplay::IsRecordingOrReplaying("eager-initialization", "ChromeMain")) {
     // Force initialization that can otherwise happen at non-deterministic points.
     base::PowerMonitor::GetInstance();
+  }
+
+  if (recordreplay::IsRecordingOrReplaying("eager-initialization",
+                                           "AbslMutex")) {
+    // absl::Mutex contention isn't recorded, so the thread that first contends
+    // and runs the slow path's one-time initializations (some of which open
+    // files) differs between recording and replaying.
+    absl::RecordReplayInitializeMutexSlowPath();
   }
 
 #if BUILDFLAG(IS_WIN)
