@@ -52,6 +52,7 @@
 #include "third_party/blink/renderer/platform/bindings/parkable_string_manager.h"
 #include "third_party/blink/renderer/platform/font_family_names.h"
 #include "third_party/blink/renderer/platform/fonts/font_cache_memory_dump_provider.h"
+#include "third_party/blink/renderer/platform/graphics/image.h"
 #include "third_party/blink/renderer/platform/graphics/image_decoding_store.h"
 #include "third_party/blink/renderer/platform/graphics/parkable_image_manager.h"
 #include "third_party/blink/renderer/platform/heap/blink_gc_memory_dump_provider.h"
@@ -244,6 +245,14 @@ void Platform::InitializeMainThreadCommon(
     // constructs the store differs between recording and replaying. Construct
     // it here, on the main thread, before any decode thread can reach it.
     ImageDecodingStore::Instance();
+  }
+
+  if (recordreplay::IsRecordingOrReplaying("eager-initialization",
+                                           "SharedCCDecodeCache")) {
+    // Same for the canvas decode caches, which worker threads drawing their
+    // first canvas at the same time can otherwise race to construct.
+    Image::SharedCCDecodeCache(kN32_SkColorType);
+    Image::SharedCCDecodeCache(kRGBA_F16_SkColorType);
   }
 
   // font_family_names are used by platform/fonts and are initialized by core.
