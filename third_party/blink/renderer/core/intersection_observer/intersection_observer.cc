@@ -286,7 +286,10 @@ IntersectionObserver::IntersectionObserver(
       always_report_root_bounds_(always_report_root_bounds),
       can_use_cached_rects_(0),
       use_overflow_clip_edge_(use_overflow_clip_edge) {
-  // Pointer registration is needed for sorting in IntersectionObserverController::ComputeIntersections.
+  // Pointer registration gives observers a deterministic order while
+  // recording/replaying: in ElementIntersectionObserverData's hash tables,
+  // keyed by the pointer id, and in the sorting in
+  // IntersectionObserverController::ComputeIntersections.
   recordreplay::RegisterPointer("IntersectionObserver", this);
   switch (margin.size()) {
     case 0:
