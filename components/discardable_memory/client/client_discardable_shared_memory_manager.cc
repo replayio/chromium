@@ -85,6 +85,17 @@ void DeletedDiscardableSharedMemoryOnIO(
   (*manager_mojo)->DeletedDiscardableSharedMemory(id);
 }
 
+#if BUILDFLAG(IS_POSIX)
+// The browser's segments aren't available once the replay diverges, so memory
+// is allocated in this process instead.
+std::unique_ptr<base::DiscardableMemory>
+RecordReplayAllocateLocalDiscardableMemory(size_t size) {
+  static std::atomic<size_t> diverge_bytes_allocated{0};
+  return std::make_unique<base::MadvFreeDiscardableMemoryPosix>(
+      size, &diverge_bytes_allocated);
+}
+#endif
+
 }  // namespace
 
 constexpr base::TimeDelta
@@ -265,9 +276,7 @@ ClientDiscardableSharedMemoryManager::AllocateLockedDiscardableMemory(
   // When events unavailable, local alloc before lock_ (avoid waiting on Mojo holders).
 #if BUILDFLAG(IS_POSIX)
   if (recordreplay::AreEventsUnavailable()) {
-    static std::atomic<size_t> diverge_bytes_allocated{0};
-    return std::make_unique<base::MadvFreeDiscardableMemoryPosix>(
-        size, &diverge_bytes_allocated);
+    return RecordReplayAllocateLocalDiscardableMemory(size);
   }
 #endif
 
@@ -379,12 +388,26 @@ ClientDiscardableSharedMemoryManager::AllocateLockedDiscardableMemory(
     return nullptr;
   }
 
+#if BUILDFLAG(IS_POSIX)
+  // The replay can diverge after the check at the top of this function, e.g.
+  // while this thread waits on |lock_|.
+  if (recordreplay::AreEventsUnavailable()) {
+    return RecordReplayAllocateLocalDiscardableMemory(size);
+  }
+#endif
+
   // Ask parent process to allocate a new discardable shared memory segment.
   std::unique_ptr<base::DiscardableSharedMemory> shared_memory =
       AllocateLockedDiscardableSharedMemory(allocation_size_in_bytes, new_id);
 
-  if (!shared_memory)
+  if (!shared_memory) {
+#if BUILDFLAG(IS_POSIX)
+    if (recordreplay::HasDivergedFromRecording()) {
+      return RecordReplayAllocateLocalDiscardableMemory(size);
+    }
+#endif
     return nullptr;
+  }
 
   // Create span for allocated memory.
   // Spans are managed by |heap_| (the member of
@@ -657,6 +680,17 @@ ClientDiscardableSharedMemoryManager::AllocateLockedDiscardableSharedMemory(
     discardable_memory_ipc_requested_size.Set(base::NumberToString(size));
     return nullptr;
   }
+
+  // A replay that diverged before the mmap call completed (during the IPC or
+  // inside Map) maps zero-filled memory: the recorded descriptor isn't open in
+  // this process and the contents the browser wrote aren't restored. The zero
+  // header reads as an unlocked, purged segment, which another thread's
+  // ReleasePurgedMemory unmaps while it's in use.
+#if BUILDFLAG(IS_POSIX)
+  if (recordreplay::HasDivergedFromRecording()) {
+    return nullptr;
+  }
+#endif
 
   discardable_memory_ipc_error_cause.Clear();
   discardable_memory_ipc_requested_size.Clear();
