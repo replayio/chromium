@@ -656,7 +656,7 @@ void NodeController::DropPeer(const ports::NodeName& node_name,
     auto it = peers_.find(name);
 
     if (it != peers_.end()) {
-      auto channel_has_one_ref = it->second.get()->HasOneRef();
+      auto channel_has_one_ref = it->second->RecordReplayHasOneRef();
 
       // Since some amount of work happens after this point, there's no
       // guarantee that this assert will fire even if there is a thread

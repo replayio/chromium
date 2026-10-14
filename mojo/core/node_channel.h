@@ -179,6 +179,9 @@ class MOJO_SYSTEM_IMPL_EXPORT NodeChannel
 
   void Release();
 
+  // HasOneRef(), ordered with Release() while recording/replaying.
+  bool RecordReplayHasOneRef() const;
+
  private:
   friend class base::RefCountedDeleteOnSequence<NodeChannel>;
   friend class base::DeleteHelper<NodeChannel>;
@@ -224,6 +227,11 @@ class MOJO_SYSTEM_IMPL_EXPORT NodeChannel
 
   base::Lock remote_process_handle_lock_;
   base::Process remote_process_handle_;
+
+  // Orders reference count decrements while recording/replaying. Which thread
+  // drops the last reference decides whether the channel is deleted inline on
+  // the IO thread or through a DeleteSoon task posted to it.
+  int record_replay_release_ordered_lock_id_ = 0;
 };
 
 }  // namespace core

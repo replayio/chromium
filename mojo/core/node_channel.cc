@@ -554,6 +554,11 @@ NodeChannel::NodeChannel(
                                std::move(io_task_runner)))
 #endif
 {
+  if (recordreplay::IsRecordingOrReplaying() &&
+      !recordreplay::AreEventsDisallowed()) {
+    record_replay_release_ordered_lock_id_ =
+        recordreplay::CreateOrderedLock("NodeChannel");
+  }
   InitializeLocalCapabilities();
 }
 
@@ -874,10 +879,36 @@ void NodeChannel::OfferChannelUpgrade() {
 }
 
 void NodeChannel::Release() {
-  recordreplay::Assert("[RUN-1307-1830] NodeChannel::Release %d %d",
-                       HasOneRef(),
-                       owning_task_runner()->RunsTasksInCurrentSequence());
-  base::RefCountedDeleteOnSequence<NodeChannel>::Release();
+  if (!record_replay_release_ordered_lock_id_) {
+    base::RefCountedDeleteOnSequence<NodeChannel>::Release();
+    return;
+  }
+
+  bool last_reference;
+  {
+    recordreplay::AutoOrderedLock ordered(
+        record_replay_release_ordered_lock_id_);
+    recordreplay::Assert("[RUN-1307-1830] NodeChannel::Release %d %d",
+                         HasOneRef(),
+                         owning_task_runner()->RunsTasksInCurrentSequence());
+    last_reference = base::subtle::RefCountedThreadSafeBase::Release();
+  }
+  if (!last_reference)
+    return;
+
+  // Same as RefCountedDeleteOnSequence::DestructOnSequence(), which is
+  // private.
+  if (owning_task_runner()->RunsTasksInCurrentSequence())
+    delete this;
+  else
+    owning_task_runner()->DeleteSoon(FROM_HERE, this);
+}
+
+bool NodeChannel::RecordReplayHasOneRef() const {
+  if (!record_replay_release_ordered_lock_id_)
+    return HasOneRef();
+  recordreplay::AutoOrderedLock ordered(record_replay_release_ordered_lock_id_);
+  return HasOneRef();
 }
 
 uint64_t NodeChannel::RemoteCapabilities() const {
