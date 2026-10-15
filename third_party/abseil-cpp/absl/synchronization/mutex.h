@@ -79,6 +79,12 @@ ABSL_NAMESPACE_BEGIN
 class Condition;
 struct SynchWaitParams;
 
+// Runs the one-time initializations that the first contended Mutex
+// otherwise runs on whichever thread hits it. Record/replay calls this on the
+// main thread at startup, because contention isn't recorded and the thread
+// (and point) that first contends differs between recording and replaying.
+void RecordReplayInitializeMutexSlowPath();
+
 // -----------------------------------------------------------------------------
 // Mutex
 // -----------------------------------------------------------------------------

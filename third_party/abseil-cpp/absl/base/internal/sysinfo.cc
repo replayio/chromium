@@ -331,6 +331,28 @@ static double MeasureTscFrequency() {
   return last_measurement;
 }
 
+// Passes events through for its lifetime. Both bindings are looked up before
+// events are passed through: dlsym is passed through as well then, and the real
+// dlsym doesn't find them.
+struct RecordReplayAutoPassThroughEvents {
+  void* begin;
+  void* end;
+
+  RecordReplayAutoPassThroughEvents() {
+    begin = LookupRecordReplaySymbol("RecordReplayBeginPassThroughEvents");
+    end = LookupRecordReplaySymbol("RecordReplayEndPassThroughEvents");
+    if (begin != reinterpret_cast<void*>(1)) {
+      reinterpret_cast<void(*)()>(begin)();
+    }
+  }
+
+  ~RecordReplayAutoPassThroughEvents() {
+    if (end != reinterpret_cast<void*>(1)) {
+      reinterpret_cast<void(*)()>(end)();
+    }
+  }
+};
+
 #endif  // ABSL_INTERNAL_UNSCALED_CYCLECLOCK_FREQUENCY_IS_CPU_FREQUENCY
 
 static double GetNominalCPUFrequency() {
@@ -359,6 +381,10 @@ static double GetNominalCPUFrequency() {
   // value with a higher frequency than that of the real TSC
   // rate. Because of this, we prefer to measure the TSC rate
   // ourselves on i386 and x86-64.
+  //
+  // How many clock reads and sleeps the measurement takes depends on the TSC,
+  // so it can't be replayed; it runs outside the recording.
+  RecordReplayAutoPassThroughEvents pass_through;
   return MeasureTscFrequency();
 #else
 

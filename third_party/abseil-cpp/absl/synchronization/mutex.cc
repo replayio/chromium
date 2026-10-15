@@ -203,6 +203,20 @@ const MutexGlobals &GetMutexGlobals() {
 }
 }  // namespace
 
+void RecordReplayInitializeMutexSlowPath() {
+  // Spin and sleep limits (NumCPUs).
+  GetMutexGlobals();
+  // NominalCPUFrequency, which reads /sys/devices/system/cpu/cpu0/tsc_freq_khz
+  // (or measures the TSC) for the waiter priority refresh in Enqueue.
+  base_internal::CycleClock::Frequency();
+  // The adaptive spin count of the SpinLocks guarding the thread identity
+  // freelist and LowLevelAlloc's arenas.
+  base_internal::SpinLock::RecordReplayInitializeSlowPath();
+  // The thread identity key and LowLevelAlloc's global arenas, which the
+  // first thread to take the slow path or wait creates.
+  GetOrCreateCurrentThreadIdentity();
+}
+
 namespace synchronization_internal {
 // Returns the Mutex delay on iteration `c` depending on the given `mode`.
 // The returned value should be used as `c` for the next call to `MutexDelay`.
