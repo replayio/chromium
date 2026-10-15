@@ -311,7 +311,7 @@ vars = {
   # Three lines of non-changing comments so that
   # the commit queue can handle CLs rolling V8
   # and whatever else without interference from each other.
-  'v8_revision': 'db4bfca2fc45a56ea343a859a0d197303ac4319d',
+  'v8_revision': 'f5f8b38c7908475c9fad1c1cf230b1311d9a0320',
   # Three lines of non-changing comments so that
   # the commit queue can handle CLs rolling swarming_client
   # and whatever else without interference from each other.
@@ -334,7 +334,7 @@ vars = {
   #
   # Note this revision should be updated with
   # third_party/boringssl/roll_boringssl.py, not roll-dep.
-  'boringssl_revision': '723c851aeb6034db99f623b521bc8454c784684c',
+  'boringssl_revision': 'c366ab49b0a58a4d92b1bfc66a31abbe76131a49',
   # Three lines of non-changing comments so that
   # the commit queue can handle CLs rolling Fuchsia sdk
   # and whatever else without interference from each other.
@@ -1855,7 +1855,7 @@ deps = {
     Var('chromium_git') + '/external/github.com/gpuweb/cts.git' + '@' + 'eba1a78f3d741241b0dbee728561b61e9587a686',
 
   'src/third_party/webrtc':
-    'https://github.com/replayio/chromium-webrtc.git' + '@' + '09158f12eaedb115c8cb2da37e4e09a2b35fa86a',
+    'https://github.com/replayio/chromium-webrtc.git' + '@' + 'b9d794c43f3a2aed53659089375b4994394a97c2',
 
   # Wuffs' canonical repository is at github.com/google/wuffs, but we use
   # Skia's mirror of Wuffs, the same as in upstream Skia's DEPS file.
