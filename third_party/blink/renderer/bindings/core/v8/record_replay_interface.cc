@@ -290,6 +290,7 @@ const char* gReactDevtoolsScript = R""""(
 const stubFiberRoots = {};
 const unmountedFibersByRenderer = {};
 const unmountedFiberAlternatesByRenderer = {};
+const unmountedFiberLinksByRenderer = {};
 
 const stubHook = {
   isStub: true,
@@ -324,6 +325,14 @@ function getUnmountedFiberAlternatesForRenderer(rendererID) {
   }
 
   return unmountedFiberAlternatesByRenderer[rendererID];
+}
+
+function getUnmountedFiberLinksForRenderer(rendererID) {
+  if (!unmountedFiberLinksByRenderer[rendererID]) {
+    unmountedFiberLinksByRenderer[rendererID] = new Map();
+  }
+
+  return unmountedFiberLinksByRenderer[rendererID];
 }
 
 window.__REACT_DEVTOOLS_SAVED_RENDERERS__ = [];
@@ -364,6 +373,19 @@ function onCommitFiberUnmount(rendererID, fiber) {
     unmountedFiberAlternates.set(fiber, fiber.alternate);
   }
 
+  // React <= 17 also cuts the deleted subtree's links and clears its state
+  // before calling onCommitFiberRoot (React 18+ only does that after passive
+  // effects). The routine needs the tree as it was before the commit, so save
+  // what React is going to clear.
+  getUnmountedFiberLinksForRenderer(rendererID).set(fiber, {
+    child: fiber.child,
+    sibling: fiber.sibling,
+    return: fiber.return,
+    memoizedProps: fiber.memoizedProps,
+    memoizedState: fiber.memoizedState,
+    stateNode: fiber.stateNode,
+  });
+
   window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook:v1:" + annotationType, "");
 }
 
@@ -390,12 +412,14 @@ function onCommitFiberRoot(rendererID, root, priorityLevel) {
   // Get these so it's in scope in the routine eval, and we can clear it after the annotation
   const unmountedFibersSet = getUnmountedFibersSetForRenderer(rendererID);
   const unmountedFiberAlternates = getUnmountedFiberAlternatesForRenderer(rendererID);
+  const unmountedFiberLinks = getUnmountedFiberLinksForRenderer(rendererID);
 
   window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook:v1:" + annotationType, "");
 
   for (const fiber of unmountedFibersSet) {
     unmountedFiberAlternates.delete(fiber);
   }
+  unmountedFiberLinks.clear();
   unmountedFibersSet.clear();
 }
 
