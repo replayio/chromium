@@ -9,9 +9,15 @@
 
 namespace recordreplay {
 
-typedef void (*ResetPaintSurfaceCallback)();
-void SetResetPaintSurfaceCallback(ResetPaintSurfaceCallback reset_paint_surface);
+// Asks the compositor thread to pick the paint surface again at its next
+// frame. Any thread.
 void DoResetPaintSurface();
+
+// Whether a reset was requested since the last call. The compositor thread
+// calls this once per submitted frame; the answer is recorded, so a replay
+// applies each reset at the same frame as the recording did however the
+// requesting thread interleaves with the compositor thread.
+bool TakePaintSurfaceReset();
 
 }  // namespace recordreplay
 

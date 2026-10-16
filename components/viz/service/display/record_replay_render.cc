@@ -45,16 +45,12 @@ static viz::SoftwareOutputSurface* gOutputSurface;
 static viz::SoftwareRenderer* gRenderer;
 
 // For now we only support drawing a single surface, which is the first one
-// which the process tried to draw.  This variable can be reset when the
-// target surface is expected to change, such as after a navigation, so that
-// the new surface is not ignored.
-// The `SetResetPaintSurfaceCallback` call below is used to install a callback
-// that chrome invokes when the target surface is expected to change.
+// which the process tried to draw.  This variable is reset when the target
+// surface is expected to change, such as after a navigation, so that the new
+// surface is not ignored: other threads request that with
+// `recordreplay::DoResetPaintSurface` and the next submitted frame applies it.
 // See https://linear.app/replay/issue/RUN-2400
 static viz::LocalSurfaceId* gSurfaceId;
-static void ResetSurfaceId() {
-  gSurfaceId = nullptr;
-}
 
 static void InitializeRenderer() {
   std::unique_ptr<viz::SoftwareOutputDevice> output_device =
@@ -67,7 +63,6 @@ static void InitializeRenderer() {
                                         nullptr,
                                         nullptr);
 
-  recordreplay::SetResetPaintSurfaceCallback(ResetSurfaceId);
   recordreplay::SetGetCurrentViewportPixelSizeCallback(GetCurrentViewportPixelSizeImpl);
 }
 
@@ -85,6 +80,10 @@ static const viz::CompositorFrame* gCurrentFrame;
 void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
                            const viz::CompositorFrame& frame) {
   CHECK(IsRecordingOrReplaying());
+
+  if (TakePaintSurfaceReset()) {
+    gSurfaceId = nullptr;
+  }
 
   if (!gSurfaceId) {
     gSurfaceId = new viz::LocalSurfaceId(local_surface_id);
