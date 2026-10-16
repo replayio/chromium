@@ -52,7 +52,13 @@ static viz::SoftwareRenderer* gRenderer;
 // that chrome invokes when the target surface is expected to change.
 // See https://linear.app/replay/issue/RUN-2400
 static viz::LocalSurfaceId* gSurfaceId;
+
+// Resets run on the main thread and claims on the compositor thread, so this
+// orders them the same way when replaying as when recording.
+static int gRecordReplaySurfaceIdOrderedLockId;
+
 static void ResetSurfaceId() {
+  AutoOrderedLock ordered(gRecordReplaySurfaceIdOrderedLockId);
   gSurfaceId = nullptr;
 }
 
@@ -67,7 +73,6 @@ static void InitializeRenderer() {
                                         nullptr,
                                         nullptr);
 
-  recordreplay::SetResetPaintSurfaceCallback(ResetSurfaceId);
   recordreplay::SetGetCurrentViewportPixelSizeCallback(GetCurrentViewportPixelSizeImpl);
 }
 
@@ -86,19 +91,23 @@ void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
                            const viz::CompositorFrame& frame) {
   CHECK(IsRecordingOrReplaying());
 
-  if (!gSurfaceId) {
-    gSurfaceId = new viz::LocalSurfaceId(local_surface_id);
-    InitializeRenderer();
-  }
+  {
+    AutoOrderedLock ordered(gRecordReplaySurfaceIdOrderedLockId);
 
-  // Surfaces are allowed to have different parent sequence numbers from the
-  // original one.
-  if (gSurfaceId->child_sequence_number() != local_surface_id.child_sequence_number() ||
-      gSurfaceId->embed_token() != local_surface_id.embed_token()) {
-    Print("Ignoring composite to unknown surface %s, expected %s",
-          SurfaceIdString(local_surface_id).c_str(),
-          SurfaceIdString(*gSurfaceId).c_str());
-    return;
+    if (!gSurfaceId) {
+      gSurfaceId = new viz::LocalSurfaceId(local_surface_id);
+      InitializeRenderer();
+    }
+
+    // Surfaces are allowed to have different parent sequence numbers from the
+    // original one.
+    if (gSurfaceId->child_sequence_number() != local_surface_id.child_sequence_number() ||
+        gSurfaceId->embed_token() != local_surface_id.embed_token()) {
+      Print("Ignoring composite to unknown surface %s, expected %s",
+            SurfaceIdString(local_surface_id).c_str(),
+            SurfaceIdString(*gSurfaceId).c_str());
+      return;
+    }
   }
 
   viz::AggregatedRenderPassList render_passes;
@@ -222,6 +231,14 @@ void InitPaintCallback() {
   if (!hasPaints) {
     hasPaints = true;
     V8RecordReplaySetPaintCallback(PaintCallback);
+
+    // ProxyMain creation precedes all of its compositor's frame submissions,
+    // so every SubmitCompositorFrame and ResetSurfaceId sees this lock.
+    if (!AreEventsDisallowed()) {
+      gRecordReplaySurfaceIdOrderedLockId =
+          CreateOrderedLock("recordreplay.gSurfaceId");
+    }
+    SetResetPaintSurfaceCallback(ResetSurfaceId);
   }
 }
 
