@@ -55,10 +55,10 @@ static viz::LocalSurfaceId* gSurfaceId;
 
 // Resets run on the main thread and claims on the compositor thread, so this
 // orders them the same way when replaying as when recording.
-static int gRecordReplaySurfaceIdOrderedLockId;
+static int gSurfaceIdOrderedLockId;
 
 static void ResetSurfaceId() {
-  AutoOrderedLock ordered(gRecordReplaySurfaceIdOrderedLockId);
+  AutoOrderedLock ordered(gSurfaceIdOrderedLockId);
   gSurfaceId = nullptr;
 }
 
@@ -92,7 +92,7 @@ void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
   CHECK(IsRecordingOrReplaying());
 
   {
-    AutoOrderedLock ordered(gRecordReplaySurfaceIdOrderedLockId);
+    AutoOrderedLock ordered(gSurfaceIdOrderedLockId);
 
     if (!gSurfaceId) {
       gSurfaceId = new viz::LocalSurfaceId(local_surface_id);
@@ -235,8 +235,7 @@ void InitPaintCallback() {
     // ProxyMain creation precedes all of its compositor's frame submissions,
     // so every SubmitCompositorFrame and ResetSurfaceId sees this lock.
     if (!AreEventsDisallowed()) {
-      gRecordReplaySurfaceIdOrderedLockId =
-          CreateOrderedLock("recordreplay.gSurfaceId");
+      gSurfaceIdOrderedLockId = CreateOrderedLock("recordreplay.gSurfaceId");
     }
     SetResetPaintSurfaceCallback(ResetSurfaceId);
   }
