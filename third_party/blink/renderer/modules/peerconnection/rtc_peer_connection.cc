@@ -40,6 +40,7 @@
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "base/task/thread_pool.h"
 #include "build/build_config.h"
 #include "build/buildflag.h"
@@ -2127,6 +2128,10 @@ RTCDtlsTransport* RTCPeerConnection::CreateOrUpdateDtlsTransport(
         CreateOrUpdateIceTransport(native_transport->ice_transport());
     transport = MakeGarbageCollected<RTCDtlsTransport>(
         GetExecutionContext(), std::move(native_transport), ice_transport);
+    if (recordreplay::IsRecordingOrReplaying(
+            "leak-references", "RTCPeerConnection::CreateOrUpdateDtlsTransport")) {
+      replay_strong_dtls_transports_.push_back(transport);
+    }
   }
   transport->ChangeState(information);
   return transport;
@@ -2745,6 +2750,18 @@ void RTCPeerConnection::CloseInternal() {
   if (sctp_transport_) {
     sctp_transport_->Close();
   }
+  // Each Close() has recorded side effects, and the map's order follows the
+  // native transports' addresses, which differ between recording and replay.
+  if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                           "RTCPeerConnection::CloseInternal")) {
+    HeapVector<Member<RTCDtlsTransport>> dtls_transports_copy =
+        replay_strong_dtls_transports_;
+    for (RTCDtlsTransport* dtls_transport : dtls_transports_copy) {
+      dtls_transport->Close();
+    }
+    feature_handle_for_scheduler_.reset();
+    return;
+  }
   // Since Close() can trigger JS-level callbacks, iterate over a copy
   // of the transports list.
   auto dtls_transports_copy = dtls_transports_by_native_transport_;
@@ -2843,6 +2860,7 @@ void RTCPeerConnection::Trace(Visitor* visitor) const {
   visitor->Trace(scheduled_events_);
   visitor->Trace(dtls_transports_by_native_transport_);
   visitor->Trace(ice_transports_by_native_transport_);
+  visitor->Trace(replay_strong_dtls_transports_);
   visitor->Trace(sctp_transport_);
   EventTargetWithInlineData::Trace(visitor);
   ExecutionContextLifecycleObserver::Trace(visitor);
