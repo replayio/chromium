@@ -2128,8 +2128,8 @@ RTCDtlsTransport* RTCPeerConnection::CreateOrUpdateDtlsTransport(
         CreateOrUpdateIceTransport(native_transport->ice_transport());
     transport = MakeGarbageCollected<RTCDtlsTransport>(
         GetExecutionContext(), std::move(native_transport), ice_transport);
-    if (recordreplay::IsRecordingOrReplaying(
-            "leak-references", "RTCPeerConnection::CreateOrUpdateDtlsTransport")) {
+    if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                             "RTCPeerConnection")) {
       replay_strong_dtls_transports_.push_back(transport);
     }
   }
@@ -2753,7 +2753,7 @@ void RTCPeerConnection::CloseInternal() {
   // Each Close() has recorded side effects, and the map's order follows the
   // native transports' addresses, which differ between recording and replay.
   if (recordreplay::IsRecordingOrReplaying("leak-references",
-                                           "RTCPeerConnection::CloseInternal")) {
+                                           "RTCPeerConnection")) {
     HeapVector<Member<RTCDtlsTransport>> dtls_transports_copy =
         replay_strong_dtls_transports_;
     for (RTCDtlsTransport* dtls_transport : dtls_transports_copy) {

@@ -529,8 +529,10 @@ class MODULES_EXPORT RTCPeerConnection final
   HeapHashMap<webrtc::IceTransportInterface*, WeakMember<RTCIceTransport>>
       ice_transports_by_native_transport_;
   // Every RTCDtlsTransport in creation order, while recording or replaying.
-  // Holding them strongly keeps a GC that happens on one side only from
-  // dropping them from dtls_transports_by_native_transport_.
+  // Once its native transport is closed and nothing else references it, a GC
+  // that happens on one side only would otherwise drop it from
+  // dtls_transports_by_native_transport_, so CloseInternal() would skip its
+  // ICE transport's stop() there.
   HeapVector<Member<RTCDtlsTransport>> replay_strong_dtls_transports_;
 
   // TODO(crbug.com/787254): Use RTCPeerConnectionHandler.
