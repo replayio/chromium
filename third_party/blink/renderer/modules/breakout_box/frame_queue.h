@@ -110,7 +110,9 @@ class FrameQueueHandle {
   }
 
  private:
-  mutable base::Lock lock_;
+  // Ordered while recording/replaying: whether QueueFrame() pushes and posts
+  // a task depends on |queue_| not having been released on another thread.
+  mutable base::Lock lock_{"FrameQueueHandle.lock_"};
   scoped_refptr<FrameQueue<NativeFrameType>> queue_ GUARDED_BY(lock_);
 };
 
