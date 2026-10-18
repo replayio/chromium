@@ -868,8 +868,9 @@ void BaseAudioContext::RecordReplayKeepDisposedHandler(
   // Nothing renders a closed context's handlers, but destroying one here, in
   // the GC, still has effects outside the graph: a MediaStreamAudioSource
   // handler removes its sink from the track, changing the sinks the audio
-  // capture thread delivers to. The context releases its kept handlers when
-  // it closes and when it is destroyed, so this one is leaked instead.
+  // capture thread delivers to. Kept handlers are released when the context
+  // closes, which has already happened, and any later release would also run
+  // in the GC, so this one is leaked instead.
   handler->AddRef();
 }
 
