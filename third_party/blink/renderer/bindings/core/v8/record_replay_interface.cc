@@ -758,11 +758,16 @@ bool RecordReplayIsReplayWindow(LocalFrame* frame) {
 }
 
 bool RecordReplayIsRootFrame(LocalFrame* frame) {
-  // Other local roots in this renderer (same-origin popups, OOPIFs) don't take
-  // over while the root's scripts are alive: they run as ordinary windows, and
-  // their contexts going away leaves the root's scripts alive.
-  return RecordReplayIsReplayWindow(frame) && frame->IsLocalRoot() &&
-         (!gReplayScriptsAlive || frame == gRootLocalFrame);
+  if (!RecordReplayIsReplayWindow(frame) || !frame->IsLocalRoot()) {
+    return false;
+  }
+  // While the root's scripts are alive, popups and OOPIFs in this renderer
+  // don't take over: they run as ordinary windows, and their contexts going
+  // away leaves the root's scripts alive. A main frame without an opener is
+  // the tab's next page, which a same-site navigation commits in this renderer
+  // before the old page leaves (into the back/forward cache, or unloaded).
+  return !gReplayScriptsAlive || frame == gRootLocalFrame ||
+         (frame->IsMainFrame() && !frame->Opener());
 }
 
 // Whether `frame` is the root frame our replay scripts are alive in.
