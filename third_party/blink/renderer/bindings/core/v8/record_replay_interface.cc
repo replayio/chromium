@@ -2975,11 +2975,20 @@ void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame
 
 void OnNewWindowAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> newContext) {
   recordreplay::AutoMarkReplayCode amrc;
+  // Other local roots have no window.top to share the root's globals with,
+  // so they get their own bindings, as isolated worlds do, without the
+  // command API.
+  const bool ordinaryLocalRoot = localFrame->IsLocalRoot() &&
+                                 !IsAliveRootFrame(localFrame) &&
+                                 gReplayScriptsAlive;
+  if (ordinaryLocalRoot) {
+    InstallRecordReplayGlobals(isolate, newContext);
+  }
+
   RunScript(isolate, newContext, gOnNewWindowScript,
             "record-replay-OnNewWindow");
 
-  if (localFrame->IsLocalRoot() && !IsAliveRootFrame(localFrame) &&
-      gReplayScriptsAlive) {
+  if (ordinaryLocalRoot) {
     RecordReplayOrdinaryLocalRootIds().insert(localFrame->RecordReplayId());
     if (gCDPMessageCallback) {
       RecordReplayEnableRuntimeForLocalRoot(isolate, localFrame);
