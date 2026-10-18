@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "base/logging.h"
+#include "base/record_replay.h"
 #include "base/system/sys_info.h"
 #include "media/base/audio_bus.h"
 #include "media/base/audio_codecs.h"
@@ -165,6 +166,9 @@ bool MediaRecorderHandler::CanSupportMimeType(const String& type,
   const bool audio = !video && EqualIgnoringASCIICase(type, "audio/webm");
   if (!video && !audio)
     return false;
+  // Video recording is unsupported while recording/replaying.
+  if (video && recordreplay::IsRecordingOrReplaying("no-video"))
+    return false;
 
   // Both |video| and |audio| support empty |codecs|; |type| == "video" supports
   // vp8, vp9, h264 and avc1 or opus; |type| = "audio", supports opus or pcm
@@ -218,6 +222,12 @@ bool MediaRecorderHandler::Initialize(
     DLOG(ERROR) << "Unsupported " << type.Utf8() << ";codecs=" << codecs.Utf8();
     return false;
   }
+  // Streams with video tracks fail as if their type was unsupported, and
+  // Start() refuses video tracks added after construction.
+  if (!media_stream->VideoComponents().empty() &&
+      recordreplay::IsRecordingOrReplaying("no-video")) {
+    return false;
+  }
 
   passthrough_enabled_ = type.empty();
 
@@ -268,6 +278,11 @@ bool MediaRecorderHandler::Start(int timeslice) {
 
   video_tracks_ = media_stream_->VideoComponents();
   audio_tracks_ = media_stream_->AudioComponents();
+
+  if (!video_tracks_.empty() &&
+      recordreplay::IsRecordingOrReplaying("no-video")) {
+    return false;
+  }
 
   if (video_tracks_.empty() && audio_tracks_.empty()) {
     LOG(WARNING) << __func__ << ": no media tracks.";

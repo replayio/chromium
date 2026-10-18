@@ -9,6 +9,7 @@
 #include <string>
 
 #include "base/memory/weak_ptr.h"
+#include "base/record_replay.h"
 #include "build/buildflag.h"
 #include "media/base/decoder_factory.h"
 #include "media/base/decoder_status.h"
@@ -246,6 +247,11 @@ class MediaVideoTaskWrapper {
       UpdateDecoderFactory();
 
     std::vector<std::unique_ptr<media::VideoDecoder>> video_decoders;
+
+    // Video decoding is unsupported while recording/replaying: without
+    // decoders, configure() fails like it does for unsupported configs.
+    if (recordreplay::IsRecordingOrReplaying("no-video"))
+      return video_decoders;
 
     // We can end up with a null |decoder_factory_| if
     // |hardware_preference_| filtered out all available factories.
