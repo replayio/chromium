@@ -863,7 +863,14 @@ void BaseAudioContext::RecordReplayKeepDisposedHandler(
     scoped_refptr<AudioHandler> handler) {
   if (context_state_ != kClosed) {
     GetDeferredTaskHandler().RecordReplayKeepDisposedHandler(std::move(handler));
+    return;
   }
+  // Nothing renders a closed context's handlers, but destroying one here, in
+  // the GC, still has effects outside the graph: a MediaStreamAudioSource
+  // handler removes its sink from the track, changing the sinks the audio
+  // capture thread delivers to. The context releases its kept handlers when
+  // it closes and when it is destroyed, so this one is leaked instead.
+  handler->AddRef();
 }
 
 void BaseAudioContext::Trace(Visitor* visitor) const {
