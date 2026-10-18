@@ -4,6 +4,8 @@
 
 #include "third_party/blink/renderer/platform/context_lifecycle_notifier.h"
 
+#include <algorithm>
+
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/context_lifecycle_observer.h"
 
@@ -78,18 +80,14 @@ void ContextLifecycleNotifier::NotifyContextDestroyed() {
                                     observer_ids, num_observers * sizeof(int));
 
     if (recordreplay::IsReplaying()) {
+      // There can be hundreds of thousands of observers (e.g. MediaQueryLists
+      // kept alive by HeapObserverSet), too many for a scan per observer.
+      std::sort(observer_ids, observer_ids + num_observers);
       HeapVector<Member<ContextLifecycleObserver>> new_observers;
       for (ContextLifecycleObserver* observer : observers) {
         int id = recordreplay::PointerId(observer);
         CHECK(id);
-        bool found = false;
-        for (wtf_size_t i = 0; i < num_observers; i++) {
-          if (observer_ids[i] == id) {
-            found = true;
-            break;
-          }
-        }
-        if (found)
+        if (std::binary_search(observer_ids, observer_ids + num_observers, id))
           new_observers.push_back(observer);
       }
 
