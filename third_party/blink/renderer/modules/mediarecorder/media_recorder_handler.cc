@@ -166,9 +166,6 @@ bool MediaRecorderHandler::CanSupportMimeType(const String& type,
   const bool audio = !video && EqualIgnoringASCIICase(type, "audio/webm");
   if (!video && !audio)
     return false;
-  // MediaRecorder can't encode video while recording/replaying.
-  if (video && recordreplay::IsRecordingOrReplaying("no-video"))
-    return false;
 
   // Both |video| and |audio| support empty |codecs|; |type| == "video" supports
   // vp8, vp9, h264 and avc1 or opus; |type| = "audio", supports opus or pcm
@@ -186,13 +183,23 @@ bool MediaRecorderHandler::CanSupportMimeType(const String& type,
   };
   static const char* const kAudioCodecs[] = {"opus", "pcm"};
 
-  auto* const* relevant_codecs_begin =
-      video ? std::begin(kVideoCodecs) : std::begin(kAudioCodecs);
-  auto* const* relevant_codecs_end =
-      video ? std::end(kVideoCodecs) : std::end(kAudioCodecs);
+  // While recording/replaying no video encoder is available: |video| types
+  // only support audio codecs, and need them listed because their default
+  // codecs include a video one.
+  const bool no_video_codecs =
+      video && recordreplay::IsRecordingOrReplaying("no-video");
+
+  auto* const* relevant_codecs_begin = video && !no_video_codecs
+                                           ? std::begin(kVideoCodecs)
+                                           : std::begin(kAudioCodecs);
+  auto* const* relevant_codecs_end = video && !no_video_codecs
+                                         ? std::end(kVideoCodecs)
+                                         : std::end(kAudioCodecs);
   std::vector<std::string> codecs_list;
   media::SplitCodecs(web_codecs.Utf8(), &codecs_list);
   media::StripCodecs(&codecs_list);
+  if (no_video_codecs && codecs_list.empty())
+    return false;
   for (const auto& codec : codecs_list) {
     String codec_string = String::FromUTF8(codec);
     if (std::none_of(relevant_codecs_begin, relevant_codecs_end,
@@ -220,11 +227,6 @@ bool MediaRecorderHandler::Initialize(
 
   if (!CanSupportMimeType(type, codecs)) {
     DLOG(ERROR) << "Unsupported " << type.Utf8() << ";codecs=" << codecs.Utf8();
-    return false;
-  }
-  // Streams with video tracks fail as if their type was unsupported.
-  if (!media_stream->VideoComponents().empty() &&
-      recordreplay::IsRecordingOrReplaying("no-video")) {
     return false;
   }
 
