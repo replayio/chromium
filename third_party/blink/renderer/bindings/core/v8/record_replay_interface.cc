@@ -55,6 +55,7 @@
 #include <cinttypes>
 #include <fstream>
 #include <string>
+#include <unordered_set>
 #include <vector>
 #include "crypto/secure_hash.h"
 #include "crypto/sha2.h"
@@ -757,17 +758,27 @@ bool RecordReplayIsReplayWindow(LocalFrame* frame) {
          frame->GetPage()->IsOrdinary();
 }
 
+// RecordReplayIds of the local roots that ran as ordinary windows while a
+// root's scripts were alive.
+static std::unordered_set<int>& RecordReplayOrdinaryLocalRootIds() {
+  static auto* ids = new std::unordered_set<int>();
+  return *ids;
+}
+
 bool RecordReplayIsRootFrame(LocalFrame* frame) {
   if (!RecordReplayIsReplayWindow(frame) || !frame->IsLocalRoot()) {
     return false;
   }
   // While the root's scripts are alive, popups and OOPIFs in this renderer
   // don't take over: they run as ordinary windows, and their contexts going
-  // away leaves the root's scripts alive. A main frame without an opener is
-  // the tab's next page, which a same-site navigation commits in this renderer
-  // before the old page leaves (into the back/forward cache, or unloaded).
+  // away leaves the root's scripts alive. A new outermost main frame without
+  // an opener is the tab's next page, which a same-site navigation commits in
+  // this renderer before the old page leaves (into the back/forward cache, or
+  // unloaded). A popup's later documents keep its frame, whose opener the page
+  // may have disowned since.
   return !gReplayScriptsAlive || frame == gRootLocalFrame ||
-         (frame->IsMainFrame() && !frame->Opener());
+         (frame->IsOutermostMainFrame() && !frame->Opener() &&
+          !RecordReplayOrdinaryLocalRootIds().count(frame->RecordReplayId()));
 }
 
 // Whether `frame` is the root frame our replay scripts are alive in.
@@ -2968,8 +2979,11 @@ void OnNewWindowAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8
             "record-replay-OnNewWindow");
 
   if (localFrame->IsLocalRoot() && !IsAliveRootFrame(localFrame) &&
-      gReplayScriptsAlive && gCDPMessageCallback) {
-    RecordReplayEnableRuntimeForLocalRoot(isolate, localFrame);
+      gReplayScriptsAlive) {
+    RecordReplayOrdinaryLocalRootIds().insert(localFrame->RecordReplayId());
+    if (gCDPMessageCallback) {
+      RecordReplayEnableRuntimeForLocalRoot(isolate, localFrame);
+    }
   }
 
   LocalFrame* parentFrame = DynamicTo<LocalFrame>(localFrame->Parent());
