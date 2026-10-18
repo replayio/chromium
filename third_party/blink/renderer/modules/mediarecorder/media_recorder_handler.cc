@@ -166,7 +166,7 @@ bool MediaRecorderHandler::CanSupportMimeType(const String& type,
   const bool audio = !video && EqualIgnoringASCIICase(type, "audio/webm");
   if (!video && !audio)
     return false;
-  // Video recording is unsupported while recording/replaying.
+  // MediaRecorder can't encode video while recording/replaying.
   if (video && recordreplay::IsRecordingOrReplaying("no-video"))
     return false;
 
@@ -222,8 +222,7 @@ bool MediaRecorderHandler::Initialize(
     DLOG(ERROR) << "Unsupported " << type.Utf8() << ";codecs=" << codecs.Utf8();
     return false;
   }
-  // Streams with video tracks fail as if their type was unsupported, and
-  // Start() refuses video tracks added after construction.
+  // Streams with video tracks fail as if their type was unsupported.
   if (!media_stream->VideoComponents().empty() &&
       recordreplay::IsRecordingOrReplaying("no-video")) {
     return false;
@@ -278,11 +277,6 @@ bool MediaRecorderHandler::Start(int timeslice) {
 
   video_tracks_ = media_stream_->VideoComponents();
   audio_tracks_ = media_stream_->AudioComponents();
-
-  if (!video_tracks_.empty() &&
-      recordreplay::IsRecordingOrReplaying("no-video")) {
-    return false;
-  }
 
   if (video_tracks_.empty() && audio_tracks_.empty()) {
     LOG(WARNING) << __func__ << ": no media tracks.";

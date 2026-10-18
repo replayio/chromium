@@ -6,6 +6,8 @@
 
 #include <algorithm>
 #include <limits>
+
+#include "base/record_replay.h"
 #include "third_party/blink/public/common/privacy_budget/identifiability_metric_builder.h"
 #include "third_party/blink/public/common/privacy_budget/identifiability_study_settings.h"
 #include "third_party/blink/public/common/privacy_budget/identifiable_surface.h"
@@ -260,6 +262,16 @@ void MediaRecorder::start(int time_slice, ExceptionState& exception_state) {
                                       "The MediaRecorder cannot start because"
                                       "there are no audio or video tracks "
                                       "available.");
+    return;
+  }
+
+  // Video tracks added after construction can't be recorded either, see
+  // MediaRecorderHandler::Initialize.
+  if (!stream_->getVideoTracks().empty() &&
+      recordreplay::IsRecordingOrReplaying("no-video")) {
+    exception_state.ThrowDOMException(
+        DOMExceptionCode::kNotSupportedError,
+        "The MediaRecorder cannot record video tracks.");
     return;
   }
 
