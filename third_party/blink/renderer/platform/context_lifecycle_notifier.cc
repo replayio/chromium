@@ -27,7 +27,7 @@ void ContextLifecycleNotifier::AddContextLifecycleObserver(
   observers_.AddObserver(observer);
 
   if (recordreplay::IsRecordingOrReplaying("values") && recordreplay::IsReplaying())
-    replay_observers_.push_back(observer);
+    replay_observers_.insert(observer);
 }
 
 void ContextLifecycleNotifier::RemoveContextLifecycleObserver(
@@ -35,12 +35,7 @@ void ContextLifecycleNotifier::RemoveContextLifecycleObserver(
   DCHECK(observers_.HasObserver(observer));
   observers_.RemoveObserver(observer);
 
-  for (wtf_size_t i = 0; i < replay_observers_.size(); i++) {
-    if (replay_observers_[i] == observer) {
-      replay_observers_.EraseAt(i);
-      break;
-    }
-  }
+  replay_observers_.erase(observer);
 }
 
 void ContextLifecycleNotifier::NotifyContextDestroyed() {
