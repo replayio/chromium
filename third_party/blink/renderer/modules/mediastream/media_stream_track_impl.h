@@ -36,6 +36,7 @@
 #include "third_party/blink/renderer/modules/mediastream/media_stream_track.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
+#include "third_party/blink/renderer/platform/heap/self_keep_alive.h"
 #include "third_party/blink/renderer/platform/mediastream/media_constraints.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_descriptor.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_source.h"
@@ -193,6 +194,14 @@ class MODULES_EXPORT MediaStreamTrackImpl : public MediaStreamTrack,
   HeapHashSet<WeakMember<MediaStreamTrack::Observer>> observers_;
   bool muted_ = false;
   MediaConstraints constraints_;
+
+  // While recording/replaying, a live track is kept until it ends. A dropped
+  // one is otherwise collected at a GC-dependent point, and its platform
+  // track's destructor (run from MediaStreamComponentImpl's prefinalizer with
+  // events disallowed) stops it: for audio, that removes its consumer from the
+  // source, changing the consumers the capture thread delivers to, or stops
+  // the source when it was the last one.
+  SelfKeepAlive<MediaStreamTrackImpl> replay_strong_self_;
 };
 
 }  // namespace blink
