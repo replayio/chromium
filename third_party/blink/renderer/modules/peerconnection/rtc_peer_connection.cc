@@ -40,6 +40,7 @@
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "base/task/thread_pool.h"
 #include "build/build_config.h"
 #include "build/buildflag.h"
@@ -628,6 +629,10 @@ RTCPeerConnection::RTCPeerConnection(
   closed_ = false;
   peer_handler_unregistered_ = false;
   suppress_events_ = false;
+  if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                           "RTCPeerConnection")) {
+    replay_strong_self_ = this;
+  }
 }
 
 RTCPeerConnection::~RTCPeerConnection() {
