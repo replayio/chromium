@@ -27,7 +27,8 @@ void InitializeRecordReplayAfterCheckpoint();
 bool RecordReplayIsReplayWindow(LocalFrame* frame);
 
 // Whether `frame` is a root frame our replay scripts run in. Gates
-//   OnRootFrameInit; the root is then tracked until ClearContexts.
+//   OnRootFrameInit; the root is then tracked until ClearContexts, and no
+//   other local root becomes the root before that.
 bool RecordReplayIsRootFrame(LocalFrame* frame);
 
 // Initialize everything that needs to be initialized with every root frame,

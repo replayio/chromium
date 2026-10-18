@@ -758,7 +758,11 @@ bool RecordReplayIsReplayWindow(LocalFrame* frame) {
 }
 
 bool RecordReplayIsRootFrame(LocalFrame* frame) {
-  return RecordReplayIsReplayWindow(frame) && frame->IsLocalRoot();
+  // Other local roots in this renderer (same-origin popups, OOPIFs) don't take
+  // over while the root's scripts are alive: they run as ordinary windows, and
+  // their contexts going away leaves the root's scripts alive.
+  return RecordReplayIsReplayWindow(frame) && frame->IsLocalRoot() &&
+         (!gReplayScriptsAlive || frame == gRootLocalFrame);
 }
 
 // Whether `frame` is the root frame our replay scripts are alive in.
