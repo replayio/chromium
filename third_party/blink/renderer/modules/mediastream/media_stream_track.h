@@ -54,9 +54,7 @@ class MODULES_EXPORT MediaStreamTrack
   class MODULES_EXPORT Observer : public GarbageCollectedMixin {
    public:
     Observer() {
-      // Pointer registration gives the tracks' observer sets a deterministic
-      // hash, so a track notifies its observers in the same order when
-      // replaying.
+      // Pointer registration is needed for hashing in the tracks' observers_.
       recordreplay::RegisterPointer("MediaStreamTrack::Observer", this);
     }
     virtual ~Observer() { recordreplay::UnregisterPointer(this); }

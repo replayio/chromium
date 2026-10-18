@@ -190,7 +190,12 @@ class MODULES_EXPORT MediaStreamTrackImpl : public MediaStreamTrack,
   Member<MediaStreamComponent> component_;
   Member<ImageCapture> image_capture_;
   WeakMember<ExecutionContext> execution_context_;
-  HeapHashSet<WeakMember<MediaStreamTrack::Observer>> observers_;
+  // setReadyState() notifies the observers in iteration order, which the
+  // registered pointer ids keep the same when replaying.
+  HeapHashSet<
+      WeakMember<MediaStreamTrack::Observer>,
+      WTF::MemberHashRecordReplayRegisteredPointerId<MediaStreamTrack::Observer>>
+      observers_;
   bool muted_ = false;
   MediaConstraints constraints_;
 };

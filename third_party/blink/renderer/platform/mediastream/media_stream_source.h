@@ -66,9 +66,7 @@ class PLATFORM_EXPORT MediaStreamSource final
   class PLATFORM_EXPORT Observer : public GarbageCollectedMixin {
    public:
     Observer() {
-      // Pointer registration gives MediaStreamSource::observers_ a
-      // deterministic hash, so SetReadyState() notifies the observers in the
-      // same order when replaying.
+      // Pointer registration is needed for hashing in observers_.
       recordreplay::RegisterPointer("MediaStreamSource::Observer", this);
     }
     virtual ~Observer() { recordreplay::UnregisterPointer(this); }
@@ -196,7 +194,11 @@ class PLATFORM_EXPORT MediaStreamSource final
   bool remote_;
   ReadyState ready_state_;
   bool requires_consumer_;
-  HeapHashSet<WeakMember<Observer>> observers_;
+  // SetReadyState() notifies the observers in iteration order, which the
+  // registered pointer ids keep the same when replaying.
+  HeapHashSet<WeakMember<Observer>,
+              WTF::MemberHashRecordReplayRegisteredPointerId<Observer>>
+      observers_;
   base::Lock audio_consumer_lock_;
   std::unique_ptr<ConsumerWrapper> audio_consumer_
       GUARDED_BY(audio_consumer_lock_);
