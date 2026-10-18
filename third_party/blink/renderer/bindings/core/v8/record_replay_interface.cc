@@ -875,9 +875,16 @@ static void SendMessageToFrontend(const v8_inspector::StringView& message) {
   }
 }
 
+// Id of CDP requests that C++ sends on its own. The command handlers only
+// expect responses to their own requests, so these responses aren't passed on.
+static constexpr int kRecordReplayInternalCDPRequestId = -1;
+
 struct InspectorChannel final : public v8_inspector::V8Inspector::Channel {
   void sendResponse(int callId,
                     std::unique_ptr<v8_inspector::StringBuffer> message) final {
+    if (callId == kRecordReplayInternalCDPRequestId) {
+      return;
+    }
     SendMessageToFrontend(message->string());
   }
   void sendNotification(std::unique_ptr<v8_inspector::StringBuffer> message) final {
@@ -976,6 +983,23 @@ v8_inspector::V8InspectorSession* getInspectorSession(v8::Isolate* isolate, int 
     }
   }
   return data->inspectorSession;
+}
+
+// Console API calls and execution contexts are reported only to sessions of
+// the context group they belong to that enabled the Runtime domain. The
+// command handlers enable it in the root's group; other local roots (popups,
+// OOPIFs) have groups of their own.
+static void RecordReplayEnableRuntimeForLocalRoot(v8::Isolate* isolate,
+                                                  LocalFrame* frame) {
+  recordreplay::AutoMarkReplayCode mark;
+  recordreplay::AutoDisallowEvents disallow(
+      "RecordReplayEnableRuntimeForLocalRoot");
+  std::string message =
+      "{\"id\":" + std::to_string(kRecordReplayInternalCDPRequestId) +
+      ",\"method\":\"Runtime.enable\"}";
+  getInspectorSession(isolate, WeakIdentifierMap<LocalFrame>::Identifier(frame))
+      ->dispatchProtocolMessage(v8_inspector::StringView(
+          reinterpret_cast<const uint8_t*>(message.c_str()), message.length()));
 }
 
 static int GetBlinkPersistentId(v8::Local<v8::Object> object) {
@@ -2942,6 +2966,11 @@ void OnNewWindowAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8
   recordreplay::AutoMarkReplayCode amrc;
   RunScript(isolate, newContext, gOnNewWindowScript,
             "record-replay-OnNewWindow");
+
+  if (localFrame->IsLocalRoot() && !IsAliveRootFrame(localFrame) &&
+      gReplayScriptsAlive && gCDPMessageCallback) {
+    RecordReplayEnableRuntimeForLocalRoot(isolate, localFrame);
+  }
 
   LocalFrame* parentFrame = DynamicTo<LocalFrame>(localFrame->Parent());
   recordreplay::Print(
