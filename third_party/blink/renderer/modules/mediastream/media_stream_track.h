@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
@@ -52,7 +53,13 @@ class MODULES_EXPORT MediaStreamTrack
  public:
   class MODULES_EXPORT Observer : public GarbageCollectedMixin {
    public:
-    virtual ~Observer() = default;
+    Observer() {
+      // Pointer registration gives the tracks' observer sets a deterministic
+      // hash, so a track notifies its observers in the same order when
+      // replaying.
+      recordreplay::RegisterPointer("MediaStreamTrack::Observer", this);
+    }
+    virtual ~Observer() { recordreplay::UnregisterPointer(this); }
     virtual void TrackChangedState() = 0;
   };
 
