@@ -54,7 +54,7 @@ void ContextLifecycleNotifier::NotifyContextDestroyed() {
   // When replaying, notify the same observers in the same order which were
   // notified when recording. Because of the use of weak pointers in the
   // HeapObserverSet the set contents can vary, so we manually record/replay
-  // the objects which should be notified. The replay_observers_ vector holds
+  // the objects which should be notified. The replay_observers_ set holds
   // strong references on the observers when replaying so none of the observers
   // we need to notify should already be collected.
   if (recordreplay::IsRecordingOrReplaying("values", "ContextLifecycleNotifier::NotifyContextDestroyed") &&
