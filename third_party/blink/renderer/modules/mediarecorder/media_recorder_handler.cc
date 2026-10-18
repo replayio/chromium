@@ -183,18 +183,19 @@ bool MediaRecorderHandler::CanSupportMimeType(const String& type,
   };
   static const char* const kAudioCodecs[] = {"opus", "pcm"};
 
+  auto* const* relevant_codecs_begin =
+      video ? std::begin(kVideoCodecs) : std::begin(kAudioCodecs);
+  auto* const* relevant_codecs_end =
+      video ? std::end(kVideoCodecs) : std::end(kAudioCodecs);
   // While recording/replaying no video encoder is available: |video| types
   // only support audio codecs, and need them listed because their default
   // codecs include a video one.
   const bool no_video_codecs =
       video && recordreplay::IsRecordingOrReplaying("no-video");
-
-  auto* const* relevant_codecs_begin = video && !no_video_codecs
-                                           ? std::begin(kVideoCodecs)
-                                           : std::begin(kAudioCodecs);
-  auto* const* relevant_codecs_end = video && !no_video_codecs
-                                         ? std::end(kVideoCodecs)
-                                         : std::end(kAudioCodecs);
+  if (no_video_codecs) {
+    relevant_codecs_begin = std::begin(kAudioCodecs);
+    relevant_codecs_end = std::end(kAudioCodecs);
+  }
   std::vector<std::string> codecs_list;
   media::SplitCodecs(web_codecs.Utf8(), &codecs_list);
   media::StripCodecs(&codecs_list);
