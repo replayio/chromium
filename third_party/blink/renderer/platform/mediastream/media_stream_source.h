@@ -194,8 +194,8 @@ class PLATFORM_EXPORT MediaStreamSource final
   bool remote_;
   ReadyState ready_state_;
   bool requires_consumer_;
-  // SetReadyState() notifies the observers in iteration order, which the
-  // registered pointer ids keep the same when replaying.
+  // SetReadyState() and SetCaptureHandle() notify the observers in iteration
+  // order, which the registered pointer ids keep the same when replaying.
   HeapHashSet<WeakMember<Observer>,
               WTF::MemberHashRecordReplayRegisteredPointerId<Observer>>
       observers_;
