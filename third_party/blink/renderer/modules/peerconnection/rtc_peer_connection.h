@@ -580,9 +580,9 @@ class MODULES_EXPORT RTCPeerConnection final
   // Insertable streams.
   bool encoded_insertable_streams_;
 
-  // While recording/replaying, a peer connection is never collected. Its
-  // context keeps it while the context lives, but once the context is
-  // destroyed it is collected at a GC-dependent point, and its sweep tears
+  // While recording/replaying, a peer connection is never collected. The
+  // fork's HeapObserverSet keeps it while its context lives, but once the
+  // context is destroyed it is collected at a GC-dependent point, and its sweep tears
   // down the RTCRtpSenders (removing their WebRTC audio sinks from the local
   // tracks the capture thread delivers to) and the RTCPeerConnectionHandler
   // (MediaStreamTrackMetrics sends RemoveTrack over mojo, and the native peer
