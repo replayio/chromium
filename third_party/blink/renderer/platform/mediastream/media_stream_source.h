@@ -66,7 +66,8 @@ class PLATFORM_EXPORT MediaStreamSource final
   class PLATFORM_EXPORT Observer : public GarbageCollectedMixin {
    public:
     Observer() {
-      // Pointer registration is needed for hashing and ordering observers_.
+      // Pointer registration is needed for notifying observers_ in pointer-id
+      // order.
       recordreplay::RegisterPointer("MediaStreamSource::Observer", this);
     }
     virtual ~Observer() { recordreplay::UnregisterPointer(this); }
@@ -194,12 +195,7 @@ class PLATFORM_EXPORT MediaStreamSource final
   bool remote_;
   ReadyState ready_state_;
   bool requires_consumer_;
-  // SetReadyState() and OnDeviceCaptureHandleChange() notify the observers in
-  // pointer-id order while recording/replaying, as the bucket order also
-  // depends on GC-time removals.
-  HeapHashSet<WeakMember<Observer>,
-              WTF::MemberHashRecordReplayRegisteredPointerId<Observer>>
-      observers_;
+  HeapHashSet<WeakMember<Observer>> observers_;
   base::Lock audio_consumer_lock_;
   std::unique_ptr<ConsumerWrapper> audio_consumer_
       GUARDED_BY(audio_consumer_lock_);
