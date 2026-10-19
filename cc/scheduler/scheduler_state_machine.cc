@@ -385,18 +385,21 @@ bool SchedulerStateMachine::ShouldDraw() const {
     return false;
   }
 
-  // [RecordReplay] A repaint's commit can follow a commit the recording's frame
-  // left pending, and it isn't drawn until it's activated too. It may only be
-  // ready to activate after the repaint's frame deadline, and no later frame
-  // comes after diverging from the recording, so it's drawn whenever it is.
+  // [RecordReplay] A repaint draws the newest tree, which is still pending when
+  // the recording's frame left a commit pending before the repaint's.
   if (replay_force_draw_ && has_pending_tree_) {
     return false;
   }
 
   // Except for the cases above, do not draw outside of the BeginImplFrame
   // deadline.
-  if (!replay_force_draw_ &&
-      begin_impl_frame_state_ != BeginImplFrameState::INSIDE_DEADLINE)
+  //
+  // [RecordReplay] A repaint's pending tree can be ready to activate only after
+  // its frame's deadline, and no later frame comes after diverging from the
+  // recording, so it's drawn once the frame is over.
+  if (begin_impl_frame_state_ != BeginImplFrameState::INSIDE_DEADLINE &&
+      !(replay_force_draw_ &&
+        begin_impl_frame_state_ == BeginImplFrameState::IDLE))
     return false;
 
   // Wait for ready to draw in full-pipeline mode or the browser compositor's
@@ -430,8 +433,9 @@ bool SchedulerStateMachine::ShouldActivateSyncTree() const {
   // compositor where scheduler does not control draw, and blocking commit
   // may lead to bad scheduling.
   //
-  // [RecordReplay] A repaint draws the tree it committed itself, so its commit
-  // can replace an active tree from the recording's frames that was never drawn.
+  // [RecordReplay] A repaint draws the newest tree, so a pending tree can be
+  // activated over an active tree from the recording's frames that was never
+  // drawn.
   if (!settings_.using_synchronous_renderer_compositor &&
       active_tree_needs_first_draw_ && !replay_force_draw_) {
     return false;
