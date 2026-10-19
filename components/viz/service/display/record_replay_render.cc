@@ -304,10 +304,6 @@ static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
 
   gRepaintMimeType = mime_type;
   gRepaintJPEGQuality = jpeg_quality;
-  gRepaintResult = nullptr;
-
-  base::WaitableEvent event;
-  gRepaintEvent = &event;
 
   // Update layout state on the main thread and commit a new paint.
   std::unique_ptr<cc::BeginMainFrameAndCommitState> begin_main_frame_state(
@@ -317,11 +313,21 @@ static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
 
   gCurrentCompositorProxy->BeginMainFrameWithBlocking(std::move(begin_main_frame_state), true);
 
+  // A draw that an earlier repaint which timed out still forces doesn't
+  // finish this one: there's no event to signal until this repaint's commit,
+  // and the commit clears the earlier forced draw. Such a draw can still
+  // signal the event after its repaint stopped waiting, so the event outlives
+  // repaints.
+  static base::WaitableEvent* event = new base::WaitableEvent();
+  event->Reset();
+  gRepaintResult = nullptr;
+  gRepaintEvent = event;
+
   // Trigger a new frame on the compositor thread.
   gCurrentCompositorProxy->RecordReplayRepaint();
 
   // Wait for the repainting frame to complete.
-  bool signaled = event.TimedWait(base::Milliseconds(3000));
+  bool signaled = event->TimedWait(base::Milliseconds(3000));
   if (!signaled) {
     Print("[RuntimeError] Failed waiting to get a repaint.");
     gRepaintResult = nullptr;
