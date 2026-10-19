@@ -6,14 +6,17 @@
 
 #include <map>
 #include <memory>
+#include <stdlib.h>
 
 #include "base/containers/flat_map.h"
 #include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "base/task/thread_pool.h"
 #include "base/thread_annotations.h"
+#include "base/threading/platform_thread.h"
 #include "base/time/time.h"
 #include "third_party/abseil-cpp/absl/functional/any_invocable.h"
 #include "third_party/webrtc/api/task_queue/task_queue_base.h"
@@ -23,6 +26,31 @@
 #include "third_party/webrtc_overrides/metronome_source.h"
 
 namespace blink {
+
+namespace {
+
+// Test hook: while recording or replaying, sleep for
+// RECORD_REPLAY_TEST_WEBRTC_TASK_QUEUE_DELAY_MS milliseconds before running a
+// task queue's coalesced delayed tasks, holding its lock. Tests use it to keep
+// task queues busy when another thread deletes them. getenv reads the recorded
+// environment when replaying, so the sleep is replayed too. It sleeps in short
+// steps and stops once the replay diverges, as a diverged sleep really waits.
+void RecordReplayMaybeDelayCoalescedTasks() {
+  if (!recordreplay::IsRecordingOrReplaying()) {
+    return;
+  }
+  static const char* delay =
+      getenv("RECORD_REPLAY_TEST_WEBRTC_TASK_QUEUE_DELAY_MS");
+  if (delay) {
+    for (int slept = 0;
+         slept < atoi(delay) && !recordreplay::HasDivergedFromRecording();
+         slept += 5) {
+      base::PlatformThread::Sleep(base::Milliseconds(5));
+    }
+  }
+}
+
+}  // namespace
 
 class WebRtcTaskQueue : public base::RefCountedThreadSafe<WebRtcTaskQueue>,
                         public webrtc::TaskQueueBase {
@@ -133,6 +161,7 @@ void WebRtcTaskQueue::MaybeRunCoalescedTasks(
     base::TimeTicks scheduled_time_now) {
   base::AutoLock lock(alive_lock_);
   if (alive_) {
+    RecordReplayMaybeDelayCoalescedTasks();
     CurrentTaskQueueSetter set_current(this);
     coalesced_tasks_.RunScheduledTasks(scheduled_time_now);
   }
