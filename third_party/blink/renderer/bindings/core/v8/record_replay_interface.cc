@@ -2998,7 +2998,7 @@ void OnNewWindowAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8
     if (recordreplay::FeatureEnabled("force-main-world-initialization")) {
       localFrame->GetSettings()->SetForceMainWorldInitialization(true);
     }
-    if (gCDPMessageCallback) {
+    if (IsCommandHandlingEnabled() && gCDPMessageCallback) {
       RecordReplayEnableRuntimeForLocalRoot(isolate, localFrame);
     }
   }
