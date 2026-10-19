@@ -2975,9 +2975,11 @@ void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame
 
 void OnNewWindowAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> newContext) {
   recordreplay::AutoMarkReplayCode amrc;
-  // Other local roots have no window.top to share the root's globals with,
-  // so they get their own bindings, as isolated worlds do, without the
-  // command API.
+  // Other local roots get their own bindings, as isolated worlds do, without
+  // the command API: a popup is its own window.top, and an OOPIF's top is
+  // usually in another process. The bindings are read-only, so an OOPIF whose
+  // top is a local window of this renderer (A embedding B embedding A) keeps
+  // them instead of sharing the top's below.
   const bool ordinaryLocalRoot = localFrame->IsLocalRoot() &&
                                  !IsAliveRootFrame(localFrame) &&
                                  gReplayScriptsAlive;
