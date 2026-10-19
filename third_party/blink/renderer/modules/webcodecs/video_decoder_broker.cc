@@ -243,15 +243,15 @@ class MediaVideoTaskWrapper {
     DVLOG(2) << __func__;
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
+    // Video decoding is unsupported while recording/replaying: without
+    // decoders, configure() fails like it does for unsupported configs.
+    if (recordreplay::IsRecordingOrReplaying("no-video"))
+      return {};
+
     if (decoder_factory_needs_update_)
       UpdateDecoderFactory();
 
     std::vector<std::unique_ptr<media::VideoDecoder>> video_decoders;
-
-    // Video decoding is unsupported while recording/replaying: without
-    // decoders, configure() fails like it does for unsupported configs.
-    if (recordreplay::IsRecordingOrReplaying("no-video"))
-      return video_decoders;
 
     // We can end up with a null |decoder_factory_| if
     // |hardware_preference_| filtered out all available factories.
