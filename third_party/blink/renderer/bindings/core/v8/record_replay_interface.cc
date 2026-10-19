@@ -2990,6 +2990,12 @@ void OnNewWindowAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8
 
   if (ordinaryLocalRoot) {
     RecordReplayOrdinaryLocalRootIds().insert(localFrame->RecordReplayId());
+    // Runtime.enable forces main world initialization in the frame's page,
+    // and with replay-only command handling it runs only when replaying.
+    // Set it on both sides, as the root does in InitializeReplayScripts.
+    if (recordreplay::FeatureEnabled("force-main-world-initialization")) {
+      localFrame->GetSettings()->SetForceMainWorldInitialization(true);
+    }
     if (gCDPMessageCallback) {
       RecordReplayEnableRuntimeForLocalRoot(isolate, localFrame);
     }
