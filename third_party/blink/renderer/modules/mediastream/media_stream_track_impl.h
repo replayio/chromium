@@ -195,12 +195,14 @@ class MODULES_EXPORT MediaStreamTrackImpl : public MediaStreamTrack,
   bool muted_ = false;
   MediaConstraints constraints_;
 
-  // While recording/replaying, a live track is kept until it ends. A dropped
-  // one is otherwise collected at a GC-dependent point, and its platform
-  // track's destructor (run from MediaStreamComponentImpl's prefinalizer with
-  // events disallowed) stops it: for audio, that removes its consumer from the
-  // source, changing the consumers the capture thread delivers to, or stops
-  // the source when it was the last one.
+  // While recording/replaying, a live track is kept until it ends, and a clone
+  // of an ended track, whose platform track still joins a live source, until
+  // the source ends. A dropped one is otherwise collected at a GC-dependent
+  // point, and its platform track's destructor (run from
+  // MediaStreamComponentImpl's prefinalizer with events disallowed) stops it:
+  // for audio, that removes its consumer from the source, changing the
+  // consumers the capture thread delivers to, or stops the source when it was
+  // the last one.
   SelfKeepAlive<MediaStreamTrackImpl> replay_strong_self_;
 };
 

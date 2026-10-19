@@ -290,12 +290,14 @@ MediaStreamTrackImpl::MediaStreamTrackImpl(
 
   // Note that both 'live' and 'muted' correspond to a 'live' ready state in the
   // web API.
-  if (ready_state_ != MediaStreamSource::kReadyStateEnded) {
+  if (ready_state_ != MediaStreamSource::kReadyStateEnded)
     EnsureFeatureHandleForScheduler();
-    if (recordreplay::IsRecordingOrReplaying("leak-references",
-                                             "MediaStreamTrackImpl")) {
-      replay_strong_self_ = this;
-    }
+
+  if ((ready_state_ != MediaStreamSource::kReadyStateEnded ||
+       component_->GetReadyState() != MediaStreamSource::kReadyStateEnded) &&
+      recordreplay::IsRecordingOrReplaying("leak-references",
+                                           "MediaStreamTrackImpl")) {
+    replay_strong_self_ = this;
   }
 }
 
