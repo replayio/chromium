@@ -145,8 +145,8 @@ class MODULES_EXPORT BaseAudioContext
   // until script disconnects them.
   void RecordReplaySetConnectedNode(AudioNode*, bool connected);
 
-  // Keeps the handler of a node the GC disposed while recording or replaying
-  // forever.
+  // Keeps the handler of a node the GC disposed while recording or replaying,
+  // and leaks it once the context is closed.
   void RecordReplayKeepDisposedHandler(scoped_refptr<AudioHandler>);
 
   // Return true if the destination is pulling on the audio graph.  Otherwise

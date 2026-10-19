@@ -870,7 +870,8 @@ void BaseAudioContext::RecordReplayKeepDisposedHandler(
   // nothing renders it anymore: a MediaStreamAudioSource handler removes its
   // sink from the track, changing the sinks the audio capture thread delivers
   // to. Which handlers the GC disposes before the context closes, and when,
-  // depends on GC timing, so none of them is ever destroyed.
+  // depends on GC timing, so once the context is closed none of them is
+  // destroyed.
   handler->AddRef();
 }
 
