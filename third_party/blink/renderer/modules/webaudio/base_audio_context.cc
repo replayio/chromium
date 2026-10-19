@@ -673,12 +673,13 @@ void BaseAudioContext::SetContextState(AudioContextState new_state) {
 
   if (new_state == kClosed) {
     GetDeferredTaskHandler().StopAcceptingTailProcessing();
-    // Nothing renders a closed context, so what was kept alive only for its
-    // rendering while recording or replaying can go.
+    // Nothing renders a closed context, so its connected nodes no longer have
+    // to be kept while recording or replaying. Its disposed handlers are
+    // leaked instead (see RecordReplayKeepDisposedHandler).
     if (recordreplay::IsRecordingOrReplaying()) {
       replay_strong_connected_nodes_.clear();
       GraphAutoLocker locker(this);
-      GetDeferredTaskHandler().RecordReplayReleaseDisposedHandlers();
+      GetDeferredTaskHandler().RecordReplayLeakDisposedHandlers();
     }
   }
 
@@ -865,12 +866,11 @@ void BaseAudioContext::RecordReplayKeepDisposedHandler(
     GetDeferredTaskHandler().RecordReplayKeepDisposedHandler(std::move(handler));
     return;
   }
-  // Nothing renders a closed context's handlers, but destroying one here, in
-  // the GC, still has effects outside the graph: a MediaStreamAudioSource
-  // handler removes its sink from the track, changing the sinks the audio
-  // capture thread delivers to. Kept handlers are released when the context
-  // closes, which has already happened, and any later release would also run
-  // in the GC, so this one is leaked instead.
+  // Destroying a disposed handler has effects outside the graph even when
+  // nothing renders it anymore: a MediaStreamAudioSource handler removes its
+  // sink from the track, changing the sinks the audio capture thread delivers
+  // to. Which handlers the GC disposes before the context closes, and when,
+  // depends on GC timing, so none of them is ever destroyed.
   handler->AddRef();
 }
 
