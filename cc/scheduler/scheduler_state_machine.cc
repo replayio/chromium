@@ -434,8 +434,7 @@ bool SchedulerStateMachine::ShouldActivateSyncTree() const {
   // may lead to bad scheduling.
   //
   // [RecordReplay] A repaint draws the newest tree, so a pending tree can be
-  // activated over an active tree from the recording's frames that was never
-  // drawn.
+  // activated over an active tree that was never drawn.
   if (!settings_.using_synchronous_renderer_compositor &&
       active_tree_needs_first_draw_ && !replay_force_draw_) {
     return false;

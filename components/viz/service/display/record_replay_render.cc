@@ -5,6 +5,7 @@
 #include "components/viz/service/display/record_replay_render.h"
 
 #include "base/base64.h"
+#include "base/no_destructor.h"
 #include "base/record_replay.h"
 #include "base/record_replay_paint_surface.h"
 #include "base/record_replay_render_interface.h"
@@ -318,10 +319,10 @@ static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
   // and the commit clears the earlier forced draw. Such a draw can still
   // signal the event after its repaint stopped waiting, so the event outlives
   // repaints.
-  static base::WaitableEvent* event = new base::WaitableEvent();
+  static base::NoDestructor<base::WaitableEvent> event;
   event->Reset();
   gRepaintResult = nullptr;
-  gRepaintEvent = event;
+  gRepaintEvent = event.get();
 
   // Trigger a new frame on the compositor thread.
   gCurrentCompositorProxy->RecordReplayRepaint();
