@@ -30,6 +30,8 @@
 
 #include "third_party/blink/renderer/platform/mediastream/media_stream_source.h"
 
+#include <algorithm>
+
 #include "base/synchronization/lock.h"
 #include "third_party/blink/public/platform/modules/webrtc/webrtc_logging.h"
 #include "third_party/blink/renderer/platform/audio/audio_bus.h"
@@ -102,6 +104,27 @@ void GetSourceSettings(const blink::WebMediaStreamSource& web_source,
   // kSampleFormatS16 is the format used for all audio input streams.
   settings.sample_size =
       media::SampleFormatToBitsPerChannel(media::kSampleFormatS16);
+}
+
+// Calls |callback| on each observer in |observers|, in pointer-id order while
+// recording/replaying: the set's bucket order also depends on which entries
+// GC has removed from it, which can differ between recording and replay.
+template <typename ObserverSet, typename Callback>
+void RecordReplayForEachObserverInOrder(const ObserverSet& observers,
+                                        Callback callback) {
+  if (!recordreplay::IsRecordingOrReplaying("pointer-ids")) {
+    for (const auto& observer : observers) {
+      callback(observer.Get());
+    }
+    return;
+  }
+  HeapVector<Member<MediaStreamSource::Observer>> sorted(observers);
+  std::sort(sorted.begin(), sorted.end(),
+            recordreplay::CompareMemberByPointerId<
+                Member<MediaStreamSource::Observer>>());
+  for (const auto& observer : sorted) {
+    callback(observer.Get());
+  }
 }
 
 }  // namespace
@@ -198,10 +221,10 @@ void MediaStreamSource::SetReadyState(ReadyState ready_state) {
     // weak persistents to allow cancelling callbacks in case they are reclaimed
     // until the callback is executed.
     Vector<base::OnceClosure> observer_callbacks;
-    for (const auto& it : observers_) {
+    RecordReplayForEachObserverInOrder(observers_, [&](Observer* observer) {
       observer_callbacks.push_back(WTF::BindOnce(&Observer::SourceChangedState,
-                                                 WrapWeakPersistent(it.Get())));
-    }
+                                                 WrapWeakPersistent(observer)));
+    });
     for (auto& observer_callback : observer_callbacks) {
       std::move(observer_callback).Run();
     }
@@ -327,6 +350,10 @@ void MediaStreamSource::OnDeviceCaptureHandleChange(
   // Observers may dispatch events which create and add new Observers;
   // take a snapshot so as to safely iterate.
   HeapVector<Member<Observer>> observers(observers_);
+  if (recordreplay::IsRecordingOrReplaying("pointer-ids")) {
+    std::sort(observers.begin(), observers.end(),
+              recordreplay::CompareMemberByPointerId<Member<Observer>>());
+  }
   for (auto observer : observers) {
     observer->SourceChangedCaptureHandle();
   }
