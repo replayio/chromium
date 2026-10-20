@@ -35,6 +35,7 @@
 #include <memory>
 #include <utility>
 
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/platform/modules/mediastream/web_media_stream_source.h"
@@ -64,7 +65,12 @@ class PLATFORM_EXPORT MediaStreamSource final
  public:
   class PLATFORM_EXPORT Observer : public GarbageCollectedMixin {
    public:
-    virtual ~Observer() = default;
+    Observer() {
+      // Pointer registration is needed for notifying observers_ in pointer-id
+      // order.
+      recordreplay::RegisterPointer("MediaStreamSource::Observer", this);
+    }
+    virtual ~Observer() { recordreplay::UnregisterPointer(this); }
     virtual void SourceChangedState() = 0;
     virtual void SourceChangedCaptureHandle() = 0;
   };
