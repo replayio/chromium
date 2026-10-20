@@ -888,9 +888,6 @@ void NodeChannel::Release() {
   {
     recordreplay::AutoOrderedLock ordered(
         record_replay_release_ordered_lock_id_);
-    recordreplay::Assert("[RUN-1307-1830] NodeChannel::Release %d %d",
-                         HasOneRef(),
-                         owning_task_runner()->RunsTasksInCurrentSequence());
     last_reference = base::subtle::RefCountedThreadSafeBase::Release();
   }
   if (!last_reference)
