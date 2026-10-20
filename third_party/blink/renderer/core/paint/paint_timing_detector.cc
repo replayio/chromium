@@ -506,9 +506,18 @@ void PaintTimingCallbackManagerImpl::
       "RegisterPaintTimeCallbackForCombinedCallbacks %d",
       frame.RecordReplayId());
 
-  auto combined_callback = CrossThreadBindOnce(
-      &PaintTimingCallbackManagerImpl::ReportPaintTime,
-      WrapCrossThreadWeakPersistent(this), std::move(frame_callbacks_));
+  // Whether a weak receiver is collected before the presentation depends on
+  // GC timing, which differs between recording and replaying, so the callback
+  // keeps the manager alive while recording/replaying.
+  auto combined_callback =
+      recordreplay::IsRecordingOrReplaying("leak-references",
+                                           "PaintTimingCallbackManagerImpl")
+          ? CrossThreadBindOnce(
+                &PaintTimingCallbackManagerImpl::ReportPaintTime,
+                WrapCrossThreadPersistent(this), std::move(frame_callbacks_))
+          : CrossThreadBindOnce(
+                &PaintTimingCallbackManagerImpl::ReportPaintTime,
+                WrapCrossThreadWeakPersistent(this), std::move(frame_callbacks_));
   frame_callbacks_ =
       std::make_unique<PaintTimingCallbackManager::CallbackQueue>();
 
