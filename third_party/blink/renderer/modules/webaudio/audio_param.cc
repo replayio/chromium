@@ -25,6 +25,7 @@
 
 #include "third_party/blink/renderer/modules/webaudio/audio_param.h"
 
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
@@ -165,6 +166,9 @@ String AudioParam::automationRate() const {
 
 void AudioParam::setAutomationRate(const String& rate,
                                    ExceptionState& exception_state) {
+  REPLAY_ASSERT("AudioParam::setAutomationRate %d %d %d",
+                Handler().IsAutomationRateFixed(), rate == "a-rate",
+                rate == "k-rate");
   if (Handler().IsAutomationRateFixed()) {
     exception_state.ThrowDOMException(
         DOMExceptionCode::kInvalidStateError,
