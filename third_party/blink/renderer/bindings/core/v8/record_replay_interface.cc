@@ -55,6 +55,7 @@
 #include <cinttypes>
 #include <fstream>
 #include <string>
+#include <unordered_set>
 #include <vector>
 #include "crypto/secure_hash.h"
 #include "crypto/sha2.h"
@@ -757,8 +758,27 @@ bool RecordReplayIsReplayWindow(LocalFrame* frame) {
          frame->GetPage()->IsOrdinary();
 }
 
+// RecordReplayIds of the local roots that ran as ordinary windows while a
+// root's scripts were alive.
+static std::unordered_set<int>& RecordReplayOrdinaryLocalRootIds() {
+  static auto* ids = new std::unordered_set<int>();
+  return *ids;
+}
+
 bool RecordReplayIsRootFrame(LocalFrame* frame) {
-  return RecordReplayIsReplayWindow(frame) && frame->IsLocalRoot();
+  if (!RecordReplayIsReplayWindow(frame) || !frame->IsLocalRoot()) {
+    return false;
+  }
+  // While the root's scripts are alive, popups and OOPIFs in this renderer
+  // don't take over: they run as ordinary windows, and their contexts going
+  // away leaves the root's scripts alive. A new outermost main frame without
+  // an opener is the tab's next page, which a same-site navigation commits in
+  // this renderer before the old page leaves (into the back/forward cache, or
+  // unloaded). A popup's later documents keep its frame, whose opener the page
+  // may have disowned since.
+  return !gReplayScriptsAlive || frame == gRootLocalFrame ||
+         (frame->IsOutermostMainFrame() && !frame->Opener() &&
+          !RecordReplayOrdinaryLocalRootIds().count(frame->RecordReplayId()));
 }
 
 // Whether `frame` is the root frame our replay scripts are alive in.
@@ -866,9 +886,16 @@ static void SendMessageToFrontend(const v8_inspector::StringView& message) {
   }
 }
 
+// Id of CDP requests that C++ sends on its own. The command handlers only
+// expect responses to their own requests, so these responses aren't passed on.
+static constexpr int kRecordReplayInternalCDPRequestId = -1;
+
 struct InspectorChannel final : public v8_inspector::V8Inspector::Channel {
   void sendResponse(int callId,
                     std::unique_ptr<v8_inspector::StringBuffer> message) final {
+    if (callId == kRecordReplayInternalCDPRequestId) {
+      return;
+    }
     SendMessageToFrontend(message->string());
   }
   void sendNotification(std::unique_ptr<v8_inspector::StringBuffer> message) final {
@@ -967,6 +994,23 @@ v8_inspector::V8InspectorSession* getInspectorSession(v8::Isolate* isolate, int 
     }
   }
   return data->inspectorSession;
+}
+
+// Console API calls and execution contexts are reported only to sessions of
+// the context group they belong to that enabled the Runtime domain. The
+// command handlers enable it in the root's group; other local roots (popups,
+// OOPIFs) have groups of their own.
+static void RecordReplayEnableRuntimeForLocalRoot(v8::Isolate* isolate,
+                                                  LocalFrame* frame) {
+  recordreplay::AutoMarkReplayCode mark;
+  recordreplay::AutoDisallowEvents disallow(
+      "RecordReplayEnableRuntimeForLocalRoot");
+  std::string message =
+      "{\"id\":" + std::to_string(kRecordReplayInternalCDPRequestId) +
+      ",\"method\":\"Runtime.enable\"}";
+  getInspectorSession(isolate, WeakIdentifierMap<LocalFrame>::Identifier(frame))
+      ->dispatchProtocolMessage(v8_inspector::StringView(
+          reinterpret_cast<const uint8_t*>(message.c_str()), message.length()));
 }
 
 static int GetBlinkPersistentId(v8::Local<v8::Object> object) {
@@ -2931,8 +2975,33 @@ void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame
 
 void OnNewWindowAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> newContext) {
   recordreplay::AutoMarkReplayCode amrc;
+  // Other local roots get their own bindings, as isolated worlds do, without
+  // the command API: a popup is its own window.top, and an OOPIF's top is
+  // usually in another process. The bindings are read-only, so an OOPIF whose
+  // top is a local window of this renderer (A embedding B embedding A) keeps
+  // them instead of sharing the top's below.
+  const bool ordinaryLocalRoot = localFrame->IsLocalRoot() &&
+                                 !IsAliveRootFrame(localFrame) &&
+                                 gReplayScriptsAlive;
+  if (ordinaryLocalRoot) {
+    InstallRecordReplayGlobals(isolate, newContext);
+  }
+
   RunScript(isolate, newContext, gOnNewWindowScript,
             "record-replay-OnNewWindow");
+
+  if (ordinaryLocalRoot) {
+    RecordReplayOrdinaryLocalRootIds().insert(localFrame->RecordReplayId());
+    // Runtime.enable forces main world initialization in the frame's page,
+    // and with replay-only command handling it runs only when replaying.
+    // Set it on both sides, as the root does in InitializeReplayScripts.
+    if (recordreplay::FeatureEnabled("force-main-world-initialization")) {
+      localFrame->GetSettings()->SetForceMainWorldInitialization(true);
+    }
+    if (IsCommandHandlingEnabled() && gCDPMessageCallback) {
+      RecordReplayEnableRuntimeForLocalRoot(isolate, localFrame);
+    }
+  }
 
   LocalFrame* parentFrame = DynamicTo<LocalFrame>(localFrame->Parent());
   recordreplay::Print(
