@@ -517,7 +517,8 @@ void PaintTimingCallbackManagerImpl::
                 WrapCrossThreadPersistent(this), std::move(frame_callbacks_))
           : CrossThreadBindOnce(
                 &PaintTimingCallbackManagerImpl::ReportPaintTime,
-                WrapCrossThreadWeakPersistent(this), std::move(frame_callbacks_));
+                WrapCrossThreadWeakPersistent(this),
+                std::move(frame_callbacks_));
   frame_callbacks_ =
       std::make_unique<PaintTimingCallbackManager::CallbackQueue>();
 
