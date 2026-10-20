@@ -8,6 +8,7 @@
 
 #include "base/guid.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
@@ -238,10 +239,13 @@ ScriptPromise MediaDevices::enumerateDevices(ScriptState* script_state,
   enumerate_device_requests_.Set(
       resolver, RequestMetadata{.start_time = base::TimeTicks::Now()});
 
+  // There is no video capture while recording/replaying, so cameras are not
+  // listed.
+  const bool video_input = !recordreplay::IsRecordingOrReplaying("no-video");
   LocalFrame* frame = LocalDOMWindow::From(script_state)->GetFrame();
   GetDispatcherHost(frame).EnumerateDevices(
-      true /* audio input */, true /* video input */, true /* audio output */,
-      true /* request_video_input_capabilities */,
+      true /* audio input */, video_input, true /* audio output */,
+      video_input /* request_video_input_capabilities */,
       true /* request_audio_input_capabilities */,
       WTF::BindOnce(&MediaDevices::DevicesEnumerated, WrapPersistent(this),
                     WrapPersistent(resolver)));
@@ -618,8 +622,9 @@ void MediaDevices::StartObserving() {
   if (!window)
     return;
 
+  const bool video_input = !recordreplay::IsRecordingOrReplaying("no-video");
   GetDispatcherHost(window->GetFrame())
-      .AddMediaDevicesListener(true /* audio input */, true /* video input */,
+      .AddMediaDevicesListener(true /* audio input */, video_input,
                                true /* audio output */,
                                receiver_.BindNewPipeAndPassRemote(
                                    GetExecutionContext()->GetTaskRunner(

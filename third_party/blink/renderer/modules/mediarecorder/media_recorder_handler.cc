@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "base/logging.h"
+#include "base/record_replay.h"
 #include "base/system/sys_info.h"
 #include "media/base/audio_bus.h"
 #include "media/base/audio_codecs.h"
@@ -186,9 +187,20 @@ bool MediaRecorderHandler::CanSupportMimeType(const String& type,
       video ? std::begin(kVideoCodecs) : std::begin(kAudioCodecs);
   auto* const* relevant_codecs_end =
       video ? std::end(kVideoCodecs) : std::end(kAudioCodecs);
+  // While recording/replaying no video encoder is available: |video| types
+  // only support audio codecs, and need them listed because their default
+  // codecs include a video one.
+  const bool no_video_codecs =
+      video && recordreplay::IsRecordingOrReplaying("no-video");
+  if (no_video_codecs) {
+    relevant_codecs_begin = std::begin(kAudioCodecs);
+    relevant_codecs_end = std::end(kAudioCodecs);
+  }
   std::vector<std::string> codecs_list;
   media::SplitCodecs(web_codecs.Utf8(), &codecs_list);
   media::StripCodecs(&codecs_list);
+  if (no_video_codecs && codecs_list.empty())
+    return false;
   for (const auto& codec : codecs_list) {
     String codec_string = String::FromUTF8(codec);
     if (std::none_of(relevant_codecs_begin, relevant_codecs_end,

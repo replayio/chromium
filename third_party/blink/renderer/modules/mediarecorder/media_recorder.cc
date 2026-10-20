@@ -6,6 +6,8 @@
 
 #include <algorithm>
 #include <limits>
+
+#include "base/record_replay.h"
 #include "third_party/blink/public/common/privacy_budget/identifiability_metric_builder.h"
 #include "third_party/blink/public/common/privacy_budget/identifiability_study_settings.h"
 #include "third_party/blink/public/common/privacy_budget/identifiable_surface.h"
@@ -20,7 +22,9 @@
 #include "third_party/blink/renderer/modules/mediarecorder/blob_event.h"
 #include "third_party/blink/renderer/platform/blob/blob_data.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/mediastream/media_stream_component.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_descriptor.h"
+#include "third_party/blink/renderer/platform/mediastream/media_stream_source.h"
 #include "third_party/blink/renderer/platform/network/mime/content_type.h"
 #include "third_party/blink/renderer/platform/privacy_budget/identifiability_digest_helpers.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
@@ -261,6 +265,22 @@ void MediaRecorder::start(int time_slice, ExceptionState& exception_state) {
                                       "there are no audio or video tracks "
                                       "available.");
     return;
+  }
+
+  // While recording/replaying no video encoder is available (see
+  // MediaRecorderHandler::CanSupportMimeType), so the video track that
+  // MediaRecorderHandler::Start would record makes any type fail, as newer
+  // Chromium fails for an audio-only type with a video track.
+  if (recordreplay::IsRecordingOrReplaying("no-video")) {
+    const auto& video_components = stream_->Descriptor()->VideoComponents();
+    if (!video_components.empty() &&
+        video_components[0]->GetReadyState() !=
+            MediaStreamSource::kReadyStateEnded) {
+      exception_state.ThrowDOMException(
+          DOMExceptionCode::kNotSupportedError,
+          "There was an error starting the MediaRecorder.");
+      return;
+    }
   }
 
   state_ = State::kRecording;
