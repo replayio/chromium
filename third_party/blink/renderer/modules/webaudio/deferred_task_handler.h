@@ -155,9 +155,9 @@ class MODULES_EXPORT DeferredTaskHandler final
   void ClearHandlersToBeDeleted();
 
   // Keeps the handler of a node the GC disposed while recording or replaying,
-  // until the context stops rendering. Both require the graph lock.
+  // until the context closes, and then leaks it. Both require the graph lock.
   void RecordReplayKeepDisposedHandler(scoped_refptr<AudioHandler>);
-  void RecordReplayReleaseDisposedHandlers();
+  void RecordReplayLeakDisposedHandlers();
 
   // Clear the context from the rendering and deletable orphan handlers.
   void ClearContextFromOrphanHandlers();

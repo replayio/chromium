@@ -343,8 +343,10 @@ void DeferredTaskHandler::RecordReplayKeepDisposedHandler(
   replay_strong_disposed_handlers_.push_back(std::move(handler));
 }
 
-void DeferredTaskHandler::RecordReplayReleaseDisposedHandlers() {
+void DeferredTaskHandler::RecordReplayLeakDisposedHandlers() {
   AssertGraphOwner();
+  for (scoped_refptr<AudioHandler>& handler : replay_strong_disposed_handlers_)
+    handler->AddRef();
   replay_strong_disposed_handlers_.clear();
 }
 
