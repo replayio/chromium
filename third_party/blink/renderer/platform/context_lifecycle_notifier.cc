@@ -4,6 +4,8 @@
 
 #include "third_party/blink/renderer/platform/context_lifecycle_notifier.h"
 
+#include <algorithm>
+
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/context_lifecycle_observer.h"
 
@@ -25,7 +27,7 @@ void ContextLifecycleNotifier::AddContextLifecycleObserver(
   observers_.AddObserver(observer);
 
   if (recordreplay::IsRecordingOrReplaying("values") && recordreplay::IsReplaying())
-    replay_observers_.push_back(observer);
+    replay_observers_.insert(observer);
 }
 
 void ContextLifecycleNotifier::RemoveContextLifecycleObserver(
@@ -33,12 +35,7 @@ void ContextLifecycleNotifier::RemoveContextLifecycleObserver(
   DCHECK(observers_.HasObserver(observer));
   observers_.RemoveObserver(observer);
 
-  for (wtf_size_t i = 0; i < replay_observers_.size(); i++) {
-    if (replay_observers_[i] == observer) {
-      replay_observers_.EraseAt(i);
-      break;
-    }
-  }
+  replay_observers_.erase(observer);
 }
 
 void ContextLifecycleNotifier::NotifyContextDestroyed() {
@@ -57,7 +54,7 @@ void ContextLifecycleNotifier::NotifyContextDestroyed() {
   // When replaying, notify the same observers in the same order which were
   // notified when recording. Because of the use of weak pointers in the
   // HeapObserverSet the set contents can vary, so we manually record/replay
-  // the objects which should be notified. The replay_observers_ vector holds
+  // the objects which should be notified. The replay_observers_ set holds
   // strong references on the observers when replaying so none of the observers
   // we need to notify should already be collected.
   if (recordreplay::IsRecordingOrReplaying("values", "ContextLifecycleNotifier::NotifyContextDestroyed") &&
@@ -78,18 +75,14 @@ void ContextLifecycleNotifier::NotifyContextDestroyed() {
                                     observer_ids, num_observers * sizeof(int));
 
     if (recordreplay::IsReplaying()) {
+      // There can be hundreds of thousands of observers (e.g. MediaQueryLists
+      // kept alive by HeapObserverSet), too many for a scan per observer.
+      std::sort(observer_ids, observer_ids + num_observers);
       HeapVector<Member<ContextLifecycleObserver>> new_observers;
       for (ContextLifecycleObserver* observer : observers) {
         int id = recordreplay::PointerId(observer);
         CHECK(id);
-        bool found = false;
-        for (wtf_size_t i = 0; i < num_observers; i++) {
-          if (observer_ids[i] == id) {
-            found = true;
-            break;
-          }
-        }
-        if (found)
+        if (std::binary_search(observer_ids, observer_ids + num_observers, id))
           new_observers.push_back(observer);
       }
 

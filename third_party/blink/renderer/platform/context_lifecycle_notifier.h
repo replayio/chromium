@@ -9,6 +9,7 @@
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap_observer_set.h"
 
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
 
 namespace blink {
@@ -44,7 +45,7 @@ class PLATFORM_EXPORT ContextLifecycleNotifier : public GarbageCollectedMixin {
   // When replaying, strong references are held on all observers, which are
   // cleared out after the context is destroyed. This ensures we can notify
   // the same observers when replaying as when originally recording
-  HeapVector<Member<ContextLifecycleObserver>> replay_observers_;
+  HeapHashSet<Member<ContextLifecycleObserver>> replay_observers_;
 };
 
 }  // namespace blink
