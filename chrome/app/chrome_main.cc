@@ -71,7 +71,6 @@ ChromeMain(int argc, const char** argv);
 #endif
 
 extern "C" void V8SetRecordingOrReplaying(void* handle);
-extern "C" void V8InitializeNotRecordingOrReplaying();
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 #include "./record_replay_main.cc"
@@ -114,8 +113,6 @@ int ChromeMain(int argc, const char** argv) {
   if (handle) {
     V8SetRecordingOrReplaying(handle);
     LoadRecordReplayMaxOldSpaceMb(handle);
-  } else {
-    V8InitializeNotRecordingOrReplaying();
   }
 #elif BUILDFLAG(IS_MAC)
   // On macOS the main function is in a different binary in chrome_exe_main_mac.cc.
