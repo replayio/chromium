@@ -25,10 +25,20 @@ void InspectorTaskRunner::InitIsolate(v8::Isolate* isolate) {
 }
 
 void InspectorTaskRunner::Dispose() {
+  // Declared before the lock, so the tasks are destroyed after it's released.
+  Deque<Task> tasks;
   recordreplay::AutoLockMaybeEventsDisallowed locker(lock_);
   disposed_ = true;
   isolate_ = nullptr;
   isolate_task_runner_ = nullptr;
+  // Queued tasks never run once this is disposed. When recording/replaying,
+  // destroy them here, at a point ordered with AppendTask(), instead of with
+  // this runner: which thread drops its last reference isn't recorded, and a
+  // task's destruction can close mojo handles, which takes ordered locks.
+  if (recordreplay::IsRecordingOrReplaying() &&
+      !recordreplay::AreEventsDisallowed()) {
+    tasks.Swap(interrupting_task_queue_);
+  }
 }
 
 bool InspectorTaskRunner::AppendTask(Task task) {
