@@ -97,7 +97,9 @@ class DevToolsAgent::IOAgent : public mojom::blink::DevToolsAgent {
 
   // May be called from any thread.
   void DeleteSoon() {
-    recordreplay::Assert("[RUN-1124-1785] DevToolsAgent::IOAgent::DeleteSoon %d", receiver_.is_bound());
+    // |receiver_| is bound on the IO thread, which may not have done so yet
+    // when a worker is torn down right after starting.
+    recordreplay::Assert("[RUN-1124-1785] DevToolsAgent::IOAgent::DeleteSoon");
     io_task_runner_->DeleteSoon(FROM_HERE, this);
   }
 

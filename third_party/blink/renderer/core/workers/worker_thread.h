@@ -465,7 +465,7 @@ class CORE_EXPORT WorkerThread : public Thread::TaskObserver {
   // This lock protects shared states between the main thread and the worker
   // thread. See thread-safety annotations (e.g., GUARDED_BY) in this header
   // file.
-  base::Lock lock_;
+  base::Lock lock_{"WorkerThread.lock_"};
 
   // Whether the thread is paused in a nested message loop or not. Used
   // only on the worker thread.
