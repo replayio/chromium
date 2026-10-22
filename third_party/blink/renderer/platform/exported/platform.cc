@@ -74,7 +74,7 @@
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
 #include "third_party/skia/include/core/SkGraphics.h"
-// Skia-internal header, whose includes trip Chromium's stricter warnings.
+// Skia-internal header, whose includes trip Blink's -Wconversion.
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wshorten-64-to-32"
 #include "third_party/skia/src/core/SkImageFilterCache.h"
