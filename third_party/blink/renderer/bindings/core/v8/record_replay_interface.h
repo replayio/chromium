@@ -22,9 +22,15 @@ void InitializeRecordReplay(
 void InitializeRecordReplayAfterCheckpoint();
 
 // Whether `frame`'s window can run replay scripts: recording/replaying, an
-//   ordinary page, and an origin with a host. Callers also require the main
+//   ordinary page, and an origin with a host, or the tab's about:blank after
+//   a root frame (see IsBlankReplayWindow). Callers also require the main
 //   world.
 bool RecordReplayIsReplayWindow(LocalFrame* frame);
+
+// Called for every main-world context. The tab's first one starts V8's
+//   instrumentation and registration of scripts, before the first root frame
+//   (e.g. on the initial about:blank).
+void RecordReplayOnMainWorldContextCreated(LocalFrame* frame);
 
 // Whether `frame` is a root frame our replay scripts run in. Gates
 //   OnRootFrameInit; the root is then tracked until ClearContexts. Until then
