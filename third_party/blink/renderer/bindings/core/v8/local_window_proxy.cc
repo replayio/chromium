@@ -242,6 +242,10 @@ void LocalWindowProxy::Initialize() {
     SetSecurityToken(origin.get());
   }
 
+  if (world_->IsMainWorld()) {
+    RecordReplayOnMainWorldContextCreated(GetFrame());
+  }
+
   if (world_->IsMainWorld() && RecordReplayIsReplayWindow(GetFrame())) {
     bool initGlobally = !gRecordReplayStateInitialized;
 
