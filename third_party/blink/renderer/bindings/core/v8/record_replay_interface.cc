@@ -111,6 +111,7 @@ using RemoteObjectIdType = WTF::String;
 
 extern "C" void V8RecordReplaySetDefaultContext(v8::Isolate* isolate, v8::Local<v8::Context> cx);
 extern "C" uintptr_t V8RecordReplayGetDefaultContextAddress(v8::Isolate* isolate);
+extern "C" void V8RecordReplayStartInstrumentingScripts();
 extern "C" void V8RecordReplayFinishRecording();
 extern "C" void V8RecordReplaySetCrashReason(const char* reason);
 extern "C" char* V8RecordReplayReadAssetFileContents(const char* aPath, size_t* aLength);
@@ -801,15 +802,40 @@ RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
 // were run in is alive.
 static bool gReplayScriptsAlive = false;
 
+// Whether `frame` is the root frame showing about:blank, e.g. after going back
+// to it. Its window runs our scripts like a root frame's, so that pauses in it
+// work, but it takes no checkpoints (see OnRootFrameInit): a recording that
+// ends on it ends with the last page. The about:blank before the first root
+// frame doesn't run them: the recording starts at the first root frame. Only
+// opaque about:blank documents count; one that inherits its initiator's origin
+// is an ordinary replay window.
+static bool IsBlankReplayWindow(LocalFrame* frame) {
+  Document* document = frame->GetDocument();
+  const SecurityOrigin* origin = frame->DomWindow()->GetSecurityOrigin();
+  return frame == gRootLocalFrame && document &&
+         document->Url().IsAboutBlankURL() && origin &&
+         origin->Host().empty();
+}
+
 bool RecordReplayIsReplayWindow(LocalFrame* frame) {
   if (!recordreplay::IsRecordingOrReplaying("commands") || !frame ||
       !frame->DomWindow()) {
     return false;
   }
-  const SecurityOrigin* origin = frame->DomWindow()->GetSecurityOrigin();
   // IsOrdinary() excludes internal pages like the in-process <select> popup.
-  return origin && !origin->Host().empty() && frame->GetPage() &&
-         frame->GetPage()->IsOrdinary();
+  if (!frame->GetPage() || !frame->GetPage()->IsOrdinary()) {
+    return false;
+  }
+  const SecurityOrigin* origin = frame->DomWindow()->GetSecurityOrigin();
+  return (origin && !origin->Host().empty()) || IsBlankReplayWindow(frame);
+}
+
+void RecordReplayOnMainWorldContextCreated(LocalFrame* frame) {
+  if (recordreplay::IsRecordingOrReplaying("commands") &&
+      frame->IsOutermostMainFrame() && frame->GetPage() &&
+      frame->GetPage()->IsOrdinary()) {
+    V8RecordReplayStartInstrumentingScripts();
+  }
 }
 
 // RecordReplayIds of the local roots that ran as ordinary windows while a
@@ -2993,7 +3019,8 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
 
   // 2. Initialize sourcemap worker, command handlers etc.
   gReplayScriptsAlive = true;
-  recordreplay::SetScriptAlive(true);
+  // about:blank takes no checkpoints.
+  recordreplay::SetScriptAlive(!IsBlankReplayWindow(localFrame));
   recordreplay::Print("ReplayScript STATUS_CHANGE_ALIVE %s group=%d win=%d frame=%d",
       v8::internal::RecordReplayContextAddressToken(
           isolate, *reinterpret_cast<v8::internal::Address*>(*context), true)
