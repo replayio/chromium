@@ -74,6 +74,11 @@
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
 #include "third_party/skia/include/core/SkGraphics.h"
+// Skia-internal header, whose includes trip Chromium's stricter warnings.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wshorten-64-to-32"
+#include "third_party/skia/src/core/SkImageFilterCache.h"
+#pragma clang diagnostic pop
 #include "third_party/webrtc/api/rtp_parameters.h"
 #include "third_party/webrtc/p2p/base/port_allocator.h"
 
@@ -253,6 +258,15 @@ void Platform::InitializeMainThreadCommon(
     // first canvas at the same time can otherwise race to construct.
     Image::SharedCCDecodeCache(kN32_SkColorType);
     Image::SharedCCDecodeCache(kRGBA_F16_SkColorType);
+  }
+
+  if (recordreplay::IsRecordingOrReplaying("eager-initialization",
+                                           "SkImageFilterCache")) {
+    // Skia's global image filter cache is an SkOnce singleton whose mutex
+    // creates an ordered lock, so the compositor, raster workers and canvas
+    // workers making their first filtered draw can otherwise race to create
+    // it.
+    SkImageFilterCache::Get();
   }
 
   // font_family_names are used by platform/fonts and are initialized by core.
