@@ -196,6 +196,12 @@ class PLATFORM_EXPORT WidgetInputHandlerManager final
     return main_thread_task_runner_.get();
   }
 
+  // Set only while recording/replaying.
+  const scoped_refptr<base::SingleThreadTaskRunner>&
+  RecordReplayMainThreadDefaultTaskRunner() const {
+    return record_replay_main_thread_default_task_runner_;
+  }
+
  protected:
   friend class base::RefCountedThreadSafe<WidgetInputHandlerManager>;
   ~WidgetInputHandlerManager() override;
@@ -313,6 +319,10 @@ class PLATFORM_EXPORT WidgetInputHandlerManager final
   // Any thread can access these variables.
   scoped_refptr<MainThreadEventQueue> input_event_queue_;
   scoped_refptr<base::SingleThreadTaskRunner> main_thread_task_runner_;
+  // The main thread's default task runner, which unlike the widget's input
+  // task runner outlives the widget.
+  scoped_refptr<base::SingleThreadTaskRunner>
+      record_replay_main_thread_default_task_runner_;
   scoped_refptr<base::SingleThreadTaskRunner>
       compositor_thread_default_task_runner_;
   scoped_refptr<base::SingleThreadTaskRunner>

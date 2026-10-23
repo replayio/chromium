@@ -12,6 +12,7 @@
 #include "base/feature_list.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
+#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "cc/base/features.h"
 #include "cc/metrics/event_metrics.h"
@@ -248,6 +249,10 @@ WidgetInputHandlerManager::WidgetInputHandlerManager(
           power_scheduler::PowerModeArbiter::GetInstance()->NewVoter(
               "PowerModeVoter.Response")),
       allow_scroll_resampling_(allow_scroll_resampling) {
+  if (recordreplay::IsRecordingOrReplaying()) {
+    record_replay_main_thread_default_task_runner_ =
+        base::ThreadTaskRunnerHandle::Get();
+  }
 #if BUILDFLAG(IS_ANDROID)
   if (compositor_thread_default_task_runner_) {
     synchronous_compositor_registry_ =
