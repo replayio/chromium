@@ -91,6 +91,12 @@ class FetchDataLoaderAsBlobHandle final : public FetchDataLoader,
     load_canceled_ = true;
     blob_handle_.reset();
     consumer_->Cancel();
+    // The data pipe loader otherwise keeps its watchers and its end of the
+    // pipe until a GC collects it, and its pre-finalizer closes them at a
+    // point that differs between recording and replaying.
+    if (data_pipe_loader_ && recordreplay::IsRecordingOrReplaying()) {
+      data_pipe_loader_->Cancel();
+    }
   }
 
   void DidFetchDataStartedDataPipe(
