@@ -60,6 +60,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_string_trustedscript.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_wasm_response_extensions.h"
 #include "third_party/blink/renderer/bindings/core/v8/worker_or_worklet_script_controller.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/core/dom/events/event_dispatch_forbidden_scope.h"
 #include "third_party/blink/renderer/core/events/error_event.h"
@@ -101,6 +102,9 @@
 #if defined(V8_USE_EXTERNAL_STARTUP_DATA)
 #include "gin/public/v8_snapshot_file_type.h"
 #endif
+
+extern "C" void V8RecordReplaySetUserScriptBeforeFirstCheckpointCallback(
+    void (*callback)(v8::Isolate*, v8::Local<v8::Context>));
 
 namespace blink {
 
@@ -886,6 +890,10 @@ void V8Initializer::InitializeMainThread(
 
   V8PerIsolateData::From(isolate)->SetThreadDebugger(
       std::make_unique<MainThreadDebugger>(isolate));
+
+  // Replay: user JS before the first checkpoint can start the recording.
+  V8RecordReplaySetUserScriptBeforeFirstCheckpointCallback(
+      RecordReplayOnUserScriptBeforeFirstCheckpoint);
 
   // The ArrayBuffer partition is placed inside V8's virtual memory cage if it
   // is enabled. For that reason, the partition can only be initialized after V8

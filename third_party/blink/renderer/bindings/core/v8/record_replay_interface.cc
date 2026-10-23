@@ -111,7 +111,6 @@ using RemoteObjectIdType = WTF::String;
 
 extern "C" void V8RecordReplaySetDefaultContext(v8::Isolate* isolate, v8::Local<v8::Context> cx);
 extern "C" uintptr_t V8RecordReplayGetDefaultContextAddress(v8::Isolate* isolate);
-extern "C" void V8RecordReplayStartInstrumentingScripts();
 extern "C" void V8RecordReplayFinishRecording();
 extern "C" void V8RecordReplaySetCrashReason(const char* reason);
 extern "C" char* V8RecordReplayReadAssetFileContents(const char* aPath, size_t* aLength);
@@ -802,13 +801,13 @@ RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
 // were run in is alive.
 static bool gReplayScriptsAlive = false;
 
-// Whether `frame` is the root frame showing about:blank, e.g. after going back
-// to it. Its window runs our scripts like a root frame's, so that pauses in it
-// work, but it takes no checkpoints (see OnRootFrameInit): a recording that
-// ends on it ends with the last page. The about:blank before the first root
-// frame doesn't run them: the recording starts at the first root frame. Only
-// opaque about:blank documents count; one that inherits its initiator's origin
-// is an ordinary replay window.
+// Whether `frame` is the root frame showing about:blank. That is the tab's
+// initial about:blank once user JS ran in it (RecordReplayOnUserScriptBeforeFirstCheckpoint),
+// or about:blank shown after a page, e.g. after going back to it. Its window runs
+// our scripts like a root frame's, so that pauses in it work. After a page it
+// takes no checkpoints (see OnRootFrameInit): a recording that ends on it ends
+// with the last page. Only opaque about:blank documents count; one that
+// inherits its initiator's origin is an ordinary replay window.
 static bool IsBlankReplayWindow(LocalFrame* frame) {
   Document* document = frame->GetDocument();
   const SecurityOrigin* origin = frame->DomWindow()->GetSecurityOrigin();
@@ -830,13 +829,13 @@ bool RecordReplayIsReplayWindow(LocalFrame* frame) {
   return (origin && !origin->Host().empty()) || IsBlankReplayWindow(frame);
 }
 
-void RecordReplayOnMainWorldContextCreated(LocalFrame* frame) {
-  if (recordreplay::IsRecordingOrReplaying("commands") &&
-      frame->IsOutermostMainFrame() && frame->GetPage() &&
-      frame->GetPage()->IsOrdinary()) {
-    V8RecordReplayStartInstrumentingScripts();
-  }
+bool RecordReplayHasRootFrame() {
+  return !!gRootLocalFrame;
 }
+
+// Whether a root frame that isn't about:blank (a page of the app) ran our
+// replay scripts yet.
+static bool gHadPageRootFrame = false;
 
 // RecordReplayIds of the local roots that ran as ordinary windows while a
 // root's scripts were alive.
@@ -2951,6 +2950,13 @@ void InitializeRecordReplay(
 }
 
 void InitializeRecordReplayAfterCheckpoint() {
+  // The first replay window does this even when it isn't a root frame and so
+  // takes no checkpoint; the root frame's first checkpoint comes later.
+  static bool initialized = false;
+  if (initialized) {
+    return;
+  }
+  initialized = true;
   // Note: This can immediately invoke the callback for events that happened
   // before the callback was registered.
   V8RecordReplayRegisterBrowserEventCallback(HandleBrowserEvent);
@@ -3018,9 +3024,11 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
   recordreplay::DoResetPaintSurface();
 
   // 2. Initialize sourcemap worker, command handlers etc.
+  // about:blank after a page takes no checkpoints.
+  const bool blank = IsBlankReplayWindow(localFrame);
+  gHadPageRootFrame |= !blank;
   gReplayScriptsAlive = true;
-  // about:blank takes no checkpoints.
-  recordreplay::SetScriptAlive(!IsBlankReplayWindow(localFrame));
+  recordreplay::SetScriptAlive(!blank || !gHadPageRootFrame);
   recordreplay::Print("ReplayScript STATUS_CHANGE_ALIVE %s group=%d win=%d frame=%d",
       v8::internal::RecordReplayContextAddressToken(
           isolate, *reinterpret_cast<v8::internal::Address*>(*context), true)
