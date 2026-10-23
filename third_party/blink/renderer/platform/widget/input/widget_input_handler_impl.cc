@@ -221,6 +221,22 @@ void WidgetInputHandlerImpl::Release() {
   if (input_processed_ack_)
     std::move(input_processed_ack_).Run();
 
+  if (recordreplay::IsRecordingOrReplaying()) {
+    // This runs on the compositor thread when the browser closes the pipe,
+    // racing the main thread's WidgetBase::Shutdown, which drops the widget's
+    // own reference to the manager in a task. Whichever reference goes last
+    // destroys the manager (and the event queue) on its thread, and nothing
+    // orders the two, so the replay can destroy them on the other thread.
+    // Drop this handler's references on the main thread instead, in a task
+    // whose order there is replayed.
+    input_handler_manager_->RecordReplayMainThreadDefaultTaskRunner()->PostTask(
+        FROM_HERE,
+        base::BindOnce([](scoped_refptr<WidgetInputHandlerManager>,
+                          scoped_refptr<MainThreadEventQueue>) {},
+                       std::move(input_handler_manager_),
+                       std::move(input_event_queue_)));
+  }
+
   delete this;
 }
 
