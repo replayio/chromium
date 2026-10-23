@@ -210,9 +210,9 @@ void MessagePort::close() {
     } else {
       // The connector keeps reading the pipe, and once closed the port is left
       // to the GC, whose finalizer clears the receiver at a point that differs
-      // between recording and replaying. Clear it now so every message after
-      // the close finds no receiver on both sides, as a disentangled port
-      // would never see it.
+      // between recording and replaying. Clear it now so the first message
+      // after the close finds no receiver on both sides and resets the pipe,
+      // which closes the peer as disentangling would have.
       connector_->set_incoming_receiver(nullptr);
     }
   }
