@@ -31,10 +31,12 @@
 #include "third_party/blink/renderer/platform/blob/blob_data.h"
 
 #include <memory>
+#include <tuple>
 #include <utility>
 
 #include "base/memory/ptr_util.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/record_replay.h"
 #include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/network/public/mojom/data_pipe_getter.mojom-blink.h"
@@ -337,7 +339,16 @@ BlobDataHandle::BlobDataHandle(
   DCHECK(blob_remote_.is_valid());
 }
 
-BlobDataHandle::~BlobDataHandle() = default;
+BlobDataHandle::~BlobDataHandle() {
+  // Which holder releases the last reference depends on when the GC finalizes
+  // the Blobs sharing this handle. Leak the pipe wherever that happens, so
+  // closing it doesn't depend on when the GC ran.
+  if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                           "BlobDataHandle")) {
+    base::AutoLock locker(blob_remote_lock_);
+    std::ignore = blob_remote_.PassPipe().release();
+  }
+}
 
 mojo::PendingRemote<mojom::blink::Blob> BlobDataHandle::CloneBlobRemote() {
   base::AutoLock locker(blob_remote_lock_);
