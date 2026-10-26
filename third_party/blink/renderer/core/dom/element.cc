@@ -1208,11 +1208,15 @@ void Element::ScrollIntoViewNoVisualUpdate(
   GetDocument().SetSequentialFocusNavigationStartingPoint(this);
 }
 
-void Element::scrollIntoViewIfNeeded(bool center_if_needed) {
+void Element::RecordReplayScrollIntoViewIfNeededForBinding(
+    bool center_if_needed) {
   if (RecordReplayThrowIfEventsUnavailable("Element.scrollIntoViewIfNeeded")) {
     return;
   }
+  scrollIntoViewIfNeeded(center_if_needed);
+}
 
+void Element::scrollIntoViewIfNeeded(bool center_if_needed) {
   GetDocument().EnsurePaintLocationDataValidForNode(
       this, DocumentUpdateReason::kJavaScript);
 
