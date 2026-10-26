@@ -929,11 +929,30 @@ void WidgetInputHandlerManager::DidHandleInputEventSentToCompositor(
       }
 
       if (!dropped_event_counts_timer_->IsRunning()) {
-        dropped_event_counts_timer_->Start(
-            FROM_HERE, kEventCountsTimerDelay,
-            base::BindOnce(
-                &WidgetInputHandlerManager::SendDroppedPointerDownCounts,
-                this));
+        base::OnceClosure send_counts;
+        if (recordreplay::IsRecordingOrReplaying()) {
+          // The timer fires on the compositor thread at a time that isn't
+          // ordered with the main thread, where WidgetBase::Shutdown's cleanup
+          // checks the manager's reference count. Drop the timer's reference
+          // on the main thread instead, in a task whose order there is
+          // replayed.
+          DCHECK(RecordReplayMainThreadDefaultTaskRunner());
+          send_counts = base::BindOnce(
+              [](scoped_refptr<WidgetInputHandlerManager> manager) {
+                manager->SendDroppedPointerDownCounts();
+                manager->RecordReplayMainThreadDefaultTaskRunner()->PostTask(
+                    FROM_HERE,
+                    base::BindOnce(
+                        [](scoped_refptr<WidgetInputHandlerManager>) {},
+                        std::move(manager)));
+              },
+              base::WrapRefCounted(this));
+        } else {
+          send_counts = base::BindOnce(
+              &WidgetInputHandlerManager::SendDroppedPointerDownCounts, this);
+        }
+        dropped_event_counts_timer_->Start(FROM_HERE, kEventCountsTimerDelay,
+                                           std::move(send_counts));
       }
     }
   }
