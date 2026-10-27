@@ -53,6 +53,7 @@
 
 #include <array>
 #include <cinttypes>
+#include <cmath>
 #include <fstream>
 #include <string>
 #include <unordered_set>
@@ -712,11 +713,64 @@ static void LogTraceCallback(const v8::FunctionCallbackInfo<v8::Value>& args) {
   recordreplay::Trace("%s", *text);
 }
 
+// warning(kind, data?): data's own enumerable string-keyed properties become
+// the warning's fields. Non-primitive values are added as their JSON.
 static void LogWarningCallback(const v8::FunctionCallbackInfo<v8::Value>& args) {
-  CHECK(args.Length() == 1 && args[0]->IsString() &&
-        "must be called with a single string");
-  v8::String::Utf8Value text(args.GetIsolate(), args[0]);
-  recordreplay::Warning("%s", *text);
+  CHECK(args.Length() >= 1 && args.Length() <= 2 && args[0]->IsString() &&
+        "must be called with a kind string and an optional data object");
+  v8::Isolate* isolate = args.GetIsolate();
+  v8::String::Utf8Value kind(isolate, args[0]);
+
+  // Backing storage for the fields' keys and string values, reserved up front
+  // so the c_str() pointers held by the fields stay valid.
+  std::vector<std::string> strings;
+  std::vector<RecordReplayWarningField> fields;
+  if (args.Length() == 2 && args[1]->IsObject()) {
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();
+    v8::Local<v8::Object> data = args[1].As<v8::Object>();
+    v8::Local<v8::Array> names;
+    if (data->GetOwnPropertyNames(
+                context,
+                static_cast<v8::PropertyFilter>(v8::ONLY_ENUMERABLE |
+                                                v8::SKIP_SYMBOLS),
+                v8::KeyConversionMode::kConvertToString)
+            .ToLocal(&names)) {
+      strings.reserve(names->Length() * 2);
+      fields.reserve(names->Length());
+      for (uint32_t i = 0; i < names->Length(); i++) {
+        v8::Local<v8::Value> name;
+        v8::Local<v8::Value> value;
+        if (!names->Get(context, i).ToLocal(&name) ||
+            !data->Get(context, name).ToLocal(&value)) {
+          continue;
+        }
+        strings.push_back(*v8::String::Utf8Value(isolate, name));
+        const char* key = strings.back().c_str();
+        if (value->IsString()) {
+          strings.push_back(*v8::String::Utf8Value(isolate, value));
+          fields.emplace_back(key, strings.back());
+        } else if (value->IsBoolean()) {
+          fields.emplace_back(key, value->BooleanValue(isolate));
+        } else if (value->IsNumber()) {
+          double number = value.As<v8::Number>()->Value();
+          if (std::trunc(number) == number &&
+              std::fabs(number) <= 9007199254740991.0) {
+            fields.emplace_back(key, static_cast<int64_t>(number));
+          } else {
+            fields.emplace_back(key, number);
+          }
+        } else {
+          v8::TryCatch try_catch(isolate);
+          v8::Local<v8::String> json;
+          if (v8::JSON::Stringify(context, value).ToLocal(&json)) {
+            strings.push_back(*v8::String::Utf8Value(isolate, json));
+            fields.emplace_back(key, strings.back());
+          }
+        }
+      }
+    }
+  }
+  recordreplay::Warning(*kind, fields.data(), fields.size());
 }
 
 static void fromJsForceCheckpoint(const v8::FunctionCallbackInfo<v8::Value>& args) {
@@ -1347,8 +1401,8 @@ v8::MaybeLocal<v8::Value> convertCborToJSTempl(v8::Isolate* isolate,
         return jsonObj.ToLocalChecked();
       }
     } else {
-      recordreplay::Warning("convertCborToJSTempl - Failed to deserialize: %s",
-                            errorMessage.c_str());
+      recordreplay::Warning("ConvertCborToJSDeserializeFailed",
+                            {{"error", errorMessage}});
     }
   }
   v8::MaybeLocal<v8::Value> defaultVal;
@@ -1546,14 +1600,14 @@ getObjectByCdpId(v8::Isolate* isolate,
 
   absl::optional<int> contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
   if (!contextGroupId.has_value()) {
-    recordreplay::Warning("[RUN-2600] getObjectByCdpId - Failed to find contextGroupId");
+    recordreplay::Warning("GetObjectByCdpIdMissingContextGroup");
     return false;
   }
 
   if (!getInspectorSession(isolate, *contextGroupId)->unwrapObject(&error, cdpIdV8, &unwrapped, &context,
                                        nullptr)) {
-    recordreplay::Warning("getObjectByCdpId - Failed to look up cdpId: %s",
-                        ToCoreString(error->string()).Ascii().c_str());
+    recordreplay::Warning("GetObjectByCdpIdLookupFailed",
+                          {{"error", ToCoreString(error->string()).Ascii()}});
     return false;
   }
   plainObject = unwrapped.As<v8::Object>();
@@ -1595,7 +1649,7 @@ static void fromJsMakeDebuggeeValue(
   auto contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
 
   if (!contextGroupId.has_value()) {
-      recordreplay::Warning("[RUN-2600] fromJsMakeDebuggeeValue - no valid context id");
+      recordreplay::Warning("MakeDebuggeeValueMissingContext");
       args.GetReturnValue().SetNull();
       return;
   }
@@ -1661,7 +1715,7 @@ static void fromJsGetArgumentsInFrame(
   auto contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
 
   if (!contextGroupId.has_value()) {
-    recordreplay::Warning("[RUN-2600] fromJsGetArgumentsInFrame - no valid context id");
+    recordreplay::Warning("GetArgumentsInFrameMissingContext");
     args.GetReturnValue().SetNull();
     return;
   }
@@ -2200,10 +2254,10 @@ static bool checkCDPResponse(const char* label,
                              const v8::FunctionCallbackInfo<v8::Value>& args) {
   if (!response.IsSuccess()) {
     recordreplay::Warning(
-        "CDP %s failed (Code: %d): %s",
-        label,
-        response.Code(),
-        response.Message().c_str());
+        "CDPCommandFailed",
+        {{"command", label},
+         {"code", static_cast<int>(response.Code())},
+         {"message", response.Message()}});
 
     // result is null
     args.GetReturnValue().SetNull();
@@ -2297,7 +2351,7 @@ static void fromJsGetMatchedStylesForElement(
 
   auto cssAgent = getOrCreateInspectorCSSAgent(isolate);
   if (!cssAgent.has_value()) {
-    recordreplay::Warning("[RUN-2600] fromJsGetMatchedStylesForElement failed no context id");
+    recordreplay::Warning("GetMatchedStylesForElementMissingContext");
     args.GetReturnValue().SetNull();
     return;
   }
@@ -2318,9 +2372,10 @@ static void fromJsGetMatchedStylesForElement(
 
   if (!response.IsSuccess()) {
     recordreplay::Warning(
-        "CDP CSS.getMatchedStylesForNode failed (nodeId: %d, Code: "
-        "%d): %s",
-        nodeId, response.Code(), response.Message().c_str());
+        "GetMatchedStylesForNodeFailed",
+        {{"nodeId", nodeId},
+         {"code", static_cast<int>(response.Code())},
+         {"message", response.Message()}});
     args.GetReturnValue().SetNull();
     return;
   }
@@ -2360,7 +2415,7 @@ static void fromJsCssGetStylesheetByCpdId(
   auto sheetId = ToCoreString(args[0].As<v8::String>());
   auto cssAgent = getOrCreateInspectorCSSAgent(isolate);
   if (!cssAgent.has_value()) {
-    recordreplay::Warning("[RUN-2600] fromJsCssGetStylesheetByCpdId failed no context id");
+    recordreplay::Warning("GetStylesheetByCdpIdMissingContext");
     args.GetReturnValue().SetNull();
     return;
   }
@@ -2384,7 +2439,7 @@ static void fromJsDomPerformSearch(
   auto query = ToCoreString(args[0].As<v8::String>());
   auto domAgent = getOrCreateInspectorDOMAgent(isolate);
   if (!domAgent.has_value()) {
-    recordreplay::Warning("[RUN-2600] fromJsDomPerformSearch failed no context id");
+    recordreplay::Warning("DomPerformSearchMissingContext");
     return;
   }
 
@@ -2438,7 +2493,7 @@ static void fromJsCollectEventListeners(const v8::FunctionCallbackInfo<v8::Value
 
   v8::Local<v8::Array> result = v8::Array::New(isolate);
   if (!node) {
-    recordreplay::Warning("[RUN-2282] JS fromJsCollectEventListeners: invalid argument is not blink Node");
+    recordreplay::Warning("CollectEventListenersNotNode");
   } else {
     auto report_for_all_contexts = true;
     V8EventListenerInfoList eventListenerInfos;

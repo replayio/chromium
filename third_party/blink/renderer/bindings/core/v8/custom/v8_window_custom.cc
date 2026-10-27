@@ -257,7 +257,8 @@ void V8Window::NamedPropertyGetterCustom(
   // for now we workaround the problem by watching for invalid document pointers.
   // Documents register themselves so we can test for a pointer ID.
   if (recordreplay::IsInReplayCode() && base_doc && !recordreplay::PointerId(base_doc)) {
-    recordreplay::Warning("V8Window::NamedPropertyGetterCustom invalid document %p", base_doc);
+    recordreplay::Warning("NamedPropertyGetterInvalidDocument",
+                          {{"document", reinterpret_cast<uintptr_t>(base_doc)}});
     return;
   }
 

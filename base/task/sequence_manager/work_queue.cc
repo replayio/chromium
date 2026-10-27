@@ -249,8 +249,8 @@ Task WorkQueue::TakeTaskFromWorkQueue() {
   if (!recordreplay::AreEventsUnavailable() &&
       !recordreplay::AreEventsPassedThrough() &&
       !pending_task.RecordReplayId()) {
-    recordreplay::Warning("WorkQueue::TakeTaskFromWorkQueue DivergentTask %s",
-                          pending_task.posted_from.ToString().c_str());
+    recordreplay::Warning("DivergentTaskTakenFromWorkQueue",
+                          {{"postedFrom", pending_task.posted_from.ToString()}});
   }
   // NB immediate tasks have a different pipeline to delayed ones.
   if (tasks_.empty()) {

@@ -101,7 +101,7 @@ Task::~Task() = default;
 void Task::RecordReplayEnter() {
   if (!recordreplay::AreEventsUnavailable() &&
       !recordreplay::AreEventsPassedThrough() && !record_replay_id_) {
-    recordreplay::Warning("cc::Task dequeue RecordReplayId 0");
+    recordreplay::Warning("CCTaskMissingRecordReplayId");
   }
   REPLAY_ASSERT("cc::Task::Enter %d", record_replay_id_);
 }

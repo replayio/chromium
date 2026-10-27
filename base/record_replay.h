@@ -15,6 +15,7 @@
 #include "v8/include/replayio-macros.h"
 
 #include <cstdint>
+#include <initializer_list>
 #include <memory>
 
 namespace base {
@@ -34,7 +35,14 @@ void Print(const char* format, ...);
 void Diagnostic(const char* format, ...);
 void CommandDiagnostic(const char* format, ...);
 void CommandDiagnosticTrace(const char* format, ...);
-void Warning(const char* format, ...);
+// Adds a warning about unexpected behavior to the recording. kind names the
+// condition, fields hold the details that differ between occurrences.
+void Warning(const char* kind,
+             std::initializer_list<RecordReplayWarningField> fields = {});
+// Same as above, for a field list built at runtime.
+void Warning(const char* kind,
+             const RecordReplayWarningField* fields,
+             size_t count);
 void Trace(const char* format, ...);
 
 bool HadMismatch();

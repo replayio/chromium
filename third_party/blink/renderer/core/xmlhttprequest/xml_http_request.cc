@@ -862,17 +862,14 @@ void XMLHttpRequest::send(const String& body, ExceptionState& exception_state) {
       bool mismatch_too_large =
         (length < recorded_length * 0.95 || length > recorded_length * 1.05) &&
         (length < recorded_length - 2 || length > recorded_length + 2);
-      recordreplay::Warning(
-        "XMLHttpRequest::Send length mismatch recorded(%zu) != replayed(%zu) toolarge=%s",
-        recorded_length, length,
-        mismatch_too_large ? "yes" : "no"
-      );
+      recordreplay::Warning("XMLHttpRequestSendLengthMismatch",
+                            {{"recordedLength", recorded_length},
+                             {"replayedLength", length},
+                             {"tooLarge", mismatch_too_large}});
       // If the difference in strings is too big (off by more than 5 percent
       // or so, then don't adjust the string).
       if (mismatch_too_large) {
-        recordreplay::Warning(
-          "XMLHttpRequest::Send length mismatch too large, not adjusting"
-        );
+        recordreplay::Warning("XMLHttpRequestSendLengthMismatchNotAdjusted");
       } else if (length < recorded_length) {
         size_t padding = recorded_length - length;
         std::unique_ptr<char[]> buffer(new char[padding + 1]);

@@ -139,7 +139,7 @@ ScriptPromise GlobalFetch::fetch(ScriptState* script_state,
   //
   // See https://linear.app/replay/issue/TT-957
   if (!LocalDOMWindowPointerIsValid(&window)) {
-    recordreplay::Warning("[TT-957] GlobalFetch::fetch Context gone");
+    recordreplay::Warning("GlobalFetchContextGone");
     exception_state.ThrowTypeError("Invalid receiver.");
     return ScriptPromise();
   }

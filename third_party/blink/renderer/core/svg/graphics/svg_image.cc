@@ -235,9 +235,7 @@ SVGImage::~SVGImage() {
       chrome_client_->ChromeDestroyed();
       // Warn once if the leak grows large.
       if (leaked_pages->size() == 500) {
-        recordreplay::Warning(
-            "[~SVGImage] Possible performance bottleneck detected: created and "
-            "discarded more than 500 SVGImages.");
+        recordreplay::Warning("ManyLeakedSVGImagePages");
       }
     } else {
       // It is safe to allow UA events within this scope, because event

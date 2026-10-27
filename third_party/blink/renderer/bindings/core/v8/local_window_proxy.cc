@@ -253,11 +253,10 @@ void LocalWindowProxy::Initialize() {
 
       if (!isMainFrame) {
         recordreplay::Warning(
-            "LocalWindowProxy::Initialize Called on non-root frame first: %d %d origin=%s url=%s",
-            GetFrame()->IsLocalRoot(),
-            world_->IsMainWorld(),
-            origin->ToRawString().Utf8().c_str(),
-            GetFrame()->GetDocument()->Url().GetString().Utf8().c_str());
+            "LocalWindowProxyNonRootFrameFirst",
+            {{"isLocalRoot", GetFrame()->IsLocalRoot()},
+             {"origin", origin->ToRawString().Utf8()},
+             {"url", GetFrame()->GetDocument()->Url().GetString().Utf8()}});
       }
 
       // After creating the first main-world context that is associated with a

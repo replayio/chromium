@@ -89,8 +89,10 @@ function logTrace(...args) {
   logTrace_(args.join(' '));
 }
 
-function warning(...args) {
-  warning_(args.join(' '));
+// Adds a warning to the recording. kind names the condition, data is an
+// optional plain object holding the details that differ between occurrences.
+function warning(kind, data) {
+  warning_(kind, data);
 }
 
 function assert(v, msg = "") {
@@ -155,16 +157,18 @@ function iterateArrayLike(obj, fn, label) {
       fn(item);
     }
   } else if (isArrayLike(obj)) {
-    warning(
-      `[RuntimeWarning] iterateArrayLike not iterable, using index (${label}): ${describeValueShape(obj)}`
-    );
+    warning("IterateArrayLikeNotIterable", {
+      label,
+      value: describeValueShape(obj),
+    });
     for (let i = 0; i < obj.length; i++) {
       fn(obj[i]);
     }
   } else if (obj != null) {
-    warning(
-      `[RuntimeWarning] iterateArrayLike expected iterable/array-like (${label}): ${describeValueShape(obj)}`
-    );
+    warning("IterateArrayLikeNotArrayLike", {
+      label,
+      value: describeValueShape(obj),
+    });
   }
 }
 
@@ -313,7 +317,7 @@ function messageCallback(message) {
       }
     }
   } catch (e) {
-    warning(`JS Message callback exception: ${e?.stack || e}`);
+    warning("CDPMessageCallbackException", { error: `${e?.stack || e}` });
 
     return JSON_stringify({
       is_error: true,
@@ -372,7 +376,7 @@ function CHECK_ALIVE(message) {
     } else {
       // Since we don't know enough about the circumstances here yet,
       // let's not crash an RTP for it.
-      warning(err.stack);
+      warning("ReplayScriptNotAlive", { message, jsStack: err.stack });
     }
   }
 }
@@ -517,7 +521,7 @@ function Target_getCurrentNetworkRequestEvent() {
     const obj = JSON_parse(getCurrentNetworkRequestEvent());
     return { data: obj };
   } catch (e) {
-    warning(`JS Target.getCurrentNetworkRequestEvent exception: ${e}`);
+    warning("GetCurrentNetworkRequestEventException", { error: `${e}` });
   }
 }
 
@@ -526,7 +530,7 @@ function Target_getCurrentNetworkStreamData(params) {
   if (data) {
     return { data };
   } else {
-    warning(`JS Target.getCurrentNetworkStreamData returned no data.`);
+    warning("GetCurrentNetworkStreamDataEmpty");
   }
 }
 
@@ -544,7 +548,7 @@ function Target_topFrameLocation() {
     if (e instanceof CDPMessageError) {
       // No available context group; this can happen, so just return nothing.
       if (e.code == CDPERROR_MISSINGCONTEXT) {
-        warning(`[RUN-2600] JS Target_topFrameLocation has no context.`);
+        warning("TopFrameLocationMissingContext");
         return {};
       }
     }
@@ -573,7 +577,7 @@ function getStackFrames() {
     if (e instanceof CDPMessageError) {
       // No available context group; this can happen, so just return nothing.
       if (e.code == CDPERROR_MISSINGCONTEXT) {
-        warning(`[RUN-2600] JS getStackFrames has no context.`);
+        warning("GetStackFramesMissingContext");
         return [];
       }
     }
@@ -706,7 +710,7 @@ function buildEvalResult(cdpResult) {
   if (usedReplayApi && cdpResult?.exceptionDetails) {
     // Emit warning if an eval that used the Replay API throws.
     const cdpException = cdpResult.exceptionDetails.exception?.description || cdpResult.exceptionDetails;
-    warning(`REPLAY_API_EVAL_ERROR ${JSON_stringify(cdpException)}`);
+    warning("ReplayApiEvalError", { exception: cdpException });
   }
   return buildRrpObjectResult(cdpResult);
 }
@@ -856,7 +860,7 @@ function clearPauseDataCallback() {
     if (e instanceof CDPMessageError && e.code == CDPERROR_MISSINGCONTEXT) {
       return;
     }
-    warning(`JS clearPauseDataCallback exception: ${e}`);
+    warning("ClearPauseDataException", { error: `${e}` });
   }
 }
 
@@ -1417,9 +1421,10 @@ ProtocolObjectPreview.prototype = {
         // Preview is best-effort: any CDP failure → empty props (match Chrome expand).
         // Rethrow would become commandCallback is_error → Command.cpp Die.
         if (e instanceof CDPMessageError) {
-          warning(
-            `[crash-0050] ProtocolObjectPreview.fill CDP error ${e.code}: ${e.cdpMessage || e.message}`,
-          );
+          warning("ObjectPreviewCDPError", {
+            code: e.code,
+            message: e.cdpMessage || e.message,
+          });
           cdpProperties = { result: [] };
         } else {
           throw e;
@@ -1943,7 +1948,10 @@ function previewFunction(cdpProperties) {
   if (locationProperty) {
     const loc = locationProperty?.value?.value || "";
     if (!loc) {
-      warning(`[RUN-1991] previewFunction missing location: ${JSON_stringify(nameProperty)}, ${JSON_stringify(locationProperty)}`);
+      warning("PreviewFunctionMissingLocation", {
+        nameProperty: JSON_stringify(nameProperty),
+        locationProperty: JSON_stringify(locationProperty),
+      });
     }
     this.extra.functionLocation = createProtocolLocation(loc);
   }
@@ -1997,11 +2005,20 @@ function evalPropRrpNotNull(owner, propKey) {
     if (plainValue === undefined || plainValue === null) {
       // [RUN-2223] This should not happen.
       const e = new Error("");
-      warning(`[RUN-2223] JS evalPropRrpNotNull got ${plainValue} when evaluating ${propKey} on ${typeof owner}, stack=${e.stack}`);
+      warning("EvalPropNullOrUndefined", {
+        value: String(plainValue),
+        propKey: String(propKey),
+        ownerType: typeof owner,
+        jsStack: e.stack,
+      });
     }
     return createRrpValueRaw(plainValue);
   } catch (err) {
-    warning(`JS evalPropRrpNotNull exception - calling ${propKey?.toString?.()} on ${typeof owner} - ${err?.stack || err}`);
+    warning("EvalPropException", {
+      propKey: `${propKey?.toString?.()}`,
+      ownerType: typeof owner,
+      error: `${err?.stack || err}`,
+    });
     return null;
   }
 }
@@ -3077,9 +3094,10 @@ StackingContext.prototype = {
       // Not sure why it sometimes complains about not being iterable.
       if (!fromJsIsBlinkElementObject(cx.raw) && !gStackingContextWarn) {
         ++gStackingContextWarn;
-        warning(
-          `[TT-253] cx.raw should be Element but is not: ${describeValueShape(cx.raw)}, children=${describeValueShape(children)}`
-        );
+        warning("StackingContextNonElement", {
+          value: describeValueShape(cx.raw),
+          children: describeValueShape(children),
+        });
       }
       return;
     }
@@ -3295,7 +3313,7 @@ function replayEval(fn) {
     // `Runtime_UnwindAndFindExceptionHandler`.
     // TODO: We should just crash here, since its the responsibility of the
     // caller of replayEval to make sure the cb won't throw.
-    warning(`replayEval ERROR: ${err?.stack || err}`);
+    warning("ReplayEvalException", { error: `${err?.stack || err}` });
   } finally {
     endReplayCode();
   }

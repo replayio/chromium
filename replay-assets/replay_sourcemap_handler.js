@@ -145,7 +145,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   }
   log(`[sourcemaps] Finished downloading ${sources.length} sources for "${sourceMapURL}".`);
   } catch (err) {
-    warning(`[RuntimeError][sourcemaps] Exception - ${err?.stack || err}`);
+    warning("SourceMapCollectionException", { error: `${err?.stack || err}` });
   }
 });
 
