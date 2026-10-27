@@ -816,6 +816,16 @@ static bool IsBlankReplayWindow(LocalFrame* frame) {
          origin->Host().empty();
 }
 
+// Whether `frame` is a tab's page at a data: or file: URL. Their origins have
+// no host, but they are pages like any other: they start the recording when
+// they load, as its first page, and are replay windows after other pages too.
+// Other documents without a host (Chrome's error pages, iframes) aren't.
+static bool IsHostlessPageWindow(LocalFrame* frame) {
+  Document* document = frame->GetDocument();
+  return frame->IsOutermostMainFrame() && document &&
+         (document->Url().ProtocolIsData() || document->Url().IsLocalFile());
+}
+
 bool RecordReplayIsReplayWindow(LocalFrame* frame) {
   if (!recordreplay::IsRecordingOrReplaying("commands") || !frame ||
       !frame->DomWindow()) {
@@ -826,7 +836,8 @@ bool RecordReplayIsReplayWindow(LocalFrame* frame) {
     return false;
   }
   const SecurityOrigin* origin = frame->DomWindow()->GetSecurityOrigin();
-  return (origin && !origin->Host().empty()) || IsBlankReplayWindow(frame);
+  return (origin && !origin->Host().empty()) || IsBlankReplayWindow(frame) ||
+         IsHostlessPageWindow(frame);
 }
 
 bool RecordReplayHasRootFrame() {
