@@ -29,12 +29,13 @@ bool RecordReplayIsReplayWindow(LocalFrame* frame);
 // Whether a root frame has run our replay scripts yet.
 bool RecordReplayHasRootFrame();
 
-// Called by V8 when user JS is about to run before the first checkpoint, with
-//   the context it runs in (see V8RecordReplaySetUserScriptBeforeFirstCheckpointCallback).
+// Called by V8 when JS of an instrumented script is about to run before the
+//   first checkpoint, with the context it runs in (see
+//   V8RecordReplaySetInstrumentedScriptBeforeFirstCheckpointCallback).
 //   JS running in the tab's initial about:blank (setContent, evaluations, init
 //   scripts, an app iframe in it) makes that about:blank the root frame and
 //   starts the recording before it runs. Defined in local_window_proxy.cc.
-void RecordReplayOnUserScriptBeforeFirstCheckpoint(v8::Isolate* isolate,
+void RecordReplayOnInstrumentedScriptBeforeFirstCheckpoint(v8::Isolate* isolate,
                                                    v8::Local<v8::Context> context);
 
 // Whether `frame` is a root frame our replay scripts run in. Gates

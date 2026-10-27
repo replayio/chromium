@@ -725,7 +725,7 @@ LocalWindowProxy::LocalWindowProxy(v8::Isolate* isolate,
   }
 }
 
-void RecordReplayOnUserScriptBeforeFirstCheckpoint(
+void RecordReplayOnInstrumentedScriptBeforeFirstCheckpoint(
     v8::Isolate* isolate,
     v8::Local<v8::Context> context) {
   // The replay scripts run below, and creating the main world's context can run

@@ -802,7 +802,8 @@ RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
 static bool gReplayScriptsAlive = false;
 
 // Whether `frame` is the root frame showing about:blank. That is the tab's
-// initial about:blank once user JS ran in it (RecordReplayOnUserScriptBeforeFirstCheckpoint),
+// initial about:blank once instrumented JS ran in it
+// (RecordReplayOnInstrumentedScriptBeforeFirstCheckpoint),
 // or about:blank shown after a page, e.g. after going back to it. Its window runs
 // our scripts like a root frame's, so that pauses in it work. After a page it
 // takes no checkpoints (see OnRootFrameInit): a recording that ends on it ends

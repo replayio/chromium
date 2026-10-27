@@ -103,7 +103,7 @@
 #include "gin/public/v8_snapshot_file_type.h"
 #endif
 
-extern "C" void V8RecordReplaySetUserScriptBeforeFirstCheckpointCallback(
+extern "C" void V8RecordReplaySetInstrumentedScriptBeforeFirstCheckpointCallback(
     void (*callback)(v8::Isolate*, v8::Local<v8::Context>));
 
 namespace blink {
@@ -891,9 +891,10 @@ void V8Initializer::InitializeMainThread(
   V8PerIsolateData::From(isolate)->SetThreadDebugger(
       std::make_unique<MainThreadDebugger>(isolate));
 
-  // Replay: user JS before the first checkpoint can start the recording.
-  V8RecordReplaySetUserScriptBeforeFirstCheckpointCallback(
-      RecordReplayOnUserScriptBeforeFirstCheckpoint);
+  // Replay: instrumented JS before the first checkpoint can start the
+  // recording.
+  V8RecordReplaySetInstrumentedScriptBeforeFirstCheckpointCallback(
+      RecordReplayOnInstrumentedScriptBeforeFirstCheckpoint);
 
   // The ArrayBuffer partition is placed inside V8's virtual memory cage if it
   // is enabled. For that reason, the partition can only be initialized after V8
