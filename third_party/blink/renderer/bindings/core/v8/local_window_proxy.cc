@@ -249,6 +249,11 @@ void LocalWindowProxy::Initialize() {
     // Whether this is the relative root frame of this process.
     bool isMainFrame = RecordReplayIsRootFrame(GetFrame());
 
+    // The first root frame takes the first checkpoint, before any of its JS
+    // runs, even when another window initialized the state: a non-root first
+    // window can't take it, as checkpoints need the root frame's context.
+    bool firstRootFrame = isMainFrame && !RecordReplayHasRootFrame();
+
     if (initGlobally) {
       gRecordReplayStateInitialized = true;
 
@@ -278,7 +283,7 @@ void LocalWindowProxy::Initialize() {
       OnRootFrameInit(GetIsolate(), GetFrame(), context);
     }
 
-    if (initGlobally) {
+    if (initGlobally || firstRootFrame) {
       // Create the first checkpoint at which execution can pause.
       recordreplay::NewCheckpoint();
       // Initialize some more.

@@ -2951,7 +2951,8 @@ void InitializeRecordReplay(
 
 void InitializeRecordReplayAfterCheckpoint() {
   // The first replay window does this even when it isn't a root frame and so
-  // takes no checkpoint; the root frame's first checkpoint comes later.
+  // takes no checkpoint; the first root frame takes it later
+  // (LocalWindowProxy::Initialize).
   static bool initialized = false;
   if (initialized) {
     return;
