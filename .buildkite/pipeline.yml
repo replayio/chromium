@@ -92,11 +92,9 @@ steps:
     key: "chromium-recording-linux-x86_64"
     depends_on:
       - "build-chromium-linux-x86_64"
-    # Non-blocking: nothing may depend on this step.
-    soft_fail: true
     timeout_in_minutes: 30
-    # Yield shared e2e agents to blocking E2E jobs.
-    priority: -1
+    # In-house suite expected to pass deterministically: take shared e2e agents before E2E jobs.
+    priority: 1
     agents:
       - "e2e=true"
     plugins:
