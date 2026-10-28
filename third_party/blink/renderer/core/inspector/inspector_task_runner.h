@@ -62,8 +62,8 @@ class CORE_EXPORT InspectorTaskRunner final
   bool AppendTaskDontInterrupt(Task) LOCKS_EXCLUDED(lock_);
 
   scoped_refptr<base::SingleThreadTaskRunner> isolate_task_runner() {
-    // Dispose() clears the runner from another thread, and a task taken before
-    // it can read the runner after it. When recording/replaying, read it under
+    // Dispose() can clear the runner from another thread, and a task taken
+    // before it can read the runner after it. When recording/replaying, read it under
     // the lock, which orders the read with Dispose().
     if (recordreplay::IsRecordingOrReplaying()) {
       base::AutoLock locker(lock_);
