@@ -330,15 +330,24 @@ bool Connector::PrefersSerializedMessages() {
 }
 
 bool Connector::Accept(Message* message) {
+  // With a lock, HandleError() can set error_ on another thread. When
+  // recording/replaying, it sets it under the lock, so check it under the lock
+  // too, which orders the check with it.
+  const bool record_replay_ordered_error =
+      lock_ && recordreplay::IsRecordingOrReplaying();
   recordreplay::Assert("[RUN-1209-1800] Connector::Accept A %d %d %d",
-                       !!lock_, !!task_runner_, !!error_);
+                       !!lock_, !!task_runner_,
+                       !record_replay_ordered_error && error_);
   if (!lock_ && task_runner_)
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  if (error_)
+  if (!record_replay_ordered_error && error_)
     return false;
 
   internal::MayAutoLock locker(&lock_);
+
+  if (record_replay_ordered_error && error_)
+    return false;
 
   recordreplay::Assert("[RUN-1209-1800] Connector::Accept B %d %d %d",
                        message_pipe_.is_valid(), drop_writes_,
@@ -711,7 +720,12 @@ void Connector::HandleError(bool force_pipe_reset, bool force_async_handler) {
       WaitToReadMore();
   } else {
     recordreplay::Assert("[RUN-1209-1900] Connector::HandleError B");
-    error_ = true;
+    if (lock_ && recordreplay::IsRecordingOrReplaying()) {
+      internal::MayAutoLock locker(&lock_);
+      error_ = true;
+    } else {
+      error_ = true;
+    }
     if (connection_error_handler_)
       std::move(connection_error_handler_).Run();
   }
