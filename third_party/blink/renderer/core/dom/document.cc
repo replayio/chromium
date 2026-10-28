@@ -3685,7 +3685,7 @@ void Document::RecordReplayOnRemoveLoadEventDelay() {
     if (node_id) {
       record_replay_load_event_dependency_nodes_.push_back(node_id);
     } else {
-      recordreplay::Warning("DependencyGraph load event delay unknown node");
+      recordreplay::Warning("DependencyGraphLoadEventDelayUnknownNode");
     }
   }
 }

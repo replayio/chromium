@@ -72,8 +72,9 @@ namespace recordreplay {
         (const char* format, va_list args),                             \
         (format, args))                                                 \
   Macro(V8RecordReplayWarning,                                          \
-        (const char* format, va_list args),                             \
-        (format, args))                                                 \
+        (const char* kind, const RecordReplayWarningField* fields,      \
+         size_t count),                                                 \
+        (kind, fields, count))                                          \
   Macro(V8RecordReplayTrace,                                            \
         (const char* format, va_list args),                             \
         (format, args))                                                 \
@@ -297,12 +298,16 @@ void CommandDiagnosticTrace(const char* format, ...) {
 #endif
 }
 
-void Warning(const char* format, ...) {
+void Warning(const char* kind,
+             std::initializer_list<RecordReplayWarningField> fields) {
+  Warning(kind, fields.begin(), fields.size());
+}
+
+void Warning(const char* kind,
+             const RecordReplayWarningField* fields,
+             size_t count) {
 #ifndef NACL_TC_REV
-  va_list ap;
-  va_start(ap, format);
-  V8RecordReplayWarning(format, ap);
-  va_end(ap);
+  V8RecordReplayWarning(kind, fields, count);
 #endif
 }
 
@@ -573,7 +578,7 @@ static bool CheckNewId(const char* name) {
     // IDs can be created when events are disallowed when our own scripts
     // create URL objects. This would be nice to improve.
     if (!IsInReplayCode()) {
-      Warning("NewId when not allowed %s", name);
+      Warning("NewIdWithEventsDisallowed", {{"name", name}});
     }
     return false;
   }

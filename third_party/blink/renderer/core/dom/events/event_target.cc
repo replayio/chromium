@@ -227,7 +227,7 @@ void EventTargetData::Trace(Visitor* visitor) const {
 EventTarget::EventTarget() {
   if (recordreplay::AreEventsDisallowed() &&
       !recordreplay::HasDivergedFromRecording())
-    recordreplay::Warning("[RUN-1735-1764] EventTarget::EventTarget");
+    recordreplay::Warning("EventTargetCreatedWithEventsDisallowed");
 }
 
 EventTarget::~EventTarget() = default;
