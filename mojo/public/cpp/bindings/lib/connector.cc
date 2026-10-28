@@ -330,9 +330,9 @@ bool Connector::PrefersSerializedMessages() {
 }
 
 bool Connector::Accept(Message* message) {
-  // With a lock, HandleError() can set error_ on another thread. When
-  // recording/replaying, it sets it under the lock, so check it under the lock
-  // too, which orders the check with it.
+  // With a lock, Accept() can run on other threads than HandleError(), which
+  // sets error_. When recording/replaying, HandleError() sets it under the
+  // lock, so check it under the lock too, which orders the check with it.
   const bool record_replay_ordered_error =
       lock_ && recordreplay::IsRecordingOrReplaying();
   recordreplay::Assert("[RUN-1209-1800] Connector::Accept A %d %d %d",
@@ -720,12 +720,13 @@ void Connector::HandleError(bool force_pipe_reset, bool force_async_handler) {
       WaitToReadMore();
   } else {
     recordreplay::Assert("[RUN-1209-1900] Connector::HandleError B");
+    // When recording/replaying, set error_ under the lock, which orders it
+    // with Accept() on other threads.
     if (lock_ && recordreplay::IsRecordingOrReplaying()) {
       internal::MayAutoLock locker(&lock_);
       error_ = true;
-    } else {
-      error_ = true;
     }
+    error_ = true;
     if (connection_error_handler_)
       std::move(connection_error_handler_).Run();
   }
