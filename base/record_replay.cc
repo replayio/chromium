@@ -71,7 +71,7 @@ namespace recordreplay {
   Macro(V8RecordReplayCommandDiagnosticTraceVA,                         \
         (const char* format, va_list args),                             \
         (format, args))                                                 \
-  Macro(V8RecordReplayStructuredWarning,                                \
+  Macro(V8RecordReplayWarning,                                          \
         (const char* kind, const RecordReplayWarningField* fields,      \
          size_t count),                                                 \
         (kind, fields, count))                                          \
@@ -307,7 +307,7 @@ void Warning(const char* kind,
              const RecordReplayWarningField* fields,
              size_t count) {
 #ifndef NACL_TC_REV
-  V8RecordReplayStructuredWarning(kind, fields, count);
+  V8RecordReplayWarning(kind, fields, count);
 #endif
 }
 
