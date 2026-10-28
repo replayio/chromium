@@ -41,18 +41,6 @@ void InspectorTaskRunner::Dispose() {
   }
 }
 
-scoped_refptr<base::SingleThreadTaskRunner>
-InspectorTaskRunner::isolate_task_runner() {
-  // Dispose() clears the runner from another thread, and a task taken before
-  // it can read the runner after it. When recording/replaying, read it under
-  // the lock, which orders the read with Dispose().
-  if (recordreplay::IsRecordingOrReplaying()) {
-    base::AutoLock locker(lock_);
-    return isolate_task_runner_;
-  }
-  return isolate_task_runner_;
-}
-
 bool InspectorTaskRunner::AppendTask(Task task) {
   base::AutoLock locker(lock_);
   if (disposed_)
