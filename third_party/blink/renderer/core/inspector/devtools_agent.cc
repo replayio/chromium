@@ -6,7 +6,6 @@
 
 #include <v8-inspector.h>
 #include <memory>
-#include <tuple>
 
 #include "base/callback_helpers.h"
 #include "base/record_replay.h"
@@ -106,19 +105,14 @@ class DevToolsAgent::IOAgent : public mojom::blink::DevToolsAgent {
   }
 
   ~IOAgent() override {
-    recordreplay::Assert(
-        "[RUN-1124-1902] DevToolsAgent::IOAgent::~IOAgent %d",
-        receiver_.internal_state()->RouterForTesting()->HasOneRef());
-    // Closing |receiver_| closes the pipe here, but the router can outlive it:
-    // tasks it posted to the worker's thread hold references, and are run or
-    // destroyed with the worker's task queues. Which thread drops the last
-    // reference isn't recorded, and destroying the router takes an ordered
-    // lock, so leak it.
+    recordreplay::Assert("[RUN-1124-1902] DevToolsAgent::IOAgent::~IOAgent");
+    // |receiver_| closes the pipe once this destructor's body has run, but the
+    // router can outlive it: tasks it posted to the worker's thread hold
+    // references, and are run or destroyed with the worker's task queues.
+    // Which thread drops the last reference isn't recorded, and destroying
+    // the router takes an ordered lock, so leak it.
     if (recordreplay::EnterLeakMemory("DevToolsAgent::IOAgent")) {
-      if (scoped_refptr<mojo::internal::MultiplexRouter> router =
-              receiver_.internal_state()->RouterForTesting()) {
-        std::ignore = router.release();
-      }
+      receiver_.internal_state()->RouterForTesting()->AddRef();
     }
   }
 
