@@ -60,9 +60,8 @@ class CORE_EXPORT InspectorTaskRunner final
   // guarantee that it'll run, e.g. if Dispose() is called before it runs.
   bool AppendTaskDontInterrupt(Task) LOCKS_EXCLUDED(lock_);
 
-  scoped_refptr<base::SingleThreadTaskRunner> isolate_task_runner() {
-    return isolate_task_runner_;
-  }
+  scoped_refptr<base::SingleThreadTaskRunner> isolate_task_runner()
+      LOCKS_EXCLUDED(lock_);
 
  private:
   friend ThreadSafeRefCounted<InspectorTaskRunner>;
