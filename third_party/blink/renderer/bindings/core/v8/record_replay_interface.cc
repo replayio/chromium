@@ -801,16 +801,53 @@ RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
 // were run in is alive.
 static bool gReplayScriptsAlive = false;
 
+// Whether `frame` is the root frame showing about:blank. That is the tab's
+// initial about:blank once instrumented JS ran in it
+// (RecordReplayOnInstrumentedScriptBeforeFirstCheckpoint),
+// or about:blank shown after a page, e.g. after going back to it. Its window runs
+// our scripts like a root frame's, so that pauses in it work. After a page it
+// takes no checkpoints (see OnRootFrameInit): a recording that ends on it ends
+// with the last page. Only opaque about:blank documents count; one that
+// inherits its initiator's origin is an ordinary replay window.
+static bool IsBlankReplayWindow(LocalFrame* frame) {
+  Document* document = frame->GetDocument();
+  const SecurityOrigin* origin = frame->DomWindow()->GetSecurityOrigin();
+  return frame == gRootLocalFrame && document &&
+         document->Url().IsAboutBlankURL() && origin &&
+         origin->Host().empty();
+}
+
+// Whether `frame` is a tab's page at a data: or file: URL. Their origins have
+// no host, but they are pages like any other: they start the recording when
+// they load, as its first page, and are replay windows after other pages too.
+// Other documents without a host (Chrome's error pages, iframes) aren't.
+static bool IsHostlessPageWindow(LocalFrame* frame) {
+  Document* document = frame->GetDocument();
+  return frame->IsOutermostMainFrame() && document &&
+         (document->Url().ProtocolIsData() || document->Url().IsLocalFile());
+}
+
 bool RecordReplayIsReplayWindow(LocalFrame* frame) {
   if (!recordreplay::IsRecordingOrReplaying("commands") || !frame ||
       !frame->DomWindow()) {
     return false;
   }
-  const SecurityOrigin* origin = frame->DomWindow()->GetSecurityOrigin();
   // IsOrdinary() excludes internal pages like the in-process <select> popup.
-  return origin && !origin->Host().empty() && frame->GetPage() &&
-         frame->GetPage()->IsOrdinary();
+  if (!frame->GetPage() || !frame->GetPage()->IsOrdinary()) {
+    return false;
+  }
+  const SecurityOrigin* origin = frame->DomWindow()->GetSecurityOrigin();
+  return (origin && !origin->Host().empty()) || IsBlankReplayWindow(frame) ||
+         IsHostlessPageWindow(frame);
 }
+
+bool RecordReplayHasRootFrame() {
+  return !!gRootLocalFrame;
+}
+
+// Whether a root frame that isn't about:blank (a page of the app) ran our
+// replay scripts yet.
+static bool gHadPageRootFrame = false;
 
 // RecordReplayIds of the local roots that ran as ordinary windows while a
 // root's scripts were alive.
@@ -2925,6 +2962,14 @@ void InitializeRecordReplay(
 }
 
 void InitializeRecordReplayAfterCheckpoint() {
+  // The first replay window does this even when it isn't a root frame and so
+  // takes no checkpoint; the first root frame takes it later
+  // (LocalWindowProxy::Initialize).
+  static bool initialized = false;
+  if (initialized) {
+    return;
+  }
+  initialized = true;
   // Note: This can immediately invoke the callback for events that happened
   // before the callback was registered.
   V8RecordReplayRegisterBrowserEventCallback(HandleBrowserEvent);
@@ -2992,8 +3037,11 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
   recordreplay::DoResetPaintSurface();
 
   // 2. Initialize sourcemap worker, command handlers etc.
+  // about:blank after a page takes no checkpoints.
+  const bool blank = IsBlankReplayWindow(localFrame);
+  gHadPageRootFrame |= !blank;
   gReplayScriptsAlive = true;
-  recordreplay::SetScriptAlive(true);
+  recordreplay::SetScriptAlive(!blank || !gHadPageRootFrame);
   recordreplay::Print("ReplayScript STATUS_CHANGE_ALIVE %s group=%d win=%d frame=%d",
       v8::internal::RecordReplayContextAddressToken(
           isolate, *reinterpret_cast<v8::internal::Address*>(*context), true)

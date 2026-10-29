@@ -22,9 +22,21 @@ void InitializeRecordReplay(
 void InitializeRecordReplayAfterCheckpoint();
 
 // Whether `frame`'s window can run replay scripts: recording/replaying, an
-//   ordinary page, and an origin with a host. Callers also require the main
-//   world.
+//   ordinary page, and an origin with a host, or an about:blank root frame
+//   (see IsBlankReplayWindow). Callers also require the main world.
 bool RecordReplayIsReplayWindow(LocalFrame* frame);
+
+// Whether a root frame has run our replay scripts yet.
+bool RecordReplayHasRootFrame();
+
+// Called by V8 when JS of an instrumented script is about to run before the
+//   first checkpoint, with the context it runs in (see
+//   V8RecordReplaySetInstrumentedScriptBeforeFirstCheckpointCallback).
+//   JS running in the tab's initial about:blank (setContent, evaluations, init
+//   scripts, an app iframe in it) makes that about:blank the root frame and
+//   starts the recording before it runs. Defined in local_window_proxy.cc.
+void RecordReplayOnInstrumentedScriptBeforeFirstCheckpoint(v8::Isolate* isolate,
+                                                   v8::Local<v8::Context> context);
 
 // Whether `frame` is a root frame our replay scripts run in. Gates
 //   OnRootFrameInit; the root is then tracked until ClearContexts. Until then

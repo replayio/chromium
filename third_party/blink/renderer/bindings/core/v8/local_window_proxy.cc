@@ -32,6 +32,7 @@
 
 #include <tuple>
 
+#include "base/auto_reset.h"
 #include "base/debug/dump_without_crashing.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/single_sample_metrics.h"
@@ -248,6 +249,11 @@ void LocalWindowProxy::Initialize() {
     // Whether this is the relative root frame of this process.
     bool isMainFrame = RecordReplayIsRootFrame(GetFrame());
 
+    // The first root frame takes the first checkpoint, before any of its JS
+    // runs, even when another window initialized the state: a non-root first
+    // window can't take it, as checkpoints need the root frame's context.
+    bool firstRootFrame = isMainFrame && !RecordReplayHasRootFrame();
+
     if (initGlobally) {
       gRecordReplayStateInitialized = true;
 
@@ -277,7 +283,7 @@ void LocalWindowProxy::Initialize() {
       OnRootFrameInit(GetIsolate(), GetFrame(), context);
     }
 
-    if (initGlobally) {
+    if (initGlobally || firstRootFrame) {
       // Create the first checkpoint at which execution can pause.
       recordreplay::NewCheckpoint();
       // Initialize some more.
@@ -717,6 +723,50 @@ LocalWindowProxy::LocalWindowProxy(v8::Isolate* isolate,
   if (World().IsMainWorld()) {
     gLatestLocalWindowProxy = this;
   }
+}
+
+void RecordReplayOnInstrumentedScriptBeforeFirstCheckpoint(
+    v8::Isolate* isolate,
+    v8::Local<v8::Context> context) {
+  // The replay scripts run below, and creating the main world's context can run
+  // JS too: none of it starts the recording again (embedder JS run while that
+  // context is created runs before the first checkpoint).
+  static bool starting = false;
+  if (starting || !recordreplay::IsRecordingOrReplaying("commands") ||
+      RecordReplayHasRootFrame()) {
+    return;
+  }
+  LocalDOMWindow* window = ToLocalDOMWindow(context);
+  LocalFrame* frame = window ? window->GetFrame() : nullptr;
+  LocalFrame* top = frame ? DynamicTo<LocalFrame>(frame->Tree().Top()) : nullptr;
+  // Only the tab's initial about:blank: any other page of a tab is a replay
+  // window, whose root frame started the recording already.
+  if (!top || !top->IsOutermostMainFrame() || !top->GetPage() ||
+      !top->GetPage()->IsOrdinary() || !top->GetDocument() ||
+      !top->GetDocument()->Url().IsAboutBlankURL() || !top->DomWindow() ||
+      !top->DomWindow()->GetSecurityOrigin()->Host().empty()) {
+    return;
+  }
+  base::AutoReset<bool> starting_scope(&starting, true);
+  ScriptState* script_state = ToScriptStateForMainWorld(top);
+  if (!script_state || RecordReplayHasRootFrame()) {
+    return;
+  }
+  v8::Local<v8::Context> main_context = script_state->GetContext();
+
+  // What LocalWindowProxy::Initialize does for the first root frame; keep the
+  // two in step.
+  if (!gRecordReplayStateInitialized) {
+    gRecordReplayStateInitialized = true;
+    InitializeRecordReplay(
+        RecordReplayGetProcessType(top, &DOMWrapperWorld::MainWorld()),
+        isolate, top, main_context);
+  }
+  OnRootFrameInit(isolate, top, main_context);
+  recordreplay::NewCheckpoint();
+  InitializeRecordReplayAfterCheckpoint();
+  OnRootFrameInitAfterCheckpoint(isolate, top, main_context);
+  OnNewWindowAfterCheckpoint(isolate, top, main_context);
 }
 
 bool RecordReplayStateEnsureInitialized() {

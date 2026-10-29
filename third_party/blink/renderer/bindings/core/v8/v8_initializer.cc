@@ -40,6 +40,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/capture_source_location.h"
 #include "third_party/blink/renderer/bindings/core/v8/isolated_world_csp.h"
 #include "third_party/blink/renderer/bindings/core/v8/native_value_traits_impl.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
 #include "third_party/blink/renderer/bindings/core/v8/referrer_script_info.h"
 #include "third_party/blink/renderer/bindings/core/v8/rejected_promises.h"
 #include "third_party/blink/renderer/bindings/core/v8/sanitize_script_errors.h"
@@ -101,6 +102,9 @@
 #if defined(V8_USE_EXTERNAL_STARTUP_DATA)
 #include "gin/public/v8_snapshot_file_type.h"
 #endif
+
+extern "C" void V8RecordReplaySetInstrumentedScriptBeforeFirstCheckpointCallback(
+    void (*callback)(v8::Isolate*, v8::Local<v8::Context>));
 
 namespace blink {
 
@@ -886,6 +890,11 @@ void V8Initializer::InitializeMainThread(
 
   V8PerIsolateData::From(isolate)->SetThreadDebugger(
       std::make_unique<MainThreadDebugger>(isolate));
+
+  // Replay: instrumented JS before the first checkpoint can start the
+  // recording.
+  V8RecordReplaySetInstrumentedScriptBeforeFirstCheckpointCallback(
+      RecordReplayOnInstrumentedScriptBeforeFirstCheckpoint);
 
   // The ArrayBuffer partition is placed inside V8's virtual memory cage if it
   // is enabled. For that reason, the partition can only be initialized after V8
