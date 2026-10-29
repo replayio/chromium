@@ -47,6 +47,7 @@
 #include "third_party/blink/renderer/platform/bindings/v8_dom_wrapper.h"
 #include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
 #include "third_party/blink/renderer/platform/fonts/font_cache.h"
+#include "third_party/blink/renderer/platform/heap/persistent.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 #include "third_party/inspector_protocol/crdtp/maybe.h"
 #include "v8/include/v8-inspector.h"
@@ -174,19 +175,15 @@ static LocalFrame* GetLocalFrameRoot(v8::Isolate* isolate) {
 
 class InspectorData {
 public:
-  // These are untraced, because they are rooted in a global variable which
-  // won't be crawled by the GC.  However, I don't think we need to worry about
-  // this, as inspector actions can't be initiated against non-existant frames,
-  // and likewise, any inspector objects that get culled should never be accessible
-  // via an inspector action (any inspector action will be against some other
-  // isolate/frame/context group that exists), so we shouldn't be able to cause an
-  // invalid dereference.
+  // Nothing else references the agents and frames the command handlers
+  // create, so these roots keep them alive across GCs during a pause, which
+  // would otherwise free them while this global still points at them.
   v8::Isolate* isolate;
-  UntracedMember<InspectorDOMAgent> inspectorDomAgent;
-  UntracedMember<InspectorDOMDebuggerAgent> inspectorDomDebuggerAgent;
-  UntracedMember<InspectorNetworkAgent> inspectorNetworkAgent;
-  UntracedMember<InspectorCSSAgent> inspectorCssAgent;
-  UntracedMember<InspectedFrames> inspectedFrames;
+  Persistent<InspectorDOMAgent> inspectorDomAgent;
+  Persistent<InspectorDOMDebuggerAgent> inspectorDomDebuggerAgent;
+  Persistent<InspectorNetworkAgent> inspectorNetworkAgent;
+  Persistent<InspectorCSSAgent> inspectorCssAgent;
+  Persistent<InspectedFrames> inspectedFrames;
   v8_inspector::V8InspectorSession* inspectorSession;
 
   InspectorData(v8::Isolate* i) {
