@@ -2646,7 +2646,7 @@ function CSS_getAppliedRules({ node: nodeRrpId }) {
       rules = [];
     }
     gCssRulesByNodeRrpId.set(nodeRrpId, rules);
-  } else {
+  } else if (!rules) {
     // The target is not a node.
     log(`[RuntimeWarning] CSS.getAppliedRules called with non-node: ${nodeRrpId} ${isBlinkObject(nodeObj)} ${typeof nodeObj}.`);
     rules = [];
