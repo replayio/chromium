@@ -255,10 +255,11 @@ MojoResult WatcherDispatcher::Arm(uint32_t* num_blocking_events,
 
     WatchSet::const_iterator next_ready_iter = ready_watches_.begin();
     if (recordreplay::IsRecordingOrReplaying("pointer-ids")) {
-      // When recording/replaying the ready_watches_ set is sorted by pointer ID.
-      // last_watch_to_block_arming_ may point to a deleted Watch whose memory
-      // another ready Watch reuses in only one of the two runs, so continue
-      // after the ID the last Watch had instead of looking for its address.
+      // When recording/replaying the ready_watches_ set is sorted by pointer
+      // ID. last_watch_to_block_arming_ may point to a deleted Watch whose
+      // memory another ready Watch reuses in only one of the two runs, so
+      // continue after the ID the last Watch had instead of looking for its
+      // address.
       while (next_ready_iter != ready_watches_.end() &&
              recordreplay::PointerId(*next_ready_iter) <=
                  record_replay_last_watch_to_block_arming_id_) {
@@ -289,7 +290,8 @@ MojoResult WatcherDispatcher::Arm(uint32_t* num_blocking_events,
       // Iterate and wrap around.
       last_watch_to_block_arming_ = reinterpret_cast<uintptr_t>(watch);
       if (recordreplay::IsRecordingOrReplaying("pointer-ids"))
-        record_replay_last_watch_to_block_arming_id_ = recordreplay::PointerId(watch);
+        record_replay_last_watch_to_block_arming_id_ =
+            recordreplay::PointerId(watch);
       ++next_ready_iter;
       if (next_ready_iter == ready_watches_.end())
         next_ready_iter = ready_watches_.begin();
