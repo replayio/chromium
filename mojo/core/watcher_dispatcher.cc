@@ -254,28 +254,24 @@ MojoResult WatcherDispatcher::Arm(uint32_t* num_blocking_events,
         *num_blocking_events, static_cast<uint32_t>(ready_watches_.size()));
 
     WatchSet::const_iterator next_ready_iter = ready_watches_.begin();
-    if (last_watch_to_block_arming_) {
+    if (recordreplay::IsRecordingOrReplaying("pointer-ids")) {
+      // When recording/replaying the ready_watches_ set is sorted by pointer
+      // ID. last_watch_to_block_arming_ may point to a deleted Watch whose
+      // memory another ready Watch reuses in only one of the two runs, so
+      // continue after the ID the last Watch had instead of looking for its
+      // address.
+      while (next_ready_iter != ready_watches_.end() &&
+             recordreplay::PointerId(*next_ready_iter) <=
+                 record_replay_last_watch_to_block_arming_id_) {
+        ++next_ready_iter;
+      }
+      if (next_ready_iter == ready_watches_.end())
+        next_ready_iter = ready_watches_.begin();
+    } else if (last_watch_to_block_arming_) {
       // Find the next watch to notify in simple round-robin order on the
       // |ready_watches_| map, wrapping around to the beginning if necessary.
-      if (recordreplay::IsRecordingOrReplaying("pointer-ids")) {
-        // When recording/replaying the ready_watches_ set is sorted by pointer ID,
-        // and since last_watch_to_block_arming_ may be an invalid pointer we can't
-        // determine the ID it originally had and use it for indexing. Scan the map
-        // for the desired entry instead. This O(N) traversal could be avoided by
-        // using a separate map when recording/replaying, indexing it by the pointer
-        // ID and using the ID itself for last_watch_to_block_arming_.
-        for (WatchSet::const_iterator search_iter = ready_watches_.begin();
-             search_iter != ready_watches_.end();
-             ++search_iter) {
-          if (*search_iter == reinterpret_cast<const Watch*>(last_watch_to_block_arming_)) {
-            next_ready_iter = search_iter;
-            break;
-          }
-        }
-      } else {
-        next_ready_iter = ready_watches_.find(
-            reinterpret_cast<const Watch*>(last_watch_to_block_arming_));
-      }
+      next_ready_iter = ready_watches_.find(
+          reinterpret_cast<const Watch*>(last_watch_to_block_arming_));
       if (next_ready_iter != ready_watches_.end())
         ++next_ready_iter;
       if (next_ready_iter == ready_watches_.end())
@@ -293,6 +289,9 @@ MojoResult WatcherDispatcher::Arm(uint32_t* num_blocking_events,
 
       // Iterate and wrap around.
       last_watch_to_block_arming_ = reinterpret_cast<uintptr_t>(watch);
+      if (recordreplay::IsRecordingOrReplaying("pointer-ids"))
+        record_replay_last_watch_to_block_arming_id_ =
+            recordreplay::PointerId(watch);
       ++next_ready_iter;
       if (next_ready_iter == ready_watches_.end())
         next_ready_iter = ready_watches_.begin();
