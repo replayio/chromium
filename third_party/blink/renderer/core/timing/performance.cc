@@ -35,6 +35,7 @@
 
 #include "base/containers/contains.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/record_replay.h"
 #include "base/time/default_tick_clock.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
@@ -277,6 +278,11 @@ PerformanceEntryVector Performance::getEntriesByType(
       PerformanceEntry::ToEntryTypeEnum(entry_type);
   if (!PerformanceEntry::IsValidTimelineEntryType(type)) {
     PerformanceEntryVector empty_entries;
+    // A removed frame's window has no execution context to warn on. Upstream
+    // guards this since chromium/chromium@8c7919b9400a (crbug.com/1401223, in
+    // 109.0.5414.120 and 110.0.5481.177); drop this once rebased past it.
+    if (!GetExecutionContext() && recordreplay::IsRecordingOrReplaying())
+      return empty_entries;
     String message = "Deprecated API for given entry type.";
     GetExecutionContext()->AddConsoleMessage(
         MakeGarbageCollected<ConsoleMessage>(
@@ -380,6 +386,11 @@ PerformanceEntryVector Performance::getEntriesByName(
 
   if (!entry_type.IsNull() &&
       !PerformanceEntry::IsValidTimelineEntryType(type)) {
+    // A removed frame's window has no execution context to warn on. Upstream
+    // guards this since chromium/chromium@8c7919b9400a (crbug.com/1401223, in
+    // 109.0.5414.120 and 110.0.5481.177); drop this once rebased past it.
+    if (!GetExecutionContext() && recordreplay::IsRecordingOrReplaying())
+      return entries;
     String message = "Deprecated API for given entry type.";
     GetExecutionContext()->AddConsoleMessage(
         MakeGarbageCollected<ConsoleMessage>(
