@@ -339,7 +339,7 @@ void DeferredTaskHandler::AddRenderingOrphanHandler(
 
 void DeferredTaskHandler::RecordReplayKeepDisposedHandler(
     scoped_refptr<AudioHandler> handler) {
-  AssertGraphOwner();
+  DCHECK(IsMainThread());
   replay_strong_disposed_handlers_.push_back(std::move(handler));
 }
 
