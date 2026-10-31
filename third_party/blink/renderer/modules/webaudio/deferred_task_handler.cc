@@ -339,7 +339,7 @@ void DeferredTaskHandler::AddRenderingOrphanHandler(
 
 void DeferredTaskHandler::RecordReplayKeepDisposedHandler(
     scoped_refptr<AudioHandler> handler) {
-  AssertGraphOwner();
+  DCHECK(IsMainThread());
   replay_strong_disposed_handlers_.push_back(std::move(handler));
 }
 
@@ -390,7 +390,9 @@ void DeferredTaskHandler::ClearHandlersToBeDeleted() {
   tail_processing_handlers_.clear();
   rendering_orphan_handlers_.clear();
   deletable_orphan_handlers_.clear();
-  replay_strong_disposed_handlers_.clear();
+  // Kept handlers weren't disposed, so their outputs can still be wired to
+  // each other's inputs, and destroying them would touch freed outputs.
+  RecordReplayLeakDisposedHandlers();
   automatic_pull_handlers_.clear();
   finished_source_handlers_.clear();
   active_source_handlers_.clear();

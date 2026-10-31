@@ -51,6 +51,11 @@ AudioNode::AudioNode(BaseAudioContext& context)
       handler_(nullptr) {}
 
 AudioNode::~AudioNode() {
+  // While recording or replaying, Dispose() hands the handler to the context
+  // without taking the graph lock (see there).
+  if (!handler_ && recordreplay::IsRecordingOrReplaying()) {
+    return;
+  }
   // The graph lock is required to destroy the handler. And we can't use
   // `context_` to touch it, since that object may also be a dead heap object.
   {
@@ -74,6 +79,21 @@ void AudioNode::Dispose() {
           this, Handler().GetNodeType(), handler_.get(),
           context()->currentTime());
 #endif
+  if (recordreplay::AreEventsDisallowed() &&
+      recordreplay::IsRecordingOrReplaying("leak-references",
+                                           "AudioNode::Dispose")) {
+    // Taking the graph lock in the GC isn't ordered, and the replay's audio
+    // thread can hold it while it waits for its turn on an ordered lock after
+    // something the main thread does after this GC, so the replay would hang.
+    // The context keeps the handler without disposing it. Connected nodes of a
+    // context that may still render are kept alive (see
+    // RecordReplayUpdateConnected), so a collected node is either unconnected
+    // or belongs to a context that is closed or unreachable.
+    context()->RecordReplayKeepDisposedHandler(std::move(handler_));
+    ReportWillBeDestroyed();
+    return;
+  }
+
   // Avoid warning when the audio node is destroyed at a non-deterministic point.
   if (recordreplay::AreEventsDisallowed())
     recordreplay::BeginPassThroughEvents();
@@ -90,16 +110,8 @@ void AudioNode::Dispose() {
   // being processed, the handler must be added.  If the context is suspended,
   // the handler still needs to be added in case the context is resumed.
   DCHECK(context());
-  if (recordreplay::AreEventsDisallowed() &&
-      recordreplay::IsRecordingOrReplaying("leak-references",
-                                           "AudioNode::Dispose")) {
-    // Skip the GC-controlled orphan-handler mutation read by the audio thread.
-    // The audio thread can still render from the handler until it sees the
-    // node disconnected, so the context keeps the handler instead of it being
-    // freed with the node.
-    context()->RecordReplayKeepDisposedHandler(std::move(handler_));
-  } else if (context()->IsPullingAudioGraph() ||
-             context()->ContextState() == BaseAudioContext::kSuspended) {
+  if (context()->IsPullingAudioGraph() ||
+      context()->ContextState() == BaseAudioContext::kSuspended) {
     context()->GetDeferredTaskHandler().AddRenderingOrphanHandler(
         std::move(handler_));
   }
