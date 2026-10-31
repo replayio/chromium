@@ -25,6 +25,10 @@ bool PopulateSkBitmapWithResource(SkBitmap* sk_bitmap, viz::ResourceId resource_
   return false;
 }
 
+bool RecordReplayShouldSamplePaint() { return false; }
+
+bool RecordReplayLastPaintSampleDecision() { return false; }
+
 void OnPaintFinished(const SkPixmap& pixmap) {}
 
 void OnRepaintFinished() {}

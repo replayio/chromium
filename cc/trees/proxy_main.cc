@@ -377,7 +377,9 @@ void ProxyMain::BeginMainFrameWithBlocking(
   // Force commits if we're recording or replaying.
   //
   // See #RUN-2434 (https://linear.app/replay/issue/RUN-2434)
-  if (updated || recordreplay::IsRecordingOrReplaying("notify-paints"))
+  if (updated ||
+      (recordreplay::IsRecordingOrReplaying("notify-paints") &&
+       recordreplay::RecordReplayShouldSamplePaint()))
     final_pipeline_stage_ = COMMIT_PIPELINE_STAGE;
 
   commit_trace_ = std::make_unique<devtools_instrumentation::ScopedCommitTrace>(
