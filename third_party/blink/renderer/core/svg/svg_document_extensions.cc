@@ -61,7 +61,8 @@ void SVGDocumentExtensions::ServiceWebAnimationsOnAnimationFrame(
 
 bool SVGDocumentExtensions::ServiceSmilAnimations() {
   bool did_schedule_animation_frame = false;
-  for (const auto& container : time_containers_) {
+  HeapVector<Member<SVGSVGElement>> time_containers(time_containers_);
+  for (const auto& container : time_containers) {
     did_schedule_animation_frame |=
         container->TimeContainer()->ServiceAnimations();
   }
