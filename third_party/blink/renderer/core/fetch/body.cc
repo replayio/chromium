@@ -20,6 +20,7 @@
 #include "third_party/blink/renderer/core/typed_arrays/dom_typed_array.h"
 #include "third_party/blink/renderer/core/url/url_search_params.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/v8_throw_exception.h"
 #include "third_party/blink/renderer/platform/heap/disallow_new_wrapper.h"
@@ -227,6 +228,12 @@ ScriptPromise Body::blob(ScriptState* script_state,
                          ExceptionState& exception_state) {
   RejectInvalidConsumption(exception_state);
   if (exception_state.HadException())
+    return ScriptPromise();
+
+  // Copying the body into a blob needs a data pipe, whose shared memory comes
+  // from a synchronous broker call to the browser process, and registering
+  // the blob needs the browser process too.
+  if (RecordReplayThrowIfEventsUnavailable("Body.blob", &exception_state))
     return ScriptPromise();
 
   // See above comment.
