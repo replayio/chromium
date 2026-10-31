@@ -110,7 +110,8 @@ bool SVGDocumentExtensions::HasSmilAnimations() const {
 }
 
 void SVGDocumentExtensions::DispatchSVGLoadEventToOutermostSVGElements() {
-  for (const auto& container : time_containers_) {
+  HeapVector<Member<SVGSVGElement>> time_containers(time_containers_);
+  for (const auto& container : time_containers) {
     SVGSVGElement* outer_svg = container.Get();
     if (!outer_svg->IsOutermostSVGSVGElement())
       continue;
