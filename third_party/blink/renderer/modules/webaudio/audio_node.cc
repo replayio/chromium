@@ -85,9 +85,10 @@ void AudioNode::Dispose() {
     // Taking the graph lock in the GC isn't ordered, and the replay's audio
     // thread can hold it while it waits for its turn on an ordered lock after
     // something the main thread does after this GC, so the replay would hang.
-    // The GC only collects nodes that aren't connected (see
-    // RecordReplayUpdateConnected), so the context keeps the handler without
-    // disposing it, as the audio thread may still reference it.
+    // The context keeps the handler without disposing it. Connected nodes of a
+    // context that may still render are kept alive (see
+    // RecordReplayUpdateConnected), so a collected node is either unconnected
+    // or belongs to a context that is closed or unreachable.
     context()->RecordReplayKeepDisposedHandler(std::move(handler_));
     ReportWillBeDestroyed();
     return;
