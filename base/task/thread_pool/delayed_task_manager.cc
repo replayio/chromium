@@ -28,7 +28,7 @@ bool RecordReplayMaybeValid(const Task& task) {
   if (recordreplay::IsRecordingOrReplaying("values",
                                            "DelayedTaskManagerMaybeValid") &&
       !recordreplay::AreEventsDisallowed()) {
-    valid = recordreplay::RecordReplayValue("DelayedTaskManager MaybeValid",
+    valid = recordreplay::RecordReplayValue("DelayedTaskManagerMaybeValid",
                                             valid);
   }
   return valid;
