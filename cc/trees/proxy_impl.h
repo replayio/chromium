@@ -91,6 +91,7 @@ class CC_EXPORT ProxyImpl : public LayerTreeHostImplClient,
   void ClearHistory() override;
   size_t CommitDurationSampleCountForTesting() const override;
 
+  void RecordReplayRepaintPending();
   void RecordReplayRepaint();
 
  private:

@@ -1021,6 +1021,10 @@ bool ProxyImpl::DataForCommit::IsValid() const {
 // Sequence number used for frames triggered while repainting when replaying.
 static const uint64_t RepaintSequenceNumber = UINT32_MAX;
 
+void ProxyImpl::RecordReplayRepaintPending() {
+  scheduler_->RecordReplayRepaintPending();
+}
+
 void ProxyImpl::RecordReplayRepaint() {
   // When repainting, the main thread has already updated the layout tree and committed
   // any changes, but the OnBeginFrame IPC message instructing the compositor to do

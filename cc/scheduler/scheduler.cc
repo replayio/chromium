@@ -166,6 +166,11 @@ void Scheduler::SetNeedsOneBeginImplFrame() {
   ProcessScheduledActions();
 }
 
+void Scheduler::RecordReplayRepaintPending() {
+  state_machine_.SetReplayRepaintPending();
+  ProcessScheduledActions();
+}
+
 void Scheduler::SetNeedsRedraw() {
   state_machine_.SetNeedsRedraw();
   recordreplay::Assert("[RUN-1230-1710] Scheduler::SetNeedsRedraw");

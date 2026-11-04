@@ -88,6 +88,7 @@ class CC_EXPORT ProxyMain : public Proxy {
     return final_pipeline_stage_;
   }
 
+  void RecordReplayRepaintPending();
   void RecordReplayRepaint();
 
  private:

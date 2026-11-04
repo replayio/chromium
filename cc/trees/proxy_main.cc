@@ -889,6 +889,12 @@ double ProxyMain::GetPercentDroppedFrames() const {
   return 0.0;
 }
 
+void ProxyMain::RecordReplayRepaintPending() {
+  ImplThreadTaskRunner()->PostTask(
+      FROM_HERE, base::BindOnce(&ProxyImpl::RecordReplayRepaintPending,
+                                base::Unretained(proxy_impl_.get())));
+}
+
 void ProxyMain::RecordReplayRepaint() {
   ImplThreadTaskRunner()->PostTask(
       FROM_HERE, base::BindOnce(&ProxyImpl::RecordReplayRepaint,

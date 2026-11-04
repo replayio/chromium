@@ -165,6 +165,8 @@ class CC_EXPORT Scheduler : public viz::BeginFrameObserverBase {
 
   void SetNeedsRedraw();
 
+  void RecordReplayRepaintPending();
+
   void SetNeedsPrepareTiles();
 
   // Requests a pending tree should be created to invalidate content on the impl
