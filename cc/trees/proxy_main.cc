@@ -284,7 +284,12 @@ void ProxyMain::BeginMainFrameWithBlocking(
 
   // See LayerTreeHostClient::BeginMainFrame for more documentation on
   // what this does.
-  layer_tree_host_->BeginMainFrame(frame_args);
+  //
+  // [RecordReplay] A repaint (force_blocking) draws the page as it is at the
+  // pause, so it doesn't run the frame's script: animation frame callbacks
+  // and rAF-aligned input would change the page before it's drawn.
+  if (!force_blocking)
+    layer_tree_host_->BeginMainFrame(frame_args);
 
   // Updates cc animations on the main-thread. This is necessary in order
   // to track animation states such that they are cleaned up properly.
