@@ -37,6 +37,7 @@
 #include "base/memory/ptr_util.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "base/timer/lap_timer.h"
 #include "base/trace_event/typed_macros.h"
 #include "cc/animation/animation_host.h"
@@ -2571,6 +2572,11 @@ bool LocalFrameView::RunDocumentTransitionSteps(
 bool LocalFrameView::RunResizeObserverSteps(
     DocumentLifecycle::LifecycleState target_state) {
   if (target_state != DocumentLifecycle::kPaintClean)
+    return false;
+
+  // [RecordReplay] Lifecycle updates after diverging, as in repaints, show the
+  // page as it is at the pause, without running its observers' script.
+  if (recordreplay::HasDivergedFromRecording())
     return false;
 
   bool re_run_lifecycles = false;
