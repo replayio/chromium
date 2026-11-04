@@ -3049,6 +3049,14 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
   InitializeReplayScripts(isolate, localFrame, context);
 }
 
+static void RunRegisteredRootFrameScripts(v8::Isolate* isolate,
+                                          v8::Local<v8::Context> context) {
+  for (const auto& script : GetRegisteredRootFrameScripts()) {
+    recordreplay::AutoDisallowEvents disallow("RunRegisteredRootFrameScripts");
+    RunScript(isolate, context, script.c_str(), kInternalScriptURL);
+  }
+}
+
 void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
   // 1. Register navigation event.
   if (localFrame->GetDocument()->Url().ProtocolIsInHTTPFamily()) {
@@ -3057,10 +3065,7 @@ void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame
   }
 
   // 2. Initialize registered root frame scripts
-  for (const auto& script : GetRegisteredRootFrameScripts()) {
-    recordreplay::AutoDisallowEvents disallow("RunRegisteredRootFrameScripts");
-    RunScript(isolate, context, script.c_str(), kInternalScriptURL);
-  }
+  RunRegisteredRootFrameScripts(isolate, context);
 
   // 3. Initialize React and Redux Devtools stubs.
   if (recordreplay::FeatureEnabled("react-devtools-backend") &&
@@ -3085,6 +3090,9 @@ void OnNewWindowAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8
                                  gReplayScriptsAlive;
   if (ordinaryLocalRoot) {
     InstallRecordReplayGlobals(isolate, newContext);
+    // The scripts define helpers on this window's __RECORD_REPLAY_ARGUMENTS__,
+    // which its code calls when its sources are replaced while replaying.
+    RunRegisteredRootFrameScripts(isolate, newContext);
   }
 
   RunScript(isolate, newContext, gOnNewWindowScript,
