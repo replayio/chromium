@@ -209,7 +209,10 @@ SVGImage::SVGImage(ImageObserver* observer, bool is_multipart)
                                  ->Scheduler()
                                  ->ToMainThreadScheduler()
                                  ->CreateAgentGroupScheduler()),
-      has_pending_timeline_rewind_(false) {}
+      has_pending_timeline_rewind_(false) {
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "SVGImage"))
+    replay_strong_image_observer_ = observer;
+}
 
 SVGImage::~SVGImage() {
   AllowDestroyingLayoutObjectInFinalizerScope scope;
