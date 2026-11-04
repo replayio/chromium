@@ -226,10 +226,10 @@ class CORE_EXPORT SVGImage final : public Image {
   std::unique_ptr<scheduler::WebAgentGroupScheduler> agent_group_scheduler_;
 
   // Keeps the observer (the ImageResourceContent holding this image) alive, so
-  // the GC never destroys the image: a collected image's page stays in
-  // Page::AllPages() but stops scheduling animations, and the recording and
-  // the replay collect it at different times. The observer drops the image
-  // when it clears or replaces it.
+  // the GC doesn't destroy the image while the observer holds it: a collected
+  // image's page stays in Page::AllPages() but stops scheduling animations,
+  // and the recording and the replay collect it at different times. The
+  // observer drops the image when it clears or replaces it.
   Persistent<ImageObserver> replay_strong_image_observer_;
 
   // When an SVG image has no intrinsic size, the size depends on the default
