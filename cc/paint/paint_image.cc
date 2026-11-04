@@ -10,6 +10,7 @@
 
 #include "base/atomic_sequence_num.h"
 #include "base/hash/hash.h"
+#include "base/record_replay.h"
 #include "base/logging.h"
 #include "cc/paint/paint_image_builder.h"
 #include "cc/paint/paint_image_generator.h"
@@ -90,13 +91,31 @@ PaintImage::DecodingMode PaintImage::GetConservative(DecodingMode one,
   return DecodingMode::kAsync;
 }
 
+// Code that runs with recorded events disallowed, such as Replay's in-process
+// draws while replaying, takes IDs from ranges of their own: an ID it took from
+// the shared sequence would shift the IDs recorded threads get later.
+static bool RecordReplayIsolatedIds() {
+  return recordreplay::IsRecordingOrReplaying() &&
+         recordreplay::AreEventsDisallowed();
+}
+
+constexpr int kRecordReplayIsolatedIdBase = 1 << 30;
+
 // static
 PaintImage::Id PaintImage::GetNextId() {
+  if (RecordReplayIsolatedIds()) {
+    static base::AtomicSequenceNumber next_isolated_id;
+    return kRecordReplayIsolatedIdBase + next_isolated_id.GetNext();
+  }
   return g_next_image_id.GetNext();
 }
 
 // static
 PaintImage::ContentId PaintImage::GetNextContentId() {
+  if (RecordReplayIsolatedIds()) {
+    static base::AtomicSequenceNumber next_isolated_content_id;
+    return kRecordReplayIsolatedIdBase + next_isolated_content_id.GetNext();
+  }
   return g_next_image_content_id.GetNext();
 }
 

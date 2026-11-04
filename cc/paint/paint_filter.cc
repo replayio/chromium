@@ -368,7 +368,8 @@ size_t PaintFilter::BaseSerializedSize() const {
 
 sk_sp<PaintFilter> PaintFilter::SnapshotWithImages(
     ImageProvider* image_provider) const {
-  if (!has_discardable_images_)
+  if (!has_discardable_images_ &&
+      !(image_provider && image_provider->RecordReplaySnapshotsAllFilters()))
     return sk_ref_sp<PaintFilter>(this);
   return SnapshotWithImagesInternal(image_provider);
 }
@@ -1045,6 +1046,11 @@ size_t RecordPaintFilter::SerializedSize() const {
 
 sk_sp<PaintFilter> RecordPaintFilter::SnapshotWithImagesInternal(
     ImageProvider* image_provider) const {
+  if (image_provider && image_provider->RecordReplaySnapshotsAllFilters()) {
+    return sk_make_sp<RecordPaintFilter>(sk_make_sp<PaintOpBuffer>(),
+                                         record_bounds_, raster_scale_,
+                                         scaling_behavior_);
+  }
   return sk_sp<RecordPaintFilter>(
       new RecordPaintFilter(record_, record_bounds_, raster_scale_,
                             scaling_behavior_, image_provider));

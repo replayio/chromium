@@ -8,6 +8,7 @@
 
 #include "base/atomic_sequence_num.h"
 #include "base/notreached.h"
+#include "base/record_replay.h"
 #include "base/types/optional_util.h"
 #include "cc/paint/image_provider.h"
 #include "cc/paint/paint_image_builder.h"
@@ -195,7 +196,14 @@ sk_sp<PaintShader> PaintShader::MakePaintRecord(
   sk_sp<PaintShader> shader(new PaintShader(Type::kPaintRecord));
 
   shader->record_ = std::move(record);
-  shader->id_ = g_next_shader_id.GetNext();
+  // See PaintImage::GetNextId().
+  if (recordreplay::IsRecordingOrReplaying() &&
+      recordreplay::AreEventsDisallowed()) {
+    static base::AtomicSequenceNumber next_isolated_shader_id;
+    shader->id_ = (1 << 30) + next_isolated_shader_id.GetNext();
+  } else {
+    shader->id_ = g_next_shader_id.GetNext();
+  }
   shader->tile_ = tile;
   shader->scaling_behavior_ = scaling_behavior;
   shader->SetMatrixAndTiling(local_matrix, tx, ty);

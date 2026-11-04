@@ -15,6 +15,9 @@
 #include "base/record_replay_render_interface.h"
 #include "base/strings/stringprintf.h"
 #include "cc/animation/animation_events.h"
+#include "cc/paint/filter_operations.h"
+#include "cc/paint/image_provider.h"
+#include "cc/paint/paint_filter.h"
 #include "cc/trees/compositor_commit_data.h"
 #include "components/viz/common/display/renderer_settings.h"
 #include "components/viz/service/display/software_output_device.h"
@@ -105,10 +108,97 @@ static bool RecordReplayDrawWhenRequested() {
 // Whether the current frame has been drawn into |gCurrentPixmap|.
 static bool gCurrentFrameDrawn;
 
+// Decodes images the way the frame's serialization for the GPU process does
+// (SkImage::asLegacyBitmap in cc::PaintOpWriter), so that one finds this decode
+// in Skia's bitmap cache, and hands the draw a raster copy.
+class RecordReplaySnapshotImageProvider : public cc::ImageProvider {
+ public:
+  ScopedResult GetRasterContent(const cc::DrawImage& draw_image) override {
+    sk_sp<SkImage> image = draw_image.paint_image().GetSwSkImage();
+    SkBitmap bitmap;
+    SkPixmap pixmap;
+    if (!image || !image->asLegacyBitmap(&bitmap) ||
+        !bitmap.peekPixels(&pixmap)) {
+      return ScopedResult();
+    }
+    sk_sp<SkImage> copy = SkImage::MakeRasterCopy(pixmap);
+    if (!copy) {
+      return ScopedResult();
+    }
+    return ScopedResult(cc::DecodedDrawImage(
+        std::move(copy), nullptr, SkSize::Make(0, 0), SkSize::Make(1, 1),
+        draw_image.filter_quality(), /*is_budgeted=*/true));
+  }
+
+  bool RecordReplaySnapshotsAllFilters() const override { return true; }
+};
+
+static bool HasReferenceFilter(const cc::FilterOperations& filters) {
+  for (const cc::FilterOperation& op : filters.operations()) {
+    if (op.type() == cc::FilterOperation::REFERENCE && op.image_filter()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static cc::FilterOperations SnapshotFilters(
+    const cc::FilterOperations& filters,
+    cc::ImageProvider* image_provider) {
+  std::vector<cc::FilterOperation> snapshot;
+  for (const cc::FilterOperation& op : filters.operations()) {
+    if (op.type() == cc::FilterOperation::REFERENCE && op.image_filter()) {
+      snapshot.push_back(cc::FilterOperation::CreateReferenceFilter(
+          op.image_filter()->SnapshotWithImages(image_provider)));
+    } else {
+      snapshot.push_back(op);
+    }
+  }
+  return cc::FilterOperations(std::move(snapshot));
+}
+
+struct RecordReplayPassFilters {
+  cc::FilterOperations filters;
+  cc::FilterOperations backdrop_filters;
+};
+
+// Snapshots of the current frame's render pass filters that have reference
+// filters, by index in its render pass list. Drawing a reference filter can
+// decode images, play back paint records and fill caches that recorded threads
+// share, so the frame's reference filters are snapshotted when it's submitted,
+// with recorded events allowed, and a later draw uses the snapshots.
+static base::NoDestructor<
+    std::vector<std::unique_ptr<RecordReplayPassFilters>>>
+    gFilterSnapshots;
+
+static void SnapshotReferenceFilters(const viz::CompositorFrame& frame) {
+  gFilterSnapshots->clear();
+  RecordReplaySnapshotImageProvider image_provider;
+  for (const auto& pass : frame.render_pass_list) {
+    std::unique_ptr<RecordReplayPassFilters> snapshot;
+    if (HasReferenceFilter(pass->filters) ||
+        HasReferenceFilter(pass->backdrop_filters)) {
+      snapshot = std::make_unique<RecordReplayPassFilters>();
+      snapshot->filters = SnapshotFilters(pass->filters, &image_provider);
+      snapshot->backdrop_filters =
+          SnapshotFilters(pass->backdrop_filters, &image_provider);
+    }
+    gFilterSnapshots->push_back(std::move(snapshot));
+  }
+}
+
 static void DrawFrame(const viz::CompositorFrame& frame) {
   viz::AggregatedRenderPassList render_passes;
   for (const auto& pass : frame.render_pass_list) {
     render_passes.push_back(pass->DeepCopyAggregated());
+  }
+  if (gFilterSnapshots->size() == render_passes.size()) {
+    for (size_t i = 0; i < render_passes.size(); i++) {
+      if (const auto& snapshot = (*gFilterSnapshots)[i]) {
+        render_passes[i]->filters = snapshot->filters;
+        render_passes[i]->backdrop_filters = snapshot->backdrop_filters;
+      }
+    }
   }
 
   // A frame drawn when its pixels are requested stays current until its
@@ -162,9 +252,11 @@ void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
     gCurrentFrame = &frame;
     gCurrentFrameDrawn = false;
     SetDeviceViewportSize(frame.size_in_pixels());
+    SnapshotReferenceFilters(frame);
     FinishPaints();
     gCurrentFrame = nullptr;
     gCurrentPixmap = nullptr;
+    gFilterSnapshots->clear();
     return;
   }
 
