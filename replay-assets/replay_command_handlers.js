@@ -127,6 +127,10 @@ const Array_push = Array.prototype.push;
 const Object_toString = Object.prototype.toString;
 const String_ = String;
 const String_slice = String.prototype.slice;
+const Object_getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const Map_size = Object.getOwnPropertyDescriptor(Map.prototype, "size").get;
+const Set_size = Object.getOwnPropertyDescriptor(Set.prototype, "size").get;
+const TypedArray_prototype = Object.getPrototypeOf(Uint8Array.prototype);
 
 function isArrayLike(obj) {
   return obj != null && typeof obj.length === "number";
@@ -767,14 +771,22 @@ function Graphics_getDevicePixelRatio() {
 // Utilities
 ///////////////////////////////////////////////////////////////////////////////
 
-function isPrototype(x) {
-  // Note: This can invoke getters or proxy hooks on page objects,
-  // so we watch for exceptions being thrown.
-  try {
-    return x === x?.constructor?.prototype;
-  } catch (e) {
+/**
+ * Whether `x` is the `prototype` of the function in its own `constructor` data
+ * property. Reads V8's own property descriptors of `x` and of that function
+ * only, so no page getter or proxy trap runs.
+ */
+function isPrototype(x, cdpProperties) {
+  const constructor = cdpProperties.result.find(
+    prop => prop.name === "constructor" && prop.isOwn
+  )?.value;
+  if (constructor?.type !== "function" || !constructor.objectId) {
     return false;
   }
+  const constructorObject = fromJsGetObjectByCdpId(constructor.objectId);
+  const prototype =
+    constructorObject && Object_getOwnPropertyDescriptor(constructorObject, "prototype");
+  return !!prototype && "value" in prototype && prototype.value === x;
 }
 
 /**
@@ -1284,7 +1296,7 @@ ProtocolObjectPreview.prototype = {
     Array_push.call(this.properties, rrpProp);
   },
 
-  addGetterValue(propKey, ownerCdpObject, force = false) {
+  addGetterValue(propKey, ownerCdpObject, getter, force = false) {
     if (isObjectPropertyBlacklisted(ownerCdpObject, propKey)) {
       return;
     }
@@ -1296,7 +1308,7 @@ ProtocolObjectPreview.prototype = {
       return;
     }
 
-    const rrpValue = evalPropRrpNotNull(this.raw, propKey);
+    const rrpValue = evalPropRrpNotNull(this.raw, propKey, getter);
     if (rrpValue) {
       this.setGetterValueUnchecked(propKey, rrpValue, force);
     }
@@ -1474,7 +1486,7 @@ ProtocolObjectPreview.prototype = {
      */
 
     // Add builtin-specific data.
-    if (!isPrototype(this.raw)) { // Ignore prototype itself.
+    if (!isPrototype(this.raw, cdpProperties)) { // Ignore prototype itself.
       const previewers = CustomPreviewers[this.cdpObj.className];
       if (previewers) {
         for (const entry of previewers) {
@@ -1674,10 +1686,10 @@ function previewArray(_cdpProperties) {
 
 function previewTypedArray() {
   // simply invoke the native getter
-  this.addGetterValue('length', this.cdpObj, /* force */ true);
-  this.addGetterValue('byteLength', this.cdpObj, /* force */ true);
-  this.addGetterValue('byteOffset', this.cdpObj, /* force */ true);
-  this.addGetterValue('buffer', this.cdpObj, /* force */ true);
+  for (const key of ['length', 'byteLength', 'byteOffset', 'buffer']) {
+    const getter = Object_getOwnPropertyDescriptor(TypedArray_prototype, key).get;
+    this.addGetterValue(key, this.cdpObj, getter, /* force */ true);
+  }
 }
 
 /**
@@ -1705,7 +1717,9 @@ function previewSetMap(cdpProperties) {
     // like this.
     // SLN: Simply query the size getter instead.
     // `raw` is null if the cdpId lookup fails post-divergence.
-    size = this.raw ? this.raw.size : 0;
+    size = this.raw
+      ? (this.cdpObj.className === "Map" ? Map_size : Set_size).call(this.raw)
+      : 0;
     const rrpSize = { name: "size", value: size };
     this.addPropertyUnchecked(rrpSize, /* force */ true);
     this.setGetterValueUnchecked(rrpSize.name, rrpSize, /* force */ true);
@@ -1999,9 +2013,9 @@ const CustomPreviewers = {
  * Since we only use this for a small set of well defined
  * props, we emit a warning if the result is undefined or null.
  */
-function evalPropRrpNotNull(owner, propKey) {
+function evalPropRrpNotNull(owner, propKey, getter) {
   try {
-    const plainValue = owner[propKey];
+    const plainValue = getter.call(owner);
     if (plainValue === undefined || plainValue === null) {
       // [RUN-2223] This should not happen.
       const e = new Error("");
