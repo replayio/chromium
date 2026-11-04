@@ -28,6 +28,7 @@ const {
   fromJsIsBlinkObject,
   fromJsIsBlinkNodeObject,
   fromJsIsBlinkElementObject,
+  fromJsGetElementAttributes,
   fromJsIsBlinkCSSStyleDeclarationObject,
   fromJsHasReturnValue,
   fromJsGetReturnValue,
@@ -1559,10 +1560,11 @@ function getExtraObjectPreviewData(cdpObject, cdpProperties) {
 function previewBlinkNode(node) {
   let attributes, pseudoType;
   if (fromJsIsBlinkElementObject(node)) {
-    attributes = [];
-    iterateArrayLike(node.attributes, ({ name, value }) => {
-      Array_push.call(attributes, { name, value });
-    }, "Element.attributes");
+    // `node.attributes` can't create the element's NamedNodeMap or its Attr
+    // nodes here without diverging, so it is null or has null items unless the
+    // page created them, and reading attributes through the DOM synchronizes
+    // lazy ones the page synchronizes itself later on.
+    attributes = fromJsGetElementAttributes(node);
     // TODO: We cannot access pseudo elements using the JS DOM API - https://linear.app/replay/issue/RUN-953/
     // pseudoType = node.localName;
   }
