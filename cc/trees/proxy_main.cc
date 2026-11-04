@@ -286,8 +286,8 @@ void ProxyMain::BeginMainFrameWithBlocking(
   // what this does.
   //
   // [RecordReplay] A repaint (force_blocking) draws the page as it is at the
-  // pause, so it doesn't run the frame's script: animation frame callbacks
-  // and rAF-aligned input would change the page before it's drawn.
+  // pause, so it doesn't run animation frame callbacks or rAF-aligned input,
+  // which would change the page before it's drawn.
   if (!force_blocking)
     layer_tree_host_->BeginMainFrame(frame_args);
 
