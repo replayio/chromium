@@ -20,6 +20,7 @@
 #include "components/viz/service/display/software_output_device.h"
 #include "components/viz/service/display/software_renderer.h"
 #include "components/viz/service/display_embedder/software_output_surface.h"
+#include "third_party/skia/include/private/SkRecordReplayDraw.h"
 #include "ui/gfx/codec/jpeg_codec.h"
 
 namespace blink {
@@ -251,7 +252,9 @@ static char* PaintCallback(const char* mime_type, int jpeg_quality) {
     if (!gCurrentFrameDrawn) {
       gCurrentFrameDrawn = true;
       AutoDisallowEvents disallow("RecordReplayDrawWhenRequested");
+      SkRecordReplayBeginIsolatedDraw();
       DrawFrame(*gCurrentFrame);
+      SkRecordReplayEndIsolatedDraw();
     }
   }
 
