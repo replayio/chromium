@@ -1038,6 +1038,9 @@ void ProxyImpl::RecordReplayRepaint() {
                                                          viz::BeginFrameArgs::DefaultInterval(),
                                                          viz::BeginFrameArgs::NORMAL, 
                                                          true /*replay_force_draw*/);
+  // The page may not have changed since its last draw, and a frame without
+  // damage isn't drawn at all.
+  host_impl_->SetFullViewportDamage();
   scheduler_->OnBeginFrameDerivedImpl(args);
 }
 
