@@ -38,6 +38,9 @@ void OnReadyToCommit(const void* compositor, int source_frame_number);
 // the given source frame number.
 void OnDrawSourceFrame(const void* compositor, int source_frame_number);
 
+// Called on the compositor thread when the compositor is destroyed.
+void OnCompositorDestroyed(const void* compositor);
+
 // Called when a shared memory buffer for rasterization has been created.
 void NotifyRasterBuffer(const viz::SharedBitmapId& shared_bitmap_id,
                         void* memory, size_t size);

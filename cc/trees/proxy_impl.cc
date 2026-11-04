@@ -216,6 +216,10 @@ ProxyImpl::~ProxyImpl() {
   // holding while still on the compositor thread. This also ensures any
   // callbacks holding a ProxyImpl pointer are cancelled.
   smoothness_priority_expiration_notifier_.Shutdown();
+
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    recordreplay::OnCompositorDestroyed(this);
+  }
 }
 
 void ProxyImpl::InitializeMutatorOnImpl(

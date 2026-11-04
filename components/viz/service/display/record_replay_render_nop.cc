@@ -17,6 +17,8 @@ void OnReadyToCommit(const void* compositor, int source_frame_number) {}
 
 void OnDrawSourceFrame(const void* compositor, int source_frame_number) {}
 
+void OnCompositorDestroyed(const void* compositor) {}
+
 void NotifyRasterBuffer(const viz::SharedBitmapId& shared_bitmap_id,
                         void* memory, size_t size) {}
 

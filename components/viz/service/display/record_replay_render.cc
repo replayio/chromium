@@ -290,6 +290,19 @@ void OnDrawSourceFrame(const void* compositor, int source_frame_number) {
   }
 }
 
+// A destroyed compositor never draws its pending commits, and a later
+// compositor at the same address must not finish them.
+void OnCompositorDestroyed(const void* compositor) {
+  for (auto it = gPendingCommitPaints->begin(); it != gPendingCommitPaints->end();) {
+    if (it->compositor != compositor) {
+      ++it;
+      continue;
+    }
+    gSupersededCommitBookmarks->push_back(it->bookmark);
+    it = gPendingCommitPaints->erase(it);
+  }
+}
+
 // How to encode repainted graphics.
 static const char* gRepaintMimeType;
 static int gRepaintJPEGQuality;
