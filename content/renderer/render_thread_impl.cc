@@ -1384,6 +1384,19 @@ void RenderThreadImpl::WriteClangProfilingProfile(
 }
 #endif
 
+void RenderThreadImpl::FinishRecording(FinishRecordingCallback callback) {
+  if (recordreplay::IsRecordingOrReplaying()) {
+    recordreplay::FinishRecording();
+    // FinishRecording will cause the process to exit,
+    // though the _exit call may happen on another thread
+    // asynchronously. either way we don't want to call the
+    // callback here.
+  } else {
+    // If we're not recording, just call the callback.
+    std::move(callback).Run();
+  }
+}
+
 void RenderThreadImpl::SetIsCrossOriginIsolated(bool value) {
   blink::SetIsCrossOriginIsolated(value);
 }

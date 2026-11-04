@@ -68,10 +68,12 @@
 #include "components/rlz/rlz_tracker.h"  // nogncheck crbug.com/1125897
 #endif
 
-#if BUILDFLAG(CLANG_PROFILING_INSIDE_SANDBOX) && BUILDFLAG(CLANG_PGO)
 #include "base/run_loop.h"
+#if BUILDFLAG(CLANG_PROFILING_INSIDE_SANDBOX) && BUILDFLAG(CLANG_PGO)
 #include "content/public/browser/profiling_utils.h"
 #endif
+
+#include "content/public/browser/recording_utils.h"
 
 namespace browser_shutdown {
 namespace {
@@ -199,6 +201,12 @@ void OnShutdownStarting(ShutdownType type) {
   content::AskAllChildrenToDumpProfilingData(nested_run_loop.QuitClosure());
   nested_run_loop.Run();
 #endif  // BUILDFLAG(CLANG_PROFILING_INSIDE_SANDBOX) && BUILDFLAG(CLANG_PGO)
+
+  // Wait for all recording child processes to finish their recording, so
+  // we don't pollute it with actual process shutdown.
+  base::RunLoop nested_run_loop(base::RunLoop::Type::kNestableTasksAllowed);
+  content::RecordReplayAskAllChildrenToFinishRecording(nested_run_loop.QuitClosure());
+  nested_run_loop.Run();
 
   // Call FastShutdown on all of the RenderProcessHosts.  This will be
   // a no-op in some cases, so we still need to go through the normal

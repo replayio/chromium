@@ -318,6 +318,7 @@ class CONTENT_EXPORT RenderProcessHostImpl
   void DumpProfilingData(base::OnceClosure callback) override;
 #endif
 
+  void FinishRecording(base::OnceClosure callback) override;
   void PauseSocketManagerForRenderFrameHost(
       const GlobalRenderFrameHostId& render_frame_host_id) override;
   void ResumeSocketManagerForRenderFrameHost(
