@@ -380,6 +380,13 @@ void ProxyMain::BeginMainFrameWithBlocking(
   if (updated || recordreplay::IsRecordingOrReplaying("notify-paints"))
     final_pipeline_stage_ = COMMIT_PIPELINE_STAGE;
 
+  // [RecordReplay] The paint's bookmark comes before WillCommit: a repaint
+  // while paused at it runs a nested main frame, whose commit would otherwise
+  // wait for this frame's commit, which isn't posted until after the bookmark.
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    recordreplay::OnCommitPaint();
+  }
+
   commit_trace_ = std::make_unique<devtools_instrumentation::ScopedCommitTrace>(
       layer_tree_host_->GetId(), frame_args.frame_id.sequence_number);
 
@@ -463,10 +470,6 @@ void ProxyMain::BeginMainFrameWithBlocking(
     absl::optional<DebugScopedSetMainThreadBlocked> main_thread_blocked;
     if (blocking)
       main_thread_blocked.emplace(task_runner_provider_);
-
-    if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
-      recordreplay::OnCommitPaint();
-    }
 
     ImplThreadTaskRunner()->PostTask(
         FROM_HERE,
