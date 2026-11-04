@@ -2576,7 +2576,8 @@ bool LocalFrameView::RunResizeObserverSteps(
 
   // [RecordReplay] Lifecycle updates after diverging, as in repaints, show the
   // page as it is at the pause, without running its observers' script.
-  if (recordreplay::HasDivergedFromRecording())
+  if (recordreplay::IsRecordingOrReplaying() &&
+      recordreplay::HasDivergedFromRecording())
     return false;
 
   bool re_run_lifecycles = false;
