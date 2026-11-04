@@ -87,6 +87,40 @@ static std::string SurfaceIdString(const viz::LocalSurfaceId& local_surface_id) 
 // Current compositor frame.
 static const viz::CompositorFrame* gCurrentFrame;
 
+extern const SkPixmap* gCurrentPixmap;
+static void FinishPaints();
+static void SetDeviceViewportSize(const gfx::Size& size);
+
+// What a frame's draw does depends on its contents, and so do the recorded
+// events it emits (asserts, recorded IDs, ordered locks). Without diverging, a
+// submitted frame is therefore drawn only when the recorder asks for its
+// pixels, with recorded events disallowed, so that drawing a frame or not
+// never changes the recording's events.
+static bool RecordReplayDrawWhenRequested() {
+  static bool enabled = IsRecordingOrReplaying("event-free-draw");
+  return enabled && !HasDivergedFromRecording();
+}
+
+// Whether the current frame has been drawn into |gCurrentPixmap|.
+static bool gCurrentFrameDrawn;
+
+static void DrawFrame(const viz::CompositorFrame& frame) {
+  viz::AggregatedRenderPassList render_passes;
+  for (const auto& pass : frame.render_pass_list) {
+    render_passes.push_back(pass->DeepCopyAggregated());
+  }
+
+  gCurrentFrame = &frame;
+
+  gRenderer->DrawFrame(&render_passes,
+                       1,
+                       frame.size_in_pixels(),
+                       gfx::DisplayColorSpaces(),
+                       viz::SurfaceDamageRectList());
+
+  gCurrentFrame = nullptr;
+}
+
 void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
                            const viz::CompositorFrame& frame) {
   CHECK(IsRecordingOrReplaying());
@@ -118,20 +152,19 @@ void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
     return;
   }
 
-  viz::AggregatedRenderPassList render_passes;
-  for (const auto& pass : frame.render_pass_list) {
-    render_passes.push_back(pass->DeepCopyAggregated());
+  if (RecordReplayDrawWhenRequested()) {
+    // The paint callback draws the frame if it's asked for the frame's pixels
+    // while its paints finish.
+    gCurrentFrame = &frame;
+    gCurrentFrameDrawn = false;
+    SetDeviceViewportSize(frame.size_in_pixels());
+    FinishPaints();
+    gCurrentFrame = nullptr;
+    gCurrentPixmap = nullptr;
+    return;
   }
 
-  gCurrentFrame = &frame;
-
-  gRenderer->DrawFrame(&render_passes,
-                       1,
-                       frame.size_in_pixels(),
-                       gfx::DisplayColorSpaces(),
-                       viz::SurfaceDamageRectList());
-
-  gCurrentFrame = nullptr;
+  DrawFrame(frame);
 }
 
 bool PopulateSkBitmapWithResource(SkBitmap* sk_bitmap, viz::ResourceId resource_id) {
@@ -178,7 +211,9 @@ extern "C" void V8RecordReplaySetPaintCallback(char* (*callback)(const char*, in
 const SkPixmap* gCurrentPixmap;
 
 static char* EncodeBitmapContents(const char* mime_type, int jpeg_quality) {
-  CHECK(gCurrentPixmap);
+  if (!gCurrentPixmap) {
+    return nullptr;
+  }
 
   if (strcmp(mime_type, "image/jpeg")) {
     // NYI
@@ -204,6 +239,17 @@ static char* PaintCallback(const char* mime_type, int jpeg_quality) {
   // we are on the main thread. These invocations need different handling.
   if (HasDivergedFromRecording()) {
     return PaintWhenDiverged(mime_type, jpeg_quality);
+  }
+
+  if (RecordReplayDrawWhenRequested()) {
+    if (!gCurrentFrame) {
+      return nullptr;
+    }
+    if (!gCurrentFrameDrawn) {
+      gCurrentFrameDrawn = true;
+      AutoDisallowEvents disallow("RecordReplayDrawWhenRequested");
+      DrawFrame(*gCurrentFrame);
+    }
   }
 
   return EncodeBitmapContents(mime_type, jpeg_quality);
@@ -316,11 +362,39 @@ static std::atomic<char*> gRepaintResult;
 // Real size of |gRepaintResult|.
 static std::atomic<gfx::Size> gDeviceViewportSize;
 
+static void SetDeviceViewportSize(const gfx::Size& size) {
+  gDeviceViewportSize = size;
+}
+
+static void FinishPaints() {
+  for (size_t superseded : *gSupersededCommitBookmarks) {
+    V8RecordReplayPaintFinished(superseded);
+  }
+  gSupersededCommitBookmarks->clear();
+  size_t bookmark = gLastCommitBookmark.load();
+  if (bookmark) {
+    V8RecordReplayPaintFinished(bookmark);
+  }
+}
+
+// The pixels of the frame the paint callback draws, which it encodes after
+// the draw.
+static base::NoDestructor<SkPixmap> gDrawnPixmap;
+
 void OnPaintFinished(const SkPixmap& pixmap) {
+  if (RecordReplayDrawWhenRequested()) {
+    // The paint callback is drawing the current frame.
+    CHECK(gCurrentFrame && AreEventsDisallowed());
+    *gDrawnPixmap = pixmap;
+    gCurrentPixmap = gDrawnPixmap.get();
+    return;
+  }
+
   gCurrentPixmap = &pixmap;
   if (gOutputSurface) {
     // Obtain device size on impl thread.
-    gDeviceViewportSize = gOutputSurface->software_device()->ReplayViewportPixelSize();
+    SetDeviceViewportSize(
+        gOutputSurface->software_device()->ReplayViewportPixelSize());
   }
 
   if (HasDivergedFromRecording()) {
@@ -329,14 +403,7 @@ void OnPaintFinished(const SkPixmap& pixmap) {
     if (gRepaintEvent)
       gRepaintResult = EncodeBitmapContents(gRepaintMimeType, gRepaintJPEGQuality);
   } else {
-    for (size_t superseded : *gSupersededCommitBookmarks) {
-      V8RecordReplayPaintFinished(superseded);
-    }
-    gSupersededCommitBookmarks->clear();
-    size_t bookmark = gLastCommitBookmark.load();
-    if (bookmark) {
-      V8RecordReplayPaintFinished(bookmark);
-    }
+    FinishPaints();
   }
 
   gCurrentPixmap = nullptr;
