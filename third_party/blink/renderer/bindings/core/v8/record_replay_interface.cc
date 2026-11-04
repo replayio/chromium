@@ -2603,8 +2603,13 @@ static void fromJsBeginReplayCode(
   CHECK(args.Length() == 1 && args[0]->IsString() &&
         "[RuntimeError] must be called with a single string");
 
+  // The driver keeps the label pointer for as long as events stay disallowed,
+  // so it can't point into this call's Utf8Value. Callers pass a few fixed
+  // labels.
+  static auto* labels = new std::unordered_set<std::string>();
   v8::String::Utf8Value label(args.GetIsolate(), args[0]);
-  recordreplay::BeginDisallowEventsWithLabel(*label);
+  recordreplay::BeginDisallowEventsWithLabel(
+      labels->insert(*label).first->c_str());
   recordreplay::EnterReplayCode();
 }
 
