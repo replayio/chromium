@@ -110,6 +110,9 @@ static void DrawFrame(const viz::CompositorFrame& frame) {
     render_passes.push_back(pass->DeepCopyAggregated());
   }
 
+  // A frame drawn when its pixels are requested stays current until its
+  // paints have finished.
+  const viz::CompositorFrame* previous_frame = gCurrentFrame;
   gCurrentFrame = &frame;
 
   gRenderer->DrawFrame(&render_passes,
@@ -118,7 +121,7 @@ static void DrawFrame(const viz::CompositorFrame& frame) {
                        gfx::DisplayColorSpaces(),
                        viz::SurfaceDamageRectList());
 
-  gCurrentFrame = nullptr;
+  gCurrentFrame = previous_frame;
 }
 
 void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
