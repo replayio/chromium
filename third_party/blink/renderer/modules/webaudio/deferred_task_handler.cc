@@ -40,6 +40,13 @@ namespace blink {
 void DeferredTaskHandler::lock() {
   // Don't allow regular lock in real-time audio thread.
   DCHECK(!IsAudioThread());
+  // Audio nodes finalized in GCs take the lock at different points when
+  // replaying, where it can't be ordered (see AudioNode::Dispose).
+  if (recordreplay::AreEventsDisallowed()) {
+    recordreplay::AutoPassThroughEvents pass_through;
+    context_graph_mutex_.lock();
+    return;
+  }
   context_graph_mutex_.lock();
 }
 
@@ -57,6 +64,12 @@ bool DeferredTaskHandler::TryLock() {
 }
 
 void DeferredTaskHandler::unlock() {
+  // See lock().
+  if (recordreplay::AreEventsDisallowed()) {
+    recordreplay::AutoPassThroughEvents pass_through;
+    context_graph_mutex_.unlock();
+    return;
+  }
   context_graph_mutex_.unlock();
 }
 

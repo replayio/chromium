@@ -52,11 +52,15 @@ class AudioScheduledSourceHandler
   double LatencyTime() const override { return 0; }
 
   PlaybackState GetPlaybackState() const {
+    PlaybackState state = playback_state_.load(std::memory_order_acquire);
     // The main thread and the render thread both update the state, so reads
-    // are recorded.
+    // are recorded, except in GCs (HasPendingActivity), which happen at
+    // different points when replaying.
+    if (recordreplay::AreEventsDisallowed()) {
+      return state;
+    }
     return static_cast<PlaybackState>(recordreplay::RecordReplayValue(
-        "AudioScheduledSourceHandler::GetPlaybackState",
-        playback_state_.load(std::memory_order_acquire)));
+        "AudioScheduledSourceHandler::GetPlaybackState", state));
   }
 
   void SetPlaybackState(PlaybackState new_state) {
