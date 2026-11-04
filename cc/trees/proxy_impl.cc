@@ -1034,6 +1034,11 @@ void ProxyImpl::RecordReplayRepaint() {
   // a paint shortly with the special repaint sequence number that will cause the main
   // thread to be notified about the repaint result.
   base::TimeTicks now = base::TimeTicks::Now();
+  // Animations tick to the frame time, which stays that of the last frame the
+  // recording began, as the page's animation time does while paused.
+  const viz::BeginFrameArgs& last_args = host_impl_->CurrentBeginFrameArgs();
+  if (last_args.IsValid())
+    now = last_args.frame_time;
   viz::BeginFrameArgs args = viz::BeginFrameArgs::Create(BEGINFRAME_FROM_HERE,
                                                          viz::BeginFrameArgs::kManualSourceId,
                                                          RepaintSequenceNumber,
