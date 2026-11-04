@@ -31,8 +31,12 @@ void InitPaintCallback();
 void OnCommitPaint();
 
 // Called on the compositor thread when the main thread's notification about
-// the commit.
-void OnReadyToCommit();
+// the commit, whose tree has the given source frame number.
+void OnReadyToCommit(int source_frame_number);
+
+// Called on the compositor thread before drawing the active tree, which has
+// the given source frame number.
+void OnDrawSourceFrame(int source_frame_number);
 
 // Called when a shared memory buffer for rasterization has been created.
 void NotifyRasterBuffer(const viz::SharedBitmapId& shared_bitmap_id,

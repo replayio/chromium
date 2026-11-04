@@ -228,8 +228,15 @@ static char* PaintCallback(const char* mime_type, int jpeg_quality) {
 // compositor thread is ready to commit.
 static std::atomic<size_t> gCurrentPaintBookmark;
 
-// Bookmark for the last point where a paint was committed on the main thread.
+// Bookmark for the last point where a paint was committed on the main thread,
+// once a frame draws that commit's tree.
 static std::atomic<size_t> gLastCommitBookmark;
+
+// The last commit's bookmark and tree until a frame draws that tree: frames
+// drawn before the tree activates still show the previous commit. Only used
+// on the compositor thread.
+static size_t gPendingCommitBookmark;
+static int gPendingCommitSourceFrame;
 
 void InitPaintCallback() {
   static bool hasPaints = false;
@@ -249,8 +256,17 @@ void OnCommitPaint() {
   }
 }
 
-void OnReadyToCommit() {
-  gLastCommitBookmark.store(gCurrentPaintBookmark, std::memory_order_relaxed);
+void OnReadyToCommit(int source_frame_number) {
+  gPendingCommitBookmark = gCurrentPaintBookmark;
+  gPendingCommitSourceFrame = source_frame_number;
+}
+
+void OnDrawSourceFrame(int source_frame_number) {
+  if (gPendingCommitBookmark &&
+      source_frame_number >= gPendingCommitSourceFrame) {
+    gLastCommitBookmark.store(gPendingCommitBookmark, std::memory_order_relaxed);
+    gPendingCommitBookmark = 0;
+  }
 }
 
 // How to encode repainted graphics.
