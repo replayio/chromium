@@ -4,6 +4,9 @@
 
 #include "components/viz/service/display/record_replay_render.h"
 
+#include <deque>
+#include <vector>
+
 #include "base/base64.h"
 #include "base/containers/contains.h"
 #include "base/no_destructor.h"
@@ -218,11 +221,9 @@ static char* PaintCallback(const char* mime_type, int jpeg_quality) {
 // 3. Compositor thread finishes painting the frame.
 //
 // The paint finished in #3 needs to be associated with the bookmark created in #1.
-// The state below is used to keep track of the bookmark for the current paint
-// in a consistent way between recording and replaying. This isn't necessarily
-// correct, though --- #2 and #3 run in separate tasks on the compositor thread,
-// so a frame could be marked ready to commit on the compositor thread before
-// the previous frame finished painting. For now this is good enough, though.
+// Frames drawn before the commit's tree activates still show earlier commits,
+// so a commit's bookmark is finished by the first frame its compositor draws
+// from a tree with the commit's source frame number or a later one.
 
 // Bookmark which was last created on the main thread before blocking until the
 // compositor thread is ready to commit.
@@ -232,11 +233,18 @@ static std::atomic<size_t> gCurrentPaintBookmark;
 // once a frame draws that commit's tree.
 static std::atomic<size_t> gLastCommitBookmark;
 
-// The last commit's bookmark and tree until a frame draws that tree: frames
-// drawn before the tree activates still show the previous commit. Only used
-// on the compositor thread.
-static size_t gPendingCommitBookmark;
-static int gPendingCommitSourceFrame;
+// Commits whose trees no frame has drawn yet, oldest first. Source frame
+// numbers count per compositor. Only used on the compositor thread.
+struct PendingCommitPaint {
+  const void* compositor;
+  int source_frame_number;
+  size_t bookmark;
+};
+static base::NoDestructor<std::deque<PendingCommitPaint>> gPendingCommitPaints;
+
+// Bookmarks of commits whose trees were replaced before any frame drew them,
+// finished along with the next paint.
+static base::NoDestructor<std::vector<size_t>> gSupersededCommitBookmarks;
 
 void InitPaintCallback() {
   static bool hasPaints = false;
@@ -256,16 +264,29 @@ void OnCommitPaint() {
   }
 }
 
-void OnReadyToCommit(int source_frame_number) {
-  gPendingCommitBookmark = gCurrentPaintBookmark;
-  gPendingCommitSourceFrame = source_frame_number;
+void OnReadyToCommit(const void* compositor, int source_frame_number) {
+  size_t bookmark = gCurrentPaintBookmark;
+  if (bookmark) {
+    gPendingCommitPaints->push_back({compositor, source_frame_number, bookmark});
+  }
 }
 
-void OnDrawSourceFrame(int source_frame_number) {
-  if (gPendingCommitBookmark &&
-      source_frame_number >= gPendingCommitSourceFrame) {
-    gLastCommitBookmark.store(gPendingCommitBookmark, std::memory_order_relaxed);
-    gPendingCommitBookmark = 0;
+void OnDrawSourceFrame(const void* compositor, int source_frame_number) {
+  size_t bookmark = 0;
+  for (auto it = gPendingCommitPaints->begin(); it != gPendingCommitPaints->end();) {
+    if (it->compositor != compositor ||
+        it->source_frame_number > source_frame_number) {
+      ++it;
+      continue;
+    }
+    if (bookmark) {
+      gSupersededCommitBookmarks->push_back(bookmark);
+    }
+    bookmark = it->bookmark;
+    it = gPendingCommitPaints->erase(it);
+  }
+  if (bookmark) {
+    gLastCommitBookmark.store(bookmark, std::memory_order_relaxed);
   }
 }
 
@@ -295,6 +316,10 @@ void OnPaintFinished(const SkPixmap& pixmap) {
     if (gRepaintEvent)
       gRepaintResult = EncodeBitmapContents(gRepaintMimeType, gRepaintJPEGQuality);
   } else {
+    for (size_t superseded : *gSupersededCommitBookmarks) {
+      V8RecordReplayPaintFinished(superseded);
+    }
+    gSupersededCommitBookmarks->clear();
     size_t bookmark = gLastCommitBookmark.load();
     if (bookmark) {
       V8RecordReplayPaintFinished(bookmark);

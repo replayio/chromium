@@ -413,7 +413,7 @@ void ProxyImpl::NotifyReadyToCommitOnImpl(
     CommitTimestamps* commit_timestamps,
     bool commit_timeout) {
   if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
-    recordreplay::OnReadyToCommit(commit_state->source_frame_number);
+    recordreplay::OnReadyToCommit(this, commit_state->source_frame_number);
 
     // A commit after diverging from the recording is a repaint's. The
     // recording can end with the compositor's frame sink lost, e.g. when its
@@ -990,8 +990,10 @@ DrawResult ProxyImpl::DrawInternal(bool forced_draw) {
 
   base::AutoReset<bool> mark_inside(&inside_draw_, true);
 
+  // [RecordReplay] Paint bookmarks are finished by frames drawing their commits.
   if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
-    recordreplay::OnDrawSourceFrame(host_impl_->active_tree()->source_frame_number());
+    recordreplay::OnDrawSourceFrame(
+        this, host_impl_->active_tree()->source_frame_number());
   }
 
   // This method is called on a forced draw, regardless of whether we are able
