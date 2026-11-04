@@ -92,7 +92,13 @@ void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
   }
 
   // Surfaces are allowed to have different parent sequence numbers from the
-  // original one.
+  // original one, and newer child sequence numbers: the widget allocates one
+  // whenever its frame sink is recreated, e.g. after the GPU process restarts.
+  if (gSurfaceId->embed_token() == local_surface_id.embed_token() &&
+      local_surface_id.child_sequence_number() >
+          gSurfaceId->child_sequence_number()) {
+    *gSurfaceId = local_surface_id;
+  }
   if (gSurfaceId->child_sequence_number() != local_surface_id.child_sequence_number() ||
       gSurfaceId->embed_token() != local_surface_id.embed_token()) {
     Print("Ignoring composite to unknown surface %s, expected %s",
