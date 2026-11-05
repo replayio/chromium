@@ -874,6 +874,12 @@ class CORE_EXPORT Node : public EventTarget {
   const AtomicString& InterfaceName() const override;
   ExecutionContext* GetExecutionContext() const override;
 
+  v8::MaybeLocal<v8::Value> Wrap(ScriptState*) override;
+  [[nodiscard]] v8::Local<v8::Object> AssociateWithWrapper(
+      v8::Isolate*,
+      const WrapperTypeInfo*,
+      v8::Local<v8::Object> wrapper) override;
+
   void RemoveAllEventListeners() override;
   void RemoveAllEventListenersRecursively();
 

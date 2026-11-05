@@ -29,6 +29,7 @@
 #include <algorithm>
 
 #include "third_party/blink/public/mojom/input/focus_type.mojom-blink.h"
+#include "third_party/blink/renderer/bindings/core/v8/local_window_proxy.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_get_root_node_options.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_node_string_trustedscript.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_string_trustedscript.h"
@@ -2590,6 +2591,88 @@ Element* Node::EnclosingLinkEventParentOrSelf() const {
   return nullptr;
 }
 
+// A missing wrapper is created in the realm of whatever hands the node out, so
+// a node whose wrapper a scavenge dropped gets the prototypes of the realm that
+// asks for it next. Scavenges happen at different points when replaying, so
+// node wrappers are created in the realm of the node's document instead, the
+// document it was in before any adoption into another window's document. A
+// wrapper a new one could differ from is never dropped: one in another realm,
+// and one whose realm can go away while the node stays reachable, which is any
+// realm outside an outermost main frame.
+using RecordReplayAdoptedNodeExecutionContextMap =
+    HeapHashMap<WeakMember<Node>, WeakMember<ExecutionContext>>;
+static RecordReplayAdoptedNodeExecutionContextMap&
+RecordReplayAdoptedNodeExecutionContexts() {
+  DEFINE_STATIC_LOCAL(
+      Persistent<RecordReplayAdoptedNodeExecutionContextMap>, map,
+      (MakeGarbageCollected<RecordReplayAdoptedNodeExecutionContextMap>()));
+  return *map;
+}
+
+// Returns the script state for node wrappers in the world of |script_state|,
+// or null when that realm has no usable context. |droppable| is set when such
+// wrappers can be dropped.
+static ScriptState* RecordReplayNodeWrapperScriptState(
+    const Node& node,
+    ScriptState* script_state,
+    bool* droppable) {
+  *droppable = false;
+  ExecutionContext* execution_context =
+      node.GetDocument().GetExecutionContext();
+  RecordReplayAdoptedNodeExecutionContextMap& adopted =
+      RecordReplayAdoptedNodeExecutionContexts();
+  if (!adopted.empty()) {
+    auto it = adopted.find(const_cast<Node*>(&node));
+    if (it != adopted.end())
+      execution_context = it->value.Get();
+  }
+  auto* window = DynamicTo<LocalDOMWindow>(execution_context);
+  LocalFrame* frame = window ? window->GetFrame() : nullptr;
+  if (!frame)
+    return nullptr;
+  ScriptState* document_script_state = script_state;
+  if (ExecutionContext::From(script_state) != execution_context) {
+    v8::Local<v8::Context> context =
+        frame->WindowProxyMaybeUninitialized(script_state->World())
+            ->ContextIfInitialized();
+    if (context.IsEmpty())
+      return nullptr;
+    document_script_state = ScriptState::From(context);
+    if (!document_script_state->ContextIsValid())
+      return nullptr;
+  }
+  *droppable = frame->IsOutermostMainFrame();
+  return document_script_state;
+}
+
+v8::MaybeLocal<v8::Value> Node::Wrap(ScriptState* script_state) {
+  if (recordreplay::IsRecordingOrReplaying("node-wrapper-realms")) {
+    bool droppable;
+    if (ScriptState* document_script_state = RecordReplayNodeWrapperScriptState(
+            *this, script_state, &droppable)) {
+      script_state = document_script_state;
+    }
+  }
+  return EventTarget::Wrap(script_state);
+}
+
+v8::Local<v8::Object> Node::AssociateWithWrapper(
+    v8::Isolate* isolate,
+    const WrapperTypeInfo* wrapper_type_info,
+    v8::Local<v8::Object> wrapper) {
+  if (recordreplay::IsRecordingOrReplaying("node-wrapper-realms")) {
+    ScriptState* script_state =
+        ScriptState::From(wrapper->GetCreationContextChecked());
+    bool droppable;
+    if (RecordReplayNodeWrapperScriptState(*this, script_state, &droppable) !=
+            script_state ||
+        !droppable) {
+      SetRecordReplayKeepWrapper();
+    }
+  }
+  return EventTarget::AssociateWithWrapper(isolate, wrapper_type_info, wrapper);
+}
+
 const AtomicString& Node::InterfaceName() const {
   return event_target_names::kNode;
 }
@@ -2629,6 +2712,14 @@ void Node::WillMoveToNewDocument(Document& old_document,
 
 void Node::DidMoveToNewDocument(Document& old_document) {
   TreeScopeAdopter::EnsureDidMoveToNewDocumentWasCalled(old_document);
+
+  // Wrappers keep the realm of the document the node was in first.
+  if (recordreplay::IsRecordingOrReplaying("node-wrapper-realms") &&
+      old_document.GetExecutionContext() !=
+          GetDocument().GetExecutionContext()) {
+    RecordReplayAdoptedNodeExecutionContexts().insert(
+        this, old_document.GetExecutionContext());
+  }
 
   if (const EventTargetData* event_target_data = GetEventTargetData()) {
     const EventListenerMap& listener_map =
