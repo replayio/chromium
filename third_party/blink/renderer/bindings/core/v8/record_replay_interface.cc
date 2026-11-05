@@ -1203,17 +1203,19 @@ static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
   v8::String::Utf8Value message(isolate, args[0]);
   std::string nmessage(*message);
 
+  // A frame's context id names its own group, which differs from the group
+  // handling a console message when the frame belongs to another local root.
   absl::optional<int> contextGroupId;
-  if (gContextGroupIdForSendCDPMessageDepth > 0) {
-    contextGroupId =
-        gContextGroupIdForSendCDPMessageStack[gContextGroupIdForSendCDPMessageDepth - 1];
-  } else if (has_context_id) {
+  if (has_context_id) {
     contextGroupId = ContextGroupIdFromInspectorContextId(
         isolate, args[1].As<v8::Int32>()->Value());
     if (!contextGroupId.has_value()) {
       SendCDPMissingContextError(isolate, args[0]);
       return;
     }
+  } else if (gContextGroupIdForSendCDPMessageDepth > 0) {
+    contextGroupId =
+        gContextGroupIdForSendCDPMessageStack[gContextGroupIdForSendCDPMessageDepth - 1];
   } else if (recordreplay::HasDivergedFromRecording() &&
              v8::internal::gPauseContextGroupId > 0) {
     // CommandCallback has already translated the paused inspector context id
