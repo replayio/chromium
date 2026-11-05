@@ -45,6 +45,15 @@ void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
 // Called to populate a bitmap with information for the given resource in the current frame.
 bool PopulateSkBitmapWithResource(SkBitmap* sk_bitmap, viz::ResourceId resource_id);
 
+// Whether the expensive paint sampling work should run for this frame. Stateful:
+// advances the throttle window (RECORD_REPLAY_MIN_PAINT_DELAY ms). Call from
+// exactly one site.
+bool RecordReplayShouldSamplePaint();
+
+// Non-advancing read of the most recent RecordReplayShouldSamplePaint() result,
+// for downstream gates on other threads.
+bool RecordReplayLastPaintSampleDecision();
+
 // Called on the compositor thread when painting to the software output device has finished.
 void OnPaintFinished(const SkPixmap& pixmap);
 
