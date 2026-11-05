@@ -200,8 +200,8 @@ void PaintImage::CreateSkImage() {
   } else if (texture_backing_) {
     cached_sk_image_ = texture_backing_->GetAcceleratedSkImage();
   }
-  recordreplay::AssertMaybeEventsDisallowed("[RUN-1975-2225] PaintImage::CreateSkImage %d",
-                       !!cached_sk_image_);
+  recordreplay::AssertMaybeEventsDisallowed(
+      "[RUN-1975-2225] PaintImage::CreateSkImage %d", !!cached_sk_image_);
 }
 
 SkISize PaintImage::GetSupportedDecodeSize(

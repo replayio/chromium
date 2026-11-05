@@ -23,6 +23,7 @@
 #include "cc/paint/record_replay_image_capture.h"
 #include "cc/trees/compositor_commit_data.h"
 #include "components/viz/common/display/renderer_settings.h"
+#include "components/viz/common/quads/picture_draw_quad.h"
 #include "components/viz/service/display/software_output_device.h"
 #include "components/viz/service/display/software_renderer.h"
 #include "components/viz/service/display_embedder/software_output_surface.h"
@@ -137,6 +138,34 @@ static base::NoDestructor<std::unique_ptr<RecordReplayFrame>> gSubmittedFrame;
 
 // Whether a frame was submitted whose paints haven't finished.
 static bool gSubmittedFramePending;
+
+// References the submitted frame's copy shares with the frame: its filters
+// and display lists. They are held, recording and replaying, until the
+// frame's paints finish and the copy is gone, and dropped with events
+// allowed: the copy never holds the last reference, whose release runs
+// destructors that can post Skia cache purges to recorded threads.
+struct RecordReplayFrameRefs {
+  std::vector<cc::FilterOperations> filters;
+  std::vector<scoped_refptr<cc::DisplayItemList>> display_item_lists;
+};
+static base::NoDestructor<RecordReplayFrameRefs> gSubmittedFrameRefs;
+
+static void HoldFrameRefs(const viz::CompositorFrame& frame) {
+  for (const auto& pass : frame.render_pass_list) {
+    if (!pass->filters.IsEmpty()) {
+      gSubmittedFrameRefs->filters.push_back(pass->filters);
+    }
+    if (!pass->backdrop_filters.IsEmpty()) {
+      gSubmittedFrameRefs->filters.push_back(pass->backdrop_filters);
+    }
+    for (const viz::DrawQuad* quad : pass->quad_list) {
+      if (quad->material == viz::DrawQuad::Material::kPictureContent) {
+        gSubmittedFrameRefs->display_item_lists.push_back(
+            viz::PictureDrawQuad::MaterialCast(quad)->display_item_list);
+      }
+    }
+  }
+}
 
 extern const SkPixmap* gCurrentPixmap;
 static void FinishPaints();
@@ -278,6 +307,7 @@ void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
     // of it if it's asked for the frame's pixels. Only replaying draws.
     gSubmittedFramePending = true;
     SetDeviceViewportSize(frame.size_in_pixels());
+    HoldFrameRefs(frame);
     if (IsReplaying()) {
       AutoDisallowEvents disallow("RecordReplayCopySubmittedFrame");
       *gSubmittedFrame = CopyFrame(frame);
@@ -306,6 +336,8 @@ void FinishSubmittedCompositorFrame() {
     gSubmittedFrame->reset();
     cc::RecordReplayClearCapturedImages();
   }
+  gSubmittedFrameRefs->filters.clear();
+  gSubmittedFrameRefs->display_item_lists.clear();
 }
 
 bool PopulateSkBitmapWithResource(SkBitmap* sk_bitmap, viz::ResourceId resource_id) {
