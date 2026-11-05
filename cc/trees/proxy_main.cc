@@ -550,7 +550,6 @@ bool ProxyMain::IsStarted() const {
 
 void ProxyMain::SetLayerTreeFrameSink(
     LayerTreeFrameSink* layer_tree_frame_sink) {
-  record_replay_frame_sinks_given_++;
   ImplThreadTaskRunner()->PostTask(
       FROM_HERE,
       base::BindOnce(&ProxyImpl::InitializeLayerTreeFrameSinkOnImpl,
@@ -896,17 +895,13 @@ void ProxyMain::RecordReplayRepaintPending() {
                                 base::Unretained(proxy_impl_.get())));
 }
 
-bool ProxyMain::RecordReplayAwaitingFrameSink() const {
-  // The compositor can wait for a frame sink whose initialization is already
-  // posted to it.
-  return proxy_impl_ && proxy_impl_->RecordReplayAwaitingFrameSink() &&
-         proxy_impl_->RecordReplayFrameSinkRequests() >
-             record_replay_frame_sinks_given_;
-}
-
-void ProxyMain::RecordReplaySetLayerTreeFrameSink(
+void ProxyMain::RecordReplayEnsureFrameSink(
     std::unique_ptr<LayerTreeFrameSink> layer_tree_frame_sink) {
-  layer_tree_host_->SetLayerTreeFrameSink(std::move(layer_tree_frame_sink));
+  ImplThreadTaskRunner()->PostTask(
+      FROM_HERE,
+      base::BindOnce(&ProxyImpl::RecordReplayEnsureFrameSink,
+                     base::Unretained(proxy_impl_.get()),
+                     std::move(layer_tree_frame_sink)));
 }
 
 void ProxyMain::RecordReplayRepaint() {

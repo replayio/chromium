@@ -90,11 +90,9 @@ class CC_EXPORT ProxyMain : public Proxy {
 
   void RecordReplayRepaintPending();
   void RecordReplayRepaint();
-  // Whether the compositor waits for a new LayerTreeFrameSink that the main
-  // thread hasn't given it yet.
-  bool RecordReplayAwaitingFrameSink() const;
-  // Gives the compositor a LayerTreeFrameSink when the embedder can't.
-  void RecordReplaySetLayerTreeFrameSink(
+  // Gives the compositor |layer_tree_frame_sink| if it still waits for one,
+  // which the embedder can't give when replaying has diverged.
+  void RecordReplayEnsureFrameSink(
       std::unique_ptr<LayerTreeFrameSink> layer_tree_frame_sink);
   scoped_refptr<base::SingleThreadTaskRunner>
   RecordReplayImplThreadTaskRunner() {
@@ -180,9 +178,6 @@ class CC_EXPORT ProxyMain : public Proxy {
   // defer_main_frame_update_ will also cause commits to be deferred, regardless
   // of the setting for paint_holding_reason_.
   bool defer_main_frame_update_;
-
-  // LayerTreeFrameSinks given to the compositor.
-  int record_replay_frame_sinks_given_ = 0;
   absl::optional<PaintHoldingReason> paint_holding_reason_;
 
   bool pause_rendering_;

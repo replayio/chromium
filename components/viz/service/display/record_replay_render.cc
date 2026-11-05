@@ -328,6 +328,7 @@ class RecordReplayRepaintFrameSink : public cc::LayerTreeFrameSink,
   }
 
   void DetachFromClient() override {
+    weak_factory_.InvalidateWeakPtrs();
     client_->SetBeginFrameSource(nullptr);
     begin_frame_source_.reset();
     cc::LayerTreeFrameSink::DetachFromClient();
@@ -385,11 +386,9 @@ static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
   // The pause can leave a frame's tree pending behind one that was never
   // drawn, so the compositor has to be told about the repaint before its
   // commit, which waits for the pending tree.
-  if (gCurrentCompositorProxy->RecordReplayAwaitingFrameSink()) {
-    gCurrentCompositorProxy->RecordReplaySetLayerTreeFrameSink(
-        std::make_unique<RecordReplayRepaintFrameSink>(
-            gCurrentCompositorProxy->RecordReplayImplThreadTaskRunner()));
-  }
+  gCurrentCompositorProxy->RecordReplayEnsureFrameSink(
+      std::make_unique<RecordReplayRepaintFrameSink>(
+          gCurrentCompositorProxy->RecordReplayImplThreadTaskRunner()));
   gCurrentCompositorProxy->RecordReplayRepaintPending();
   gCurrentCompositorProxy->BeginMainFrameWithBlocking(std::move(begin_main_frame_state), true);
 

@@ -183,10 +183,12 @@ void ProxyImpl::InitializeLayerTreeFrameSinkOnImpl(
   DCHECK(IsImplThread());
 
   proxy_main_frame_sink_bound_weak_ptr_ = proxy_main_frame_sink_bound_weak_ptr;
-  record_replay_awaiting_frame_sink_ = false;
 
   LayerTreeHostImpl* host_impl = host_impl_.get();
   bool success = host_impl->InitializeFrameSink(layer_tree_frame_sink);
+  record_replay_frame_sink_ = nullptr;
+  if (success)
+    record_replay_awaiting_frame_sink_ = false;
   MainThreadTaskRunner()->PostTask(
       FROM_HERE, base::BindOnce(&ProxyMain::DidInitializeLayerTreeFrameSink,
                                 proxy_main_weak_ptr_, success));
@@ -854,7 +856,6 @@ void ProxyImpl::ScheduledActionBeginLayerTreeFrameSinkCreation() {
                "ProxyImpl::ScheduledActionBeginLayerTreeFrameSinkCreation");
   DCHECK(IsImplThread());
   record_replay_awaiting_frame_sink_ = true;
-  record_replay_frame_sink_requests_++;
   MainThreadTaskRunner()->PostTask(
       FROM_HERE, base::BindOnce(&ProxyMain::RequestNewLayerTreeFrameSink,
                                 proxy_main_weak_ptr_));
@@ -1023,6 +1024,20 @@ bool ProxyImpl::DataForCommit::IsValid() const {
 
 // Sequence number used for frames triggered while repainting when replaying.
 static const uint64_t RepaintSequenceNumber = UINT32_MAX;
+
+void ProxyImpl::RecordReplayEnsureFrameSink(
+    std::unique_ptr<LayerTreeFrameSink> layer_tree_frame_sink) {
+  DCHECK(IsImplThread());
+  // A frame sink the main thread gave before the repaint was initialized
+  // first.
+  if (!record_replay_awaiting_frame_sink_ ||
+      !host_impl_->InitializeFrameSink(layer_tree_frame_sink.get())) {
+    return;
+  }
+  record_replay_awaiting_frame_sink_ = false;
+  record_replay_frame_sink_ = std::move(layer_tree_frame_sink);
+  scheduler_->DidCreateAndInitializeLayerTreeFrameSink();
+}
 
 void ProxyImpl::RecordReplayRepaintPending() {
   scheduler_->RecordReplayRepaintPending();
