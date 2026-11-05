@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/platform/heap/thread_state.h"
 
 #include "base/callback.h"
+#include "base/record_replay.h"
 #include "gin/public/v8_platform.h"
 #include "third_party/blink/renderer/platform/bindings/dom_wrapper_world.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
@@ -43,6 +44,10 @@ class BlinkRootsHandler final : public v8::EmbedderRootsHandler {
         handle.template As<v8::Object>();
     if (ToWrapperTypeInfo(traced)->IsActiveScriptWrappable() &&
         ToScriptWrappable(traced)->HasPendingActivity()) {
+      return true;
+    }
+    if (recordreplay::IsRecordingOrReplaying() &&
+        ToScriptWrappable(traced)->RecordReplayKeepWrapper()) {
       return true;
     }
 
