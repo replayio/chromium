@@ -890,6 +890,8 @@ double ProxyMain::GetPercentDroppedFrames() const {
 }
 
 void ProxyMain::RecordReplayRepaintPending() {
+  if (!proxy_impl_)
+    return;
   ImplThreadTaskRunner()->PostTask(
       FROM_HERE, base::BindOnce(&ProxyImpl::RecordReplayRepaintPending,
                                 base::Unretained(proxy_impl_.get())));
@@ -897,6 +899,8 @@ void ProxyMain::RecordReplayRepaintPending() {
 
 void ProxyMain::RecordReplayEnsureFrameSink(
     std::unique_ptr<LayerTreeFrameSink> layer_tree_frame_sink) {
+  if (!proxy_impl_)
+    return;
   ImplThreadTaskRunner()->PostTask(
       FROM_HERE,
       base::BindOnce(&ProxyImpl::RecordReplayEnsureFrameSink,
@@ -904,7 +908,13 @@ void ProxyMain::RecordReplayEnsureFrameSink(
                      std::move(layer_tree_frame_sink)));
 }
 
+bool ProxyMain::RecordReplayUsesRepaintFrameSink() const {
+  return proxy_impl_ && proxy_impl_->RecordReplayUsesRepaintFrameSink();
+}
+
 void ProxyMain::RecordReplayRepaint() {
+  if (!proxy_impl_)
+    return;
   ImplThreadTaskRunner()->PostTask(
       FROM_HERE, base::BindOnce(&ProxyImpl::RecordReplayRepaint,
                                 base::Unretained(proxy_impl_.get())));

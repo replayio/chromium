@@ -97,6 +97,11 @@ class CC_EXPORT ProxyImpl : public LayerTreeHostImplClient,
   // sink from the main thread.
   void RecordReplayEnsureFrameSink(
       std::unique_ptr<LayerTreeFrameSink> layer_tree_frame_sink);
+  // Whether the compositor uses a frame sink RecordReplayEnsureFrameSink
+  // initialized.
+  bool RecordReplayUsesRepaintFrameSink() const {
+    return !!record_replay_frame_sink_;
+  }
 
  private:
   // LayerTreeHostImplClient implementation
@@ -243,6 +248,8 @@ class CC_EXPORT ProxyImpl : public LayerTreeHostImplClient,
   bool record_replay_awaiting_frame_sink_ = false;
   // The frame sink RecordReplayEnsureFrameSink initialized.
   std::unique_ptr<LayerTreeFrameSink> record_replay_frame_sink_;
+  // Whether a frame sink that replaced that one failed to initialize.
+  bool record_replay_lost_repaint_frame_sink_ = false;
 };
 
 }  // namespace cc

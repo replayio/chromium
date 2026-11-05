@@ -24,4 +24,13 @@ gfx::Size GetCurrentViewportPixelSize() {
   return gDefaultSize;
 }
 
+static bool gLastRepaintUsedRepaintFrameSink = false;
+void SetLastRepaintUsedRepaintFrameSink(bool used) {
+  gLastRepaintUsedRepaintFrameSink = used;
+}
+
+bool LastRepaintUsedRepaintFrameSink() {
+  return gLastRepaintUsedRepaintFrameSink;
+}
+
 }  // namespace recordreplay

@@ -2649,6 +2649,11 @@ static void fromJsGetDevicePixelRatio(
   args.GetReturnValue().Set(window->devicePixelRatio());
 }
 
+static void fromJsLastRepaintUsedRepaintFrameSink(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  args.GetReturnValue().Set(recordreplay::LastRepaintUsedRepaintFrameSink());
+}
+
 /** ###########################################################################
  * misc
  * ##########################################################################*/
@@ -2901,6 +2906,8 @@ void InstallRecordReplayGlobals(v8::Isolate* isolate,
                       fromJsGetCurrentViewportPixelSize);
   SetFunctionProperty(isolate, args, "fromJsGetDevicePixelRatio",
                       fromJsGetDevicePixelRatio);
+  SetFunctionProperty(isolate, args, "fromJsLastRepaintUsedRepaintFrameSink",
+                      fromJsLastRepaintUsedRepaintFrameSink);
 
   // unsorted Replay stuff
   SetFunctionProperty(

@@ -19,6 +19,11 @@ void SetGetCurrentViewportPixelSizeCallback(GetCurrentViewportPixelSizeCallback 
 // Get the current surface size in pixels.
 gfx::Size GetCurrentViewportPixelSize();
 
+// Whether the compositor drew the last repaint with the frame sink repaints
+// give it when it waits for one.
+void SetLastRepaintUsedRepaintFrameSink(bool used);
+bool LastRepaintUsedRepaintFrameSink();
+
 
 }  // namespace recordreplay
 
