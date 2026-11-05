@@ -127,10 +127,20 @@ const Array_push = Array.prototype.push;
 const Object_toString = Object.prototype.toString;
 const String_ = String;
 const String_slice = String.prototype.slice;
-const Object_getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
-const Map_size = Object.getOwnPropertyDescriptor(Map.prototype, "size").get;
-const Set_size = Object.getOwnPropertyDescriptor(Set.prototype, "size").get;
-const TypedArray_prototype = Object.getPrototypeOf(Uint8Array.prototype);
+const { bind, call } = Function.prototype;
+const uncurryThis = bind.bind(call);
+const ObjectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const ObjectHasOwn = Object.hasOwn;
+const uncurryGetter = (proto, key) =>
+  uncurryThis(ObjectGetOwnPropertyDescriptor(proto, key).get);
+const ArrayPrototypeFind = uncurryThis(Array.prototype.find);
+const MapPrototypeGetSize = uncurryGetter(Map.prototype, "size");
+const SetPrototypeGetSize = uncurryGetter(Set.prototype, "size");
+const TypedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype);
+const TypedArrayPrototypeGetLength = uncurryGetter(TypedArrayPrototype, "length");
+const TypedArrayPrototypeGetByteLength = uncurryGetter(TypedArrayPrototype, "byteLength");
+const TypedArrayPrototypeGetByteOffset = uncurryGetter(TypedArrayPrototype, "byteOffset");
+const TypedArrayPrototypeGetBuffer = uncurryGetter(TypedArrayPrototype, "buffer");
 
 function isArrayLike(obj) {
   return obj != null && typeof obj.length === "number";
@@ -777,7 +787,8 @@ function Graphics_getDevicePixelRatio() {
  * only, so no page getter or proxy trap runs.
  */
 function isPrototype(x, cdpProperties) {
-  const constructor = cdpProperties.result.find(
+  const constructor = ArrayPrototypeFind(
+    cdpProperties.result,
     prop => prop.name === "constructor" && prop.isOwn
   )?.value;
   if (constructor?.type !== "function" || !constructor.objectId) {
@@ -785,8 +796,8 @@ function isPrototype(x, cdpProperties) {
   }
   const constructorObject = fromJsGetObjectByCdpId(constructor.objectId);
   const prototype =
-    constructorObject && Object_getOwnPropertyDescriptor(constructorObject, "prototype");
-  return !!prototype && "value" in prototype && prototype.value === x;
+    constructorObject && ObjectGetOwnPropertyDescriptor(constructorObject, "prototype");
+  return !!prototype && ObjectHasOwn(prototype, "value") && prototype.value === x;
 }
 
 /**
@@ -1686,10 +1697,10 @@ function previewArray(_cdpProperties) {
 
 function previewTypedArray() {
   // simply invoke the native getter
-  for (const key of ['length', 'byteLength', 'byteOffset', 'buffer']) {
-    const getter = Object_getOwnPropertyDescriptor(TypedArray_prototype, key).get;
-    this.addGetterValue(key, this.cdpObj, getter, /* force */ true);
-  }
+  this.addGetterValue('length', this.cdpObj, TypedArrayPrototypeGetLength, /* force */ true);
+  this.addGetterValue('byteLength', this.cdpObj, TypedArrayPrototypeGetByteLength, /* force */ true);
+  this.addGetterValue('byteOffset', this.cdpObj, TypedArrayPrototypeGetByteOffset, /* force */ true);
+  this.addGetterValue('buffer', this.cdpObj, TypedArrayPrototypeGetBuffer, /* force */ true);
 }
 
 /**
@@ -1718,7 +1729,9 @@ function previewSetMap(cdpProperties) {
     // SLN: Simply query the size getter instead.
     // `raw` is null if the cdpId lookup fails post-divergence.
     size = this.raw
-      ? (this.cdpObj.className === "Map" ? Map_size : Set_size).call(this.raw)
+      ? this.cdpObj.className === "Map"
+        ? MapPrototypeGetSize(this.raw)
+        : SetPrototypeGetSize(this.raw)
       : 0;
     const rrpSize = { name: "size", value: size };
     this.addPropertyUnchecked(rrpSize, /* force */ true);
@@ -2015,7 +2028,7 @@ const CustomPreviewers = {
  */
 function evalPropRrpNotNull(owner, propKey, getter) {
   try {
-    const plainValue = getter.call(owner);
+    const plainValue = getter(owner);
     if (plainValue === undefined || plainValue === null) {
       // [RUN-2223] This should not happen.
       const e = new Error("");
