@@ -1827,6 +1827,36 @@ static void fromJsIsBlinkElementObject(
   args.GetReturnValue().Set(!!V8Element::ToImplWithTypeCheck(isolate, args[0]));
 }
 
+// Returns an element's attributes as [{ name, value }] without synchronizing
+// lazy attributes (a `style` attribute the CSSOM changed, animated SVG ones),
+// which the page synchronizes itself later on, and without creating Attr nodes.
+static void fromJsGetElementAttributes(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 &&
+        "[RuntimeError] must be called with a single value");
+
+  v8::Isolate* isolate = args.GetIsolate();
+  Element* element = V8Element::ToImplWithTypeCheck(isolate, args[0]);
+  CHECK(element && "[RuntimeError] must be called with an element");
+
+  v8::Local<v8::Context> context = isolate->GetCurrentContext();
+  v8::Local<v8::Array> result = v8::Array::New(isolate);
+  uint32_t index = 0;
+  for (const Attribute& attribute : element->AttributesWithoutUpdate()) {
+    v8::Local<v8::Object> entry = v8::Object::New(isolate);
+    entry
+        ->CreateDataProperty(context, V8String(isolate, "name"),
+                             V8String(isolate, attribute.GetName().ToString()))
+        .Check();
+    entry
+        ->CreateDataProperty(context, V8String(isolate, "value"),
+                             V8String(isolate, attribute.Value()))
+        .Check();
+    result->CreateDataProperty(context, index++, entry).Check();
+  }
+  args.GetReturnValue().Set(result);
+}
+
 static void fromJsIsBlinkCSSStyleDeclarationObject(
     const v8::FunctionCallbackInfo<v8::Value>& args) {
   CHECK(args.Length() == 1 &&
@@ -2856,6 +2886,8 @@ void InstallRecordReplayGlobals(v8::Isolate* isolate,
                       fromJsIsBlinkNodeObject);
   SetFunctionProperty(isolate, args, "fromJsIsBlinkElementObject",
                       fromJsIsBlinkElementObject);
+  SetFunctionProperty(isolate, args, "fromJsGetElementAttributes",
+                      fromJsGetElementAttributes);
   SetFunctionProperty(isolate, args, "fromJsIsBlinkCSSStyleDeclarationObject",
                       fromJsIsBlinkCSSStyleDeclarationObject);
   SetFunctionProperty(isolate, args, "fromJsHasReturnValue",
