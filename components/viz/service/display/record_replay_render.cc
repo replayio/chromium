@@ -371,7 +371,6 @@ class RecordReplayRepaintFrameSink : public cc::LayerTreeFrameSink,
 static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
   CHECK(IsMainThread());
 
-  SetLastRepaintUsedRepaintFrameSink(false);
   if (!gCurrentCompositorProxy)
     return nullptr;
 
@@ -411,9 +410,6 @@ static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
   if (!signaled) {
     Print("[RuntimeError] Failed waiting to get a repaint.");
     gRepaintResult = nullptr;
-  } else {
-    SetLastRepaintUsedRepaintFrameSink(
-        gCurrentCompositorProxy->RecordReplayUsesRepaintFrameSink());
   }
 
   gRepaintEvent = nullptr;

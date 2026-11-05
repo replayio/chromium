@@ -38,7 +38,6 @@ const {
   fromJsCollectEventListeners,
   fromJsDomPerformSearch,
   fromJsGetDevicePixelRatio,
-  fromJsLastRepaintUsedRepaintFrameSink,
 
   // network
   getCurrentNetworkRequestEvent,
@@ -342,7 +341,6 @@ const gContextChangeCallbacks = new Set();
 
 const CommandCallbacks = {
   "Graphics.getDevicePixelRatio": Graphics_getDevicePixelRatio,
-  "Graphics.getRepaintDiagnostics": Graphics_getRepaintDiagnostics,
   "Target.evaluatePrivileged": Target_evaluatePrivileged,
   "Target.getCurrentMessageContents": Target_getCurrentMessageContents,
   "Target.getSourceMapURL": Target_getSourceMapURL,
@@ -762,12 +760,6 @@ function Pause_getScope({ scope }) {
 
 function Graphics_getDevicePixelRatio() {
   return { ratio: fromJsGetDevicePixelRatio() || 0 };
-}
-
-// Facts about the last repaint for tests: whether the compositor drew it with
-// the frame sink repaints give it while it waits for one.
-function Graphics_getRepaintDiagnostics() {
-  return { usedRepaintFrameSink: fromJsLastRepaintUsedRepaintFrameSink() };
 }
 
 

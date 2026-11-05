@@ -94,9 +94,6 @@ class CC_EXPORT ProxyMain : public Proxy {
   // which the embedder can't give when replaying has diverged.
   void RecordReplayEnsureFrameSink(
       std::unique_ptr<LayerTreeFrameSink> layer_tree_frame_sink);
-  // Whether the compositor draws with the frame sink a repaint gave it. Read
-  // after the compositor finished a repaint.
-  bool RecordReplayUsesRepaintFrameSink() const;
   scoped_refptr<base::SingleThreadTaskRunner>
   RecordReplayImplThreadTaskRunner() {
     return ImplThreadTaskRunner();
