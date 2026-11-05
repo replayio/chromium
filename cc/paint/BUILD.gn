@@ -71,6 +71,8 @@ cc_component("paint") {
     "raw_memory_transfer_cache_entry.cc",
     "raw_memory_transfer_cache_entry.h",
     "record_paint_canvas.cc",
+    "record_replay_image_capture.cc",
+    "record_replay_image_capture.h",
     "record_paint_canvas.h",
     "render_surface_filters.cc",
     "render_surface_filters.h",

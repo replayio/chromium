@@ -20,6 +20,7 @@
 #include "cc/paint/filter_operations.h"
 #include "cc/paint/image_provider.h"
 #include "cc/paint/paint_filter.h"
+#include "cc/paint/record_replay_image_capture.h"
 #include "cc/trees/compositor_commit_data.h"
 #include "components/viz/common/display/renderer_settings.h"
 #include "components/viz/service/display/software_output_device.h"
@@ -109,8 +110,33 @@ static std::string SurfaceIdString(const viz::LocalSurfaceId& local_surface_id) 
                             local_surface_id.embed_token().ToString().c_str());
 }
 
-// Current compositor frame.
-static const viz::CompositorFrame* gCurrentFrame;
+// What drawing a submitted frame needs: the frame itself is sent to the GPU
+// process, which destroys it, before its paints finish.
+struct RecordReplayFrame {
+  viz::AggregatedRenderPassList render_passes;
+  std::vector<viz::TransferableResource> resources;
+  gfx::Size size_in_pixels;
+};
+
+static std::unique_ptr<RecordReplayFrame> CopyFrame(
+    const viz::CompositorFrame& frame) {
+  auto copy = std::make_unique<RecordReplayFrame>();
+  for (const auto& pass : frame.render_pass_list) {
+    copy->render_passes.push_back(pass->DeepCopyAggregated());
+  }
+  copy->resources = frame.resource_list;
+  copy->size_in_pixels = frame.size_in_pixels();
+  return copy;
+}
+
+// Resources of the frame being drawn.
+static const std::vector<viz::TransferableResource>* gCurrentResources;
+
+// When replaying, a copy of the submitted frame whose paints finish next.
+static base::NoDestructor<std::unique_ptr<RecordReplayFrame>> gSubmittedFrame;
+
+// Whether a frame was submitted whose paints haven't finished.
+static bool gSubmittedFramePending;
 
 extern const SkPixmap* gCurrentPixmap;
 static void FinishPaints();
@@ -129,25 +155,19 @@ static bool RecordReplayDrawWhenRequested() {
 // Whether the current frame has been drawn into |gCurrentPixmap|.
 static bool gCurrentFrameDrawn;
 
-// Decodes images the way the frame's serialization for the GPU process does
-// (SkImage::asLegacyBitmap in cc::PaintOpWriter), so that one finds this decode
-// in Skia's bitmap cache, and hands the draw a raster copy.
-class RecordReplaySnapshotImageProvider : public cc::ImageProvider {
+// Hands a draw the images the frame's send to the GPU process serialized
+// (cc::RecordReplayCaptureImage), and nothing for others, which drops their
+// filters: decoding images would fill caches that recorded threads share.
+class RecordReplayCapturedImageProvider : public cc::ImageProvider {
  public:
   ScopedResult GetRasterContent(const cc::DrawImage& draw_image) override {
-    sk_sp<SkImage> image = draw_image.paint_image().GetSwSkImage();
-    SkBitmap bitmap;
-    SkPixmap pixmap;
-    if (!image || !image->asLegacyBitmap(&bitmap) ||
-        !bitmap.peekPixels(&pixmap)) {
-      return ScopedResult();
-    }
-    sk_sp<SkImage> copy = SkImage::MakeRasterCopy(pixmap);
-    if (!copy) {
+    sk_sp<SkImage> image =
+        cc::RecordReplayFindCapturedImage(draw_image.paint_image());
+    if (!image) {
       return ScopedResult();
     }
     return ScopedResult(cc::DecodedDrawImage(
-        std::move(copy), nullptr, SkSize::Make(0, 0), SkSize::Make(1, 1),
+        std::move(image), nullptr, SkSize::Make(0, 0), SkSize::Make(1, 1),
         draw_image.filter_quality(), /*is_budgeted=*/true));
   }
 
@@ -178,63 +198,47 @@ static cc::FilterOperations SnapshotFilters(
   return cc::FilterOperations(std::move(snapshot));
 }
 
-struct RecordReplayPassFilters {
-  cc::FilterOperations filters;
-  cc::FilterOperations backdrop_filters;
-};
-
-// Snapshots of the current frame's render pass filters that have reference
-// filters, by index in its render pass list. Drawing a reference filter can
-// decode images, play back paint records and fill caches that recorded threads
-// share, so the frame's reference filters are snapshotted when it's submitted,
-// with recorded events allowed, and a later draw uses the snapshots.
-static base::NoDestructor<
-    std::vector<std::unique_ptr<RecordReplayPassFilters>>>
-    gFilterSnapshots;
-
-static void SnapshotReferenceFilters(const viz::CompositorFrame& frame) {
-  gFilterSnapshots->clear();
-  RecordReplaySnapshotImageProvider image_provider;
-  for (const auto& pass : frame.render_pass_list) {
-    std::unique_ptr<RecordReplayPassFilters> snapshot;
-    if (HasReferenceFilter(pass->filters) ||
-        HasReferenceFilter(pass->backdrop_filters)) {
-      snapshot = std::make_unique<RecordReplayPassFilters>();
-      snapshot->filters = SnapshotFilters(pass->filters, &image_provider);
-      snapshot->backdrop_filters =
+// Drawing a reference filter can decode images, play back paint records and
+// fill caches that recorded threads share. A draw uses snapshots of the
+// frame's reference filters instead, with the images the send captured and
+// paint records emptied, as viz receives them.
+static void SnapshotReferenceFilters(RecordReplayFrame& frame) {
+  RecordReplayCapturedImageProvider image_provider;
+  for (auto& pass : frame.render_passes) {
+    if (HasReferenceFilter(pass->filters)) {
+      pass->filters = SnapshotFilters(pass->filters, &image_provider);
+    }
+    if (HasReferenceFilter(pass->backdrop_filters)) {
+      pass->backdrop_filters =
           SnapshotFilters(pass->backdrop_filters, &image_provider);
     }
-    gFilterSnapshots->push_back(std::move(snapshot));
   }
 }
 
-static void DrawFrame(const viz::CompositorFrame& frame) {
-  viz::AggregatedRenderPassList render_passes;
+static bool HasReferenceFilters(const viz::CompositorFrame& frame) {
   for (const auto& pass : frame.render_pass_list) {
-    render_passes.push_back(pass->DeepCopyAggregated());
-  }
-  if (!gFilterSnapshots->empty()) {
-    CHECK_EQ(gFilterSnapshots->size(), render_passes.size());
-    for (size_t i = 0; i < render_passes.size(); i++) {
-      if (const auto& snapshot = (*gFilterSnapshots)[i]) {
-        render_passes[i]->filters = snapshot->filters;
-        render_passes[i]->backdrop_filters = snapshot->backdrop_filters;
-      }
+    if (HasReferenceFilter(pass->filters) ||
+        HasReferenceFilter(pass->backdrop_filters)) {
+      return true;
     }
   }
+  return false;
+}
 
+static void DrawFrame(RecordReplayFrame& frame) {
   // A frame drawn when its pixels are requested stays current until its
   // paints have finished.
-  const viz::CompositorFrame* previous_frame = gCurrentFrame;
-  gCurrentFrame = &frame;
+  const std::vector<viz::TransferableResource>* previous_resources =
+      gCurrentResources;
+  gCurrentResources = &frame.resources;
 
-  gRenderer->DrawFrame(&render_passes,
+  gRenderer->DrawFrame(&frame.render_passes,
                        1,
-                       frame.size_in_pixels(),
+                       frame.size_in_pixels,
                        gfx::DisplayColorSpaces(),
                        viz::SurfaceDamageRectList());
 
-  gCurrentFrame = previous_frame;
+  gCurrentResources = previous_resources;
 }
 
 void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
@@ -269,27 +273,46 @@ void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
   }
 
   if (RecordReplayDrawWhenRequested()) {
-    // The paint callback draws the frame if it's asked for the frame's pixels
-    // while its paints finish.
-    gCurrentFrame = &frame;
-    gCurrentFrameDrawn = false;
+    // The frame's paints finish once it has been sent to the GPU process
+    // (FinishSubmittedCompositorFrame), when the paint callback draws a copy
+    // of it if it's asked for the frame's pixels. Only replaying draws.
+    gSubmittedFramePending = true;
     SetDeviceViewportSize(frame.size_in_pixels());
-    SnapshotReferenceFilters(frame);
-    FinishPaints();
-    gCurrentFrame = nullptr;
-    gCurrentPixmap = nullptr;
-    gFilterSnapshots->clear();
+    if (IsReplaying()) {
+      AutoDisallowEvents disallow("RecordReplayCopySubmittedFrame");
+      *gSubmittedFrame = CopyFrame(frame);
+      cc::RecordReplaySetCapturingImages(HasReferenceFilters(frame));
+    }
     return;
   }
 
-  DrawFrame(frame);
+  std::unique_ptr<RecordReplayFrame> copy = CopyFrame(frame);
+  DrawFrame(*copy);
+}
+
+void FinishSubmittedCompositorFrame() {
+  if (!gSubmittedFramePending) {
+    return;
+  }
+  gSubmittedFramePending = false;
+  cc::RecordReplaySetCapturingImages(false);
+
+  gCurrentFrameDrawn = false;
+  FinishPaints();
+  gCurrentPixmap = nullptr;
+
+  if (*gSubmittedFrame) {
+    AutoDisallowEvents disallow("RecordReplayCopySubmittedFrame");
+    gSubmittedFrame->reset();
+    cc::RecordReplayClearCapturedImages();
+  }
 }
 
 bool PopulateSkBitmapWithResource(SkBitmap* sk_bitmap, viz::ResourceId resource_id) {
-  CHECK(gCurrentFrame);
+  CHECK(gCurrentResources);
 
   const viz::TransferableResource* transferable = nullptr;
-  for (const viz::TransferableResource& resource : gCurrentFrame->resource_list) {
+  for (const viz::TransferableResource& resource : *gCurrentResources) {
     if (resource.id == resource_id) {
       transferable = &resource;
       break;
@@ -360,7 +383,7 @@ static char* PaintCallback(const char* mime_type, int jpeg_quality) {
   }
 
   if (RecordReplayDrawWhenRequested()) {
-    if (!gCurrentFrame) {
+    if (!*gSubmittedFrame) {
       return nullptr;
     }
     if (!gCurrentFrameDrawn) {
@@ -368,7 +391,8 @@ static char* PaintCallback(const char* mime_type, int jpeg_quality) {
       AutoDisallowEvents disallow("RecordReplayDrawWhenRequested");
       SkRecordReplayBeginIsolatedDraw();
       gInIsolatedDraw = true;
-      DrawFrame(*gCurrentFrame);
+      SnapshotReferenceFilters(**gSubmittedFrame);
+      DrawFrame(**gSubmittedFrame);
       gInIsolatedDraw = false;
       SkRecordReplayEndIsolatedDraw();
     }
@@ -506,7 +530,7 @@ static base::NoDestructor<SkPixmap> gDrawnPixmap;
 void OnPaintFinished(const SkPixmap& pixmap) {
   if (RecordReplayDrawWhenRequested()) {
     // The paint callback is drawing the current frame.
-    CHECK(gCurrentFrame && AreEventsDisallowed());
+    CHECK(gCurrentResources && AreEventsDisallowed());
     *gDrawnPixmap = pixmap;
     gCurrentPixmap = gDrawnPixmap.get();
     return;

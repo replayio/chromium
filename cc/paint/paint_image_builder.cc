@@ -29,7 +29,7 @@ PaintImageBuilder::PaintImageBuilder(PaintImage image, bool clear_contents)
 #if DCHECK_IS_ON()
   id_set_ = true;
 #endif
-  recordreplay::Assert("[RUN-1975-2225] PaintImageBuilder %d %d",
+  recordreplay::AssertMaybeEventsDisallowed("[RUN-1975-2225] PaintImageBuilder %d %d",
                        clear_contents, paint_image_.stable_id());
   if (clear_contents) {
     paint_image_.sk_image_ = nullptr;
@@ -82,7 +82,7 @@ PaintImage PaintImageBuilder::TakePaintImage() {
   }
 #endif
 
-  recordreplay::Assert("[RUN-1975-2036] PaintImageBuilder::TakePaintImage %d",
+  recordreplay::AssertMaybeEventsDisallowed("[RUN-1975-2036] PaintImageBuilder::TakePaintImage %d",
                        !!paint_image_.cached_sk_image_);
 
   // We may already have a cached_sk_image_ if this builder was created with a

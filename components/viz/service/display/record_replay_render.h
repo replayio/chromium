@@ -49,6 +49,10 @@ void NotifyRasterBuffer(const viz::SharedBitmapId& shared_bitmap_id,
 void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
                            const viz::CompositorFrame& frame);
 
+// Called after a frame passed to SubmitCompositorFrame has been sent to the
+// GPU process, which destroys the frame.
+void FinishSubmittedCompositorFrame();
+
 // Called to populate a bitmap with information for the given resource in the current frame.
 bool PopulateSkBitmapWithResource(SkBitmap* sk_bitmap, viz::ResourceId resource_id);
 

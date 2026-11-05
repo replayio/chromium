@@ -29,6 +29,8 @@ bool PopulateSkBitmapWithResource(SkBitmap* sk_bitmap, viz::ResourceId resource_
   return false;
 }
 
+void FinishSubmittedCompositorFrame() {}
+
 void OnPaintFinished(const SkPixmap& pixmap) {}
 
 void OnRepaintFinished() {}
