@@ -183,6 +183,7 @@ void ProxyImpl::InitializeLayerTreeFrameSinkOnImpl(
   DCHECK(IsImplThread());
 
   proxy_main_frame_sink_bound_weak_ptr_ = proxy_main_frame_sink_bound_weak_ptr;
+  record_replay_awaiting_frame_sink_ = false;
 
   LayerTreeHostImpl* host_impl = host_impl_.get();
   bool success = host_impl->InitializeFrameSink(layer_tree_frame_sink);
@@ -852,6 +853,8 @@ void ProxyImpl::ScheduledActionBeginLayerTreeFrameSinkCreation() {
   TRACE_EVENT0("cc",
                "ProxyImpl::ScheduledActionBeginLayerTreeFrameSinkCreation");
   DCHECK(IsImplThread());
+  record_replay_awaiting_frame_sink_ = true;
+  record_replay_frame_sink_requests_++;
   MainThreadTaskRunner()->PostTask(
       FROM_HERE, base::BindOnce(&ProxyMain::RequestNewLayerTreeFrameSink,
                                 proxy_main_weak_ptr_));

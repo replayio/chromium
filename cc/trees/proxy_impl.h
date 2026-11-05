@@ -5,6 +5,7 @@
 #ifndef CC_TREES_PROXY_IMPL_H_
 #define CC_TREES_PROXY_IMPL_H_
 
+#include <atomic>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -93,6 +94,14 @@ class CC_EXPORT ProxyImpl : public LayerTreeHostImplClient,
 
   void RecordReplayRepaintPending();
   void RecordReplayRepaint();
+  // Whether the scheduler asked for a new LayerTreeFrameSink that hasn't been
+  // initialized yet, and how many it has asked for. Read on the main thread.
+  bool RecordReplayAwaitingFrameSink() const {
+    return record_replay_awaiting_frame_sink_;
+  }
+  int RecordReplayFrameSinkRequests() const {
+    return record_replay_frame_sink_requests_;
+  }
 
  private:
   // LayerTreeHostImplClient implementation
@@ -233,6 +242,9 @@ class CC_EXPORT ProxyImpl : public LayerTreeHostImplClient,
   // Either thread can request deferring BeginMainFrame; keep track of both.
   bool main_wants_defer_begin_main_frame_ = false;
   bool impl_wants_defer_begin_main_frame_ = false;
+
+  std::atomic<bool> record_replay_awaiting_frame_sink_{false};
+  std::atomic<int> record_replay_frame_sink_requests_{0};
 };
 
 }  // namespace cc
