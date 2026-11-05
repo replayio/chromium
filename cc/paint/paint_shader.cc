@@ -8,12 +8,12 @@
 
 #include "base/atomic_sequence_num.h"
 #include "base/notreached.h"
-#include "base/record_replay.h"
 #include "base/types/optional_util.h"
 #include "cc/paint/image_provider.h"
 #include "cc/paint/paint_image_builder.h"
 #include "cc/paint/paint_op_writer.h"
 #include "cc/paint/paint_record.h"
+#include "cc/paint/record_replay_ids.h"
 #include "third_party/skia/include/core/SkColorSpace.h"
 #include "third_party/skia/include/core/SkPictureRecorder.h"
 #include "third_party/skia/include/effects/SkGradientShader.h"
@@ -21,6 +21,7 @@
 namespace cc {
 namespace {
 base::AtomicSequenceNumber g_next_shader_id;
+base::AtomicSequenceNumber g_next_isolated_shader_id;
 
 sk_sp<SkPicture> ToSkPicture(sk_sp<PaintRecord> record,
                              const SkRect& bounds,
@@ -196,14 +197,7 @@ sk_sp<PaintShader> PaintShader::MakePaintRecord(
   sk_sp<PaintShader> shader(new PaintShader(Type::kPaintRecord));
 
   shader->record_ = std::move(record);
-  // See PaintImage::GetNextId().
-  if (recordreplay::IsRecordingOrReplaying() &&
-      recordreplay::AreEventsDisallowed()) {
-    static base::AtomicSequenceNumber next_isolated_shader_id;
-    shader->id_ = (1 << 30) + next_isolated_shader_id.GetNext();
-  } else {
-    shader->id_ = g_next_shader_id.GetNext();
-  }
+  shader->id_ = RecordReplayNextId(g_next_shader_id, g_next_isolated_shader_id);
   shader->tile_ = tile;
   shader->scaling_behavior_ = scaling_behavior;
   shader->SetMatrixAndTiling(local_matrix, tx, ty);

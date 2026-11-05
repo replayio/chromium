@@ -1321,6 +1321,15 @@ size_t ShaderPaintFilter::SerializedSize() const {
 
 sk_sp<PaintFilter> ShaderPaintFilter::SnapshotWithImagesInternal(
     ImageProvider* image_provider) const {
+  if (image_provider && image_provider->RecordReplaySnapshotsAllFilters() &&
+      shader_ && shader_->shader_type() == PaintShader::Type::kPaintRecord) {
+    SkMatrix local_matrix = shader_->GetLocalMatrix();
+    return sk_make_sp<ShaderPaintFilter>(
+        PaintShader::MakePaintRecord(sk_make_sp<PaintOpBuffer>(),
+                                     shader_->tile(), shader_->tx(),
+                                     shader_->ty(), &local_matrix),
+        alpha_, filter_quality_, dither_, GetCropRect());
+  }
   PaintFlags orig_flags;
   orig_flags.setShader(shader_);
   orig_flags.setAlpha(alpha_);

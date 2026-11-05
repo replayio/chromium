@@ -10,12 +10,12 @@
 
 #include "base/atomic_sequence_num.h"
 #include "base/hash/hash.h"
-#include "base/record_replay.h"
 #include "base/logging.h"
 #include "cc/paint/paint_image_builder.h"
 #include "cc/paint/paint_image_generator.h"
 #include "cc/paint/paint_record.h"
 #include "cc/paint/paint_worklet_input.h"
+#include "cc/paint/record_replay_ids.h"
 #include "cc/paint/skia_paint_image_generator.h"
 #include "third_party/skia/include/core/SkColorSpace.h"
 #include "third_party/skia/include/gpu/GrBackendSurface.h"
@@ -25,6 +25,8 @@ namespace cc {
 namespace {
 base::AtomicSequenceNumber g_next_image_id;
 base::AtomicSequenceNumber g_next_image_content_id;
+base::AtomicSequenceNumber g_next_isolated_image_id;
+base::AtomicSequenceNumber g_next_isolated_image_content_id;
 base::AtomicSequenceNumber g_next_generator_client_id;
 }  // namespace
 
@@ -91,32 +93,15 @@ PaintImage::DecodingMode PaintImage::GetConservative(DecodingMode one,
   return DecodingMode::kAsync;
 }
 
-// Code that runs with recorded events disallowed, such as Replay's in-process
-// draws while replaying, takes IDs from ranges of their own: an ID it took from
-// the shared sequence would shift the IDs recorded threads get later.
-static bool RecordReplayIsolatedIds() {
-  return recordreplay::IsRecordingOrReplaying() &&
-         recordreplay::AreEventsDisallowed();
-}
-
-constexpr int kRecordReplayIsolatedIdBase = 1 << 30;
-
 // static
 PaintImage::Id PaintImage::GetNextId() {
-  if (RecordReplayIsolatedIds()) {
-    static base::AtomicSequenceNumber next_isolated_id;
-    return kRecordReplayIsolatedIdBase + next_isolated_id.GetNext();
-  }
-  return g_next_image_id.GetNext();
+  return RecordReplayNextId(g_next_image_id, g_next_isolated_image_id);
 }
 
 // static
 PaintImage::ContentId PaintImage::GetNextContentId() {
-  if (RecordReplayIsolatedIds()) {
-    static base::AtomicSequenceNumber next_isolated_content_id;
-    return kRecordReplayIsolatedIdBase + next_isolated_content_id.GetNext();
-  }
-  return g_next_image_content_id.GetNext();
+  return RecordReplayNextId(g_next_image_content_id,
+                            g_next_isolated_image_content_id);
 }
 
 // static

@@ -9,6 +9,8 @@
 
 #include "base/base64.h"
 #include "base/containers/contains.h"
+#include "base/metrics/record_histogram_checker.h"
+#include "base/metrics/statistics_recorder.h"
 #include "base/no_destructor.h"
 #include "base/record_replay.h"
 #include "base/record_replay_paint_surface.h"
@@ -66,7 +68,26 @@ static viz::LocalSurfaceId* gSurfaceId;
 // compositor thread.
 static std::atomic<const base::UnguessableToken*> gSurfaceEmbedToken;
 
+// Whether this thread is drawing a frame in-process.
+static thread_local bool gInIsolatedDraw;
+
+// Histograms are shared with recorded threads: their samples are sent to the
+// browser and observers of them post tasks. A histogram first used in an
+// in-process draw, which only happens when replaying, is a dummy.
+class RecordReplayDrawHistogramChecker : public base::RecordHistogramChecker {
+ public:
+  bool ShouldRecord(uint32_t histogram_hash) const override {
+    return !gInIsolatedDraw;
+  }
+};
+
 static void InitializeRenderer() {
+  static bool installed_histogram_checker = false;
+  if (!installed_histogram_checker) {
+    installed_histogram_checker = true;
+    base::StatisticsRecorder::SetRecordChecker(
+        std::make_unique<RecordReplayDrawHistogramChecker>());
+  }
   std::unique_ptr<viz::SoftwareOutputDevice> output_device =
       std::make_unique<viz::SoftwareOutputDevice>();
   gOutputSurface = new viz::SoftwareOutputSurface(std::move(output_device));
@@ -192,7 +213,8 @@ static void DrawFrame(const viz::CompositorFrame& frame) {
   for (const auto& pass : frame.render_pass_list) {
     render_passes.push_back(pass->DeepCopyAggregated());
   }
-  if (gFilterSnapshots->size() == render_passes.size()) {
+  if (!gFilterSnapshots->empty()) {
+    CHECK_EQ(gFilterSnapshots->size(), render_passes.size());
     for (size_t i = 0; i < render_passes.size(); i++) {
       if (const auto& snapshot = (*gFilterSnapshots)[i]) {
         render_passes[i]->filters = snapshot->filters;
@@ -345,7 +367,9 @@ static char* PaintCallback(const char* mime_type, int jpeg_quality) {
       gCurrentFrameDrawn = true;
       AutoDisallowEvents disallow("RecordReplayDrawWhenRequested");
       SkRecordReplayBeginIsolatedDraw();
+      gInIsolatedDraw = true;
       DrawFrame(*gCurrentFrame);
+      gInIsolatedDraw = false;
       SkRecordReplayEndIsolatedDraw();
     }
   }
