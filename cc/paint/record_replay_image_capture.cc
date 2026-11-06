@@ -16,7 +16,9 @@ namespace cc {
 
 namespace {
 
-// Only used on the compositor thread, which sends and draws frames.
+// Only used on the compositor thread, which sends frames
+// (AsyncLayerTreeFrameSink::SubmitCompositorFrame serializes them) and draws
+// them, so nothing here is locked.
 bool g_capturing_images = false;
 
 using CapturedImageKey = std::pair<PaintImage::Id, PaintImage::ContentId>;
@@ -78,8 +80,12 @@ void RecordReplayCaptureImage(const PaintImage& image,
 }
 
 sk_sp<SkImage> RecordReplayFindCapturedImage(const PaintImage& image) {
+  // A capture that the frame being drawn didn't send is the previous frame's.
   auto it = CapturedImages().find(KeyFor(image));
-  return it == CapturedImages().end() ? nullptr : it->second.image;
+  if (it == CapturedImages().end() || !it->second.captured) {
+    return nullptr;
+  }
+  return it->second.image;
 }
 
 void RecordReplayClearCapturedImages() {
