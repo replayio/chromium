@@ -4,6 +4,8 @@
 
 #include "cc/paint/record_replay_image_capture.h"
 
+#include <string.h>
+
 #include <map>
 #include <utility>
 
@@ -19,10 +21,29 @@ bool g_capturing_images = false;
 
 using CapturedImageKey = std::pair<PaintImage::Id, PaintImage::ContentId>;
 
-std::map<CapturedImageKey, sk_sp<SkImage>>& CapturedImages() {
-  static base::NoDestructor<std::map<CapturedImageKey, sk_sp<SkImage>>>
-      images;
+struct CapturedImage {
+  sk_sp<SkImage> image;
+  // Whether the frame being sent captured the image.
+  bool captured = false;
+};
+
+std::map<CapturedImageKey, CapturedImage>& CapturedImages() {
+  static base::NoDestructor<std::map<CapturedImageKey, CapturedImage>> images;
   return *images;
+}
+
+bool HasPixels(const sk_sp<SkImage>& image, const SkPixmap& pixmap) {
+  SkPixmap pixels;
+  if (!image->peekPixels(&pixels) || pixels.info() != pixmap.info()) {
+    return false;
+  }
+  size_t row_bytes = pixmap.info().minRowBytes();
+  for (int y = 0; y < pixmap.height(); y++) {
+    if (memcmp(pixels.addr(0, y), pixmap.addr(0, y), row_bytes)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 CapturedImageKey KeyFor(const PaintImage& image) {
@@ -45,19 +66,32 @@ void RecordReplayCaptureImage(const PaintImage& image,
   // Copying the pixels emits no recorded events of its own; new images get IDs
   // from the range for code with events disallowed.
   recordreplay::AutoDisallowEvents disallow("RecordReplayCaptureImage");
-  sk_sp<SkImage> copy = SkImage::MakeRasterCopy(pixmap);
-  if (copy) {
-    CapturedImages()[KeyFor(image)] = std::move(copy);
+  CapturedImage& captured = CapturedImages()[KeyFor(image)];
+  captured.captured = true;
+  // Frames mostly send the images the previous frame sent. Keeping the copy
+  // of the same pixels saves copying them again, and draws find what they
+  // cached for the image.
+  if (captured.image && HasPixels(captured.image, pixmap)) {
+    return;
   }
+  captured.image = SkImage::MakeRasterCopy(pixmap);
 }
 
 sk_sp<SkImage> RecordReplayFindCapturedImage(const PaintImage& image) {
   auto it = CapturedImages().find(KeyFor(image));
-  return it == CapturedImages().end() ? nullptr : it->second;
+  return it == CapturedImages().end() ? nullptr : it->second.image;
 }
 
 void RecordReplayClearCapturedImages() {
-  CapturedImages().clear();
+  auto& images = CapturedImages();
+  for (auto it = images.begin(); it != images.end();) {
+    if (it->second.captured && it->second.image) {
+      it->second.captured = false;
+      ++it;
+    } else {
+      it = images.erase(it);
+    }
+  }
 }
 
 }  // namespace cc

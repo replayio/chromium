@@ -25,6 +25,7 @@ CC_PAINT_EXPORT void RecordReplayCaptureImage(const PaintImage& image,
                                               const SkPixmap& pixmap);
 CC_PAINT_EXPORT sk_sp<SkImage> RecordReplayFindCapturedImage(
     const PaintImage& image);
+// Drops the images the frame that was sent last didn't capture.
 CC_PAINT_EXPORT void RecordReplayClearCapturedImages();
 
 }  // namespace cc

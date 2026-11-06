@@ -1266,6 +1266,12 @@ size_t TurbulencePaintFilter::SerializedSize() const {
 
 sk_sp<PaintFilter> TurbulencePaintFilter::SnapshotWithImagesInternal(
     ImageProvider* image_provider) const {
+  // [RecordReplay] Without images or paint records, Replay's in-process draws
+  // can use the filter itself, whose noise their filter cache keeps between
+  // draws.
+  if (image_provider && image_provider->RecordReplaySnapshotsAllFilters()) {
+    return sk_ref_sp<PaintFilter>(this);
+  }
   return sk_make_sp<TurbulencePaintFilter>(turbulence_type_, base_frequency_x_,
                                            base_frequency_y_, num_octaves_,
                                            seed_, &tile_size_, GetCropRect());
