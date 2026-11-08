@@ -523,6 +523,9 @@ void Histogram::Add(int value) {
 }
 
 void Histogram::AddCount(int value, int count) {
+#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
+  recordreplay::IsolatedDrawCheckName("histogram sample", histogram_name());
+#endif
   DCHECK_EQ(0, ranges(0));
   DCHECK_EQ(kSampleType_MAX, ranges(bucket_count()));
 

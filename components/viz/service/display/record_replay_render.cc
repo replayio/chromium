@@ -94,7 +94,9 @@ class ScopedIsolatedDraw {
 
 // Histograms are shared with recorded threads: their samples are sent to the
 // browser and observers of them post tasks. A histogram first used in an
-// in-process draw, which only happens when replaying, is a dummy.
+// in-process draw, which only happens when replaying, is a dummy. A histogram
+// used before still gets the draw's samples, from macros that cached it too,
+// which this doesn't see; the code that draws records none outside the draw.
 class RecordReplayDrawHistogramChecker : public base::RecordHistogramChecker {
  public:
   bool ShouldRecord(uint32_t histogram_hash) const override {

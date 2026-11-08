@@ -20,6 +20,12 @@
 #include "base/synchronization/lock.h"
 #include "base/values.h"
 
+#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
+namespace recordreplay {
+void IsolatedDrawCheckName(const char* what, const char* name);
+}
+#endif
+
 namespace base {
 
 typedef HistogramBase::Count Count;
@@ -110,6 +116,9 @@ void SparseHistogram::Add(Sample value) {
 }
 
 void SparseHistogram::AddCount(Sample value, int count) {
+#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
+  recordreplay::IsolatedDrawCheckName("histogram sample", histogram_name());
+#endif
   if (count <= 0) {
     NOTREACHED();
     return;
