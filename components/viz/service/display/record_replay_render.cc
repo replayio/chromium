@@ -422,6 +422,11 @@ static char* PaintCallback(const char* mime_type, int jpeg_quality) {
   // on the compositor thread, or at any time after diverging from the recording and
   // we are on the main thread. These invocations need different handling.
   if (HasDivergedFromRecording()) {
+    // Paints the compositor thread finishes while diverged, such as a
+    // repaint's frames, aren't the recording's.
+    if (!IsMainThread()) {
+      return nullptr;
+    }
     return PaintWhenDiverged(mime_type, jpeg_quality);
   }
 
@@ -490,10 +495,6 @@ static base::NoDestructor<std::deque<PendingCommitPaint>> gPendingCommitPaints;
 // before them, which the screen still showed, and aren't among the started
 // paints the linker reports pending at the end of a paints run.
 static void FinishPaintWithoutPixels(size_t bookmark) {
-  // A repaint's frames don't finish the recording's paints.
-  if (HasDivergedFromRecording()) {
-    return;
-  }
   gFinishingWithoutPixels = true;
   V8RecordReplayPaintFinished(bookmark);
   gFinishingWithoutPixels = false;

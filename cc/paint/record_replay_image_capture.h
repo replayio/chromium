@@ -6,12 +6,13 @@
 #define CC_PAINT_RECORD_REPLAY_IMAGE_CAPTURE_H_
 
 #include "cc/paint/paint_export.h"
-#include "cc/paint/paint_filter.h"
 #include "cc/paint/paint_image.h"
 #include "third_party/skia/include/core/SkImage.h"
 #include "third_party/skia/include/core/SkPixmap.h"
 
 namespace cc {
+
+class PaintFilter;
 
 // When replaying, Replay draws a compositor frame in-process after the frame
 // has been sent to the GPU process, and only if the recorder asks for its
@@ -30,7 +31,9 @@ CC_PAINT_EXPORT sk_sp<SkImage> RecordReplayFindCapturedImage(
 // its unsent filters.
 CC_PAINT_EXPORT void RecordReplayClearCapturedImages();
 // A filter the send couldn't serialize reaches viz as no filter at all
-// (paint_filter_mojom_traits.cc), and has to be drawn as none.
+// (paint_filter_mojom_traits.cc), and has to be drawn as none. A filter that
+// serializes but that viz fails to read would reject the whole frame instead;
+// no filter type is known to do that.
 CC_PAINT_EXPORT void RecordReplayNoteUnsentFilter(const PaintFilter* filter);
 CC_PAINT_EXPORT bool RecordReplayIsUnsentFilter(const PaintFilter* filter);
 

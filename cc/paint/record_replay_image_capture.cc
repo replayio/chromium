@@ -10,6 +10,7 @@
 
 #include "base/no_destructor.h"
 #include "base/record_replay.h"
+#include "cc/paint/paint_filter.h"
 #include "cc/paint/record_replay_isolated_draw.h"
 
 #if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
