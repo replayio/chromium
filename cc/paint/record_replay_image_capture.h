@@ -6,6 +6,7 @@
 #define CC_PAINT_RECORD_REPLAY_IMAGE_CAPTURE_H_
 
 #include "cc/paint/paint_export.h"
+#include "cc/paint/paint_filter.h"
 #include "cc/paint/paint_image.h"
 #include "third_party/skia/include/core/SkImage.h"
 #include "third_party/skia/include/core/SkPixmap.h"
@@ -25,8 +26,13 @@ CC_PAINT_EXPORT void RecordReplayCaptureImage(const PaintImage& image,
                                               const SkPixmap& pixmap);
 CC_PAINT_EXPORT sk_sp<SkImage> RecordReplayFindCapturedImage(
     const PaintImage& image);
-// Drops the images the frame that was sent last didn't capture.
+// Drops the images the frame that was sent last didn't capture, and forgets
+// its unsent filters.
 CC_PAINT_EXPORT void RecordReplayClearCapturedImages();
+// A filter the send couldn't serialize reaches viz as no filter at all
+// (paint_filter_mojom_traits.cc), and has to be drawn as none.
+CC_PAINT_EXPORT void RecordReplayNoteUnsentFilter(const PaintFilter* filter);
+CC_PAINT_EXPORT bool RecordReplayIsUnsentFilter(const PaintFilter* filter);
 
 }  // namespace cc
 

@@ -225,7 +225,9 @@ static cc::FilterOperations SnapshotFilters(
   for (const cc::FilterOperation& op : filters.operations()) {
     if (op.type() == cc::FilterOperation::REFERENCE && op.image_filter()) {
       snapshot.push_back(cc::FilterOperation::CreateReferenceFilter(
-          op.image_filter()->SnapshotWithImages(image_provider)));
+          cc::RecordReplayIsUnsentFilter(op.image_filter().get())
+              ? nullptr
+              : op.image_filter()->SnapshotWithImages(image_provider)));
     } else {
       snapshot.push_back(op);
     }
@@ -235,8 +237,9 @@ static cc::FilterOperations SnapshotFilters(
 
 // Drawing a reference filter can decode images, play back paint records and
 // fill caches that recorded threads share. A draw uses snapshots of the
-// frame's reference filters instead, with the images the send captured and
-// paint records emptied, as viz receives them.
+// frame's reference filters instead, with the images the send captured,
+// paint records emptied and no filter where the send couldn't serialize one,
+// as viz receives them.
 static void SnapshotReferenceFilters(RecordReplayFrame& frame) {
   RecordReplayCapturedImageProvider image_provider;
   for (auto& pass : frame.render_passes) {

@@ -5,6 +5,7 @@
 #include "cc/paint/record_replay_image_capture.h"
 
 #include <map>
+#include <set>
 #include <utility>
 
 #include "base/no_destructor.h"
@@ -53,6 +54,12 @@ bool HasPixels(const sk_sp<SkImage>& image, const SkPixmap& pixmap) {
 }
 #endif
 
+// Filters of the frame being sent and drawn, which the frame keeps alive.
+std::set<const PaintFilter*>& UnsentFilters() {
+  static base::NoDestructor<std::set<const PaintFilter*>> filters;
+  return *filters;
+}
+
 CapturedImageKey KeyFor(const PaintImage& image) {
   return {image.stable_id(),
           image.GetContentIdForFrame(PaintImage::kDefaultFrameIndex)};
@@ -99,7 +106,16 @@ sk_sp<SkImage> RecordReplayFindCapturedImage(const PaintImage& image) {
   return it->second.image;
 }
 
+void RecordReplayNoteUnsentFilter(const PaintFilter* filter) {
+  UnsentFilters().insert(filter);
+}
+
+bool RecordReplayIsUnsentFilter(const PaintFilter* filter) {
+  return UnsentFilters().count(filter);
+}
+
 void RecordReplayClearCapturedImages() {
+  UnsentFilters().clear();
   auto& images = CapturedImages();
   for (auto it = images.begin(); it != images.end();) {
     if (it->second.captured && it->second.image) {
