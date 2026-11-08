@@ -380,6 +380,9 @@ class CC_EXPORT SchedulerStateMachine {
   }
 
   void SetReplayRepaintPending() { replay_repaint_pending_ = true; }
+  bool RecordReplayCreatingFrameSink() const {
+    return layer_tree_frame_sink_state_ == LayerTreeFrameSinkState::CREATING;
+  }
 
  protected:
   bool BeginFrameRequiredForAction() const;

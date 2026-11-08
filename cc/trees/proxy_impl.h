@@ -234,9 +234,6 @@ class CC_EXPORT ProxyImpl : public LayerTreeHostImplClient,
   bool main_wants_defer_begin_main_frame_ = false;
   bool impl_wants_defer_begin_main_frame_ = false;
 
-  // Whether the scheduler asked for a LayerTreeFrameSink and none has been
-  // initialized since.
-  bool record_replay_awaiting_frame_sink_ = false;
   // The frame sink a repaint initialized while the compositor waited for one.
   std::unique_ptr<LayerTreeFrameSink> record_replay_frame_sink_;
 };

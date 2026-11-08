@@ -260,8 +260,6 @@ void ProxyImpl::InitializeLayerTreeFrameSinkOnImpl(
 
   LayerTreeHostImpl* host_impl = host_impl_.get();
   bool success = host_impl->InitializeFrameSink(layer_tree_frame_sink);
-  if (success)
-    record_replay_awaiting_frame_sink_ = false;
   MainThreadTaskRunner()->PostTask(
       FROM_HERE, base::BindOnce(&ProxyMain::DidInitializeLayerTreeFrameSink,
                                 proxy_main_weak_ptr_, success));
@@ -928,7 +926,6 @@ void ProxyImpl::ScheduledActionBeginLayerTreeFrameSinkCreation() {
   TRACE_EVENT0("cc",
                "ProxyImpl::ScheduledActionBeginLayerTreeFrameSinkCreation");
   DCHECK(IsImplThread());
-  record_replay_awaiting_frame_sink_ = true;
   MainThreadTaskRunner()->PostTask(
       FROM_HERE, base::BindOnce(&ProxyMain::RequestNewLayerTreeFrameSink,
                                 proxy_main_weak_ptr_));
@@ -1100,13 +1097,15 @@ static const uint64_t RepaintSequenceNumber = UINT32_MAX;
 
 void ProxyImpl::RecordReplayRepaintPending() {
   // A frame sink the main thread gave before the repaint was initialized
-  // first, since its task was posted first.
-  if (record_replay_awaiting_frame_sink_ && !record_replay_frame_sink_) {
+  // first, since its task was posted first. A frame sink lost while frames
+  // keep the scheduler from asking for another isn't replaced, and the repaint
+  // times out.
+  if (scheduler_->RecordReplayCreatingFrameSink() &&
+      !record_replay_frame_sink_) {
     auto frame_sink = std::make_unique<RecordReplayRepaintFrameSink>(
         task_runner_provider_->ImplThreadTaskRunner());
     if (host_impl_->InitializeFrameSink(frame_sink.get())) {
       record_replay_frame_sink_ = std::move(frame_sink);
-      record_replay_awaiting_frame_sink_ = false;
       scheduler_->DidCreateAndInitializeLayerTreeFrameSink();
     }
   }
