@@ -173,7 +173,7 @@ static void HoldFrameRefs(const viz::CompositorFrame& frame) {
 extern const SkPixmap* gCurrentPixmap;
 static void FinishPaints();
 
-// Whether paints are being finished without pixels (FinishPaints).
+// Whether a paint is being finished without pixels (FinishPaintWithoutPixels).
 static bool gFinishingWithoutPixels;
 static void SetDeviceViewportSize(const gfx::Size& size);
 
@@ -466,9 +466,10 @@ static std::atomic<size_t> gCurrentPaintBookmark;
 // once a frame draws that commit's tree.
 static std::atomic<size_t> gLastCommitBookmark;
 
-// Whether a sent frame finished |gLastCommitBookmark|'s paint. Only used on the
-// compositor thread.
+// Whether a sent frame finished |gLastCommitBookmark|'s paint, and the
+// compositor whose frame drew its commit. Only used on the compositor thread.
 static bool gLastCommitBookmarkFinished = true;
+static const void* gLastCommitCompositor;
 
 // Commits whose trees no frame has drawn yet, oldest first. Source frame
 // numbers count per compositor. Only used on the compositor thread.
@@ -479,13 +480,17 @@ struct PendingCommitPaint {
 };
 static base::NoDestructor<std::deque<PendingCommitPaint>> gPendingCommitPaints;
 
-// Bookmarks of commits whose trees no sent frame showed: replaced before any
+// Paints of commits whose trees no sent frame showed: replaced before any
 // frame drew them, drawn by frames that weren't sent (an aborted draw, a
 // surface that isn't drawn) or left by a destroyed compositor. They are
-// finished along with the next paint, without pixels, so that they show the
-// paint before them, which the screen still showed. That keeps them out of
-// the started paints the linker reports pending at the end of a paints run.
-static base::NoDestructor<std::vector<size_t>> gSupersededCommitBookmarks;
+// finished without pixels once that's known, so that they show the paint
+// before them, which the screen still showed, and aren't among the started
+// paints the linker reports pending at the end of a paints run.
+static void FinishPaintWithoutPixels(size_t bookmark) {
+  gFinishingWithoutPixels = true;
+  V8RecordReplayPaintFinished(bookmark);
+  gFinishingWithoutPixels = false;
+}
 
 void InitPaintCallback() {
   static bool hasPaints = false;
@@ -521,7 +526,7 @@ void OnDrawSourceFrame(const void* compositor, int source_frame_number) {
       continue;
     }
     if (bookmark) {
-      gSupersededCommitBookmarks->push_back(bookmark);
+      FinishPaintWithoutPixels(bookmark);
     }
     bookmark = it->bookmark;
     it = gPendingCommitPaints->erase(it);
@@ -532,10 +537,11 @@ void OnDrawSourceFrame(const void* compositor, int source_frame_number) {
 #if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
       IsolatedDrawCheckAlways("paint bookmark without a sent frame", compositor);
 #endif
-      gSupersededCommitBookmarks->push_back(last);
+      FinishPaintWithoutPixels(last);
     }
     gLastCommitBookmark.store(bookmark, std::memory_order_relaxed);
     gLastCommitBookmarkFinished = false;
+    gLastCommitCompositor = compositor;
   }
 }
 
@@ -547,8 +553,22 @@ void OnCompositorDestroyed(const void* compositor) {
       ++it;
       continue;
     }
-    gSupersededCommitBookmarks->push_back(it->bookmark);
+    FinishPaintWithoutPixels(it->bookmark);
     it = gPendingCommitPaints->erase(it);
+  }
+  // Nor is its last drawn commit's paint finished by another compositor's
+  // frames.
+  if (gLastCommitCompositor == compositor) {
+    size_t last = gLastCommitBookmark.load(std::memory_order_relaxed);
+    if (last && !gLastCommitBookmarkFinished) {
+#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
+      IsolatedDrawCheckAlways("paint bookmark of a destroyed compositor", compositor);
+#endif
+      FinishPaintWithoutPixels(last);
+    }
+    gLastCommitBookmark.store(0, std::memory_order_relaxed);
+    gLastCommitBookmarkFinished = true;
+    gLastCommitCompositor = nullptr;
   }
 }
 
@@ -570,12 +590,6 @@ static void SetDeviceViewportSize(const gfx::Size& size) {
 }
 
 static void FinishPaints() {
-  gFinishingWithoutPixels = true;
-  for (size_t superseded : *gSupersededCommitBookmarks) {
-    V8RecordReplayPaintFinished(superseded);
-  }
-  gFinishingWithoutPixels = false;
-  gSupersededCommitBookmarks->clear();
   size_t bookmark = gLastCommitBookmark.load();
   if (bookmark) {
     V8RecordReplayPaintFinished(bookmark);
