@@ -16,11 +16,12 @@
 
 namespace cc {
 
-// Code that runs with recorded events disallowed, isolated draws among it,
-// takes IDs from a range of its own: an ID it took from the shared sequence
-// would shift the IDs recorded threads get later, and some of that code
-// (replay-only commands, unordered tasks) doesn't run at the same points when
-// recording and replaying. Counts down from the largest ID, as Skia's do.
+// Code that runs with recorded events disallowed takes IDs from ranges of its
+// own: an ID it took from the shared sequence would shift the IDs recorded
+// threads get later, and some of that code (replay-only commands, unordered
+// tasks) doesn't run at the same points when recording and replaying.
+// Isolated draws, which run only when replaying, have a range apart from the
+// rest of that code. Both count down, as Skia's do.
 inline int RecordReplayNextId(base::AtomicSequenceNumber& shared,
                               base::AtomicSequenceNumber& isolated) {
   if (SkRecordReplayAreEventsDisallowedByDriver()) {
@@ -30,7 +31,11 @@ inline int RecordReplayNextId(base::AtomicSequenceNumber& shared,
           "cc ID outside an isolated draw", __builtin_return_address(0));
     }
 #endif
-    return std::numeric_limits<int>::max() - isolated.GetNext();
+    if (SkRecordReplayInIsolatedDraw()) {
+      static base::AtomicSequenceNumber draw;
+      return std::numeric_limits<int>::max() - draw.GetNext();
+    }
+    return std::numeric_limits<int>::max() / 2 - isolated.GetNext();
   }
   return shared.GetNext();
 }
