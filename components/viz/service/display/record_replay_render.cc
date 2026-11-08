@@ -490,6 +490,10 @@ static base::NoDestructor<std::deque<PendingCommitPaint>> gPendingCommitPaints;
 // before them, which the screen still showed, and aren't among the started
 // paints the linker reports pending at the end of a paints run.
 static void FinishPaintWithoutPixels(size_t bookmark) {
+  // A repaint's frames don't finish the recording's paints.
+  if (HasDivergedFromRecording()) {
+    return;
+  }
   gFinishingWithoutPixels = true;
   V8RecordReplayPaintFinished(bookmark);
   gFinishingWithoutPixels = false;
