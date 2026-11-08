@@ -11,6 +11,10 @@
 #include "base/record_replay.h"
 #include "third_party/skia/include/private/SkRecordReplayDraw.h"
 
+#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
+#include <string.h>
+#endif
+
 namespace cc {
 
 namespace {
@@ -32,6 +36,22 @@ std::map<CapturedImageKey, CapturedImage>& CapturedImages() {
   static base::NoDestructor<std::map<CapturedImageKey, CapturedImage>> images;
   return *images;
 }
+
+#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
+bool HasPixels(const sk_sp<SkImage>& image, const SkPixmap& pixmap) {
+  SkPixmap pixels;
+  if (!image->peekPixels(&pixels) || pixels.info() != pixmap.info()) {
+    return false;
+  }
+  size_t row_bytes = pixmap.info().minRowBytes();
+  for (int y = 0; y < pixmap.height(); y++) {
+    if (memcmp(pixels.addr(0, y), pixmap.addr(0, y), row_bytes)) {
+      return false;
+    }
+  }
+  return true;
+}
+#endif
 
 CapturedImageKey KeyFor(const PaintImage& image) {
   return {image.stable_id(),
@@ -56,8 +76,14 @@ void RecordReplayCaptureImage(const PaintImage& image,
   struct ScopedIsolatedDraw {
     ScopedIsolatedDraw() {
       SkRecordReplayBeginIsolatedDraw();
+#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
+      recordreplay::SetInIsolatedDrawForChecks(true);
+#endif
     }
     ~ScopedIsolatedDraw() {
+#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
+      recordreplay::SetInIsolatedDrawForChecks(false);
+#endif
       SkRecordReplayEndIsolatedDraw();
     }
   } isolated;
@@ -68,6 +94,11 @@ void RecordReplayCaptureImage(const PaintImage& image,
   // default one), so the earlier copy has the same pixels: keeping it saves
   // copying them again, and draws find what they cached for the image.
   if (captured.image) {
+#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
+    if (!HasPixels(captured.image, pixmap)) {
+      recordreplay::IsolatedDrawCheckAlways("captured image changed", &image);
+    }
+#endif
     return;
   }
   captured.image = SkImage::MakeRasterCopy(pixmap);

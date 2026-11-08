@@ -77,8 +77,14 @@ class ScopedIsolatedDraw {
  public:
   explicit ScopedIsolatedDraw(const char* why) : disallow_(why) {
     SkRecordReplayBeginIsolatedDraw();
+#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
+    SetInIsolatedDrawForChecks(true);
+#endif
   }
   ~ScopedIsolatedDraw() {
+#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
+    SetInIsolatedDrawForChecks(false);
+#endif
     SkRecordReplayEndIsolatedDraw();
   }
 
@@ -167,6 +173,13 @@ static base::NoDestructor<RecordReplayFrameRefs> gSubmittedFrameRefs;
 
 static void HoldFrameRefs(const viz::CompositorFrame& frame) {
   for (const auto& pass : frame.render_pass_list) {
+#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
+    for (const viz::DrawQuad* quad : pass->quad_list) {
+      if (quad->material == viz::DrawQuad::Material::kPictureContent) {
+        IsolatedDrawCheckAlways("picture quad", quad);
+      }
+    }
+#endif
     if (!pass->filters.IsEmpty()) {
       gSubmittedFrameRefs->filters.push_back(pass->filters);
     }

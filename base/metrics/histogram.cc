@@ -40,6 +40,12 @@
 #include "base/values.h"
 #include "build/build_config.h"
 
+#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
+namespace recordreplay {
+void IsolatedDrawCheckName(const char* what, const char* name);
+}
+#endif
+
 namespace base {
 
 namespace {
@@ -159,6 +165,9 @@ class Histogram::Factory {
 HistogramBase* Histogram::Factory::Build() {
   // recordreplay::Assert("[RUN-1217]-1310 Histogram::Factory::Build");
   HistogramBase* histogram = StatisticsRecorder::FindHistogram(name_);
+#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
+  recordreplay::IsolatedDrawCheckName("histogram", name_.c_str());
+#endif
   if (!histogram) {
     // constructor. Refactor code to avoid the additional call.
     bool should_record = StatisticsRecorder::ShouldRecordHistogram(

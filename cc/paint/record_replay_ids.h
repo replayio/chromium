@@ -10,6 +10,10 @@
 #include "base/atomic_sequence_num.h"
 #include "third_party/skia/include/private/SkRecordReplayDraw.h"
 
+#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
+#include "base/record_replay.h"
+#endif
+
 namespace cc {
 
 // Replay's isolated draws (SkRecordReplayBeginIsolatedDraw) take IDs from a
@@ -21,6 +25,12 @@ inline int RecordReplayNextId(base::AtomicSequenceNumber& shared,
   if (SkRecordReplayInIsolatedDraw()) {
     return std::numeric_limits<int>::max() - isolated.GetNext();
   }
+#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
+  if (recordreplay::AreEventsDisallowed()) {
+    recordreplay::IsolatedDrawCheckAlways("cc ID with events disallowed",
+                                          __builtin_return_address(0));
+  }
+#endif
   return shared.GetNext();
 }
 

@@ -19,6 +19,12 @@
 #include <string.h>
 #endif
 
+#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
+namespace recordreplay {
+void IsolatedDrawCheck(const char* what, const void* address);
+}
+#endif
+
 namespace base {
 class Lock;
 class ConditionVariable;
@@ -80,6 +86,9 @@ class BASE_EXPORT LockImpl {
 };
 
 void LockImpl::Lock() {
+#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
+  recordreplay::IsolatedDrawCheck("base::Lock", __builtin_return_address(0));
+#endif
   // The ScopedLockAcquireActivity in LockInternalWithTracking() (not inlined
   // here because of circular includes) is relatively expensive and so its
   // actions can become significant due to the very large number of locks that

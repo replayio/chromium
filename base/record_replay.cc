@@ -3,6 +3,13 @@
 // found in the LICENSE file.
 
 #include "base/record_replay.h"
+
+#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
+#include <dlfcn.h>
+#include <stdarg.h>
+
+#include <atomic>
+#endif
 #include "base/json/json_writer.h"
 #include "base/values.h"
 
@@ -327,6 +334,52 @@ void AssertBytes(const char* why, const void* buf, size_t size) {
 bool AreAssertsDisabled() {
   return V8RecordReplayAreAssertsDisabled();
 }
+
+#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
+// Isolated draws in this thread, as SkRecordReplayBeginIsolatedDraw counts
+// them in Skia, which base can't call.
+static thread_local int gIsolatedDrawDepthForChecks;
+
+void SetInIsolatedDrawForChecks(bool in) {
+  gIsolatedDrawDepthForChecks += in ? 1 : -1;
+}
+
+bool InIsolatedDrawForChecks() {
+  return gIsolatedDrawDepthForChecks > 0;
+}
+
+// Prints with the driver's RecordReplayPrint, which binaries without V8 can't
+// link.
+static void CheckPrint(const char* format, ...) {
+  static void (*print)(const char*, va_list) =
+      reinterpret_cast<void (*)(const char*, va_list)>(
+          dlsym(RTLD_DEFAULT, "RecordReplayPrint"));
+  static std::atomic<int> count;
+  if (!print || count++ > 2000) {
+    return;
+  }
+  va_list ap;
+  va_start(ap, format);
+  print(format, ap);
+  va_end(ap);
+}
+
+void IsolatedDrawCheck(const char* what, const void* address) {
+  if (InIsolatedDrawForChecks()) {
+    CheckPrint("IsolatedDrawCheck %s caller=%p", what, address);
+  }
+}
+
+void IsolatedDrawCheckName(const char* what, const char* name) {
+  if (InIsolatedDrawForChecks()) {
+    CheckPrint("IsolatedDrawCheck %s %s", what, name);
+  }
+}
+
+void IsolatedDrawCheckAlways(const char* what, const void* address) {
+  CheckPrint("IsolatedDrawCheck %s caller=%p", what, address);
+}
+#endif
 
 void Print(const char* format, ...) {
 #ifndef NACL_TC_REV

@@ -7,6 +7,12 @@
 
 #include <atomic>
 
+#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
+namespace recordreplay {
+void IsolatedDrawCheck(const char* what, const void* address);
+}
+#endif
+
 namespace base {
 
 // AtomicSequenceNumber is a thread safe increasing sequence number generator.
@@ -20,7 +26,13 @@ class AtomicSequenceNumber {
 
   // Returns an increasing sequence number starts from 0 for each call.
   // This function can be called from any thread without data race.
-  inline int GetNext() { return seq_.fetch_add(1, std::memory_order_relaxed); }
+  inline int GetNext() {
+#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
+    recordreplay::IsolatedDrawCheck("AtomicSequenceNumber",
+                                    __builtin_return_address(0));
+#endif
+    return seq_.fetch_add(1, std::memory_order_relaxed);
+  }
 
  private:
   std::atomic_int seq_{0};
