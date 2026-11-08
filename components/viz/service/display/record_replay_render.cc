@@ -483,7 +483,8 @@ static base::NoDestructor<std::deque<PendingCommitPaint>> gPendingCommitPaints;
 // frame drew them, drawn by frames that weren't sent (an aborted draw, a
 // surface that isn't drawn) or left by a destroyed compositor. They are
 // finished along with the next paint, without pixels, so that they show the
-// paint before them, which the screen still showed.
+// paint before them, which the screen still showed. That keeps them out of
+// the started paints the linker reports pending at the end of a paints run.
 static base::NoDestructor<std::vector<size_t>> gSupersededCommitBookmarks;
 
 void InitPaintCallback() {
