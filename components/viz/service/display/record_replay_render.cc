@@ -21,6 +21,7 @@
 #include "cc/paint/image_provider.h"
 #include "cc/paint/paint_filter.h"
 #include "cc/paint/record_replay_image_capture.h"
+#include "cc/paint/record_replay_isolated_draw.h"
 #include "cc/trees/compositor_commit_data.h"
 #include "components/viz/common/display/renderer_settings.h"
 #include "components/viz/common/quads/picture_draw_quad.h"
@@ -69,28 +70,6 @@ static viz::LocalSurfaceId* gSurfaceId;
 // surface, for repaints on the main thread: `gSurfaceId` belongs to the
 // compositor thread.
 static std::atomic<const base::UnguessableToken*> gSurfaceEmbedToken;
-
-// Code that copies, captures or draws frames in-process runs with recorded
-// events disallowed and in an isolated Skia draw, which takes IDs from ranges
-// of its own and uses caches of its own.
-class ScopedIsolatedDraw {
- public:
-  explicit ScopedIsolatedDraw(const char* why) : disallow_(why) {
-    SkRecordReplayBeginIsolatedDraw();
-#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
-    SetInIsolatedDrawForChecks(true);
-#endif
-  }
-  ~ScopedIsolatedDraw() {
-#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
-    SetInIsolatedDrawForChecks(false);
-#endif
-    SkRecordReplayEndIsolatedDraw();
-  }
-
- private:
-  AutoDisallowEvents disallow_;
-};
 
 // Histograms are shared with recorded threads: their samples are sent to the
 // browser and observers of them post tasks. A histogram first used in an
@@ -335,7 +314,7 @@ void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
     if (IsReplaying()) {
       // Every frame is copied: sending it to the GPU process destroys it
       // before its paints finish, when it's known whether they need pixels.
-      ScopedIsolatedDraw isolated("RecordReplayCopySubmittedFrame");
+      cc::RecordReplayScopedIsolatedDraw isolated("RecordReplayCopySubmittedFrame");
       *gSubmittedFrame = CopyFrame(frame);
       cc::RecordReplaySetCapturingImages(HasReferenceFilters(frame));
     }
@@ -354,11 +333,19 @@ void FinishSubmittedCompositorFrame() {
   cc::RecordReplaySetCapturingImages(false);
 
   gCurrentFrameDrawn = false;
+  static bool verify_draw_all =
+      !IsRecordingOrReplaying("event-free-draw", "efd-verify-skip");
+  if (verify_draw_all && *gSubmittedFrame) {
+    gCurrentFrameDrawn = true;
+    ScopedIsolatedDraw isolated("RecordReplayDrawWhenRequested");
+    SnapshotReferenceFilters(**gSubmittedFrame);
+    DrawFrame(**gSubmittedFrame);
+  }
   FinishPaints();
   gCurrentPixmap = nullptr;
 
   if (*gSubmittedFrame) {
-    ScopedIsolatedDraw isolated("RecordReplayCopySubmittedFrame");
+    cc::RecordReplayScopedIsolatedDraw isolated("RecordReplayCopySubmittedFrame");
     gSubmittedFrame->reset();
     cc::RecordReplayClearCapturedImages();
   }
@@ -443,12 +430,13 @@ static char* PaintCallback(const char* mime_type, int jpeg_quality) {
     if (!*gSubmittedFrame) {
       return nullptr;
     }
+    cc::RecordReplayScopedIsolatedDraw isolated("RecordReplayDrawWhenRequested");
     if (!gCurrentFrameDrawn) {
       gCurrentFrameDrawn = true;
-      ScopedIsolatedDraw isolated("RecordReplayDrawWhenRequested");
       SnapshotReferenceFilters(**gSubmittedFrame);
       DrawFrame(**gSubmittedFrame);
     }
+    return EncodeBitmapContents(mime_type, jpeg_quality);
   }
 
   return EncodeBitmapContents(mime_type, jpeg_quality);
@@ -477,6 +465,7 @@ static std::atomic<size_t> gCurrentPaintBookmark;
 // Bookmark for the last point where a paint was committed on the main thread,
 // once a frame draws that commit's tree.
 static std::atomic<size_t> gLastCommitBookmark;
+
 
 // Commits whose trees no frame has drawn yet, oldest first. Source frame
 // numbers count per compositor. Only used on the compositor thread.
@@ -583,7 +572,7 @@ static base::NoDestructor<SkPixmap> gDrawnPixmap;
 void OnPaintFinished(const SkPixmap& pixmap) {
   if (RecordReplayDrawWhenRequested()) {
     // The paint callback is drawing the current frame.
-    CHECK(gCurrentResources && AreEventsDisallowed());
+    CHECK(gCurrentResources && SkRecordReplayInIsolatedDraw());
     *gDrawnPixmap = pixmap;
     gCurrentPixmap = gDrawnPixmap.get();
     return;

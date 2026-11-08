@@ -9,7 +9,7 @@
 
 #include "base/no_destructor.h"
 #include "base/record_replay.h"
-#include "third_party/skia/include/private/SkRecordReplayDraw.h"
+#include "cc/paint/record_replay_isolated_draw.h"
 
 #if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
 #include <string.h>
@@ -72,21 +72,7 @@ void RecordReplayCaptureImage(const PaintImage& image,
                               const SkPixmap& pixmap) {
   // Copying the pixels emits no recorded events of its own; new images get IDs
   // from the range for isolated draws.
-  recordreplay::AutoDisallowEvents disallow("RecordReplayCaptureImage");
-  struct ScopedIsolatedDraw {
-    ScopedIsolatedDraw() {
-      SkRecordReplayBeginIsolatedDraw();
-#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
-      recordreplay::SetInIsolatedDrawForChecks(true);
-#endif
-    }
-    ~ScopedIsolatedDraw() {
-#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
-      recordreplay::SetInIsolatedDrawForChecks(false);
-#endif
-      SkRecordReplayEndIsolatedDraw();
-    }
-  } isolated;
+  RecordReplayScopedIsolatedDraw isolated("RecordReplayCaptureImage");
   CapturedImage& captured = CapturedImages()[KeyFor(image)];
   captured.captured = true;
   // Frames mostly send the images the previous frame sent. The key's content

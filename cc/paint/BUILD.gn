@@ -75,6 +75,7 @@ cc_component("paint") {
     "record_replay_ids.h",
     "record_replay_image_capture.cc",
     "record_replay_image_capture.h",
+    "record_replay_isolated_draw.h",
     "render_surface_filters.cc",
     "render_surface_filters.h",
     "scoped_raster_flags.cc",
