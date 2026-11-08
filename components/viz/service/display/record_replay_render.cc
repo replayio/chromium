@@ -172,6 +172,9 @@ static void HoldFrameRefs(const viz::CompositorFrame& frame) {
 
 extern const SkPixmap* gCurrentPixmap;
 static void FinishPaints();
+
+// Whether paints are being finished without pixels (FinishPaints).
+static bool gFinishingWithoutPixels;
 static void SetDeviceViewportSize(const gfx::Size& size);
 
 // What a frame's draw does depends on its contents, and so do the recorded
@@ -426,6 +429,10 @@ static char* PaintCallback(const char* mime_type, int jpeg_quality) {
     return PaintWhenDiverged(mime_type, jpeg_quality);
   }
 
+  if (gFinishingWithoutPixels) {
+    return nullptr;
+  }
+
   if (RecordReplayDrawWhenRequested()) {
     if (!*gSubmittedFrame) {
       return nullptr;
@@ -466,6 +473,9 @@ static std::atomic<size_t> gCurrentPaintBookmark;
 // once a frame draws that commit's tree.
 static std::atomic<size_t> gLastCommitBookmark;
 
+// Whether a sent frame finished |gLastCommitBookmark|'s paint. Only used on the
+// compositor thread.
+static bool gLastCommitBookmarkFinished = true;
 
 // Commits whose trees no frame has drawn yet, oldest first. Source frame
 // numbers count per compositor. Only used on the compositor thread.
@@ -476,8 +486,11 @@ struct PendingCommitPaint {
 };
 static base::NoDestructor<std::deque<PendingCommitPaint>> gPendingCommitPaints;
 
-// Bookmarks of commits whose trees were replaced before any frame drew them,
-// finished along with the next paint.
+// Bookmarks of commits whose trees no sent frame showed: replaced before any
+// frame drew them, drawn by frames that weren't sent (an aborted draw, a
+// surface that isn't drawn) or left by a destroyed compositor. They are
+// finished along with the next paint, without pixels, so that they show the
+// paint before them, which the screen still showed.
 static base::NoDestructor<std::vector<size_t>> gSupersededCommitBookmarks;
 
 void InitPaintCallback() {
@@ -520,7 +533,15 @@ void OnDrawSourceFrame(const void* compositor, int source_frame_number) {
     it = gPendingCommitPaints->erase(it);
   }
   if (bookmark) {
+    size_t last = gLastCommitBookmark.load(std::memory_order_relaxed);
+    if (last && !gLastCommitBookmarkFinished) {
+#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
+      IsolatedDrawCheckAlways("paint bookmark without a sent frame", compositor);
+#endif
+      gSupersededCommitBookmarks->push_back(last);
+    }
     gLastCommitBookmark.store(bookmark, std::memory_order_relaxed);
+    gLastCommitBookmarkFinished = false;
   }
 }
 
@@ -555,13 +576,16 @@ static void SetDeviceViewportSize(const gfx::Size& size) {
 }
 
 static void FinishPaints() {
+  gFinishingWithoutPixels = true;
   for (size_t superseded : *gSupersededCommitBookmarks) {
     V8RecordReplayPaintFinished(superseded);
   }
+  gFinishingWithoutPixels = false;
   gSupersededCommitBookmarks->clear();
   size_t bookmark = gLastCommitBookmark.load();
   if (bookmark) {
     V8RecordReplayPaintFinished(bookmark);
+    gLastCommitBookmarkFinished = true;
   }
 }
 
