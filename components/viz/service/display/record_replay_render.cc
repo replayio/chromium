@@ -564,7 +564,8 @@ void OnCompositorDestroyed(const void* compositor) {
     it = gPendingCommitPaints->erase(it);
   }
   // Nor is its last drawn commit's paint finished by another compositor's
-  // frames.
+  // frames. This is bookkeeping: no page was found where that paint showed the
+  // next compositor's pixels instead of the earlier paint's.
   if (gLastCommitCompositor == compositor) {
     size_t last = gLastCommitBookmark.load(std::memory_order_relaxed);
     if (last && !gLastCommitBookmarkFinished) {
