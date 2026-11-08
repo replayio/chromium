@@ -336,14 +336,6 @@ void FinishSubmittedCompositorFrame() {
   cc::RecordReplaySetCapturingImages(false);
 
   gCurrentFrameDrawn = false;
-  static bool verify_draw_all =
-      !IsRecordingOrReplaying("event-free-draw", "efd-verify-skip");
-  if (verify_draw_all && *gSubmittedFrame) {
-    gCurrentFrameDrawn = true;
-    ScopedIsolatedDraw isolated("RecordReplayDrawWhenRequested");
-    SnapshotReferenceFilters(**gSubmittedFrame);
-    DrawFrame(**gSubmittedFrame);
-  }
   FinishPaints();
   gCurrentPixmap = nullptr;
 
@@ -377,6 +369,7 @@ bool PopulateSkBitmapWithResource(SkBitmap* sk_bitmap, viz::ResourceId resource_
     for (const SharedBitmapInfo& info : *gSharedBitmaps) {
       if (info.id_ == transferable->mailbox_holder.mailbox) {
         pixels = info.memory_;
+        break;
       }
     }
   }
