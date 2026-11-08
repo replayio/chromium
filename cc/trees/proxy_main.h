@@ -90,14 +90,6 @@ class CC_EXPORT ProxyMain : public Proxy {
 
   void RecordReplayRepaintPending();
   void RecordReplayRepaint();
-  // Gives the compositor |layer_tree_frame_sink| if it still waits for one,
-  // which the embedder can't give when replaying has diverged.
-  void RecordReplayEnsureFrameSink(
-      std::unique_ptr<LayerTreeFrameSink> layer_tree_frame_sink);
-  scoped_refptr<base::SingleThreadTaskRunner>
-  RecordReplayImplThreadTaskRunner() {
-    return ImplThreadTaskRunner();
-  }
 
  private:
   // Proxy implementation.

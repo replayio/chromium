@@ -93,10 +93,6 @@ class CC_EXPORT ProxyImpl : public LayerTreeHostImplClient,
 
   void RecordReplayRepaintPending();
   void RecordReplayRepaint();
-  // Uses |layer_tree_frame_sink| if the compositor still waits for a frame
-  // sink from the main thread.
-  void RecordReplayEnsureFrameSink(
-      std::unique_ptr<LayerTreeFrameSink> layer_tree_frame_sink);
 
  private:
   // LayerTreeHostImplClient implementation
@@ -241,10 +237,8 @@ class CC_EXPORT ProxyImpl : public LayerTreeHostImplClient,
   // Whether the scheduler asked for a LayerTreeFrameSink and none has been
   // initialized since.
   bool record_replay_awaiting_frame_sink_ = false;
-  // The frame sink RecordReplayEnsureFrameSink initialized.
+  // The frame sink a repaint initialized while the compositor waited for one.
   std::unique_ptr<LayerTreeFrameSink> record_replay_frame_sink_;
-  // Whether a frame sink that replaced that one failed to initialize.
-  bool record_replay_lost_repaint_frame_sink_ = false;
 };
 
 }  // namespace cc

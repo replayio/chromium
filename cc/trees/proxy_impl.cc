@@ -27,6 +27,7 @@
 #include "cc/paint/paint_worklet_layer_painter.h"
 #include "cc/trees/compositor_commit_data.h"
 #include "cc/trees/layer_tree_frame_sink.h"
+#include "cc/trees/layer_tree_frame_sink_client.h"
 #include "cc/trees/layer_tree_host.h"
 #include "cc/trees/layer_tree_impl.h"
 #include "cc/trees/mutator_host.h"
@@ -34,6 +35,7 @@
 #include "cc/trees/render_frame_metadata_observer.h"
 #include "cc/trees/task_runner_provider.h"
 #include "components/power_scheduler/power_mode_arbiter.h"
+#include "components/viz/common/frame_sinks/begin_frame_source.h"
 #include "components/viz/common/frame_sinks/delay_based_time_source.h"
 #include "components/viz/common/frame_timing_details.h"
 #include "components/viz/common/gpu/context_provider.h"
@@ -50,6 +52,69 @@ namespace {
 // Measured in seconds.
 constexpr auto kSmoothnessTakesPriorityExpirationDelay =
     base::Milliseconds(250);
+
+// [RecordReplay] A LayerTreeFrameSink for repaints that only draws in this
+// process. A tab that closes can lose its frame sink before the renderer
+// finishes recording, which then ends while the compositor waits for a new
+// frame sink. None comes once a replay has diverged, and the compositor can't
+// draw without one.
+class RecordReplayRepaintFrameSink : public LayerTreeFrameSink,
+                                     public viz::ExternalBeginFrameSourceClient {
+ public:
+  explicit RecordReplayRepaintFrameSink(
+      scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner)
+      : LayerTreeFrameSink(nullptr, nullptr, std::move(compositor_task_runner),
+                           nullptr) {}
+
+  bool BindToClient(LayerTreeFrameSinkClient* client) override {
+    if (!LayerTreeFrameSink::BindToClient(client)) {
+      return false;
+    }
+    begin_frame_source_ = std::make_unique<viz::ExternalBeginFrameSource>(this);
+    client->SetBeginFrameSource(begin_frame_source_.get());
+    return true;
+  }
+
+  void DetachFromClient() override {
+    weak_factory_.InvalidateWeakPtrs();
+    client_->SetBeginFrameSource(nullptr);
+    begin_frame_source_.reset();
+    LayerTreeFrameSink::DetachFromClient();
+  }
+
+  void SetLocalSurfaceId(const viz::LocalSurfaceId& local_surface_id) override {
+    local_surface_id_ = local_surface_id;
+  }
+
+  void SubmitCompositorFrame(viz::CompositorFrame frame,
+                             bool hit_test_data_changed) override {
+    recordreplay::SubmitCompositorFrame(local_surface_id_, frame);
+    compositor_task_runner_->PostTask(
+        FROM_HERE,
+        base::BindOnce(&RecordReplayRepaintFrameSink::DidReceiveAck,
+                       weak_factory_.GetWeakPtr()));
+  }
+
+  void DidNotProduceFrame(const viz::BeginFrameAck& ack,
+                          FrameSkippedReason reason) override {}
+  void DidAllocateSharedBitmap(base::ReadOnlySharedMemoryRegion region,
+                               const viz::SharedBitmapId& id) override {}
+  void DidDeleteSharedBitmap(const viz::SharedBitmapId& id) override {}
+
+  // viz::ExternalBeginFrameSourceClient
+  void OnNeedsBeginFrames(bool needs_begin_frames) override {}
+
+ private:
+  void DidReceiveAck() {
+    if (client_) {
+      client_->DidReceiveCompositorFrameAck();
+    }
+  }
+
+  viz::LocalSurfaceId local_surface_id_;
+  std::unique_ptr<viz::ExternalBeginFrameSource> begin_frame_source_;
+  base::WeakPtrFactory<RecordReplayRepaintFrameSink> weak_factory_{this};
+};
 
 }  // namespace
 
@@ -184,20 +249,23 @@ void ProxyImpl::InitializeLayerTreeFrameSinkOnImpl(
 
   proxy_main_frame_sink_bound_weak_ptr_ = proxy_main_frame_sink_bound_weak_ptr;
 
+  // [RecordReplay] A repaint's frame sink stays once installed, and the main
+  // thread is told this one initialized.
+  if (record_replay_frame_sink_) {
+    MainThreadTaskRunner()->PostTask(
+        FROM_HERE, base::BindOnce(&ProxyMain::DidInitializeLayerTreeFrameSink,
+                                  proxy_main_weak_ptr_, true));
+    return;
+  }
+
   LayerTreeHostImpl* host_impl = host_impl_.get();
-  // The scheduler already has a frame sink when this one replaces the
-  // repaint's, which it releases even if this one fails.
-  bool replaces_repaint_frame_sink = !!record_replay_frame_sink_;
   bool success = host_impl->InitializeFrameSink(layer_tree_frame_sink);
-  record_replay_frame_sink_ = nullptr;
   if (success)
     record_replay_awaiting_frame_sink_ = false;
-  record_replay_lost_repaint_frame_sink_ =
-      replaces_repaint_frame_sink && !success;
   MainThreadTaskRunner()->PostTask(
       FROM_HERE, base::BindOnce(&ProxyMain::DidInitializeLayerTreeFrameSink,
                                 proxy_main_weak_ptr_, success));
-  if (success && !replaces_repaint_frame_sink)
+  if (success)
     scheduler_->DidCreateAndInitializeLayerTreeFrameSink();
 }
 
@@ -1030,25 +1098,18 @@ bool ProxyImpl::DataForCommit::IsValid() const {
 // Sequence number used for frames triggered while repainting when replaying.
 static const uint64_t RepaintSequenceNumber = UINT32_MAX;
 
-void ProxyImpl::RecordReplayEnsureFrameSink(
-    std::unique_ptr<LayerTreeFrameSink> layer_tree_frame_sink) {
-  DCHECK(IsImplThread());
-  // A frame sink the main thread gave before the repaint was initialized
-  // first.
-  if ((!record_replay_awaiting_frame_sink_ &&
-       !record_replay_lost_repaint_frame_sink_) ||
-      !host_impl_->InitializeFrameSink(layer_tree_frame_sink.get())) {
-    return;
-  }
-  record_replay_frame_sink_ = std::move(layer_tree_frame_sink);
-  record_replay_lost_repaint_frame_sink_ = false;
-  if (record_replay_awaiting_frame_sink_) {
-    record_replay_awaiting_frame_sink_ = false;
-    scheduler_->DidCreateAndInitializeLayerTreeFrameSink();
-  }
-}
-
 void ProxyImpl::RecordReplayRepaintPending() {
+  // A frame sink the main thread gave before the repaint was initialized
+  // first, since its task was posted first.
+  if (record_replay_awaiting_frame_sink_ && !record_replay_frame_sink_) {
+    auto frame_sink = std::make_unique<RecordReplayRepaintFrameSink>(
+        task_runner_provider_->ImplThreadTaskRunner());
+    if (host_impl_->InitializeFrameSink(frame_sink.get())) {
+      record_replay_frame_sink_ = std::move(frame_sink);
+      record_replay_awaiting_frame_sink_ = false;
+      scheduler_->DidCreateAndInitializeLayerTreeFrameSink();
+    }
+  }
   scheduler_->RecordReplayRepaintPending();
 }
 

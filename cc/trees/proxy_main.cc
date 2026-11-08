@@ -897,17 +897,6 @@ void ProxyMain::RecordReplayRepaintPending() {
                                 base::Unretained(proxy_impl_.get())));
 }
 
-void ProxyMain::RecordReplayEnsureFrameSink(
-    std::unique_ptr<LayerTreeFrameSink> layer_tree_frame_sink) {
-  if (!proxy_impl_)
-    return;
-  ImplThreadTaskRunner()->PostTask(
-      FROM_HERE,
-      base::BindOnce(&ProxyImpl::RecordReplayEnsureFrameSink,
-                     base::Unretained(proxy_impl_.get()),
-                     std::move(layer_tree_frame_sink)));
-}
-
 void ProxyMain::RecordReplayRepaint() {
   if (!proxy_impl_)
     return;

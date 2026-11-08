@@ -12,10 +12,7 @@
 #include "base/strings/stringprintf.h"
 #include "cc/animation/animation_events.h"
 #include "cc/trees/compositor_commit_data.h"
-#include "cc/trees/layer_tree_frame_sink.h"
-#include "cc/trees/layer_tree_frame_sink_client.h"
 #include "components/viz/common/display/renderer_settings.h"
-#include "components/viz/common/frame_sinks/begin_frame_source.h"
 #include "components/viz/service/display/software_output_device.h"
 #include "components/viz/service/display/software_renderer.h"
 #include "components/viz/service/display_embedder/software_output_surface.h"
@@ -306,68 +303,6 @@ void CompositorProxyDestroyed(cc::ProxyMain* proxy) {
   }
 }
 
-// A LayerTreeFrameSink for repaints that only draws in this process. A tab
-// that closes can lose its frame sink before the renderer finishes recording,
-// which then ends while the compositor waits for a new frame sink. None comes
-// once a replay has diverged, and the compositor can't draw without one.
-class RecordReplayRepaintFrameSink : public cc::LayerTreeFrameSink,
-                                     public viz::ExternalBeginFrameSourceClient {
- public:
-  explicit RecordReplayRepaintFrameSink(
-      scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner)
-      : cc::LayerTreeFrameSink(nullptr, nullptr,
-                               std::move(compositor_task_runner), nullptr) {}
-
-  bool BindToClient(cc::LayerTreeFrameSinkClient* client) override {
-    if (!cc::LayerTreeFrameSink::BindToClient(client)) {
-      return false;
-    }
-    begin_frame_source_ = std::make_unique<viz::ExternalBeginFrameSource>(this);
-    client->SetBeginFrameSource(begin_frame_source_.get());
-    return true;
-  }
-
-  void DetachFromClient() override {
-    weak_factory_.InvalidateWeakPtrs();
-    client_->SetBeginFrameSource(nullptr);
-    begin_frame_source_.reset();
-    cc::LayerTreeFrameSink::DetachFromClient();
-  }
-
-  void SetLocalSurfaceId(const viz::LocalSurfaceId& local_surface_id) override {
-    local_surface_id_ = local_surface_id;
-  }
-
-  void SubmitCompositorFrame(viz::CompositorFrame frame,
-                             bool hit_test_data_changed) override {
-    recordreplay::SubmitCompositorFrame(local_surface_id_, frame);
-    compositor_task_runner_->PostTask(
-        FROM_HERE,
-        base::BindOnce(&RecordReplayRepaintFrameSink::DidReceiveAck,
-                       weak_factory_.GetWeakPtr()));
-  }
-
-  void DidNotProduceFrame(const viz::BeginFrameAck& ack,
-                          cc::FrameSkippedReason reason) override {}
-  void DidAllocateSharedBitmap(base::ReadOnlySharedMemoryRegion region,
-                               const viz::SharedBitmapId& id) override {}
-  void DidDeleteSharedBitmap(const viz::SharedBitmapId& id) override {}
-
-  // viz::ExternalBeginFrameSourceClient
-  void OnNeedsBeginFrames(bool needs_begin_frames) override {}
-
- private:
-  void DidReceiveAck() {
-    if (client_) {
-      client_->DidReceiveCompositorFrameAck();
-    }
-  }
-
-  viz::LocalSurfaceId local_surface_id_;
-  std::unique_ptr<viz::ExternalBeginFrameSource> begin_frame_source_;
-  base::WeakPtrFactory<RecordReplayRepaintFrameSink> weak_factory_{this};
-};
-
 static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
   CHECK(IsMainThread());
 
@@ -386,9 +321,6 @@ static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
   // The pause can leave a frame's tree pending behind one that was never
   // drawn, so the compositor has to be told about the repaint before its
   // commit, which waits for the pending tree.
-  gCurrentCompositorProxy->RecordReplayEnsureFrameSink(
-      std::make_unique<RecordReplayRepaintFrameSink>(
-          gCurrentCompositorProxy->RecordReplayImplThreadTaskRunner()));
   gCurrentCompositorProxy->RecordReplayRepaintPending();
   gCurrentCompositorProxy->BeginMainFrameWithBlocking(std::move(begin_main_frame_state), true);
 
