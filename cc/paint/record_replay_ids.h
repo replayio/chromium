@@ -12,14 +12,13 @@
 
 namespace cc {
 
-// Code that runs with recorded events disallowed, such as Replay's in-process
-// draws while replaying, takes IDs from a range of its own: an ID it took from
-// the shared sequence would shift the IDs recorded threads get later. Gated on
-// what the driver disallows, as Skia's ID ranges are, and counting down from
-// the largest ID as those do.
+// Replay's isolated draws (SkRecordReplayBeginIsolatedDraw) take IDs from a
+// range of their own: an ID they took from the shared sequence would shift the
+// IDs recorded threads get later. Counts down from the largest ID, as Skia's
+// isolated IDs do.
 inline int RecordReplayNextId(base::AtomicSequenceNumber& shared,
                               base::AtomicSequenceNumber& isolated) {
-  if (SkRecordReplayAreEventsDisallowedByDriver()) {
+  if (SkRecordReplayInIsolatedDraw()) {
     return std::numeric_limits<int>::max() - isolated.GetNext();
   }
   return shared.GetNext();

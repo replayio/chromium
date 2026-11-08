@@ -4,13 +4,12 @@
 
 #include "cc/paint/record_replay_image_capture.h"
 
-#include <string.h>
-
 #include <map>
 #include <utility>
 
 #include "base/no_destructor.h"
 #include "base/record_replay.h"
+#include "third_party/skia/include/private/SkRecordReplayDraw.h"
 
 namespace cc {
 
@@ -34,20 +33,6 @@ std::map<CapturedImageKey, CapturedImage>& CapturedImages() {
   return *images;
 }
 
-bool HasPixels(const sk_sp<SkImage>& image, const SkPixmap& pixmap) {
-  SkPixmap pixels;
-  if (!image->peekPixels(&pixels) || pixels.info() != pixmap.info()) {
-    return false;
-  }
-  size_t row_bytes = pixmap.info().minRowBytes();
-  for (int y = 0; y < pixmap.height(); y++) {
-    if (memcmp(pixels.addr(0, y), pixmap.addr(0, y), row_bytes)) {
-      return false;
-    }
-  }
-  return true;
-}
-
 CapturedImageKey KeyFor(const PaintImage& image) {
   return {image.stable_id(),
           image.GetContentIdForFrame(PaintImage::kDefaultFrameIndex)};
@@ -66,14 +51,23 @@ bool RecordReplayCapturingImages() {
 void RecordReplayCaptureImage(const PaintImage& image,
                               const SkPixmap& pixmap) {
   // Copying the pixels emits no recorded events of its own; new images get IDs
-  // from the range for code with events disallowed.
+  // from the range for isolated draws.
   recordreplay::AutoDisallowEvents disallow("RecordReplayCaptureImage");
+  struct ScopedIsolatedDraw {
+    ScopedIsolatedDraw() {
+      SkRecordReplayBeginIsolatedDraw();
+    }
+    ~ScopedIsolatedDraw() {
+      SkRecordReplayEndIsolatedDraw();
+    }
+  } isolated;
   CapturedImage& captured = CapturedImages()[KeyFor(image)];
   captured.captured = true;
-  // Frames mostly send the images the previous frame sent. Keeping the copy
-  // of the same pixels saves copying them again, and draws find what they
-  // cached for the image.
-  if (captured.image && HasPixels(captured.image, pixmap)) {
+  // Frames mostly send the images the previous frame sent. The key's content
+  // ID changes with the pixels of the frame PaintOpWriter serializes (the
+  // default one), so the earlier copy has the same pixels: keeping it saves
+  // copying them again, and draws find what they cached for the image.
+  if (captured.image) {
     return;
   }
   captured.image = SkImage::MakeRasterCopy(pixmap);

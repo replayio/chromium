@@ -70,8 +70,21 @@ static viz::LocalSurfaceId* gSurfaceId;
 // compositor thread.
 static std::atomic<const base::UnguessableToken*> gSurfaceEmbedToken;
 
-// Whether this thread is drawing a frame in-process.
-static thread_local bool gInIsolatedDraw;
+// Code that copies, captures or draws frames in-process runs with recorded
+// events disallowed and in an isolated Skia draw, which takes IDs from ranges
+// of its own and uses caches of its own.
+class ScopedIsolatedDraw {
+ public:
+  explicit ScopedIsolatedDraw(const char* why) : disallow_(why) {
+    SkRecordReplayBeginIsolatedDraw();
+  }
+  ~ScopedIsolatedDraw() {
+    SkRecordReplayEndIsolatedDraw();
+  }
+
+ private:
+  AutoDisallowEvents disallow_;
+};
 
 // Histograms are shared with recorded threads: their samples are sent to the
 // browser and observers of them post tasks. A histogram first used in an
@@ -79,7 +92,7 @@ static thread_local bool gInIsolatedDraw;
 class RecordReplayDrawHistogramChecker : public base::RecordHistogramChecker {
  public:
   bool ShouldRecord(uint32_t histogram_hash) const override {
-    return !gInIsolatedDraw;
+    return !SkRecordReplayInIsolatedDraw();
   }
 };
 
@@ -139,14 +152,16 @@ static base::NoDestructor<std::unique_ptr<RecordReplayFrame>> gSubmittedFrame;
 // Whether a frame was submitted whose paints haven't finished.
 static bool gSubmittedFramePending;
 
-// References the submitted frame's copy shares with the frame: its filters
-// and display lists. They are held, recording and replaying, until the
-// frame's paints finish and the copy is gone, and dropped with events
-// allowed: the copy never holds the last reference, whose release runs
-// destructors that can post Skia cache purges to recorded threads.
+// References the submitted frame's copy shares with the frame: its filters.
+// They are held, recording and replaying, until the frame's paints finish and
+// the copy is gone, and dropped with events allowed: the copy never holds the
+// last reference, whose release runs destructors that can post Skia cache
+// purges to recorded threads. Filters are thus destroyed after the frame is
+// sent, in both modes. Frames this renderer draws in software have no picture
+// quads (PictureLayerImpl appends them only in resourceless software draws),
+// so they share no display lists with the copy.
 struct RecordReplayFrameRefs {
   std::vector<cc::FilterOperations> filters;
-  std::vector<scoped_refptr<cc::DisplayItemList>> display_item_lists;
 };
 static base::NoDestructor<RecordReplayFrameRefs> gSubmittedFrameRefs;
 
@@ -157,12 +172,6 @@ static void HoldFrameRefs(const viz::CompositorFrame& frame) {
     }
     if (!pass->backdrop_filters.IsEmpty()) {
       gSubmittedFrameRefs->filters.push_back(pass->backdrop_filters);
-    }
-    for (const viz::DrawQuad* quad : pass->quad_list) {
-      if (quad->material == viz::DrawQuad::Material::kPictureContent) {
-        gSubmittedFrameRefs->display_item_lists.push_back(
-            viz::PictureDrawQuad::MaterialCast(quad)->display_item_list);
-      }
     }
   }
 }
@@ -309,7 +318,9 @@ void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
     SetDeviceViewportSize(frame.size_in_pixels());
     HoldFrameRefs(frame);
     if (IsReplaying()) {
-      AutoDisallowEvents disallow("RecordReplayCopySubmittedFrame");
+      // Every frame is copied: sending it to the GPU process destroys it
+      // before its paints finish, when it's known whether they need pixels.
+      ScopedIsolatedDraw isolated("RecordReplayCopySubmittedFrame");
       *gSubmittedFrame = CopyFrame(frame);
       cc::RecordReplaySetCapturingImages(HasReferenceFilters(frame));
     }
@@ -332,12 +343,11 @@ void FinishSubmittedCompositorFrame() {
   gCurrentPixmap = nullptr;
 
   if (*gSubmittedFrame) {
-    AutoDisallowEvents disallow("RecordReplayCopySubmittedFrame");
+    ScopedIsolatedDraw isolated("RecordReplayCopySubmittedFrame");
     gSubmittedFrame->reset();
     cc::RecordReplayClearCapturedImages();
   }
   gSubmittedFrameRefs->filters.clear();
-  gSubmittedFrameRefs->display_item_lists.clear();
 }
 
 bool PopulateSkBitmapWithResource(SkBitmap* sk_bitmap, viz::ResourceId resource_id) {
@@ -420,13 +430,9 @@ static char* PaintCallback(const char* mime_type, int jpeg_quality) {
     }
     if (!gCurrentFrameDrawn) {
       gCurrentFrameDrawn = true;
-      AutoDisallowEvents disallow("RecordReplayDrawWhenRequested");
-      SkRecordReplayBeginIsolatedDraw();
-      gInIsolatedDraw = true;
+      ScopedIsolatedDraw isolated("RecordReplayDrawWhenRequested");
       SnapshotReferenceFilters(**gSubmittedFrame);
       DrawFrame(**gSubmittedFrame);
-      gInIsolatedDraw = false;
-      SkRecordReplayEndIsolatedDraw();
     }
   }
 
