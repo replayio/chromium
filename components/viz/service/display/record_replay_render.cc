@@ -431,7 +431,10 @@ static char* PaintCallback(const char* mime_type, int jpeg_quality) {
   }
 
   if (gFinishingWithoutPixels) {
-    return nullptr;
+    // An empty result tells the linker that the paint was finished without
+    // pixels and shows the paint before it, unlike no result, which means its
+    // pixels aren't available. It is freed like any other result.
+    return strdup("");
   }
 
   if (RecordReplayDrawWhenRequested()) {
