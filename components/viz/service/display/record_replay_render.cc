@@ -172,6 +172,7 @@ static void HoldFrameRefs(const viz::CompositorFrame& frame) {
 
 const SkPixmap* gCurrentPixmap;
 static void FinishPaints();
+static void FinishIgnoredFramePaint();
 
 // The compositor drawing a frame (OnDrawSourceFrame), and the one whose frame
 // was submitted last. Only used on the compositor thread.
@@ -188,13 +189,7 @@ static void SetDeviceViewportSize(const gfx::Size& size);
 // pixels, with recorded events disallowed, so that drawing a frame or not
 // never changes the recording's events.
 static bool RecordReplayDrawWhenRequested() {
-  static bool enabled = [] {
-    bool event_free_draw = IsRecordingOrReplaying("event-free-draw");
-    // A frame drawn when requested is finished by its paints, which only
-    // notify-paints reports.
-    CHECK(!event_free_draw || IsRecordingOrReplaying("notify-paints"));
-    return event_free_draw;
-  }();
+  static bool enabled = IsRecordingOrReplaying("event-free-draw");
   return enabled && !HasDivergedFromRecording();
 }
 
@@ -318,6 +313,7 @@ void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
     Print("Ignoring composite to unknown surface %s, expected %s",
           SurfaceIdString(local_surface_id).c_str(),
           SurfaceIdString(*gSurfaceId).c_str());
+    FinishIgnoredFramePaint();
     return;
   }
   gSubmittingCompositor = gDrawingCompositor;
@@ -523,10 +519,12 @@ void InitPaintCallback() {
 
 // The bookmark is handed from the main thread to the compositor thread's
 // OnReadyToCommit while the main thread waits for the commit: commits block
-// it (NonBlockingCommit is disabled, and a repaint's commit is forced to
-// block), and every compositor of the renderer commits from its main thread.
-// A non-blocking commit could let the next main frame replace the bookmark
-// before the compositor thread reads it.
+// it (NonBlockingCommit is disabled by default, and a repaint's commit is
+// forced to block), and every compositor of the renderer commits from its main
+// thread. Enabling NonBlockingCommit, with --enable-features or a field trial,
+// would let the next main frame replace the bookmark before the compositor
+// thread reads it. Our builds fetch no variations seed (unbranded) and the
+// field trial testing config doesn't enable it.
 void OnCommitPaint() {
   // Record/replay state has to be initialized before the first paint
   // starts, as a checkpoint must have been taken.
@@ -618,10 +616,23 @@ static void SetDeviceViewportSize(const gfx::Size& size) {
   gDeviceViewportSize = size;
 }
 
+// A commit drawn by a frame of a surface that isn't drawn was never on screen,
+// so its paint is finished without pixels when that frame is ignored.
+static void FinishIgnoredFramePaint() {
+  size_t last = gLastCommitBookmark.load(std::memory_order_relaxed);
+  if (last && !gLastCommitBookmarkFinished &&
+      gLastCommitCompositor == gDrawingCompositor) {
+    FinishPaintWithoutPixels(last);
+    gLastCommitBookmarkFinished = true;
+  }
+}
+
 static void FinishPaints() {
-  // Only the frames of the compositor that drew the commit finish its paint:
-  // another compositor's commit, whose surface isn't drawn, is finished
-  // without pixels when its compositor draws its next commit or is destroyed.
+  // Only the frames of the compositor that drew the commit finish its paint.
+  // Another compositor's drawn commit was finished without pixels when its
+  // frame was ignored, or, if its draw sent no frame, is when any compositor
+  // draws its next commit or that compositor is destroyed; until then it stays
+  // pending, also through frames of other compositors without a new commit.
   size_t bookmark = gLastCommitBookmark.load();
   if (bookmark && gLastCommitCompositor == gSubmittingCompositor) {
     V8RecordReplayPaintFinished(bookmark);
