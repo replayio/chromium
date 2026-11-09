@@ -108,6 +108,8 @@ sk_sp<SkImage> RecordReplayFindCapturedImage(const PaintImage& image) {
 }
 
 void RecordReplayNoteUnsentFilter(const PaintFilter* filter) {
+  // Like a capture, noting a filter is the send's own work while replaying.
+  RecordReplayScopedIsolatedDraw isolated("RecordReplayNoteUnsentFilter");
   UnsentFilters().insert(filter);
 }
 

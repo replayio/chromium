@@ -170,8 +170,13 @@ static void HoldFrameRefs(const viz::CompositorFrame& frame) {
   }
 }
 
-extern const SkPixmap* gCurrentPixmap;
+const SkPixmap* gCurrentPixmap;
 static void FinishPaints();
+
+// The compositor drawing a frame (OnDrawSourceFrame), and the one whose frame
+// was submitted last. Only used on the compositor thread.
+static const void* gDrawingCompositor;
+static const void* gSubmittingCompositor;
 
 // Whether a paint is being finished without pixels (FinishPaintWithoutPixels).
 static bool gFinishingWithoutPixels;
@@ -183,7 +188,13 @@ static void SetDeviceViewportSize(const gfx::Size& size);
 // pixels, with recorded events disallowed, so that drawing a frame or not
 // never changes the recording's events.
 static bool RecordReplayDrawWhenRequested() {
-  static bool enabled = IsRecordingOrReplaying("event-free-draw");
+  static bool enabled = [] {
+    bool event_free_draw = IsRecordingOrReplaying("event-free-draw");
+    // A frame drawn when requested is finished by its paints, which only
+    // notify-paints reports.
+    CHECK(!event_free_draw || IsRecordingOrReplaying("notify-paints"));
+    return event_free_draw;
+  }();
   return enabled && !HasDivergedFromRecording();
 }
 
@@ -309,6 +320,7 @@ void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
           SurfaceIdString(*gSurfaceId).c_str());
     return;
   }
+  gSubmittingCompositor = gDrawingCompositor;
 
   if (RecordReplayDrawWhenRequested()) {
     // The frame's paints finish once it has been sent to the GPU process
@@ -391,8 +403,6 @@ bool PopulateSkBitmapWithResource(SkBitmap* sk_bitmap, viz::ResourceId resource_
 extern "C" size_t V8RecordReplayPaintStart();
 extern "C" void V8RecordReplayPaintFinished(size_t bookmark);
 extern "C" void V8RecordReplaySetPaintCallback(char* (*callback)(const char*, int));
-
-const SkPixmap* gCurrentPixmap;
 
 static char* EncodeBitmapContents(const char* mime_type, int jpeg_quality) {
   if (!gCurrentPixmap) {
@@ -511,6 +521,12 @@ void InitPaintCallback() {
   }
 }
 
+// The bookmark is handed from the main thread to the compositor thread's
+// OnReadyToCommit while the main thread waits for the commit: commits block
+// it (NonBlockingCommit is disabled, and a repaint's commit is forced to
+// block), and every compositor of the renderer commits from its main thread.
+// A non-blocking commit could let the next main frame replace the bookmark
+// before the compositor thread reads it.
 void OnCommitPaint() {
   // Record/replay state has to be initialized before the first paint
   // starts, as a checkpoint must have been taken.
@@ -529,6 +545,7 @@ void OnReadyToCommit(const void* compositor, int source_frame_number) {
 }
 
 void OnDrawSourceFrame(const void* compositor, int source_frame_number) {
+  gDrawingCompositor = compositor;
   size_t bookmark = 0;
   for (auto it = gPendingCommitPaints->begin(); it != gPendingCommitPaints->end();) {
     if (it->compositor != compositor ||
@@ -602,8 +619,11 @@ static void SetDeviceViewportSize(const gfx::Size& size) {
 }
 
 static void FinishPaints() {
+  // Only the frames of the compositor that drew the commit finish its paint:
+  // another compositor's commit, whose surface isn't drawn, is finished
+  // without pixels when its compositor draws its next commit or is destroyed.
   size_t bookmark = gLastCommitBookmark.load();
-  if (bookmark) {
+  if (bookmark && gLastCommitCompositor == gSubmittingCompositor) {
     V8RecordReplayPaintFinished(bookmark);
     gLastCommitBookmarkFinished = true;
   }
