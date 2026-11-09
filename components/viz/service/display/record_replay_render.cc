@@ -483,8 +483,10 @@ static std::atomic<size_t> gCurrentPaintBookmark;
 // once a frame draws that commit's tree.
 static std::atomic<size_t> gLastCommitBookmark;
 
-// Whether a sent frame finished |gLastCommitBookmark|'s paint, and the
-// compositor whose frame drew its commit. Only used on the compositor thread.
+// Whether |gLastCommitBookmark|'s paint was finished, by a sent frame, or
+// without pixels when its frame was ignored or its compositor destroyed, and
+// the compositor whose frame drew its commit. Only used on the compositor
+// thread.
 static bool gLastCommitBookmarkFinished = true;
 static const void* gLastCommitCompositor;
 
@@ -633,7 +635,7 @@ static void FinishPaints() {
   // frame was ignored, or, if its draw sent no frame, is when any compositor
   // draws its next commit or that compositor is destroyed; until then it stays
   // pending, also through frames of other compositors without a new commit.
-  // Each paint is finished once, by the first frame that shows it.
+  // Each paint is finished once, by the first sent frame.
   size_t bookmark = gLastCommitBookmark.load(std::memory_order_relaxed);
   if (bookmark && !gLastCommitBookmarkFinished &&
       gLastCommitCompositor == gSubmittingCompositor) {
