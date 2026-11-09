@@ -633,8 +633,10 @@ static void FinishPaints() {
   // frame was ignored, or, if its draw sent no frame, is when any compositor
   // draws its next commit or that compositor is destroyed; until then it stays
   // pending, also through frames of other compositors without a new commit.
-  size_t bookmark = gLastCommitBookmark.load();
-  if (bookmark && gLastCommitCompositor == gSubmittingCompositor) {
+  // Each paint is finished once, by the first frame that shows it.
+  size_t bookmark = gLastCommitBookmark.load(std::memory_order_relaxed);
+  if (bookmark && !gLastCommitBookmarkFinished &&
+      gLastCommitCompositor == gSubmittingCompositor) {
     V8RecordReplayPaintFinished(bookmark);
     gLastCommitBookmarkFinished = true;
   }
