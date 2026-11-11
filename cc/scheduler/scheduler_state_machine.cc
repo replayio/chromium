@@ -299,8 +299,11 @@ bool SchedulerStateMachine::PendingDrawsShouldBeAborted() const {
   // since activation of the pending tree is blocked by drawing of the
   // active tree and the main thread might be blocked on activation of
   // the most recent commit.
+  //
+  // [RecordReplay] A repaint draws in this process, so it doesn't need begin
+  // frames, which the browser can have paused, e.g. when the recording ended.
   return is_layer_tree_frame_sink_lost || !can_draw_ || !visible_ ||
-         begin_frame_source_paused_;
+         (begin_frame_source_paused_ && !replay_force_draw_);
 }
 
 bool SchedulerStateMachine::ShouldAbortCurrentFrame() const {
@@ -434,9 +437,12 @@ bool SchedulerStateMachine::ShouldActivateSyncTree() const {
   // may lead to bad scheduling.
   //
   // [RecordReplay] A repaint draws the newest tree, so a pending tree can be
-  // activated over an active tree that was never drawn.
+  // activated over an active tree that was never drawn. The repaint's commit
+  // waits for that activation, as no frame draws the active tree once the
+  // replay has diverged.
   if (!settings_.using_synchronous_renderer_compositor &&
-      active_tree_needs_first_draw_ && !replay_force_draw_) {
+      active_tree_needs_first_draw_ && !replay_force_draw_ &&
+      !replay_repaint_pending_) {
     return false;
   }
 

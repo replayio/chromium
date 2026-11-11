@@ -165,6 +165,13 @@ class CC_EXPORT Scheduler : public viz::BeginFrameObserverBase {
 
   void SetNeedsRedraw();
 
+  void RecordReplayRepaintPending();
+  // Whether the scheduler asked for a LayerTreeFrameSink that hasn't been
+  // initialized.
+  bool RecordReplayCreatingFrameSink() const {
+    return state_machine_.RecordReplayCreatingFrameSink();
+  }
+
   void SetNeedsPrepareTiles();
 
   // Requests a pending tree should be created to invalidate content on the impl

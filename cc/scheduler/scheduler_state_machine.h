@@ -375,7 +375,13 @@ class CC_EXPORT SchedulerStateMachine {
   bool ClearReplayForceDraw() {
     bool result = replay_force_draw_; 
     replay_force_draw_ = false;
+    replay_repaint_pending_ = false;
     return result;
+  }
+
+  void SetReplayRepaintPending() { replay_repaint_pending_ = true; }
+  bool RecordReplayCreatingFrameSink() const {
+    return layer_tree_frame_sink_state_ == LayerTreeFrameSinkState::CREATING;
   }
 
  protected:
@@ -519,6 +525,9 @@ class CC_EXPORT SchedulerStateMachine {
   int aborted_begin_main_frame_count_ = 0;
 
   bool replay_force_draw_ = false;
+
+  // A repaint has started and its commit is coming.
+  bool replay_repaint_pending_ = false;
 };
 
 }  // namespace cc

@@ -92,7 +92,13 @@ void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
   }
 
   // Surfaces are allowed to have different parent sequence numbers from the
-  // original one.
+  // original one, and newer child sequence numbers: the widget allocates one
+  // whenever its frame sink is recreated, e.g. after the GPU process restarts.
+  if (gSurfaceId->embed_token() == local_surface_id.embed_token() &&
+      local_surface_id.child_sequence_number() >
+          gSurfaceId->child_sequence_number()) {
+    *gSurfaceId = local_surface_id;
+  }
   if (gSurfaceId->child_sequence_number() != local_surface_id.child_sequence_number() ||
       gSurfaceId->embed_token() != local_surface_id.embed_token()) {
     Print("Ignoring composite to unknown surface %s, expected %s",
@@ -312,6 +318,10 @@ static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
   begin_main_frame_state->mutator_events = std::make_unique<cc::AnimationEvents>();
   begin_main_frame_state->commit_data = std::make_unique<cc::CompositorCommitData>();
 
+  // The pause can leave a frame's tree pending behind one that was never
+  // drawn, so the compositor has to be told about the repaint before its
+  // commit, which waits for the pending tree.
+  gCurrentCompositorProxy->RecordReplayRepaintPending();
   gCurrentCompositorProxy->BeginMainFrameWithBlocking(std::move(begin_main_frame_state), true);
 
   // A draw that an earlier repaint which timed out still forces doesn't
