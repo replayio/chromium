@@ -1596,6 +1596,19 @@ void SchedulerStateMachine::DidLoseLayerTreeFrameSink() {
   needs_redraw_ = false;
 }
 
+void SchedulerStateMachine::RecordReplayReuseLostLayerTreeFrameSink() {
+  // Only a frame sink whose replacement hasn't been asked for is reused, which
+  // is the case while a BeginMainFrame is outstanding. One that is being
+  // replaced (CREATING) is left alone, and a repaint then is no better off
+  // than before.
+  if (layer_tree_frame_sink_state_ != LayerTreeFrameSinkState::NONE)
+    return;
+  layer_tree_frame_sink_state_ = LayerTreeFrameSinkState::ACTIVE;
+  // A closing tab's begin frames are paused when its frame sink is lost, and
+  // a repaint doesn't need them.
+  begin_frame_source_paused_ = false;
+}
+
 bool SchedulerStateMachine::NotifyReadyToActivate() {
   // It is not valid for clients to try and activate the pending tree whilst
   // paint worklets are still being processed; the pending tree *must* be fully
