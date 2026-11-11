@@ -346,10 +346,12 @@ void ProxyImpl::NotifyReadyToCommitOnImpl(
     // tab closes, and the scheduler then drops the repaint's frame instead of
     // drawing it. No new frame sink comes after diverging: making one needs
     // the main thread, which waits for the repaint. A lost frame sink stays
-    // with the compositor until it's replaced and still submits frames to
-    // recordreplay::SubmitCompositorFrame, which is all a repaint needs, so
-    // the repaint commits to it and draws with it. This doesn't help a
-    // compositor that has no frame sink at all.
+    // with the compositor until it's replaced or released and still submits
+    // frames to recordreplay::SubmitCompositorFrame, which is all a repaint
+    // needs, so the repaint commits to it and draws with it. This doesn't
+    // help a compositor that has no frame sink at all, and a repaint whose
+    // commit creates a UI resource comes back empty: LayerTreeHostImpl counts
+    // it as evicted while its frame sink is lost and can't draw.
     if (recordreplay::HasDivergedFromRecording() && host_impl_ &&
         host_impl_->layer_tree_frame_sink()) {
       scheduler_->RecordReplayReuseLostLayerTreeFrameSink();

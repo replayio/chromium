@@ -1597,8 +1597,8 @@ void SchedulerStateMachine::DidLoseLayerTreeFrameSink() {
 }
 
 void SchedulerStateMachine::RecordReplayReuseLostLayerTreeFrameSink() {
-  // Only a frame sink whose replacement hasn't been asked for is reused, which
-  // is the case while a BeginMainFrame is outstanding. One that is being
+  // Only a frame sink whose replacement hasn't been asked for is reused, e.g.
+  // one lost while a BeginMainFrame is outstanding. One that is being
   // replaced (CREATING) is left alone, and a repaint then is no better off
   // than before.
   if (layer_tree_frame_sink_state_ != LayerTreeFrameSinkState::NONE)
