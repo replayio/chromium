@@ -184,7 +184,7 @@ Profiler* ProfilerGroup::CreateProfiler(ScriptState* script_state,
     case v8::CpuProfilingStatus::kErrorNotSupported: {
       exception_state.ThrowDOMException(
           DOMExceptionCode::kNotSupportedError,
-          "JS profiling is not supported when recording.");
+          "JS profiling is not supported in Replay-recorded processes.");
       return nullptr;
     }
     case v8::CpuProfilingStatus::kAlreadyStarted: {
