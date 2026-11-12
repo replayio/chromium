@@ -2069,6 +2069,7 @@ static void HandleNetworkPrepareRequestEvent(const base::DictionaryValue& info) 
   CopyDictionaryProperty(event, info, "requestMethod");
   CopyDictionaryProperty(event, info, "requestCause");
   CopyDictionaryProperty(event, info, "initiator");
+  CopyDictionaryProperty(event, info, "replayInternal");
   if (redirect_source_id) {
     event.SetString("redirectSourceId", *redirect_source_id);
   }
@@ -2106,6 +2107,7 @@ static void HandleNetworkNavigationRedirectEvent(const base::DictionaryValue& in
   CopyDictionaryProperty(redirected_info, info, "requestMethod");
   CopyDictionaryProperty(redirected_info, previous_info, "requestCause");
   CopyDictionaryProperty(redirected_info, previous_info, "initiator");
+  CopyDictionaryProperty(redirected_info, previous_info, "replayInternal");
 
   base::DictionaryValue event;
   event.SetString("kind", "request");
@@ -2114,6 +2116,7 @@ static void HandleNetworkNavigationRedirectEvent(const base::DictionaryValue& in
   CopyDictionaryProperty(event, redirected_info, "requestMethod");
   CopyDictionaryProperty(event, redirected_info, "requestCause");
   CopyDictionaryProperty(event, redirected_info, "initiator");
+  CopyDictionaryProperty(event, redirected_info, "replayInternal");
   event.SetString("redirectSourceId", previous_request_id);
   EmitNetworkRequestEvent(redirected_request_id, event);
 
