@@ -226,6 +226,7 @@ class CC_EXPORT Scheduler : public viz::BeginFrameObserverBase {
                                  const viz::FrameTimingDetails& details);
 
   void DidLoseLayerTreeFrameSink();
+  void RecordReplayReuseLostLayerTreeFrameSink();
   void DidCreateAndInitializeLayerTreeFrameSink();
 
   // Tests do not want to shut down until all possible BeginMainFrames have

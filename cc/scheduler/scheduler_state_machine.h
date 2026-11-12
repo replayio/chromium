@@ -326,6 +326,7 @@ class CC_EXPORT SchedulerStateMachine {
 
   void DidPrepareTiles();
   void DidLoseLayerTreeFrameSink();
+  void RecordReplayReuseLostLayerTreeFrameSink();
   void DidCreateAndInitializeLayerTreeFrameSink();
   bool HasInitializedLayerTreeFrameSink() const;
 
