@@ -53,10 +53,7 @@ struct ReplayNetworkRequestState {
   size_t redirect_count = 0;
   bool has_form_body = false;
   std::string form_body;
-  // Initiated by Replay's own scripts (e.g. the sourcemap handler): not app
-  // traffic. All network events are still emitted: they are the backend's
-  // sourcemap source. The "replayInternal" mark excludes the request from
-  // request listings.
+  // Initiated by a Replay-injected script: not app traffic.
   bool replay_internal = false;
 };
 
@@ -83,7 +80,6 @@ static uint64_t RecordReplayNetworkInspectorId(uint64_t inspector_id) {
   return RecordReplayValue("NetworkInspectorId", inspector_id);
 }
 
-// `identifier` is the recorded RecordReplayNetworkInspectorId() value.
 static std::string NetworkRequestIdForIdentifier(uint64_t identifier) {
   char request_id[64];
   snprintf(request_id, 64, "%d.%lu", (int) base::GetCurrentProcId(),
@@ -114,15 +110,13 @@ static void RecordReplayNetworkClearRequestState(uint64_t inspector_id) {
   GetReplayNetworkRequestStates().erase(identifier);
 }
 
-// `identifier` is the recorded RecordReplayNetworkInspectorId() value.
 static bool IsReplayInternalRequest(uint64_t identifier) {
   auto& request_states = GetReplayNetworkRequestStates();
   auto it = request_states.find(identifier);
   return it != request_states.end() && it->second.replay_internal;
 }
 
-// Whether the topmost named JS frame belongs to one of Replay's injected
-// scripts, which run with "record-replay-" URLs (record_replay_interface.cc).
+// Whether the topmost named JS frame is a Replay-injected script.
 static bool IsInReplayScriptFrame() {
   v8::Isolate* isolate = v8::Isolate::GetCurrent();
   return isolate && GetCurrentScriptUrl(isolate).StartsWith("record-replay-");
