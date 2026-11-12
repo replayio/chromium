@@ -53,8 +53,10 @@ struct ReplayNetworkRequestState {
   size_t redirect_count = 0;
   bool has_form_body = false;
   std::string form_body;
-  // Initiated by Replay's own scripts: not app traffic, reported with the
-  // "replayInternal" mark.
+  // Initiated by Replay's own scripts (e.g. the sourcemap handler): not app
+  // traffic. All network events are still emitted: they are the backend's
+  // sourcemap source. The "replayInternal" mark excludes the request from
+  // request listings.
   bool replay_internal = false;
 };
 
@@ -81,9 +83,8 @@ static uint64_t RecordReplayNetworkInspectorId(uint64_t inspector_id) {
   return RecordReplayValue("NetworkInspectorId", inspector_id);
 }
 
-static std::string RecordReplayNetworkRequestId(uint64_t inspector_id) {
-  const uint64_t identifier = RecordReplayNetworkInspectorId(inspector_id);
-
+// `identifier` is the recorded RecordReplayNetworkInspectorId() value.
+static std::string NetworkRequestIdForIdentifier(uint64_t identifier) {
   char request_id[64];
   snprintf(request_id, 64, "%d.%lu", (int) base::GetCurrentProcId(),
            (unsigned long)identifier);
@@ -98,6 +99,11 @@ static std::string RecordReplayNetworkRequestId(uint64_t inspector_id) {
   return root_request_id + ":" + std::to_string(it->second.redirect_count);
 }
 
+static std::string RecordReplayNetworkRequestId(uint64_t inspector_id) {
+  return NetworkRequestIdForIdentifier(
+      RecordReplayNetworkInspectorId(inspector_id));
+}
+
 static void RecordReplayNetworkIncrementRedirectCount(uint64_t inspector_id) {
   const uint64_t identifier = RecordReplayNetworkInspectorId(inspector_id);
   GetReplayNetworkRequestStates()[identifier].redirect_count++;
@@ -108,8 +114,8 @@ static void RecordReplayNetworkClearRequestState(uint64_t inspector_id) {
   GetReplayNetworkRequestStates().erase(identifier);
 }
 
-static bool IsReplayInternalRequest(uint64_t inspector_id) {
-  const uint64_t identifier = RecordReplayNetworkInspectorId(inspector_id);
+// `identifier` is the recorded RecordReplayNetworkInspectorId() value.
+static bool IsReplayInternalRequest(uint64_t identifier) {
   auto& request_states = GetReplayNetworkRequestStates();
   auto it = request_states.find(identifier);
   return it != request_states.end() && it->second.replay_internal;
@@ -284,7 +290,6 @@ void OnNetworkPrepareRequest(const blink::Document* document,
   if (redirect_response.IsNull() && IsInReplayScriptFrame()) {
     request_state.replay_internal = true;
   }
-  const bool replay_internal = request_state.replay_internal;
 
   // We must allow user agent scripts when taking a new bookmark.
   blink::ScriptForbiddenScope::AllowUserAgentScript allow_script;
@@ -292,7 +297,7 @@ void OnNetworkPrepareRequest(const blink::Document* document,
 
   // Capture the record replay bookmark for the network request here,
   // where the devtools stack id is taken.
-  uint64_t bookmark = replay_internal ? 0 : NewBookmark();
+  uint64_t bookmark = request_state.replay_internal ? 0 : NewBookmark();
 
   std::string redirect_source_id;
   if (!redirect_response.IsNull()) {
@@ -301,7 +306,8 @@ void OnNetworkPrepareRequest(const blink::Document* document,
   }
   std::string requestId = RecordReplayNetworkRequestId(request.InspectorId());
 
-  if (recordreplay::DependencyGraphEnabled() && !replay_internal) {
+  if (recordreplay::DependencyGraphEnabled() &&
+      !request_state.replay_internal) {
     base::Value::Dict info;
     info.Set("kind", "networkRequest");
     info.Set("requestId", requestId);
@@ -333,7 +339,7 @@ void OnNetworkPrepareRequest(const blink::Document* document,
   if (!redirect_response.IsNull()) {
     dict.SetString("redirectSourceId", redirect_source_id);
   }
-  if (replay_internal) {
+  if (request_state.replay_internal) {
     dict.SetBoolean("replayInternal", true);
   }
 
@@ -449,12 +455,11 @@ void OnNetworkReceiveData(uint64_t inspector_id, const char* data, int length) {
   }
 
   blink::ScriptForbiddenScope::AllowUserAgentScript allow_script;
-  std::string requestId = RecordReplayNetworkRequestId(inspector_id);
-  // Unconditional: it replays a recorded value, so it must not depend on the
-  // replay-only DependencyGraphEnabled().
-  const bool replay_internal = IsReplayInternalRequest(inspector_id);
+  const uint64_t identifier = RecordReplayNetworkInspectorId(inspector_id);
+  std::string requestId = NetworkRequestIdForIdentifier(identifier);
 
-  if (recordreplay::DependencyGraphEnabled() && !replay_internal) {
+  if (recordreplay::DependencyGraphEnabled() &&
+      !IsReplayInternalRequest(identifier)) {
     base::Value::Dict info;
     info.Set("kind", "networkReceiveData");
     info.Set("requestId", requestId);
@@ -487,12 +492,11 @@ void OnNetworkFinishLoading(uint64_t inspector_id,
   }
 
   blink::ScriptForbiddenScope::AllowUserAgentScript allow_script;
-  std::string requestId = RecordReplayNetworkRequestId(inspector_id);
-  // Unconditional: it replays a recorded value, so it must not depend on the
-  // replay-only DependencyGraphEnabled().
-  const bool replay_internal = IsReplayInternalRequest(inspector_id);
+  const uint64_t identifier = RecordReplayNetworkInspectorId(inspector_id);
+  std::string requestId = NetworkRequestIdForIdentifier(identifier);
 
-  if (recordreplay::DependencyGraphEnabled() && !replay_internal) {
+  if (recordreplay::DependencyGraphEnabled() &&
+      !IsReplayInternalRequest(identifier)) {
     base::Value::Dict info;
     info.Set("kind", "networkFinishLoading");
     info.Set("requestId", requestId);
@@ -515,12 +519,11 @@ void OnNetworkFail(uint64_t inspector_id, const blink::WebURLError& error) {
   }
 
   blink::ScriptForbiddenScope::AllowUserAgentScript allow_script;
-  std::string requestId = RecordReplayNetworkRequestId(inspector_id);
-  // Unconditional: it replays a recorded value, so it must not depend on the
-  // replay-only DependencyGraphEnabled().
-  const bool replay_internal = IsReplayInternalRequest(inspector_id);
+  const uint64_t identifier = RecordReplayNetworkInspectorId(inspector_id);
+  std::string requestId = NetworkRequestIdForIdentifier(identifier);
 
-  if (recordreplay::DependencyGraphEnabled() && !replay_internal) {
+  if (recordreplay::DependencyGraphEnabled() &&
+      !IsReplayInternalRequest(identifier)) {
     base::Value::Dict info;
     info.Set("kind", "networkFail");
     info.Set("requestId", requestId);
