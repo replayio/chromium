@@ -284,14 +284,38 @@ function buildImageOfCheckout() {
 // produced a debug build without remote execution, and the recovery had to be
 // changed to preserve the file instead (replayio/chromium#1544). A wiped out
 // dir now comes back correctly configured.
+//
+// The build agent's args.gn is not an import but a verbatim copy of
+// replay_build_scripts/linux_args.gn, which means the file in this repository
+// is decorative there: changing it changes nothing a build does. A copy that
+// still matches the repository's is replaced with the import, which resolves to
+// exactly the same arguments and makes the repository the source of them from
+// then on. An args.gn that says anything else is somebody's own and is left
+// alone.
 function prepareOutDir() {
   mkdirp(outdir);
   const argsFile = path.join(outdir, "args.gn");
+  const args = `replay_build_scripts/${argsName()}`;
+  const line = `import("//${args}")\n`;
   if (!fs.existsSync(argsFile)) {
-    const args = `replay_build_scripts/${argsName()}`;
     console.log(`Writing ${argsFile} importing //${args}`);
-    fs.writeFileSync(argsFile, `import("//${args}")\n`);
+    fs.writeFileSync(argsFile, line);
+  } else if (isCopyOf(argsFile, path.join(__dirname, args))) {
+    console.log(`Replacing the copy in ${argsFile} with //${args}`);
+    fs.writeFileSync(argsFile, line);
   }
+}
+
+function isCopyOf(file, original) {
+  function read(f) {
+    try {
+      return fs.readFileSync(f, "utf8").replace(/\s+$/, "");
+    } catch (e) {
+      return null;
+    }
+  }
+  const have = read(file);
+  return have !== null && have === read(original);
 }
 
 // The build image's node is 8.10 (bionic), so: no fs.mkdirSync recursive
