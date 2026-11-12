@@ -49,6 +49,32 @@ gclient solution and its caches, the backend checkout, and the container's
 so every path gn, ninja and reclient bake into their state is the same for every
 key and the same as it was before this change.
 
+## Disk
+
+A Chromium checkout here is 104 GB: 58 GB of the fork's git objects, 14 GB in
+the 140 repositories DEPS pins, and ~31 GB of working files. Two of the three
+are git objects, which are append-only and identical whatever version checked
+them out, so a second version shares them rather than copying:
+
+- The fork's history comes from a local `git clone`, which hardlinks the pack
+  files: 58 GB becomes 0.76 s and about 2 MB (measured). `prepare --from`
+  hardlinks every `.git` the same way, with `rsync --link-dest`, while copying
+  working files for real -- a gclient hook that overwrites one in place must not
+  write into the version it was copied from.
+- The DEPS repositories come from gclient's own mirror of them,
+  `<checkouts dir>/.git-cache` (`GIT_CACHE_PATH`), which every version's sync
+  populates and clones from. It belongs to no key, and `wipe` cannot touch it:
+  a key may not begin with a dot.
+
+So a second milestone costs its working files and its build outputs, around
+35-45 GB, not another 104 GB. Hardlinked objects also keep the versions
+independent, which `--reference`/alternates would not: deleting one checkout
+leaves the others' objects alone, so `wipe` stays `rm -rf` of one directory.
+
+Not shared on purpose: the working files (they differ per milestone, and a build
+or a hook writes in them) and `out/Release`, which is the state this whole
+arrangement exists to keep apart.
+
 ## Using it
 
 ```sh

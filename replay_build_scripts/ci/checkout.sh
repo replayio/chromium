@@ -20,6 +20,13 @@
 #     home/              HOME for the build container
 #     .replay-checkout    this scheme's stamp: key, scheme, when, from what
 #
+# Next to the keys, and belonging to none of them, is .git-cache: gclient's
+# mirrors of the repositories DEPS pins, which every version's checkout clones
+# its dependencies from. It holds git objects, which are append-only and say
+# nothing about a version, so sharing it costs nothing in isolation and saves
+# most of what a checkout would otherwise take (see prepare). `wipe` cannot
+# touch it -- a key may not begin with a dot.
+#
 # <checkouts dir> is $CHROMIUM_CHECKOUTS_DIR, or ~/chromium-checkouts. The
 # container mounts <key>/ at /chromium whatever the key is, so every path a
 # build sees -- and every path gn, ninja and reclient bake into their state --
@@ -27,6 +34,7 @@
 #
 #   checkout.sh key                 the key for the tree this script came from
 #   checkout.sh root [key]          where that key's state lives
+#   checkout.sh git-cache           where the shared DEPS mirrors live
 #   checkout.sh require [key]       fail unless that key is prepared
 #   checkout.sh sync                fetch and reset this key's tree to the build's
 #                                   commit, and its DEPS'd Replay forks with it
@@ -50,6 +58,15 @@ repo=$(dirname "$(dirname "$dir")")
 
 checkouts_dir() {
   echo "${CHROMIUM_CHECKOUTS_DIR:-$HOME/chromium-checkouts}"
+}
+
+# gclient's mirrors of the DEPS repositories, shared by every version.
+git_cache() {
+  echo "${GIT_CACHE_PATH:-$(checkouts_dir)/.git-cache}"
+}
+
+fork_url() {
+  echo "${CHROMIUM_FORK_URL:-git@github.com:replayio/chromium.git}"
 }
 
 # The checkout every build shared before this existed, and still shares with
@@ -97,6 +114,23 @@ key() {
 
 root() {
   echo "$(checkouts_dir)/${1:-$(key)}"
+}
+
+# Any checkout that already has the fork's history, to clone it from. Objects
+# are objects whatever version checked them out, and a local clone hardlinks
+# them.
+nearest_src() {
+  local d src
+  d=$(checkouts_dir)
+  for src in "$d"/*/src; do
+    if [ -d "$src/.git" ]; then
+      echo "$src"
+      return
+    fi
+  done
+  if [ -d "$(legacy_checkout)/src/.git" ]; then
+    echo "$(legacy_checkout)/src"
+  fi
 }
 
 stamp_file() {
@@ -331,15 +365,34 @@ prepare() {
       echo "checkout: '$from' is not prepared" >&2
       exit 1
     fi
-    echo "--- copying $src -> $r (without build outputs)"
-    # Everything but the out dirs: the deps of a neighbouring milestone are a
-    # far better starting point for gclient sync than an empty directory, and
-    # another version's build outputs are exactly what must not come along.
-    rsync -a --delete --exclude '/src/out' --exclude '/home' --exclude '/.replay-checkout' \
+    # Two passes, because the two halves of a checkout can be shared to very
+    # different extents. The working files are copied: a gclient hook that
+    # overwrites one in place would otherwise write into the version this was
+    # copied from. Every .git is hardlinked instead (--link-dest), because git
+    # only ever adds pack files and never rewrites one, so two checkouts can
+    # share the same inodes safely -- which is what makes this cheap: the
+    # fork's object store alone is 58 GB, and hardlinking it costs megabytes.
+    echo "--- copying $src -> $r: working files"
+    rsync -a --delete --exclude '.git/' \
+      --exclude '/src/out' --exclude '/home' --exclude '/.replay-checkout' \
+      "$src/" "$r/"
+    echo "--- copying $src -> $r: git objects, hardlinked"
+    rsync -a --link-dest="$src" --include '*/' --include '.git/***' --exclude '*' \
       "$src/" "$r/"
   else
-    echo "--- cloning replayio/chromium into $r/src"
-    git clone git@github.com:replayio/chromium.git "$r/src"
+    # A local clone hardlinks the pack files, so taking the fork's history from
+    # a checkout that already has it costs about a second and a couple of
+    # megabytes instead of 58 GB and a fetch of the whole repository.
+    local near
+    near=$(nearest_src)
+    if [ -n "$near" ]; then
+      echo "--- cloning the fork from $near (hardlinked objects)"
+      git clone -q --no-checkout "$near" "$r/src"
+      git -C "$r/src" remote set-url origin "$(fork_url)"
+    else
+      echo "--- cloning the fork from $(fork_url)"
+      git clone -q --no-checkout "$(fork_url)" "$r/src"
+    fi
     cat > "$r/.gclient" <<'EOF'
 solutions = [
 {
@@ -367,10 +420,15 @@ EOF
 checkout: '$k' is at $r, with the fork checked out but its DEPS not synced.
 
 Sync its DEPS in the build image, so depot_tools is the pinned one and the
-generated reclient configs get the paths a build runs at:
+generated reclient configs get the paths a build runs at. GIT_CACHE_PATH is
+gclient's mirror of every DEPS repository, shared by all versions: with it, the
+140 repositories come from disk rather than the network, and each checkout's
+copy of them is a clone of the mirror rather than another 14 GB of objects.
 
   $r/src/replay_build_scripts/ci/build-in-container.sh --root $r -- \\
-    bash -c 'cd /chromium && gclient sync -D --with_branch_heads && gclient runhooks'
+    bash -c 'cd /chromium && GIT_CACHE_PATH=/chromium-git-cache gclient sync -D --with_branch_heads && gclient runhooks'
+
+(build-in-container.sh mounts $(git_cache) there.)
 
 This fork disabled per-build gclient sync ("may be too old for gclient sync to
 work properly", common.mjs), so for a milestone nobody has synced here before,
@@ -403,6 +461,7 @@ wipe_out() {
 
 case ${1:-} in
   key) key ;;
+  git-cache) git_cache ;;
   root) shift; root "${1:-}" ;;
   require) shift; require "${1:-}" ;;
   sync) sync ;;

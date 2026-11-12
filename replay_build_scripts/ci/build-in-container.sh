@@ -34,6 +34,8 @@ if [ ${#cmd[@]} -eq 0 ]; then
   cmd=(node build.js)
 fi
 mkdir -p "$root/home"
+cache=$("$dir/checkout.sh" git-cache)
+mkdir -p "$cache"
 
 image=$("$dir/build-image.sh" ref)
 "$dir/build-image.sh" ensure >&2
@@ -51,6 +53,11 @@ args=(
   run --name "$name" --rm --init
   -v "$root:/chromium"
   -w /chromium/src
+  # gclient's shared mirrors of the DEPS repositories, which a sync in here
+  # clones the dependencies from (GIT_CACHE_PATH=/chromium-git-cache). It holds
+  # nothing version-specific, so every key sees the same one.
+  -v "$cache:/chromium-git-cache"
+  -e GIT_CACHE_PATH=/chromium-git-cache
   # The agent and the image's ubuntu are both uid 1000; passing it explicitly
   # means the files a build writes belong to whoever ran it either way.
   --user "$(id -u):$(id -g)"
