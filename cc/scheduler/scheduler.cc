@@ -292,6 +292,11 @@ void Scheduler::DidLoseLayerTreeFrameSink() {
   ProcessScheduledActions();
 }
 
+void Scheduler::RecordReplayReuseLostLayerTreeFrameSink() {
+  state_machine_.RecordReplayReuseLostLayerTreeFrameSink();
+  UpdateCompositorTimingHistoryRecordingEnabled();
+}
+
 void Scheduler::DidCreateAndInitializeLayerTreeFrameSink() {
   {
     TRACE_EVENT0("cc", "Scheduler::DidCreateAndInitializeLayerTreeFrameSink");
@@ -397,6 +402,12 @@ void Scheduler::PostPendingBeginFrameTask() {
 }
 
 void Scheduler::OnBeginFrameSourcePausedChanged(bool paused) {
+  // [RecordReplay] A repaint draws in this process and doesn't need the
+  // browser's begin frames. The begin frame source of a lost frame sink that a
+  // repaint reuses repeats its pause when the scheduler starts observing it
+  // again.
+  if (paused && recordreplay::HasDivergedFromRecording())
+    return;
   if (state_machine_.begin_frame_source_paused() == paused)
     return;
   {
