@@ -23,7 +23,7 @@ steps:
       CI: "1"
     command: |
       set -euo pipefail
-      PIN=51e2dfe4c6141964e817838fb0ddaeb446f32d49
+      PIN=b32624af2c233d4b6aa432e4fc4aa7a9390540ea
       test -n "$$PIN"
       WORKDIR=$$(mktemp -d "/tmp/chromium-recording-$${BUILDKITE_JOB_ID}.XXXXXX")
       # Short path: unix socket paths under TMPDIR are length-limited.
