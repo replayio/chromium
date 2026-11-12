@@ -5,6 +5,7 @@
 #include "components/viz/service/display/record_replay_render.h"
 
 #include "base/base64.h"
+#include "base/containers/contains.h"
 #include "base/no_destructor.h"
 #include "base/record_replay.h"
 #include "base/record_replay_paint_surface.h"
@@ -53,6 +54,11 @@ static viz::SoftwareRenderer* gRenderer;
 // See https://linear.app/replay/issue/RUN-2400
 static viz::LocalSurfaceId* gSurfaceId;
 
+// Embed token of `gSurfaceId`, which identifies the window owning the paint
+// surface, for repaints on the main thread: `gSurfaceId` belongs to the
+// compositor thread.
+static std::atomic<const base::UnguessableToken*> gSurfaceEmbedToken;
+
 static void InitializeRenderer() {
   std::unique_ptr<viz::SoftwareOutputDevice> output_device =
       std::make_unique<viz::SoftwareOutputDevice>();
@@ -88,6 +94,8 @@ void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
 
   if (!gSurfaceId) {
     gSurfaceId = new viz::LocalSurfaceId(local_surface_id);
+    gSurfaceEmbedToken =
+        new base::UnguessableToken(local_surface_id.embed_token());
     InitializeRenderer();
   }
 
@@ -290,9 +298,19 @@ void OnRepaintFinished() {
 
 static cc::ProxyMain* gCurrentCompositorProxy;
 
+// The main thread's live compositor proxies. A process has one for each
+// window it renders, e.g. a page and a popup it opened.
+static std::vector<cc::ProxyMain*>* gCompositorProxies;
+
 void SetCompositorProxy(cc::ProxyMain* proxy) {
   if (IsMainThread()) {
     gCurrentCompositorProxy = proxy;
+    if (!gCompositorProxies) {
+      gCompositorProxies = new std::vector<cc::ProxyMain*>();
+    }
+    if (!base::Contains(*gCompositorProxies, proxy)) {
+      gCompositorProxies->push_back(proxy);
+    }
   }
 }
 
@@ -301,11 +319,38 @@ void CompositorProxyDestroyed(cc::ProxyMain* proxy) {
     CHECK(IsMainThread());
     gCurrentCompositorProxy = nullptr;
   }
+  if (gCompositorProxies && IsMainThread()) {
+    std::erase(*gCompositorProxies, proxy);
+  }
+}
+
+// The proxy to repaint with. Only frames submitted to the paint surface are
+// drawn, so a repaint needs the proxy of the window which owns that surface.
+// The current proxy is the one which last began a main frame, and with several
+// windows in the process that can be another window's: after a page opens a
+// popup, either window can own the paint surface while both keep running main
+// frames. A repaint with the other window's proxy draws a frame which
+// SubmitCompositorFrame ignores, and returns nothing.
+//
+// When no live proxy owns the paint surface (its window was closed and no
+// frame has claimed the surface since), the current proxy is used and the
+// repaint still returns nothing, unless a paint surface reset is pending.
+static cc::ProxyMain* RepaintCompositorProxy() {
+  const base::UnguessableToken* embed_token = gSurfaceEmbedToken;
+  if (embed_token && gCompositorProxies) {
+    for (cc::ProxyMain* proxy : *gCompositorProxies) {
+      if (proxy->RecordReplayLocalSurfaceId().embed_token() == *embed_token) {
+        return proxy;
+      }
+    }
+  }
+  return gCurrentCompositorProxy;
 }
 
 static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
   CHECK(IsMainThread());
 
+  gCurrentCompositorProxy = RepaintCompositorProxy();
   if (!gCurrentCompositorProxy)
     return nullptr;
 

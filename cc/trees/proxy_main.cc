@@ -905,4 +905,8 @@ void ProxyMain::RecordReplayRepaint() {
                                 base::Unretained(proxy_impl_.get())));
 }
 
+const viz::LocalSurfaceId& ProxyMain::RecordReplayLocalSurfaceId() const {
+  return layer_tree_host_->local_surface_id_from_parent();
+}
+
 }  // namespace cc
