@@ -171,12 +171,14 @@ link_legacy_checkout() {
   fi
   mkdir -p "$r/home"
   write_stamp "$k" "linked the shared checkout at $legacy"
-  echo "checkout: '$k' -> $legacy, the checkout builds shared before there was"
-  echo "one per version. Nothing was copied or moved: branches that still build"
-  echo "there keep working, and 'checkout.sh adopt --move' ends that when they"
-  echo "are gone."
+  # stderr: require's stdout is the path its callers capture.
+  echo "checkout: '$k' -> $legacy, the checkout builds shared before there was" >&2
+  echo "one per version. Nothing was copied or moved: branches that still build" >&2
+  echo "there keep working, and 'checkout.sh adopt --move' ends that when they" >&2
+  echo "are gone." >&2
 }
 
+# Prints the key's directory and nothing else: callers capture it.
 require() {
   local k=${1:-$(key)} r
   r=$(root "$k")
