@@ -117,6 +117,7 @@ static bool IsReplayInternalRequest(uint64_t identifier) {
 }
 
 // Whether the topmost named JS frame is a Replay-injected script.
+// Must match between recording and replaying: it gates NewBookmark().
 static bool IsInReplayScriptFrame() {
   v8::Isolate* isolate = v8::Isolate::GetCurrent();
   return isolate && GetCurrentScriptUrl(isolate).StartsWith("record-replay-");
