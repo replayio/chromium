@@ -13,6 +13,7 @@
 #include "base/metrics/statistics_recorder.h"
 #include "base/no_destructor.h"
 #include "base/record_replay.h"
+#include "base/record_replay_isolated_draw_asserts.h"
 #include "base/record_replay_paint_surface.h"
 #include "base/record_replay_render_interface.h"
 #include "base/strings/stringprintf.h"
@@ -154,13 +155,13 @@ static base::NoDestructor<RecordReplayFrameRefs> gSubmittedFrameRefs;
 
 static void HoldFrameRefs(const viz::CompositorFrame& frame) {
   for (const auto& pass : frame.render_pass_list) {
-#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
-    for (const viz::DrawQuad* quad : pass->quad_list) {
-      if (quad->material == viz::DrawQuad::Material::kPictureContent) {
-        IsolatedDrawCheckAlways("picture quad", quad);
+    if (IsolatedDrawAssertsEnabled()) {
+      for (const viz::DrawQuad* quad : pass->quad_list) {
+        if (quad->material == viz::DrawQuad::Material::kPictureContent) {
+          ReportIsolatedDrawAssert("picture quad", quad);
+        }
       }
     }
-#endif
     if (!pass->filters.IsEmpty()) {
       gSubmittedFrameRefs->filters.push_back(pass->filters);
     }
@@ -562,9 +563,7 @@ void OnDrawSourceFrame(const void* compositor, int source_frame_number) {
   if (bookmark) {
     size_t last = gLastCommitBookmark.load(std::memory_order_relaxed);
     if (last && !gLastCommitBookmarkFinished) {
-#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
-      IsolatedDrawCheckAlways("paint bookmark without a sent frame", compositor);
-#endif
+      ReportIsolatedDrawAssert("paint bookmark without a sent frame", compositor);
       FinishPaintWithoutPixels(last);
     }
     gLastCommitBookmark.store(bookmark, std::memory_order_relaxed);
@@ -590,9 +589,7 @@ void OnCompositorDestroyed(const void* compositor) {
   if (gLastCommitCompositor == compositor) {
     size_t last = gLastCommitBookmark.load(std::memory_order_relaxed);
     if (last && !gLastCommitBookmarkFinished) {
-#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
-      IsolatedDrawCheckAlways("paint bookmark of a destroyed compositor", compositor);
-#endif
+      ReportIsolatedDrawAssert("paint bookmark of a destroyed compositor", compositor);
       FinishPaintWithoutPixels(last);
     }
     gLastCommitBookmark.store(0, std::memory_order_relaxed);

@@ -6,6 +6,7 @@
 #define CC_PAINT_RECORD_REPLAY_ISOLATED_DRAW_H_
 
 #include "base/record_replay.h"
+#include "base/record_replay_isolated_draw_asserts.h"
 #include "third_party/skia/include/private/SkRecordReplayDraw.h"
 
 namespace cc {
@@ -17,14 +18,14 @@ class RecordReplayScopedIsolatedDraw {
  public:
   explicit RecordReplayScopedIsolatedDraw(const char* why) : disallow_(why) {
     SkRecordReplayBeginIsolatedDraw();
-#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
-    recordreplay::SetInIsolatedDrawForChecks(true);
-#endif
+    if (recordreplay::IsolatedDrawAssertsEnabled()) {
+      recordreplay::SetInIsolatedDrawForAsserts(true);
+    }
   }
   ~RecordReplayScopedIsolatedDraw() {
-#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
-    recordreplay::SetInIsolatedDrawForChecks(false);
-#endif
+    if (recordreplay::IsolatedDrawAssertsEnabled()) {
+      recordreplay::SetInIsolatedDrawForAsserts(false);
+    }
     SkRecordReplayEndIsolatedDraw();
   }
 

@@ -10,12 +10,11 @@
 
 #include "base/no_destructor.h"
 #include "base/record_replay.h"
+#include "base/record_replay_isolated_draw_asserts.h"
 #include "cc/paint/paint_filter.h"
 #include "cc/paint/record_replay_isolated_draw.h"
 
-#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
 #include <string.h>
-#endif
 
 namespace cc {
 
@@ -39,7 +38,6 @@ std::map<CapturedImageKey, CapturedImage>& CapturedImages() {
   return *images;
 }
 
-#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
 bool HasPixels(const sk_sp<SkImage>& image, const SkPixmap& pixmap) {
   SkPixmap pixels;
   if (!image->peekPixels(&pixels) || pixels.info() != pixmap.info()) {
@@ -53,7 +51,6 @@ bool HasPixels(const sk_sp<SkImage>& image, const SkPixmap& pixmap) {
   }
   return true;
 }
-#endif
 
 // Filters of the frame being sent and drawn, which the frame keeps alive.
 std::set<const PaintFilter*>& UnsentFilters() {
@@ -88,11 +85,10 @@ void RecordReplayCaptureImage(const PaintImage& image,
   // default one), so the earlier copy has the same pixels: keeping it saves
   // copying them again, and draws find what they cached for the image.
   if (captured.image) {
-#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
-    if (!HasPixels(captured.image, pixmap)) {
-      recordreplay::IsolatedDrawCheckAlways("captured image changed", &image);
+    if (recordreplay::IsolatedDrawAssertsEnabled() &&
+        !HasPixels(captured.image, pixmap)) {
+      recordreplay::ReportIsolatedDrawAssert("captured image changed", &image);
     }
-#endif
     return;
   }
   captured.image = SkImage::MakeRasterCopy(pixmap);

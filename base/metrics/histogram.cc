@@ -40,11 +40,7 @@
 #include "base/values.h"
 #include "build/build_config.h"
 
-#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
-namespace recordreplay {
-void IsolatedDrawCheckName(const char* what, const char* name);
-}
-#endif
+#include "base/record_replay_isolated_draw_asserts.h"
 
 namespace base {
 
@@ -165,9 +161,7 @@ class Histogram::Factory {
 HistogramBase* Histogram::Factory::Build() {
   // recordreplay::Assert("[RUN-1217]-1310 Histogram::Factory::Build");
   HistogramBase* histogram = StatisticsRecorder::FindHistogram(name_);
-#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
-  recordreplay::IsolatedDrawCheckName("histogram", name_.c_str());
-#endif
+  recordreplay::IsolatedDrawAssertName("histogram", name_.c_str());
   if (!histogram) {
     // constructor. Refactor code to avoid the additional call.
     bool should_record = StatisticsRecorder::ShouldRecordHistogram(
@@ -523,9 +517,7 @@ void Histogram::Add(int value) {
 }
 
 void Histogram::AddCount(int value, int count) {
-#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
-  recordreplay::IsolatedDrawCheckName("histogram sample", histogram_name());
-#endif
+  recordreplay::IsolatedDrawAssertName("histogram sample", histogram_name());
   DCHECK_EQ(0, ranges(0));
   DCHECK_EQ(kSampleType_MAX, ranges(bucket_count()));
 

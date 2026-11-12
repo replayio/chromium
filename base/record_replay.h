@@ -24,17 +24,6 @@ namespace base {
 
 namespace recordreplay {
 
-#if defined(RECORD_REPLAY_ISOLATED_DRAW_CHECKS)
-// Checks of what Replay's isolated draws touch (record_replay_isolated_draw_checks).
-BASE_EXPORT void SetInIsolatedDrawForChecks(bool in);
-BASE_EXPORT bool InIsolatedDrawForChecks();
-// Prints |what| when this thread is in an isolated draw.
-BASE_EXPORT void IsolatedDrawCheck(const char* what, const void* address);
-BASE_EXPORT void IsolatedDrawCheckName(const char* what, const char* name);
-// Prints |what| wherever it happens.
-BASE_EXPORT void IsolatedDrawCheckAlways(const char* what, const void* address);
-#endif
-
 bool IsRecordingOrReplaying(const char* feature = nullptr,
                             const char* subfeature = nullptr);
 bool IsRecording();
