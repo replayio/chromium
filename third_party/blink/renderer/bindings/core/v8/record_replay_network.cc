@@ -450,9 +450,11 @@ void OnNetworkReceiveData(uint64_t inspector_id, const char* data, int length) {
 
   blink::ScriptForbiddenScope::AllowUserAgentScript allow_script;
   std::string requestId = RecordReplayNetworkRequestId(inspector_id);
+  // Unconditional: it replays a recorded value, so it must not depend on the
+  // replay-only DependencyGraphEnabled().
+  const bool replay_internal = IsReplayInternalRequest(inspector_id);
 
-  if (recordreplay::DependencyGraphEnabled() &&
-      !IsReplayInternalRequest(inspector_id)) {
+  if (recordreplay::DependencyGraphEnabled() && !replay_internal) {
     base::Value::Dict info;
     info.Set("kind", "networkReceiveData");
     info.Set("requestId", requestId);
@@ -486,9 +488,11 @@ void OnNetworkFinishLoading(uint64_t inspector_id,
 
   blink::ScriptForbiddenScope::AllowUserAgentScript allow_script;
   std::string requestId = RecordReplayNetworkRequestId(inspector_id);
+  // Unconditional: it replays a recorded value, so it must not depend on the
+  // replay-only DependencyGraphEnabled().
+  const bool replay_internal = IsReplayInternalRequest(inspector_id);
 
-  if (recordreplay::DependencyGraphEnabled() &&
-      !IsReplayInternalRequest(inspector_id)) {
+  if (recordreplay::DependencyGraphEnabled() && !replay_internal) {
     base::Value::Dict info;
     info.Set("kind", "networkFinishLoading");
     info.Set("requestId", requestId);
@@ -512,9 +516,11 @@ void OnNetworkFail(uint64_t inspector_id, const blink::WebURLError& error) {
 
   blink::ScriptForbiddenScope::AllowUserAgentScript allow_script;
   std::string requestId = RecordReplayNetworkRequestId(inspector_id);
+  // Unconditional: it replays a recorded value, so it must not depend on the
+  // replay-only DependencyGraphEnabled().
+  const bool replay_internal = IsReplayInternalRequest(inspector_id);
 
-  if (recordreplay::DependencyGraphEnabled() &&
-      !IsReplayInternalRequest(inspector_id)) {
+  if (recordreplay::DependencyGraphEnabled() && !replay_internal) {
     base::Value::Dict info;
     info.Set("kind", "networkFail");
     info.Set("requestId", requestId);
