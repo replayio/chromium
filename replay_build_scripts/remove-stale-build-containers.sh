@@ -1,18 +1,21 @@
 #!/bin/bash
 # A build container still on this agent is left over from a job that was
 # cancelled or killed: the agent runs one job at a time. Remove it before
-# building in the shared checkout's out dir, which it would keep writing to
-# (overlapping ninja runs corrupted out/Release's ninja state once). Runs after
-# the checkout is reset, so that this job's version of the script runs.
+# anything touches a checkout it would keep writing to (overlapping ninja runs
+# corrupted out/Release's ninja state once, replayio/chromium#1540). Per-version
+# checkouts do not help here: an orphan builds in the same one its job did.
 
 set -o pipefail
 
-# By name, since buildLinux.mjs names them, and by image, for containers from
-# before it did. The image filter alone misses containers of an image that
-# chromium-build-new has since been rebuilt as.
+# With a key, only that version's containers (build-in-container.sh names them
+# chromium-build-<key>-<job>), so a second agent process building another
+# version is left alone. Without one, every build container, for cleaning up by
+# hand. The second filter is the image that was maintained by hand on the agent,
+# for containers left from before these names existed.
+key=${1:-}
 list_build_containers() {
   {
-    docker ps --all --quiet --filter "name=^/?chromium-build-" &&
+    docker ps --all --quiet --filter "name=^/?chromium-build-${key:+$key-}" &&
       docker ps --all --quiet --filter ancestor=chromium-build-new
   } | sort -u
 }

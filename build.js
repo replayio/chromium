@@ -26,13 +26,18 @@ const outdir = buildArm ? "out/Release-ARM" : "out/Release";
 
 // Ensure that the git repository is "trusted", otherwise we'll get errors like:
 // fatal: unsafe repository ('/chromium/src' is owned by someone else)
-spawnChecked(
-  "git",
-  ["config", "--global", "--add", "safe.directory", __dirname],
-  {
-    stdio: "inherit",
-  }
-);
+// The build image already has a --system safe.directory for everything, and
+// its HOME is a directory that persists across builds, so adding a --global
+// line there on every build would just make the file longer.
+if (!fs.existsSync("/etc/chromium-build-image")) {
+  spawnChecked(
+    "git",
+    ["config", "--global", "--add", "safe.directory", __dirname],
+    {
+      stdio: "inherit",
+    }
+  );
+}
 
 const archSuffix = buildArm ? "-arm" : "";
 
@@ -130,6 +135,9 @@ if (currentPlatform() == "macOS" && driver_h_changed) {
 
 // ensure that build configuration is written with correct paths
 const gn = currentPlatform() == "windows" ? "gn.bat" : "gn";
+checkBuildImage();
+configureReclient();
+prepareOutDir();
 spawnChecked(gn, ["gen", outdir], { stdio: "inherit" });
 
 // only lint when not in buildkite (since buildkite does the linting at a different stage)
@@ -165,8 +173,8 @@ console.log(`Build finished.`);
 // CI agents build in a persistent checkout, where an interrupted or
 // overlapping ninja run can leave state behind in the out dir that makes every
 // later ninja crash at startup. Clean the out dir and build again if ninja
-// crashes; RBE's cache keeps the rebuild cheap. gn clean keeps args.gn, which
-// CI doesn't write: it is the agent's own build config.
+// crashes; RBE's cache keeps the rebuild cheap. gn clean keeps args.gn (which
+// prepareOutDir would write again anyway).
 function buildHealingNinjaState() {
   const rv = spawnLogged(autoninja, autoninjaArgs, { stdio: "inherit" });
   if (!ninjaCrashed(rv)) {
@@ -186,6 +194,151 @@ function buildHealingNinjaState() {
 function ninjaCrashed(rv) {
   const crashSignals = [6 /* SIGABRT */, 7 /* SIGBUS */, 11 /* SIGSEGV */];
   return crashSignals.some((signal) => rv.status == 256 - signal);
+}
+
+// The reclient configs, from the tree, for the path the build actually runs
+// at. DEPS pins the generator (third_party/reclient_configs) and the generated
+// rewrapper config is what names the remote worker image by digest, so the
+// worker image is part of the checkout like the rest of the toolchain -- but the
+// generated reproxy config also holds an absolute path to the deps scanner in
+// the checkout, so a config generated anywhere else points at a path that does
+// not exist here and deps scanning silently falls back to compiling locally.
+//
+// gclient's configure_reclient hook, which would do this, never runs on CI (see
+// runGclientSync in replay_build_scripts/common.mjs), so until now these files
+// were whatever the last person to sync the agent's checkout by hand produced.
+// Only in our own build image, where the checkout is always at /chromium/src:
+// on a developer's machine the files belong to however they sync their tree.
+function configureReclient() {
+  if (!buildImageOfContainer() || !process.env["RBE_service"]) {
+    return;
+  }
+  const parent = path.dirname(__dirname);
+  const configure = path.join(
+    __dirname,
+    "third_party",
+    "reclient_configs",
+    "configure_reclient.py"
+  );
+  if (!fs.existsSync(configure)) {
+    throw new Error(
+      `${configure} is missing: this checkout's DEPS have not been synced ` +
+        `(replay_build_scripts/ci/checkout.sh prepare)`
+    );
+  }
+  console.log("Configuring reclient...");
+  spawnChecked("python3", [configure, "--src_dir=" + path.basename(__dirname)], {
+    cwd: parent,
+    stdio: "inherit",
+  });
+}
+
+// In the build image (replay_build_scripts/ci/), refuse to build a checkout
+// whose Dockerfile is not the one this image was built from: its tag is a hash
+// of that file, so a tree that changed it -- another Chromium version's, say --
+// would otherwise build with another version's tools and say nothing.
+function checkBuildImage() {
+  const have = buildImageOfContainer();
+  if (!have) {
+    return;
+  }
+  const want = buildImageOfCheckout();
+  if (have != want) {
+    throw new Error(
+      `This container is build image ${have}, but this checkout's ` +
+        `replay_build_scripts/ci/Dockerfile is ${want}. Build it with ` +
+        `replay_build_scripts/ci/build-in-container.sh, which builds the image ` +
+        `this checkout describes.`
+    );
+  }
+}
+
+function buildImageOfContainer() {
+  try {
+    return fs.readFileSync("/etc/chromium-build-image", "utf8").trim();
+  } catch (e) {
+    return "";
+  }
+}
+
+function buildImageOfCheckout() {
+  const dockerfile = path.join(
+    __dirname,
+    "replay_build_scripts",
+    "ci",
+    "Dockerfile"
+  );
+  // build-image.sh: sha256 of the Dockerfile, first 16 characters.
+  return require("crypto")
+    .createHash("sha256")
+    .update(fs.readFileSync(dockerfile))
+    .digest("hex")
+    .slice(0, 16);
+}
+
+// The out dir's own configuration comes from the repo.
+//
+// args.gn used to be written by hand on each machine, which made it the one
+// piece of the build configuration that no checkout described: when a build
+// deleted the out dir to recover from crashing ninja state, gn gen then
+// produced a debug build without remote execution, and the recovery had to be
+// changed to preserve the file instead (replayio/chromium#1544). A wiped out
+// dir now comes back correctly configured.
+//
+// The build agent's args.gn is not an import but a verbatim copy of
+// replay_build_scripts/linux_args.gn, which means the file in this repository
+// is decorative there: changing it changes nothing a build does. A copy that
+// still matches the repository's is replaced with the import, which resolves to
+// exactly the same arguments and makes the repository the source of them from
+// then on. An args.gn that says anything else is somebody's own and is left
+// alone.
+function prepareOutDir() {
+  mkdirp(outdir);
+  const argsFile = path.join(outdir, "args.gn");
+  const args = `replay_build_scripts/${argsName()}`;
+  const line = `import("//${args}")\n`;
+  if (!fs.existsSync(argsFile)) {
+    console.log(`Writing ${argsFile} importing //${args}`);
+    fs.writeFileSync(argsFile, line);
+  } else if (isCopyOf(argsFile, path.join(__dirname, args))) {
+    console.log(`Replacing the copy in ${argsFile} with //${args}`);
+    fs.writeFileSync(argsFile, line);
+  }
+}
+
+function isCopyOf(file, original) {
+  function read(f) {
+    try {
+      return fs.readFileSync(f, "utf8").replace(/\s+$/, "");
+    } catch (e) {
+      return null;
+    }
+  }
+  const have = read(file);
+  return have !== null && have === read(original);
+}
+
+// The build image's node is 8.10 (bionic), so: no fs.mkdirSync recursive
+// option, no fs.rmSync, no fs.cpSync. Everything build.js does runs there.
+function mkdirp(dir) {
+  const parent = path.dirname(dir);
+  if (parent != dir && !fs.existsSync(parent)) {
+    mkdirp(parent);
+  }
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir);
+  }
+}
+
+function argsName() {
+  switch (currentPlatform()) {
+    case "linux":
+      return "linux_args.gn";
+    case "windows":
+      return "windows_args.gn";
+    case "macOS":
+      return buildArm ? "mac_arm64_args.gn" : "mac_x86_64_args.gn";
+  }
 }
 
 function writeFileSyncIfChanged(filename, newContents) {
