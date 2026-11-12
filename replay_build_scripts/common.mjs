@@ -167,7 +167,12 @@ export function updateBackendRepo() {
   fs.symlinkSync(chromiumRepoPath, chromiumPathInBackend);
 }
 
-export function updateChromiumRepo() {
+// The sources of a Chromium checkout: the fork at the revision being built and
+// the Replay forks its DEPS pins. Split out of updateChromiumRepo so that a
+// per-version checkout can be synced without running gn, which belongs in the
+// build container: the paths gn bakes into the out dir have to be the
+// container's, not the host's (replay_build_scripts/ci/).
+export function syncChromiumSources() {
   const chromium = process.cwd();
   const rev =
     process.env["CHROMIUM_REVISION"] || process.env["BUILDKITE_COMMIT"];
@@ -187,6 +192,10 @@ export function updateChromiumRepo() {
   );
 
   runGclientSync();
+}
+
+export function updateChromiumRepo() {
+  syncChromiumSources();
 
   runGnGen();
 }

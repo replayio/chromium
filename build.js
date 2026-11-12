@@ -130,6 +130,9 @@ if (currentPlatform() == "macOS" && driver_h_changed) {
 
 // ensure that build configuration is written with correct paths
 const gn = currentPlatform() == "windows" ? "gn.bat" : "gn";
+checkBuildImage();
+configureReclient();
+prepareOutDir();
 spawnChecked(gn, ["gen", outdir], { stdio: "inherit" });
 
 // only lint when not in buildkite (since buildkite does the linting at a different stage)
@@ -186,6 +189,141 @@ function buildHealingNinjaState() {
 function ninjaCrashed(rv) {
   const crashSignals = [6 /* SIGABRT */, 7 /* SIGBUS */, 11 /* SIGSEGV */];
   return crashSignals.some((signal) => rv.status == 256 - signal);
+}
+
+// The reclient configs, from the tree, for the path the build actually runs
+// at. DEPS pins the generator (third_party/reclient_configs) and the generated
+// rewrapper config is what names the remote worker image by digest, so the
+// worker image is part of the checkout like the rest of the toolchain -- but the
+// generated reproxy config also holds an absolute path to the deps scanner in
+// the checkout, so a config generated anywhere else points at a path that does
+// not exist here and deps scanning silently falls back to compiling locally.
+//
+// gclient's configure_reclient hook, which would do this, never runs on CI (see
+// runGclientSync in replay_build_scripts/common.mjs), so until now these files
+// were whatever the last person to sync the agent's checkout by hand produced.
+// Only in our own build image, where the checkout is always at /chromium/src:
+// on a developer's machine the files belong to however they sync their tree.
+function configureReclient() {
+  if (!buildImageOfContainer() || !process.env["RBE_service"]) {
+    return;
+  }
+  const parent = path.dirname(__dirname);
+  const configure = path.join(
+    __dirname,
+    "third_party",
+    "reclient_configs",
+    "configure_reclient.py"
+  );
+  if (!fs.existsSync(configure)) {
+    throw new Error(
+      `${configure} is missing: this checkout's DEPS have not been synced ` +
+        `(replay_build_scripts/ci/checkout.sh prepare)`
+    );
+  }
+  console.log("Configuring reclient...");
+  spawnChecked("python3", [configure, "--src_dir=" + path.basename(__dirname)], {
+    cwd: parent,
+    stdio: "inherit",
+  });
+}
+
+// In the build image (replay_build_scripts/ci/), refuse to build a checkout
+// whose Dockerfile is not the one this image was built from: its tag is a hash
+// of that file, so a tree that changed it -- another Chromium version's, say --
+// would otherwise build with another version's tools and say nothing.
+function checkBuildImage() {
+  const have = buildImageOfContainer();
+  if (!have) {
+    return;
+  }
+  const want = buildImageOfCheckout();
+  if (have != want) {
+    throw new Error(
+      `This container is build image ${have}, but this checkout's ` +
+        `replay_build_scripts/ci/Dockerfile is ${want}. Build it with ` +
+        `replay_build_scripts/ci/build-in-container.sh, which builds the image ` +
+        `this checkout describes.`
+    );
+  }
+}
+
+function buildImageOfContainer() {
+  try {
+    return fs.readFileSync("/etc/chromium-build-image", "utf8").trim();
+  } catch (e) {
+    return "";
+  }
+}
+
+function buildImageOfCheckout() {
+  const dockerfile = path.join(
+    __dirname,
+    "replay_build_scripts",
+    "ci",
+    "Dockerfile"
+  );
+  // build-image.sh: sha256 of the Dockerfile, first 16 characters.
+  return require("crypto")
+    .createHash("sha256")
+    .update(fs.readFileSync(dockerfile))
+    .digest("hex")
+    .slice(0, 16);
+}
+
+// The out dir's own configuration comes from the repo, and an out dir never
+// outlives the image it was built in.
+//
+// args.gn used to be written by hand on each machine, which made it the one
+// piece of the build configuration that no checkout described: when a build
+// deleted the out dir to recover from crashing ninja state, gn gen then
+// produced a debug build without remote execution, and the recovery had to be
+// changed to preserve the file instead (replayio/chromium#1544). A wiped out
+// dir now comes back correctly configured.
+function prepareOutDir() {
+  const image = buildImageOfContainer();
+  const stamp = path.join(outdir, ".replay-build-image");
+  if (image && fs.existsSync(outdir)) {
+    let built = "";
+    try {
+      built = fs.readFileSync(stamp, "utf8").trim();
+    } catch (e) {}
+    if (built && built != image) {
+      console.log(
+        `Build image changed (${built} -> ${image}); ` +
+          `rebuilding ${outdir} from scratch`
+      );
+      fs.rmSync(outdir, { force: true, recursive: true });
+    } else if (!built) {
+      // An out dir from before this stamp existed, i.e. one the image built by
+      // hand on the agent produced. Keep it and stamp it: Chromium compiles
+      // with the clang and sysroot in the checkout, not with the image's, so
+      // its objects do not depend on which image produced them, and wiping
+      // here would cost every agent one full rebuild for nothing.
+      console.log(`Stamping existing ${outdir} with build image ${image}`);
+    }
+  }
+  fs.mkdirSync(outdir, { recursive: true });
+  const argsFile = path.join(outdir, "args.gn");
+  if (!fs.existsSync(argsFile)) {
+    const args = `replay_build_scripts/${argsName()}`;
+    console.log(`Writing ${argsFile} importing //${args}`);
+    fs.writeFileSync(argsFile, `import("//${args}")\n`);
+  }
+  if (image) {
+    fs.writeFileSync(stamp, image + "\n");
+  }
+}
+
+function argsName() {
+  switch (currentPlatform()) {
+    case "linux":
+      return "linux_args.gn";
+    case "windows":
+      return "windows_args.gn";
+    case "macOS":
+      return buildArm ? "mac_arm64_args.gn" : "mac_x86_64_args.gn";
+  }
 }
 
 function writeFileSyncIfChanged(filename, newContents) {

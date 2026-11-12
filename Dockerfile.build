@@ -1,3 +1,8 @@
+# NOT the image CI builds in any more: that is
+# replay_build_scripts/ci/Dockerfile, which is built from the repository by
+# replay_build_scripts/ci/build-image.sh and tagged with a hash of itself. This
+# file is what the chromium-build-new image on the build agent was built from,
+# by hand, and the (unused) //BUCK genrule still names it.
 FROM ubuntu:bionic
 
 RUN apt-get update && \
