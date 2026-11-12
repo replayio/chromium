@@ -106,19 +106,19 @@ the key has no checkout, the job fails and says what to run.
 
 ## On a build agent
 
-The existing shared checkout becomes the current milestone's, as a symlink:
-
-```sh
-.ci-boot/replay_build_scripts/ci/checkout.sh adopt /home/ubuntu/chromium m108
-```
-
-(from a `bootstrap.sh` clone, or any checkout of this commit — the shared tree
-itself only has these scripts once a build has synced it).
+Nothing, for the milestone the agent is already building. The first job claims
+the shared checkout as that milestone's key itself -- a symlink, nothing copied
+or moved -- after checking that the tree's own `chrome/VERSION` is the key it
+wants. It says so in the log when it does.
 
 A symlink rather than a move, because `.buildkite/pipeline.yml` is fetched per
 branch: until a branch is rebased onto this change it still runs the old step,
 which builds in `/home/ubuntu/chromium/src` directly. Both kinds of job then
 build the same tree. For the same reason the old `chromium-build-new` image and
-`/home/ubuntu/depot_tools` have to stay until no branch builds the old way;
-`adopt --move` and removing them is the last step of the migration, not the
-first.
+`/home/ubuntu/depot_tools` have to stay until no branch builds the old way. When
+they are gone, `checkout.sh adopt --move /home/ubuntu/chromium m108` ends the
+arrangement and the shared path with it.
+
+`checkout.sh adopt [--move] <dir> [key]` is also how a tree that already exists
+somewhere else becomes a key's, which is the cheap way to give a milestone a
+checkout without `gclient sync`.

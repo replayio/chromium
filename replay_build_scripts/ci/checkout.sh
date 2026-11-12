@@ -52,6 +52,12 @@ checkouts_dir() {
   echo "${CHROMIUM_CHECKOUTS_DIR:-$HOME/chromium-checkouts}"
 }
 
+# The checkout every build shared before this existed, and still shares with
+# branches that have not been rebased onto it.
+legacy_checkout() {
+  echo "${CHROMIUM_LEGACY_CHECKOUT:-$HOME/chromium}"
+}
+
 # The milestone of the tree this script came from. chrome/VERSION is in the tree
 # being built, so a job reads it from the small clone it bootstrapped these
 # scripts with, before any big checkout is involved: `git show` works there even
@@ -107,21 +113,57 @@ created_by=$how
 EOF
 }
 
+# A key with no directory of its own, whose milestone is the one the shared
+# checkout holds, takes that checkout over: a symlink, nothing copied, nothing
+# moved, so branches that still build in it keep working. This is how the
+# current milestone arrives here without anyone doing anything by hand. A
+# milestone nobody has checked out on this machine is a different matter, since
+# making one means gclient and the 140 repositories DEPS pins (see prepare).
+link_legacy_checkout() {
+  local k=$1 r=$2 legacy major
+  legacy=$(legacy_checkout)
+  if [ ! -d "$legacy/src/.git" ]; then
+    return 1
+  fi
+  major=$(sed -n 's/^MAJOR=//p' "$legacy/src/chrome/VERSION" 2>/dev/null)
+  if [ -z "$major" ] || [ "$k" != "m$major" ]; then
+    return 1
+  fi
+  mkdir -p "$(dirname "$r")"
+  if ! ln -s "$legacy" "$r" 2>/dev/null; then
+    # Another job got there first, which is all this needed.
+    [ -d "$r/src/.git" ]
+    return
+  fi
+  mkdir -p "$r/home"
+  write_stamp "$k" "linked the shared checkout at $legacy"
+  echo "checkout: '$k' -> $legacy, the checkout builds shared before there was"
+  echo "one per version. Nothing was copied or moved: branches that still build"
+  echo "there keep working, and 'checkout.sh adopt --move' ends that when they"
+  echo "are gone."
+}
+
 require() {
   local k=${1:-$(key)} r
   r=$(root "$k")
   if [ ! -d "$r/src/.git" ]; then
+    link_legacy_checkout "$k" "$r" || true
+  fi
+  if [ ! -d "$r/src/.git" ]; then
     cat >&2 <<EOF
 checkout: no Chromium checkout for key '$k' at $r
 
-A build never creates one and never borrows another version's: prepare it once,
-on this host, and every build of that version then has its own tree.
+This machine has no tree for that Chromium version, and a build will not make
+one or borrow another version's: a Chromium checkout is the fork plus the 140
+repositories its DEPS pin, which is gclient's job and an hour of it, not a git
+clone. Make it once and every build of that version has it:
 
-  replay_build_scripts/ci/checkout.sh prepare                 # from scratch
-  replay_build_scripts/ci/checkout.sh prepare --from <key>    # from a prepared one
-  replay_build_scripts/ci/checkout.sh adopt <dir> $k        # an existing checkout
+  CHROMIUM_REVISION=<commit> replay_build_scripts/ci/checkout.sh prepare --from <key>
+  CHROMIUM_REVISION=<commit> replay_build_scripts/ci/checkout.sh prepare
+  replay_build_scripts/ci/checkout.sh adopt <dir> $k   # a tree that already exists
 
 Prepared keys here: $(ls -1 "$(checkouts_dir)" 2>/dev/null | tr '\n' ' ')
+Shared checkout: $(legacy_checkout), milestone $(sed -n 's/^MAJOR=/m/p' "$(legacy_checkout)/src/chrome/VERSION" 2>/dev/null || echo unknown)
 EOF
     exit 1
   fi
