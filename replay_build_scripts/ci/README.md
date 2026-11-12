@@ -24,6 +24,10 @@ changed.
 | `bootstrap.sh` | the four seconds at the start of a job that put this commit's scripts on disk, before any checkout is involved. |
 | `sync-repos.mjs`, `upload-artifacts.sh` | the pipeline's sync and upload steps, against the key's checkout instead of the current directory. |
 
+The build image's node is 8.10 and its git is 2.17 (bionic), so anything
+`build.js` or these scripts run inside it has to work there: no `fs.rmSync`,
+no recursive `fs.mkdirSync`, no `git sparse-checkout`.
+
 ## Keys
 
 A key names a checkout and everything that belongs to it. By default it is the
@@ -76,22 +80,45 @@ the next build being a debug build without remote execution, which is what made
 the recovery in replayio/chromium#1544 preserve the file instead.
 
 A bad image is the same: change the `Dockerfile`, and the tag changes with it,
-so the next build builds a new image and the out dir it produced is rebuilt
-(`build.js` stamps the out dir with the image it was built in). Nothing is ever
-rebuilt in place under a running build.
+so the next build builds a new image rather than rebuilding one in place under a
+running build. The out dir is not thrown away when the image changes, because
+the objects in it come from the checkout's clang and sysroot, not from the
+image.
 
 ## Preparing a new version
 
 ```sh
-CHROMIUM_CHECKOUT_KEY=m140 replay_build_scripts/ci/checkout.sh prepare --from m108
+CHROMIUM_CHECKOUT_KEY=m140 CHROMIUM_REVISION=<commit or branch> \
+  replay_build_scripts/ci/checkout.sh prepare --from m108
 ```
 
-copies the nearest prepared checkout without its build outputs and leaves
-`gclient sync` to run in the image, which is the one step of a new version that
-is not routine: this fork disabled per-build `gclient sync` ("may be too old for
-gclient sync to work properly", `common.mjs`), so for a milestone nobody has
-synced here before, expect it to need attention. It is also the step a rebase
-does anyway.
+copies the nearest prepared checkout without its build outputs, checks out the
+revision the new version is for, and prints the `gclient sync` to run in the
+image. That sync is the one step of a new version that is not routine: this fork
+disabled per-build `gclient sync` ("may be too old for gclient sync to work
+properly", `common.mjs`), so for a milestone nobody has synced here before,
+expect it to need attention. It is also the step a rebase does anyway. `prepare`
+refuses if the volume has little space left, because every key shares it (and so
+do the backend's `linux_cpp_tests`, which run on this agent too).
 
 A build never prepares a checkout and never falls back to another version's: if
 the key has no checkout, the job fails and says what to run.
+
+## On a build agent
+
+The existing shared checkout becomes the current milestone's, as a symlink:
+
+```sh
+.ci-boot/replay_build_scripts/ci/checkout.sh adopt /home/ubuntu/chromium m108
+```
+
+(from a `bootstrap.sh` clone, or any checkout of this commit — the shared tree
+itself only has these scripts once a build has synced it).
+
+A symlink rather than a move, because `.buildkite/pipeline.yml` is fetched per
+branch: until a branch is rebased onto this change it still runs the old step,
+which builds in `/home/ubuntu/chromium/src` directly. Both kinds of job then
+build the same tree. For the same reason the old `chromium-build-new` image and
+`/home/ubuntu/depot_tools` have to stay until no branch builds the old way;
+`adopt --move` and removing them is the last step of the migration, not the
+first.

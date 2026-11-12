@@ -26,13 +26,18 @@ const outdir = buildArm ? "out/Release-ARM" : "out/Release";
 
 // Ensure that the git repository is "trusted", otherwise we'll get errors like:
 // fatal: unsafe repository ('/chromium/src' is owned by someone else)
-spawnChecked(
-  "git",
-  ["config", "--global", "--add", "safe.directory", __dirname],
-  {
-    stdio: "inherit",
-  }
-);
+// The build image already has a --system safe.directory for everything, and
+// its HOME is a directory that persists across builds, so adding a --global
+// line there on every build would just make the file longer.
+if (!fs.existsSync("/etc/chromium-build-image")) {
+  spawnChecked(
+    "git",
+    ["config", "--global", "--add", "safe.directory", __dirname],
+    {
+      stdio: "inherit",
+    }
+  );
+}
 
 const archSuffix = buildArm ? "-arm" : "";
 
@@ -168,8 +173,8 @@ console.log(`Build finished.`);
 // CI agents build in a persistent checkout, where an interrupted or
 // overlapping ninja run can leave state behind in the out dir that makes every
 // later ninja crash at startup. Clean the out dir and build again if ninja
-// crashes; RBE's cache keeps the rebuild cheap. gn clean keeps args.gn, which
-// CI doesn't write: it is the agent's own build config.
+// crashes; RBE's cache keeps the rebuild cheap. gn clean keeps args.gn (which
+// prepareOutDir would write again anyway).
 function buildHealingNinjaState() {
   const rv = spawnLogged(autoninja, autoninjaArgs, { stdio: "inherit" });
   if (!ninjaCrashed(rv)) {
@@ -271,8 +276,7 @@ function buildImageOfCheckout() {
     .slice(0, 16);
 }
 
-// The out dir's own configuration comes from the repo, and an out dir never
-// outlives the image it was built in.
+// The out dir's own configuration comes from the repo.
 //
 // args.gn used to be written by hand on each machine, which made it the one
 // piece of the build configuration that no checkout described: when a build
@@ -281,37 +285,24 @@ function buildImageOfCheckout() {
 // changed to preserve the file instead (replayio/chromium#1544). A wiped out
 // dir now comes back correctly configured.
 function prepareOutDir() {
-  const image = buildImageOfContainer();
-  const stamp = path.join(outdir, ".replay-build-image");
-  if (image && fs.existsSync(outdir)) {
-    let built = "";
-    try {
-      built = fs.readFileSync(stamp, "utf8").trim();
-    } catch (e) {}
-    if (built && built != image) {
-      console.log(
-        `Build image changed (${built} -> ${image}); ` +
-          `rebuilding ${outdir} from scratch`
-      );
-      fs.rmSync(outdir, { force: true, recursive: true });
-    } else if (!built) {
-      // An out dir from before this stamp existed, i.e. one the image built by
-      // hand on the agent produced. Keep it and stamp it: Chromium compiles
-      // with the clang and sysroot in the checkout, not with the image's, so
-      // its objects do not depend on which image produced them, and wiping
-      // here would cost every agent one full rebuild for nothing.
-      console.log(`Stamping existing ${outdir} with build image ${image}`);
-    }
-  }
-  fs.mkdirSync(outdir, { recursive: true });
+  mkdirp(outdir);
   const argsFile = path.join(outdir, "args.gn");
   if (!fs.existsSync(argsFile)) {
     const args = `replay_build_scripts/${argsName()}`;
     console.log(`Writing ${argsFile} importing //${args}`);
     fs.writeFileSync(argsFile, `import("//${args}")\n`);
   }
-  if (image) {
-    fs.writeFileSync(stamp, image + "\n");
+}
+
+// The build image's node is 8.10 (bionic), so: no fs.mkdirSync recursive
+// option, no fs.rmSync, no fs.cpSync. Everything build.js does runs there.
+function mkdirp(dir) {
+  const parent = path.dirname(dir);
+  if (parent != dir && !fs.existsSync(parent)) {
+    mkdirp(parent);
+  }
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir);
   }
 }
 

@@ -38,12 +38,14 @@ mkdir -p "$root/home"
 image=$("$dir/build-image.sh" ref)
 "$dir/build-image.sh" ensure >&2
 
-# Named after the job, so that cancelling it can remove the container, and with
-# the chromium-build- prefix that remove-stale-build-containers.sh looks for.
+# Named after the version and the job: cancelling the job can then remove the
+# container, and the sweep for orphans can leave other versions' builds alone.
 # --init: the image's command runs under a shell, which as PID 1 would ignore
 # SIGTERM, and a cancelled job's build then kept running in the checkout
 # (replayio/chromium#1540).
-name="chromium-build-${BUILDKITE_JOB_ID:-$$}"
+key=${root%/}
+key=${key##*/}
+name="chromium-build-${key//[^A-Za-z0-9_.-]/-}-${BUILDKITE_JOB_ID:-$$}"
 
 args=(
   run --name "$name" --rm --init
@@ -89,4 +91,8 @@ for signal in INT TERM HUP; do
 done
 
 echo "\$ docker ${args[*]} $image ${cmd[*]}"
-docker "${args[@]}" "$image" "${cmd[@]}"
+# In the background and waited for, not in the foreground: bash runs a trap
+# only once the foreground child has exited, so a cancelled job's cleanup would
+# wait for the build it is trying to stop.
+docker "${args[@]}" "$image" "${cmd[@]}" &
+wait $!

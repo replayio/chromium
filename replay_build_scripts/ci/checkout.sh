@@ -145,12 +145,19 @@ EOF
 sync() {
   local k r
   k=$(key)
-  r=$(require "$k")
   local commit=${CHROMIUM_REVISION:-${BUILDKITE_COMMIT:-}}
   if [ -z "$commit" ]; then
     echo "checkout: set CHROMIUM_REVISION (or BUILDKITE_COMMIT) to the commit to build" >&2
     exit 1
   fi
+  # "HEAD" would reset the checkout to whatever it already held and publish
+  # that as this build, silently. The step this replaced reset to
+  # origin/$BUILDKITE_BRANCH, so it could not happen there.
+  if [ "$commit" = "HEAD" ]; then
+    echo "checkout: refusing to build 'HEAD': name the commit or branch to build" >&2
+    exit 1
+  fi
+  r=$(require "$k")
   echo "--- checkout '$k' at $r -> $commit"
   # The fork goes to the commit being built, the Replay forks of v8, skia,
   # webrtc and boringssl to their DEPS revisions, and the backend to
@@ -170,11 +177,12 @@ list() {
     echo "no checkouts in $d"
     return
   fi
-  local k
-  for k in $(ls -1 "$d" 2>/dev/null); do
-    if [ ! -e "$d/$k/.replay-checkout" ]; then
+  local stamp k
+  for stamp in "$d"/*/.replay-checkout; do
+    if [ ! -e "$stamp" ]; then
       continue
     fi
+    k=$(basename "$(dirname "$stamp")")
     local head size=""
     head=$(git -C "$d/$k/src" rev-parse --short=12 HEAD 2>/dev/null || echo "?")
     if [ "${1:-}" = "--sizes" ]; then
@@ -186,27 +194,51 @@ list() {
 }
 
 # Migration: the checkout that every build has been sharing becomes the
-# milestone's own. Nothing is copied, so this costs nothing and is reversible by
-# moving the directory back.
+# milestone's own.
+#
+# By default the key becomes a symlink to it, because .buildkite/pipeline.yml is
+# fetched per branch: every branch that has not been rebased onto this change
+# still runs the old step, which cd's into /home/ubuntu/chromium/src and builds
+# there. A symlink lets both kinds of job build the same tree, so this can land
+# without a flag day -- and for the same reason the old build image and
+# /home/ubuntu/depot_tools have to stay until those branches are gone.
+#
+# --move moves the directory instead, for when nothing builds the old way any
+# more. Either way it costs nothing and is undone by moving it back.
 adopt() {
+  local move=0
+  while [ $# -gt 0 ]; do
+    case ${1:-} in
+      --move) move=1; shift ;;
+      *) break ;;
+    esac
+  done
   local src=${1:-} k=${2:-$(key)} r
   if [ -z "$src" ] || [ ! -d "$src/src/.git" ]; then
-    echo "usage: $0 adopt <dir holding src/> [key]" >&2
+    echo "usage: $0 adopt [--move] <dir holding src/> [key]" >&2
     exit 1
   fi
+  src=$(cd "$src" && pwd)
   r=$(root "$k")
-  if [ -e "$r" ]; then
+  if [ -e "$r" ] || [ -L "$r" ]; then
     echo "checkout: $r already exists; wipe it first or pick another key" >&2
     exit 1
   fi
   mkdir -p "$(dirname "$r")"
-  mv "$src" "$r"
+  if [ "$move" = 1 ]; then
+    mv "$src" "$r"
+  else
+    ln -s "$src" "$r"
+  fi
   mkdir -p "$r/home"
   # Secrets a job wrote into the old shared directory (the EngFlow client cert
   # and key used to land next to the checkout and stay there) do not come along.
-  rm -f "$r/engflow.crt" "$r/engflow.key"
+  # A linked checkout keeps them while old-style jobs still need them there.
+  if [ "$move" = 1 ]; then
+    rm -f "$r/engflow.crt" "$r/engflow.key"
+  fi
   write_stamp "$k" "adopted from $src"
-  echo "checkout: '$k' is now $r"
+  echo "checkout: '$k' is $r -> $(readlink -f "$r")"
 }
 
 prepare() {
@@ -219,11 +251,37 @@ prepare() {
   done
   k=$(key)
   r=$(root "$k")
-  if [ -e "$r" ]; then
+  if [ -e "$r" ] || [ -L "$r" ]; then
     echo "checkout: $r already exists" >&2
     exit 1
   fi
+  local commit=${CHROMIUM_REVISION:-}
+  if [ -z "$commit" ]; then
+    echo "checkout: set CHROMIUM_REVISION to the commit or branch '$k' is for" >&2
+    echo "(the fork's default branch is the current milestone, which is not" >&2
+    echo "what a checkout for another one should hold)" >&2
+    exit 1
+  fi
+  # A version costs 60-115 GB here, on the volume every other version and the
+  # backend's C++ test jobs share, so say so before taking it.
+  local free
+  free=$(df -BG --output=avail "$(dirname "$r")" 2>/dev/null | tail -1 | tr -dc 0-9)
+  if [ -n "$free" ]; then
+    echo "--- $free GB free on $(dirname "$r")"
+    if [ "$free" -lt 150 ]; then
+      echo "checkout: that is not much for a Chromium checkout and its build;" >&2
+      echo "wipe a key that is no longer in flight first (checkout.sh list)." >&2
+      echo "Set CHROMIUM_CHECKOUT_FORCE=1 to prepare anyway." >&2
+      if [ -z "${CHROMIUM_CHECKOUT_FORCE:-}" ]; then
+        exit 1
+      fi
+    fi
+  fi
   mkdir -p "$r"
+  # Nothing half-made is left behind for the next attempt to trip over.
+  # shellcheck disable=SC2064  # $r is expanded now on purpose: the trap must
+  # remove this directory even if the variable is out of scope by then.
+  trap "rm -rf '$r'" EXIT
   if [ -n "$from" ]; then
     local src
     src=$(root "$from")
@@ -252,19 +310,24 @@ solutions = [
 ]
 EOF
   fi
+  echo "--- checking out $commit"
+  git -C "$r/src" fetch origin "$commit"
+  git -C "$r/src" checkout -f --detach FETCH_HEAD
   if [ ! -d "$r/backend" ]; then
     echo "--- cloning replayio/backend into $r/backend"
     git clone git@github.com:replayio/backend.git "$r/backend"
   fi
   mkdir -p "$r/home"
-  write_stamp "$k" "prepare${from:+ --from $from}"
+  write_stamp "$k" "prepare${from:+ --from $from} $commit"
+  trap - EXIT
   cat <<EOF
 
 checkout: '$k' is at $r, with the fork checked out but its DEPS not synced.
 
-Sync it in the build image, so depot_tools is the pinned one:
+Sync its DEPS in the build image, so depot_tools is the pinned one and the
+generated reclient configs get the paths a build runs at:
 
-  replay_build_scripts/ci/build-in-container.sh --root $r -- \\
+  $r/src/replay_build_scripts/ci/build-in-container.sh --root $r -- \\
     bash -c 'cd /chromium && gclient sync -D --with_branch_heads && gclient runhooks'
 
 This fork disabled per-build gclient sync ("may be too old for gclient sync to

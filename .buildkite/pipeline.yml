@@ -80,12 +80,23 @@ steps:
       # script that fetches the rest of this commit's build scripts. Everything
       # after this line is repository content at $$BUILDKITE_COMMIT, instead of
       # whatever a shared checkout happened to hold (replayio/chromium#1544).
-      curl -fsS "https://raw.githubusercontent.com/replayio/chromium/$$BUILDKITE_COMMIT/replay_build_scripts/ci/bootstrap.sh" -o ci-bootstrap.sh
+      # This pipeline.yml is fetched per BRANCH, so re-running an old build of a
+      # branch that has since been rebased onto this change asks for a commit
+      # that has no ci/ directory. Say that rather than just failing on a 404.
+      if ! curl -fsS "https://raw.githubusercontent.com/replayio/chromium/$$BUILDKITE_COMMIT/replay_build_scripts/ci/bootstrap.sh" -o ci-bootstrap.sh; then
+        echo "no replay_build_scripts/ci/bootstrap.sh at $$BUILDKITE_COMMIT:"
+        echo "this commit predates per-version checkouts, so it cannot be built"
+        echo "by this branch's pipeline. Build a commit that has it."
+        exit 1
+      fi
       be_cmd bootstrap-scripts -- bash ci-bootstrap.sh
       SCRIPTS=.ci-boot/replay_build_scripts
+      KEY=$$("$$SCRIPTS/ci/checkout.sh" key)
+      echo "checkout key: $$KEY"
       # Before anything touches the checkout, not after: a container left by a
-      # cancelled job keeps building in it (replayio/chromium#1540).
-      be_cmd remove-stale-build-containers -- "$$SCRIPTS/remove-stale-build-containers.sh"
+      # cancelled job keeps building in it (replayio/chromium#1540). Only this
+      # version's containers, so another version's build is left alone.
+      be_cmd remove-stale-build-containers -- "$$SCRIPTS/remove-stale-build-containers.sh" "$$KEY"
       be_cmd checkout-sync -- "$$SCRIPTS/ci/checkout.sh" sync
       be_cmd clean-artifacts-dir -- node "$$SCRIPTS/clean_artifacts.mjs"
       be_cmd chromium-build -- "$$SCRIPTS/ci/build-in-container.sh"

@@ -7,12 +7,15 @@
 
 set -o pipefail
 
-# By name, which replay_build_scripts/ci/build-in-container.sh always gives
-# them, and by the image of the build image that was maintained by hand on the
-# agent, for containers left from before that script existed.
+# With a key, only that version's containers (build-in-container.sh names them
+# chromium-build-<key>-<job>), so a second agent process building another
+# version is left alone. Without one, every build container, for cleaning up by
+# hand. The second filter is the image that was maintained by hand on the agent,
+# for containers left from before these names existed.
+key=${1:-}
 list_build_containers() {
   {
-    docker ps --all --quiet --filter "name=^/?chromium-build-" &&
+    docker ps --all --quiet --filter "name=^/?chromium-build-${key:+$key-}" &&
       docker ps --all --quiet --filter ancestor=chromium-build-new
   } | sort -u
 }
