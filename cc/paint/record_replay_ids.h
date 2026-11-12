@@ -5,6 +5,7 @@
 #ifndef CC_PAINT_RECORD_REPLAY_IDS_H_
 #define CC_PAINT_RECORD_REPLAY_IDS_H_
 
+#include <atomic>
 #include <limits>
 
 #include "base/atomic_sequence_num.h"
@@ -24,12 +25,16 @@ inline int RecordReplayNextId(base::AtomicSequenceNumber& shared,
                               base::AtomicSequenceNumber& isolated) {
   if (SkRecordReplayAreEventsDisallowedByDriver()) {
     if (!SkRecordReplayInIsolatedDraw()) {
-      recordreplay::ReportIsolatedDrawAssert(
+      recordreplay::IsolatedDrawNote(
           "cc ID outside an isolated draw", __builtin_return_address(0));
     }
     if (SkRecordReplayInIsolatedDraw()) {
-      static base::AtomicSequenceNumber draw;
-      return std::numeric_limits<int>::max() - draw.GetNext();
+      // Only isolated draws use this counter, so it isn't an
+      // AtomicSequenceNumber, which RECORD_REPLAY_ISOLATED_DRAW_ASSERTS
+      // fails on in an isolated draw.
+      static std::atomic<int> draw{0};
+      return std::numeric_limits<int>::max() -
+             draw.fetch_add(1, std::memory_order_relaxed);
     }
     return std::numeric_limits<int>::max() / 2 - isolated.GetNext();
   }

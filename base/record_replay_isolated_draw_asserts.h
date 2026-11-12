@@ -10,10 +10,12 @@
 #include "base/base_export.h"
 #include "base/compiler_specific.h"
 
-// Checks of what Replay's isolated in-process draws touch that recorded
-// threads share (locks, counters, histograms, IDs), enabled by
-// RECORD_REPLAY_ISOLATED_DRAW_ASSERTS. They are hooked into hot base code
-// (locks, sequence numbers), so when disabled each costs a load and a branch.
+// Asserts that Replay's isolated in-process draws don't touch what recorded
+// threads share (locks, counters, histogram samples, IDs), enabled by
+// RECORD_REPLAY_ISOLATED_DRAW_ASSERTS: a failed one prints what was touched
+// and its caller, then crashes. With them come notes that only print. They are
+// hooked into hot base code (locks, sequence numbers), so when disabled each
+// costs a load and a branch.
 // Kept apart from base/record_replay.cc, which links against V8: binaries
 // without V8 use these hooks too.
 
@@ -40,10 +42,12 @@ BASE_EXPORT NOINLINE void IsolatedDrawAssertSlow(const char* what,
                                                  const void* address);
 BASE_EXPORT NOINLINE void IsolatedDrawAssertNameSlow(const char* what,
                                                      const char* name);
-BASE_EXPORT NOINLINE void ReportIsolatedDrawAssertSlow(const char* what,
+BASE_EXPORT NOINLINE void IsolatedDrawAssertAlwaysSlow(const char* what,
                                                        const void* address);
+BASE_EXPORT NOINLINE void IsolatedDrawNoteSlow(const char* what,
+                                               const void* address);
 
-// Reports |what| when this thread is in an isolated draw.
+// Fails when this thread is in an isolated draw.
 inline void IsolatedDrawAssert(const char* what, const void* address) {
   if (UNLIKELY(IsolatedDrawAssertsEnabled())) {
     IsolatedDrawAssertSlow(what, address);
@@ -56,10 +60,17 @@ inline void IsolatedDrawAssertName(const char* what, const char* name) {
   }
 }
 
-// Reports |what| wherever it happens.
-inline void ReportIsolatedDrawAssert(const char* what, const void* address) {
+// Fails wherever it happens.
+inline void IsolatedDrawAssertAlways(const char* what, const void* address) {
   if (UNLIKELY(IsolatedDrawAssertsEnabled())) {
-    ReportIsolatedDrawAssertSlow(what, address);
+    IsolatedDrawAssertAlwaysSlow(what, address);
+  }
+}
+
+// Prints |what|, which is worth knowing about but not a failure.
+inline void IsolatedDrawNote(const char* what, const void* address) {
+  if (UNLIKELY(IsolatedDrawAssertsEnabled())) {
+    IsolatedDrawNoteSlow(what, address);
   }
 }
 

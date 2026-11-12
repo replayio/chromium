@@ -87,7 +87,7 @@ void RecordReplayCaptureImage(const PaintImage& image,
   if (captured.image) {
     if (recordreplay::IsolatedDrawAssertsEnabled() &&
         !HasPixels(captured.image, pixmap)) {
-      recordreplay::ReportIsolatedDrawAssert("captured image changed", &image);
+      recordreplay::IsolatedDrawAssertAlways("captured image changed", &image);
     }
     return;
   }

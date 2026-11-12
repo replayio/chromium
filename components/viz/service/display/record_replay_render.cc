@@ -158,7 +158,7 @@ static void HoldFrameRefs(const viz::CompositorFrame& frame) {
     if (IsolatedDrawAssertsEnabled()) {
       for (const viz::DrawQuad* quad : pass->quad_list) {
         if (quad->material == viz::DrawQuad::Material::kPictureContent) {
-          ReportIsolatedDrawAssert("picture quad", quad);
+          IsolatedDrawNote("picture quad", quad);
         }
       }
     }
@@ -563,7 +563,7 @@ void OnDrawSourceFrame(const void* compositor, int source_frame_number) {
   if (bookmark) {
     size_t last = gLastCommitBookmark.load(std::memory_order_relaxed);
     if (last && !gLastCommitBookmarkFinished) {
-      ReportIsolatedDrawAssert("paint bookmark without a sent frame", compositor);
+      IsolatedDrawNote("paint bookmark without a sent frame", compositor);
       FinishPaintWithoutPixels(last);
     }
     gLastCommitBookmark.store(bookmark, std::memory_order_relaxed);
@@ -589,7 +589,7 @@ void OnCompositorDestroyed(const void* compositor) {
   if (gLastCommitCompositor == compositor) {
     size_t last = gLastCommitBookmark.load(std::memory_order_relaxed);
     if (last && !gLastCommitBookmarkFinished) {
-      ReportIsolatedDrawAssert("paint bookmark of a destroyed compositor", compositor);
+      IsolatedDrawNote("paint bookmark of a destroyed compositor", compositor);
       FinishPaintWithoutPixels(last);
     }
     gLastCommitBookmark.store(0, std::memory_order_relaxed);

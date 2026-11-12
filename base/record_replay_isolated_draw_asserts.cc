@@ -7,6 +7,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 
+#include "base/immediate_crash.h"
 #include "build/build_config.h"
 
 #if BUILDFLAG(IS_POSIX)
@@ -40,8 +41,7 @@ static void AssertPrint(const char* format, ...) {
   static void (*print)(const char*, va_list) =
       reinterpret_cast<void (*)(const char*, va_list)>(
           dlsym(RTLD_DEFAULT, "RecordReplayPrint"));
-  static std::atomic<int> count;
-  if (!print || count++ > 2000) {
+  if (!print) {
     return;
   }
   va_list ap;
@@ -53,18 +53,29 @@ static void AssertPrint(const char* format, ...) {
 
 void IsolatedDrawAssertSlow(const char* what, const void* address) {
   if (InIsolatedDrawForAsserts()) {
-    AssertPrint("IsolatedDrawAssert %s caller=%p", what, address);
+    IsolatedDrawAssertAlwaysSlow(what, address);
   }
 }
 
 void IsolatedDrawAssertNameSlow(const char* what, const char* name) {
   if (InIsolatedDrawForAsserts()) {
-    AssertPrint("IsolatedDrawAssert %s %s", what, name);
+    AssertPrint("IsolatedDrawAssert failed: %s %s", what, name);
+    IMMEDIATE_CRASH();
   }
 }
 
-void ReportIsolatedDrawAssertSlow(const char* what, const void* address) {
-  AssertPrint("IsolatedDrawAssert %s caller=%p", what, address);
+void IsolatedDrawAssertAlwaysSlow(const char* what, const void* address) {
+  AssertPrint("IsolatedDrawAssert failed: %s caller=%p", what, address);
+  IMMEDIATE_CRASH();
+}
+
+// Notes can be many, e.g. one for each paint without a sent frame, so only
+// the first ones print.
+void IsolatedDrawNoteSlow(const char* what, const void* address) {
+  static std::atomic<int> count;
+  if (count++ < 2000) {
+    AssertPrint("IsolatedDrawNote %s caller=%p", what, address);
+  }
 }
 
 }  // namespace recordreplay

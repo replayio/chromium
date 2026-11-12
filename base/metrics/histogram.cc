@@ -161,7 +161,6 @@ class Histogram::Factory {
 HistogramBase* Histogram::Factory::Build() {
   // recordreplay::Assert("[RUN-1217]-1310 Histogram::Factory::Build");
   HistogramBase* histogram = StatisticsRecorder::FindHistogram(name_);
-  recordreplay::IsolatedDrawAssertName("histogram", name_.c_str());
   if (!histogram) {
     // constructor. Refactor code to avoid the additional call.
     bool should_record = StatisticsRecorder::ShouldRecordHistogram(
