@@ -368,7 +368,8 @@ size_t PaintFilter::BaseSerializedSize() const {
 
 sk_sp<PaintFilter> PaintFilter::SnapshotWithImages(
     ImageProvider* image_provider) const {
-  if (!has_discardable_images_)
+  if (!has_discardable_images_ &&
+      !(image_provider && image_provider->RecordReplaySnapshotsAllFilters()))
     return sk_ref_sp<PaintFilter>(this);
   return SnapshotWithImagesInternal(image_provider);
 }
@@ -1045,6 +1046,11 @@ size_t RecordPaintFilter::SerializedSize() const {
 
 sk_sp<PaintFilter> RecordPaintFilter::SnapshotWithImagesInternal(
     ImageProvider* image_provider) const {
+  if (image_provider && image_provider->RecordReplaySnapshotsAllFilters()) {
+    return sk_make_sp<RecordPaintFilter>(sk_make_sp<PaintOpBuffer>(),
+                                         record_bounds_, raster_scale_,
+                                         scaling_behavior_);
+  }
   return sk_sp<RecordPaintFilter>(
       new RecordPaintFilter(record_, record_bounds_, raster_scale_,
                             scaling_behavior_, image_provider));
@@ -1260,6 +1266,12 @@ size_t TurbulencePaintFilter::SerializedSize() const {
 
 sk_sp<PaintFilter> TurbulencePaintFilter::SnapshotWithImagesInternal(
     ImageProvider* image_provider) const {
+  // [RecordReplay] Without images or paint records, Replay's in-process draws
+  // can use the filter itself, whose noise their filter cache keeps between
+  // draws.
+  if (image_provider && image_provider->RecordReplaySnapshotsAllFilters()) {
+    return sk_ref_sp<PaintFilter>(this);
+  }
   return sk_make_sp<TurbulencePaintFilter>(turbulence_type_, base_frequency_x_,
                                            base_frequency_y_, num_octaves_,
                                            seed_, &tile_size_, GetCropRect());
@@ -1315,6 +1327,15 @@ size_t ShaderPaintFilter::SerializedSize() const {
 
 sk_sp<PaintFilter> ShaderPaintFilter::SnapshotWithImagesInternal(
     ImageProvider* image_provider) const {
+  if (image_provider && image_provider->RecordReplaySnapshotsAllFilters() &&
+      shader_ && shader_->shader_type() == PaintShader::Type::kPaintRecord) {
+    SkMatrix local_matrix = shader_->GetLocalMatrix();
+    return sk_make_sp<ShaderPaintFilter>(
+        PaintShader::MakePaintRecord(sk_make_sp<PaintOpBuffer>(),
+                                     shader_->tile(), shader_->tx(),
+                                     shader_->ty(), &local_matrix),
+        alpha_, filter_quality_, dither_, GetCropRect());
+  }
   PaintFlags orig_flags;
   orig_flags.setShader(shader_);
   orig_flags.setAlpha(alpha_);

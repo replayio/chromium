@@ -4,19 +4,32 @@
 
 #include "components/viz/service/display/record_replay_render.h"
 
+#include <deque>
+#include <vector>
+
 #include "base/base64.h"
 #include "base/containers/contains.h"
+#include "base/metrics/record_histogram_checker.h"
+#include "base/metrics/statistics_recorder.h"
 #include "base/no_destructor.h"
 #include "base/record_replay.h"
+#include "base/record_replay_isolated_draw_asserts.h"
 #include "base/record_replay_paint_surface.h"
 #include "base/record_replay_render_interface.h"
 #include "base/strings/stringprintf.h"
 #include "cc/animation/animation_events.h"
+#include "cc/paint/filter_operations.h"
+#include "cc/paint/image_provider.h"
+#include "cc/paint/paint_filter.h"
+#include "cc/paint/record_replay_image_capture.h"
+#include "cc/paint/record_replay_isolated_draw.h"
 #include "cc/trees/compositor_commit_data.h"
 #include "components/viz/common/display/renderer_settings.h"
+#include "components/viz/common/quads/picture_draw_quad.h"
 #include "components/viz/service/display/software_output_device.h"
 #include "components/viz/service/display/software_renderer.h"
 #include "components/viz/service/display_embedder/software_output_surface.h"
+#include "third_party/skia/include/private/SkRecordReplayDraw.h"
 #include "ui/gfx/codec/jpeg_codec.h"
 
 namespace blink {
@@ -59,7 +72,25 @@ static viz::LocalSurfaceId* gSurfaceId;
 // compositor thread.
 static std::atomic<const base::UnguessableToken*> gSurfaceEmbedToken;
 
+// Histograms are shared with recorded threads: their samples are sent to the
+// browser and observers of them post tasks. A histogram first used in an
+// in-process draw, which only happens when replaying, is a dummy. A histogram
+// used before still gets the draw's samples, from macros that cached it too,
+// which this doesn't see; the code that draws records none outside the draw.
+class RecordReplayDrawHistogramChecker : public base::RecordHistogramChecker {
+ public:
+  bool ShouldRecord(uint32_t histogram_hash) const override {
+    return !SkRecordReplayInIsolatedDraw();
+  }
+};
+
 static void InitializeRenderer() {
+  static bool installed_histogram_checker = false;
+  if (!installed_histogram_checker) {
+    installed_histogram_checker = true;
+    base::StatisticsRecorder::SetRecordChecker(
+        std::make_unique<RecordReplayDrawHistogramChecker>());
+  }
   std::unique_ptr<viz::SoftwareOutputDevice> output_device =
       std::make_unique<viz::SoftwareOutputDevice>();
   gOutputSurface = new viz::SoftwareOutputSurface(std::move(output_device));
@@ -81,8 +112,179 @@ static std::string SurfaceIdString(const viz::LocalSurfaceId& local_surface_id) 
                             local_surface_id.embed_token().ToString().c_str());
 }
 
-// Current compositor frame.
-static const viz::CompositorFrame* gCurrentFrame;
+// What drawing a submitted frame needs: the frame itself is sent to the GPU
+// process, which destroys it, before its paints finish.
+struct RecordReplayFrame {
+  viz::AggregatedRenderPassList render_passes;
+  std::vector<viz::TransferableResource> resources;
+  gfx::Size size_in_pixels;
+};
+
+static std::unique_ptr<RecordReplayFrame> CopyFrame(
+    const viz::CompositorFrame& frame) {
+  auto copy = std::make_unique<RecordReplayFrame>();
+  for (const auto& pass : frame.render_pass_list) {
+    copy->render_passes.push_back(pass->DeepCopyAggregated());
+  }
+  copy->resources = frame.resource_list;
+  copy->size_in_pixels = frame.size_in_pixels();
+  return copy;
+}
+
+// Resources of the frame being drawn.
+static const std::vector<viz::TransferableResource>* gCurrentResources;
+
+// When replaying, a copy of the submitted frame whose paints finish next.
+static base::NoDestructor<std::unique_ptr<RecordReplayFrame>> gSubmittedFrame;
+
+// Whether a frame was submitted whose paints haven't finished.
+static bool gSubmittedFramePending;
+
+// References the submitted frame's copy shares with the frame: its filters.
+// They are held, recording and replaying, until the frame's paints finish and
+// the copy is gone, and dropped with events allowed: the copy never holds the
+// last reference, whose release runs destructors that can post Skia cache
+// purges to recorded threads. Filters are thus destroyed after the frame is
+// sent, in both modes. Frames this renderer draws in software have no picture
+// quads (PictureLayerImpl appends them only in resourceless software draws),
+// so they share no display lists with the copy.
+struct RecordReplayFrameRefs {
+  std::vector<cc::FilterOperations> filters;
+};
+static base::NoDestructor<RecordReplayFrameRefs> gSubmittedFrameRefs;
+
+static void HoldFrameRefs(const viz::CompositorFrame& frame) {
+  for (const auto& pass : frame.render_pass_list) {
+    if (IsolatedDrawAssertsEnabled()) {
+      for (const viz::DrawQuad* quad : pass->quad_list) {
+        if (quad->material == viz::DrawQuad::Material::kPictureContent) {
+          IsolatedDrawNote("picture quad", quad);
+        }
+      }
+    }
+    if (!pass->filters.IsEmpty()) {
+      gSubmittedFrameRefs->filters.push_back(pass->filters);
+    }
+    if (!pass->backdrop_filters.IsEmpty()) {
+      gSubmittedFrameRefs->filters.push_back(pass->backdrop_filters);
+    }
+  }
+}
+
+const SkPixmap* gCurrentPixmap;
+static void FinishPaints();
+static void FinishIgnoredFramePaint();
+
+// The compositor drawing a frame (OnDrawSourceFrame), and the one whose frame
+// was submitted last. Only used on the compositor thread.
+static const void* gDrawingCompositor;
+static const void* gSubmittingCompositor;
+
+// Whether a paint is being finished without pixels (FinishPaintWithoutPixels).
+static bool gFinishingWithoutPixels;
+static void SetDeviceViewportSize(const gfx::Size& size);
+
+// What a frame's draw does depends on its contents, and so do the recorded
+// events it emits (asserts, recorded IDs, ordered locks). Without diverging, a
+// submitted frame is therefore drawn only when the recorder asks for its
+// pixels, with recorded events disallowed, so that drawing a frame or not
+// never changes the recording's events.
+static bool RecordReplayDrawWhenRequested() {
+  static bool enabled = IsRecordingOrReplaying("event-free-draw");
+  return enabled && !HasDivergedFromRecording();
+}
+
+// Whether the current frame has been drawn into |gCurrentPixmap|.
+static bool gCurrentFrameDrawn;
+
+// Hands a draw the images the frame's send to the GPU process serialized
+// (cc::RecordReplayCaptureImage), and nothing for others, which drops their
+// filters: decoding images would fill caches that recorded threads share.
+class RecordReplayCapturedImageProvider : public cc::ImageProvider {
+ public:
+  ScopedResult GetRasterContent(const cc::DrawImage& draw_image) override {
+    sk_sp<SkImage> image =
+        cc::RecordReplayFindCapturedImage(draw_image.paint_image());
+    if (!image) {
+      return ScopedResult();
+    }
+    return ScopedResult(cc::DecodedDrawImage(
+        std::move(image), nullptr, SkSize::Make(0, 0), SkSize::Make(1, 1),
+        draw_image.filter_quality(), /*is_budgeted=*/true));
+  }
+
+  bool RecordReplaySnapshotsAllFilters() const override { return true; }
+};
+
+static bool HasReferenceFilter(const cc::FilterOperations& filters) {
+  for (const cc::FilterOperation& op : filters.operations()) {
+    if (op.type() == cc::FilterOperation::REFERENCE && op.image_filter()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static cc::FilterOperations SnapshotFilters(
+    const cc::FilterOperations& filters,
+    cc::ImageProvider* image_provider) {
+  std::vector<cc::FilterOperation> snapshot;
+  for (const cc::FilterOperation& op : filters.operations()) {
+    if (op.type() == cc::FilterOperation::REFERENCE && op.image_filter()) {
+      snapshot.push_back(cc::FilterOperation::CreateReferenceFilter(
+          cc::RecordReplayIsUnsentFilter(op.image_filter().get())
+              ? nullptr
+              : op.image_filter()->SnapshotWithImages(image_provider)));
+    } else {
+      snapshot.push_back(op);
+    }
+  }
+  return cc::FilterOperations(std::move(snapshot));
+}
+
+// Drawing a reference filter can decode images, play back paint records and
+// fill caches that recorded threads share. A draw uses snapshots of the
+// frame's reference filters instead, with the images the send captured,
+// paint records emptied and no filter where the send couldn't serialize one,
+// as viz receives them.
+static void SnapshotReferenceFilters(RecordReplayFrame& frame) {
+  RecordReplayCapturedImageProvider image_provider;
+  for (auto& pass : frame.render_passes) {
+    if (HasReferenceFilter(pass->filters)) {
+      pass->filters = SnapshotFilters(pass->filters, &image_provider);
+    }
+    if (HasReferenceFilter(pass->backdrop_filters)) {
+      pass->backdrop_filters =
+          SnapshotFilters(pass->backdrop_filters, &image_provider);
+    }
+  }
+}
+
+static bool HasReferenceFilters(const viz::CompositorFrame& frame) {
+  for (const auto& pass : frame.render_pass_list) {
+    if (HasReferenceFilter(pass->filters) ||
+        HasReferenceFilter(pass->backdrop_filters)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static void DrawFrame(RecordReplayFrame& frame) {
+  // A frame drawn when its pixels are requested stays current until its
+  // paints have finished.
+  const std::vector<viz::TransferableResource>* previous_resources =
+      gCurrentResources;
+  gCurrentResources = &frame.resources;
+
+  gRenderer->DrawFrame(&frame.render_passes,
+                       1,
+                       frame.size_in_pixels,
+                       gfx::DisplayColorSpaces(),
+                       viz::SurfaceDamageRectList());
+
+  gCurrentResources = previous_resources;
+}
 
 void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
                            const viz::CompositorFrame& frame) {
@@ -112,30 +314,56 @@ void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
     Print("Ignoring composite to unknown surface %s, expected %s",
           SurfaceIdString(local_surface_id).c_str(),
           SurfaceIdString(*gSurfaceId).c_str());
+    FinishIgnoredFramePaint();
+    return;
+  }
+  gSubmittingCompositor = gDrawingCompositor;
+
+  if (RecordReplayDrawWhenRequested()) {
+    // The frame's paints finish once it has been sent to the GPU process
+    // (FinishSubmittedCompositorFrame), when the paint callback draws a copy
+    // of it if it's asked for the frame's pixels. Only replaying draws.
+    gSubmittedFramePending = true;
+    SetDeviceViewportSize(frame.size_in_pixels());
+    HoldFrameRefs(frame);
+    if (IsReplaying()) {
+      // Every frame is copied: sending it to the GPU process destroys it
+      // before its paints finish, when it's known whether they need pixels.
+      cc::RecordReplayScopedIsolatedDraw isolated("RecordReplayCopySubmittedFrame");
+      *gSubmittedFrame = CopyFrame(frame);
+      cc::RecordReplaySetCapturingImages(HasReferenceFilters(frame));
+    }
     return;
   }
 
-  viz::AggregatedRenderPassList render_passes;
-  for (const auto& pass : frame.render_pass_list) {
-    render_passes.push_back(pass->DeepCopyAggregated());
+  std::unique_ptr<RecordReplayFrame> copy = CopyFrame(frame);
+  DrawFrame(*copy);
+}
+
+void FinishSubmittedCompositorFrame() {
+  if (!gSubmittedFramePending) {
+    return;
   }
+  gSubmittedFramePending = false;
+  cc::RecordReplaySetCapturingImages(false);
 
-  gCurrentFrame = &frame;
+  gCurrentFrameDrawn = false;
+  FinishPaints();
+  gCurrentPixmap = nullptr;
 
-  gRenderer->DrawFrame(&render_passes,
-                       1,
-                       frame.size_in_pixels(),
-                       gfx::DisplayColorSpaces(),
-                       viz::SurfaceDamageRectList());
-
-  gCurrentFrame = nullptr;
+  if (*gSubmittedFrame) {
+    cc::RecordReplayScopedIsolatedDraw isolated("RecordReplayCopySubmittedFrame");
+    gSubmittedFrame->reset();
+    cc::RecordReplayClearCapturedImages();
+  }
+  gSubmittedFrameRefs->filters.clear();
 }
 
 bool PopulateSkBitmapWithResource(SkBitmap* sk_bitmap, viz::ResourceId resource_id) {
-  CHECK(gCurrentFrame);
+  CHECK(gCurrentResources);
 
   const viz::TransferableResource* transferable = nullptr;
-  for (const viz::TransferableResource& resource : gCurrentFrame->resource_list) {
+  for (const viz::TransferableResource& resource : *gCurrentResources) {
     if (resource.id == resource_id) {
       transferable = &resource;
       break;
@@ -153,6 +381,7 @@ bool PopulateSkBitmapWithResource(SkBitmap* sk_bitmap, viz::ResourceId resource_
     for (const SharedBitmapInfo& info : *gSharedBitmaps) {
       if (info.id_ == transferable->mailbox_holder.mailbox) {
         pixels = info.memory_;
+        break;
       }
     }
   }
@@ -172,10 +401,10 @@ extern "C" size_t V8RecordReplayPaintStart();
 extern "C" void V8RecordReplayPaintFinished(size_t bookmark);
 extern "C" void V8RecordReplaySetPaintCallback(char* (*callback)(const char*, int));
 
-const SkPixmap* gCurrentPixmap;
-
 static char* EncodeBitmapContents(const char* mime_type, int jpeg_quality) {
-  CHECK(gCurrentPixmap);
+  if (!gCurrentPixmap) {
+    return nullptr;
+  }
 
   if (strcmp(mime_type, "image/jpeg")) {
     // NYI
@@ -200,7 +429,32 @@ static char* PaintCallback(const char* mime_type, int jpeg_quality) {
   // on the compositor thread, or at any time after diverging from the recording and
   // we are on the main thread. These invocations need different handling.
   if (HasDivergedFromRecording()) {
+    // Paints the compositor thread finishes while diverged, such as a
+    // repaint's frames, aren't the recording's.
+    if (!IsMainThread()) {
+      return nullptr;
+    }
     return PaintWhenDiverged(mime_type, jpeg_quality);
+  }
+
+  if (gFinishingWithoutPixels) {
+    // An empty result tells the linker that the paint was finished without
+    // pixels and shows the paint before it, unlike no result, which means its
+    // pixels aren't available. It is freed like any other result.
+    return strdup("");
+  }
+
+  if (RecordReplayDrawWhenRequested()) {
+    if (!*gSubmittedFrame) {
+      return nullptr;
+    }
+    cc::RecordReplayScopedIsolatedDraw isolated("RecordReplayDrawWhenRequested");
+    if (!gCurrentFrameDrawn) {
+      gCurrentFrameDrawn = true;
+      SnapshotReferenceFilters(**gSubmittedFrame);
+      DrawFrame(**gSubmittedFrame);
+    }
+    return EncodeBitmapContents(mime_type, jpeg_quality);
   }
 
   return EncodeBitmapContents(mime_type, jpeg_quality);
@@ -218,18 +472,45 @@ static char* PaintCallback(const char* mime_type, int jpeg_quality) {
 // 3. Compositor thread finishes painting the frame.
 //
 // The paint finished in #3 needs to be associated with the bookmark created in #1.
-// The state below is used to keep track of the bookmark for the current paint
-// in a consistent way between recording and replaying. This isn't necessarily
-// correct, though --- #2 and #3 run in separate tasks on the compositor thread,
-// so a frame could be marked ready to commit on the compositor thread before
-// the previous frame finished painting. For now this is good enough, though.
+// Frames drawn before the commit's tree activates still show earlier commits,
+// so a commit's bookmark is finished by the first frame its compositor draws
+// from a tree with the commit's source frame number or a later one.
 
 // Bookmark which was last created on the main thread before blocking until the
 // compositor thread is ready to commit.
 static std::atomic<size_t> gCurrentPaintBookmark;
 
-// Bookmark for the last point where a paint was committed on the main thread.
+// Bookmark for the last point where a paint was committed on the main thread,
+// once a frame draws that commit's tree.
 static std::atomic<size_t> gLastCommitBookmark;
+
+// Whether |gLastCommitBookmark|'s paint was finished, by a sent frame, or
+// without pixels when its frame was ignored or its compositor destroyed, and
+// the compositor whose frame drew its commit. Only used on the compositor
+// thread.
+static bool gLastCommitBookmarkFinished = true;
+static const void* gLastCommitCompositor;
+
+// Commits whose trees no frame has drawn yet, oldest first. Source frame
+// numbers count per compositor. Only used on the compositor thread.
+struct PendingCommitPaint {
+  const void* compositor;
+  int source_frame_number;
+  size_t bookmark;
+};
+static base::NoDestructor<std::deque<PendingCommitPaint>> gPendingCommitPaints;
+
+// Paints of commits whose trees no sent frame showed: replaced before any
+// frame drew them, drawn by frames that weren't sent (an aborted draw, a
+// surface that isn't drawn) or left by a destroyed compositor. They are
+// finished without pixels once that's known, so that they show the paint
+// before them, which the screen still showed, and aren't among the started
+// paints the linker reports pending at the end of a paints run.
+static void FinishPaintWithoutPixels(size_t bookmark) {
+  gFinishingWithoutPixels = true;
+  V8RecordReplayPaintFinished(bookmark);
+  gFinishingWithoutPixels = false;
+}
 
 void InitPaintCallback() {
   static bool hasPaints = false;
@@ -239,6 +520,14 @@ void InitPaintCallback() {
   }
 }
 
+// The bookmark is handed from the main thread to the compositor thread's
+// OnReadyToCommit while the main thread waits for the commit: commits block
+// it (NonBlockingCommit is disabled by default, and a repaint's commit is
+// forced to block), and every compositor of the renderer commits from its main
+// thread. Enabling NonBlockingCommit, with --enable-features or a field trial,
+// would let the next main frame replace the bookmark before the compositor
+// thread reads it. Our builds fetch no variations seed (unbranded) and the
+// field trial testing config doesn't enable it.
 void OnCommitPaint() {
   // Record/replay state has to be initialized before the first paint
   // starts, as a checkpoint must have been taken.
@@ -249,8 +538,64 @@ void OnCommitPaint() {
   }
 }
 
-void OnReadyToCommit() {
-  gLastCommitBookmark.store(gCurrentPaintBookmark, std::memory_order_relaxed);
+void OnReadyToCommit(const void* compositor, int source_frame_number) {
+  size_t bookmark = gCurrentPaintBookmark;
+  if (bookmark) {
+    gPendingCommitPaints->push_back({compositor, source_frame_number, bookmark});
+  }
+}
+
+void OnDrawSourceFrame(const void* compositor, int source_frame_number) {
+  gDrawingCompositor = compositor;
+  size_t bookmark = 0;
+  for (auto it = gPendingCommitPaints->begin(); it != gPendingCommitPaints->end();) {
+    if (it->compositor != compositor ||
+        it->source_frame_number > source_frame_number) {
+      ++it;
+      continue;
+    }
+    if (bookmark) {
+      FinishPaintWithoutPixels(bookmark);
+    }
+    bookmark = it->bookmark;
+    it = gPendingCommitPaints->erase(it);
+  }
+  if (bookmark) {
+    size_t last = gLastCommitBookmark.load(std::memory_order_relaxed);
+    if (last && !gLastCommitBookmarkFinished) {
+      IsolatedDrawNote("paint bookmark without a sent frame", compositor);
+      FinishPaintWithoutPixels(last);
+    }
+    gLastCommitBookmark.store(bookmark, std::memory_order_relaxed);
+    gLastCommitBookmarkFinished = false;
+    gLastCommitCompositor = compositor;
+  }
+}
+
+// A destroyed compositor never draws its pending commits, and a later
+// compositor at the same address must not finish them.
+void OnCompositorDestroyed(const void* compositor) {
+  for (auto it = gPendingCommitPaints->begin(); it != gPendingCommitPaints->end();) {
+    if (it->compositor != compositor) {
+      ++it;
+      continue;
+    }
+    FinishPaintWithoutPixels(it->bookmark);
+    it = gPendingCommitPaints->erase(it);
+  }
+  // Nor is its last drawn commit's paint finished by another compositor's
+  // frames. This is bookkeeping: no page was found where that paint showed the
+  // next compositor's pixels instead of the earlier paint's.
+  if (gLastCommitCompositor == compositor) {
+    size_t last = gLastCommitBookmark.load(std::memory_order_relaxed);
+    if (last && !gLastCommitBookmarkFinished) {
+      IsolatedDrawNote("paint bookmark of a destroyed compositor", compositor);
+      FinishPaintWithoutPixels(last);
+    }
+    gLastCommitBookmark.store(0, std::memory_order_relaxed);
+    gLastCommitBookmarkFinished = true;
+    gLastCommitCompositor = nullptr;
+  }
 }
 
 // How to encode repainted graphics.
@@ -266,11 +611,54 @@ static std::atomic<char*> gRepaintResult;
 // Real size of |gRepaintResult|.
 static std::atomic<gfx::Size> gDeviceViewportSize;
 
+static void SetDeviceViewportSize(const gfx::Size& size) {
+  gDeviceViewportSize = size;
+}
+
+// A commit drawn by a frame of a surface that isn't drawn was never on screen,
+// so its paint is finished without pixels when that frame is ignored.
+static void FinishIgnoredFramePaint() {
+  size_t last = gLastCommitBookmark.load(std::memory_order_relaxed);
+  if (last && !gLastCommitBookmarkFinished &&
+      gLastCommitCompositor == gDrawingCompositor) {
+    FinishPaintWithoutPixels(last);
+    gLastCommitBookmarkFinished = true;
+  }
+}
+
+static void FinishPaints() {
+  // Only the frames of the compositor that drew the commit finish its paint.
+  // Another compositor's drawn commit was finished without pixels when its
+  // frame was ignored, or, if its draw sent no frame, is when any compositor
+  // draws its next commit or that compositor is destroyed; until then it stays
+  // pending, also through frames of other compositors without a new commit.
+  // Each paint is finished once, by the first sent frame.
+  size_t bookmark = gLastCommitBookmark.load(std::memory_order_relaxed);
+  if (bookmark && !gLastCommitBookmarkFinished &&
+      gLastCommitCompositor == gSubmittingCompositor) {
+    V8RecordReplayPaintFinished(bookmark);
+    gLastCommitBookmarkFinished = true;
+  }
+}
+
+// The pixels of the frame the paint callback draws, which it encodes after
+// the draw.
+static base::NoDestructor<SkPixmap> gDrawnPixmap;
+
 void OnPaintFinished(const SkPixmap& pixmap) {
+  if (RecordReplayDrawWhenRequested()) {
+    // The paint callback is drawing the current frame.
+    CHECK(gCurrentResources && SkRecordReplayInIsolatedDraw());
+    *gDrawnPixmap = pixmap;
+    gCurrentPixmap = gDrawnPixmap.get();
+    return;
+  }
+
   gCurrentPixmap = &pixmap;
   if (gOutputSurface) {
     // Obtain device size on impl thread.
-    gDeviceViewportSize = gOutputSurface->software_device()->ReplayViewportPixelSize();
+    SetDeviceViewportSize(
+        gOutputSurface->software_device()->ReplayViewportPixelSize());
   }
 
   if (HasDivergedFromRecording()) {
@@ -279,10 +667,7 @@ void OnPaintFinished(const SkPixmap& pixmap) {
     if (gRepaintEvent)
       gRepaintResult = EncodeBitmapContents(gRepaintMimeType, gRepaintJPEGQuality);
   } else {
-    size_t bookmark = gLastCommitBookmark.load();
-    if (bookmark) {
-      V8RecordReplayPaintFinished(bookmark);
-    }
+    FinishPaints();
   }
 
   gCurrentPixmap = nullptr;

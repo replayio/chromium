@@ -1,0 +1,42 @@
+// Copyright 2026 Record Replay Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+#ifndef CC_PAINT_RECORD_REPLAY_IMAGE_CAPTURE_H_
+#define CC_PAINT_RECORD_REPLAY_IMAGE_CAPTURE_H_
+
+#include "cc/paint/paint_export.h"
+#include "cc/paint/paint_image.h"
+#include "third_party/skia/include/core/SkImage.h"
+#include "third_party/skia/include/core/SkPixmap.h"
+
+namespace cc {
+
+class PaintFilter;
+
+// When replaying, Replay draws a compositor frame in-process after the frame
+// has been sent to the GPU process, and only if the recorder asks for its
+// pixels. The images in the frame's filters are captured as the send
+// serializes them (PaintOpWriter), so that drawing never decodes images
+// itself: decoding fills caches that recorded threads share.
+CC_PAINT_EXPORT void RecordReplaySetCapturingImages(bool capturing);
+CC_PAINT_EXPORT bool RecordReplayCapturingImages();
+// Images are keyed by their stable ID and the content ID of their default
+// frame, which is what PaintOpWriter serializes.
+CC_PAINT_EXPORT void RecordReplayCaptureImage(const PaintImage& image,
+                                              const SkPixmap& pixmap);
+CC_PAINT_EXPORT sk_sp<SkImage> RecordReplayFindCapturedImage(
+    const PaintImage& image);
+// Drops the images the frame that was sent last didn't capture, and forgets
+// its unsent filters.
+CC_PAINT_EXPORT void RecordReplayClearCapturedImages();
+// A filter the send couldn't serialize reaches viz as no filter at all
+// (paint_filter_mojom_traits.cc), and has to be drawn as none. A filter that
+// serializes but that viz fails to read would reject the whole frame instead;
+// no filter type is known to do that.
+CC_PAINT_EXPORT void RecordReplayNoteUnsentFilter(const PaintFilter* filter);
+CC_PAINT_EXPORT bool RecordReplayIsUnsentFilter(const PaintFilter* filter);
+
+}  // namespace cc
+
+#endif  // CC_PAINT_RECORD_REPLAY_IMAGE_CAPTURE_H_

@@ -31,8 +31,15 @@ void InitPaintCallback();
 void OnCommitPaint();
 
 // Called on the compositor thread when the main thread's notification about
-// the commit.
-void OnReadyToCommit();
+// the commit, whose tree has the given source frame number.
+void OnReadyToCommit(const void* compositor, int source_frame_number);
+
+// Called on the compositor thread before drawing the active tree, which has
+// the given source frame number.
+void OnDrawSourceFrame(const void* compositor, int source_frame_number);
+
+// Called on the compositor thread when the compositor is destroyed.
+void OnCompositorDestroyed(const void* compositor);
 
 // Called when a shared memory buffer for rasterization has been created.
 void NotifyRasterBuffer(const viz::SharedBitmapId& shared_bitmap_id,
@@ -41,6 +48,10 @@ void NotifyRasterBuffer(const viz::SharedBitmapId& shared_bitmap_id,
 // Called when a CompositorFrame is being submitted to the GPU process.
 void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
                            const viz::CompositorFrame& frame);
+
+// Called after a frame passed to SubmitCompositorFrame has been sent to the
+// GPU process, which destroys the frame.
+void FinishSubmittedCompositorFrame();
 
 // Called to populate a bitmap with information for the given resource in the current frame.
 bool PopulateSkBitmapWithResource(SkBitmap* sk_bitmap, viz::ResourceId resource_id);

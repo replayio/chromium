@@ -16,6 +16,7 @@
 #include "cc/paint/paint_flags.h"
 #include "cc/paint/paint_op_buffer_serializer.h"
 #include "cc/paint/paint_shader.h"
+#include "cc/paint/record_replay_image_capture.h"
 #include "cc/paint/skottie_transfer_cache_entry.h"
 #include "cc/paint/skottie_wrapper.h"
 #include "cc/paint/transfer_cache_serialize_helper.h"
@@ -274,6 +275,8 @@ void PaintOpWriter::Write(const DrawImage& draw_image,
 
     Write(static_cast<uint8_t>(PaintOp::SerializedImageType::kImageData));
     const auto& pixmap = bm.pixmap();
+    if (RecordReplayCapturingImages())
+      RecordReplayCaptureImage(paint_image, pixmap);
     Write(pixmap.colorType());
     Write(pixmap.width());
     Write(pixmap.height());

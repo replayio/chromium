@@ -56,6 +56,11 @@ class CC_PAINT_EXPORT ImageProvider {
   // provided, the draw for this image will be skipped during raster. Or,
   // 2. The PaintRecord produced by paint worklet JS paint callback.
   virtual ScopedResult GetRasterContent(const DrawImage& draw_image) = 0;
+
+  // Whether PaintFilter::SnapshotWithImages() snapshots every filter, and
+  // replaces paint records in them with empty ones, as viz receives them.
+  // Replay snapshots the filters it draws in-process with such a provider.
+  virtual bool RecordReplaySnapshotsAllFilters() const;
 };
 
 }  // namespace cc
