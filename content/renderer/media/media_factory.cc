@@ -57,6 +57,7 @@
 #include "third_party/blink/public/platform/media/key_system_config_selector.h"
 #include "third_party/blink/public/platform/media/remote_playback_client_wrapper_impl.h"
 #include "third_party/blink/public/platform/media/resource_fetch_context.h"
+#include "third_party/blink/public/platform/media/stub_web_media_player.h"
 #include "third_party/blink/public/platform/media/url_index.h"
 #include "third_party/blink/public/platform/media/video_frame_compositor.h"
 #include "third_party/blink/public/platform/media/web_encrypted_media_client_impl.h"
@@ -373,9 +374,17 @@ blink::WebMediaPlayer* MediaFactory::CreateMediaPlayer(
     scoped_refptr<base::SingleThreadTaskRunner>
         main_thread_compositor_task_runner,
     scoped_refptr<base::TaskRunner> compositor_worker_task_runner) {
-  // Media playback is not supported when recording/replaying.
+  // Media playback is not supported when recording/replaying. URL sources get
+  // a stub player unless "media-stub-player" is disabled.
   if (recordreplay::IsRecordingOrReplaying("no-media")) {
-    return nullptr;
+    if (source.IsMediaStream() ||
+        !recordreplay::IsRecordingOrReplaying("media-stub-player")) {
+      return nullptr;
+    }
+    return blink::CreateStubWebMediaPlayer(
+               client, GetWebMediaPlayerDelegate(),
+               render_frame_->GetTaskRunner(blink::TaskType::kInternalMedia))
+        .release();
   }
 
   blink::WebLocalFrame* web_frame = render_frame_->GetWebFrame();
