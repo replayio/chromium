@@ -304,7 +304,8 @@ class StubWebMediaPlayer : public WebMediaPlayer,
   }
 
   void OnMediaSourceInitialized(media::PipelineStatus status) {
-    if (!status.is_ok()) {
+    // PipelineStatus has no kOk code, so is_ok() is always false.
+    if (status.code() != media::PIPELINE_OK) {
       Fail(status.code());
       return;
     }
