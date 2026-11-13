@@ -19,9 +19,10 @@ namespace blink {
 class WebMediaPlayerClient;
 class WebMediaPlayerDelegate;
 
-// A player for recording/replaying, where media isn't played: it loads a
-// fixed-length resource without tracks, fetching and decoding nothing, and
-// plays it on the clock. Only URL sources load.
+// A player for recording/replaying, where media isn't played: it plays a
+// resource without tracks on the clock, fetching and decoding nothing. URL
+// resources have a fixed length, Media Source resources what the page appends,
+// MediaStreams are live.
 BLINK_PLATFORM_EXPORT std::unique_ptr<WebMediaPlayer> CreateStubWebMediaPlayer(
     WebMediaPlayerClient* client,
     WebMediaPlayerDelegate* delegate,

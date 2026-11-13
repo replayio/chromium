@@ -374,13 +374,11 @@ blink::WebMediaPlayer* MediaFactory::CreateMediaPlayer(
     scoped_refptr<base::SingleThreadTaskRunner>
         main_thread_compositor_task_runner,
     scoped_refptr<base::TaskRunner> compositor_worker_task_runner) {
-  // Media playback is not supported when recording/replaying. URL sources get
-  // a stub player unless "media-stub-player" is disabled.
+  // Media playback is not supported when recording/replaying. Media elements
+  // get a stub player unless "media-stub-player" is disabled.
   if (recordreplay::IsRecordingOrReplaying("no-media")) {
-    if (source.IsMediaStream() ||
-        !recordreplay::IsRecordingOrReplaying("media-stub-player")) {
+    if (!recordreplay::IsRecordingOrReplaying("media-stub-player"))
       return nullptr;
-    }
     return blink::CreateStubWebMediaPlayer(
                client, GetWebMediaPlayerDelegate(),
                render_frame_->GetTaskRunner(blink::TaskType::kInternalMedia))
