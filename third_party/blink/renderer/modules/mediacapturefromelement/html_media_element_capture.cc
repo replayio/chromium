@@ -9,6 +9,8 @@
 #include "third_party/blink/public/mojom/mediastream/media_devices.mojom-blink.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/task_type.h"
+#include "third_party/blink/public/platform/web_media_player.h"
+#include "third_party/blink/public/platform/webaudiosourceprovider_impl.h"
 #include "third_party/blink/public/web/modules/mediastream/media_stream_video_source.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/core/dom/events/native_event_listener.h"
@@ -102,6 +104,10 @@ void CreateHTMLAudioElementCapturer(
     scoped_refptr<base::SingleThreadTaskRunner> task_runner) {
   DCHECK(descriptor);
   DCHECK(web_media_player);
+
+  // Null for players without audio output, e.g. the record/replay stub.
+  if (!web_media_player->GetAudioSourceProvider())
+    return;
 
   const String track_id = WTF::CreateCanonicalUUIDString();
 
