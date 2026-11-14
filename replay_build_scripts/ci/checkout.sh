@@ -1,12 +1,23 @@
 #!/bin/bash
 # One Chromium checkout per Chromium version, each with all of its own state.
 #
-# Until now every build on the agent ran in /home/ubuntu/chromium: one checkout,
+# Every build on the agent used to run in /home/ubuntu/chromium: one checkout,
 # one out dir, one gclient solution, one backend checkout, one reclient cache,
 # shared by every branch that built there. Two Chromium versions in flight would
 # rebuild each other's trees on every job, and a job that damaged that state
 # (replayio/chromium#1540, #1544) took every later build with it, with nothing
 # recording what had changed.
+#
+# That directory is gone, and with it the bridge this script used to keep to it.
+# A key whose milestone matched whatever the shared tree currently held took it
+# over by symlink, which read the identity of a 104 GB development checkout off
+# a value any build could change: the pipeline-upload steps reset that tree to
+# `origin/$BUILDKITE_BRANCH` on every build of every branch, so a push to a
+# rebase branch left it on another milestone and the next build of THAT
+# milestone claimed the development checkout as its own (build 5567 took the
+# m108 tree as m110 and died in `gn gen`, because only the four Replay forks
+# move per job and the other 136 DEPS repositories stayed at m108's pins).
+# A key is now a directory somebody prepared, or it does not exist.
 #
 # Here, a key -- the Chromium milestone by default -- picks a directory that
 # holds everything a build of that version writes:
@@ -69,12 +80,6 @@ fork_url() {
   echo "${CHROMIUM_FORK_URL:-git@github.com:replayio/chromium.git}"
 }
 
-# The checkout every build shared before this existed, and still shares with
-# branches that have not been rebased onto it.
-legacy_checkout() {
-  echo "${CHROMIUM_LEGACY_CHECKOUT:-$HOME/chromium}"
-}
-
 # The milestone of the tree this script came from. chrome/VERSION is in the tree
 # being built, so a job reads it from the small clone it bootstrapped these
 # scripts with, before any big checkout is involved: `git show` works there even
@@ -118,7 +123,10 @@ root() {
 
 # Any checkout that already has the fork's history, to clone it from. Objects
 # are objects whatever version checked them out, and a local clone hardlinks
-# them.
+# them. With no key prepared at all there is nothing to hardlink from and
+# `prepare` falls back to cloning the fork over the network: 58 GB and a long
+# wait, rather than a second and a couple of megabytes. That is the price of
+# wiping the last key on the machine, so keep one.
 nearest_src() {
   local d src
   d=$(checkouts_dir)
@@ -128,54 +136,50 @@ nearest_src() {
       return
     fi
   done
-  if [ -d "$(legacy_checkout)/src/.git" ]; then
-    echo "$(legacy_checkout)/src"
-  fi
 }
 
 stamp_file() {
   echo "$(root "${1:-}")/.replay-checkout"
 }
 
+# What the DEPS of a synced tree pin, apart from the four Replay forks that a
+# job moves itself. Everything else in the tree -- pdfium, the toolchain, the
+# other 136 repositories -- is whatever the last `gclient sync` of this key
+# left, so when this changes, the tree on disk no longer matches the commit
+# being built and the build fails somewhere far from the cause.
+deps_fingerprint() {
+  sed -e "/'v8_revision':/d" -e "/'skia_revision':/d" \
+      -e "/'boringssl_revision':/d" -e "/replayio\/chromium-webrtc/d" |
+    sha1sum | cut -c1-12
+}
+
 write_stamp() {
-  local k=$1 how=$2
+  local k=$1 how=$2 deps=${3:-}
   cat > "$(stamp_file "$k")" <<EOF
 key=$k
 scheme=$SCHEME
 created=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 created_by=$how
+deps=$deps
 EOF
 }
 
-# A key with no directory of its own, whose milestone is the one the shared
-# checkout holds, takes that checkout over: a symlink, nothing copied, nothing
-# moved, so branches that still build in it keep working. This is how the
-# current milestone arrives here without anyone doing anything by hand. A
-# milestone nobody has checked out on this machine is a different matter, since
-# making one means gclient and the 140 repositories DEPS pins (see prepare).
-link_legacy_checkout() {
-  local k=$1 r=$2 legacy major
-  legacy=$(legacy_checkout)
-  if [ ! -d "$legacy/src/.git" ]; then
-    return 1
-  fi
-  major=$(sed -n 's/^MAJOR=//p' "$legacy/src/chrome/VERSION" 2>/dev/null)
-  if [ -z "$major" ] || [ "$k" != "m$major" ]; then
-    return 1
-  fi
-  mkdir -p "$(dirname "$r")"
-  if ! ln -s "$legacy" "$r" 2>/dev/null; then
-    # Another job got there first, which is all this needed.
-    [ -d "$r/src/.git" ]
-    return
-  fi
-  mkdir -p "$r/home"
-  write_stamp "$k" "linked the shared checkout at $legacy"
-  # stderr: require's stdout is the path its callers capture.
-  echo "checkout: '$k' -> $legacy, the checkout builds shared before there was" >&2
-  echo "one per version. Nothing was copied or moved: branches that still build" >&2
-  echo "there keep working, and 'checkout.sh adopt --move' ends that when they" >&2
-  echo "are gone." >&2
+# git only ever adds pack files, which is what lets `prepare --from` hardlink a
+# 58 GB object store for a couple of megabytes -- but `gc` rewrites packs, and
+# every job runs a full `git fetch origin` in this key's fork and in each of the
+# four Replay forks, so `gc --auto` fires on its own sooner or later. The first
+# key to repack stops sharing inodes with the others and the volume grows by
+# another object store, silently. Repacking a key is a deliberate act here, not
+# something a build does on the way past.
+disable_auto_gc() {
+  local r=$1 d
+  for d in "$r/src" "$r/src/v8" "$r/src/third_party/skia" \
+           "$r/src/third_party/webrtc" "$r/src/third_party/boringssl/src" \
+           "$r/backend"; do
+    if [ -d "$d/.git" ] || [ -f "$d/.git" ]; then
+      git -C "$d" config gc.auto 0 || true
+    fi
+  done
 }
 
 # Prints the key's directory and nothing else: callers capture it.
@@ -183,10 +187,8 @@ require() {
   local k=${1:-$(key)} r
   r=$(root "$k")
   if [ ! -d "$r/src/.git" ]; then
-    link_legacy_checkout "$k" "$r" || true
-  fi
-  if [ ! -d "$r/src/.git" ]; then
-    cat >&2 <<EOF
+    local message
+    message=$(cat <<EOF
 checkout: no Chromium checkout for key '$k' at $r
 
 This machine has no tree for that Chromium version, and a build will not make
@@ -199,8 +201,15 @@ clone. Make it once and every build of that version has it:
   replay_build_scripts/ci/checkout.sh adopt <dir> $k   # a tree that already exists
 
 Prepared keys here: $(ls -1 "$(checkouts_dir)" 2>/dev/null | tr '\n' ' ')
-Shared checkout: $(legacy_checkout), milestone $(sed -n 's/^MAJOR=/m/p' "$(legacy_checkout)/src/chrome/VERSION" 2>/dev/null || echo unknown)
 EOF
+)
+    echo "$message" >&2
+    # The same text on the build, so an unprovisioned milestone says what it
+    # needs without anyone opening the log.
+    if command -v buildkite-agent >/dev/null 2>&1; then
+      printf '%s\n' "**No Chromium checkout for \`$k\` on this agent.**" '' '```' "$message" '```' |
+        buildkite-agent annotate --context "checkout-$k" --style error >/dev/null 2>&1 || true
+    fi
     exit 1
   fi
   local have
@@ -237,6 +246,37 @@ sync() {
   fi
   r=$(require "$k")
   echo "--- checkout '$k' at $r -> $commit"
+  disable_auto_gc "$r"
+
+  # What this build is about to cost and churn, before it costs it. Every key
+  # shares one volume with every other and with the backend's C++ test jobs, so
+  # `df` is the number that decides whether the next milestone fits; the out dir
+  # is the part that grows per build; and the file count is what a warm out dir
+  # is worth, which is the whole reason two branches on one milestone share a
+  # checkout. Full per-key sizes are `checkout.sh list --sizes`, not this.
+  df -h "$r" 2>/dev/null | tail -1 | sed 's/^/    volume: /' || true
+  echo "    out dir: $(du -sh "$r/src/out" 2>/dev/null | cut -f1 || echo none)"
+  if git -C "$r/src" fetch -q origin "$commit" 2>/dev/null; then
+    echo "    tree: $(git -C "$r/src" rev-parse --short=12 HEAD 2>/dev/null || echo none) -> ${commit:0:12}, $(git -C "$r/src" diff --name-only HEAD FETCH_HEAD 2>/dev/null | wc -l) files differ"
+    # Only the four Replay forks move per job, so if the commit being built
+    # pins anything else differently from what was synced into this key, the
+    # tree on disk is a mix of two milestones: src from this commit, pdfium and
+    # the other 135 repositories from the last `gclient sync`. That is what
+    # build 5567 was, and it surfaced as an undefined gn identifier deep in
+    # pdfium.gni instead of as the version skew it is.
+    local want have
+    want=$(git -C "$r/src" show FETCH_HEAD:DEPS 2>/dev/null | deps_fingerprint || true)
+    have=$(sed -n 's/^deps=//p' "$(stamp_file "$k")" 2>/dev/null || true)
+    if [ -n "$want" ] && [ -n "$have" ] && [ "$want" != "$have" ]; then
+      echo "    DEPS: $have (synced) != $want (this commit)" >&2
+      echo "checkout: '$k' was synced for different DEPS than this commit pins." >&2
+      echo "Everything but v8, skia, webrtc and boringssl is still at the" >&2
+      echo "revisions gclient last synced here, so a build may fail in a" >&2
+      echo "dependency for no reason visible in this commit. Re-sync the key:" >&2
+      echo "  checkout.sh prepare   # prints the gclient sync to run in the image" >&2
+    fi
+  fi
+
   # The fork goes to the commit being built, the Replay forks of v8, skia,
   # webrtc and boringssl to their DEPS revisions, and the backend to
   # REPLAY_BACKEND_REV; everything else in the tree is what `prepare` synced.
@@ -255,34 +295,62 @@ list() {
     echo "no checkouts in $d"
     return
   fi
-  local stamp k
+  local stamp k keys=()
   for stamp in "$d"/*/.replay-checkout; do
     if [ ! -e "$stamp" ]; then
       continue
     fi
-    k=$(basename "$(dirname "$stamp")")
-    local head size=""
+    keys+=("$(basename "$(dirname "$stamp")")")
+  done
+  if [ ${#keys[@]} -eq 0 ]; then
+    echo "no checkouts in $d"
+    return
+  fi
+
+  # One du over every key at once, never one per key. du counts a hardlinked
+  # file for the first name it sees and skips the rest -- but only within a
+  # single invocation, so a du per key charges each one the whole 58 GB object
+  # store that `prepare --from` hardlinked, and the keys appear to cost 104 GB
+  # each when together they cost that once plus their working files. Getting
+  # this wrong is how 40 milestones look like 4 TB instead of a few hundred GB.
+  local sizes=""
+  if [ "${1:-}" = "--sizes" ]; then
+    sizes=$(cd "$d" && du -sh "${keys[@]}" 2>/dev/null) || sizes=""
+    echo "--- sizes: blocks shared by hardlink are charged to the first key"
+    echo "    below that holds them, so a later key's disk= is what it adds."
+  fi
+
+  for k in "${keys[@]}"; do
+    local head extra=""
     head=$(git -C "$d/$k/src" rev-parse --short=12 HEAD 2>/dev/null || echo "?")
     if [ "${1:-}" = "--sizes" ]; then
-      size=" src=$(du -sh "$d/$k/src" 2>/dev/null | cut -f1)"
-      size="$size out=$(du -sh "$d/$k/src/out" 2>/dev/null | cut -f1)"
+      extra=" disk=$(printf '%s\n' "$sizes" | awk -v k="$k" '$2==k{print $1}')"
+      extra="$extra out=$(du -sh "$d/$k/src/out" 2>/dev/null | cut -f1)"
+      # Packs, because sharing decays: `prepare --from` hardlinks the packs it
+      # found, and every later fetch adds packs of this key's own. A key with
+      # many more packs than the others has stopped being nearly free.
+      extra="$extra packs=$(find "$d/$k/src/.git/objects/pack" -name '*.pack' 2>/dev/null | wc -l)"
     fi
-    echo "$k  HEAD=$head  $(sed -n 's/^created=/created /p' "$d/$k/.replay-checkout")$size"
+    echo "$k  HEAD=$head  $(sed -n 's/^created=/created /p' "$d/$k/.replay-checkout")$extra"
   done
+  if [ "${1:-}" = "--sizes" ]; then
+    echo "--- totals (hardlinks counted once across all keys)"
+    (cd "$d" && du -shc "${keys[@]}" 2>/dev/null | tail -1) || true
+    df -h "$d" | tail -1
+  fi
 }
 
-# Migration: the checkout that every build has been sharing becomes the
-# milestone's own.
+# A checkout that already exists somewhere else becomes a key's: the cheap way
+# to give a milestone a tree without an hour of gclient, and how the directory
+# every build used to share became m108's.
 #
-# By default the key becomes a symlink to it, because .buildkite/pipeline.yml is
-# fetched per branch: every branch that has not been rebased onto this change
-# still runs the old step, which cd's into /home/ubuntu/chromium/src and builds
-# there. A symlink lets both kinds of job build the same tree, so this can land
-# without a flag day -- and for the same reason the old build image and
-# /home/ubuntu/depot_tools have to stay until those branches are gone.
+# --move moves the directory, which is what ending that sharing meant; without
+# it the key is a symlink to a tree somebody else may also be writing to, which
+# is only right while something still builds there. Pass the key explicitly
+# when the tree is not sitting on the milestone it belongs to -- the default
+# key comes from this script's own tree, not from the directory being adopted.
 #
-# --move moves the directory instead, for when nothing builds the old way any
-# more. Either way it costs nothing and is undone by moving it back.
+# Either way it costs nothing and is undone by moving it back.
 adopt() {
   local move=0
   while [ $# -gt 0 ]; do
@@ -315,7 +383,11 @@ adopt() {
   if [ "$move" = 1 ]; then
     rm -f "$r/engflow.crt" "$r/engflow.key"
   fi
-  write_stamp "$k" "adopted from $src"
+  # Whatever this tree's DEPS pin now is what its dependencies are synced for,
+  # so record it: `sync` compares it with the commit being built and says so
+  # when they differ, instead of letting the build fail inside pdfium.
+  write_stamp "$k" "adopted from $src" "$(deps_fingerprint < "$r/src/DEPS" 2>/dev/null || true)"
+  disable_auto_gc "$r"
   echo "checkout: '$k' is $r -> $(readlink -f "$r")"
 }
 
@@ -415,7 +487,12 @@ EOF
     git clone git@github.com:replayio/backend.git "$r/backend"
   fi
   mkdir -p "$r/home"
-  write_stamp "$k" "prepare${from:+ --from $from} $commit"
+  # The fingerprint of the DEPS the gclient sync below is about to be run for,
+  # so a later build of a commit that pins anything else is told rather than
+  # left to fail inside whichever dependency moved.
+  write_stamp "$k" "prepare${from:+ --from $from} $commit" \
+    "$(deps_fingerprint < "$r/src/DEPS" 2>/dev/null || true)"
+  disable_auto_gc "$r"
   trap - EXIT
   cat <<EOF
 

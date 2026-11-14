@@ -42,6 +42,16 @@ that wants to be alone, or two experiments on one milestone, set
 `CHROMIUM_CHECKOUT_KEY` (in the Buildkite build, or on a branch's builds) and
 get a directory nothing else writes to.
 
+The milestone is all the key knows, so two commits on one milestone with
+different upstream bases look alike to it while their DEPS differ. Only the four
+Replay forks move per job, so the rest of such a tree stays at whatever
+`gclient sync` last left: `prepare` and `adopt` record a fingerprint of the
+DEPS they synced for (every pin except those four forks) in
+`.replay-checkout`, and `sync` prints a warning naming both when the commit
+being built disagrees. That is the difference between build 5567's undefined
+`pdf_use_skia_paths_override` and a line saying the tree was synced for other
+DEPS. Set `CHROMIUM_CHECKOUT_KEY` to give such a branch a directory of its own.
+
 Everything a key owns is under `~/chromium-checkouts/<key>/`
 (`$CHROMIUM_CHECKOUTS_DIR` to move it): `src/` including `src/out/Release`, the
 gclient solution and its caches, the backend checkout, and the container's
@@ -74,6 +84,45 @@ leaves the others' objects alone, so `wipe` stays `rm -rf` of one directory.
 Not shared on purpose: the working files (they differ per milestone, and a build
 or a hook writes in them) and `out/Release`, which is the state this whole
 arrangement exists to keep apart.
+
+### The sharing decays, so keep an eye on it
+
+Hardlinks share the packs that existed when the key was made. Every job then
+runs a full `git fetch origin` in the fork and in each of the four Replay forks,
+so each key accumulates packs of its own; and `gc` *rewrites* packs, so one
+`gc --auto` firing in a key replaces shared inodes with private ones and the
+volume quietly grows by another object store. `prepare` and `adopt` therefore
+set `gc.auto 0` in every repository they create, and `sync` sets it again on the
+key it is about to build, so repacking a key is a deliberate act. `list
+--sizes` prints each key's pack count: a key with many more packs than the
+others has stopped being nearly free.
+
+### Measuring it
+
+Use `checkout.sh list --sizes`, which runs **one** `du` over all the keys
+together. `du` skips the second and later names of a hardlinked file, but only
+within a single invocation -- so a `du` per key charges every one of them the
+whole 58 GB object store they share, and 40 milestones look like 4 TB when they
+cost a few hundred GB plus their working files. The `--- totals` line is the
+honest number, and `df` next to it is the one that decides whether the next
+milestone fits.
+
+### Many versions
+
+At 35-45 GB a key, ~40 milestones is 1.4-1.8 TB, which needs more than this
+accounting. Two levers, in order of effect, neither implemented here:
+
+- `out/Release` is 12 GB of the per-key cost and is derived: `wipe-out` for keys
+  that are not in flight buys that back for one cold RBE build (~15 min).
+- The working files are ~31 GB and are *not* shared, because a gclient hook
+  overwriting one in place must not write into the version it was copied from.
+  Copy-on-write has exactly that property: `cp --reflink` on XFS (`reflink=1`)
+  or btrfs shares blocks until something writes to them. Adjacent milestones are
+  measurably close -- m108 to m109 changes 36,823 of 406,218 tracked files, 0.69
+  GiB of 3.3 GiB -- but that is `src` only; the DEPS trees and toolchains are
+  the other ~28 GB and their overlap is unmeasured. Measure it (reflink-copy a
+  key, sync it to the next milestone, then read shared vs exclusive extents)
+  before sizing a volume for it.
 
 ## Using it
 
@@ -132,19 +181,45 @@ the key has no checkout, the job fails and says what to run.
 
 ## On a build agent
 
-Nothing, for the milestone the agent is already building. The first job claims
-the shared checkout as that milestone's key itself -- a symlink, nothing copied
-or moved -- after checking that the tree's own `chrome/VERSION` is the key it
-wants. It says so in the log when it does.
+Every key is a directory somebody prepared. There is no shared checkout left to
+inherit one from, and a build never makes one.
 
-A symlink rather than a move, because `.buildkite/pipeline.yml` is fetched per
-branch: until a branch is rebased onto this change it still runs the old step,
-which builds in `/home/ubuntu/chromium/src` directly. Both kinds of job then
-build the same tree. For the same reason the old `chromium-build-new` image and
-`/home/ubuntu/depot_tools` have to stay until no branch builds the old way. When
-they are gone, `checkout.sh adopt --move /home/ubuntu/chromium m108` ends the
-arrangement and the shared path with it.
+There was, briefly: a key whose milestone matched whatever `/home/ubuntu/chromium`
+currently held took that tree over by symlink, so the milestone the agent was
+already building arrived here with nobody arranging it. That read the identity
+of a 104 GB development checkout off a value any build could change. The
+pipeline-upload steps of `runtime-build-and-test` and
+`manual-chromium-branch-build` did `git reset --hard origin/$BUILDKITE_BRANCH`
+in that tree on every build of every branch, so a push to a rebase branch left
+it on another milestone, and the next build of *that* milestone claimed the
+development checkout as its own: build 5567 took the m108 tree as `m110`,
+reset it to an m110 commit, and died in `gn gen` on an undefined identifier in
+`pdfium.gni`, because only the four Replay forks move per job and the other 136
+DEPS repositories were still at m108's pins.
 
-`checkout.sh adopt [--move] <dir> [key]` is also how a tree that already exists
+Two days of it left the agent with four keys and no checkouts:
+
+```
+m108 -> /home/ubuntu/chromium   Nov 12 16:08
+m110 -> /home/ubuntu/chromium   Nov 14 09:17   (build 5567)
+m112 -> /home/ubuntu/chromium   Nov 14 11:27
+m116 -> /home/ubuntu/chromium   Nov 14 12:58
+```
+
+-- every one a symlink to the same tree, which by then held an m116 commit, and
+`prepare` never run once. With one `.replay-checkout` between them: the stamp is
+written at the key's root, and for a symlinked key that root resolved into the
+shared tree, so the four names shared a single stamp that each new link
+overwrote. It read `key=m116` under all four. A key's own record of what it is
+was being rewritten by other keys.
+
+Those upload steps now take this commit's scripts by URL instead of resetting a
+checkout, `/home/ubuntu/chromium` is m108's own directory
+(`adopt --move`), and the `chromium-build-new` image and
+`/home/ubuntu/depot_tools` that went with it are gone.
+
+`checkout.sh adopt [--move] <dir> [key]` is still how a tree that already exists
 somewhere else becomes a key's, which is the cheap way to give a milestone a
-checkout without `gclient sync`.
+checkout without `gclient sync`. Pass the key explicitly when the tree is not
+sitting on the milestone it belongs to: the default comes from the tree the
+script was run from, not from the directory being adopted.
