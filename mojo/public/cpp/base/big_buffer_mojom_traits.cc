@@ -6,6 +6,7 @@
 
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "mojo/public/cpp/bindings/array_data_view.h"
 
 namespace mojo {
@@ -95,6 +96,12 @@ bool UnionTraits<mojo_base::mojom::BigBufferDataView, mojo_base::BigBuffer>::
       if (!data.ReadSharedMemory(&shared_memory)) {
         return false;
       }
+
+      // RUN-1618: Data read from shared memory must be explicitly
+      // recorded/replayed.
+      recordreplay::RecordReplayBytes("Traits<BigBufferDataView>::Read",
+                                      shared_memory.memory(),
+                                      shared_memory.size());
       *out = mojo_base::BigBuffer(std::move(shared_memory));
       return true;
     }
@@ -162,6 +169,12 @@ bool UnionTraits<
       if (!data.ReadSharedMemory(&shared_memory)) {
         return false;
       }
+
+      // RUN-1618: Data read from shared memory must be explicitly
+      // recorded/replayed.
+      recordreplay::RecordReplayBytes("Traits<BigBufferDataView>::Read",
+                                      shared_memory.memory(),
+                                      shared_memory.size());
       out->SetSharedMemory(std::move(shared_memory));
       return true;
     }

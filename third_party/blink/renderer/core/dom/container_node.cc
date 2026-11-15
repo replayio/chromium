@@ -23,6 +23,8 @@
 
 #include "third_party/blink/renderer/core/dom/container_node.h"
 
+#include <string>
+
 #include "base/compiler_specific.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_get_html_options.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_sethtmlunsafeoptions_trustedhtmlparseroptions.h"
@@ -434,22 +436,20 @@ void ContainerNode::DidInsertNodeVector(
     const NodeVector& post_insertion_notification_targets) {
 
   // https://linear.app/replay/issue/RUN-820
-  {
-    size_t numTargets = targets.size();
-    size_t targetsBufSize = numTargets * 12;
-    char* targetsBuf = (char*)malloc(targetsBufSize);
-    size_t targetsBufIdx = 0;
+  if (recordreplay::HasAsserts()) {
+    // The ids, separated by commas. With no targets the text is empty: the
+    // earlier code wrote its terminator before a zero-sized buffer there and
+    // asserted whatever bytes followed, which a replay doesn't have the same.
+    std::string ids;
     for (const auto& target_node : targets) {
-      targetsBufIdx += UNSAFE_BUFFERS(snprintf(
-        targetsBuf + targetsBufIdx,
-        targetsBufSize - targetsBufIdx,
-        "%d,", target_node->RecordReplayId()));
+      if (!ids.empty()) {
+        ids += ",";
+      }
+      ids += std::to_string(target_node->RecordReplayId());
     }
-    // Eliminate the trailing comma.
-    UNSAFE_BUFFERS(targetsBuf[targetsBufIdx - 1] = '\0');
     recordreplay::Assert(
       "[RUN-820] ContainerNode::DidInsertNodeVector targets=%s next=%d",
-      targetsBuf, next ? next->RecordReplayId() : -1);
+      ids.c_str(), next ? next->RecordReplayId() : -1);
   }
 
   Node* unchanged_previous =

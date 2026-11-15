@@ -19,6 +19,7 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/thread_pool.h"
 #include "base/trace_event/trace_event.h"
@@ -210,6 +211,14 @@ sk_sp<SkTypeface> FontDataManager::onMatchFamilyStyle(
   style->width = requested_style.width();
   style->slant = ConvertToMojomFontStyle(requested_style.slant());
 
+  // [RecordReplay] The font service is in the browser, and a call to it waits
+  // for an answer that never comes when there's no browser to give one: at a
+  // pause, style recalc for an evaluation or a repaint stops here for good.
+  // Refused instead, as FontServiceThread does, and not remembered as a miss.
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
+    return nullptr;
+  }
+
   mojom::MatchFamilyNameResponsePtr response;
   {
     TRACE_EVENT1("fonts", "FontDataManager::onMatchFamilyStyle", "family_name",
@@ -244,6 +253,14 @@ sk_sp<SkTypeface> FontDataManager::onMatchFamilyStyleCharacter(
   style->weight = requested_style.weight();
   style->width = requested_style.width();
   style->slant = ConvertToMojomFontStyle(requested_style.slant());
+
+  // [RecordReplay] The font service is in the browser, and a call to it waits
+  // for an answer that never comes when there's no browser to give one: at a
+  // pause, style recalc for an evaluation or a repaint stops here for good.
+  // Refused instead, as FontServiceThread does, and not remembered as a miss.
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
+    return nullptr;
+  }
 
   mojom::MatchFamilyNameResultPtr match_result;
   {
@@ -327,6 +344,14 @@ sk_sp<SkTypeface> FontDataManager::onLegacyMakeTypeface(
   style->weight = requested_style.weight();
   style->width = requested_style.width();
   style->slant = ConvertToMojomFontStyle(requested_style.slant());
+
+  // [RecordReplay] The font service is in the browser, and a call to it waits
+  // for an answer that never comes when there's no browser to give one: at a
+  // pause, style recalc for an evaluation or a repaint stops here for good.
+  // Refused instead, as FontServiceThread does, and not remembered as a miss.
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
+    return nullptr;
+  }
 
   mojom::MatchFamilyNameResultPtr match_result;
   {
@@ -565,6 +590,14 @@ sk_sp<SkTypeface> FontDataManager::CreateTypefaceFromMatchResult(
 }
 
 void FontDataManager::GetAllFamilyNamesLockRequired() const {
+  // [RecordReplay] The font service is in the browser, and a call to it waits
+  // for an answer that never comes when there's no browser to give one: at a
+  // pause, style recalc for an evaluation or a repaint stops here for good.
+  // Refused instead, as FontServiceThread does, and not remembered as a miss.
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
+    return;
+  }
+
   GetRemoteFontDataService().GetAllFamilyNames(&family_names_);
 }
 

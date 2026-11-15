@@ -78,6 +78,11 @@ class WakeUpQueue;
 // tasks (normally the most common type) don't starve out immediate work.
 class BASE_EXPORT TaskQueueImpl : public TaskQueue {
  public:
+  // [RecordReplay] Runs the tasks posted to this queue from outside the
+  // recording, with events disallowed, without waiting for the queue's ordered
+  // tasks to be taken. See record_replay_unordered_immediate_incoming_queue.
+  void RecordReplayRunUnorderedTasks();
+
   // Initializes the state of all the task queue features. Must be invoked
   // after FeatureList initialization and while Chrome is still single-threaded.
   static void InitializeFeatures();
@@ -561,7 +566,10 @@ class BASE_EXPORT TaskQueueImpl : public TaskQueue {
 
   // This lock protects access to the handler callbacks, and is used in both ordered and unordered
   // contexts.  In particular, this lock must only be used around the handler
-  mutable base::internal::CheckedLock unordered_lock_;
+  // An empty name: a lock that has no name is ordered when it's made with
+  // events allowed, and this one is taken by threads whose events are
+  // disallowed.
+  mutable base::internal::CheckedLock unordered_lock_{""};
 
   TaskDeque record_replay_unordered_immediate_incoming_queue GUARDED_BY(unordered_lock_);
   base::flat_map<raw_ptr<OnTaskPostedCallbackHandleImpl>, OnTaskPostedHandler> on_task_posted_handlers GUARDED_BY(unordered_lock_);

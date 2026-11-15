@@ -75,7 +75,8 @@ void HTMLImageLoader::DispatchErrorEvent() {
     return;
   }
 
-  GetElement()->DispatchEvent(*Event::Create(event_type_names::kError));
+  GetElement()->DispatchEvent(*Event::Create(event_type_names::kError),
+                              "HTMLImageLoader::DispatchErrorEvent");
 }
 
 void HTMLImageLoader::NoImageResourceToLoad() {

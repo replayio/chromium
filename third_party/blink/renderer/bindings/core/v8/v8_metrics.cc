@@ -8,6 +8,7 @@
 
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/record_replay.h"
 #include "base/strings/strcat.h"
 #include "base/time/time.h"
 #include "services/metrics/public/cpp/metrics_utils.h"
@@ -655,6 +656,13 @@ V8MetricsRecorder::GetUkmRecorderAndSourceId(
     v8::metrics::Recorder::ContextId context_id) {
   if (!isolate_)
     return std::optional<UkmRecorderAndSourceId>();
+  // The collector reports its cycles from inside a collection, which runs at
+  // other points on a replay. The first to ask a document for its recorder
+  // makes it, with a pipe to the browser, so a collection must not be the
+  // first: its metrics go unreported in a recording.
+  if (recordreplay::AreEventsDisallowed()) {
+    return std::optional<UkmRecorderAndSourceId>();
+  }
   v8::HandleScope handle_scope(isolate_);
   v8::MaybeLocal<v8::Context> maybe_context =
       v8::metrics::Recorder::GetContext(isolate_, context_id);

@@ -14,6 +14,13 @@
 
 #include "absl/hash/internal/hash.h"
 
+#ifndef _WIN32
+#include <dlfcn.h>
+#else
+#include <windows.h>
+#endif
+
+#include <atomic>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -431,6 +438,28 @@ uint64_t CombineLargeContiguousImplOn64BitLengthGt32(uint64_t state,
 }
 
 ABSL_CONST_INIT const void* const MixingHashState::kSeed = &kSeed;
+
+ABSL_CONST_INIT std::atomic<size_t> MixingHashState::replay_seed_{0};
+
+size_t MixingHashState::InitializeSeed() {
+  // [RecordReplay] The driver is loaded before this library in a process
+  // that's recorded, and the engine answers for it in one that's replayed.
+#ifndef _WIN32
+  const bool record_replay =
+      dlsym(RTLD_DEFAULT, "RecordReplayAttach") != nullptr;
+#else
+  const bool record_replay =
+      GetModuleHandleA("windows-recordreplay.dll") != nullptr;
+#endif
+  size_t seed = record_replay ? static_cast<size_t>(0x9e3779b97f4a7c15ULL)
+                              : AddressSeed();
+  if (seed == 0) {
+    seed = 1;
+  }
+  // Every thread that gets here computes the same value.
+  replay_seed_.store(seed, std::memory_order_relaxed);
+  return seed;
+}
 
 }  // namespace hash_internal
 ABSL_NAMESPACE_END

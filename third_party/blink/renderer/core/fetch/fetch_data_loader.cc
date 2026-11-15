@@ -348,6 +348,7 @@ class FetchDataLoaderAsFormData final : public FetchDataLoader,
         if (!buffer_appended || multipart_receive_failed) {
           // No point in reading any more as the input is invalid.
           consumer_->Cancel();
+          ReportFetchFailed("FormDataAppendFailed");
           client_->DidFetchDataLoadFailed();
           return;
         }
@@ -513,6 +514,7 @@ class FetchDataLoaderAsString final : public FetchDataLoader,
           if (!Append(decoder_->Decode(base::as_bytes(buffer)))) {
             std::ignore = consumer_->EndRead(buffer.size());
             Cancel();
+            ReportFetchFailed("StringAppendFailed");
             client_->DidFetchDataLoadFailed();
             return;
           }
@@ -527,6 +529,7 @@ class FetchDataLoaderAsString final : public FetchDataLoader,
         case BytesConsumer::Result::kDone:
           if (!Append(decoder_->Flush())) {
             Cancel();
+            ReportFetchFailed("StringFlushFailed");
             client_->DidFetchDataLoadFailed();
             return;
           }

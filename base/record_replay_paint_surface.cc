@@ -19,6 +19,10 @@ void DoResetPaintSurface() {
   gPaintSurfaceResetRequested.store(true);
 }
 
+bool IsPaintSurfaceResetPending() {
+  return gPaintSurfaceResetRequested.load();
+}
+
 bool TakePaintSurfaceReset() {
   bool requested = gPaintSurfaceResetRequested.exchange(false);
   return RecordReplayValue("TakePaintSurfaceReset", requested);

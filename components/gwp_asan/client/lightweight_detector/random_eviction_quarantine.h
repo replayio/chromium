@@ -70,7 +70,9 @@ class GWP_ASAN_EXPORT RandomEvictionQuarantineBase {
   const size_t eviction_chunk_size_;
   const base::TimeDelta eviction_task_interval_;
 
-  mutable base::Lock lock_;
+  // [RecordReplay] Never ordered: which allocations are sampled isn't the
+  // same in a replay, so nothing the allocator does can be in the recording.
+  mutable base::Lock lock_{""};
   std::atomic<size_t> total_size_ =
       0;  // Total size of allocations currently in quarantine.
           // Atomic for fast-path checks, but should be accessed

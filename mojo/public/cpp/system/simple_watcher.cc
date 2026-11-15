@@ -91,7 +91,7 @@ class SimpleWatcher::Context : public base::RefCountedThreadSafe<Context> {
   void Notify(MojoResult result,
               MojoHandleSignalsState signals_state,
               MojoTrapEventFlags flags) {
-    recordreplay::Assert("[RUN-1126] SimpleWatcher::Context::Notify %d %d %d %d",
+    recordreplay::AssertMaybeEventsDisallowed("[RUN-1126] SimpleWatcher::Context::Notify %d %d %d %d",
                          (int)flags, task_runner_->RunsTasksInCurrentSequence(),
                          ctor_has_weak_watcher, ctor_has_default_task_runner_weak_watcher);
 
@@ -100,14 +100,14 @@ class SimpleWatcher::Context : public base::RefCountedThreadSafe<Context> {
     if (!(flags & MOJO_TRAP_EVENT_FLAG_WITHIN_API_CALL) &&
         task_runner_->RunsTasksInCurrentSequence() && weak_watcher_ &&
         weak_watcher_->is_default_task_runner_) {
-      recordreplay::Assert("[RUN-1126] SimpleWatcher::Context::Notify #1");
+      recordreplay::AssertMaybeEventsDisallowed("[RUN-1126] SimpleWatcher::Context::Notify #1");
 
       // System notifications will trigger from the task runner passed to
       // mojo::core::ScopedIPCSupport. In Chrome this happens to always be
       // the default task runner for the IO thread.
       weak_watcher_->OnHandleReady(watch_id_, result, state);
     } else {
-      recordreplay::Assert("[RUN-1126] SimpleWatcher::Context::Notify #2");
+      recordreplay::AssertMaybeEventsDisallowed("[RUN-1126] SimpleWatcher::Context::Notify #2");
 
       {
         // Annotate the posted task with |handler_tag_| as the IPC interface.
@@ -145,6 +145,10 @@ SimpleWatcher::SimpleWatcher(const base::Location& from_here,
 }
 
 SimpleWatcher::~SimpleWatcher() {
+  // [RecordReplay] An owner the collector frees stops watching here, e.g. a
+  // worker's script loader as its heap is torn down. The watch only goes away:
+  // no callback of it runs afterwards.
+  recordreplay::AutoPassThroughEventsIfDisallowed pass_through;
   if (IsWatching()) {
     Cancel();
   }
@@ -204,7 +208,7 @@ void SimpleWatcher::Cancel() {
   MojoResult rv =
       MojoRemoveTrigger(trap_handle_.get().value(), context->value(), nullptr);
 
-  recordreplay::Assert("[RUN-1126] SimpleWatcher::Cancel %d", rv);
+  recordreplay::AssertMaybeEventsDisallowed("[RUN-1126] SimpleWatcher::Cancel %d", rv);
 
   // It's possible this cancellation could race with a handle closure
   // notification, in which case the watch may have already been implicitly

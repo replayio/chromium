@@ -105,6 +105,12 @@ class CORE_EXPORT SourceSignalCompositionManager
 
  private:
   HeapLinkedHashSet<WeakMember<AbortSignal>> dependent_signals_;
+  // When recording or replaying, what's in `dependent_signals_`, held until
+  // this settles. Aborting runs each dependent's abort steps, so which of them
+  // the collector has got to by then can't be left to decide what runs: the
+  // signal a fetch makes from the one it's given is unreachable as soon as
+  // the fetch fails.
+  HeapVector<Member<AbortSignal>> record_replay_dependent_signals_;
 };
 
 // Manages composition for an `AbortSignal` that is dependent on zero or more
@@ -138,6 +144,9 @@ class CORE_EXPORT DependentSignalCompositionManager
   void AddSourceSignal(AbortSignal&);
 
   HeapLinkedHashSet<WeakMember<AbortSignal>> source_signals_;
+  // When recording or replaying, what's in `source_signals_`, held until this
+  // settles, so that when it settles doesn't depend on the collector either.
+  HeapVector<Member<AbortSignal>> record_replay_source_signals_;
 };
 
 template <>

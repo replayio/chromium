@@ -790,6 +790,16 @@ AnimatedImageDriverMap LayerTreeHostImpl::GatherAnimatedImageDriverState()
   return result;
 }
 
+std::string LayerTreeHostImpl::RecordReplayDescribeCanDraw() const {
+  return base::StringPrintf(
+      "has_sink=%d resourceless=%d no_layers=%d surface_evicted=%d "
+      "empty_viewport=%d ui_resources_evicted=%d visible=%d",
+      !!layer_tree_frame_sink_, resourceless_software_draw_,
+      active_tree_->LayerListIsEmpty(), evicted_local_surface_id_.is_valid(),
+      active_tree_->GetDeviceViewport().IsEmpty(), EvictedUIResourcesExist(),
+      visible_);
+}
+
 bool LayerTreeHostImpl::CanDraw() const {
   // Note: If you are changing this function or any other function that might
   // affect the result of CanDraw, make sure to call
@@ -813,7 +823,12 @@ bool LayerTreeHostImpl::CanDraw() const {
 
   // Do not draw while evicted. Await the activation of a tree containing a
   // newer viz::Surface
-  if (evicted_local_surface_id_.is_valid()) {
+  //
+  // [RecordReplay] A repaint draws in this process, not to the surface the
+  // browser evicted when it hid the page, and no newer one comes to a replay
+  // that has diverged from its recording.
+  if (evicted_local_surface_id_.is_valid() &&
+      !recordreplay::HasDivergedFromRecording()) {
     TRACE_EVENT_INSTANT(
         "cc",
         "LayerTreeHostImpl::CanDraw viz::Surface evicted and not recreated");

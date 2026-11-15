@@ -31,8 +31,11 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_FONTS_FONT_PLATFORM_DATA_CACHE_H_
 
 #include "third_party/blink/renderer/platform/fonts/font_cache_key.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_deque.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
+#include "third_party/blink/renderer/platform/wtf/deque.h"
 
 namespace blink {
 
@@ -50,7 +53,10 @@ class FontPlatformDataCache final {
  public:
   FontPlatformDataCache();
 
-  void Trace(Visitor* visitor) const { visitor->Trace(map_); }
+  void Trace(Visitor* visitor) const {
+    visitor->Trace(map_);
+    visitor->Trace(record_replay_held_);
+  }
 
   const FontPlatformData* GetOrCreateFontPlatformData(
       FontCache* font_cache,
@@ -58,11 +64,27 @@ class FontPlatformDataCache final {
       const FontFaceCreationParams& creation_params,
       AlternateFontName alternate_font_name);
 
-  void Clear() { map_.clear(); }
+  void Clear() {
+    map_.clear();
+    record_replay_held_.clear();
+    record_replay_keys_.clear();
+  }
 
  private:
   friend class FontCacheMacTest;
   HeapHashMap<FontCacheKey, WeakMember<const FontPlatformData>> map_;
+
+  // `map_` is weak, and the collector clears an entry nothing else holds at a
+  // point which isn't the same on a replay. Making the entry again asks the
+  // system for the font, which is recorded. So while recording or replaying
+  // the newest entries are held here, with their keys, and an entry leaves the
+  // map when it leaves this list, whoever else still has it: the map then has
+  // the same entries on a replay. The list is bounded, as these are collected
+  // objects and a page can ask for thousands.
+  void RecordReplayHold(const FontCacheKey& key,
+                        const FontPlatformData* platform_data);
+  HeapDeque<Member<const FontPlatformData>> record_replay_held_;
+  Deque<FontCacheKey> record_replay_keys_;
 
   // A maximum float value to which we limit incoming font sizes. This is the
   // smallest float so that multiplying it by

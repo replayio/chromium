@@ -21,6 +21,10 @@ void DoResetPaintSurface();
 // pending then applies to the first repaint.
 bool TakePaintSurfaceReset();
 
+// Whether a reset was asked for that no frame has taken yet. Neither clears
+// the request nor records anything.
+bool IsPaintSurfaceResetPending();
+
 }  // namespace recordreplay
 
 #endif // BASE_RECORD_REPLAY_PAINT_SURFACE_H_

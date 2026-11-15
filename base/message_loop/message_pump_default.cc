@@ -4,6 +4,7 @@
 
 #include "base/message_loop/message_pump_default.h"
 
+#include <algorithm>
 #include <optional>
 
 #include "base/auto_reset.h"
@@ -56,6 +57,29 @@ MessagePumpDefault::MessagePumpDefault()
 }
 
 MessagePumpDefault::~MessagePumpDefault() = default;
+
+namespace {
+
+// [RecordReplay] How long the pump waits for work. On Linux a thread isn't
+// woken for a task posted outside the recording (see
+// ThreadControllerWithMessagePumpImpl::ScheduleWork), so when recording or
+// replaying an idle main thread looks for work once a second by itself. A wait
+// that ends by its time is recorded, so a replay wakes where the recording
+// did. Only the main thread: a replay runs a thread through its idle wake-ups
+// without waiting for anything, and other threads would read the clock
+// seconds ahead of where the main thread is paused.
+TimeDelta RecordReplayWaitLimit(
+    const MessagePump::Delegate::NextWorkInfo& next_work_info) {
+  TimeDelta delay = next_work_info.remaining_delay();
+#if !BUILDFLAG(IS_APPLE)
+  if (recordreplay::IsRecordingOrReplaying() && recordreplay::IsMainThread()) {
+    delay = std::min(delay, Seconds(1));
+  }
+#endif
+  return delay;
+}
+
+}  // namespace
 
 void MessagePumpDefault::Run(Delegate* delegate) {
   AutoReset<bool> auto_reset_keep_running(&keep_running_, true);
@@ -116,10 +140,10 @@ void MessagePumpDefault::Run(Delegate* delegate) {
           BusyWaitOnEvent(before, next_work_info.remaining_delay());
       if (!found_in_busy_loop) {
         next_work_info.recent_now = base::TimeTicks::Now();
-        woke_from_os = event_.TimedWait(next_work_info.remaining_delay());
+        woke_from_os = event_.TimedWait(RecordReplayWaitLimit(next_work_info));
       }
     } else {
-      woke_from_os = event_.TimedWait(next_work_info.remaining_delay());
+      woke_from_os = event_.TimedWait(RecordReplayWaitLimit(next_work_info));
     }
 
     if (woke_from_os) {

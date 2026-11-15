@@ -1653,6 +1653,13 @@ void Node::SetNeedsStyleRecalc(StyleChangeType change_type,
   if (ShouldSkipMarkingStyleDirty())
     return;
 
+  // With assertions on, a replay stops at the first node it marks that the
+  // recording didn't.
+  REPLAY_ASSERT_MAYBE_EVENTS_DISALLOWED(
+      "Node::SetNeedsStyleRecalc %s %s %s %d", nodeName().Utf8().c_str(),
+      reason.ReasonString().Utf8().c_str(),
+      reason.GetExtraData().Utf8().c_str(), static_cast<int>(change_type));
+
   DEVTOOLS_TIMELINE_TRACE_EVENT_INSTANT_WITH_CATEGORIES(
       TRACE_DISABLED_BY_DEFAULT("devtools.timeline.invalidationTracking"),
       "StyleRecalcInvalidationTracking",

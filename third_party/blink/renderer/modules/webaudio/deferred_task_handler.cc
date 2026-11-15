@@ -426,6 +426,10 @@ void DeferredTaskHandler::DeleteHandlersOnMainThread() {
 
 void DeferredTaskHandler::ClearHandlersToBeDeleted() {
   DCHECK(IsMainThread());
+  // ~BaseAudioContext calls this, from the collector. The lists cleared are of
+  // handlers nothing renders any more, so their locks are taken outside the
+  // recording there.
+  recordreplay::AutoPassThroughEventsIfDisallowed pass_through;
   // crbug 1370091: Acquire graph lock before clearing
   // rendering_automatic_pull_handlers_ to avoid race conditions on
   // teardown.

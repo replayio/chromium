@@ -68,6 +68,8 @@ CloneableMessage CloneableMessage::ShallowClone() const {
     token = source_token.Unbind();
   }
   clone.sender_agent_cluster_id = sender_agent_cluster_id;
+  clone.record_replay_message_id = record_replay_message_id;
+  clone.record_replay_process_id = record_replay_process_id;
   return clone;
 }
 

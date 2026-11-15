@@ -119,6 +119,12 @@ class CC_EXPORT ProxyMain : public Proxy {
 
   void RecordReplayRepaintPending();
   void RecordReplayRepaint();
+  // Has the compositor thread print what it's waiting on, for a repaint that
+  // drew nothing.
+  void RecordReplayDescribeRepaint();
+  // Whether the page has layers to commit, and whether it's visible.
+  bool RecordReplayHasRootLayer() const;
+  bool RecordReplayIsVisible() const;
   // The surface this proxy's compositor submits its frames to.
   const viz::LocalSurfaceId& RecordReplayLocalSurfaceId() const;
 

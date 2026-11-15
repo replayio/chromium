@@ -1447,6 +1447,12 @@ void FrameLoader::StopAllLoaders(bool abort_client) {
 }
 
 void FrameLoader::DidAccessInitialDocument() {
+  // What a replay runs for itself gets at the window before the page does,
+  // and the page's own first access is the one the recording has.
+  if (recordreplay::IsRecordingOrReplaying() &&
+      recordreplay::AreEventsDisallowed()) {
+    return;
+  }
   if (frame_->IsMainFrame() && !has_accessed_initial_document_) {
     has_accessed_initial_document_ = true;
     // Forbid script execution to prevent re-entering V8, since this is called

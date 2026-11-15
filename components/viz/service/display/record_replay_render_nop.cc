@@ -7,6 +7,8 @@
 
 #include "components/viz/service/display/record_replay_render.h"
 
+#include "gpu/command_buffer/client/shared_image_interface.h"
+
 namespace recordreplay {
 
 void InitPaintCallback() {}
@@ -15,9 +17,9 @@ void OnCommitPaint() {}
 
 void OnReadyToCommit() {}
 
-// TODO-REPLAY-REBASE: NotifyRasterBuffer infrastructure depended on viz::SharedBitmapId, removed upstream in v147. Restore once ported to gpu::Mailbox or decide to drop.
-// void NotifyRasterBuffer(const viz::SharedBitmapId& shared_bitmap_id,
-//                         void* memory, size_t size) {}
+void OnCommitOnImpl() {}
+
+void OnActivateOnImpl() {}
 
 void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
                            const viz::CompositorFrame& frame) {}
@@ -33,5 +35,12 @@ void OnRepaintFinished() {}
 void SetCompositorProxy(cc::ProxyMain* proxy) {}
 
 void CompositorProxyDestroyed(cc::ProxyMain* proxy) {}
+
+void SetRepaintSharedImageInterfaceGetter(
+    RepaintSharedImageInterfaceGetter getter) {}
+
+scoped_refptr<gpu::SharedImageInterface> GetRepaintSharedImageInterface() {
+  return nullptr;
+}
 
 } // namespace recordreplay

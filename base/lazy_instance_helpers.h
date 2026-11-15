@@ -26,6 +26,15 @@ constexpr uintptr_t kLazyInstanceStateCreating = 1;
 // instance to be created and returns false.
 BASE_EXPORT bool NeedsLazyInstance(std::atomic<uintptr_t>& state);
 
+// When recording or replaying, what GetOrCreateLazyPointer() goes by after
+// reading |state|: |instance| as it was read, or what makes this thread do as
+// it did when recording. Which thread makes an instance, and which find it
+// made, is a race, so it's recorded.
+BASE_EXPORT bool RecordReplayIsActiveForLazyInstance();
+BASE_EXPORT uintptr_t RecordReplayLazyInstanceState(
+    std::atomic<uintptr_t>& state,
+    uintptr_t instance);
+
 // Helper for GetOrCreateLazyPointer(). After creating an instance, this is
 // called to register the dtor to be called at program exit and to update the
 // atomic state to hold the |new_instance|
@@ -76,6 +85,9 @@ Type* GetOrCreateLazyPointer(std::atomic<uintptr_t>& state,
   // to acquire visibility over the associated data. Pairing Release_Store is in
   // CompleteLazyInstance().
   uintptr_t instance = state.load(std::memory_order_acquire);
+  if (internal::RecordReplayIsActiveForLazyInstance()) {
+    instance = internal::RecordReplayLazyInstanceState(state, instance);
+  }
   if (!(instance & kLazyInstanceCreatedMask)) {
     if (internal::NeedsLazyInstance(state)) {
       // This thread won the race and is now responsible for creating the

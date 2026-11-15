@@ -67,6 +67,8 @@
 #include "third_party/blink/renderer/platform/weborigin/security_policy.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 DedicatedWorker* DedicatedWorker::Create(
@@ -368,6 +370,11 @@ void DedicatedWorker::OnWorkerHostCreated(
         dedicated_worker_host,
     const WebSecurityOrigin& origin) {
   TRACE_EVENT("blink.worker", "DedicatedWorker::OnWorkerHostCreated");
+  // Keep track of network requests and other work triggered by the message
+  // we are handling from the browser process.
+  recordreplay::AutoDependencyExecution execute(
+      recordreplay::NewDependencyGraphNode(
+          "{\"kind\":\"workerHostCreated\"}"));
   base::UmaHistogramTimes("Worker.TopLevelScript.WorkerHostCreatedTime",
                           base::TimeTicks::Now() - start_time_);
   DCHECK(!browser_interface_broker_);
@@ -378,6 +385,11 @@ void DedicatedWorker::OnWorkerHostCreated(
 
 void DedicatedWorker::OnScriptLoadStartFailed() {
   TRACE_EVENT("blink.worker", "DedicatedWorker::OnScriptLoadStartFailed");
+  // Keep track of network requests and other work triggered by the message
+  // we are handling from the browser process.
+  recordreplay::AutoDependencyExecution execute(
+      recordreplay::NewDependencyGraphNode(
+          "{\"kind\":\"workerHostCreated\"}"));
   // Specify empty source code here because scripts will be fetched on the
   context_proxy_->DidFailToFetchScript();
   factory_client_.reset();
@@ -418,6 +430,11 @@ void DedicatedWorker::OnScriptLoadStarted(
   UMA_HISTOGRAM_TIMES("Worker.TopLevelScript.LoadStartedTime",
                       base::TimeTicks::Now() - start_time_);
   TRACE_EVENT("blink.worker", "DedicatedWorker::OnScriptLoadStarted");
+  // Keep track of network requests and other work triggered by the message
+  // we are handling from the browser process.
+  recordreplay::AutoDependencyExecution execute(
+      recordreplay::NewDependencyGraphNode(
+          "{\"kind\":\"workerHostCreated\"}"));
   if (base::FeatureList::IsEnabled(
           features::kDedicatedWorkerAblationStudyEnabled)) {
     CHECK(GetExecutionContext());

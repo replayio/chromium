@@ -90,6 +90,8 @@ CachedMatchedProperties::CachedMatchedProperties(
                                              "CachedMatchedProperties")) {
       replay_matched_properties_strong_.push_back(
           new_matched_properties.properties);
+      replay_mixin_parameter_bindings_strong_.push_back(
+          new_matched_properties.mixin_parameter_bindings);
     }
   }
 }
@@ -97,6 +99,7 @@ CachedMatchedProperties::CachedMatchedProperties(
 void CachedMatchedProperties::Clear() {
   matched_properties.clear();
   replay_matched_properties_strong_.clear();
+  replay_mixin_parameter_bindings_strong_.clear();
   entries.clear();
 }
 
@@ -303,10 +306,24 @@ bool CachedMatchedProperties::CorrespondsTo(
 void CachedMatchedProperties::RefreshKey(
     const MatchedPropertiesVector& lookup_properties) {
   DCHECK(CorrespondsTo(lookup_properties));
+  // What's held strongly when recording or replaying follows the key: the
+  // collector doesn't clean this cache then (see RecordReplayPrune()), so a
+  // key must never point at something only the lookup held.
+  const bool hold_key = recordreplay::IsRecordingOrReplaying(
+      "leak-references", "CachedMatchedProperties");
+  if (hold_key) {
+    replay_matched_properties_strong_.clear();
+    replay_mixin_parameter_bindings_strong_.clear();
+  }
   for (auto [lookup_it, cached_it] :
        std::views::zip(lookup_properties, matched_properties)) {
     cached_it.properties = lookup_it.properties;
     cached_it.mixin_parameter_bindings = lookup_it.mixin_parameter_bindings;
+    if (hold_key) {
+      replay_matched_properties_strong_.push_back(lookup_it.properties);
+      replay_mixin_parameter_bindings_strong_.push_back(
+          lookup_it.mixin_parameter_bindings);
+    }
   }
 }
 
@@ -317,6 +334,10 @@ void MatchedPropertiesCache::Add(
     const ComputedStyle* parent_style,
     const ComputedStyle* layout_parent_style,
     const ComputedStyle* originating_element_style) {
+  if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                           "CachedMatchedProperties")) {
+    RecordReplayPrune();
+  }
   Member<CachedMatchedProperties>& cache_item =
       cache_.insert(key.hash_, nullptr).stored_value->value;
 
@@ -487,6 +508,12 @@ void MatchedPropertiesCache::CleanMatchedPropertiesCache(
   constexpr unsigned kCacheLimit = 500;
   constexpr unsigned kPruneCacheTarget = 300;
 
+  // See RecordReplayPrune().
+  if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                           "CachedMatchedProperties")) {
+    return;
+  }
+
   if (cache_entries_ <= kCacheLimit) {
     // Fast path with no LRU pruning.
     cache_.erase_if([&info, this](const auto& entry_pair) {
@@ -550,6 +577,37 @@ void MatchedPropertiesCache::CleanMatchedPropertiesCache(
           return entry.last_used <= min_last_used;
         });
   }
+}
+
+void MatchedPropertiesCache::RecordReplayPrune() {
+  // The limits of CleanMatchedPropertiesCache().
+  constexpr unsigned kCacheLimit = 500;
+  constexpr unsigned kPruneCacheTarget = 300;
+  if (cache_entries_ <= kCacheLimit) {
+    return;
+  }
+  Vector<unsigned> live_entries;
+  live_entries.ReserveInitialCapacity(cache_entries_);
+  for (const auto& entry_pair : cache_) {
+    if (!entry_pair.value) {
+      continue;
+    }
+    for (const auto& entry : entry_pair.value->entries) {
+      live_entries.emplace_back(entry.last_used);
+    }
+  }
+  if (live_entries.size() <= kPruneCacheTarget) {
+    return;
+  }
+  unsigned cutoff_idx = live_entries.size() - kPruneCacheTarget - 1;
+  // SAFETY: Bounds-checked just above.
+  std::nth_element(live_entries.begin(),
+                   UNSAFE_BUFFERS(live_entries.begin() + cutoff_idx),
+                   live_entries.end());
+  unsigned min_last_used = live_entries[cutoff_idx];
+  EraseEntriesIf([min_last_used](const CachedMatchedProperties::Entry& entry) {
+    return entry.last_used <= min_last_used;
+  });
 }
 
 std::ostream& operator<<(std::ostream& stream,

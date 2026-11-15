@@ -11,6 +11,7 @@
 #include "base/compiler_specific.h"
 #include "base/containers/span.h"
 #include "base/feature_list.h"
+#include "base/record_replay.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "third_party/boringssl/src/include/openssl/rand.h"
@@ -136,11 +137,16 @@ void RandBytesInternal(span<uint8_t> output, bool avoid_allocation) {
   // On Android it is mandatory to check that the kernel _version_ has the
   // support for a syscall before calling. The same check is made on Linux and
   // ChromeOS to avoid making a syscall that predictably returns ENOSYS.
-  // Disable this test when recording/replaying as in some cases when replaying
-  // we might not think there is kernel support for getrandom for an unknown reason.
-  static const bool kernel_has_support = KernelSupportsGetRandom();
-  (void)kernel_has_support;
-  if (/*kernel_has_support && */GetRandomSyscall(output.data(), output.size())) {
+  // Not tested when recording or replaying: the test asks the system for its
+  // version the first time bytes are asked for here, and that first time can
+  // be inside a collection, where nothing is recorded, on one run and outside
+  // on another.
+  bool use_getrandom = recordreplay::IsRecordingOrReplaying();
+  if (!use_getrandom) {
+    static const bool kernel_has_support = KernelSupportsGetRandom();
+    use_getrandom = kernel_has_support;
+  }
+  if (use_getrandom && GetRandomSyscall(output.data(), output.size())) {
     return;
   }
 #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) ||

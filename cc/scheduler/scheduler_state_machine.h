@@ -7,6 +7,8 @@
 
 #include <stdint.h>
 
+#include <string>
+
 #include "base/time/time.h"
 #include "base/tracing/protos/chrome_track_event.pbzero.h"
 #include "cc/cc_export.h"
@@ -403,6 +405,10 @@ class CC_EXPORT SchedulerStateMachine {
   bool RecordReplayCreatingFrameSink() const {
     return layer_tree_frame_sink_state_ == LayerTreeFrameSinkState::CREATING;
   }
+  // A repaint's frame is about to be given: see the definition.
+  void RecordReplayWillRepaint();
+  // What the state machine is waiting on, for a repaint that drew nothing.
+  std::string RecordReplayDescribe() const;
 
  protected:
   bool BeginFrameRequiredForAction() const;

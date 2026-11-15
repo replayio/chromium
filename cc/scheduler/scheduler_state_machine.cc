@@ -11,6 +11,7 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
 #include "base/rand_util.h"
+#include "base/strings/stringprintf.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/traced_value.h"
@@ -1764,6 +1765,37 @@ void SchedulerStateMachine::DidLoseLayerTreeFrameSink() {
     return;
   layer_tree_frame_sink_state_ = LayerTreeFrameSinkState::NONE;
   needs_redraw_ = false;
+}
+
+void SchedulerStateMachine::RecordReplayWillRepaint() {
+  // The repaint's commit is over by now, if it made one. It makes none for a
+  // page whose layers have been taken away, and draws the tree the compositor
+  // still has: a frame sink the repaint put in is then still waiting for a
+  // first commit that isn't coming, and nothing has asked for a redraw, for
+  // want of which the scheduler would turn the repaint's frame away.
+  if (layer_tree_frame_sink_state_ ==
+      LayerTreeFrameSinkState::WAITING_FOR_FIRST_COMMIT) {
+    layer_tree_frame_sink_state_ = LayerTreeFrameSinkState::ACTIVE;
+  }
+  needs_redraw_ = true;
+}
+
+std::string SchedulerStateMachine::RecordReplayDescribe() const {
+  return base::StringPrintf(
+      "sink=%d impl_frame=%d main_frame=%d forced_redraw=%d next_action=%d "
+      "submits_pending=%d needs_redraw=%d needs_prepare_tiles=%d "
+      "needs_main_frame=%d visible=%d source_paused=%d can_draw=%d "
+      "pending_tree=%d pending_ready=%d active_needs_first_draw=%d "
+      "force_draw=%d repaint_pending=%d did_draw=%d",
+      static_cast<int>(layer_tree_frame_sink_state_),
+      static_cast<int>(begin_impl_frame_state_),
+      static_cast<int>(begin_main_frame_state_),
+      static_cast<int>(forced_redraw_state_), static_cast<int>(NextAction()),
+      pending_submit_frames_, needs_redraw_, needs_prepare_tiles_,
+      needs_begin_main_frame_, visible_, begin_frame_source_paused_, can_draw_,
+      has_pending_tree_, pending_tree_is_ready_for_activation_,
+      active_tree_needs_first_draw_, replay_force_draw_,
+      replay_repaint_pending_, did_draw_);
 }
 
 void SchedulerStateMachine::RecordReplayReuseLostLayerTreeFrameSink() {

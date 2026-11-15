@@ -5,6 +5,10 @@
 #include "components/viz/service/display/record_replay_render.h"
 
 #include <algorithm>
+#include <atomic>
+#include <memory>
+#include <utility>
+#include <vector>
 
 #include "base/base64.h"
 #include "base/no_destructor.h"
@@ -12,12 +16,20 @@
 #include "base/record_replay_paint_surface.h"
 #include "base/record_replay_render_interface.h"
 #include "base/strings/stringprintf.h"
+#include "base/synchronization/waitable_event.h"
+#include "base/threading/platform_thread.h"
+#include "base/time/time.h"
+#include "base/unguessable_token.h"
 #include "cc/animation/animation_events.h"
 #include "cc/trees/compositor_commit_data.h"
 #include "components/viz/common/display/renderer_settings.h"
+#include "components/viz/common/resources/shared_image_format_utils.h"
+#include "components/viz/common/resources/transferable_resource.h"
 #include "components/viz/service/display/software_output_device.h"
 #include "components/viz/service/display/software_renderer.h"
 #include "components/viz/service/display_embedder/software_output_surface.h"
+#include "gpu/command_buffer/client/client_shared_image.h"
+#include "gpu/command_buffer/client/shared_image_interface.h"
 #include "ui/gfx/codec/jpeg_codec.h"
 
 namespace blink {
@@ -28,22 +40,20 @@ namespace recordreplay {
 
 extern bool IsMainThread();
 
-// TODO-REPLAY-REBASE: NotifyRasterBuffer infrastructure depended on viz::SharedBitmapId, removed upstream in v147. Restore once ported to gpu::Mailbox or decide to drop.
-// struct SharedBitmapInfo {
-//   viz::SharedBitmapId id_;
-//   uint8_t* memory_;
-//   size_t size_;
-// };
-// typedef std::vector<SharedBitmapInfo> SharedBitmapInfoVector;
-// static SharedBitmapInfoVector* gSharedBitmaps;
-//
-// void NotifyRasterBuffer(const viz::SharedBitmapId& shared_bitmap_id,
-//                         void* memory, size_t size) {
-//   if (!gSharedBitmaps) {
-//     gSharedBitmaps = new SharedBitmapInfoVector();
-//   }
-//   gSharedBitmaps->push_back({ shared_bitmap_id, (uint8_t*)memory, size });
-// }
+// What a repaint makes tiles with when the compositor never had a frame sink.
+static RepaintSharedImageInterfaceGetter gRepaintSharedImageInterfaceGetter;
+
+void SetRepaintSharedImageInterfaceGetter(
+    RepaintSharedImageInterfaceGetter getter) {
+  gRepaintSharedImageInterfaceGetter = getter;
+}
+
+scoped_refptr<gpu::SharedImageInterface> GetRepaintSharedImageInterface() {
+  if (!gRepaintSharedImageInterfaceGetter) {
+    return nullptr;
+  }
+  return gRepaintSharedImageInterfaceGetter();
+}
 
 static viz::SoftwareOutputSurface* gOutputSurface;
 static viz::SoftwareRenderer* gRenderer;
@@ -71,6 +81,8 @@ static void InitializeRenderer() {
                                         gOutputSurface,
                                         nullptr,
                                         nullptr);
+  gRenderer->Initialize();
+  gRenderer->SetHasBackBuffers(true);
 
   recordreplay::SetGetCurrentViewportPixelSizeCallback(GetCurrentViewportPixelSizeImpl);
 }
@@ -83,12 +95,21 @@ static std::string SurfaceIdString(const viz::LocalSurfaceId& local_surface_id) 
                             local_surface_id.embed_token().ToString().c_str());
 }
 
-// Current compositor frame.
+// Current compositor frame, and the mappings of its tiles that are in use
+// while it's drawn.
 static const viz::CompositorFrame* gCurrentFrame;
+static std::vector<std::unique_ptr<gpu::ClientSharedImage::ScopedMapping>>*
+    gCurrentMappings;
+
+// What a repaint's draw got as far as, said when it comes back with nothing.
+static std::atomic<int> gRepaintFramesSubmitted;
+static std::atomic<int> gRepaintFramesForOtherSurface;
+static std::atomic<int> gRepaintFramesPainted;
 
 void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
                            const viz::CompositorFrame& frame) {
   CHECK(IsRecordingOrReplaying());
+  gRepaintFramesSubmitted++;
 
   if (TakePaintSurfaceReset()) {
     gSurfaceId = nullptr;
@@ -114,6 +135,7 @@ void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
     Print("Ignoring composite to unknown surface %s, expected %s",
           SurfaceIdString(local_surface_id).c_str(),
           SurfaceIdString(*gSurfaceId).c_str());
+    gRepaintFramesForOtherSurface++;
     return;
   }
 
@@ -122,15 +144,19 @@ void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
     render_passes.push_back(pass->DeepCopyAggregated());
   }
 
+  std::vector<std::unique_ptr<gpu::ClientSharedImage::ScopedMapping>> mappings;
   gCurrentFrame = &frame;
+  gCurrentMappings = &mappings;
 
   gRenderer->DrawFrame(&render_passes,
                        1,
                        frame.size_in_pixels(),
                        gfx::DisplayColorSpaces(),
-                       viz::SurfaceDamageRectList());
+                       viz::SurfaceDamageRectList(),
+                       viz::TrackedElementRects());
 
   gCurrentFrame = nullptr;
+  gCurrentMappings = nullptr;
 }
 
 bool PopulateSkBitmapWithResource(SkBitmap* sk_bitmap, viz::ResourceId resource_id) {
@@ -150,25 +176,40 @@ bool PopulateSkBitmapWithResource(SkBitmap* sk_bitmap, viz::ResourceId resource_
     return false;
   }
 
-  void* pixels = nullptr;
-  // TODO-REPLAY-REBASE: NotifyRasterBuffer infrastructure depended on viz::SharedBitmapId, removed upstream in v147. Restore once ported to gpu::Mailbox or decide to drop.
-  // if (gSharedBitmaps) {
-  //   for (const SharedBitmapInfo& info : *gSharedBitmaps) {
-  //     if (info.id_ == transferable->mailbox_holder.mailbox) {
-  //       pixels = info.memory_;
-  //     }
-  //   }
-  // }
+  // A software resource's pixels are in the shared image the resource itself
+  // carries, in memory this process has mapped. (Chromium 108 rastered tiles
+  // into shared bitmaps, which the frame named by an ID and which had to be
+  // registered here as they were made.) A frame drawn in this process hasn't
+  // been through mojo, so its resources still have their images.
+  scoped_refptr<gpu::ClientSharedImage> image;
+  if (transferable->GetIsSoftware() &&
+      transferable->shared_image()->format().is_single_plane()) {
+    image = transferable->shared_image();
+  }
 
-  recordreplay::AssertMaybeEventsDisallowed("[RUN-2847-3001] recordreplay::PopulateSkBitmapWithResource B %d", !!pixels);
-  if (!pixels) {
+  recordreplay::AssertMaybeEventsDisallowed("[RUN-2847-3001] recordreplay::PopulateSkBitmapWithResource B %d", !!image);
+  if (!image) {
     return false;
   }
 
-  SkImageInfo info =
-      SkImageInfo::MakeN32Premul(transferable->GetSize().width(),
-                                 transferable->GetSize().height());
-  return sk_bitmap->installPixels(info, pixels, info.minRowBytes());
+  // The pixels stay mapped until the frame has been drawn.
+  std::unique_ptr<gpu::ClientSharedImage::ScopedMapping> mapping = image->Map();
+  if (!mapping) {
+    return false;
+  }
+  gfx::Size size = mapping->Size();
+  SkImageInfo info = SkImageInfo::Make(
+      size.width(), size.height(),
+      viz::ToClosestSkColorType(image->format()), kPremul_SkAlphaType);
+  base::span<uint8_t> memory = mapping->GetMemoryForPlane(0);
+  size_t stride = mapping->Stride(0);
+  if (stride < info.minRowBytes() ||
+      memory.size() < info.computeByteSize(stride)) {
+    return false;
+  }
+  bool installed = sk_bitmap->installPixels(info, memory.data(), stride);
+  gCurrentMappings->push_back(std::move(mapping));
+  return installed;
 }
 
 extern "C" size_t V8RecordReplayPaintStart();
@@ -234,6 +275,15 @@ static std::atomic<size_t> gCurrentPaintBookmark;
 // Bookmark for the last point where a paint was committed on the main thread.
 static std::atomic<size_t> gLastCommitBookmark;
 
+// The bookmarks of the tree last committed and of the tree being drawn, which
+// is the last one activated. Compositor thread. A finished paint is credited
+// to the second: the compositor can hear of the next commit, and even make it,
+// while it still draws the tree before, and across a navigation that next
+// commit can be of an empty tree. Its bookmark would then be a paint point at
+// which there is nothing to repaint.
+static size_t gCommittedBookmark;
+static size_t gActiveBookmark;
+
 void InitPaintCallback() {
   static bool hasPaints = false;
   if (!hasPaints) {
@@ -254,6 +304,14 @@ void OnCommitPaint() {
 
 void OnReadyToCommit() {
   gLastCommitBookmark.store(gCurrentPaintBookmark, std::memory_order_relaxed);
+}
+
+void OnCommitOnImpl() {
+  gCommittedBookmark = gLastCommitBookmark.load();
+}
+
+void OnActivateOnImpl() {
+  gActiveBookmark = gCommittedBookmark;
 }
 
 // How to encode repainted graphics.
@@ -279,10 +337,16 @@ void OnPaintFinished(const SkPixmap& pixmap) {
   if (HasDivergedFromRecording()) {
     // If we've diverged from the recording then we're probably repainting,
     // and in any case don't need to notify the recorder that the paint finished.
+    gRepaintFramesPainted++;
     if (gRepaintEvent)
       gRepaintResult = EncodeBitmapContents(gRepaintMimeType, gRepaintJPEGQuality);
   } else {
-    size_t bookmark = gLastCommitBookmark.load();
+    // The bookmarks come from the main thread, for each commit of any of the
+    // process's compositors, while this thread draws: with several widgets (a
+    // page and its popups) which commit this draw comes after isn't the same
+    // on a replay. So what was read is recorded.
+    size_t bookmark =
+        RecordReplayValueIfAllowed("OnPaintFinished bookmark", gActiveBookmark);
     if (bookmark) {
       V8RecordReplayPaintFinished(bookmark);
     }
@@ -340,11 +404,47 @@ void CompositorProxyDestroyed(cc::ProxyMain* proxy) {
 // repaint still returns nothing, unless a paint surface reset is pending.
 static cc::ProxyMain* RepaintCompositorProxy() {
   const base::UnguessableToken* embed_token = gSurfaceEmbedToken;
+  // After a navigation has asked for the paint surface to change, the owner
+  // on record is the page that was left until the new page's first frame is
+  // submitted. A repaint before then (at the new page's first paint, which is
+  // credited to its commit) would draw the old page's window, which has no
+  // layers left: a blank picture, when the new page gets a new window.
+  if (IsPaintSurfaceResetPending()) {
+    embed_token = nullptr;
+  }
   if (embed_token && gCompositorProxies) {
     for (cc::ProxyMain* proxy : *gCompositorProxies) {
       if (proxy->RecordReplayLocalSurfaceId().embed_token() == *embed_token) {
         return proxy;
       }
+    }
+  }
+  // No window owns the paint surface, or none has been drawn yet. The current
+  // proxy is the one made or used last, which can be of a window that is
+  // hidden and has no layers, and its repaint draws nothing or an old blank
+  // frame. A window with layers is the one to draw: a visible one if there is
+  // one, and the newest of those.
+  if (gCompositorProxies &&
+      (!gCurrentCompositorProxy ||
+       !gCurrentCompositorProxy->RecordReplayHasRootLayer() ||
+       !gCurrentCompositorProxy->RecordReplayIsVisible())) {
+    cc::ProxyMain* with_layers = nullptr;
+    cc::ProxyMain* visible_with_layers = nullptr;
+    for (cc::ProxyMain* proxy : *gCompositorProxies) {
+      if (!proxy->RecordReplayHasRootLayer()) {
+        continue;
+      }
+      with_layers = proxy;
+      if (proxy->RecordReplayIsVisible()) {
+        visible_with_layers = proxy;
+      }
+    }
+    if (visible_with_layers) {
+      return visible_with_layers;
+    }
+    if (with_layers && (!gCurrentCompositorProxy ||
+                        !gCurrentCompositorProxy->RecordReplayHasRootLayer())) {
+      return with_layers;
     }
   }
   return gCurrentCompositorProxy;
@@ -356,6 +456,26 @@ static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
   gCurrentCompositorProxy = RepaintCompositorProxy();
   if (!gCurrentCompositorProxy)
     return nullptr;
+
+  if (gCompositorProxies &&
+      (!gCurrentCompositorProxy->RecordReplayHasRootLayer() ||
+       !gCurrentCompositorProxy->RecordReplayIsVisible())) {
+    // Says what there was to choose from when the page chosen can't be drawn
+    // as it is.
+    const base::UnguessableToken* embed_token = gSurfaceEmbedToken;
+    size_t index = 0;
+    for (cc::ProxyMain* proxy : *gCompositorProxies) {
+      Print("Repaint: compositor %zu of %zu%s: layers %d, visible %d, owns the "
+            "paint surface %d (a surface is owned %d).",
+            ++index, gCompositorProxies->size(),
+            proxy == gCurrentCompositorProxy ? " (chosen)" : "",
+            proxy->RecordReplayHasRootLayer(), proxy->RecordReplayIsVisible(),
+            embed_token &&
+                proxy->RecordReplayLocalSurfaceId().embed_token() ==
+                    *embed_token,
+            !!embed_token);
+    }
+  }
 
   gRepaintMimeType = mime_type;
   gRepaintJPEGQuality = jpeg_quality;
@@ -380,6 +500,9 @@ static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
   static base::NoDestructor<base::WaitableEvent> event;
   event->Reset();
   gRepaintResult = nullptr;
+  gRepaintFramesSubmitted = 0;
+  gRepaintFramesForOtherSurface = 0;
+  gRepaintFramesPainted = 0;
   gRepaintEvent = event.get();
 
   // Trigger a new frame on the compositor thread.
@@ -393,6 +516,19 @@ static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
   }
 
   gRepaintEvent = nullptr;
+  if (!gRepaintResult) {
+    Print("[RuntimeError] Repaint drew nothing: %d frames submitted, %d for "
+          "another surface, %d painted. The page %s layers and %s visible. "
+          "%zu compositors in this process.",
+          gRepaintFramesSubmitted.load(), gRepaintFramesForOtherSurface.load(),
+          gRepaintFramesPainted.load(),
+          gCurrentCompositorProxy->RecordReplayHasRootLayer() ? "has" : "has no",
+          gCurrentCompositorProxy->RecordReplayIsVisible() ? "is" : "isn't",
+          gCompositorProxies ? gCompositorProxies->size() : 0);
+    // The compositor thread says what it's waiting on, and gets a moment to.
+    gCurrentCompositorProxy->RecordReplayDescribeRepaint();
+    base::PlatformThread::Sleep(base::Milliseconds(200));
+  }
   return gRepaintResult;
 }
 

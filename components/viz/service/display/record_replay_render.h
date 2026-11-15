@@ -5,14 +5,17 @@
 #ifndef COMPONENTS_VIZ_SERVICE_DISPLAY_RECORD_REPLAY_RENDER_H_
 #define COMPONENTS_VIZ_SERVICE_DISPLAY_RECORD_REPLAY_RENDER_H_
 
+#include "base/memory/scoped_refptr.h"
 #include "cc/trees/proxy_main.h"
-// TODO-REPLAY-REBASE: NotifyRasterBuffer infrastructure depended on viz::SharedBitmapId, removed upstream in v147. Restore once ported to gpu::Mailbox or decide to drop.
-// #include "components/viz/common/resources/shared_bitmap.h"
 #include "components/viz/common/resources/resource_id.h"
 #include "components/viz/common/surfaces/local_surface_id.h"
 #include "components/viz/common/quads/compositor_frame.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkPixmap.h"
+
+namespace gpu {
+class SharedImageInterface;
+}
 
 namespace recordreplay {
 
@@ -35,16 +38,17 @@ void OnCommitPaint();
 // the commit.
 void OnReadyToCommit();
 
-// Called when a shared memory buffer for rasterization has been created.
-// TODO-REPLAY-REBASE: NotifyRasterBuffer infrastructure depended on viz::SharedBitmapId, removed upstream in v147. Restore once ported to gpu::Mailbox or decide to drop.
-// void NotifyRasterBuffer(const viz::SharedBitmapId& shared_bitmap_id,
-//                         void* memory, size_t size);
+// Called on the compositor thread when it has committed the tree it last
+// heard was ready, and when it has activated the tree it last committed.
+void OnCommitOnImpl();
+void OnActivateOnImpl();
 
 // Called when a CompositorFrame is being submitted to the GPU process.
 void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
                            const viz::CompositorFrame& frame);
 
 // Called to populate a bitmap with information for the given resource in the current frame.
+// The pixels are those of the software shared image the resource carries.
 bool PopulateSkBitmapWithResource(SkBitmap* sk_bitmap, viz::ResourceId resource_id);
 
 // Called on the compositor thread when painting to the software output device has finished.
@@ -59,6 +63,16 @@ void SetCompositorProxy(cc::ProxyMain* proxy);
 
 // Called when a compositor proxy has been destroyed and can't be used to trigger repaints.
 void CompositorProxyDestroyed(cc::ProxyMain* proxy);
+
+// What a repaint's tiles are made with when the compositor has never had a
+// frame sink, as at a pause before the page's first one was made: tiles are
+// rastered into shared images, and the interface for them comes with a frame
+// sink. The renderer says how to get one. Main thread.
+using RepaintSharedImageInterfaceGetter =
+    scoped_refptr<gpu::SharedImageInterface> (*)();
+void SetRepaintSharedImageInterfaceGetter(
+    RepaintSharedImageInterfaceGetter getter);
+scoped_refptr<gpu::SharedImageInterface> GetRepaintSharedImageInterface();
 
 gfx::Size GetCurrentViewportPixelSizeImpl();
 

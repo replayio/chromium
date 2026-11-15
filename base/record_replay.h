@@ -16,10 +16,12 @@
 
 #include "v8/include/replayio-macros.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <initializer_list>
 #include <memory>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 namespace base {
@@ -27,6 +29,13 @@ namespace base {
 }
 
 namespace recordreplay {
+
+// Creates what this file needs made on the main thread before any other
+// thread exists (see AutoOrderedRefCount). Called once the driver is attached.
+void Initialize();
+
+// Whether the calling thread is the one the driver attached on.
+bool IsMainThread();
 
 bool IsRecordingOrReplaying(const char* feature = nullptr,
                             const char* subfeature = nullptr);
@@ -40,6 +49,13 @@ bool IsRecording();
 bool IsReplaying();
 char* GetRecordingId();
 void FinishRecording();
+
+// On the main thread: finishes the recording if another thread has asked for
+// that (see FinishRecording()) and events are allowed. The main thread calls
+// this each time it selects a task and when it runs out of work, as the task
+// that asks for it can be posted from outside the recording, and then runs
+// with events disallowed, where a recording's end can't be written.
+void MaybeFinishRecording();
 
 void Print(const char* format, ...);
 void Diagnostic(const char* format, ...);
@@ -62,7 +78,14 @@ void AssertMaybeEventsDisallowed(const char* format, ...);
 void AssertBytes(const char* why, const void* buf, size_t size);
 bool AreAssertsDisabled();
 
+// The calling thread is exiting and running its thread-local destructors:
+// its asserts are skipped from here on, as the driver no longer has the thread.
+void NoteThreadExiting();
+
 uintptr_t RecordReplayValue(const char* why, uintptr_t v);
+// The same, for somewhere that also runs while events are disallowed or
+// passed through, or after diverging, where the value is used as it is.
+uintptr_t RecordReplayValueIfAllowed(const char* why, uintptr_t v);
 void RecordReplayBytes(const char* why, void* buf, size_t size);
 void RecordReplayString(const char* why, std::string& text);
 
@@ -73,6 +96,20 @@ void OrderedUnlock(int lock);
 struct AutoOrderedLock {
   AutoOrderedLock(int id) : id_(id) { OrderedLock(id_); }
   ~AutoOrderedLock() { OrderedUnlock(id_); }
+  int id_;
+};
+
+// Orders one reference count operation among threads. For the few kinds of
+// object whose last reference any of several threads can drop, and whose
+// destruction is something a recording notes (a task posted, a lock taken):
+// the thread that destroys one when recording isn't always the one that does
+// when replaying. One lock serves all of them. Nothing is ordered where events
+// are disallowed or passed through, or before Initialize().
+struct AutoOrderedRefCount {
+  AutoOrderedRefCount();
+  ~AutoOrderedRefCount();
+  AutoOrderedRefCount(const AutoOrderedRefCount&) = delete;
+  AutoOrderedRefCount& operator=(const AutoOrderedRefCount&) = delete;
   int id_;
 };
 
@@ -101,6 +138,12 @@ void EndDisallowEvents();
 // Whether we are in a code path that we have explicitely identified as
 // divergent.
 bool AreEventsDisallowed(const char* why = nullptr);
+
+// The name to give a base::Lock made now, for it to be ordered: none while
+// events are disallowed, as what's made then isn't part of the recording.
+inline const char* OrderedLockName(const char* name) {
+  return AreEventsDisallowed() ? nullptr : name;
+}
 
 void EnterReplayCode();
 void ExitReplayCode();
@@ -131,6 +174,26 @@ struct AutoPassThroughEvents {
 struct AutoDisallowEvents {
   AutoDisallowEvents(const char* label) { BeginDisallowEventsWithLabel(label); }
   ~AutoDisallowEvents() { EndDisallowEvents(); }
+};
+
+// For a destructor the collector can run, or anything else that also runs
+// where events are disallowed: what it does there is passed through, without
+// the driver warning of each lock it takes. Where events are allowed this does
+// nothing. Each use says why the code is safe to run at a point that isn't the
+// same on a replay.
+struct AutoPassThroughEventsIfDisallowed {
+  AutoPassThroughEventsIfDisallowed()
+      : active_(IsRecordingOrReplaying() && AreEventsDisallowed()) {
+    if (active_)
+      BeginPassThroughEvents();
+  }
+  ~AutoPassThroughEventsIfDisallowed() {
+    if (active_)
+      EndPassThroughEvents();
+  }
+
+ private:
+  const bool active_;
 };
 
 // Whether we have intentionally diverged from recording at a pause point.
@@ -212,6 +275,19 @@ struct CompareByPointerId {
     return (*this)(a, b.get());
   }
 };
+
+// A pointer container's elements in the order their pointers were registered
+// when recording or replaying, for walking a container whose own order is by
+// address or by an address's hash, and so isn't a replay's.
+template <typename Container>
+auto SortedByPointerId(const Container& container) {
+  std::vector<std::remove_cvref_t<decltype(*container.begin())>> sorted(
+      container.begin(), container.end());
+  if (IsRecordingOrReplaying("pointer-ids")) {
+    std::sort(sorted.begin(), sorted.end(), CompareByPointerId());
+  }
+  return sorted;
+}
 
 // stl comparator for classes that have a RecordReplayId() method.
 struct CompareByRecordReplayId {

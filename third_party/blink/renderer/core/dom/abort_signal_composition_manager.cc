@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/core/dom/abort_signal_composition_manager.h"
 
 #include "base/check.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/dom/abort_signal.h"
 #include "third_party/blink/renderer/core/dom/abort_signal_composition_type.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_linked_hash_set.h"
@@ -66,6 +67,7 @@ DependentSignalCompositionManager::~DependentSignalCompositionManager() =
 void DependentSignalCompositionManager::Trace(Visitor* visitor) const {
   AbortSignalCompositionManager::Trace(visitor);
   visitor->Trace(source_signals_);
+  visitor->Trace(record_replay_source_signals_);
 }
 
 void DependentSignalCompositionManager::AddSourceSignal(AbortSignal& source) {
@@ -88,12 +90,17 @@ void DependentSignalCompositionManager::AddSourceSignal(AbortSignal& source) {
     return;
   }
   source_signals_.insert(&source);
+  if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                           "AbortSignal sources")) {
+    record_replay_source_signals_.push_back(&source);
+  }
   source_manager->AddDependentSignal(*this);
 }
 
 void DependentSignalCompositionManager::Settle() {
   AbortSignalCompositionManager::Settle();
   source_signals_.clear();
+  record_replay_source_signals_.clear();
 }
 
 void DependentSignalCompositionManager::OnSourceSettled(
@@ -121,6 +128,7 @@ SourceSignalCompositionManager::~SourceSignalCompositionManager() = default;
 void SourceSignalCompositionManager::Trace(Visitor* visitor) const {
   AbortSignalCompositionManager::Trace(visitor);
   visitor->Trace(dependent_signals_);
+  visitor->Trace(record_replay_dependent_signals_);
 }
 
 void SourceSignalCompositionManager::AddDependentSignal(
@@ -134,6 +142,10 @@ void SourceSignalCompositionManager::AddDependentSignal(
 
   CHECK(&dependent_manager.GetSignal());
   dependent_signals_.insert(&dependent_manager.GetSignal());
+  if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                           "AbortSignal dependents")) {
+    record_replay_dependent_signals_.push_back(&dependent_manager.GetSignal());
+  }
 }
 
 void SourceSignalCompositionManager::Settle() {
@@ -152,6 +164,7 @@ void SourceSignalCompositionManager::Settle() {
     manager->OnSourceSettled(*this);
   }
   dependent_signals_.clear();
+  record_replay_dependent_signals_.clear();
 }
 
 }  // namespace blink

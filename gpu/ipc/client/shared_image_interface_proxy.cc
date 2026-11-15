@@ -7,6 +7,7 @@
 #include <bit>
 
 #include "base/logging.h"
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
 #include "gpu/ipc/client/gpu_channel_host.h"
@@ -571,6 +572,10 @@ void SharedImageInterfaceProxy::CreateSharedImagePool(
 
 void SharedImageInterfaceProxy::DestroySharedImagePool(
     const SharedImagePoolId& pool_id) {
+  // [RecordReplay] A canvas's resource provider destroys its pool when the
+  // collector frees it. The message is for the GPU process, which a replay
+  // doesn't have.
+  recordreplay::AutoPassThroughEventsIfDisallowed pass_through;
   auto params = mojom::DestroySharedImagePoolParams::New();
   params->pool_id = pool_id;
   {

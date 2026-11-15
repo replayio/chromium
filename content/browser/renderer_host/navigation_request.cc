@@ -278,8 +278,15 @@ constexpr base::TimeDelta kCompositorLockTimeout = base::Milliseconds(150);
 // Flag to control whether redirect URLs are being sanitized before sending
 // them to the renderer process as part of the navigation.
 // See https://crbug.com/40095391.
+//
+// [RecordReplay] Off in this Chromium, with kSanitizeOriginalUrlDuringNavigation
+// (content/common/features.cc): a recording reports each hop of a redirected
+// navigation with its URL, as Chromium 108 let it. The renderer of a recorded
+// page is therefore told the cross-origin URLs a successful navigation passed
+// through, which stock Chromium now keeps from it. See
+// SanitizeRedirectsForCommit for what is still kept from it.
 BASE_FEATURE(kSanitizeRedirectUrlsDuringNavigation,
-             base::FEATURE_ENABLED_BY_DEFAULT);
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Killswitch to replace the current NavigationEntry for same-URL navigations
 // recovering from an error document. See https://crbug.com/396645696.
@@ -8686,9 +8693,13 @@ void NavigationRequest::UpdateHistoryParamsInCommitNavigationParams() {
 void NavigationRequest::SanitizeRedirectsForCommit(
     blink::mojom::CommonNavigationParamsPtr& common_params,
     blink::mojom::CommitNavigationParamsPtr& commit_params) {
-  if (!base::FeatureList::IsEnabled(kSanitizeRedirectUrlsDuringNavigation)) {
-    return;
-  }
+  // [RecordReplay] The feature is off in this Chromium, and decides only
+  // whether a successful navigation's redirect URLs are cut to their origins.
+  // The error page of a failed, redirected subframe navigation that commits in
+  // its initiator's process still gets nothing but origins, and Location
+  // headers are still cut below: a recording needs neither.
+  const bool sanitize_redirect_urls =
+      base::FeatureList::IsEnabled(kSanitizeRedirectUrlsDuringNavigation);
 
   // TODO(crbug.com/40134629): Remove the sanitization once Subframe Error
   // Pages are isolated.
@@ -8702,14 +8713,21 @@ void NavigationRequest::SanitizeRedirectsForCommit(
 
   if (should_sanitize_final_url_for_error_page) {
     common_params->url = common_params->url.DeprecatedGetOriginAsURL();
+    commit_params->original_url =
+        commit_params->original_url.DeprecatedGetOriginAsURL();
   }
+
+  const bool sanitize_urls =
+      sanitize_redirect_urls || should_sanitize_final_url_for_error_page;
 
   // It is safe to convert GURL to an Origin and back in the code below because
   // we only want to discard the rest of the URL (e.g., path and params). The
   // actual underlying Origin is not needed, which could be inherited or opaque
   // in sandbox cases.
-  for (GURL& redirect : commit_params->redirects) {
-    redirect = redirect.DeprecatedGetOriginAsURL();
+  if (sanitize_urls) {
+    for (GURL& redirect : commit_params->redirects) {
+      redirect = redirect.DeprecatedGetOriginAsURL();
+    }
   }
 
   // In the redirect_params vector, the last entry contains the URL we are going
@@ -8718,7 +8736,7 @@ void NavigationRequest::SanitizeRedirectsForCommit(
   // if the error page commits in the initiator's process and the navigation was
   // redirected before failing, in which case that final URL may be cross-origin
   // to the receiving process and must be reduced to origin as well.
-  if (!commit_params->redirect_params.empty()) {
+  if (sanitize_urls && !commit_params->redirect_params.empty()) {
     base::span<blink::mojom::NavigationRedirectParamsPtr> redirect_params_span(
         commit_params->redirect_params);
     if (!should_sanitize_final_url_for_error_page) {

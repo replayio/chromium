@@ -696,7 +696,8 @@ void MainThreadSchedulerImpl::ShutdownAllQueues() {
 
 bool MainThreadSchedulerImpl::
     IsAnyOrdinaryMainFrameWaitingForFirstMeaningfulPaint() const {
-  for (const PageSchedulerImpl* ps : main_thread_only().page_schedulers) {
+  for (const PageSchedulerImpl* ps :
+       recordreplay::SortedByPointerId(main_thread_only().page_schedulers)) {
     if (ps->IsOrdinary() && ps->IsWaitingForMainFrameMeaningfulPaint())
       return true;
   }
@@ -705,7 +706,8 @@ bool MainThreadSchedulerImpl::
 
 bool MainThreadSchedulerImpl::
     IsAnyOrdinaryMainFrameWaitingForFirstContentfulPaint() const {
-  for (const PageSchedulerImpl* ps : main_thread_only().page_schedulers) {
+  for (const PageSchedulerImpl* ps :
+       recordreplay::SortedByPointerId(main_thread_only().page_schedulers)) {
     if (ps->IsOrdinary() && ps->IsWaitingForMainFrameContentfulPaint())
       return true;
   }
@@ -846,7 +848,8 @@ scoped_refptr<MainThreadTaskQueue> MainThreadSchedulerImpl::NewTaskQueue(
 }
 
 bool MainThreadSchedulerImpl::IsIpcTrackingEnabledForAllPages() {
-  for (auto* scheduler : main_thread_only().page_schedulers) {
+  for (auto* scheduler :
+       recordreplay::SortedByPointerId(main_thread_only().page_schedulers)) {
     if (!(scheduler->IsInBackForwardCache() &&
           scheduler->has_ipc_detection_enabled())) {
       return false;
@@ -1196,7 +1199,8 @@ void MainThreadSchedulerImpl::SetBatterySaverEnabled(bool enabled) {
 
   // Energy saver gates fullscreen video timer throttling, so re-evaluate the
   // throttling policy for all pages (and their frames).
-  for (PageSchedulerImpl* page_scheduler : main_thread_only().page_schedulers) {
+  for (PageSchedulerImpl* page_scheduler :
+       recordreplay::SortedByPointerId(main_thread_only().page_schedulers)) {
     page_scheduler->UpdatePolicy();
   }
 }
@@ -1219,7 +1223,8 @@ void MainThreadSchedulerImpl::ResumeTimersForAndroidWebView() {
 
 void MainThreadSchedulerImpl::OnAudioStateChanged() {
   bool is_audio_playing = false;
-  for (PageSchedulerImpl* page_scheduler : main_thread_only().page_schedulers) {
+  for (PageSchedulerImpl* page_scheduler :
+       recordreplay::SortedByPointerId(main_thread_only().page_schedulers)) {
     is_audio_playing = is_audio_playing || page_scheduler->IsAudioPlaying();
   }
 
@@ -1687,7 +1692,12 @@ void MainThreadSchedulerImpl::UpdatePolicyLocked(UpdateType update_type) {
       find_in_page_budget_pool_controller_->CurrentTaskPriority();
 
   new_policy.should_prioritize_ipc_tasks =
-      num_pending_urgent_ipc_messages_.load(std::memory_order_relaxed) > 0;
+      // Another thread counts these as they arrive, so what's read here is
+      // recorded: the policy, and so which task runs next, goes by it.
+      recordreplay::RecordReplayValueIfAllowed(
+          "MainThreadSchedulerImpl.num_pending_urgent_ipc_messages_",
+          num_pending_urgent_ipc_messages_.load(std::memory_order_relaxed) >
+              0) != 0;
 
   const bool are_all_pages_frozen = AllPagesFrozen();
   new_policy.should_freeze_compositor_task_queue = are_all_pages_frozen;
@@ -2021,7 +2031,8 @@ void MainThreadSchedulerImpl::OnVirtualTimeEnabled() {
 
   ForceUpdatePolicy();
 
-  for (auto* page_scheduler : main_thread_only().page_schedulers) {
+  for (auto* page_scheduler :
+       recordreplay::SortedByPointerId(main_thread_only().page_schedulers)) {
     page_scheduler->OnVirtualTimeEnabled();
   }
 }
@@ -2117,7 +2128,8 @@ void MainThreadSchedulerImpl::WriteIntoTraceLocked(
   dict.Add("is_audio_playing", main_thread_only().is_audio_playing);
   dict.Add("page_schedulers", [&](perfetto::TracedValue context) {
     auto array = std::move(context).WriteArray();
-    for (const auto* page_scheduler : main_thread_only().page_schedulers) {
+    for (const auto* page_scheduler :
+       recordreplay::SortedByPointerId(main_thread_only().page_schedulers)) {
       page_scheduler->WriteIntoTrace(array.AppendItem(), optional_now);
     }
   });
@@ -2772,7 +2784,8 @@ void MainThreadSchedulerImpl::OnStart(
   CreateTraceEventObjectSnapshot();
 
   tracing_controller_.OnTraceLogEnabled();
-  for (PageSchedulerImpl* page_scheduler : main_thread_only().page_schedulers) {
+  for (PageSchedulerImpl* page_scheduler :
+       recordreplay::SortedByPointerId(main_thread_only().page_schedulers)) {
     page_scheduler->OnTraceLogEnabled();
   }
 }
@@ -2872,7 +2885,12 @@ void MainThreadSchedulerImpl::MaybeUpdatePolicyOnTaskCompleted(
   bool needs_policy_update = false;
 
   bool should_prioritize_ipc_tasks =
-      num_pending_urgent_ipc_messages_.load(std::memory_order_relaxed) > 0;
+      // Another thread counts these as they arrive, so what's read here is
+      // recorded: the policy, and so which task runs next, goes by it.
+      recordreplay::RecordReplayValueIfAllowed(
+          "MainThreadSchedulerImpl.num_pending_urgent_ipc_messages_",
+          num_pending_urgent_ipc_messages_.load(std::memory_order_relaxed) >
+              0) != 0;
   if (should_prioritize_ipc_tasks !=
       main_thread_only().current_policy.should_prioritize_ipc_tasks) {
     needs_policy_update = true;
@@ -3024,7 +3042,8 @@ MainThreadSchedulerImpl::ComputeCompositorPriorityForMainFrame() const {
 bool MainThreadSchedulerImpl::AllPagesFrozen() const {
   if (main_thread_only().page_schedulers.empty())
     return false;
-  for (const auto* scheduler : main_thread_only().page_schedulers) {
+  for (const auto* scheduler :
+       recordreplay::SortedByPointerId(main_thread_only().page_schedulers)) {
     if (!scheduler->IsFrozen())
       return false;
   }

@@ -365,6 +365,11 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS) InterfaceEndpointClient
   // is no longer valid to use once this has been set.
   bool record_replay_leaked_ = false;
 
+  // Whether this was leaked by now when recording. The collector runs at
+  // other points on a replay, so a replay goes by what the recording did: an
+  // endpoint that's still alive there is treated as gone if it had gone.
+  bool RecordReplayLeaked(const char* why);
+
   const scoped_refptr<base::SequencedTaskRunner> task_runner_;
 
   internal::ControlMessageProxy control_message_proxy_{this};

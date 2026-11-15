@@ -318,6 +318,15 @@ void GpuChannelHost::VerifyFlush(uint32_t deferred_message_id) {
     return;
   }
 
+  // [RecordReplay] A replay that has diverged from its recording has no GPU
+  // process to answer a synchronous flush, and a canvas makes one for each
+  // software resource it hands the compositor. The frame a repaint draws is
+  // drawn in this process, from the resource's own memory, so nothing waits on
+  // the other side having seen the flush.
+  if (recordreplay::HasDivergedFromRecording()) {
+    return;
+  }
+
   bool ipc_needed = false;
   const bool skip_flush_if_possible =
       base::FeatureList::IsEnabled(features::kConditionallySkipGpuChannelFlush);
@@ -353,6 +362,12 @@ void GpuChannelHost::VerifyFlush(uint32_t deferred_message_id) {
   } else {
     ipc_needed = true;
   }
+
+  // [RecordReplay] Whether the GPU process has got as far as the flushed
+  // messages is read from memory it shares with this one, and it gets there in
+  // its own time: the answer is recorded.
+  ipc_needed = !!recordreplay::RecordReplayValueIfAllowed(
+      "GpuChannelHost::VerifyFlush ipc_needed", ipc_needed);
 
   // Flush is needed.
   if (ipc_needed) {
@@ -407,8 +422,15 @@ void GpuChannelHost::InternalFlush(uint32_t deferred_message_id) {
 
   EnqueuePendingOrderingBarrier();
 
-  if (!deferred_messages_.empty() &&
-      deferred_message_id > flushed_deferred_message_id_) {
+  // [RecordReplay] A canvas resource the collector frees queues a message
+  // here, at a point which isn't the same on a replay, so whether there is
+  // anything to flush is recorded: a replay then flushes where the recording
+  // did, whatever it has queued.
+  const bool flush = !!recordreplay::RecordReplayValueIfAllowed(
+      "GpuChannelHost::InternalFlush",
+      !deferred_messages_.empty() &&
+          deferred_message_id > flushed_deferred_message_id_);
+  if (flush) {
     if (TRACE_EVENT_CATEGORY_ENABLED("gpu,toplevel.flow")) {
       for (auto& message : deferred_messages_) {
         if (message->params->is_command_buffer_request()) {
@@ -426,7 +448,9 @@ void GpuChannelHost::InternalFlush(uint32_t deferred_message_id) {
       }
     }
 
-    DCHECK_EQ(enqueued_deferred_message_id_, next_deferred_message_id_ - 1);
+    // [RecordReplay] Not so when a replay flushes where its recording did.
+    DCHECK(recordreplay::IsRecordingOrReplaying() ||
+           enqueued_deferred_message_id_ == next_deferred_message_id_ - 1);
     flushed_deferred_message_id_ = enqueued_deferred_message_id_;
 
     GetGpuChannel().FlushDeferredRequests(std::move(deferred_messages_),

@@ -1221,7 +1221,21 @@ void PaintArtifactCompositor::Update(
   for (auto& node : scroll_translation_nodes) {
     property_tree_manager.EnsureCompositorScrollNode(*node);
   }
+  // The map is keyed by the nodes' addresses, so its own order isn't the same
+  // on a replay, and the order the compositor's nodes are made in decides
+  // their IDs. They're made in the order of the scrollers' element IDs.
+  HeapVector<Member<const TransformPaintPropertyNode>>
+      ordered_painted_scroll_translations;
   for (auto& [node, _] : painted_scroll_translations_) {
+    ordered_painted_scroll_translations.push_back(node);
+  }
+  std::sort(ordered_painted_scroll_translations.begin(),
+            ordered_painted_scroll_translations.end(),
+            [](const auto& a, const auto& b) {
+              return a->ScrollNode()->GetCompositorElementId() <
+                     b->ScrollNode()->GetCompositorElementId();
+            });
+  for (auto& node : ordered_painted_scroll_translations) {
     property_tree_manager.EnsureCompositorScrollAndTransformNode(*node);
   }
 

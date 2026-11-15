@@ -215,6 +215,14 @@ void Scheduler::RecordReplayRepaintPending() {
   ProcessScheduledActions();
 }
 
+void Scheduler::RecordReplayWillRepaint() {
+  state_machine_->RecordReplayWillRepaint();
+}
+
+std::string Scheduler::RecordReplayDescribe() const {
+  return state_machine_->RecordReplayDescribe();
+}
+
 // This is an experimental method introduced for crbug.com/496610055
 // in which we send an artificial BeginMainFrame if we know that we're
 // in the last renderer frame of a cross-document view transition.

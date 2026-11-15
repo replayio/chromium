@@ -61,6 +61,7 @@
 #include "third_party/blink/renderer/platform/scheduler/public/widget_scheduler.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
+#include "third_party/blink/renderer/platform/wtf/linked_hash_set.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
 
@@ -829,7 +830,10 @@ class PLATFORM_EXPORT MainThreadSchedulerImpl
         agent_group_schedulers;
     // Task queues that have been detached from their scheduler and may have
     // pending tasks that need to run.
-    HashSet<scoped_refptr<MainThreadTaskQueue>> detached_task_queues;
+    // In the order they were added: ShutdownEmptyDetachedTaskQueues() shuts
+    // queues down in the set's order, and a hash set's order comes from
+    // addresses, which aren't the same on a replay.
+    LinkedHashSet<scoped_refptr<MainThreadTaskQueue>> detached_task_queues;
 
     // `WidgetScheduler`s that have not been shut down.
     HashSet<scoped_refptr<WidgetSchedulerImpl>> widget_schedulers;

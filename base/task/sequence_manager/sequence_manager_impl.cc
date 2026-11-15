@@ -490,6 +490,23 @@ SequenceManagerImpl::SelectNextTaskImpl(LazyNow& lazy_now,
   TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("sequence_manager"),
                "SequenceManagerImpl::SelectNextTask");
 
+  if (record_replay_unordered_pending_.load(std::memory_order_relaxed) > 0) {
+    // A copy, as a task that runs can add or remove a queue.
+    std::vector<internal::TaskQueueImpl*> queues(
+        main_thread_only().active_queues.begin(),
+        main_thread_only().active_queues.end());
+    for (internal::TaskQueueImpl* queue : queues) {
+      if (main_thread_only().active_queues.contains(queue)) {
+        queue->RecordReplayRunUnorderedTasks();
+      }
+    }
+  }
+  // Here, where every selection of a task passes, and not only when there
+  // were unordered tasks: whether the main thread has been asked to finish
+  // the recording is itself recorded, so it's read at the same points on a
+  // replay.
+  recordreplay::MaybeFinishRecording();
+
   ReloadEmptyWorkQueues();
   MoveReadyDelayedTasksToWorkQueues(&lazy_now);
 
@@ -1015,6 +1032,9 @@ void SequenceManagerImpl::ReclaimMemory() {
 }
 
 void SequenceManagerImpl::CleanUpQueues() {
+  recordreplay::Assert("[RUN-2217] SequenceManagerImpl::CleanUpQueues %zu",
+                       main_thread_only().queues_to_delete.size());
+
   main_thread_only().queues_to_delete.clear();
 
   recordreplay::Assert("[RUN-2217] SequenceManagerImpl::CleanUpQueues Done");

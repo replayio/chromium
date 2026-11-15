@@ -10,6 +10,7 @@
 #include "base/check_op.h"
 #include "base/dcheck_is_on.h"
 #include "base/memory/stack_allocated.h"
+#include "base/record_replay.h"
 #include "base/synchronization/condition_variable.h"
 #include "base/synchronization/lock.h"
 #include "base/task/common/checked_lock_impl.h"
@@ -85,6 +86,36 @@ class LOCKABLE CheckedLock : public Lock {
   explicit CheckedLock(UniversalPredecessor) {}
   explicit CheckedLock(UniversalSuccessor) {}
   static void AssertNoLockHeldOnCurrentThread() {}
+
+  // The thread pool's locks are ordered when recording or replaying, which
+  // threads that take them with events allowed need. A worker whose loop runs
+  // with events disallowed takes them too, where nothing can be ordered and
+  // the driver warns if asked to: there the lock is taken passed through.
+  void Acquire(subtle::LockTracking tracking = subtle::LockTracking::kDisabled)
+      EXCLUSIVE_LOCK_FUNCTION() {
+    if (recordreplay::AreEventsDisallowed()) {
+      recordreplay::AutoPassThroughEvents pass_through;
+      Lock::Acquire(tracking);
+      return;
+    }
+    Lock::Acquire(tracking);
+  }
+  void Release() UNLOCK_FUNCTION() {
+    if (recordreplay::AreEventsDisallowed()) {
+      recordreplay::AutoPassThroughEvents pass_through;
+      Lock::Release();
+      return;
+    }
+    Lock::Release();
+  }
+  bool Try(subtle::LockTracking tracking = subtle::LockTracking::kDisabled)
+      EXCLUSIVE_TRYLOCK_FUNCTION(true) {
+    if (recordreplay::AreEventsDisallowed()) {
+      recordreplay::AutoPassThroughEvents pass_through;
+      return Lock::Try(tracking);
+    }
+    return Lock::Try(tracking);
+  }
 
   ConditionVariable CreateConditionVariable() {
     return ConditionVariable(this);

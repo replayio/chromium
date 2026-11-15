@@ -101,6 +101,13 @@ class BASE_EXPORT SequenceManagerImpl
       public internal::TaskQueueSelector::Observer,
       public RunLoop::NestingObserver {
  public:
+  // [RecordReplay] How many tasks posted from outside the recording are
+  // waiting in this manager's queues
+  // (TaskQueueImpl::RecordReplayRunUnorderedTasks()). The thread looks before
+  // it selects a task, as nothing else tells it of them: they're kept out of
+  // everything a recording has in it.
+  std::atomic<int> record_replay_unordered_pending_{0};
+
   using Observer = SequenceManager::Observer;
 
   SequenceManagerImpl(const SequenceManagerImpl&) = delete;

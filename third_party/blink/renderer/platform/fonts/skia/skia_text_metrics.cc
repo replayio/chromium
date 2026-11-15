@@ -193,7 +193,10 @@ void SkFontGetPreciseBoundsForGlyph(const SkFont& font,
   // Unlike GetPathBoundsForGlyph / SkFontGetBoundsForGlyph, we intentionally
   // do NOT round to integers for non-subpixel fonts, because the caller
   // (canvas TextMetrics) needs float-precision results.
-  if (const auto path = font.getPath(glyph)) {
+  const auto path = recordreplay::AreEventsUnavailable("divergent-update")
+                        ? std::optional<SkPath>()
+                        : font.getPath(glyph);
+  if (path) {
     *bounds = path->getBounds();
   } else {
     // Bitmap-only glyphs (e.g. color emoji) have no outlines.

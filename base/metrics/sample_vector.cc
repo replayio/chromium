@@ -442,7 +442,10 @@ void SampleVectorBase::MountCountsStorageAndMoveSingleSample() {
     // define a single, global lock that all can use. This lock only prevents
     // concurrent entry into the code below; access and updates to
     // |counts_data_| still requires atomic operations.
-    static base::NoDestructor<Lock> counts_lock;
+    // Never ordered when recording (see LockImpl::LockImpl): a histogram keeps
+    // its first sample in an atomic and gets here on its second, and threads
+    // whose work isn't in the recording add samples too.
+    static base::NoDestructor<Lock> counts_lock("");
     AutoLock lock(*counts_lock);
     if (counts_data_.load(std::memory_order_relaxed) == nullptr) {
       // Create the actual counts storage while the above lock is acquired.

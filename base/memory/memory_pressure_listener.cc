@@ -50,6 +50,8 @@ MemoryPressureListener::MemoryPressureListener() {
 // static
 void MemoryPressureListener::NotifyMemoryPressure(
     MemoryPressureLevel memory_pressure_level) {
+  // How pressed for memory the machine is isn't part of a recording.
+  recordreplay::AutoDisallowEvents disallow("MemoryPressureObserver::Notify");
   MemoryPressureListenerRegistry::NotifyMemoryPressure(memory_pressure_level);
 }
 

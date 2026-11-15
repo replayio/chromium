@@ -265,7 +265,9 @@ DurableStringView HistogramBase::GetPermanentName(std::string_view name) {
   // support pointer-stability for its keys, due to small-string-optimization
   // in std::string.
   static base::NoDestructor<std::set<std::string, std::less<>>> permanent_names;
-  static base::NoDestructor<Lock> permanent_names_lock;
+  // Never ordered when recording (see LockImpl::LockImpl): metrics are no part
+  // of a recording, and code that runs at a pause in a replay reports them too.
+  static base::NoDestructor<Lock> permanent_names_lock("");
 
   AutoLock lock(*permanent_names_lock);
   auto it = permanent_names->lower_bound(name);

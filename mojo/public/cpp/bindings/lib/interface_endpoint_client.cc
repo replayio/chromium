@@ -672,6 +672,19 @@ bool InterfaceEndpointClient::SendMessageWithResponder(
   return true;
 }
 
+bool InterfaceEndpointClient::RecordReplayLeaked(const char* why) {
+  if (!recordreplay::IsRecordingOrReplaying() ||
+      recordreplay::AreEventsDisallowed() ||
+      recordreplay::AreEventsPassedThrough() ||
+      recordreplay::HasDivergedFromRecording()) {
+    return record_replay_leaked_;
+  }
+  bool recorded = recordreplay::RecordReplayValue(why, record_replay_leaked_);
+  // Leaked already on this side whatever the recording says: there's nothing
+  // left to hand a message to.
+  return recorded || record_replay_leaked_;
+}
+
 bool InterfaceEndpointClient::HandleIncomingMessage(Message* message) {
   CHECK(sequence_checker_.CalledOnValidSequence());
 
@@ -781,7 +794,7 @@ void InterfaceEndpointClient::NotifyError(
   }
 
   // Skip user Callback Invokes on a leaked client (owner already gone).
-  if (record_replay_leaked_) {
+  if (RecordReplayLeaked("InterfaceEndpointClient::NotifyError leaked")) {
     return;
   }
 
@@ -864,7 +877,7 @@ bool InterfaceEndpointClient::AcceptNotifyIdle() {
 
   // With no outstanding unacked messages, a NotifyIdle received implies that
   // the peer really is idle. We can invoke our idle handler.
-  if (!record_replay_leaked_) {
+  if (!RecordReplayLeaked("InterfaceEndpointClient::AcceptNotifyIdle leaked")) {
     idle_handler_.Run();
   }
   return true;
@@ -1035,6 +1048,8 @@ bool InterfaceEndpointClient::HandleValidatedMessage(Message* message) {
   auto weak_self = weak_ptr_factory_.GetWeakPtr();
   bool accepted_interface_message = false;
   bool has_response = false;
+  const bool leaked = RecordReplayLeaked(
+      "InterfaceEndpointClient::HandleValidatedMessage leaked");
   if (message->has_flag(Message::kFlagExpectsResponse)) {
     recordreplay::Assert("[RUN-2229-2231] InterfaceEndpointClient::HandleValidatedMessage B");
     has_response = true;
@@ -1045,7 +1060,7 @@ bool InterfaceEndpointClient::HandleValidatedMessage(Message* message) {
           weak_ptr_factory_.GetWeakPtr(), task_runner_);
       return control_message_handler_.AcceptWithResponder(message,
                                                           std::move(responder));
-    } else if (record_replay_leaked_) {
+    } else if (leaked) {
       // Do not build a ResponderThunk: its dtor RaiseError() would reset the
       // pipe (shared MultiplexRouter) after a leak skip.
       accepted_interface_message = true;
@@ -1114,8 +1129,7 @@ bool InterfaceEndpointClient::HandleValidatedMessage(Message* message) {
     internal::MessageDispatchContext dispatch_context(message);
     recordreplay::Assert(
         "[RUN-2229-2231] InterfaceEndpointClient::HandleValidatedMessage J");
-    return record_replay_leaked_ ||
-           pending_response->responder->Accept(message);
+    return leaked || pending_response->responder->Accept(message);
   } else {
     if (mojo::internal::ControlMessageHandler::IsControlMessage(message)) {
       recordreplay::Assert(
@@ -1124,7 +1138,7 @@ bool InterfaceEndpointClient::HandleValidatedMessage(Message* message) {
     }
 
     // If this has been leaked instead of destroyed the receiver can no longer be used.
-    accepted_interface_message = record_replay_leaked_ || incoming_receiver_->Accept(message);
+    accepted_interface_message = leaked || incoming_receiver_->Accept(message);
   }
 
   if (weak_self && accepted_interface_message &&

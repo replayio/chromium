@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "base/record_replay.h"
+#include "base/record_replay_racy_static.h"
 #include "base/json/json_writer.h"
 #include "base/values.h"
 
@@ -135,6 +136,7 @@ namespace recordreplay {
   Macro(V8RecordReplayMaybeTerminate,                                   \
         (void (*callback)(void*), void* data), (callback, data))        \
   Macro(V8RecordReplayFinishRecording, (), ())                          \
+  Macro(V8RecordReplayMaybeFinishRecording, (), ())                     \
   Macro(V8RecordReplayGetCurrentJSStack,                                \
         (std::string* stackTrace), (stackTrace))                        \
   Macro(V8RecordReplayEnterReplayCode, (), ())                          \
@@ -269,8 +271,19 @@ bool HasAsserts() {
   return V8RecordReplayHasAsserts();
 }
 
+// Set for a thread that is running its thread-local destructors as it exits.
+// The driver no longer has the thread by then, and warns of an assert from it.
+static thread_local bool gThreadExiting = false;
+
+void NoteThreadExiting() {
+  gThreadExiting = true;
+}
+
 void Assert(const char* format, ...) {
 #ifndef NACL_TC_REV
+  if (gThreadExiting) {
+    return;
+  }
   va_list ap;
   va_start(ap, format);
   V8RecordReplayAssertVA(format, ap);
@@ -280,6 +293,10 @@ void Assert(const char* format, ...) {
 
 void AssertMaybeEventsDisallowed(const char* format, ...) {
 #ifndef NACL_TC_REV
+  if (gThreadExiting || AreEventsPassedThrough() ||
+      HasDivergedFromRecording()) {
+    return;
+  }
   va_list ap;
   va_start(ap, format);
   V8RecordReplayAssertMaybeEventsDisallowedVA(format, ap);
@@ -357,6 +374,14 @@ uintptr_t RecordReplayValue(const char* why, uintptr_t v) {
   return V8RecordReplayValue(why, v);
 }
 
+uintptr_t RecordReplayValueIfAllowed(const char* why, uintptr_t v) {
+  if (!IsRecordingOrReplaying() || AreEventsDisallowed() ||
+      AreEventsPassedThrough() || HasDivergedFromRecording()) {
+    return v;
+  }
+  return RecordReplayValue(why, v);
+}
+
 void RecordReplayBytes(const char* why, void* buf, size_t size) {
   V8RecordReplayBytes(why, buf, size);
 }
@@ -379,6 +404,32 @@ void OrderedLock(int lock) {
 
 void OrderedUnlock(int lock) {
   V8RecordReplayOrderedUnlock(lock);
+}
+
+// The lock AutoOrderedRefCount takes. Made on the main thread as the process
+// starts, before any other thread exists.
+static int gRefCountLock;
+
+void Initialize() {
+  if (IsRecordingOrReplaying() && !gRefCountLock) {
+    gRefCountLock = CreateOrderedLock("ref counts");
+  }
+}
+
+AutoOrderedRefCount::AutoOrderedRefCount()
+    : id_(gRefCountLock && !AreEventsDisallowed() &&
+                  !AreEventsPassedThrough() && !HasDivergedFromRecording()
+              ? gRefCountLock
+              : 0) {
+  if (id_) {
+    OrderedLock(id_);
+  }
+}
+
+AutoOrderedRefCount::~AutoOrderedRefCount() {
+  if (id_) {
+    OrderedUnlock(id_);
+  }
 }
 
 void NewCheckpoint() {
@@ -439,6 +490,22 @@ void EndDisallowEvents() {
 
 bool AreEventsPassedThrough(const char* why) {
   return V8RecordReplayAreEventsPassedThrough(why);
+}
+
+namespace {
+thread_local int g_unordered_lock_creation_depth = 0;
+}  // namespace
+
+AutoUnorderedLockCreation::AutoUnorderedLockCreation() {
+  g_unordered_lock_creation_depth++;
+}
+
+AutoUnorderedLockCreation::~AutoUnorderedLockCreation() {
+  g_unordered_lock_creation_depth--;
+}
+
+bool InUnorderedLockCreation() {
+  return g_unordered_lock_creation_depth > 0;
 }
 
 void BeginPassThroughEvents() {
@@ -684,6 +751,13 @@ void MaybeTerminate(void (*callback)(void*), void* data) {
 
 void FinishRecording() {
   V8RecordReplayFinishRecording();
+}
+
+void MaybeFinishRecording() {
+  if (!IsRecordingOrReplaying() || !IsMainThread()) {
+    return;
+  }
+  V8RecordReplayMaybeFinishRecording();
 }
 
 std::vector<std::string> *gPseudoStack = nullptr;

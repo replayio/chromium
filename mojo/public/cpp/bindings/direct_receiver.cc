@@ -13,6 +13,7 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/no_destructor.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "base/task/current_thread.h"
 #include "base/task/single_thread_task_runner.h"
@@ -365,6 +366,15 @@ void ThreadLocalNode::OnTransferredPortalAvailable() {
 namespace mojo {
 
 bool IsDirectReceiverSupported() {
+  // [RecordReplay] A direct receiver gives its thread an IO message pump: a
+  // recorded renderer's compositor thread would wait in a recorded system
+  // call. A replay that has diverged from its recording has no more of those,
+  // and the compositor never wakes to draw a repaint. Without direct receivers
+  // that thread keeps the default pump, as in Chromium 108, which waits on a
+  // condition variable the replay can signal.
+  if (recordreplay::IsRecordingOrReplaying()) {
+    return false;
+  }
 #if BUILDFLAG(IS_APPLE) && !BUILDFLAG(MOJO_USE_APPLE_CHANNEL)
   // Connecting a node hands over ipcz' node link memory as a Mach handle, but
   // ChannelPosix can only carry file descriptors. Affects tvOS only.

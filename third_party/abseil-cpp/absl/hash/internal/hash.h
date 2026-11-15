@@ -33,6 +33,7 @@
 // For feature testing and determining which headers can be included.
 #if ABSL_INTERNAL_CPLUSPLUS_LANG >= 202002L || \
     defined(ABSL_INTERNAL_VERSION_HEADER_AVAILABLE)
+#include <atomic>
 #include <version>
 #else
 #include <ciso646>
@@ -1552,7 +1553,23 @@ class ABSL_DLL MixingHashState : public HashStateBase<MixingHashState> {
   //
   // On other platforms this is still going to be non-deterministic but most
   // probably per-build and not per-process.
+  //
+  // [RecordReplay] A process that's recorded or replayed has a fixed seed. The
+  // order a hash table's entries come out in goes by their hashes, code walks
+  // tables doing things a recording has in it (closing every receiver in a
+  // set, say), and a replay's addresses aren't the recording's. The seed is
+  // settled the first time it's asked for and never changes after.
   ABSL_ATTRIBUTE_ALWAYS_INLINE static size_t Seed() {
+    size_t seed = replay_seed_.load(std::memory_order_relaxed);
+    if (ABSL_PREDICT_FALSE(seed == 0)) {
+      seed = InitializeSeed();
+    }
+    return seed;
+  }
+  static std::atomic<size_t> replay_seed_;
+  static size_t InitializeSeed();
+
+  ABSL_ATTRIBUTE_ALWAYS_INLINE static size_t AddressSeed() {
 #if (!defined(__clang__) || __clang_major__ > 11) && \
     (!defined(__apple_build_version__) ||            \
      __apple_build_version__ >= 19558921)  // Xcode 12

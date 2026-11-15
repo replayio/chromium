@@ -264,7 +264,6 @@ FrameSchedulerImpl::FrameSchedulerImpl()
                          FrameType::kSubframe) {}
 
 FrameSchedulerImpl::~FrameSchedulerImpl() {
-  recordreplay::UnregisterPointer(this);
   weak_factory_.InvalidateWeakPtrs();
 
   TRACE_EVENT_END("renderer.scheduler.status", url_track_);
@@ -295,6 +294,10 @@ FrameSchedulerImpl::~FrameSchedulerImpl() {
 
   if (replay_scheduling_owner_release_)
     std::move(replay_scheduling_owner_release_).Run();
+
+  // Last: the page scheduler walks its frame schedulers in pointer ID order
+  // until this one is taken out of its set above.
+  recordreplay::UnregisterPointer(this);
 }
 
 AgentGroupSchedulerImpl& FrameSchedulerImpl::GetAgentGroupSchedulerImpl() {

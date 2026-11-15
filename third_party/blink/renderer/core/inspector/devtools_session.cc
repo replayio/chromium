@@ -432,6 +432,15 @@ void DevToolsSession::SendProtocolNotification(
     return;
   }
 
+  // The page's own DevTools client, if it was recorded with one, mustn't hear
+  // of what runs with events disallowed (a collection, or a replay's own
+  // debugger at a pause): sending it on is IPC the recording doesn't have.
+  if (recordreplay::AreEventsDisallowed() &&
+      recordreplay::IsRecordingOrReplaying(
+          "leak-references", "DevToolsSession::SendProtocolNotification")) {
+    return;
+  }
+
   recordreplay::Assert("[RUN-1515] DevToolsSession::SendProtocolNotification");
 
   notification_queue_.push_back(BindOnce(
@@ -548,12 +557,28 @@ blink::mojom::blink::DevToolsMessagePtr DevToolsSession::FinalizeMessage(
   // behavior handling messages from the record/replay driver using the
   // devtools protocol. We don't want this to influence Mojo, so force
   // the message contents to match up.
-  if (recordreplay::IsRecordingOrReplaying("values", "DevToolsSession::FinalizeMessage")) {
+  if (recordreplay::IsRecordingOrReplaying("values", "DevToolsSession::FinalizeMessage") &&
+      !recordreplay::AreEventsUnavailable()) {
+    // With assertions on, the start of each message, so that a replay that
+    // sends one the recording didn't says which.
+    if (recordreplay::HasAsserts()) {
+      std::string start;
+      for (size_t i = 0; i < message_to_send.size() && start.size() < 90; i++) {
+        const char c = static_cast<char>(message_to_send[i]);
+        if (c >= 0x20 && c < 0x7f && c != '%') {
+          start.push_back(c);
+        }
+      }
+      recordreplay::Assert("DevToolsSession::FinalizeMessage %d %s",
+                           call_id.value_or(-1), start.c_str());
+    }
     size_t nbytes = recordreplay::RecordReplayValue("DevToolsSession::FinalizeMessage",
                                                     message_to_send.size());
     message_to_send.resize(nbytes);
-    recordreplay::RecordReplayBytes("DevToolsSession::FinalizeMessage",
-                                    &message_to_send[0], message_to_send.size());
+    if (nbytes) {
+      recordreplay::RecordReplayBytes("DevToolsSession::FinalizeMessage",
+                                      message_to_send.data(), nbytes);
+    }
   }
 
   auto mojo_msg = mojom::blink::DevToolsMessage::New();

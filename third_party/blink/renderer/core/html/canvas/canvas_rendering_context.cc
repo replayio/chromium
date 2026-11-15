@@ -25,6 +25,7 @@
 
 #include "third_party/blink/renderer/core/html/canvas/canvas_rendering_context.h"
 
+#include "base/record_replay.h"
 #include "base/byte_size.h"
 #include "base/strings/stringprintf.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
@@ -363,6 +364,14 @@ void CanvasRenderingContext::MaybeRecordUKMCanvasAccessibility() {
 
 void CanvasRenderingContext::RecordUKMCanvasAccessibility() {
   if (did_record_accessibility_ukm_ || !did_process_task_) {
+    return;
+  }
+
+  // A context is also disposed of by the collector, or by a task it posts,
+  // outside the recording, and the metric would mint a source ID and send a
+  // message there.
+  if (recordreplay::IsRecordingOrReplaying() &&
+      recordreplay::AreEventsDisallowed()) {
     return;
   }
 

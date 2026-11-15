@@ -27,6 +27,10 @@
 
 class GURL;
 
+namespace gpu {
+class SharedImageInterface;
+}
+
 namespace viz {
 class FrameTimingDetails;
 class LocalSurfaceId;
@@ -140,8 +144,18 @@ class CC_EXPORT ProxyImpl : public LayerTreeHostImplDelegate,
 
   void NotifyNewLocalSurfaceIdExpectedWhilePaused();
 
-  void RecordReplayRepaintPending();
+  // [RecordReplay] Told before a repaint's commit, which can wait on a pending
+  // tree. |shared_image_interface| is for a repaint's own frame sink when the
+  // compositor never had one.
+  void RecordReplayRepaintPending(
+      scoped_refptr<gpu::SharedImageInterface> shared_image_interface);
+  // Puts in the repaint's own frame sink if the scheduler is waiting for one.
+  void RecordReplayEnsureRepaintFrameSink();
+  // Draws a frame now, for a replay that has diverged from its recording and
+  // is asked what the page looks like.
   void RecordReplayRepaint();
+  // Prints what the scheduler is waiting on, for a repaint that drew nothing.
+  void RecordReplayDescribeRepaint();
 
  private:
   // LayerTreeHostImplDelegate implementation
@@ -296,6 +310,9 @@ class CC_EXPORT ProxyImpl : public LayerTreeHostImplDelegate,
 
   // The frame sink a repaint initialized while the compositor waited for one.
   std::unique_ptr<LayerTreeFrameSink> record_replay_frame_sink_;
+  // What the last frame sink made shared images with, for a repaint's own.
+  scoped_refptr<gpu::SharedImageInterface>
+      record_replay_shared_image_interface_;
 };
 
 }  // namespace cc

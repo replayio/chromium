@@ -411,6 +411,17 @@ void TaskQueueImpl::PostTask(PostedTask task) {
           ? TaskQueueImpl::CurrentThread::kMainThread
           : TaskQueueImpl::CurrentThread::kNotMainThread;
 
+  // [RecordReplay] A delayed task posted outside the recording, as a garbage
+  // collection at a pause in a replay posts one to release pages, would come
+  // due as one of the queue's recorded tasks, where the recording has none. It
+  // goes the way of the immediate ones, without its delay: see
+  // record_replay_unordered_immediate_incoming_queue.
+  const bool unordered = recordreplay::IsRecordingOrReplaying() &&
+                         (recordreplay::AreEventsDisallowed("unordered-tasks") ||
+                          recordreplay::AreEventsPassedThrough("unordered-tasks"));
+  if (unordered && task.is_delayed()) {
+    task.delay_or_delayed_run_time = TimeDelta();
+  }
   if (!task.is_delayed()) {
     PostImmediateTaskImpl(std::move(task), current_thread);
   } else {
@@ -532,28 +543,39 @@ void TaskQueueImpl::PostImmediateTaskImplUnordered(PostedTask task,
   CHECK(recordreplay::AreEventsDisallowed("unordered-tasks") ||
         recordreplay::AreEventsPassedThrough("unordered-tasks"));
 
-  base::internal::CheckedAutoLock lock(unordered_lock_);
+  {
+    base::internal::CheckedAutoLock lock(unordered_lock_);
 
-  bool add_queue_time_to_tasks = sequence_manager_->GetAddQueueTimeToTasks();
-  TimeTicks queue_time;
+    bool add_queue_time_to_tasks = sequence_manager_->GetAddQueueTimeToTasks();
+    TimeTicks queue_time;
 
-  if (add_queue_time_to_tasks || delayed_fence_allowed_)
-    queue_time = sequence_manager_->any_thread_clock_maybe_events_disallowed()->NowTicks();
+    if (add_queue_time_to_tasks || delayed_fence_allowed_)
+      queue_time = sequence_manager_->any_thread_clock_maybe_events_disallowed()->NowTicks();
 
-  record_replay_unordered_immediate_incoming_queue.push_back(
-      Task(std::move(task), EnqueueOrder(), EnqueueOrder(), queue_time));
+    record_replay_unordered_immediate_incoming_queue.push_back(
+        Task(std::move(task), EnqueueOrder(), EnqueueOrder(), queue_time));
 
 #if DCHECK_IS_ON()
-  record_replay_unordered_immediate_incoming_queue.back().cross_thread_ =
-      (current_thread == TaskQueueImpl::CurrentThread::kNotMainThread);
+    record_replay_unordered_immediate_incoming_queue.back().cross_thread_ =
+        (current_thread == TaskQueueImpl::CurrentThread::kNotMainThread);
 #endif
 
-  sequence_manager_->WillQueueTask(&record_replay_unordered_immediate_incoming_queue.back());
+    sequence_manager_->WillQueueTask(&record_replay_unordered_immediate_incoming_queue.back());
 
-  for (auto& handler : on_task_posted_handlers) {
-    DCHECK(!handler.second.is_null());
-    handler.second.Run(record_replay_unordered_immediate_incoming_queue.back());
+    for (auto& handler : on_task_posted_handlers) {
+      DCHECK(!handler.second.is_null());
+      handler.second.Run(record_replay_unordered_immediate_incoming_queue.back());
+    }
+
+    // The count the queue's thread reads before it selects a task, so that
+    // these run when no ordered task comes to take them with
+    // (SequenceManagerImpl::SelectNextTaskImpl()).
+    sequence_manager_->record_replay_unordered_pending_.fetch_add(
+        1, std::memory_order_relaxed);
   }
+  // Wakes the queue's thread where a wake-up from outside the recording can be
+  // made: see ThreadControllerWithMessagePumpImpl::ScheduleWork().
+  sequence_manager_->ScheduleWork();
 }
 
 void TaskQueueImpl::PostImmediateTaskImpl(PostedTask task,
@@ -649,6 +671,20 @@ void TaskQueueImpl::ReloadEmptyImmediateWorkQueue() {
   }
 }
 
+void TaskQueueImpl::RecordReplayRunUnorderedTasks() {
+  if (!recordreplay::IsRecordingOrReplaying()) {
+    return;
+  }
+  TaskDeque tasks;
+  {
+    base::internal::CheckedAutoLock lock(unordered_lock_);
+    tasks.swap(record_replay_unordered_immediate_incoming_queue);
+    sequence_manager_->record_replay_unordered_pending_.fetch_sub(
+        static_cast<int>(tasks.size()), std::memory_order_relaxed);
+  }
+  WorkQueue::RecordReplayRunUnorderedTasks(&tasks);
+}
+
 void TaskQueueImpl::TakeImmediateIncomingQueueTasks(TaskDeque* queue, TaskDeque* record_replay_unordered_queue) {
   recordreplay::Assert("[RUN-1916] TaskQueueImpl::TakeImmediateIncomingQueueTasks %zu",
                        queue->size());
@@ -658,6 +694,9 @@ void TaskQueueImpl::TakeImmediateIncomingQueueTasks(TaskDeque* queue, TaskDeque*
   base::internal::CheckedAutoLock u_lock(unordered_lock_);
   queue->swap(any_thread_.immediate_incoming_queue);
   record_replay_unordered_queue->swap(record_replay_unordered_immediate_incoming_queue);
+  sequence_manager_->record_replay_unordered_pending_.fetch_sub(
+      static_cast<int>(record_replay_unordered_queue->size()),
+      std::memory_order_relaxed);
 
   // Activate delayed fence if necessary. This is ideologically similar to
   // ActivateDelayedFenceIfNeeded, but due to immediate tasks being posted

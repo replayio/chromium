@@ -14,6 +14,7 @@
 #include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/record_replay.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/bind_post_task.h"
 #include "base/task/sequenced_task_runner.h"
@@ -80,15 +81,23 @@ void AudioOutputDevice::InitializeOnIOThread(
 }
 
 AudioOutputDevice::~AudioOutputDevice() {
+  // Abort any pending callbacks. Technically we don't need to acquire the
+  // lock here since there should be no other calls outstanding, but because
+  // we've used the GUARDED_BY compiler syntax, we'll get an error without it.
+  //
+  // [RecordReplay] This runs on whichever thread drops the last reference,
+  // the IO thread or the owner's, and which one does isn't the same on a
+  // replay. Taking the lock is something a thread's recording notes, so the
+  // lock is taken outside the recording, and the callback run after it.
+  OutputDeviceInfoCB pending_device_info_cb;
   {
-    // Abort any pending callbacks. Technically we don't need to acquire the
-    // lock here since there should be no other calls outstanding, but because
-    // we've used the GUARDED_BY compiler syntax, we'll get an error without it.
+    recordreplay::AutoPassThroughEvents pass_through;
     base::AutoLock auto_lock(device_info_lock_);
-    if (pending_device_info_cb_) {
-      std::move(pending_device_info_cb_)
-          .Run(OutputDeviceInfo(OUTPUT_DEVICE_STATUS_ERROR_INTERNAL));
-    }
+    pending_device_info_cb = std::move(pending_device_info_cb_);
+  }
+  if (pending_device_info_cb) {
+    std::move(pending_device_info_cb)
+        .Run(OutputDeviceInfo(OUTPUT_DEVICE_STATUS_ERROR_INTERNAL));
   }
 
 #if DCHECK_IS_ON()

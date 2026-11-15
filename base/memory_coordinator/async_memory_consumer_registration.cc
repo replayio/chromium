@@ -11,6 +11,7 @@
 #include "base/debug/leak_annotations.h"
 #include "base/functional/bind.h"
 #include "base/memory_coordinator/memory_consumer.h"
+#include "base/record_replay.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
@@ -128,6 +129,19 @@ AsyncMemoryConsumerRegistration::~AsyncMemoryConsumerRegistration() {
     // the TaskEnvironment. The main thread object thus gets tagged as leaking,
     // which is fine in this case.
     ANNOTATE_LEAKING_OBJECT_PTR(main_thread_.get());
+    // [RecordReplay] A task posted while events are disallowed (an isolate
+    // being torn down, a destructor the collector runs) is an unordered one
+    // when recording, and those run before the ordered tasks that were posted
+    // ahead of them. Init is ordered, so with a worker that ends as it starts
+    // this deletion could run first, and Init then ran on freed memory. The
+    // object leaks instead: nothing comes to it once its handle is gone.
+    if (recordreplay::IsRecordingOrReplaying(
+            "leak-references", "AsyncMemoryConsumerRegistration") &&
+        (recordreplay::AreEventsDisallowed() ||
+         recordreplay::AreEventsPassedThrough())) {
+      (void)main_thread_.release();
+      return;
+    }
     main_thread_task_runner_->DeleteSoon(FROM_HERE, main_thread_.release());
   }
 }

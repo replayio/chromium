@@ -11,6 +11,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -34,9 +35,11 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/histogram_macros_local.h"
 #include "base/observer_list.h"
+#include "base/no_destructor.h"
 #include "base/path_service.h"
 #include "base/process/process.h"
 #include "base/process/process_metrics.h"
+#include "base/record_replay.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
@@ -69,6 +72,7 @@
 #include "components/viz/common/features.h"
 #include "components/viz/common/frame_sinks/copy_output_request.h"
 #include "components/viz/common/switches.h"
+#include "components/viz/service/display/record_replay_render.h"
 #include "content/child/runtime_features.h"
 #include "content/common/buildflags.h"
 #include "content/common/content_constants_internal.h"
@@ -109,8 +113,11 @@
 #include "gpu/command_buffer/client/gles2_interface.h"
 #include "gpu/command_buffer/client/raster_interface.h"
 #include "gpu/command_buffer/client/shared_memory_limits.h"
+#include "gpu/command_buffer/common/shared_image_capabilities.h"
+#include "gpu/config/gpu_feature_info.h"
 #include "gpu/config/gpu_driver_bug_workarounds.h"
 #include "gpu/config/gpu_finch_features.h"
+#include "gpu/config/gpu_info.h"
 #include "gpu/config/gpu_switches.h"
 #include "gpu/ipc/client/command_buffer_proxy_impl.h"
 #include "gpu/ipc/client/gpu_channel_host.h"
@@ -477,6 +484,11 @@ RenderThreadImpl::RenderThreadImpl(
 }
 
 void RenderThreadImpl::Init() {
+  if (recordreplay::IsRecordingOrReplaying()) {
+    recordreplay::SetRepaintSharedImageInterfaceGetter(
+        &RenderThreadImpl::RecordReplayRepaintSharedImageInterface);
+  }
+
   TRACE_EVENT0("startup", "RenderThreadImpl::Init");
 
   SCOPED_UMA_HISTOGRAM_TIMER("Renderer.RenderThreadImpl.Init");
@@ -610,6 +622,13 @@ void RenderThreadImpl::Init() {
   }
 
   if (command_line.HasSwitch(switches::kDisableGpuCompositing))
+    is_gpu_compositing_disabled_ = true;
+
+  // [RecordReplay] The browser only passes the switch above once its GPU data
+  // manager has settled, so the first renderers start without it and are told
+  // later, at a time a replay can't reproduce. A recorded renderer never
+  // composites on the GPU, so it doesn't wait to be told.
+  if (recordreplay::IsRecordingOrReplaying("no-gpu"))
     is_gpu_compositing_disabled_ = true;
 
   // Note that under Linux, the media library will normally already have
@@ -1077,6 +1096,37 @@ RenderThreadImpl::GetVideoFrameCompositorContextProvider(
           /*automatic_flushes=*/false, /*support_locking=*/false, limits,
           viz::command_buffer_metrics::ContextType::RENDERER_COMPOSITOR);
   return video_frame_compositor_context_provider_;
+}
+
+// static
+scoped_refptr<gpu::SharedImageInterface>
+RenderThreadImpl::RecordReplayRepaintSharedImageInterface() {
+  RenderThreadImpl* thread = current();
+  if (!thread) {
+    return nullptr;
+  }
+  if (thread->shared_image_interface_ &&
+      !thread->shared_image_interface_->IsLost()) {
+    return thread->shared_image_interface_;
+  }
+  // The usual interface comes with a channel to the GPU process, which is
+  // asked of the browser, and a replay that has diverged from its recording
+  // hears from no one. A software compositor's shared images are memory this
+  // process allocates and only tells the GPU process about, so a channel with
+  // no one at the other end does: the end that's never read is never closed
+  // either, which keeps the channel from looking lost.
+  static base::NoDestructor<scoped_refptr<gpu::SharedImageInterface>>
+      repaint_interface;
+  if (!*repaint_interface) {
+    mojo::MessagePipe pipe;
+    std::ignore = pipe.handle1.release();
+    scoped_refptr<gpu::GpuChannelHost> channel = gpu::GpuChannelHost::Create(
+        thread->client_id_, gpu::GPUInfo(), gpu::GpuFeatureInfo(),
+        gpu::SharedImageCapabilities(), std::move(pipe.handle0),
+        thread->GetIOTaskRunner());
+    *repaint_interface = channel->CreateClientSharedImageInterface();
+  }
+  return *repaint_interface;
 }
 
 scoped_refptr<gpu::SharedImageInterface>

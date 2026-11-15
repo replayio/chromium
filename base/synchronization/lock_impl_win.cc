@@ -21,7 +21,8 @@ namespace internal {
 extern "C" void V8RecordReplayAddOrderedSRWLock(const char* name, void* aLock);
 
 LockImpl::LockImpl(const char* ordered_name) : native_handle_(SRWLOCK_INIT) {
-  if (ordered_name)
+  // An empty name is for a lock that's never ordered (see lock_impl_posix.cc).
+  if (ordered_name && *ordered_name)
     recordreplay::AddOrderedSRWLock(ordered_name, &native_handle_);
 }
 

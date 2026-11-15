@@ -167,6 +167,26 @@ void ThreadControllerWithMessagePumpImpl::WillQueueTask(
 
 void ThreadControllerWithMessagePumpImpl::ScheduleWork() {
   base::internal::CheckedLock::AssertNoLockHeldOnCurrentThread();
+  // [RecordReplay] Asked for from outside the recording, for a task that is
+  // too. Whether work has been asked for already is state the recording's own
+  // requests go by, so this one leaves it alone.
+  if (recordreplay::IsRecordingOrReplaying() &&
+      (recordreplay::AreEventsDisallowed() ||
+       recordreplay::AreEventsPassedThrough())) {
+    // The wake-up isn't part of the recording either. On macOS a pump's
+    // wake-up is a Mach message or a kqueue event, which the kernel keeps. On
+    // other POSIX systems the pumps keep it in memory of their own
+    // (WaitableEvent's signalled flag and waiter list, MessagePumpEpoll's
+    // flags), which a wake-up made at another point on a replay leaves in
+    // another state than the recording's, and the woken thread then takes
+    // another path. So the thread isn't woken there: the task runs when the
+    // thread next has something to do.
+#if BUILDFLAG(IS_APPLE)
+    recordreplay::AutoPassThroughEvents pass_through;
+    pump_->ScheduleWork();
+#endif
+    return;
+  }
   if (work_deduplicator_.OnWorkRequested() ==
       ShouldScheduleWork::kScheduleImmediate) {
     if (!associated_thread_->IsBoundToCurrentThread()) {
@@ -180,8 +200,12 @@ void ThreadControllerWithMessagePumpImpl::ScheduleWork() {
 void ThreadControllerWithMessagePumpImpl::BeginNativeWorkBeforeDoWork() {
   do_work_needed_before_wait_ = true;
 
-  if (!g_avoid_schedule_calls_during_native_event_processing.load(
-          std::memory_order_relaxed)) {
+  // [RecordReplay] The main thread sets this from a feature while other
+  // threads are already pumping, so which of them see it set is recorded.
+  if (!recordreplay::RecordReplayValueIfAllowed(
+          "g_avoid_schedule_calls_during_native_event_processing",
+          g_avoid_schedule_calls_during_native_event_processing.load(
+              std::memory_order_relaxed))) {
     return;
   }
 
@@ -550,6 +574,11 @@ bool ThreadControllerWithMessagePumpImpl::RunsTasksByBatches() const {
 }
 
 void ThreadControllerWithMessagePumpImpl::DoIdleWork() {
+  // [RecordReplay] A thread other than the main one asks for the recording to
+  // be finished. If it asks from where events are disallowed, the task that
+  // carries the request runs there too and can't finish anything. So the main
+  // thread also looks each time it runs out of work, where it can.
+  recordreplay::MaybeFinishRecording();
   struct OnIdle {
     STACK_ALLOCATED();
 

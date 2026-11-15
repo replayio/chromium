@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/platform/instrumentation/canvas_memory_dump_provider.h"
 
+#include "base/record_replay.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/process_memory_dump.h"
 #include "third_party/blink/renderer/platform/instrumentation/instance_counters.h"
@@ -62,6 +63,9 @@ void CanvasMemoryDumpProvider::RegisterClient(CanvasMemoryDumpClient* client) {
 
 void CanvasMemoryDumpProvider::UnregisterClient(
     CanvasMemoryDumpClient* client) {
+  // A canvas context the collector frees takes itself off the list, which
+  // only memory dumps read.
+  recordreplay::AutoPassThroughEventsIfDisallowed pass_through;
   base::AutoLock auto_lock(lock_);
   DCHECK(clients_.Contains(client));
   clients_.erase(client);

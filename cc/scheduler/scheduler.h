@@ -177,6 +177,10 @@ class CC_EXPORT Scheduler : public viz::BeginFrameObserverBase {
   bool RecordReplayCreatingFrameSink() const {
     return state_machine_->RecordReplayCreatingFrameSink();
   }
+  // A repaint's frame is about to be given to the scheduler.
+  void RecordReplayWillRepaint();
+  // What the scheduler is waiting on, for a repaint that drew nothing.
+  std::string RecordReplayDescribe() const;
 
   void SetNeedsPrepareTiles();
 

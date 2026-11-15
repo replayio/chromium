@@ -736,6 +736,9 @@ class CC_EXPORT LayerTreeHostImpl : public TileManagerClient,
   // will not immediately delete the resources' backing textures.
   void EvictAllUIResources();
   bool EvictedUIResourcesExist() const;
+  // [RecordReplay] Each thing CanDraw() looks at, for a repaint that drew
+  // nothing.
+  std::string RecordReplayDescribeCanDraw() const;
 
   virtual viz::ResourceId ResourceIdForUIResource(UIResourceId uid) const;
 

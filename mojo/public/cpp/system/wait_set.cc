@@ -375,7 +375,28 @@ class WaitSet::State : public base::RefCountedThreadSafe<State> {
     }
   }
   std::vector<scoped_refptr<Context>> cancelled_contexts_;
-  std::set<raw_ptr<base::WaitableEvent, SetExperimental>, recordreplay::CompareByPointerId> user_events_;
+  // Orders user events by pointer ID when recording/replaying. An event made
+  // with events disallowed has no ID (see WaitableEvent's constructor): such
+  // events go by address, after the ones that have one.
+  struct CompareEvents {
+    bool operator()(
+        const raw_ptr<base::WaitableEvent, SetExperimental>& a,
+        const raw_ptr<base::WaitableEvent, SetExperimental>& b) const {
+      if (recordreplay::IsRecordingOrReplaying("pointer-ids")) {
+        int ida = recordreplay::PointerId(a.get());
+        int idb = recordreplay::PointerId(b.get());
+        if (ida && idb) {
+          return ida < idb;
+        }
+        if (ida || idb) {
+          return ida != 0;
+        }
+      }
+      return a.get() < b.get();
+    }
+  };
+  std::set<raw_ptr<base::WaitableEvent, SetExperimental>, CompareEvents>
+      user_events_;
 
   // Event signaled any time a handle notification is received.
   base::WaitableEvent handle_event_;

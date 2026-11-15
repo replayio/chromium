@@ -119,6 +119,27 @@ class SharedRemoteBase
     RemoteWrapper(const RemoteWrapper&) = delete;
     RemoteWrapper& operator=(const RemoteWrapper&) = delete;
 
+    // [RecordReplay] Any thread holding the SharedRemote can drop the last
+    // reference, and whichever does posts the task that deletes this on its
+    // own sequence. Which thread that is has to be the same when replaying
+    // (e.g. a widget's input handler host, cleared on the main thread while
+    // the compositor thread lets go of its copy), so the count is ordered
+    // among threads. The deleting itself is outside the lock.
+    void AddRef() const {
+      recordreplay::AutoOrderedRefCount ordered;
+      base::RefCountedThreadSafe<RemoteWrapper, RemoteWrapperDeleter>::AddRef();
+    }
+    void Release() const {
+      bool last;
+      {
+        recordreplay::AutoOrderedRefCount ordered;
+        last = base::subtle::RefCountedThreadSafeBase::Release();
+      }
+      if (last) {
+        RemoteWrapperDeleter::Destruct(this);
+      }
+    }
+
     std::unique_ptr<ThreadSafeForwarder<InterfaceType>> CreateForwarder(
         const base::Location& location) {
       return std::make_unique<ThreadSafeForwarder<InterfaceType>>(

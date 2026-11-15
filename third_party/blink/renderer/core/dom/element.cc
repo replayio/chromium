@@ -5874,6 +5874,11 @@ StyleRecalcChange Element::RecalcOwnStyle(
     const StyleRecalcContext& style_recalc_context) {
   DCHECK(GetDocument().InStyleRecalc());
 
+  // As in Node::SetNeedsStyleRecalc(): which elements get their style again.
+  REPLAY_ASSERT_MAYBE_EVENTS_DISALLOWED(
+      "Element::RecalcOwnStyle %s %d %d", nodeName().Utf8().c_str(),
+      NeedsStyleRecalc(), change.RecalcChildren());
+
   StyleRecalcContext new_style_recalc_context = style_recalc_context;
   if (change.RecalcChildren() || change.RecalcContainerQueryDependent(*this)) {
     if (NeedsStyleRecalc()) {
@@ -5958,6 +5963,9 @@ StyleRecalcChange Element::RecalcOwnStyle(
 
   ComputedStyle::Difference diff =
       ComputedStyle::ComputeDifference(old_style, new_style);
+  REPLAY_ASSERT_MAYBE_EVENTS_DISALLOWED(
+      "Element::RecalcOwnStyle diff %s %d %d %d", nodeName().Utf8().c_str(),
+      static_cast<int>(diff), !!old_style, !!new_style);
   if (ViewTransitionUtils::GetTransition(*this)) {
     // Even if the computed style is an exact match, we must trigger pseudo-
     // element traversal to properly populate the pseudo-element's subtree.

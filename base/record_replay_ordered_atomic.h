@@ -27,7 +27,7 @@ class OrderedAtomic {
   }
 
   T load(std::memory_order memory_order = std::memory_order_seq_cst) const {
-    AutoOrderedLock ordered(ordered_lock_id_);
+    AutoOrderedLock ordered(LockIdForNow());
     return value_.load(memory_order);
   }
 
@@ -40,44 +40,44 @@ class OrderedAtomic {
   }
 
   void store(T v, std::memory_order memory_order = std::memory_order_seq_cst) {
-    AutoOrderedLock ordered(ordered_lock_id_);
+    AutoOrderedLock ordered(LockIdForNow());
     value_.store(v, memory_order);
   }
 
   T fetch_add(T v, std::memory_order memory_order = std::memory_order_seq_cst) {
-    AutoOrderedLock ordered(ordered_lock_id_);
+    AutoOrderedLock ordered(LockIdForNow());
     return value_.fetch_add(v, memory_order);
   }
 
   T fetch_sub(T v, std::memory_order memory_order = std::memory_order_seq_cst) {
-    AutoOrderedLock ordered(ordered_lock_id_);
+    AutoOrderedLock ordered(LockIdForNow());
     return value_.fetch_sub(v, memory_order);
   }
 
   T fetch_or(T v, std::memory_order memory_order = std::memory_order_seq_cst) {
-    AutoOrderedLock ordered(ordered_lock_id_);
+    AutoOrderedLock ordered(LockIdForNow());
     return value_.fetch_or(v, memory_order);
   }
 
   T fetch_and(T v, std::memory_order memory_order = std::memory_order_seq_cst) {
-    AutoOrderedLock ordered(ordered_lock_id_);
+    AutoOrderedLock ordered(LockIdForNow());
     return value_.fetch_and(v, memory_order);
   }
 
   T exchange(T v, std::memory_order memory_order = std::memory_order_seq_cst) {
-    AutoOrderedLock ordered(ordered_lock_id_);
+    AutoOrderedLock ordered(LockIdForNow());
     return value_.exchange(v, memory_order);
   }
 
   bool compare_exchange_weak(T& a, T b,
                              std::memory_order memory_order = std::memory_order_seq_cst) {
-    AutoOrderedLock ordered(ordered_lock_id_);
+    AutoOrderedLock ordered(LockIdForNow());
     return value_.compare_exchange_weak(a, b, memory_order);
   }
 
   bool compare_exchange_strong(T& a, T b,
                                std::memory_order memory_order = std::memory_order_seq_cst) {
-    AutoOrderedLock ordered(ordered_lock_id_);
+    AutoOrderedLock ordered(LockIdForNow());
     return value_.compare_exchange_strong(a, b, memory_order);
   }
 
@@ -99,6 +99,13 @@ class OrderedAtomic {
   }
 
  private:
+  // Where events are disallowed (a destructor run by the collector's sweep,
+  // say) nothing can be ordered and the driver warns if asked to. Lock 0 is no
+  // lock.
+  int LockIdForNow() const {
+    return AreEventsDisallowed() ? 0 : ordered_lock_id_;
+  }
+
   int ordered_lock_id_;
   std::atomic<T> value_;
 };

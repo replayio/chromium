@@ -47,6 +47,18 @@ void Parcel::AllocateData(size_t num_bytes,
                           NodeLinkMemory* memory) {
   ABSL_ASSERT(std::holds_alternative<std::monostate>(data_.storage));
 
+  // [RecordReplay] A parcel's data stays out of shared memory when a renderer
+  // is recorded, on both sides of the link: in the recorded or replaying
+  // process itself, and in a browser of a record/replay run, which is what
+  // sends a page its responses. Inline, a message reaches the renderer through
+  // its channel, in a call whose output is in the recording, as every message
+  // did with the legacy Mojo core; and a recorded node allocates no blocks for
+  // parcel data, so nothing has to be recorded for the allocation.
+  if (::recordreplay::IsRecordReplayRun() ||
+      ::recordreplay::IsRecordingOrReplaying()) {
+    memory = nullptr;
+  }
+
   Fragment fragment;
   if (num_bytes > 0 && memory) {
     const size_t requested_fragment_size = num_bytes + sizeof(FragmentHeader);

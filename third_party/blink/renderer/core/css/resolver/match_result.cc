@@ -87,6 +87,11 @@ void MatchResult::BeginAddingAuthorRulesForTreeScope(
   current_tree_order_ =
       ClampTo<decltype(current_tree_order_)>(tree_scopes_.size());
   tree_scopes_.push_back(&tree_scope);
+  // Replay's Chromium 108 asserts this in FinishAddingAuthorRulesForTreeScope,
+  // which pushed the scope there.
+  REPLAY_ASSERT(
+      "[RUN-2424-3053] MatchResult::FinishAddingAuthorRulesForTreeScope %u",
+      (unsigned)tree_scopes_.size());
 }
 
 void MatchResult::Reset() {

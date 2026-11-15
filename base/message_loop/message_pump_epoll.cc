@@ -23,6 +23,7 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/posix/eintr_wrapper.h"
+#include "base/record_replay.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
 #include "base/trace_event/heap_profiler.h"
@@ -47,6 +48,24 @@ std::atomic_bool g_use_poll = false;
 constexpr std::pair<uint32_t, short int> kEpollToPollEvents[] = {
     {EPOLLIN, POLLIN},   {EPOLLOUT, POLLOUT}, {EPOLLRDHUP, POLLRDHUP},
     {EPOLLPRI, POLLPRI}, {EPOLLERR, POLLERR}, {EPOLLHUP, POLLHUP}};
+
+// [RecordReplay] The data the kernel keeps with a watched descriptor, and
+// hands back from epoll_wait. It's a pointer, and what epoll_wait hands back
+// on a replay is what it did when recording, where the same object was
+// somewhere else. So when recording or replaying it's the descriptor's number,
+// which is the same both times, and the wake-up event's has a number no
+// descriptor has.
+constexpr uint64_t kRecordReplayWakeData = ~uint64_t{0};
+
+epoll_data_t RecordReplayEpollData(void* ptr, int fd) {
+  epoll_data_t data;
+  if (recordreplay::IsRecordingOrReplaying()) {
+    data.u64 = fd < 0 ? kRecordReplayWakeData : static_cast<uint64_t>(fd);
+  } else {
+    data.ptr = ptr;
+  }
+  return data;
+}
 
 void SetEventsForPoll(const uint32_t epoll_events, struct pollfd* poll_entry) {
   poll_entry->events = 0;
@@ -145,7 +164,8 @@ MessagePumpEpoll::MessagePumpEpoll() {
   wake_event_.reset(eventfd(0, EFD_NONBLOCK));
   PCHECK(wake_event_.is_valid());
 
-  epoll_event wake{.events = EPOLLIN, .data = {.ptr = &wake_event_}};
+  epoll_event wake{.events = EPOLLIN,
+                   .data = RecordReplayEpollData(&wake_event_, -1)};
   int rv = epoll_ctl(epoll_.get(), EPOLL_CTL_ADD, wake_event_.get(), &wake);
   PCHECK(rv == 0);
 
@@ -324,7 +344,8 @@ void MessagePumpEpoll::AddEpollEvent(EpollEventEntry& entry) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   DCHECK(!entry.stopped);
   const uint32_t events = entry.ComputeActiveEvents();
-  epoll_event event{.events = events, .data = {.ptr = &entry}};
+  epoll_event event{.events = events,
+                    .data = RecordReplayEpollData(&entry, entry.fd)};
   int rv = epoll_ctl(epoll_.get(), EPOLL_CTL_ADD, entry.fd, &event);
 #if DCHECK_IS_ON()
   // TODO(361611793): Remove these debug logs after resolving the issue.
@@ -381,7 +402,8 @@ void MessagePumpEpoll::UpdateEpollEvent(EpollEventEntry& entry) {
       // Persistent events don't need to be modified if no bits are changing.
       return;
     }
-    epoll_event event{.events = events, .data = {.ptr = &entry}};
+    epoll_event event{.events = events,
+                      .data = RecordReplayEpollData(&entry, entry.fd)};
     int rv = epoll_ctl(epoll_.get(), EPOLL_CTL_MOD, entry.fd, &event);
     DPCHECK(rv == 0);
 #if DCHECK_IS_ON()
@@ -488,6 +510,21 @@ bool MessagePumpEpoll::WaitForEpollEvents(TimeDelta timeout) {
 
     ready_events =
         span(epoll_events).first(base::checked_cast<size_t>(epoll_result));
+
+    // [RecordReplay] What the kernel was given for each descriptor when
+    // recording or replaying is the descriptor's number, and here it's turned
+    // back into what the rest of this expects. A descriptor that's no longer
+    // watched has nothing to dispatch to.
+    if (recordreplay::IsRecordingOrReplaying()) {
+      for (epoll_event& e : ready_events) {
+        if (e.data.u64 == kRecordReplayWakeData) {
+          e.data.ptr = &wake_event_;
+          continue;
+        }
+        auto it = entries_.find(static_cast<int>(e.data.u64));
+        e.data.ptr = it == entries_.end() ? nullptr : &it->second;
+      }
+    }
   }
 
   if (!ready_events.empty()) {
@@ -509,6 +546,9 @@ bool MessagePumpEpoll::WaitForEpollEvents(TimeDelta timeout) {
     // corresponding epoll_event returned by epoll_wait(). We do this before
     // dispatching any events, and the second pass below will only dispatch an
     // event if its epoll_event data is still valid.
+    if (!e.data.ptr) {
+      continue;
+    }
     auto& entry = EpollEventEntry::FromEpollEvent(e);
     DCHECK(!entry.active_event);
     EpollEventEntry::FromEpollEvent(e).active_event = &e;

@@ -43,6 +43,7 @@
 #include "cc/trees/trace_utils.h"
 #include "components/viz/common/view_transition_element_resource_id.h"
 #include "components/viz/service/display/record_replay_render.h"
+#include "gpu/command_buffer/client/shared_image_interface.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
 #include "third_party/abseil-cpp/absl/cleanup/cleanup.h"
 #include "third_party/perfetto/include/perfetto/tracing/track.h"
@@ -271,7 +272,12 @@ void ProxyMain::BeginMainFrameWithBlocking(
   // Visibility check needs to happen before setting
   // max_requested_pipeline_stage_. Otherwise a requested commit could get lost
   // after tab becomes visible again.
-  if (!layer_tree_host_->IsVisible()) {
+  //
+  // [RecordReplay] A repaint (force_blocking) is of the page as it is at the
+  // pause, shown or not: the browser may not have said yet that it's visible,
+  // or has just hidden it to close it, and a frame for a page that isn't
+  // visible is aborted here, before anything is committed.
+  if (!layer_tree_host_->IsVisible() && !force_blocking) {
     TRACE_EVENT("cc,benchmark", "MainFrameAborted",
                 [&](perfetto::EventContext ctx) {
                   auto* pipeline = EmitMainFramePipelineStep(
@@ -307,7 +313,8 @@ void ProxyMain::BeginMainFrameWithBlocking(
   has_sent_unthrottled_commit_request_ = false;
 
   // If main frame updates and commits are deferred, skip the entire pipeline.
-  if (defer_main_frame_update_ || pause_rendering_) {
+  // [RecordReplay] A repaint's frame runs regardless.
+  if ((defer_main_frame_update_ || pause_rendering_) && !force_blocking) {
     TRACE_EVENT("cc,benchmark", "MainFrameAborted",
                 [&](perfetto::EventContext ctx) {
                   auto* pipeline = EmitMainFramePipelineStep(
@@ -413,6 +420,24 @@ void ProxyMain::BeginMainFrameWithBlocking(
   // avoid committing right now, or may have allowed commits to go through. So
   // evaluate this flag now.
   bool skip_commit = defer_main_frame_update_ || IsDeferringCommits();
+  // [RecordReplay] Commits are held back while a page first loads, until it
+  // has something worth showing. A repaint at a pause in that time is asked
+  // what the page looks like now, and with its commit held back the
+  // compositor has no layers and draws nothing.
+  //
+  // A page that still has no layers after its frame has run is one that is
+  // being closed, and has had them taken away. Committing that would leave the
+  // compositor with nothing to draw, while it still has the tree it last
+  // drew, which is what the page looked like: the repaint is of that.
+  if (force_blocking) {
+    skip_commit = !layer_tree_host_->root_layer();
+    if (skip_commit) {
+      recordreplay::Print(
+          "Repaint: the page has no layers (visible %d), drawing the tree the "
+          "compositor last drew.",
+          layer_tree_host_->IsVisible());
+    }
+  }
 
   // When we don't need to produce a CompositorFrame, there's also no need to
   // commit our updates. We still need to run layout and paint though, as it can
@@ -441,6 +466,13 @@ void ProxyMain::BeginMainFrameWithBlocking(
     // commit happens in the future.
     std::vector<std::unique_ptr<SwapPromise>> empty_swap_promises;
     reason = CommitEarlyOutReason::kAbortedDeferredCommit;
+    // [RecordReplay] A repaint that skips its commit, for a page with no
+    // layers, has finished with nothing to update: a frame sink the repaint
+    // has just put in is waiting for its first commit before it draws, and a
+    // deferred commit would leave it waiting.
+    if (force_blocking) {
+      reason = CommitEarlyOutReason::kFinishedNoUpdates;
+    }
     ImplThreadTaskRunner()->PostTask(
         FROM_HERE, base::BindOnce(&ProxyImpl::BeginMainFrameAbortedOnImpl,
                                   base::Unretained(proxy_impl_.get()), reason,
@@ -1255,8 +1287,26 @@ void ProxyMain::RecordReplayRepaintPending() {
   if (!proxy_impl_)
     return;
   ImplThreadTaskRunner()->PostTask(
-      FROM_HERE, base::BindOnce(&ProxyImpl::RecordReplayRepaintPending,
+      FROM_HERE,
+      base::BindOnce(&ProxyImpl::RecordReplayRepaintPending,
+                     base::Unretained(proxy_impl_.get()),
+                     recordreplay::GetRepaintSharedImageInterface()));
+}
+
+void ProxyMain::RecordReplayDescribeRepaint() {
+  if (!proxy_impl_)
+    return;
+  ImplThreadTaskRunner()->PostTask(
+      FROM_HERE, base::BindOnce(&ProxyImpl::RecordReplayDescribeRepaint,
                                 base::Unretained(proxy_impl_.get())));
+}
+
+bool ProxyMain::RecordReplayHasRootLayer() const {
+  return !!layer_tree_host_->root_layer();
+}
+
+bool ProxyMain::RecordReplayIsVisible() const {
+  return layer_tree_host_->IsVisible();
 }
 
 void ProxyMain::RecordReplayRepaint() {

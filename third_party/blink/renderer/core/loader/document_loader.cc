@@ -279,6 +279,10 @@ ResourceRequest BuildRecordReplayNavigationRequest(
   request.SetRequestDestination(frame && frame->Owner()
                                     ? network::mojom::RequestDestination::kIframe
                                     : network::mojom::RequestDestination::kDocument);
+  // What the request is reported as having been caused by goes by this.
+  request.SetRequestContext(frame && frame->Owner()
+                                ? mojom::blink::RequestContextType::IFRAME
+                                : mojom::blink::RequestContextType::HYPERLINK);
   return request;
 }
 

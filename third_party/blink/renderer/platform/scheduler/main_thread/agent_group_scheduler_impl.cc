@@ -198,7 +198,10 @@ void AgentGroupSchedulerImpl::UpdatePolicy() {
   CHECK(!is_updating_policy_);
   base::AutoReset auto_reset(&is_updating_policy_, true);
 
-  for (auto* page_scheduler : page_schedulers_) {
+  // The set is keyed by address, so its own order isn't the same on a replay,
+  // and each page's update takes locks and reads the clock.
+  for (PageSchedulerImpl* page_scheduler :
+       recordreplay::SortedByPointerId(page_schedulers_)) {
     page_scheduler->UpdatePolicy();
   }
 }

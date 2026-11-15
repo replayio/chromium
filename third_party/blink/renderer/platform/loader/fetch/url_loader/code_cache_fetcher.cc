@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/platform/loader/fetch/url_loader/code_cache_fetcher.h"
 
 #include "base/memory/scoped_refptr.h"
+#include "base/record_replay.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "third_party/blink/public/mojom/loader/code_cache.mojom-blink.h"
 #include "third_party/blink/public/platform/platform.h"
@@ -98,6 +99,12 @@ scoped_refptr<CodeCacheFetcher> CodeCacheFetcher::TryCreateAndStart(
     scoped_refptr<base::SequencedTaskRunner> host_task_runner,
     base::OnceClosure done_closure) {
   scoped_refptr<CodeCacheFetcher> fetcher;
+  // A recorded renderer compiles every script itself (see
+  // V8CodeCache::GetCompileOptions), so no cached code is asked for.
+  if (recordreplay::IsRecordingOrReplaying(
+          "no-compile-cache", "CodeCacheFetcher::TryCreateAndStart")) {
+    return fetcher;
+  }
   if (ShouldFetchWebUIBundledCodeCache(request)) {
     fetcher = base::MakeRefCounted<WebUIBundledCodeCacheFetcher>(
         std::move(host_task_runner),

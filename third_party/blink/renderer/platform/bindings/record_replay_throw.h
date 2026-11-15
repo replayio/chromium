@@ -9,6 +9,10 @@
 
 namespace blink {
 
+// The private name on an exception whose message is to stay as thrown.
+inline constexpr char kRecordReplayPlainMessageMark[] =
+    "RecordReplayPlainMessage";
+
 class ExceptionState;
 
 // If events are unavailable: throw

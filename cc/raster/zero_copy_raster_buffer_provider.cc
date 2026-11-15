@@ -12,7 +12,6 @@
 #include "base/feature_list.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
-#include "base/record_replay.h"
 #include "base/trace_event/process_memory_dump.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/traced_value.h"
@@ -22,7 +21,6 @@
 #include "components/viz/client/client_resource_provider.h"
 #include "components/viz/common/resources/platform_color.h"
 #include "components/viz/common/resources/shared_image_format_utils.h"
-#include "components/viz/service/display/record_replay_render.h"
 #include "gpu/command_buffer/client/client_shared_image.h"
 #include "gpu/command_buffer/client/shared_image_interface.h"
 #include "gpu/command_buffer/common/shared_image_trace_utils.h"
@@ -50,20 +48,6 @@ ZeroCopyRasterBufferImpl::ZeroCopyRasterBufferImpl(
           sii, "ZeroCopyRasterBufferProviderSoftware");
       in_use_resource.backing()->mailbox_sync_token =
           in_use_resource.backing()->shared_image()->creation_sync_token();
-
-      // TODO-REPLAY-REBASE: NotifyRasterBuffer infrastructure depended on viz::SharedBitmapId, removed upstream in v147. Restore once ported to gpu::Mailbox or decide to drop.
-      // if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
-      //   auto* backing = in_use_resource.backing();
-      //   if (backing->shared_image()) {
-      //     auto mapping = backing->shared_image()->Map();
-      //     if (mapping) {
-      //       recordreplay::NotifyRasterBuffer(
-      //           backing->shared_image()->mailbox(),
-      //           mapping->GetMemoryForPlane(0).data(),
-      //           mapping->GetMemoryForPlane(0).size());
-      //     }
-      //   }
-      // }
     } else {
       auto backing = std::make_unique<ResourcePool::Backing>(
           in_use_resource.size(), in_use_resource.format(),

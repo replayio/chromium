@@ -215,11 +215,16 @@ void ScriptRunner::RemoveDelayReasonFromScript(PendingScript* pending_script,
     return;
   }
 
+  // Asked once: the answer reads the clock and, the first time, the amount of
+  // memory, and the dependency graph below is only built when replaying.
+  const bool low_priority =
+      pending_script->IsEligibleForLowPriorityAsyncScriptExecution();
+
   int record_replay_scheduled_node_id = 0;
   if (recordreplay::DependencyGraphEnabled()) {
     base::DictValue info;
     info.Set("kind", "scheduleExecuteAsyncScript");
-    if (pending_script->IsEligibleForLowPriorityAsyncScriptExecution()) {
+    if (low_priority) {
       double timeout = features::kTimeoutForLowPriorityAsyncScriptExecution.Get().InMillisecondsF();
       info.Set("lowPriorityTimeout", timeout);
     }
@@ -234,7 +239,7 @@ void ScriptRunner::RemoveDelayReasonFromScript(PendingScript* pending_script,
       &ScriptRunner::ExecuteAsyncPendingScript, WrapWeakPersistent(this),
       WrapPersistent(pending_script), base::TimeTicks::Now(),
       record_replay_scheduled_node_id);
-  if (pending_script->IsEligibleForLowPriorityAsyncScriptExecution()) {
+  if (low_priority) {
     PostTaskWithLowPriorityUntilTimeout(
         FROM_HERE, std::move(task),
         features::kTimeoutForLowPriorityAsyncScriptExecution.Get(),

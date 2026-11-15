@@ -11,6 +11,7 @@
 #include "base/notimplemented.h"
 #include "base/notreached.h"
 #include "base/process/memory.h"
+#include "base/record_replay.h"
 #include "components/viz/common/resources/shared_image_format_utils.h"
 #include "gpu/command_buffer/client/client_shared_image.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
@@ -128,6 +129,8 @@ void SharedImageInterface::CopyNativeGmbToSharedMemoryAsync(
 }
 
 void SharedImageInterface::Release() const {
+  // [RecordReplay] The collector drops references too, with a pool it frees.
+  recordreplay::AutoPassThroughEventsIfDisallowed pass_through;
   bool should_destroy = false;
 
   {

@@ -191,19 +191,21 @@ PageSchedulerImpl::PageSchedulerImpl(
 }
 
 PageSchedulerImpl::~PageSchedulerImpl() {
-  recordreplay::UnregisterPointer(this);
-
   // TODO(alexclarke): Find out why we can't rely on the web view outliving the
   // frame.
   {
     PolicyUpdater policy_updater;
-    for (FrameSchedulerImpl* frame_scheduler : frame_schedulers_) {
+    for (FrameSchedulerImpl* frame_scheduler :
+       recordreplay::SortedByPointerId(frame_schedulers_)) {
       frame_scheduler->OnPageSchedulerDeletion(policy_updater);
     }
     agent_group_scheduler_->RemovePageScheduler(this);
   }
 
   main_thread_scheduler_->RemovePageScheduler(this);
+
+  // Last: the sets this was in are walked in pointer ID order until here.
+  recordreplay::UnregisterPointer(this);
 }
 
 void
@@ -228,7 +230,8 @@ void PageSchedulerImpl::SetPageVisible(bool page_visible) {
   page_visibility_ = page_visibility;
   page_visibility_changed_time_ = main_thread_scheduler_->NowTicks();
 
-  for (FrameSchedulerImpl* frame_scheduler : frame_schedulers_) {
+  for (FrameSchedulerImpl* frame_scheduler :
+       recordreplay::SortedByPointerId(frame_schedulers_)) {
     frame_scheduler->OnPageVisibilityChange(page_visibility_, policy_updater);
   }
 
@@ -267,7 +270,8 @@ void PageSchedulerImpl::SetPageFrozenImpl(
   if (is_frozen_ == frozen)
     return;
   is_frozen_ = frozen;
-  for (FrameSchedulerImpl* frame_scheduler : frame_schedulers_) {
+  for (FrameSchedulerImpl* frame_scheduler :
+       recordreplay::SortedByPointerId(frame_schedulers_)) {
     frame_scheduler->SetPageFrozenForTracing(frozen);
     frame_scheduler->SetShouldReportPostedTasksWhenDisabled(frozen);
   }
@@ -288,7 +292,8 @@ void PageSchedulerImpl::SetPageFrozenImpl(
     set_ipc_posted_handler_task_.Cancel();
     has_ipc_detection_enabled_ = false;
     main_thread_scheduler_->UpdateIpcTracking();
-    for (FrameSchedulerImpl* frame_scheduler : frame_schedulers_) {
+    for (FrameSchedulerImpl* frame_scheduler :
+       recordreplay::SortedByPointerId(frame_schedulers_)) {
       frame_scheduler->DetachOnIPCTaskPostedWhileInBackForwardCacheHandler();
     }
 
@@ -349,7 +354,8 @@ void PageSchedulerImpl::SetUpIPCTaskDetection() {
   DCHECK(is_stored_in_back_forward_cache_);
   has_ipc_detection_enabled_ = true;
   main_thread_scheduler_->UpdateIpcTracking();
-  for (FrameSchedulerImpl* frame_scheduler : frame_schedulers_) {
+  for (FrameSchedulerImpl* frame_scheduler :
+       recordreplay::SortedByPointerId(frame_schedulers_)) {
     frame_scheduler->SetOnIPCTaskPostedWhileInBackForwardCacheHandler();
   }
 }
@@ -482,7 +488,8 @@ bool PageSchedulerImpl::IsCPUTimeThrottled() const {
 
 void PageSchedulerImpl::OnThrottlingStatusUpdated() {
   bool opted_out_from_aggressive_throttling = false;
-  for (FrameSchedulerImpl* frame_scheduler : frame_schedulers_) {
+  for (FrameSchedulerImpl* frame_scheduler :
+       recordreplay::SortedByPointerId(frame_schedulers_)) {
     opted_out_from_aggressive_throttling |=
         frame_scheduler->opted_out_from_aggressive_throttling();
   }
@@ -504,7 +511,8 @@ void PageSchedulerImpl::OnVirtualTimeEnabled() {
 
 void PageSchedulerImpl::OnTraceLogEnabled() {
   tracing_controller_.OnTraceLogEnabled();
-  for (FrameSchedulerImpl* frame_scheduler : frame_schedulers_) {
+  for (FrameSchedulerImpl* frame_scheduler :
+       recordreplay::SortedByPointerId(frame_schedulers_)) {
     frame_scheduler->OnTraceLogEnabled();
   }
 }
@@ -793,14 +801,8 @@ void PageSchedulerImpl::UpdateWakeUpBudgetPools(base::LazyNow* lazy_now) {
 }
 
 void PageSchedulerImpl::UpdatePolicy() {
-  std::vector<FrameSchedulerImpl*> frame_scheduler_vector;
-  for (FrameSchedulerImpl* frame_scheduler : frame_schedulers_) {
-    frame_scheduler_vector.push_back(frame_scheduler);
-  }
-  std::sort(frame_scheduler_vector.begin(), frame_scheduler_vector.end(),
-            recordreplay::CompareByPointerId());
-
-  for (FrameSchedulerImpl* frame_scheduler : frame_scheduler_vector) {
+  for (FrameSchedulerImpl* frame_scheduler :
+       recordreplay::SortedByPointerId(frame_schedulers_)) {
     frame_scheduler->UpdatePolicy();
   }
 

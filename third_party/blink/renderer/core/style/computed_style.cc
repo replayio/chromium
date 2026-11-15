@@ -33,6 +33,7 @@
 #include "base/debug/alias.h"
 #include "base/memory/values_equivalent.h"
 #include "base/numerics/clamped_math.h"
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "cc/input/overscroll_behavior.h"
 #include "cc/paint/paint_flags.h"
@@ -457,6 +458,17 @@ ComputedStyle::ComputeDifferenceIgnoringInheritedFirstLineStyle(
   if (old_style.ScrollMarkerGroupNone() != new_style.ScrollMarkerGroupNone()) {
     return Difference::kDescendantAffecting;
   }
+  // Which part of two styles differs, for finding why a replay's differ.
+  REPLAY_ASSERT_MAYBE_EVENTS_DISALLOWED(
+      "ComputedStyle::ComputeDifference %d %d %d %d %d %d %d %d",
+      old_style.NonIndependentInheritedEqual(new_style),
+      old_style.JustifyItems() == new_style.JustifyItems(),
+      old_style.AppliedTextDecorations() == new_style.AppliedTextDecorations(),
+      old_style.NonInheritedEqual(new_style),
+      old_style.ChildHasExplicitInheritance(),
+      old_style.InheritedVariablesEqual(new_style),
+      base::ValuesEquivalent(old_style.GetFont(), new_style.GetFont()),
+      old_style.GetFontDescription() == new_style.GetFontDescription());
   if (!old_style.NonIndependentInheritedEqual(new_style)) {
     return Difference::kInherited;
   }

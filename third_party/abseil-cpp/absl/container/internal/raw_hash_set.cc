@@ -14,6 +14,12 @@
 
 #include "absl/container/internal/raw_hash_set.h"
 
+#ifndef _WIN32
+#include <dlfcn.h>
+#else
+#include <windows.h>
+#endif
+
 #include <algorithm>
 #include <atomic>
 #include <cassert>
@@ -89,6 +95,22 @@ inline size_t RandomSeed() {
   static std::atomic<size_t> counter(0);
   size_t value = counter.fetch_add(kIncrement, std::memory_order_relaxed);
 #endif  // ABSL_HAVE_THREAD_LOCAL
+  // [RecordReplay] No address in it in a recorded or replayed process, for the
+  // reason given at MixingHashState::Seed(), and no count either. A thread
+  // makes tables where nothing is recorded (a GC, an allocation that's
+  // sampled, what a replay runs for itself), so the count of tables it has
+  // made isn't the same on a replay, and every later table would be walked in
+  // another order.
+#ifndef _WIN32
+  static const bool record_replay =
+      dlsym(RTLD_DEFAULT, "RecordReplayAttach") != nullptr;
+#else
+  static const bool record_replay =
+      GetModuleHandleA("windows-recordreplay.dll") != nullptr;
+#endif
+  if (record_replay) {
+    return kIncrement;
+  }
   return value ^ static_cast<size_t>(reinterpret_cast<uintptr_t>(&counter));
 }
 

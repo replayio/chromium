@@ -4,6 +4,8 @@
 
 #include "base/task/sequence_manager/delayed_task_handle_delegate.h"
 
+#include "base/record_replay.h"
+
 #include "base/task/sequence_manager/task_queue_impl.h"
 
 namespace base::sequence_manager::internal {
@@ -36,6 +38,16 @@ void DelayedTaskHandleDelegate::CancelTask() {
   // WeakReference::Flag, as no new WeakPtrs will ever be issued from this
   // delegate.
   weak_ptr_factory_.InvalidateWeakPtrsAndDoom();
+
+  // [RecordReplay] A destructor the collector runs gets here at a point which
+  // isn't the same on a replay, and taking the task out changes when the queue
+  // next wakes up, which is recorded. The task stays where it is, cancelled:
+  // whoever looks at it next finds that out, and that answer is recorded (see
+  // Task::IsCanceled).
+  if (recordreplay::IsRecordingOrReplaying() &&
+      recordreplay::AreEventsDisallowed()) {
+    return;
+  }
 
   // If the task is still inside the heap, then it can be removed directly.
   if (heap_handle_.IsValid()) {

@@ -16,6 +16,7 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/no_destructor.h"
+#include "base/record_replay.h"
 #include "base/strings/strcat.h"
 #include "base/system/sys_info.h"
 #include "components/performance_manager/scenario_api/performance_scenarios.h"
@@ -455,6 +456,13 @@ SpareRenderProcessHostManagerImpl::GetLastSpareRendererCreationInfo() const {
 RenderProcessHost* SpareRenderProcessHostManagerImpl::WarmupSpare(
     BrowserContext* browser_context,
     std::optional<base::TimeDelta> timeout) {
+  // [RecordReplay] Every renderer makes a recording when all content is
+  // recorded. A spare one would make one of no page, and the browser stops it
+  // at shutdown before it has written its end.
+  if (recordreplay::IsRecordReplayRun()) {
+    return nullptr;
+  }
+
   if (delay_timer_) {
     // If the timeout does not have a value, the delayed creation is no longer
     // required since we will create the spare renderer here.

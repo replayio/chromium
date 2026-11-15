@@ -179,6 +179,12 @@ int ChromeMain(int argc, const char** argv) {
 #error Unknown platform
 #endif // !BUILDFLAG(IS_WIN)
 
+  // The driver is attached and V8's bindings are set up. Makes what
+  // base/record_replay needs on the main thread before any other thread
+  // exists (the ordered lock of recordreplay::AutoOrderedRefCount). Does
+  // nothing in a process that isn't recording or replaying.
+  recordreplay::Initialize();
+
   if (recordreplay::IsRecordingOrReplaying("eager-initialization", "ChromeMain")) {
     // Force initialization that can otherwise happen at non-deterministic points.
     base::PowerMonitor::GetInstance();

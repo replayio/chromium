@@ -6,6 +6,7 @@
 
 #include <variant>
 
+#include "base/record_replay.h"
 #include "base/task/sequence_manager/task_order.h"
 
 namespace base::sequence_manager {
@@ -78,17 +79,41 @@ HeapHandle Task::GetHeapHandle() const {
   return delayed_task_handle_delegate_->GetHeapHandle();
 }
 
+namespace {
+
+// Whether a task posted with a DelayedTaskHandle has been cancelled. An object
+// the collector frees cancels its tasks from its destructor (a timer of a
+// document, say), at a point which isn't the same on a replay, so like
+// whether a weak receiver is gone (CallbackCancellationTraits), the answer is
+// recorded where it's asked for: a replay then drops or runs the task as the
+// recording did.
+bool RecordReplayHandleWasInvalidated(
+    const WeakPtr<internal::DelayedTaskHandleDelegate>& delegate) {
+  bool invalidated = delegate.WasInvalidated();
+  // Most tasks have no handle, which is the same on a replay.
+  if (!invalidated && !delegate) {
+    return false;
+  }
+  if (recordreplay::IsRecordingOrReplaying()) {
+    invalidated = !!recordreplay::RecordReplayValueIfAllowed(
+        "DelayedTaskHandleInvalidated", invalidated);
+  }
+  return invalidated;
+}
+
+}  // namespace
+
 bool Task::IsCanceled() const {
   CHECK(task);
   if (task.IsCancelled()) {
     return true;
   }
 
-  return delayed_task_handle_delegate_.WasInvalidated();
+  return RecordReplayHandleWasInvalidated(delayed_task_handle_delegate_);
 }
 
 bool Task::WillRunTask() {
-  if (delayed_task_handle_delegate_.WasInvalidated()) {
+  if (RecordReplayHandleWasInvalidated(delayed_task_handle_delegate_)) {
     return false;
   }
   if (delayed_task_handle_delegate_) {

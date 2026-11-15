@@ -100,7 +100,9 @@ class BASE_EXPORT PersistentSparseHistogramDataManager {
   std::map<uint64_t, std::unique_ptr<std::vector<ReferenceAndSample>>>
       sample_records_ GUARDED_BY(lock_);
 
-  base::Lock lock_;
+  // Never ordered when recording (see LockImpl::LockImpl): metrics are no part
+  // of a recording, and code that runs at a pause in a replay reports them too.
+  base::Lock lock_{""};
 };
 
 // This class manages sample-records used by a PersistentSampleMap container

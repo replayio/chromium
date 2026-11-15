@@ -4,6 +4,8 @@
 
 #include "base/threading/hang_watcher.h"
 
+#include <optional>
+
 #include <algorithm>
 #include <atomic>
 #include <utility>
@@ -19,6 +21,7 @@
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/power_monitor/power_monitor.h"
+#include "base/record_replay.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/synchronization/lock.h"
 #include "base/synchronization/waitable_event.h"
@@ -780,7 +783,15 @@ void HangWatcher::RecordHang() {
 
 ScopedClosureRunner HangWatcher::RegisterThreadInternal(
     ThreadType thread_type) {
+  // [RecordReplay] Taken with events disallowed too (a pool worker's loop),
+  // where the lock can't be ordered and the driver warns if asked to: there
+  // it's taken passed through.
+  std::optional<recordreplay::AutoPassThroughEvents> pass_through;
+  if (recordreplay::AreEventsDisallowed()) {
+    pass_through.emplace();
+  }
   AutoLock auto_lock(watch_state_lock_);
+  pass_through.reset();
   CHECK(base::FeatureList::GetInstance());
 
   // Do not install a WatchState if the results would never be observable.

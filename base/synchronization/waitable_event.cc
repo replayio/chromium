@@ -13,6 +13,7 @@
 #include "base/threading/thread_restrictions.h"
 #include "base/trace_event/trace_event.h"
 #include "base/tracing_buildflags.h"
+#include "build/build_config.h"
 
 namespace base {
 
@@ -36,9 +37,13 @@ WaitableEvent::~WaitableEvent() {
 }
 
 void WaitableEvent::Signal() {
+#if BUILDFLAG(IS_APPLE)
+  // Only the Mach port implementation has an ordered lock per event; the
+  // POSIX one goes by WaitableEventKernel::record_replay_unordered_.
   std::optional<recordreplay::AutoDisallowEvents> disallow;
   if (!record_replay_ordered_lock_id_)
     disallow.emplace("WaitableEvent::Signal");
+#endif
 
   // Must be ordered before SignalImpl() to guarantee it's emitted before the
   // matching TerminatingFlow in TimedWait().
@@ -59,9 +64,12 @@ bool WaitableEvent::TimedWait(TimeDelta wait_delta, const Location& location) {
     return IsSignaled();
   }
 
+#if BUILDFLAG(IS_APPLE)
+  // See Signal().
   std::optional<recordreplay::AutoDisallowEvents> disallow;
   if (!record_replay_ordered_lock_id_)
     disallow.emplace("WaitableEvent::TimedWait");
+#endif
 
   // Consider this thread blocked unless the event is already signaled. Ignore
   // this for non-blocking WaitableEvents.

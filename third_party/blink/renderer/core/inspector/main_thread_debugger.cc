@@ -343,6 +343,11 @@ void MainThreadDebugger::endEnsureAllContextsInGroup(int context_group_id) {
 
 bool MainThreadDebugger::canExecuteScripts(int context_group_id) {
   LocalFrame* frame = WeakIdentifierMap<LocalFrame>::Lookup(context_group_id);
+  // A replay's debugger asks about a context group at a pause, and the frame
+  // it's for can be gone: frames are held weakly here.
+  if (!frame || !frame->DomWindow()) {
+    return false;
+  }
   return frame->DomWindow()->CanExecuteScripts(kNotAboutToExecuteScript);
 }
 

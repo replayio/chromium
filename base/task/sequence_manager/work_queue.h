@@ -114,7 +114,7 @@ class BASE_EXPORT WorkQueue {
   void TakeImmediateIncomingQueueTasks();
 
   // Run any unordered queue tasks when recording/replaying.
-  void RecordReplayRunUnorderedTasks(TaskQueueImpl::TaskDeque* queue);
+  static void RecordReplayRunUnorderedTasks(TaskQueueImpl::TaskDeque* queue);
 
   size_t Size() const { return tasks_.size(); }
 

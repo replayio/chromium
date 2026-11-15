@@ -22,6 +22,7 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/pending_task.h"
 #include "base/process/current_process.h"
+#include "base/record_replay.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/synchronization/lock_metrics_recorder.h"
@@ -340,6 +341,13 @@ int RendererMain(MainFunctionParams parameters) {
       RenderThreadImpl::current()->set_run_loop_start_time(run_loop_start_time);
       LogTimeToStartRunLoop(command_line, run_loop_start_time);
       run_loop.Run();
+      // [RecordReplay] The recording is finished here if nothing finished it
+      // sooner. The channel to the browser closing ends this loop and, on the
+      // IO thread, asks for the recording to be finished, which is a task for
+      // this thread. If the loop ended first the task never ran: this thread
+      // went on to stop the IO thread, which was waiting for it, and the
+      // process sat there until it was killed, its recording unfinished.
+      recordreplay::FinishRecording();
     }
 
 #if defined(LEAK_SANITIZER)

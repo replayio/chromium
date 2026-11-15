@@ -13,6 +13,7 @@
 #include "base/functional/callback_helpers.h"
 #include "base/no_destructor.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "base/scoped_clear_last_error.h"
 #include "base/task/scoped_set_task_priority_for_current_thread.h"
 #include "base/task/thread_pool.h"
@@ -382,8 +383,14 @@ UncheckedScopedBlockingCall::UncheckedScopedBlockingCall(
   // threads. Cancels() any pending monitored call when a WILL_BLOCK or
   // ScopedBlockingCallWithBaseSyncPrimitives nests into a
   // ScopedBlockingCall(MAY_BLOCK).
+  // [RecordReplay] The main thread sets the global while other threads are
+  // already making blocking calls (an audio device thread reading its socket),
+  // so which of them see it set is recorded.
+  const bool only_monitor_observed_threads =
+      !!recordreplay::RecordReplayValueIfAllowed(
+          "g_only_monitor_observed_threads", g_only_monitor_observed_threads);
   if (!IsBackgroundPriorityWorker() &&
-      (!g_only_monitor_observed_threads || blocking_observer_)) {
+      (!only_monitor_observed_threads || blocking_observer_)) {
     const bool is_monitored_type =
         blocking_call_type == BlockingCallType::kRegular && !is_will_block_;
     if (is_monitored_type && !previous_scoped_blocking_call_) {

@@ -7,12 +7,14 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <optional>
 
 #include "base/check_op.h"
 #include "base/compiler_specific.h"
 #include "base/containers/span.h"
 #include "base/memory/raw_ptr_exclusion.h"
 #include "base/notreached.h"
+#include "base/record_replay.h"
 #include "base/sampling_heap_profiler/poisson_allocation_sampler.h"
 #include "base/synchronization/lock.h"
 #include "build/build_config.h"
@@ -324,6 +326,7 @@ base::span<TlsVectorEntry> ConstructTlsVector() {
 
 void OnThreadExitInternal(TlsVectorEntry* tls_data) {
   DCHECK(tls_data);
+  recordreplay::NoteThreadExiting();
   // Some allocators, such as TCMalloc, use TLS. As a result, when a thread
   // terminates, one of the destructor calls we make may be to shut down an
   // allocator. We have to be careful that after we've shutdown all of the known
@@ -489,7 +492,15 @@ void ThreadLocalStorage::Slot::Initialize(TLSDestructorFunc destructor) {
 
   // Grab a new slot.
   {
+    // [RecordReplay] Slots are handed out to whichever thread asks first, and
+    // which slot a thing got shows nowhere, so the lock that guards them is
+    // taken outside the recording.
+    std::optional<recordreplay::AutoPassThroughEvents> record_replay_pass;
+    if (recordreplay::IsRecordingOrReplaying()) {
+      record_replay_pass.emplace();
+    }
     base::AutoLock auto_lock(*GetTLSMetadataLock());
+    record_replay_pass.reset();
     for (size_t i = 0; i < kThreadLocalStorageSize; ++i) {
       // Tracking the last assigned slot is an attempt to find the next
       // available slot within one iteration. Under normal usage, slots remain

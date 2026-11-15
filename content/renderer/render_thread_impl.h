@@ -263,6 +263,11 @@ class CONTENT_EXPORT RenderThreadImpl
   scoped_refptr<gpu::SharedImageInterface>
   GetRenderThreadSharedImageInterface();
 
+  // [RecordReplay] What a repaint makes tiles with when the compositor never
+  // had a frame sink. See record_replay_render.h.
+  static scoped_refptr<gpu::SharedImageInterface>
+  RecordReplayRepaintSharedImageInterface();
+
   // Returns a worker context provider that will be bound on the compositor
   // thread.
   scoped_refptr<viz::RasterContextProvider>

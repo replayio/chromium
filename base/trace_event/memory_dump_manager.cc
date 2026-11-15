@@ -365,6 +365,14 @@ void MemoryDumpManager::ContinueAsyncProcessDump(
   // Don't generate process dumps when recording/replaying, to avoid mismatched
   // behavior issues when accessing memory dump state.
   if (recordreplay::IsRecordingOrReplaying("gc-changes", "MemoryDumpManager::ContinueAsyncProcessDump")) {
+    // Each provider is measured as it's taken off this list, and it's checked
+    // that it was. None is asked here, so take them all off as a dump would.
+    auto& skipped_providers = pmd_async_state->pending_dump_providers;
+    while (!skipped_providers.empty()) {
+      skipped_providers.back().set_num_following_providers(
+          skipped_providers.size() - 1);
+      skipped_providers.pop_back();
+    }
     FinishAsyncProcessDump(std::move(pmd_async_state));
     return;
   }

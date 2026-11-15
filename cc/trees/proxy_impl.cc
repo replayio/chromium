@@ -55,6 +55,7 @@
 #include "components/viz/common/gpu/raster_context_provider.h"
 #include "components/viz/service/display/record_replay_render.h"
 #include "gpu/command_buffer/client/raster_interface.h"
+#include "gpu/command_buffer/client/shared_image_interface.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
 
 #include "base/record_replay.h"
@@ -75,10 +76,14 @@ constexpr auto kSmoothnessTakesPriorityExpirationDelay =
 class RecordReplayRepaintFrameSink : public LayerTreeFrameSink,
                                      public viz::ExternalBeginFrameSourceClient {
  public:
-  explicit RecordReplayRepaintFrameSink(
-      scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner)
+  // Tiles are rastered into shared images, which are made through the
+  // interface a frame sink carries (Chromium 108 rastered software tiles into
+  // bitmaps of its own), so the repaint's sink is given one.
+  RecordReplayRepaintFrameSink(
+      scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner,
+      scoped_refptr<gpu::SharedImageInterface> shared_image_interface)
       : LayerTreeFrameSink(nullptr, nullptr, std::move(compositor_task_runner),
-                           nullptr) {}
+                           std::move(shared_image_interface)) {}
 
   bool BindToClient(LayerTreeFrameSinkClient* client) override {
     if (!LayerTreeFrameSink::BindToClient(client)) {
@@ -292,6 +297,13 @@ void ProxyImpl::InitializeLayerTreeFrameSinkOnImpl(
 
   ClientLayerTreeHostImpl* host_impl = host_impl_.get();
   bool success = host_impl->InitializeFrameSink(layer_tree_frame_sink);
+  // [RecordReplay] What this frame sink makes shared images with is kept for
+  // a repaint's own frame sink, which stands in once this one is lost.
+  if (success && recordreplay::IsRecordingOrReplaying() &&
+      layer_tree_frame_sink->shared_image_interface()) {
+    record_replay_shared_image_interface_ =
+        layer_tree_frame_sink->shared_image_interface();
+  }
   MainThreadTaskRunner()->PostTask(
       FROM_HERE, base::BindOnce(&ProxyMain::DidInitializeLayerTreeFrameSink,
                                 proxy_main_weak_ptr_, success));
@@ -983,6 +995,10 @@ void ProxyImpl::ScheduledActionCommit() {
   auto* commit_state = data_for_commit_->commit_state.get();
   auto* unsafe_state = data_for_commit_->unsafe_state.get();
 
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    recordreplay::OnCommitOnImpl();
+  }
+
   host_impl_->BeginCommit(commit_state->source_frame_number,
                           commit_state->trace_id);
   host_impl_->FinishCommit(*commit_state, *unsafe_state);
@@ -1015,6 +1031,9 @@ void ProxyImpl::ScheduledActionPostCommit() {
 }
 
 void ProxyImpl::ScheduledActionActivateSyncTree() {
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    recordreplay::OnActivateOnImpl();
+  }
   if (host_impl_->sync_tree() &&
       host_impl_->sync_tree()->source_frame_number() !=
           host_impl_->active_tree()->source_frame_number()) {
@@ -1226,21 +1245,56 @@ void ProxyImpl::NotifyNewLocalSurfaceIdExpectedWhilePaused() {
 // Sequence number used for frames triggered while repainting when replaying.
 static const uint64_t RepaintSequenceNumber = UINT32_MAX;
 
-void ProxyImpl::RecordReplayRepaintPending() {
+void ProxyImpl::RecordReplayRepaintPending(
+    scoped_refptr<gpu::SharedImageInterface> shared_image_interface) {
+  // A pause can come before the page's first frame sink was made, and a
+  // repaint then has the renderer's stand-in to make tiles with.
+  if (!record_replay_shared_image_interface_) {
+    record_replay_shared_image_interface_ = std::move(shared_image_interface);
+  }
+  // The compositor of a page that isn't visible has no frame sink and asks for
+  // none, so it's told the page is visible: it then asks for a frame sink,
+  // which the repaint's own stands in for below.
+  if (!host_impl_->visible()) {
+    SetVisibleOnImpl(true);
+  }
+  // What CanDraw() answers changes when a replay diverges from its recording
+  // (an evicted surface no longer counts), and nothing tells the scheduler so.
+  scheduler_->SetCanDraw(host_impl_->CanDraw());
   // A frame sink the main thread gave before the repaint was initialized
   // first, since its task was posted first. A frame sink lost while frames
   // keep the scheduler from asking for another isn't replaced, and the repaint
   // times out.
+  RecordReplayEnsureRepaintFrameSink();
+  if (scheduler_->RecordReplayCreatingFrameSink()) {
+    recordreplay::Print(
+        "[RuntimeError] Repaint has no frame sink to draw with.");
+  }
+  scheduler_->RecordReplayRepaintPending();
+}
+
+void ProxyImpl::RecordReplayEnsureRepaintFrameSink() {
+  // The repaint's sink carries the shared image interface the lost sink had,
+  // or the renderer's stand-in; with neither there is nothing to raster into.
   if (scheduler_->RecordReplayCreatingFrameSink() &&
-      !record_replay_frame_sink_) {
+      !record_replay_frame_sink_ && record_replay_shared_image_interface_) {
     auto frame_sink = std::make_unique<RecordReplayRepaintFrameSink>(
-        task_runner_provider_->ImplThreadTaskRunner());
+        task_runner_provider_->ImplThreadTaskRunner(),
+        record_replay_shared_image_interface_);
     if (host_impl_->InitializeFrameSink(frame_sink.get())) {
       record_replay_frame_sink_ = std::move(frame_sink);
       scheduler_->DidCreateAndInitializeLayerTreeFrameSink();
     }
   }
-  scheduler_->RecordReplayRepaintPending();
+}
+
+void ProxyImpl::RecordReplayDescribeRepaint() {
+  recordreplay::Print(
+      "[RuntimeError] Repaint scheduler state: %s own_sink=%d interface=%d "
+      "can_draw: %s",
+      scheduler_->RecordReplayDescribe().c_str(), !!record_replay_frame_sink_,
+      !!record_replay_shared_image_interface_,
+      host_impl_->RecordReplayDescribeCanDraw().c_str());
 }
 
 void ProxyImpl::RecordReplayRepaint() {
@@ -1269,6 +1323,13 @@ void ProxyImpl::RecordReplayRepaint() {
   // The page may not have changed since its last draw, and a frame without
   // damage isn't drawn at all.
   host_impl_->SetFullViewportDamage();
+  // The frame sink can go while the repaint's frame runs on the main thread
+  // (the page's own sink hears that its connection is gone), after the look
+  // RecordReplayRepaintPending() took: the scheduler asks for another, which
+  // only the repaint's own can be.
+  scheduler_->RecordReplayRepaintPending();
+  RecordReplayEnsureRepaintFrameSink();
+  scheduler_->RecordReplayWillRepaint();
   scheduler_->OnBeginFrameDerivedImpl(args);
 }
 

@@ -19,6 +19,7 @@
 #include "base/memory/ref_counted.h"
 #include "base/observer_list.h"
 #include "base/rand_util.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/types/pass_key.h"
@@ -269,7 +270,14 @@ class GPU_IPC_CLIENT_EXPORT GpuChannelHost
       : public base::RefCountedThreadSafe<ConnectionTracker> {
     ConnectionTracker();
 
-    bool is_connected() const { return is_connected_.load(); }
+    // [RecordReplay] The IO thread clears this when the GPU process goes, and
+    // any thread reads it. What a thread read is recorded where it can be: a
+    // main thread asking for a channel just as the old one was lost would take
+    // the other branch on a replay.
+    bool is_connected() const {
+      return recordreplay::RecordReplayValueIfAllowed(
+          "GpuChannelHost is_connected", is_connected_.load());
+    }
 
     void OnDisconnectedFromGpuProcess();
 

@@ -438,6 +438,14 @@ void SoftwareRenderer::DoDrawQuad(const DrawQuad* quad,
       DrawTileQuad(TileDrawQuad::MaterialCast(quad));
       break;
     case DrawQuad::Material::kSurfaceContent:
+      // [RecordReplay] A frame drawn in the process being recorded comes
+      // straight from its compositor, with no aggregation, so another frame
+      // sink's surface (a canvas a worker draws to, a child frame) is still a
+      // quad here. There's nothing of it to draw. In Chromium 108 this
+      // NOTREACHED did nothing in a release build; here it ends the process.
+      if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+        break;
+      }
       // Surface content should be fully resolved to other quad types before
       // reaching a direct renderer.
       NOTREACHED();
@@ -542,8 +550,12 @@ void SoftwareRenderer::DrawTextureQuad(const TextureDrawQuad* quad) {
   SkRect sk_uv_rect = gfx::RectFToSkRect(visible_uv_rect);
   SkRect quad_rect = gfx::RectToSkRect(quad->visible_rect);
 
-  const bool y_flipped = resource_provider()->GetOrigin(quad->resource_id) ==
-                         kBottomLeft_GrSurfaceOrigin;
+  // [RecordReplay] A recorded process draws its frames with no resource
+  // provider.
+  const bool y_flipped =
+      resource_provider() &&
+      resource_provider()->GetOrigin(quad->resource_id) ==
+          kBottomLeft_GrSurfaceOrigin;
   if (y_flipped) {
     current_canvas_->translate(0, quad->rect.height());
     current_canvas_->scale(1, -1);

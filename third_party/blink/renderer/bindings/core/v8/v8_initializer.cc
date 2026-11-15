@@ -34,6 +34,7 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "base/system/sys_info.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -89,6 +90,7 @@
 #include "third_party/blink/renderer/platform/bindings/active_script_wrappable_manager.h"
 #include "third_party/blink/renderer/platform/bindings/dom_wrapper_world.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/bindings/source_location.h"
 #include "third_party/blink/renderer/platform/bindings/v8_dom_wrapper.h"
 #include "third_party/blink/renderer/platform/bindings/v8_per_context_data.h"
@@ -414,6 +416,18 @@ void V8Initializer::ExceptionPropagationCallback(
   }
 
   v8::Local<v8::Object> exception = v8_message.GetException();
+
+  // See RecordReplayThrowIfEventsUnavailable.
+  if (recordreplay::IsRecordingOrReplaying() &&
+      exception
+          ->HasPrivate(isolate->GetCurrentContext(),
+                       v8::Private::ForApi(
+                           isolate,
+                           v8::String::NewFromUtf8Literal(
+                               isolate, kRecordReplayPlainMessageMark)))
+          .FromMaybe(false)) {
+    return;
+  }
 
   v8::ExceptionContext context_type = v8_message.GetExceptionContext();
   String class_name = ToCoreString(isolate, v8_message.GetInterfaceName());

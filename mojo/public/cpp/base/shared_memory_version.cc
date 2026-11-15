@@ -11,6 +11,7 @@
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/structured_shared_memory.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/record_replay.h"
 
 namespace mojo {
 
@@ -132,9 +133,13 @@ bool SharedMemoryVersionClient::CommittedWritesIsLessThan(
   }
   // Relaxed memory order because no other memory operation depends on the
   // version.
-  const auto current_count =
-      read_only_mapping_->ReadOnlyPtr()->committed_writes_count.load(
-          std::memory_order_relaxed);
+  //
+  // [RecordReplay] Another process writes this, so what's read is recorded.
+  const auto current_count = static_cast<CountType>(
+      recordreplay::RecordReplayValueIfAllowed(
+          "SharedMemoryVersionClient.committed_writes_count",
+          read_only_mapping_->ReadOnlyPtr()->committed_writes_count.load(
+              std::memory_order_relaxed)));
   return current_count < count;
 }
 
@@ -144,8 +149,12 @@ VersionType SharedMemoryVersionClient::GetSharedVersion() const {
   }
   // Relaxed memory order because no other memory operation depends on the
   // version.
-  return read_only_mapping_->ReadOnlyRef().version.load(
-      std::memory_order_relaxed);
+  //
+  // [RecordReplay] Another process writes this, so what's read is recorded.
+  return static_cast<VersionType>(recordreplay::RecordReplayValueIfAllowed(
+      "SharedMemoryVersionClient.version",
+      read_only_mapping_->ReadOnlyRef().version.load(
+          std::memory_order_relaxed)));
 }
 
 }  // namespace mojo
