@@ -7,6 +7,9 @@ import("//mojo/public/tools/bindings/mojom.gni")
 mojom("mojom") {
   sources = [ "auth_token.mojom" ]
 
+  # The blink variant is opt-in; blink's LocalFrameMojoHandler uses it.
+  generate_blink = true
+
 #  public_deps = [ "//sandbox/policy/mojom" ]
 
   # The blink variant of the Auth Token Service mojom are depended on by the
