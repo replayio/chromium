@@ -49,7 +49,6 @@ def generate_buildkite_pipeline(backend_commit_hash):
     driver_revision = backend_commit_hash.split()[0][:12]
     pipeline = {
         "steps": [
-            driver_step(backend_commit_hash, driver_revision),
             {
                 "trigger": "chromium-build",
                 "build": {
@@ -61,7 +60,6 @@ def generate_buildkite_pipeline(backend_commit_hash):
                     "branch": "${BUILDKITE_BRANCH}",
                     "commit": "${BUILDKITE_COMMIT}",
                 },
-                "depends_on": ["build-driver-linker"],
             },
         ]
     }
