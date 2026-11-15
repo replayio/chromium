@@ -46,10 +46,8 @@ steps:
     env:
       REPLAY_JOB_TIMEOUT_MINUTES: *timeout
     agents:
-      - "build-runtime=true"
-      - "runtimeType=chromiumbuild"
-      - "os=linux"
       - "queue=runtime"
+      - "runtimeType=chromiumbuild"
     # Artifacts are uploaded by job.sh itself, from the checkout's job directory.
     command: |
       set -euo pipefail

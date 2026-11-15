@@ -238,7 +238,7 @@ class StubWebMediaPlayer : public WebMediaPlayer,
   ReadyState GetReadyState() const override { return ready_state_; }
 
   WebString GetErrorMessage() const override {
-    return error_ ? WebString::FromUTF8(media::PipelineStatusToString(*error_))
+    return error_ ? WebString::FromUtf8(media::PipelineStatusToString(*error_))
                   : WebString();
   }
 
