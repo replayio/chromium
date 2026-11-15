@@ -357,8 +357,7 @@ const SimpleFontData* FontCache::PlatformFallbackFontForCharacter(
     }
   }
 
-  if (recordreplay::AreEventsDisallowed("PlatformFallbackFontForCharacter") ||
-      recordreplay::HasDivergedFromRecording()) {
+  if (recordreplay::AreEventsUnavailable("PlatformFallbackFontForCharacter")) {
     // [RUN-2765] Circumvent a rabbit hole of MAC-related font calls.
     return nullptr;
   }

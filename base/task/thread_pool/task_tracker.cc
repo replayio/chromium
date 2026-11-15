@@ -294,6 +294,19 @@ bool TaskTracker::WillPostTask(Task* task,
   DCHECK(task->task);
 
   task->sequence_num = sequence_nums_.GetNext();
+
+  // DelayedTaskManager and Sequence break ties between equal delayed run times
+  // (common for WebRTC task queues, which snap to metronome ticks) with
+  // |sequence_num|, so the replay needs the numbers the recording handed out
+  // across threads. Immediate tasks are never compared by it.
+  if (!task->delayed_run_time.is_null() &&
+      recordreplay::IsRecordingOrReplaying("values",
+                                           "ThreadPoolTaskSequenceNum")) {
+    task->sequence_num = static_cast<int>(recordreplay::RecordReplayValue(
+        "ThreadPoolTaskSequenceNum",
+        static_cast<uintptr_t>(task->sequence_num)));
+  }
+
   if (state_->HasShutdownStarted()) {
     // A non BLOCK_SHUTDOWN task is allowed to be posted iff shutdown hasn't
     // started and the task is not delayed.

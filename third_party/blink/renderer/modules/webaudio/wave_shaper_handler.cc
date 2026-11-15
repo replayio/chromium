@@ -10,6 +10,7 @@
 
 #include "base/containers/span.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "build/build_config.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_typed_array.h"
@@ -441,6 +442,8 @@ double WaveShaperHandler::LatencyTime() const {
 
 void WaveShaperHandler::PullInputs(uint32_t frames_to_process) {
   // Render directly into output bus for in-place processing
+  REPLAY_ASSERT("WaveShaperHandler::PullInputs %d %d",
+                recordreplay::PointerId(this), (int)GetNodeType());
   Input(0).Pull(Output(0).Bus(), frames_to_process);
 }
 

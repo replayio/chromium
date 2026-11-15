@@ -61,7 +61,7 @@ class IIRFilterHandler final : public AudioHandler {
 
   // Since `Process()` is called on a different thread than `Initialize()` and
   // `Uninitialize()`, guard access to the processing kernels with a lock.
-  mutable base::Lock process_lock_;
+  mutable base::Lock process_lock_{"IIRFilterHandler"};
   Vector<std::unique_ptr<IIRFilter>> kernels_ GUARDED_BY(process_lock_);
 
   // The feedback and feedforward filter coefficients for the IIR filter.

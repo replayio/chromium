@@ -305,6 +305,7 @@
 #include "third_party/blink/renderer/platform/bindings/dom_data_store.h"
 #include "third_party/blink/renderer/platform/bindings/dom_wrapper_world.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/v8_dom_activity_logger.h"
 #include "third_party/blink/renderer/platform/bindings/v8_dom_wrapper.h"
@@ -2296,6 +2297,8 @@ bool Element::HasAttributeIgnoringNamespace(
 }
 
 void Element::SynchronizeAllAttributes() const {
+  recordreplay::Assert("[RUN-2424-3238] Element::SynchronizeAllAttributes %d",
+                        HasElementData());
   if (!HasElementData()) {
     return;
   }
@@ -2381,6 +2384,10 @@ ScriptPromise<ScrollResult> Element::scrollIntoView(
 
 void Element::scrollIntoViewWithOptions(const ScrollIntoViewOptions* options,
                                         ScrollPromiseResolver* resolver) {
+  if (RecordReplayThrowIfEventsUnavailable("Element.scrollIntoView")) {
+    return;
+  }
+
   ActivateDisplayLockIfNeeded(DisplayLockActivationReason::kScrollIntoView);
   GetDocument().UpdateStyleAndLayoutForNode(this,
                                             DocumentUpdateReason::kJavaScript);
@@ -2454,6 +2461,14 @@ void Element::ScrollIntoViewNoVisualUpdate(
     GetDocument().SetSequentialFocusNavigationStartingPoint(
         originating_element);
   }
+}
+
+void Element::RecordReplayScrollIntoViewIfNeededForBinding(
+    bool center_if_needed) {
+  if (RecordReplayThrowIfEventsUnavailable("Element.scrollIntoViewIfNeeded")) {
+    return;
+  }
+  scrollIntoViewIfNeeded(center_if_needed);
 }
 
 void Element::scrollIntoViewIfNeeded(bool center_if_needed) {
@@ -2836,6 +2851,10 @@ double Element::scrollTop() {
 }
 
 void Element::setScrollLeft(double new_left) {
+  if (RecordReplayThrowIfEventsUnavailable("Element.scrollLeft")) {
+    return;
+  }
+
   if (!InActiveDocument()) {
     return;
   }
@@ -2893,6 +2912,10 @@ void Element::setScrollLeft(double new_left) {
 }
 
 void Element::setScrollTop(double new_top) {
+  if (RecordReplayThrowIfEventsUnavailable("Element.scrollTop")) {
+    return;
+  }
+
   if (!InActiveDocument()) {
     return;
   }
@@ -3010,6 +3033,10 @@ ScriptPromise<ScrollResult> Element::scrollBy(ScriptState* script_state,
 ScriptPromise<ScrollResult> Element::scrollBy(
     ScriptState* script_state,
     const ScrollToOptions* scroll_to_options) {
+  if (RecordReplayThrowIfEventsUnavailable("Element.scrollBy")) {
+    return EmptyPromise();
+  }
+
   ScrollPromiseResolver* resolver =
       MakeGarbageCollected<ScrollPromiseResolver>(script_state);
 
@@ -3047,6 +3074,10 @@ ScriptPromise<ScrollResult> Element::scrollTo(ScriptState* script_state,
 ScriptPromise<ScrollResult> Element::scrollTo(
     ScriptState* script_state,
     const ScrollToOptions* scroll_to_options) {
+  if (RecordReplayThrowIfEventsUnavailable("Element.scrollTo")) {
+    return EmptyPromise();
+  }
+
   ScrollPromiseResolver* resolver =
       MakeGarbageCollected<ScrollPromiseResolver>(script_state);
   ScrollTo(scroll_to_options, resolver);
@@ -5256,6 +5287,8 @@ const ComputedStyle* Element::StyleForLayoutObject(
 
   new_style_recalc_context.old_style = PostStyleUpdateScope::GetOldStyle(*this);
   bool has_custom_style_callbacks = HasCustomStyleCallbacks();
+  recordreplay::Assert("[RUN-2424-3227] Element::StyleForLayoutObject %d",
+    has_custom_style_callbacks);
   const ComputedStyle* style =
       has_custom_style_callbacks
           ? CustomStyleForLayoutObject(new_style_recalc_context)

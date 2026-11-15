@@ -56,7 +56,7 @@ class CORE_EXPORT CachedMatchedProperties final
   };
   Vector<Key> matched_properties;
   // Strong references to CSSPropertyValueSet to avoid weak pointer
-  // nondeterminism during record/replay (see "avoid-weak-pointers").
+  // nondeterminism during record/replay (see "leak-references").
   HeapVector<Member<CSSPropertyValueSet>> replay_matched_properties_strong_;
 
   struct Entry {

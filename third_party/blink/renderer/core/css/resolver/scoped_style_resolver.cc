@@ -28,6 +28,7 @@
 
 #include "third_party/blink/renderer/core/css/resolver/scoped_style_resolver.h"
 
+#include "base/record_replay.h"
 #include <ranges>
 
 #include "third_party/blink/renderer/core/animation/document_timeline.h"
@@ -291,6 +292,8 @@ void ScopedStyleResolver::ForAllStylesheets(ElementRuleCollector& collector,
   }
 #endif
 
+  recordreplay::Assert("[RUN-2424-3233] ForAllStylesheets size %d",
+                        (int)rule_set_groups_.size());
   for (RuleSetGroup& rule_set_group : rule_set_groups_) {
     func(MatchRequest(rule_set_group, &scope_root, collector));
   }

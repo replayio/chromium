@@ -37,6 +37,7 @@
 #include "base/check.h"
 #include "base/notreached.h"
 #include "base/task/single_thread_task_runner.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_blob_property_bag.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_readable_writable_pair.h"
@@ -54,10 +55,12 @@
 #include "third_party/blink/renderer/core/typed_arrays/dom_array_buffer.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_array_buffer_view.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/self_keep_alive.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
+#include "third_party/blink/renderer/platform/wtf/text/strcat.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_encoding.h"
 
 namespace blink {
@@ -72,6 +75,20 @@ bool IsValidBlobType(const String& type) {
       return false;
     }
   }
+  return true;
+}
+
+// Rejects `resolver` if the blob can't be read because events are
+// unavailable, and returns whether it did.
+bool RecordReplayRejectBlobRead(ScriptPromiseResolverBase* resolver,
+                                const char* operation_name) {
+  if (!recordreplay::AreEventsUnavailable("divergent-side-effect")) {
+    return false;
+  }
+  resolver->RejectWithDOMException(
+      DOMExceptionCode::kNotReadableError,
+      StrCat({"Cannot replay operation ", operation_name,
+              " because it was not recorded."}));
   return true;
 }
 
@@ -145,9 +162,22 @@ Blob::Blob(scoped_refptr<BlobDataHandle> data_handle)
 Blob::~Blob() = default;
 
 // static
+Blob* Blob::Create(ExecutionContext*, ExceptionState& exception_state) {
+  if (RecordReplayThrowIfEventsUnavailable("Blob.constructor",
+                                           &exception_state))
+    return nullptr;
+  return MakeGarbageCollected<Blob>(BlobDataHandle::Create());
+}
+
+// static
 Blob* Blob::Create(ExecutionContext* context,
                    const HeapVector<Member<V8BlobPart>>& blob_parts,
-                   const BlobPropertyBag* options) {
+                   const BlobPropertyBag* options,
+                   ExceptionState& exception_state) {
+  if (RecordReplayThrowIfEventsUnavailable("Blob.constructor",
+                                           &exception_state))
+    return nullptr;
+
   DCHECK(options->hasType());
   DCHECK(options->hasEndings());
   const bool normalize_line_endings_to_native =
@@ -288,6 +318,9 @@ ScriptPromise<IDLUSVString> Blob::text(ScriptState* script_state) {
   auto* resolver =
       MakeGarbageCollected<ScriptPromiseResolver<IDLUSVString>>(script_state);
   auto promise = resolver->Promise();
+  if (RecordReplayRejectBlobRead(resolver, "Blob.text")) {
+    return promise;
+  }
   MakeGarbageCollected<BlobFileReaderClient>(
       blob_data_handle_,
       ExecutionContext::From(script_state)
@@ -300,6 +333,9 @@ ScriptPromise<DOMArrayBuffer> Blob::arrayBuffer(ScriptState* script_state) {
   auto* resolver =
       MakeGarbageCollected<ScriptPromiseResolver<DOMArrayBuffer>>(script_state);
   auto promise = resolver->Promise();
+  if (RecordReplayRejectBlobRead(resolver, "Blob.arrayBuffer")) {
+    return promise;
+  }
   MakeGarbageCollected<BlobFileReaderClient>(
       blob_data_handle_,
       ExecutionContext::From(script_state)
@@ -313,6 +349,9 @@ ScriptPromise<NotShared<DOMUint8Array>> Blob::bytes(ScriptState* script_state) {
       MakeGarbageCollected<ScriptPromiseResolver<NotShared<DOMUint8Array>>>(
           script_state);
   auto promise = resolver->Promise();
+  if (RecordReplayRejectBlobRead(resolver, "Blob.bytes")) {
+    return promise;
+  }
   MakeGarbageCollected<BlobFileReaderClient>(
       blob_data_handle_,
       ExecutionContext::From(script_state)

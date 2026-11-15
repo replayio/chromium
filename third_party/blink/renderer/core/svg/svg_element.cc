@@ -441,7 +441,7 @@ void SVGElement::AddInstance(SVGElement* instance) {
   DCHECK(!instances.Contains(instance));
 
   instances.insert(instance);
-  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+  if (recordreplay::IsRecordingOrReplaying("leak-references",
                                            "SVGElement"))
     EnsureSVGRareData()->ReplayStrongElementInstances().insert(instance);
 }
@@ -456,7 +456,7 @@ void SVGElement::RemoveInstance(SVGElement* instance) {
 
   instances.erase(instance);
 
-  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "SVGElement"))
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "SVGElement"))
     EnsureSVGRareData()->ReplayStrongElementInstances().erase(instance);
 }
 
@@ -994,7 +994,7 @@ void SVGElement::InvalidateInstances() {
 
   SvgRareData()->ElementInstances().clear();
 
-  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "SVGElement"))
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "SVGElement"))
     EnsureSVGRareData()->ReplayStrongElementInstances().clear();
 }
 

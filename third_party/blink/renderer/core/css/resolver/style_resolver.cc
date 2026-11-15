@@ -926,6 +926,10 @@ void MatchHostPartRules(const Element& element,
 void MatchStyleAttribute(const Element& element,
                          ElementRuleCollector& collector,
                          StyleRuleUsageTracker* tracker) {
+  recordreplay::Assert(
+      "[RUN-2424-3231] MatchElementScopeRules inline style %d",
+      element.IsStyledElement() && element.InlineStyle() &&
+          collector.GetPseudoId() == kPseudoIdNone);
   if (element.IsStyledElement() && element.InlineStyle() &&
       collector.GetPseudoId() == kPseudoIdNone) {
     collector.AddElementStyleProperties(
@@ -943,6 +947,8 @@ void MatchElementScopeRules(const Element& element,
   UAShadowPseudoResult spr = UAShadowPseudoCascading(element);
 
   collector.BeginAddingAuthorRulesForTreeScope(element.GetTreeScope());
+  recordreplay::Assert("[RUN-2424-3230] MatchElementScopeRules %d",
+                        !!element_scope_resolver);
   if (element_scope_resolver) {
     ElementRuleCollector::ScopedRuleTreeScope scope(
         collector, element_scope_resolver->GetTreeScope());
@@ -1967,6 +1973,9 @@ void StyleResolver::ApplyBaseStyleNoCache(
     }
   }
 
+  recordreplay::Assert(
+      "[RUN-2424-3229] StyleResolver::ApplyBaseStyleNoCache %d",
+      style_request.rules_to_include == StyleRequest::kUAOnly);
   if (style_request.rules_to_include == StyleRequest::kUAOnly) {
     MatchUARules(*element, collector);
   } else {
@@ -2117,6 +2126,8 @@ void StyleResolver::ApplyBaseStyle(
     StyleCascade& cascade) {
   DCHECK(style_request.pseudo_id != kPseudoIdFirstLineInherited);
 
+  recordreplay::Assert("[RUN-2424-3005] StyleResolver::ApplyBaseStyle %d",
+                        state.CanTriggerAnimations() && CanReuseBaseComputedStyle(state));
   if (state.CanTriggerAnimations() && CanReuseBaseComputedStyle(state)) {
     const ComputedStyle* animation_base_computed_style =
         CachedAnimationBaseComputedStyle(state);
@@ -2153,6 +2164,10 @@ void StyleResolver::ApplyBaseStyle(
     return;
   }
 
+  recordreplay::Assert(
+      "[RUN-2424-3228] StyleResolver::ApplyBaseStyle incremental %d",
+      style_recalc_context.can_use_incremental_style &&
+          CanApplyStyleIncrementally(element, state, style_request));
   if (style_recalc_context.can_use_incremental_style &&
       CanApplyStyleIncrementally(element, state, style_request)) {
     // Reuse the previous style and apply the whole inline style, not just the

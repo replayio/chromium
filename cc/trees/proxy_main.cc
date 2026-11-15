@@ -383,7 +383,12 @@ void ProxyMain::BeginMainFrameWithBlocking(
 
   // See LayerTreeHostDelegate::BeginMainFrame for more documentation on
   // what this does.
-  layer_tree_host_->BeginMainFrame(frame_args);
+  //
+  // [RecordReplay] A repaint (force_blocking) draws the page as it is at the
+  // pause, so it doesn't run animation frame callbacks or rAF-aligned input,
+  // which would change the page before it's drawn.
+  if (!force_blocking)
+    layer_tree_host_->BeginMainFrame(frame_args);
 
   // Updates cc animations on the main-thread. This is necessary in order
   // to track animation states such that they are cleaned up properly.
@@ -494,6 +499,13 @@ void ProxyMain::BeginMainFrameWithBlocking(
   if (updated || recordreplay::IsRecordingOrReplaying("notify-paints")) {
     final_pipeline_stage_ = COMMIT_PIPELINE_STAGE;
   }
+
+  // [RecordReplay] The paint's bookmark comes before WillCommit: a repaint
+  // while paused at it runs a nested main frame, whose commit would otherwise
+  // wait for this frame's commit, which isn't posted until after the bookmark.
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    recordreplay::OnCommitPaint();
+  }
   bool has_updates = (final_pipeline_stage_ == COMMIT_PIPELINE_STAGE);
 
   // At this point, the contents of the commit are locked (minus intentional
@@ -585,10 +597,6 @@ void ProxyMain::BeginMainFrameWithBlocking(
     std::optional<DebugScopedSetMainThreadBlocked> main_thread_blocked;
     if (blocking)
       main_thread_blocked.emplace(task_runner_provider_);
-
-    if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
-      recordreplay::OnCommitPaint();
-    }
 
     ImplThreadTaskRunner()->PostTask(
         FROM_HERE, base::BindOnce(&ProxyImpl::NotifyReadyToCommitOnImpl,
@@ -1243,10 +1251,24 @@ void ProxyMain::NotifyNewLocalSurfaceIdExpectedWhilePaused() {
                      base::Unretained(proxy_impl_.get())));
 }
 
+void ProxyMain::RecordReplayRepaintPending() {
+  if (!proxy_impl_)
+    return;
+  ImplThreadTaskRunner()->PostTask(
+      FROM_HERE, base::BindOnce(&ProxyImpl::RecordReplayRepaintPending,
+                                base::Unretained(proxy_impl_.get())));
+}
+
 void ProxyMain::RecordReplayRepaint() {
+  if (!proxy_impl_)
+    return;
   ImplThreadTaskRunner()->PostTask(
       FROM_HERE, base::BindOnce(&ProxyImpl::RecordReplayRepaint,
                                 base::Unretained(proxy_impl_.get())));
+}
+
+const viz::LocalSurfaceId& ProxyMain::RecordReplayLocalSurfaceId() const {
+  return layer_tree_host_->local_surface_id_from_parent();
 }
 
 }  // namespace cc

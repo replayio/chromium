@@ -195,6 +195,7 @@ class PLATFORM_EXPORT FrameSchedulerImpl : public FrameScheduler,
   std::unique_ptr<WebSchedulingTaskQueue> CreateWebSchedulingTaskQueue(
       WebSchedulingQueueType,
       WebSchedulingPriority) override;
+  void SetReplaySchedulingOwnerRelease(base::OnceClosure) override;
   void OnWebSchedulingTaskQueuePriorityChanged(MainThreadTaskQueue*);
   void OnWebSchedulingTaskQueueDestroyed(MainThreadTaskQueue*);
 
@@ -398,6 +399,8 @@ class PLATFORM_EXPORT FrameSchedulerImpl : public FrameScheduler,
   // The number of times WebRTC instances throttle back to the default thread
   // type.
   size_t thread_type_throttled_to_default_count_ = 0;
+
+  base::OnceClosure replay_scheduling_owner_release_;
 
   // TODO(altimin): Remove after we have have 1:1 relationship between frames
   // and documents.

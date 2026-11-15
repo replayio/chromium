@@ -44,8 +44,8 @@ PendingTask::PendingTask(const Location& posted_from,
                    leeway,
                    delay_policy),
       task(std::move(task)) {
-  if (!recordreplay::AreEventsDisallowed() && !recordreplay::AreEventsPassedThrough()) {
-    // We use these for Asserts.
+  if (!recordreplay::AreEventsUnavailable() &&
+      !recordreplay::AreEventsPassedThrough()) {
     record_replay_id = recordreplay::NewIdAnyThread("PendingTask");
   }
 }

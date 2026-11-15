@@ -14,6 +14,7 @@
 #include "third_party/blink/renderer/core/dom/abort_signal.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/frame/web_feature.h"
+#include "third_party/blink/renderer/core/record_replay/deterministic_retainer.h"
 #include "third_party/blink/renderer/core/scheduler/dom_task.h"
 #include "third_party/blink/renderer/core/scheduler/dom_task_continuation.h"
 #include "third_party/blink/renderer/core/scheduler/dom_task_signal.h"
@@ -30,6 +31,7 @@
 #include "third_party/blink/renderer/platform/scheduler/public/web_scheduling_priority.h"
 #include "third_party/blink/renderer/platform/scheduler/public/web_scheduling_queue_type.h"
 #include "third_party/blink/renderer/platform/scheduler/public/web_scheduling_task_queue.h"
+#include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
 
 namespace blink {
@@ -59,6 +61,15 @@ V8TaskPriority::Enum V8TaskEnumFromWebSchedulingPriority(
   }
   NOTREACHED();
 }
+
+// KeepAlive OwnerGraph: Retain DOMScheduler (Oilpan root) until
+// ~FrameSchedulerImpl after Detach-ordered StreamTouch + CleanUpQueue.
+// ContextDestroyed is too early (before frame_scheduler_.reset()).
+recordreplay::DeterministicRetainer<DOMScheduler>& DomSchedulerRetainer() {
+  DEFINE_STATIC_LOCAL(recordreplay::DeterministicRetainer<DOMScheduler>,
+                      retainer, ("DOMScheduler"));
+  return retainer;
+}
 }  // namespace
 
 const char DOMScheduler::kSupplementName[] = "DOMScheduler";
@@ -83,14 +94,24 @@ DOMScheduler::DOMScheduler(ExecutionContext* context)
   CHECK(context->GetScheduler());
   CreateFixedPriorityTaskQueues(context, WebSchedulingQueueType::kTaskQueue,
                                 fixed_priority_task_queues_);
+  DomSchedulerRetainer().Retain(this);
+  // A weak reference: the retainer keeps the scheduler alive until the release
+  // runs while recording/replaying, and has nothing to release otherwise.
+  context->GetScheduler()->SetReplaySchedulingOwnerRelease(BindOnce(
+      [](DOMScheduler* self) { DomSchedulerRetainer().Release(self); },
+      WrapWeakPersistent(this)));
 }
 
 void DOMScheduler::ContextDestroyed() {
   REPLAY_ASSERT("[TT-1465] DOMScheduler::ContextDestroyed %u %u",
     fixed_priority_task_queues_.size(),
     signal_to_task_queue_map_.size());
-  fixed_priority_task_queues_.clear();
-  signal_to_task_queue_map_.clear();
+
+  // Keep queues alive until DOMScheduler itself is GC-collected.
+  if (!recordreplay::EnterLeakMemory("DOMScheduler")) {
+    fixed_priority_task_queues_.clear();
+    signal_to_task_queue_map_.clear();
+  }
 }
 
 void DOMScheduler::Trace(Visitor* visitor) const {
@@ -290,6 +311,9 @@ DOMScheduler::DOMTaskQueue* DOMScheduler::CreateDynamicPriorityTaskQueue(
   CHECK(task_queue);
   auto* dom_task_queue =
       MakeGarbageCollected<DOMTaskQueue>(std::move(task_queue), priority);
+  if (recordreplay::EnterLeakMemory("DOMScheduler")) {
+    replay_strong_signal_.insert(signal);
+  }
   auto* handle = signal->AddPriorityChangeAlgorithm(BindRepeating(
       &DOMScheduler::OnPriorityChange, WrapWeakPersistent(this),
       WrapWeakPersistent(signal), WrapWeakPersistent(dom_task_queue)));

@@ -11,7 +11,9 @@
 #include <tuple>
 
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_automation_rate.h"
 #include "third_party/blink/renderer/core/typed_arrays/array_buffer_view_helpers.h"
@@ -173,7 +175,12 @@ class MODULES_EXPORT AudioParamHandler final
   void CalculateSampleAccurateValues(base::span<float> values);
 
   float IntrinsicValue() const {
-    return intrinsic_value_.load(std::memory_order_relaxed);
+    float value = intrinsic_value_.load(std::memory_order_relaxed);
+    // The main thread sets the value while the render thread computes it from
+    // the timeline, so reads are recorded.
+    recordreplay::RecordReplayBytes("AudioParamHandler::IntrinsicValue",
+                                    &value, sizeof(value));
+    return value;
   }
 
   base::Lock& RateLock() const { return rate_lock_; }
@@ -600,6 +607,14 @@ class MODULES_EXPORT AudioParamHandler final
   HashSet<ParamEvent*> new_events_ GUARDED_BY(events_lock_);
 
   mutable base::Lock events_lock_;
+
+  // Set while recording or replaying: orders the timeline's accesses through
+  // the handler's render-wide lock (see
+  // DeferredTaskHandler::RecordReplayRenderTimelinesLocker).
+  raw_ptr<DeferredTaskHandler> record_replay_handler_ = nullptr;
+
+  // Whether the audio thread may read the timeline in this render.
+  bool RecordReplayMayRead() const;
 
   // The destination node used to get necessary information like the sample
   // rate and context time.

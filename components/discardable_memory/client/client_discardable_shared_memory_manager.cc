@@ -18,6 +18,8 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/process/memory.h"
+#include "base/record_replay.h"
+#include "base/record_replay_atomic_sequence_num.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/system/sys_info.h"
@@ -29,7 +31,11 @@
 #include "build/build_config.h"
 #include "components/crash/core/common/crash_key.h"
 
-#include "base/record_replay_atomic_sequence_num.h"
+#if BUILDFLAG(IS_POSIX)
+#include "base/containers/heap_array.h"
+#include "base/trace_event/memory_allocator_dump.h"
+#include "base/trace_event/process_memory_dump.h"
+#endif
 
 namespace discardable_memory {
 namespace {
@@ -98,6 +104,41 @@ constexpr base::MemoryConsumerTraits kMemoryConsumerTraits(
     base::MemoryConsumerTraits::SupportsMemoryLimit::kNo,
     // Stateless consumer. Performs one-shot eviction of current free segments.
     base::MemoryConsumerTraits::IsStateful::kNo);
+
+#if BUILDFLAG(IS_POSIX)
+// Discardable memory that lives in this process and is never discarded.
+class RecordReplayLocalDiscardableMemory : public base::DiscardableMemory {
+ public:
+  explicit RecordReplayLocalDiscardableMemory(size_t size)
+      : data_(base::HeapArray<uint8_t>::WithSize(size)) {}
+
+  // base::DiscardableMemory:
+  bool Lock() override { return true; }
+  void Unlock() override {}
+  void* data() const override { return const_cast<uint8_t*>(data_.data()); }
+  void DiscardForTesting() override {}
+  base::trace_event::MemoryAllocatorDump* CreateMemoryAllocatorDump(
+      const char* name,
+      base::trace_event::ProcessMemoryDump* pmd) const override {
+    base::trace_event::MemoryAllocatorDump* dump =
+        pmd->CreateAllocatorDump(name);
+    dump->AddScalar(base::trace_event::MemoryAllocatorDump::kNameSize,
+                    base::trace_event::MemoryAllocatorDump::kUnitsBytes,
+                    data_.size());
+    return dump;
+  }
+
+ private:
+  base::HeapArray<uint8_t> data_;
+};
+
+// The browser's segments aren't available once the replay diverges, so memory
+// is allocated in this process instead.
+std::unique_ptr<base::DiscardableMemory>
+RecordReplayAllocateLocalDiscardableMemory(size_t size) {
+  return std::make_unique<RecordReplayLocalDiscardableMemory>(size);
+}
+#endif
 
 }  // namespace
 
@@ -292,6 +333,13 @@ void ClientDiscardableSharedMemoryManager::OnReleaseMemory() {
 std::unique_ptr<base::DiscardableMemory>
 ClientDiscardableSharedMemoryManager::AllocateLockedDiscardableMemory(
     size_t size) {
+  // When events unavailable, local alloc before lock_ (avoid waiting on Mojo holders).
+#if BUILDFLAG(IS_POSIX)
+  if (recordreplay::AreEventsUnavailable()) {
+    return RecordReplayAllocateLocalDiscardableMemory(size);
+  }
+#endif
+
   base::AutoLock lock(lock_);
 
   if (!is_purge_scheduled_) {
@@ -396,12 +444,26 @@ ClientDiscardableSharedMemoryManager::AllocateLockedDiscardableMemory(
     return nullptr;
   }
 
+#if BUILDFLAG(IS_POSIX)
+  // The replay can diverge after the check at the top of this function, e.g.
+  // while this thread waits on |lock_|.
+  if (recordreplay::AreEventsUnavailable()) {
+    return RecordReplayAllocateLocalDiscardableMemory(size);
+  }
+#endif
+
   // Ask parent process to allocate a new discardable shared memory segment.
   std::unique_ptr<base::DiscardableSharedMemory> shared_memory =
       AllocateLockedDiscardableSharedMemory(allocation_size_in_bytes, new_id);
 
-  if (!shared_memory)
+  if (!shared_memory) {
+#if BUILDFLAG(IS_POSIX)
+    if (recordreplay::HasDivergedFromRecording()) {
+      return RecordReplayAllocateLocalDiscardableMemory(size);
+    }
+#endif
     return nullptr;
+  }
 
   // Create span for allocated memory.
   // Spans are managed by |heap_| (the member of
@@ -665,6 +727,17 @@ ClientDiscardableSharedMemoryManager::AllocateLockedDiscardableSharedMemory(
     discardable_memory_ipc_requested_size.Set(base::NumberToString(size));
     return nullptr;
   }
+
+  // A replay that diverged before the mmap call completed (during the IPC or
+  // inside Map) maps zero-filled memory: the recorded descriptor isn't open in
+  // this process and the contents the browser wrote aren't restored. The zero
+  // header reads as an unlocked, purged segment, which another thread's
+  // ReleasePurgedMemory unmaps while it's in use.
+#if BUILDFLAG(IS_POSIX)
+  if (recordreplay::HasDivergedFromRecording()) {
+    return nullptr;
+  }
+#endif
 
   discardable_memory_ipc_error_cause.Clear();
   discardable_memory_ipc_requested_size.Clear();

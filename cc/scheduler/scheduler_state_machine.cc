@@ -335,8 +335,11 @@ bool SchedulerStateMachine::PendingDrawsShouldBeAborted() const {
   // since activation of the pending tree is blocked by drawing of the
   // active tree and the main thread might be blocked on activation of
   // the most recent commit.
+  //
+  // [RecordReplay] A repaint draws in this process, so it doesn't need begin
+  // frames, which the browser can have paused, e.g. when the recording ended.
   return is_layer_tree_frame_sink_lost || !can_draw_ || !visible_ ||
-         begin_frame_source_paused_ ||
+         (begin_frame_source_paused_ && !replay_force_draw_) ||
          waiting_for_activation_after_rendering_resumed_;
 }
 
@@ -430,9 +433,21 @@ bool SchedulerStateMachine::ShouldDraw() const {
     return false;
   }
 
+  // [RecordReplay] A repaint draws its own commit, so the draw waits for its
+  // pending tree to activate.
+  if (replay_force_draw_ && has_pending_tree_) {
+    return false;
+  }
+
   // Except for the cases above, do not draw outside of the BeginImplFrame
   // deadline.
-  if (begin_impl_frame_state_ != BeginImplFrameState::INSIDE_DEADLINE)
+  //
+  // [RecordReplay] A repaint's frame can end before its tree is ready to
+  // activate, and no later frame comes after diverging from the recording, so
+  // it's drawn once the frame is over.
+  if (begin_impl_frame_state_ != BeginImplFrameState::INSIDE_DEADLINE &&
+      !(replay_force_draw_ &&
+        begin_impl_frame_state_ == BeginImplFrameState::IDLE))
     return false;
 
   if (CheckShouldDraw()) {
@@ -467,7 +482,13 @@ bool SchedulerStateMachine::ShouldActivateSyncTree() const {
   // We should not activate a second tree before drawing the first one.
   // Even if we need to force activation of the pending tree, we should abort
   // drawing the active tree first.
-  if (ShouldActivateSyncTreeBeforeDraw()) {
+  //
+  // [RecordReplay] A repaint draws the newest tree, so a pending tree can be
+  // activated over an active tree that was never drawn. The repaint's commit
+  // waits for that activation, as no frame draws the active tree once the
+  // replay has diverged.
+  if (ShouldActivateSyncTreeBeforeDraw() && !replay_force_draw_ &&
+      !replay_repaint_pending_) {
     TRACE_EVENT_INSTANT(TRACE_DISABLED_BY_DEFAULT("cc.debug"),
                         "Not activating before drawing active first");
     return false;
@@ -928,6 +949,10 @@ bool SchedulerStateMachine::CheckWillCommit() const {
 }
 
 void SchedulerStateMachine::WillCommit(bool commit_has_no_updates) {
+  // [RecordReplay] A repaint's commit comes before its frame forces a draw, so
+  // this clears a draw that a repaint which timed out still forces.
+  replay_force_draw_ = false;
+
   if (commit_has_no_updates) {
     consecutive_no_damage_main_frames_++;
   } else {
@@ -1739,6 +1764,19 @@ void SchedulerStateMachine::DidLoseLayerTreeFrameSink() {
     return;
   layer_tree_frame_sink_state_ = LayerTreeFrameSinkState::NONE;
   needs_redraw_ = false;
+}
+
+void SchedulerStateMachine::RecordReplayReuseLostLayerTreeFrameSink() {
+  // Only a frame sink whose replacement hasn't been asked for is reused, e.g.
+  // one lost while a BeginMainFrame is outstanding. One that is being
+  // replaced (CREATING) is left alone, and a repaint then is no better off
+  // than before.
+  if (layer_tree_frame_sink_state_ != LayerTreeFrameSinkState::NONE)
+    return;
+  layer_tree_frame_sink_state_ = LayerTreeFrameSinkState::ACTIVE;
+  // A closing tab's begin frames are paused when its frame sink is lost, and
+  // a repaint doesn't need them.
+  begin_frame_source_paused_ = false;
 }
 
 bool SchedulerStateMachine::NotifyReadyToActivate() {

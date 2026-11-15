@@ -38,7 +38,7 @@ class PLATFORM_EXPORT HeapObserverList final {
     // this fact.
     observers_.push_back(observer);
     observers_to_indices_.insert(observer, observers_.size() - 1);
-    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+    if (recordreplay::IsRecordingOrReplaying("leak-references",
                                              "HeapObserverList"))
       replay_observers_strong_.insert(observer);
     if (check_capacity_) [[unlikely]] {
@@ -75,7 +75,7 @@ class PLATFORM_EXPORT HeapObserverList final {
     // `observers_` is already clean. It may just mean that more observer may be
     // removed from the data structure.
     observers_to_indices_.erase(it);
-    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+    if (recordreplay::IsRecordingOrReplaying("leak-references",
                                              "HeapObserverList"))
       replay_observers_strong_.erase(observer);
 
@@ -99,7 +99,7 @@ class PLATFORM_EXPORT HeapObserverList final {
     CHECK(mutation_state_ & kAllowRemoval);
     observers_.clear();
     observers_to_indices_.clear();
-    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+    if (recordreplay::IsRecordingOrReplaying("leak-references",
                                              "HeapObserverList"))
       replay_observers_strong_.clear();
   }

@@ -1334,7 +1334,7 @@ void StyleEngine::AddStyleSheetContents(const String& text,
   }
   text_to_sheet_cache_.Set(key, contents);
 
-  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "StyleEngine")) {
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "StyleEngine")) {
     style_sheet_contents_strong_.insert(contents);
   }
 }

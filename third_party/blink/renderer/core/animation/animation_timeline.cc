@@ -32,14 +32,14 @@ void AnimationTimeline::AnimationAttached(Animation* animation) {
   animations_.insert(animation);
   animation->ResolveTimelineOffsets(GetTimelineRange());
 
-  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "AnimationTimeline"))
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "AnimationTimeline"))
     record_replay_animations_strong_.insert(animation);
 }
 
 void AnimationTimeline::AnimationDetached(Animation* animation) {
   DCHECK(!in_trigger_attachments_update_);
   animations_.erase(animation);
-  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "AnimationTimeline"))
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "AnimationTimeline"))
     record_replay_animations_strong_.erase(animation);
 
   animations_needing_update_.erase(animation);

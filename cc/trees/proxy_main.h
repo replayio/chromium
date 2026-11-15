@@ -117,7 +117,10 @@ class CC_EXPORT ProxyMain : public Proxy {
 
   ProxyImpl* proxy_impl_for_testing() const { return proxy_impl_.get(); }
 
+  void RecordReplayRepaintPending();
   void RecordReplayRepaint();
+  // The surface this proxy's compositor submits its frames to.
+  const viz::LocalSurfaceId& RecordReplayLocalSurfaceId() const;
 
  private:
   // Proxy implementation.

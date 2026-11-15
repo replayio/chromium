@@ -107,7 +107,7 @@ void AgentGroupSchedulerImpl::AddAgent(Agent* agent) {
   DCHECK(!agents_.Contains(agent));
   agents_.insert(agent);
 
-  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "AgentGroupSchedulerImpl"))
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "AgentGroupSchedulerImpl"))
     replay_agents_strong_.insert(agent);
 }
 

@@ -76,13 +76,22 @@ void AudioOutputDeviceThreadCallback::Process(uint32_t control_signal) {
   // Read the glitch info.
   media::AudioGlitchInfo glitch_info =
       buffer_helper_.GetGlitchIncrementSinceLastCall(buffer->params);
+  // The audio service writes the glitch counters in the shared memory, so the
+  // increment is recorded.
+  glitch_info.duration =
+      base::Microseconds(static_cast<int64_t>(recordreplay::RecordReplayValue(
+          "audioparams::glitch_duration_us",
+          static_cast<uintptr_t>(glitch_info.duration.InMicroseconds()))));
+  glitch_info.count = static_cast<unsigned int>(recordreplay::RecordReplayValue(
+      "audioparams::glitch_count", glitch_info.count));
 
   // RUN-1667: Record the delay_us param from the shared memory buffer (this is mutated by the other end.)
   base::TimeDelta delay = base::Microseconds(
     recordreplay::RecordReplayValue("audioparams::delay_us", buffer->params.delay_us));
 
   base::TimeTicks delay_timestamp =
-      base::TimeTicks() + base::Microseconds(buffer->params.delay_timestamp_us);
+      base::TimeTicks() + base::Microseconds(recordreplay::RecordReplayValue(
+          "audioparams::delay_timestamp_us", buffer->params.delay_timestamp_us));
 
   TRACE_EVENT("audio", "AudioOutputDevice::FireRenderCallback", "callback_num",
               callback_num_, "delay_timestamp (ms)",
@@ -109,8 +118,24 @@ void AudioOutputDeviceThreadCallback::Process(uint32_t control_signal) {
   // frames, and ask client to render audio.  Since |output_bus_| is wrapping
   // the shared memory the Render() call is writing directly into the shared
   // memory.
-  render_callback_->Render(delay, delay_timestamp, glitch_info,
-                           output_bus_.get());
+  // The audio service also writes this shared memory, which isn't recorded,
+  // so while recording or replaying the client renders into memory only this
+  // process writes, and the result is copied to the shared memory afterwards.
+  if (recordreplay::IsRecordingOrReplaying() &&
+      !audio_parameters_.IsBitstreamFormat()) {
+    if (!record_replay_bus_) {
+      record_replay_bus_ = media::AudioBus::Create(audio_parameters_);
+    }
+    // Like the audio service zeroing the shared memory, so a render that
+    // writes nothing outputs silence.
+    record_replay_bus_->Zero();
+    render_callback_->Render(delay, delay_timestamp, glitch_info,
+                             record_replay_bus_.get());
+    record_replay_bus_->CopyTo(output_bus_.get());
+  } else {
+    render_callback_->Render(delay, delay_timestamp, glitch_info,
+                             output_bus_.get());
+  }
   stats_reporter_.ReportCallback(delay, glitch_info);
 
 #if BUILDFLAG(ENABLE_PASSTHROUGH_AUDIO_CODECS)

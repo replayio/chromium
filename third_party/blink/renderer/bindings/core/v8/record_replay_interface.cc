@@ -23,15 +23,18 @@
 #include "base/record_replay_render_interface.h"
 #include "content/public/renderer/render_thread.h"
 #include "content/public/renderer/v8_value_converter.h"
-#include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
-#include "third_party/blink/renderer/bindings/core/v8/v8_document.h"
-#include "third_party/blink/renderer/bindings/core/v8/v8_node.h"
 #include "third_party/blink/renderer/bindings/core/v8/serialization/serialized_script_value.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_css_style_declaration.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_document.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_element.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_node.h"
 #include "third_party/blink/renderer/core/css/css_style_declaration.h"
 // `getV8FromBlinkObject` upcasts `CSSStyleSheet*` to `ScriptWrappable*`, which
 // requires the complete type (it was only forward-declared via the inspector
 // CSS agent header). `CSSStyleSheet : StyleSheet : ScriptWrappable`.
 #include "third_party/blink/renderer/core/css/css_style_sheet.h"
+#include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/dom_node_ids.h"
 #include "third_party/blink/renderer/core/dom/events/custom_event.h"
 // `event_interface_names::kCustomEvent` is used to type-check events without
@@ -48,14 +51,22 @@
 #include "third_party/blink/renderer/core/inspector/inspector_resource_content_loader.h"
 #include "third_party/blink/renderer/core/inspector/main_thread_debugger.h"
 #include "third_party/blink/renderer/core/inspector/resolve_node.h"
+#include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
 #include "third_party/blink/renderer/platform/bindings/v8_dom_wrapper.h"
+#include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
+#include "third_party/blink/renderer/platform/fonts/font_cache.h"
+#include "third_party/blink/renderer/platform/heap/persistent.h"
+#include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 #include "v8/include/v8-inspector.h"
 
 #include <array>
+#include <cinttypes>
+#include <cmath>
 #include <fstream>
 #include <string>
+#include <unordered_set>
 #include <vector>
 #include "crypto/secure_hash.h"
 #include "crypto/sha2.h"
@@ -86,6 +97,10 @@ extern v8::Local<v8::Object> RecordReplayGetBytecode(
     v8::Isolate* isolate_,
     v8::Local<v8::Object> paramsObj);
 
+extern int gPauseContextGroupId;
+std::string RecordReplayContextAddressToken(v8::Isolate* isolate,
+                                            uintptr_t ctxAddr, bool includeId);
+
 } // namespace internal
 } // namespace v8
 
@@ -105,6 +120,7 @@ using RemoteObjectIdTypeRaw = std::u16string;
 using RemoteObjectIdType = String;
 
 extern "C" void V8RecordReplaySetDefaultContext(v8::Isolate* isolate, v8::Local<v8::Context> cx);
+extern "C" uintptr_t V8RecordReplayGetDefaultContextAddress(v8::Isolate* isolate);
 extern "C" void V8RecordReplayFinishRecording();
 extern "C" void V8RecordReplaySetCrashReason(const char* reason);
 extern "C" char* V8RecordReplayReadAssetFileContents(const char* aPath, size_t* aLength);
@@ -168,23 +184,19 @@ static LocalFrame* GetLocalFrameRoot(v8::Isolate* isolate) {
 
 class InspectorData {
 public:
-  // These are untraced, because they are rooted in a global variable which
-  // won't be crawled by the GC.  However, I don't think we need to worry about
-  // this, as inspector actions can't be initiated against non-existant frames,
-  // and likewise, any inspector objects that get culled should never be accessible
-  // via an inspector action (any inspector action will be against some other 
-  // isolate/frame/context group that exists), so we shouldn't be able to cause an 
-  // invalid dereference.
+  // Nothing else references the agents and frames the command handlers
+  // create, so these roots keep them alive across GCs during a pause, which
+  // would otherwise free them while this global still points at them.
   v8::Isolate* isolate;
-  UntracedMember<InspectorDOMAgent> inspectorDomAgent;
-  UntracedMember<InspectorDOMDebuggerAgent> inspectorDomDebuggerAgent;
-  UntracedMember<InspectorNetworkAgent> inspectorNetworkAgent;
-  UntracedMember<InspectorCSSAgent> inspectorCssAgent;
-  UntracedMember<InspectedFrames> inspectedFrames;
+  Persistent<InspectorDOMAgent> inspectorDomAgent;
+  Persistent<InspectorDOMDebuggerAgent> inspectorDomDebuggerAgent;
+  Persistent<InspectorNetworkAgent> inspectorNetworkAgent;
+  Persistent<InspectorCSSAgent> inspectorCssAgent;
+  Persistent<InspectedFrames> inspectedFrames;
   v8_inspector::V8InspectorSession* inspectorSession;
 
   InspectorData(v8::Isolate* i) {
-    isolate = i; 
+    isolate = i;
     inspectorDomAgent = nullptr;
     inspectorDomDebuggerAgent = nullptr;
     inspectorNetworkAgent = nullptr;
@@ -294,6 +306,7 @@ const char* gReactDevtoolsScript = R""""(
 const stubFiberRoots = {};
 const unmountedFibersByRenderer = {};
 const unmountedFiberAlternatesByRenderer = {};
+const unmountedFiberLinksByRenderer = {};
 
 const stubHook = {
   isStub: true,
@@ -328,6 +341,14 @@ function getUnmountedFiberAlternatesForRenderer(rendererID) {
   }
 
   return unmountedFiberAlternatesByRenderer[rendererID];
+}
+
+function getUnmountedFiberLinksForRenderer(rendererID) {
+  if (!unmountedFiberLinksByRenderer[rendererID]) {
+    unmountedFiberLinksByRenderer[rendererID] = new Map();
+  }
+
+  return unmountedFiberLinksByRenderer[rendererID];
 }
 
 window.__REACT_DEVTOOLS_SAVED_RENDERERS__ = [];
@@ -368,6 +389,19 @@ function onCommitFiberUnmount(rendererID, fiber) {
     unmountedFiberAlternates.set(fiber, fiber.alternate);
   }
 
+  // React <= 17 also cuts the deleted subtree's links and clears its state
+  // before calling onCommitFiberRoot (React 18+ only does that after passive
+  // effects). The routine needs the tree as it was before the commit, so save
+  // what React is going to clear.
+  getUnmountedFiberLinksForRenderer(rendererID).set(fiber, {
+    child: fiber.child,
+    sibling: fiber.sibling,
+    return: fiber.return,
+    memoizedProps: fiber.memoizedProps,
+    memoizedState: fiber.memoizedState,
+    stateNode: fiber.stateNode,
+  });
+
   window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook:v1:" + annotationType, "");
 }
 
@@ -394,12 +428,14 @@ function onCommitFiberRoot(rendererID, root, priorityLevel) {
   // Get these so it's in scope in the routine eval, and we can clear it after the annotation
   const unmountedFibersSet = getUnmountedFibersSetForRenderer(rendererID);
   const unmountedFiberAlternates = getUnmountedFiberAlternatesForRenderer(rendererID);
+  const unmountedFiberLinks = getUnmountedFiberLinksForRenderer(rendererID);
 
   window.__RECORD_REPLAY_ANNOTATION_HOOK__("react-devtools-hook:v1:" + annotationType, "");
 
   for (const fiber of unmountedFibersSet) {
     unmountedFiberAlternates.delete(fiber);
   }
+  unmountedFiberLinks.clear();
   unmountedFibersSet.clear();
 }
 
@@ -640,7 +676,7 @@ const char* gOnNewWindowScript = R""""(
   window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ = window.top.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__;
 
   // TODO: Feels like this cross-context function usage can cause trouble, especially when
-  //      the user pauses inside the iframe's JS and tries to access something inside the iframe via 
+  //      the user pauses inside the iframe's JS and tries to access something inside the iframe via
   //      __RECORD_REPLAY__?
   window.__RECORD_REPLAY__ = window.top.__RECORD_REPLAY__;
   window.__RECORD_REPLAY_ARGUMENTS__ = window.top.__RECORD_REPLAY_ARGUMENTS__;
@@ -691,11 +727,75 @@ static void LogTraceCallback(const v8::FunctionCallbackInfo<v8::Value>& args) {
   recordreplay::Trace("%s", *text);
 }
 
+// warning(kind, data?): data's own enumerable string-keyed properties become
+// the warning's fields. Non-primitive values are added as their JSON.
 static void LogWarningCallback(const v8::FunctionCallbackInfo<v8::Value>& args) {
-  CHECK(args.Length() == 1 && args[0]->IsString() &&
-        "must be called with a single string");
-  v8::String::Utf8Value text(args.GetIsolate(), args[0]);
-  recordreplay::Warning("%s", *text);
+  CHECK(args.Length() >= 1 && args.Length() <= 2 && args[0]->IsString() &&
+        "must be called with a kind string and an optional data object");
+  v8::Isolate* isolate = args.GetIsolate();
+  v8::String::Utf8Value kind(isolate, args[0]);
+
+  // Backing storage for the fields' keys and string values, reserved up front
+  // so the c_str() pointers held by the fields stay valid.
+  std::vector<std::string> strings;
+  std::vector<RecordReplayWarningField> fields;
+  if (args.Length() == 2 && args[1]->IsObject()) {
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();
+    v8::Local<v8::Object> data = args[1].As<v8::Object>();
+    v8::Local<v8::Array> names;
+    if (data->GetOwnPropertyNames(
+                context,
+                static_cast<v8::PropertyFilter>(v8::ONLY_ENUMERABLE |
+                                                v8::SKIP_SYMBOLS),
+                v8::KeyConversionMode::kConvertToString)
+            .ToLocal(&names)) {
+      strings.reserve(names->Length() * 2);
+      fields.reserve(names->Length());
+      for (uint32_t i = 0; i < names->Length(); i++) {
+        v8::Local<v8::Value> name;
+        v8::Local<v8::Value> value;
+        if (!names->Get(context, i).ToLocal(&name) ||
+            !data->Get(context, name).ToLocal(&value)) {
+          continue;
+        }
+        strings.push_back(*v8::String::Utf8Value(isolate, name));
+        const char* key = strings.back().c_str();
+        if (value->IsString()) {
+          strings.push_back(*v8::String::Utf8Value(isolate, value));
+          fields.emplace_back(key, strings.back());
+        } else if (value->IsBoolean()) {
+          fields.emplace_back(key, value->BooleanValue(isolate));
+        } else if (value->IsNumber()) {
+          double number = value.As<v8::Number>()->Value();
+          if (std::trunc(number) == number &&
+              std::fabs(number) <= 9007199254740991.0) {
+            fields.emplace_back(key, static_cast<int64_t>(number));
+          } else {
+            fields.emplace_back(key, number);
+          }
+        } else {
+          v8::TryCatch try_catch(isolate);
+          v8::Local<v8::String> json;
+          if (v8::JSON::Stringify(context, value).ToLocal(&json)) {
+            strings.push_back(*v8::String::Utf8Value(isolate, json));
+            fields.emplace_back(key, strings.back());
+          }
+        }
+      }
+    }
+  }
+  recordreplay::Warning(*kind, fields.data(), fields.size());
+}
+
+static void fromJsForceCheckpoint(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 0 && "must be called without arguments");
+  if (recordreplay::IsInReplayCode("forceCheckpoint")) {
+    return;
+  }
+
+  // Use a flushed checkpoint so explicit test checkpoints are not dropped by
+  // the normal time-based checkpoint throttle.
+  recordreplay::NewCheckpointFlushed();
 }
 
 void
@@ -715,16 +815,118 @@ RecordReplayRegisterV8Inspector(v8_inspector::V8Inspector* inspector,
 // were run in is alive.
 static bool gReplayScriptsAlive = false;
 
+// Whether `frame` is the root frame showing about:blank. That is the tab's
+// initial about:blank once instrumented JS ran in it
+// (RecordReplayOnInstrumentedScriptBeforeFirstCheckpoint),
+// or about:blank shown after a page, e.g. after going back to it. Its window runs
+// our scripts like a root frame's, so that pauses in it work. After a page it
+// takes no checkpoints (see OnRootFrameInit): a recording that ends on it ends
+// with the last page. Only opaque about:blank documents count; one that
+// inherits its initiator's origin is an ordinary replay window.
+static bool IsBlankReplayWindow(LocalFrame* frame) {
+  Document* document = frame->GetDocument();
+  const SecurityOrigin* origin = frame->DomWindow()->GetSecurityOrigin();
+  return frame == gRootLocalFrame && document &&
+         document->Url().IsAboutBlankUrl() && origin &&
+         origin->Host().empty();
+}
+
+// Whether `frame` is a tab's page at a data: or file: URL. Their origins have
+// no host, but they are pages like any other: they start the recording when
+// they load, as its first page, and are replay windows after other pages too.
+// Other documents without a host (Chrome's error pages, iframes) aren't.
+static bool IsHostlessPageWindow(LocalFrame* frame) {
+  Document* document = frame->GetDocument();
+  return frame->IsOutermostMainFrame() && document &&
+         (document->Url().ProtocolIsData() || document->Url().IsLocalFile());
+}
+
+bool RecordReplayIsReplayWindow(LocalFrame* frame) {
+  if (!recordreplay::IsRecordingOrReplaying("commands") || !frame ||
+      !frame->DomWindow()) {
+    return false;
+  }
+  // IsOrdinary() excludes internal pages like the in-process <select> popup.
+  if (!frame->GetPage() || !frame->GetPage()->IsOrdinary()) {
+    return false;
+  }
+  const SecurityOrigin* origin = frame->DomWindow()->GetSecurityOrigin();
+  return (origin && !origin->Host().empty()) || IsBlankReplayWindow(frame) ||
+         IsHostlessPageWindow(frame);
+}
+
+bool RecordReplayHasRootFrame() {
+  return !!gRootLocalFrame;
+}
+
+// Whether a root frame that isn't about:blank (a page of the app) ran our
+// replay scripts yet.
+static bool gHadPageRootFrame = false;
+
+// RecordReplayIds of the local roots that ran as ordinary windows while a
+// root's scripts were alive.
+static std::unordered_set<int>& RecordReplayOrdinaryLocalRootIds() {
+  static auto* ids = new std::unordered_set<int>();
+  return *ids;
+}
+
+bool RecordReplayIsRootFrame(LocalFrame* frame) {
+  if (!RecordReplayIsReplayWindow(frame) || !frame->IsLocalRoot()) {
+    return false;
+  }
+  // While the root's scripts are alive, popups and OOPIFs in this renderer
+  // don't take over: they run as ordinary windows, and their contexts going
+  // away leaves the root's scripts alive. A new outermost main frame without
+  // an opener is the tab's next page, which a same-site navigation commits in
+  // this renderer before the old page leaves (into the back/forward cache, or
+  // unloaded). A popup's later documents keep its frame, whose opener the page
+  // may have disowned since.
+  return !gReplayScriptsAlive || frame == gRootLocalFrame ||
+         (frame->IsOutermostMainFrame() && !frame->Opener() &&
+          !RecordReplayOrdinaryLocalRootIds().count(frame->RecordReplayId()));
+}
+
+// Whether `frame` is the root frame our replay scripts are alive in.
+static bool IsAliveRootFrame(LocalFrame* frame) {
+  return gReplayScriptsAlive && frame == gRootLocalFrame &&
+         RecordReplayIsRootFrame(frame);
+}
+
+void RecordReplayBeforeDocumentShutdown(Document& document) {
+  LocalFrame* frame = document.GetFrame();
+  if (!IsAliveRootFrame(frame)) {
+    return;
+  }
+  CHECK(v8::IsMainThread());
+  recordreplay::Print("ReplayScript BeforeDocumentShutdown frame=%d",
+                      frame->RecordReplayId());
+  // Last live document state; must precede SetScriptAlive(false) so the gate
+  // allows it.
+  recordreplay::NewCheckpointFlushed();
+  // Skip initial empty documents: their window can be reused without
+  // ClearContexts or a new ALIVE, so nothing would undo the mute.
+  if (!document.IsInitialEmptyDocument()) {
+    recordreplay::SetScriptAlive(false);
+  }
+}
+
 /**
  * This is called when our local root frame is about to shut down.
  */
 void RecordReplayClearContexts(const char* reason, LocalFrame* frame) {
   CHECK(v8::IsMainThread());
-  if (!gReplayScriptsAlive || frame != gRootLocalFrame) {
+  if (!IsAliveRootFrame(frame)) {
     return;
   }
-  recordreplay::Print("ReplayScript STATUS_CHANGE_UNALIVE - %s", reason);
+  v8::Isolate* isolate = ToIsolate(frame);
+  recordreplay::Print(
+      "ReplayScript STATUS_CHANGE_UNALIVE - %s %s frame=%d", reason,
+      v8::internal::RecordReplayContextAddressToken(
+          isolate, V8RecordReplayGetDefaultContextAddress(isolate), true)
+          .c_str(),
+      frame->RecordReplayId());
   gReplayScriptsAlive = false;
+  recordreplay::SetScriptAlive(false);
 }
 
 static void fromJsIsReplayScriptAlive(const v8::FunctionCallbackInfo<v8::Value>& args) {
@@ -748,6 +950,7 @@ static void SetCDPMessageCallback(const v8::FunctionCallbackInfo<v8::Value>& arg
 }
 
 static void SendMessageToFrontend(const v8_inspector::StringView& message) {
+  recordreplay::AutoMarkReplayCode mark;
   recordreplay::AutoDisallowEvents disallow("RecordReplay_SendMessageToFrontend");
   CHECK(v8::IsMainThread());
 
@@ -788,9 +991,16 @@ static void SendMessageToFrontend(const v8_inspector::StringView& message) {
   }
 }
 
+// Id of CDP requests that C++ sends on its own. The command handlers only
+// expect responses to their own requests, so these responses aren't passed on.
+static constexpr int kRecordReplayInternalCDPRequestId = -1;
+
 struct InspectorChannel final : public v8_inspector::V8Inspector::Channel {
   void sendResponse(int callId,
                     std::unique_ptr<v8_inspector::StringBuffer> message) final {
+    if (callId == kRecordReplayInternalCDPRequestId) {
+      return;
+    }
     SendMessageToFrontend(message->string());
   }
   void sendNotification(std::unique_ptr<v8_inspector::StringBuffer> message) final {
@@ -799,19 +1009,27 @@ struct InspectorChannel final : public v8_inspector::V8Inspector::Channel {
   void flushProtocolNotifications() final {}
 };
 
-static absl::optional<int> gContextGroupIdForSendCDPMessage;
+// Nestable override for SendCDPMessage context-group routing.
+// Console → OnConsoleMessage can re-enter via pause evaluate that emits
+// another console API call; a single optional cannot model that.
+// POD stack: no global ctor / exit-time dtor (-Werror).
+static constexpr size_t kMaxContextGroupIdOverrideDepth = 16;
+static int gContextGroupIdForSendCDPMessageStack[kMaxContextGroupIdOverrideDepth];
+static size_t gContextGroupIdForSendCDPMessageDepth = 0;
 
 extern "C" void SetContextGroupIdForSendCDPMessage(int contextGroupId) {
   CHECK(v8::IsMainThread());
   CHECK_GT(contextGroupId, 0);
-  CHECK(!gContextGroupIdForSendCDPMessage.has_value());
-  gContextGroupIdForSendCDPMessage = contextGroupId;
+  CHECK_LT(gContextGroupIdForSendCDPMessageDepth, kMaxContextGroupIdOverrideDepth);
+  UNSAFE_BUFFERS(
+      gContextGroupIdForSendCDPMessageStack[gContextGroupIdForSendCDPMessageDepth++]) =
+      contextGroupId;
 }
 
 extern "C" void ClearContextGroupIdForSendCDPMessage() {
   CHECK(v8::IsMainThread());
-  CHECK(gContextGroupIdForSendCDPMessage.has_value());
-  gContextGroupIdForSendCDPMessage.reset();
+  CHECK_GT(gContextGroupIdForSendCDPMessageDepth, 0u);
+  gContextGroupIdForSendCDPMessageDepth--;
 }
 
 absl::optional<int> GetCurrentContextGroupIdForIsolate(v8::Isolate* isolate) {
@@ -862,13 +1080,43 @@ v8_inspector::V8InspectorSession* getInspectorSession(v8::Isolate* isolate, int 
   InspectorData* data = getInspectorFor(isolate, contextGroupId);
 
   if (!data->inspectorSession) {
-    recordreplay::AutoDisallowEvents disallow("RecordReplayRegisterV8Inspector");
-    data->inspectorSession = inspector->connect(contextGroupId,
-                                            new InspectorChannel(),
-                                            v8_inspector::StringView(),
-                                            v8_inspector::V8Inspector::kFullyTrusted).release();
+    // RecorderCommandHandling creates the session at record and replay the
+    // same way — not divergent. Only Mark+Disallow when the session is
+    // replay-only; AreEventsDisallowed() then seeds m_replay_owned.
+    auto connect = [&]() {
+      return inspector
+          ->connect(contextGroupId, new InspectorChannel(),
+                    v8_inspector::StringView(),
+                    v8_inspector::V8Inspector::kFullyTrusted)
+          .release();
+    };
+    if (IsCommandHandlingEnabledWhenRecording()) {
+      data->inspectorSession = connect();
+    } else {
+      recordreplay::AutoMarkReplayCode mark;
+      recordreplay::AutoDisallowEvents disallow(
+          "RecordReplayRegisterV8Inspector");
+      data->inspectorSession = connect();
+    }
   }
   return data->inspectorSession;
+}
+
+// Console API calls and execution contexts are reported only to sessions of
+// the context group they belong to that enabled the Runtime domain. The
+// command handlers enable it in the root's group; other local roots (popups,
+// OOPIFs) have groups of their own.
+static void RecordReplayEnableRuntimeForLocalRoot(v8::Isolate* isolate,
+                                                  LocalFrame* frame) {
+  recordreplay::AutoMarkReplayCode mark;
+  recordreplay::AutoDisallowEvents disallow(
+      "RecordReplayEnableRuntimeForLocalRoot");
+  std::string message =
+      "{\"id\":" + std::to_string(kRecordReplayInternalCDPRequestId) +
+      ",\"method\":\"Runtime.enable\"}";
+  getInspectorSession(isolate, WeakIdentifierMap<LocalFrame>::Identifier(frame))
+      ->dispatchProtocolMessage(v8_inspector::StringView(
+          reinterpret_cast<const uint8_t*>(message.c_str()), message.length()));
 }
 
 static int GetBlinkPersistentId(v8::Local<v8::Object> object) {
@@ -903,51 +1151,112 @@ static int GetPersistentId(v8::Local<v8::Object> object) {
  * However, we might also opt to forego that option entirely, and do it all manually, since many inspectors/agents
  * do not provide too much value if they are not hooked up to a `DevToolsSession` and the `UberDispatcher`.
  */
-static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
-  CHECK(args.Length() == 1 && args[0]->IsString() &&
-        "must be called with a single string");
+static void SendCDPMissingContextError(v8::Isolate* isolate,
+                                       v8::Local<v8::Value> message_arg) {
+  if (gCDPMessageCallback == nullptr) {
+    return;
+  }
+  // Ensure the message has an ID. If not, handle the error in JavaScript.
+  v8::String::Utf8Value inmessage(isolate, message_arg);
+  std::string nmessage(*inmessage);
+  absl::optional<base::Value> jsonMessage = base::JSONReader::Read(nmessage, base::JSON_PARSE_RFC);
+  base::DictValue* messageDict = jsonMessage->GetIfDict();
+  CHECK(messageDict != nullptr);
+  CHECK(messageDict->FindInt("id").has_value());
 
+  // Construct our error result.
+  base::DictValue error;
+  error.Set("message", "[RUN-2600] No context group available for Isolate.");
+  error.Set("code", CDPERROR_MISSINGCONTEXT);
+
+  base::DictValue result;
+  result.Set("error", std::move(error));
+  result.Set("id", *(messageDict->FindInt("id")));
+
+  std::string json;
+  base::JSONWriter::Write(result, &json);
+  auto message = v8_inspector::StringView((const uint8_t*)json.c_str(), json.length());
+  SendMessageToFrontend(message);
+}
+
+static absl::optional<int> ContextGroupIdFromInspectorContextId(
+    v8::Isolate* isolate,
+    int context_id) {
+  if (context_id <= 0 || !gV8Inspectors)
+    return absl::nullopt;
+
+  auto it = gV8Inspectors->find(isolate);
+  if (it == gV8Inspectors->end() || !it->second)
+    return absl::nullopt;
+
+  v8::HandleScope handle_scope(isolate);
+  v8::Local<v8::Context> context;
+  if (!it->second->contextById(context_id).ToLocal(&context))
+    return absl::nullopt;
+
+  LocalDOMWindow* window =
+      DynamicTo<LocalDOMWindow>(ToExecutionContext(context));
+  LocalFrame* frame = window ? window->GetFrame() : nullptr;
+  if (!frame)
+    return absl::nullopt;
+
+  // Same map GetCurrentContextGroupIdForIsolate uses; do not create.
+  LocalFrame& root = frame->LocalFrameRoot();
+  if (!WeakIdentifierMap<LocalFrame>::HasIdentifier(&root))
+    return absl::nullopt;
+  return WeakIdentifierMap<LocalFrame>::Identifier(&root);
+}
+
+static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  // The optional second argument is an inspector context id used to route
+  // frame evaluations; existing callers only pass the serialized message.
+  const bool has_context_id = args.Length() == 2 && !args[1]->IsUndefined();
+  CHECK((args.Length() == 1 || args.Length() == 2) && args[0]->IsString() &&
+        (!has_context_id || args[1]->IsInt32()) &&
+        "must be called with a string and optional context id");
+
+  recordreplay::AutoMarkReplayCode mark;
   recordreplay::AutoDisallowEvents disallow("SendCDPMessage");
 
   v8::Isolate* isolate = args.GetIsolate();
-  absl::optional<int> contextGroupId = gContextGroupIdForSendCDPMessage;
-  if (!contextGroupId.has_value()) {
+  v8::String::Utf8Value message(isolate, args[0]);
+  std::string nmessage(*message);
+
+  absl::optional<int> contextGroupId;
+  if (gContextGroupIdForSendCDPMessageDepth > 0) {
+    contextGroupId = UNSAFE_BUFFERS(
+        gContextGroupIdForSendCDPMessageStack[gContextGroupIdForSendCDPMessageDepth - 1]);
+  } else if (has_context_id) {
+    contextGroupId = ContextGroupIdFromInspectorContextId(
+        isolate, args[1].As<v8::Int32>()->Value());
+    if (!contextGroupId.has_value()) {
+      SendCDPMissingContextError(isolate, args[0]);
+      return;
+    }
+  } else if (recordreplay::HasDivergedFromRecording() &&
+             v8::internal::gPauseContextGroupId > 0) {
+    // CommandCallback has already translated the paused inspector context id
+    // into a context group id, so no further lookup is needed here.
+    contextGroupId = v8::internal::gPauseContextGroupId;
+  } else {
     contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
   }
 
-  // It can be the case that we simply don't have a context group id (a local frame) at this
-  // time; just log it and inform the client.
-  if (!contextGroupId.has_value()) {
-    if (gCDPMessageCallback != nullptr) {
-      // Ensure the message has an ID. If not, handle the error in JavaScript.
-      v8::String::Utf8Value inmessage(args.GetIsolate(), args[0]);
-      std::string nmessage(*inmessage);
-      absl::optional<base::Value> jsonMessage = base::JSONReader::Read(nmessage, base::JSON_PARSE_RFC);
-      base::DictValue* messageDict = jsonMessage->GetIfDict();
-      CHECK(messageDict != nullptr);
-      CHECK(messageDict->FindInt("id").has_value());
-
-      // Construct our error result.
-      base::DictValue error;
-      error.Set("message", "[RUN-2600] No context group available for Isolate.");
-      error.Set("code", CDPERROR_MISSINGCONTEXT);
-
-      base::DictValue result;
-      result.Set("error", std::move(error));
-      result.Set("id", *(messageDict->FindInt("id")));
-
-      std::string json;
-      base::JSONWriter::Write(result, &json);
-      auto message = v8_inspector::StringView((const uint8_t*)json.c_str(), json.length());
-      SendMessageToFrontend(message);
-    }
+  // No group, or its main-world V8 Context is already gone (post-nav /
+  // DidClearContextsForFrame). ContextIfInitialized does not create.
+  LocalFrame* frame =
+      contextGroupId.has_value()
+          ? WeakIdentifierMap<LocalFrame>::Lookup(*contextGroupId)
+          : nullptr;
+  if (!frame ||
+      ToV8ContextMaybeEmpty(frame, DOMWrapperWorld::MainWorld(isolate))
+          .IsEmpty()) {
+    SendCDPMissingContextError(isolate, args[0]);
     return;
   }
 
-  v8::String::Utf8Value message(args.GetIsolate(), args[0]);
-
-  std::string nmessage(*message);
-  v8_inspector::StringView messageView((const uint8_t*)nmessage.c_str(), nmessage.length());
+  v8_inspector::StringView messageView((const uint8_t*)nmessage.c_str(),
+                                       nmessage.length());
   getInspectorSession(isolate, *contextGroupId)->dispatchProtocolMessage(messageView);
 }
 
@@ -978,25 +1287,29 @@ static void SHA256DigestHex(const v8::FunctionCallbackInfo<v8::Value>& args) {
   CHECK(args.Length() == 1 && args[0]->IsString() &&
       "must be called with a single string");
   v8::Isolate* isolate = args.GetIsolate();
-  v8::String::Utf8Value content(isolate, args[0]);
+  // Zeroed: replay skips hash and only fills via RecordReplayBytes.
+  char* digestHex = new char[65]();
 
-  std::unique_ptr<crypto::SecureHash> hasher =
-    crypto::SecureHash::Create(crypto::SecureHash::SHA256);
-  // SAFETY: `content.length()` is the byte length of the buffer pointed to by
-  // `*content` (the V8 UTF-8 value), so the span bounds match.
-  hasher->Update(UNSAFE_BUFFERS(base::span<const uint8_t>(
-      reinterpret_cast<const uint8_t*>(*content), content.length())));
-  uint8_t digest[crypto::kSHA256Length];
-  // SAFETY: `digest` is declared `uint8_t[crypto::kSHA256Length]`, so the span
-  // bounds match its declared size exactly.
-  hasher->Finish(UNSAFE_BUFFERS(base::span<uint8_t>(digest, crypto::kSHA256Length)));
-  char* digestHex = new char[65];
-  for (int i = 0; i < 32; i++) {
-    // SAFETY: `digest` has 32 bytes (`crypto::kSHA256Length`) so `digest[i]` is
-    // in range for `i < 32`; `digestHex` is `new char[65]` and each iteration
-    // writes 2 hex chars + NUL at offset `i*2` (max offset 62), so it stays
-    // within the buffer.
-    UNSAFE_BUFFERS(sprintf(digestHex + i * 2, "%02x", digest[i]));
+  if (!recordreplay::IsReplaying()) {
+    v8::String::Utf8Value content(isolate, args[0]);
+    std::unique_ptr<crypto::SecureHash> hasher =
+        crypto::SecureHash::Create(crypto::SecureHash::SHA256);
+    // SAFETY: `content.length()` is the byte length of the buffer pointed to by
+    // `*content` (the V8 UTF-8 value), so the span bounds match.
+    hasher->Update(UNSAFE_BUFFERS(base::span<const uint8_t>(
+        reinterpret_cast<const uint8_t*>(*content), content.length())));
+    uint8_t digest[crypto::kSHA256Length];
+    // SAFETY: `digest` is declared `uint8_t[crypto::kSHA256Length]`, so the
+    // span bounds match its declared size exactly.
+    hasher->Finish(
+        UNSAFE_BUFFERS(base::span<uint8_t>(digest, crypto::kSHA256Length)));
+    for (int i = 0; i < 32; i++) {
+      // SAFETY: `digest` has 32 bytes (`crypto::kSHA256Length`) so `digest[i]`
+      // is in range for `i < 32`; `digestHex` is `new char[65]` and each
+      // iteration writes 2 hex chars + NUL at offset `i*2` (max offset 62), so
+      // it stays within the buffer.
+      UNSAFE_BUFFERS(sprintf(digestHex + i * 2, "%02x", digest[i]));
+    }
   }
 
   // The content being hashed can vary when replaying if source contents have been
@@ -1152,8 +1465,8 @@ v8::MaybeLocal<v8::Value> convertCborToJSTempl(v8::Isolate* isolate,
         return jsonObj.ToLocalChecked();
       }
     } else {
-      recordreplay::Warning("convertCborToJSTempl - Failed to deserialize: %s",
-                            errorMessage.c_str());
+      recordreplay::Warning("ConvertCborToJSDeserializeFailed",
+                            {{"error", errorMessage}});
     }
   }
   v8::MaybeLocal<v8::Value> defaultVal;
@@ -1335,14 +1648,14 @@ getObjectByCdpId(v8::Isolate* isolate,
 
   absl::optional<int> contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
   if (!contextGroupId.has_value()) {
-    recordreplay::Warning("[RUN-2600] getObjectByCdpId - Failed to find contextGroupId");
+    recordreplay::Warning("GetObjectByCdpIdMissingContextGroup");
     return false;
   }
 
   if (!getInspectorSession(isolate, *contextGroupId)->unwrapObject(&error, cdpIdV8, &unwrapped, &context,
                                        nullptr)) {
-    recordreplay::Warning("getObjectByCdpId - Failed to look up cdpId: %s",
-                        ToCoreString(error->string()).Ascii().c_str());
+    recordreplay::Warning("GetObjectByCdpIdLookupFailed",
+                          {{"error", ToCoreString(error->string()).Ascii()}});
     return false;
   }
   plainObject = unwrapped.As<v8::Object>();
@@ -1381,7 +1694,7 @@ static void fromJsMakeDebuggeeValue(
   auto contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
 
   if (!contextGroupId.has_value()) {
-      recordreplay::Warning("[RUN-2600] fromJsMakeDebuggeeValue - no valid context id");
+      recordreplay::Warning("MakeDebuggeeValueMissingContext");
       args.GetReturnValue().SetNull();
       return;
   }
@@ -1447,7 +1760,7 @@ static void fromJsGetArgumentsInFrame(
   auto contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
 
   if (!contextGroupId.has_value()) {
-    recordreplay::Warning("[RUN-2600] fromJsGetArgumentsInFrame - no valid context id");
+    recordreplay::Warning("GetArgumentsInFrameMissingContext");
     args.GetReturnValue().SetNull();
     return;
   }
@@ -1509,6 +1822,36 @@ static void fromJsIsBlinkObject(
   args.GetReturnValue().Set(result);
 }
 
+// `ToImplWithTypeCheck` was removed; the type-checked
+// `ToWrappable(isolate, Local<Value>)` returns null for other values.
+static void fromJsIsBlinkNodeObject(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 &&
+        "[RuntimeError] must be called with a single value");
+
+  v8::Isolate* isolate = args.GetIsolate();
+  args.GetReturnValue().Set(!!V8Node::ToWrappable(isolate, args[0]));
+}
+
+static void fromJsIsBlinkElementObject(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 &&
+        "[RuntimeError] must be called with a single value");
+
+  v8::Isolate* isolate = args.GetIsolate();
+  args.GetReturnValue().Set(!!V8Element::ToWrappable(isolate, args[0]));
+}
+
+static void fromJsIsBlinkCSSStyleDeclarationObject(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  CHECK(args.Length() == 1 &&
+        "[RuntimeError] must be called with a single value");
+
+  v8::Isolate* isolate = args.GetIsolate();
+  args.GetReturnValue().Set(
+      !!V8CSSStyleDeclaration::ToWrappable(isolate, args[0]));
+}
+
 /**
  * Return whether there is a return value available for the topmost frame,
  * when stopped at an "exit" return site.
@@ -1564,8 +1907,31 @@ std::unordered_map<std::string, NetworkRequestStatus>*
 // `base::DictValue`, so this pointer is a `base::DictValue*`. `JSONWriter`
 // still serializes it via the implicit `base::ValueView(const DictValue&)`.
 static base::DictValue *gCurrentNetworkRequestEvent = nullptr;
+static const std::string* gCurrentNetworkRequestId = nullptr;
+static const char* gCurrentNetworkStreamKind = nullptr;
 static std::vector<uint8_t>* gCurrentNetworkStreamData = nullptr;
 
+static void SetCurrentNetworkStreamData(
+    const std::string& request_id,
+    const char* stream_kind,
+    const uint8_t* data,
+    size_t data_length) {
+  gCurrentNetworkRequestId = &request_id;
+  gCurrentNetworkStreamKind = stream_kind;
+  gCurrentNetworkStreamData->clear();
+  gCurrentNetworkStreamData->insert(
+      gCurrentNetworkStreamData->begin(),
+      data,
+      // SAFETY: callers pass the length of the buffer `data` points at, so
+      // the computed end pointer is its one-past-the-end.
+      UNSAFE_BUFFERS(data + data_length));
+}
+
+static void ClearCurrentNetworkStreamData() {
+  gCurrentNetworkRequestId = nullptr;
+  gCurrentNetworkStreamKind = nullptr;
+  gCurrentNetworkStreamData->clear();
+}
 static void GetCurrentNetworkRequestEvent(const v8::FunctionCallbackInfo<v8::Value>& args) {
   if (!gCurrentNetworkRequestEvent) {
     return;
@@ -1576,6 +1942,28 @@ static void GetCurrentNetworkRequestEvent(const v8::FunctionCallbackInfo<v8::Val
   base::JSONWriter::Write(*gCurrentNetworkRequestEvent, &json);
   v8::Local<v8::String> json_string = ToV8String(isolate, json.c_str());
   args.GetReturnValue().Set(json_string);
+}
+
+static void GetCurrentNetworkRequestId(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  if (!gCurrentNetworkRequestId) {
+    return;
+  }
+
+  v8::Isolate* isolate = args.GetIsolate();
+  args.GetReturnValue().Set(
+      ToV8String(isolate, gCurrentNetworkRequestId->c_str()));
+}
+
+static void GetCurrentNetworkStreamKind(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  if (!gCurrentNetworkStreamKind) {
+    return;
+  }
+
+  v8::Isolate* isolate = args.GetIsolate();
+  args.GetReturnValue().Set(
+      ToV8String(isolate, gCurrentNetworkStreamKind));
 }
 
 static void GetCurrentNetworkStreamData(const v8::FunctionCallbackInfo<v8::Value>& args) {
@@ -1606,7 +1994,9 @@ static void GetCurrentNetworkStreamData(const v8::FunctionCallbackInfo<v8::Value
     return;
   }
 
-  uint8_t* bytes = &(*gCurrentNetworkStreamData)[index];
+  // SAFETY: `index` was bounds-checked against the buffer's size above.
+  const uint8_t* bytes =
+      UNSAFE_BUFFERS(gCurrentNetworkStreamData->data() + index);
   // SAFETY: `bytes` points at offset `index` into `*gCurrentNetworkStreamData`
   // and `length` was bounds-checked against that buffer's remaining size above,
   // so the span stays within the buffer.
@@ -1658,19 +2048,48 @@ static void CopyDictionaryProperty(base::DictValue& dst,
   }
 }
 
+static void EmitNetworkRequestEvent(const std::string& request_id,
+                                    base::DictValue& event) {
+  gCurrentNetworkRequestEvent = &event;
+  gCurrentNetworkRequestId = &request_id;
+  recordreplay::OnNetworkRequestEvent(request_id.c_str());
+  gCurrentNetworkRequestEvent = nullptr;
+  gCurrentNetworkRequestId = nullptr;
+}
+
+static void EmitResponseEvent(const std::string& request_id,
+                              const base::DictValue& info) {
+  base::DictValue event;
+  event.Set("kind", "response");
+  CopyDictionaryProperty(event, info, "responseHeaders");
+  CopyDictionaryProperty(event, info, "responseProtocolVersion");
+  CopyDictionaryProperty(event, info, "responseStatus");
+  CopyDictionaryProperty(event, info, "responseStatusText");
+  CopyDictionaryProperty(event, info, "responseFromCache");
+  EmitNetworkRequestEvent(request_id, event);
+}
+
 static void HandleNetworkPrepareRequestEvent(const base::DictValue& info) {
   CHECK(gActiveNetworkRequests);
   std::string request_id = GetRequestIdentifierProperty(info);
   if (gActiveNetworkRequests->find(request_id) != gActiveNetworkRequests->end()) {
-    // If the request already exists, this is a redirect.
-    // Chromium will send a "Network.ResourceRedirect" event which will
-    // be handled by `HandleNetworkPrepareRequestEvent` below.
+    // TODO: should be an assert?
+    recordreplay::Print("Duplicate request id: %s", request_id.c_str());
     return;
   }
 
+  const std::string* redirect_source_id = info.FindString("redirectSourceId");
+  if (redirect_source_id) {
+    auto request_info = gActiveNetworkRequests->find(*redirect_source_id);
+    if (request_info == gActiveNetworkRequests->end()) {
+      recordreplay::Print("No original request for redirected prepare: %s",
+                          redirect_source_id->c_str());
+      return;
+    }
+    gActiveNetworkRequests->erase(request_info);
+  }
+
   // Save request info in a global table.
-  // Associate with it the original request info which may be needed later if the
-  // request is redirected.
   gActiveNetworkRequests->insert(
     { request_id, NetworkRequestStatus(info) }
   );
@@ -1687,116 +2106,59 @@ static void HandleNetworkPrepareRequestEvent(const base::DictValue& info) {
   CopyDictionaryProperty(event, info, "requestMethod");
   CopyDictionaryProperty(event, info, "requestCause");
   CopyDictionaryProperty(event, info, "initiator");
-
-  gCurrentNetworkRequestEvent = &event;
-  recordreplay::OnNetworkRequestEvent(request_id.c_str());
-  gCurrentNetworkRequestEvent = nullptr;
-}
-
-static void HandleNetworkResourceRedirectEvent(const base::DictValue& info) {
-  CHECK(gActiveNetworkRequests);
-
-  // Retrieve the existing request data which should already have been
-  // registered by `HandleNetworkPrepareRequestEvent`.
-  std::string request_id = GetRequestIdentifierProperty(info);
-  auto request_info = gActiveNetworkRequests->find(request_id);
-  if (request_info == gActiveNetworkRequests->end()) {
-    recordreplay::Print("No original request for navigation redirect: %s",
-      request_id.c_str());
-    return;
+  CopyDictionaryProperty(event, info, "replayInternal");
+  if (redirect_source_id) {
+    event.Set("redirectSourceId", *redirect_source_id);
   }
-  // `base::Value::AsDictionaryValue` was removed; `info` is already a
-  // `base::DictValue`, so bind it directly.
-  const base::DictValue& original_info = request_info->second.info;
 
-  // Register a new network request with the same request id as the original
-  // for this redirect.
-  uint64_t bookmark = *original_info.FindDouble("bookmark");
-  recordreplay::OnNetworkRequest(request_id.c_str(), "http", bookmark);
-
-  // Package and emit a network request event, using data from the original
-  // request when necessary.
-  base::DictValue event;
-  event.Set("kind", "request");
-  CopyDictionaryProperty(event, info, "requestUrl");
-  CopyDictionaryProperty(event, info, "requestHeaders");
-  CopyDictionaryProperty(event, original_info, "requestMethod");
-  CopyDictionaryProperty(event, original_info, "requestCause");
-  CopyDictionaryProperty(event, original_info, "initiator");
-
-  gCurrentNetworkRequestEvent = &event;
-  recordreplay::OnNetworkRequestEvent(request_id.c_str());
-  gCurrentNetworkRequestEvent = nullptr;
-}
-
-static void HandleNetworkNavigationEvent(const base::DictValue& info) {
-  CHECK(gActiveNetworkRequests);
-
-  // Navigation events are network requests that are not resource requests.
-  // They are directed here (the renderer process) from the content process.
-  // They have no associated bookmark, as we can't take bookmarks in the
-  // content process.
-
-  // Ensure that a request with the same ID has not already been registered.
-  std::string request_id = *info.FindString("requestId");
-  if (gActiveNetworkRequests->find(request_id) != gActiveNetworkRequests->end()) {
-    recordreplay::Print("Duplicate request id: %s", request_id.c_str());
-    return;
-  }
-  gActiveNetworkRequests->insert({ request_id, NetworkRequestStatus(info) });
-
-  // A navigation event is a new network request, so call the `OnNetworkRequest` hook.
-  // Navigation events have no bookmarks associated with them.
-  recordreplay::OnNetworkRequest(request_id.c_str(), "http", /* bookmark = */ 0);
-
-  // Package and emit a network request event.
-  base::DictValue event;
-  event.Set("kind", "request");
-  CopyDictionaryProperty(event, info, "requestUrl");
-  CopyDictionaryProperty(event, info, "requestHeaders");
-  CopyDictionaryProperty(event, info, "requestMethod");
-  event.Set("requestCause", "document");
-
-  gCurrentNetworkRequestEvent = &event;
-  recordreplay::OnNetworkRequestEvent(request_id.c_str());
-  gCurrentNetworkRequestEvent = nullptr;
+  EmitNetworkRequestEvent(request_id, event);
 }
 
 static void HandleNetworkNavigationRedirectEvent(const base::DictValue& info) {
   CHECK(gActiveNetworkRequests);
 
-  // Navigation redirect events are, as with navigation events, sent from
-  // the content process to the renderer process.
+  std::string redirected_request_id = GetRequestIdentifierProperty(info);
 
-  // Ensure that a request with the same ID has not already been registered.
-  std::string request_id = *info.FindString("requestId");
-  // This is a redirect, so an existing request should have been registered
-  // with the same id.
-  auto request_info = gActiveNetworkRequests->find(request_id);
+  const std::string& previous_request_id = *info.FindString("redirectSourceId");
+
+  auto request_info = gActiveNetworkRequests->find(previous_request_id);
   if (request_info == gActiveNetworkRequests->end()) {
     recordreplay::Print("No original request for navigation redirect: %s",
-      request_id.c_str());
+      previous_request_id.c_str());
     return;
   }
-  // `base::Value::AsDictionaryValue` was removed; `info` is already a
-  // `base::DictValue`, so bind it directly.
-  const base::DictValue& original_info = request_info->second.info;
+  const base::DictValue& previous_info = request_info->second.info;
 
-  // A navigation redirect event is a new network request. There is no bookmark.
-  recordreplay::OnNetworkRequest(request_id.c_str(), "http", 0);
+  EmitResponseEvent(previous_request_id, info);
 
-  // Package and emit a network request event.
-  // The request method is obtained from the saved request info.
+  // TODO: should we be inheriting the bookmark from the previous request?
+  const uint64_t bookmark = *previous_info.FindDouble("bookmark");
+  recordreplay::OnNetworkRequest(redirected_request_id.c_str(), "http", bookmark);
+
+  base::DictValue redirected_info;
+  CopyDictionaryProperty(redirected_info, previous_info, "bookmark");
+  CopyDictionaryProperty(redirected_info, info, "requestUrl");
+  CopyDictionaryProperty(redirected_info, info, "requestHeaders");
+  CopyDictionaryProperty(redirected_info, info, "requestMethod");
+  CopyDictionaryProperty(redirected_info, previous_info, "requestCause");
+  CopyDictionaryProperty(redirected_info, previous_info, "initiator");
+  CopyDictionaryProperty(redirected_info, previous_info, "replayInternal");
+
   base::DictValue event;
   event.Set("kind", "request");
-  CopyDictionaryProperty(event, info, "requestUrl");
-  CopyDictionaryProperty(event, info, "requestHeaders");
-  CopyDictionaryProperty(event, original_info, "requestMethod");
-  event.Set("requestCause", "document");
+  CopyDictionaryProperty(event, redirected_info, "requestUrl");
+  CopyDictionaryProperty(event, redirected_info, "requestHeaders");
+  CopyDictionaryProperty(event, redirected_info, "requestMethod");
+  CopyDictionaryProperty(event, redirected_info, "requestCause");
+  CopyDictionaryProperty(event, redirected_info, "initiator");
+  CopyDictionaryProperty(event, redirected_info, "replayInternal");
+  event.Set("redirectSourceId", previous_request_id);
+  EmitNetworkRequestEvent(redirected_request_id, event);
 
-  gCurrentNetworkRequestEvent = &event;
-  recordreplay::OnNetworkRequestEvent(request_id.c_str());
-  gCurrentNetworkRequestEvent = nullptr;
+  gActiveNetworkRequests->erase(request_info);
+  gActiveNetworkRequests->insert(
+    { redirected_request_id, NetworkRequestStatus(redirected_info) }
+  );
 }
 
 static void HandleNetworkRequestDataFormEvent(const base::DictValue& info) {
@@ -1817,9 +2179,7 @@ static void HandleNetworkRequestDataFormEvent(const base::DictValue& info) {
     base::DictValue requestBodyEvent;
     requestBodyEvent.Set("kind", "request-body");
 
-    gCurrentNetworkRequestEvent = &requestBodyEvent;
-    recordreplay::OnNetworkRequestEvent(request_id.c_str());
-    gCurrentNetworkRequestEvent = nullptr;
+    EmitNetworkRequestEvent(request_id, requestBodyEvent);
   }
 
   std::string stream_id = "request-" + request_id;
@@ -1833,23 +2193,21 @@ static void HandleNetworkRequestDataFormEvent(const base::DictValue& info) {
   size_t length = *info.FindDouble("dataLength");
 
   CHECK(length >= 0);
-  gCurrentNetworkStreamData->clear();
   const std::string *data_base64 = info.FindString("data");
   if (data_base64) {
     const uint8_t* data =
       reinterpret_cast<const uint8_t *>(data_base64->c_str());
-    gCurrentNetworkStreamData->insert(
-      gCurrentNetworkStreamData->begin(),
-      data,
-      // SAFETY: `data` points at `data_base64`'s buffer, so the computed end
-      // pointer (`data + data_base64->length()`) is its one-past-the-end.
-      UNSAFE_BUFFERS(data + data_base64->length())
-    );
     size_t offset = request_info->second.response_data_received;
+    SetCurrentNetworkStreamData(
+      request_id,
+      "request-data",
+      data,
+      data_base64->length()
+    );
     recordreplay::OnNetworkStreamData(
       stream_id.c_str(), offset, length, /* bookmark = */ 0
     );
-    gCurrentNetworkStreamData->clear();
+    ClearCurrentNetworkStreamData();
   }
   request_info->second.request_data_sent += length;
 }
@@ -1864,17 +2222,7 @@ static void HandleNetworkDidReceiveResponseEvent(const base::DictValue& info) {
     return;
   }
 
-  base::DictValue event;
-  event.Set("kind", "response");
-  CopyDictionaryProperty(event, info, "responseHeaders");
-  CopyDictionaryProperty(event, info, "responseProtocolVersion");
-  CopyDictionaryProperty(event, info, "responseStatus");
-  CopyDictionaryProperty(event, info, "responseStatusText");
-  CopyDictionaryProperty(event, info, "responseFromCache");
-
-  gCurrentNetworkRequestEvent = &event;
-  recordreplay::OnNetworkRequestEvent(request_id.c_str());
-  gCurrentNetworkRequestEvent = nullptr;
+  EmitResponseEvent(request_id, info);
 }
 
 static void HandleNetworkDidFinishLoadingEvent(const base::DictValue& info) {
@@ -1892,9 +2240,7 @@ static void HandleNetworkDidFinishLoadingEvent(const base::DictValue& info) {
   CopyDictionaryProperty(event, info, "encodedBodySize");
   CopyDictionaryProperty(event, info, "decodedBodySize");
 
-  gCurrentNetworkRequestEvent = &event;
-  recordreplay::OnNetworkRequestEvent(request_id.c_str());
-  gCurrentNetworkRequestEvent = nullptr;
+  EmitNetworkRequestEvent(request_id, event);
 }
 
 static void HandleNetworkDidFailLoadingEvent(const base::DictValue& info) {
@@ -1911,9 +2257,7 @@ static void HandleNetworkDidFailLoadingEvent(const base::DictValue& info) {
   event.Set("kind", "request-failed");
   CopyDictionaryProperty(event, info, "requestFailedReason");
 
-  gCurrentNetworkRequestEvent = &event;
-  recordreplay::OnNetworkRequestEvent(request_id.c_str());
-  gCurrentNetworkRequestEvent = nullptr;
+  EmitNetworkRequestEvent(request_id, event);
 }
 
 static void HandleNetworkDidReceiveDataEvent(const base::DictValue& info) {
@@ -1935,9 +2279,7 @@ static void HandleNetworkDidReceiveDataEvent(const base::DictValue& info) {
     base::DictValue event;
     event.Set("kind", "response-body");
 
-    gCurrentNetworkRequestEvent = &event;
-    recordreplay::OnNetworkRequestEvent(request_id.c_str());
-    gCurrentNetworkRequestEvent = nullptr;
+    EmitNetworkRequestEvent(request_id, event);
 
     recordreplay::OnNetworkStreamStart(
       stream_id.c_str(), "response-data", request_id.c_str()
@@ -1948,7 +2290,6 @@ static void HandleNetworkDidReceiveDataEvent(const base::DictValue& info) {
   size_t length = *info.FindDouble("dataLength");
   CHECK(length >= 0);
 
-  gCurrentNetworkStreamData->clear();
   const std::string *data_base64 = info.FindString("data");
   if (data_base64) {
     std::string out_string;
@@ -1959,18 +2300,17 @@ static void HandleNetworkDidReceiveDataEvent(const base::DictValue& info) {
     }
     const uint8_t* data =
       reinterpret_cast<const uint8_t *>(out_string.c_str());
-    gCurrentNetworkStreamData->insert(
-      gCurrentNetworkStreamData->begin(),
-      data,
-      // SAFETY: `data` points at `out_string`'s buffer, so the computed end
-      // pointer (`data + out_string.length()`) is its one-past-the-end.
-      UNSAFE_BUFFERS(data + out_string.length())
-    );
     size_t offset = request_info->second.response_data_received;
+    SetCurrentNetworkStreamData(
+      request_id,
+      "response-data",
+      data,
+      out_string.length()
+    );
     recordreplay::OnNetworkStreamData(
       stream_id.c_str(), offset, length, /* bookmark = */ 0
     );
-    gCurrentNetworkStreamData->clear();
+    ClearCurrentNetworkStreamData();
   }
   request_info->second.response_data_received += length;
 }
@@ -1986,10 +2326,10 @@ static bool checkCDPResponse(const char* label,
                              const v8::FunctionCallbackInfo<v8::Value>& args) {
   if (!response.IsSuccess()) {
     recordreplay::Warning(
-        "CDP %s failed (Code: %d): %s",
-        label,
-        response.Code(),
-        response.Message().c_str());
+        "CDPCommandFailed",
+        {{"command", label},
+         {"code", static_cast<int>(response.Code())},
+         {"message", response.Message()}});
 
     // result is null
     args.GetReturnValue().SetNull();
@@ -2086,7 +2426,7 @@ static void fromJsGetMatchedStylesForElement(
 
   auto cssAgent = getOrCreateInspectorCSSAgent(isolate);
   if (!cssAgent.has_value()) {
-    recordreplay::Warning("[RUN-2600] fromJsGetMatchedStylesForElement failed no context id");
+    recordreplay::Warning("GetMatchedStylesForElementMissingContext");
     args.GetReturnValue().SetNull();
     return;
   }
@@ -2121,9 +2461,10 @@ static void fromJsGetMatchedStylesForElement(
 
   if (!response.IsSuccess()) {
     recordreplay::Warning(
-        "CDP CSS.getMatchedStylesForNode failed (nodeId: %d, Code: "
-        "%d): %s",
-        nodeId, response.Code(), response.Message().c_str());
+        "GetMatchedStylesForNodeFailed",
+        {{"nodeId", nodeId},
+         {"code", static_cast<int>(response.Code())},
+         {"message", response.Message()}});
     args.GetReturnValue().SetNull();
     return;
   }
@@ -2165,7 +2506,7 @@ static void fromJsCssGetStylesheetByCpdId(
   auto sheetId = ToCoreString(isolate, args[0].As<v8::String>());
   auto cssAgent = getOrCreateInspectorCSSAgent(isolate);
   if (!cssAgent.has_value()) {
-    recordreplay::Warning("[RUN-2600] fromJsCssGetStylesheetByCpdId failed no context id");
+    recordreplay::Warning("GetStylesheetByCdpIdMissingContext");
     args.GetReturnValue().SetNull();
     return;
   }
@@ -2191,7 +2532,7 @@ static void fromJsDomPerformSearch(
   auto query = ToCoreString(isolate, args[0].As<v8::String>());
   auto domAgent = getOrCreateInspectorDOMAgent(isolate);
   if (!domAgent.has_value()) {
-    recordreplay::Warning("[RUN-2600] fromJsDomPerformSearch failed no context id");
+    recordreplay::Warning("DomPerformSearchMissingContext");
     return;
   }
 
@@ -2247,7 +2588,7 @@ static void fromJsCollectEventListeners(const v8::FunctionCallbackInfo<v8::Value
 
   v8::Local<v8::Array> result = v8::Array::New(isolate);
   if (!node) {
-    recordreplay::Warning("[RUN-2282] JS fromJsCollectEventListeners: invalid argument is not blink Node");
+    recordreplay::Warning("CollectEventListenersNotNode");
   } else {
     auto report_for_all_contexts = true;
     V8EventListenerInfoList eventListenerInfos;
@@ -2323,8 +2664,13 @@ static void fromJsBeginReplayCode(
   CHECK(args.Length() == 1 && args[0]->IsString() &&
         "[RuntimeError] must be called with a single string");
 
+  // The driver keeps the label pointer for as long as events stay disallowed,
+  // so it can't point into this call's Utf8Value. Callers pass a few fixed
+  // labels.
+  static auto* labels = new std::unordered_set<std::string>();
   v8::String::Utf8Value label(args.GetIsolate(), args[0]);
-  recordreplay::BeginDisallowEventsWithLabel(*label);
+  recordreplay::BeginDisallowEventsWithLabel(
+      labels->insert(*label).first->c_str());
   recordreplay::EnterReplayCode();
 }
 
@@ -2347,6 +2693,28 @@ static void fromJsGetCurrentViewportPixelSize(const v8::FunctionCallbackInfo<v8:
   args.GetReturnValue().Set(jsSize);
 }
 
+// Blink LocalDOMWindow accessors — never page-owned Window getters.
+static void fromJsGetDevicePixelRatio(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  v8::Isolate* isolate = args.GetIsolate();
+  LocalDOMWindow* window = CurrentDOMWindow(isolate);
+  if (!window) {
+    args.GetReturnValue().Set(0);
+    return;
+  }
+
+  // RUN-2989: early Mac devicePixelRatio is wrong; prefer viewport/CSS px.
+  gfx::Size size = recordreplay::GetCurrentViewportPixelSize();
+  if (size.width()) {
+    const int inner_width = window->innerWidth();
+    if (inner_width > 0) {
+      args.GetReturnValue().Set(static_cast<double>(size.width()) / inner_width);
+      return;
+    }
+  }
+  args.GetReturnValue().Set(window->devicePixelRatio());
+}
+
 /** ###########################################################################
  * misc
  * ##########################################################################*/
@@ -2363,8 +2731,8 @@ static void HandleBrowserEvent(const char* name, const char* payload) {
   // The libc check is opted out per-call via `UNSAFE_TODO`.
   if (!UNSAFE_TODO(strcmp(name, "Network.PrepareRequest"))) {
     HandleNetworkPrepareRequestEvent(val.GetDict());
-  } else if (!UNSAFE_TODO(strcmp(name, "Network.ResourceRedirect"))) {
-    HandleNetworkResourceRedirectEvent(val.GetDict());
+  } else if (!UNSAFE_TODO(strcmp(name, "Network.NavigationRedirect"))) {
+    HandleNetworkNavigationRedirectEvent(val.GetDict());
   } else if (!UNSAFE_TODO(strcmp(name, "Network.RequestData.Form"))) {
     HandleNetworkRequestDataFormEvent(val.GetDict());
   } else if (!UNSAFE_TODO(strcmp(name, "Network.DidReceiveResponse"))) {
@@ -2375,10 +2743,6 @@ static void HandleBrowserEvent(const char* name, const char* payload) {
     HandleNetworkDidFailLoadingEvent(val.GetDict());
   } else if (!UNSAFE_TODO(strcmp(name, "Network.DidReceiveData"))) {
     HandleNetworkDidReceiveDataEvent(val.GetDict());
-  } else if (!UNSAFE_TODO(strcmp(name, "Network.Navigation"))) {
-    HandleNetworkNavigationEvent(val.GetDict());
-  } else if (!UNSAFE_TODO(strcmp(name, "Network.NavigationRedirect"))) {
-    HandleNetworkNavigationRedirectEvent(val.GetDict());
   } else {
     recordreplay::Print("HandleBrowserEvent received unrecognized event %s", name);
   }
@@ -2496,10 +2860,14 @@ static bool TestEnv(const char* env) {
   return v && v[0] && v[0] != '0';
 }
 
+// Share aggregate instrumentation state across realms so that it remains
+// reachable from global evaluations in the main world.
 static v8::Eternal<v8::Object>* gRecordReplayEternalState;
 
-static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* localFrame) {
-  v8::Local<v8::Context> context = isolate->GetCurrentContext();
+void InstallRecordReplayGlobals(v8::Isolate* isolate,
+                                v8::Local<v8::Context> context) {
+  // Create the objects and functions below in this context's realm.
+  v8::Context::Scope scope(context);
 
   // Add __RECORD_REPLAY_ANNOTATION_HOOK__ as a global.
   SetFunctionProperty(isolate, context->Global(), AnnotationHookJSName,
@@ -2552,6 +2920,12 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
                       fromJsGetObjectByCdpId);
   SetFunctionProperty(isolate, args, "fromJsIsBlinkObject",
                       fromJsIsBlinkObject);
+  SetFunctionProperty(isolate, args, "fromJsIsBlinkNodeObject",
+                      fromJsIsBlinkNodeObject);
+  SetFunctionProperty(isolate, args, "fromJsIsBlinkElementObject",
+                      fromJsIsBlinkElementObject);
+  SetFunctionProperty(isolate, args, "fromJsIsBlinkCSSStyleDeclarationObject",
+                      fromJsIsBlinkCSSStyleDeclarationObject);
   SetFunctionProperty(isolate, args, "fromJsHasReturnValue",
                       fromJsHasReturnValue);
   SetFunctionProperty(isolate, args, "fromJsGetReturnValue",
@@ -2560,6 +2934,10 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
   // networking
   SetFunctionProperty(isolate, args, "getCurrentNetworkRequestEvent",
                       GetCurrentNetworkRequestEvent);
+  SetFunctionProperty(isolate, args, "getCurrentNetworkRequestId",
+                      GetCurrentNetworkRequestId);
+  SetFunctionProperty(isolate, args, "getCurrentNetworkStreamKind",
+                      GetCurrentNetworkStreamKind);
   SetFunctionProperty(isolate, args, "getCurrentNetworkStreamData",
                       GetCurrentNetworkStreamData);
 
@@ -2594,6 +2972,8 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
   // Graphics.
   SetFunctionProperty(isolate, args, "getCurrentViewportPixelSize",
                       fromJsGetCurrentViewportPixelSize);
+  SetFunctionProperty(isolate, args, "fromJsGetDevicePixelRatio",
+                      fromJsGetDevicePixelRatio);
 
   // unsorted Replay stuff
   SetFunctionProperty(
@@ -2619,6 +2999,7 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
   SetFunctionProperty(isolate, args, "getPersistentId", fromJsGetPersistentId);
   SetFunctionProperty(isolate, args, "checkPersistentId", fromJsCheckPersistentId);
   SetFunctionProperty(isolate, args, "getProgressCounter", fromJsGetProgressCounter);
+  SetFunctionProperty(isolate, args, "forceCheckpoint", fromJsForceCheckpoint);
   SetFunctionProperty(isolate, args, "registerRootFrameScript",
                       fromJsRegisterRootFrameScript);
 
@@ -2628,8 +3009,10 @@ static void InitializeRecordReplayApiObjects(v8::Isolate* isolate, LocalFrame* l
     ForTestingSerializeValueToArray);
 
   if (gRecordReplayEternalState == nullptr) {
+    v8::Local<v8::Object> eternal_state = v8::Object::New(isolate);
+    eternal_state->SetPrototype(context, v8::Null(isolate)).Check();
     gRecordReplayEternalState =
-        new v8::Eternal<v8::Object>(isolate, v8::Object::New(isolate));
+        new v8::Eternal<v8::Object>(isolate, eternal_state);
   }
   DefineProperty(isolate, context->Global(), "__RECORD_REPLAY_ETERNAL_STATE__",
                  gRecordReplayEternalState->Get(isolate));
@@ -2642,27 +3025,35 @@ void InitializeRecordReplay(
   gActiveNetworkRequests =
       new std::unordered_map<std::string, NetworkRequestStatus>();
   gCurrentNetworkStreamData = new std::vector<uint8_t>();
-  
+
   // Add process type metadata.
   std::string metadata = std::string("{ \"process\": \"") + processType + "\" }";
   V8RecordReplayAddMetadata(metadata.c_str());
 }
 
 void InitializeRecordReplayAfterCheckpoint() {
+  // The first replay window does this even when it isn't a root frame and so
+  // takes no checkpoint; the first root frame takes it later
+  // (LocalWindowProxy::Initialize).
+  static bool initialized = false;
+  if (initialized) {
+    return;
+  }
+  initialized = true;
   // Note: This can immediately invoke the callback for events that happened
   // before the callback was registered.
   V8RecordReplayRegisterBrowserEventCallback(HandleBrowserEvent);
 }
 
 static void InitializeReplayScripts(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
-  // Register context, s.t. when handling a command and we are not on a 
+  // Register context, s.t. when handling a command and we are not on a
   // JS stack, we can always use the current root frame's context.
   // Note: We are assuming that each tab has its own process, for now.
   //   (That might not hold true for tabs of the same domain - not sure)
   V8RecordReplaySetDefaultContext(isolate, context);
-  
+
   // Initialize __RECORD_REPLAY__ things.
-  InitializeRecordReplayApiObjects(isolate, localFrame);
+  InstallRecordReplayGlobals(isolate, context);
 
   if (recordreplay::FeatureEnabled("collect-source-maps") &&
       !TestEnv("RECORD_REPLAY_DISABLE_SOURCEMAP_COLLECTION")) {
@@ -2701,21 +3092,42 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
       localFrame->IsMainFrame(),
 
       localFrame->Parent() ? localFrame->Parent()->IsMainFrame() : -1,
-      
+
       localFrame->GetDocument()->Url().GetString().Utf8().c_str()
       );
-  
+
   // NOTE: The root `LocalFrame` can change over time.
   gRootLocalFrame = localFrame;
+
+  // Retain last-resort font before first checkpoint for post-diverge PF inject.
+  FontCache::WarmReplayLastResortFont();
 
   // 1. Reset paint surface so that paints to the new root's surface are not ignored.
   // See: https://linear.app/replay/issue/RUN-2400
   recordreplay::DoResetPaintSurface();
-  
+
   // 2. Initialize sourcemap worker, command handlers etc.
+  // about:blank after a page takes no checkpoints.
+  const bool blank = IsBlankReplayWindow(localFrame);
+  gHadPageRootFrame |= !blank;
   gReplayScriptsAlive = true;
-  recordreplay::Print("ReplayScript STATUS_CHANGE_ALIVE");
+  recordreplay::SetScriptAlive(!blank || !gHadPageRootFrame);
+  recordreplay::Print("ReplayScript STATUS_CHANGE_ALIVE %s group=%d win=%d frame=%d",
+      v8::internal::RecordReplayContextAddressToken(
+          isolate, *reinterpret_cast<v8::internal::Address*>(*context), true)
+          .c_str(),
+      v8::internal::gPauseContextGroupId,
+      localFrame->DomWindow()->RecordReplayId(),
+      localFrame->RecordReplayId());
   InitializeReplayScripts(isolate, localFrame, context);
+}
+
+static void RunRegisteredRootFrameScripts(v8::Isolate* isolate,
+                                          v8::Local<v8::Context> context) {
+  for (const auto& script : GetRegisteredRootFrameScripts()) {
+    recordreplay::AutoDisallowEvents disallow("RunRegisteredRootFrameScripts");
+    RunScript(isolate, context, script.c_str(), kInternalScriptURL);
+  }
 }
 
 void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
@@ -2728,10 +3140,7 @@ void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame
   }
 
   // 2. Initialize registered root frame scripts
-  for (const auto& script : GetRegisteredRootFrameScripts()) {
-    recordreplay::AutoDisallowEvents disallow("RunRegisteredRootFrameScripts");
-    RunScript(isolate, context, script.c_str(), kInternalScriptURL);
-  }
+  RunRegisteredRootFrameScripts(isolate, context);
 
   // 3. Initialize React and Redux Devtools stubs.
   if (recordreplay::FeatureEnabled("react-devtools-backend") &&
@@ -2746,8 +3155,36 @@ void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame
 
 void OnNewWindowAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> newContext) {
   recordreplay::AutoMarkReplayCode amrc;
+  // Other local roots get their own bindings, as isolated worlds do, without
+  // the command API: a popup is its own window.top, and an OOPIF's top is
+  // usually in another process. The bindings are read-only, so an OOPIF whose
+  // top is a local window of this renderer (A embedding B embedding A) keeps
+  // them instead of sharing the top's below.
+  const bool ordinaryLocalRoot = localFrame->IsLocalRoot() &&
+                                 !IsAliveRootFrame(localFrame) &&
+                                 gReplayScriptsAlive;
+  if (ordinaryLocalRoot) {
+    InstallRecordReplayGlobals(isolate, newContext);
+    // The scripts define helpers on this window's __RECORD_REPLAY_ARGUMENTS__,
+    // which its code calls when its sources are replaced while replaying.
+    RunRegisteredRootFrameScripts(isolate, newContext);
+  }
+
   RunScript(isolate, newContext, gOnNewWindowScript,
             "record-replay-OnNewWindow");
+
+  if (ordinaryLocalRoot) {
+    RecordReplayOrdinaryLocalRootIds().insert(localFrame->RecordReplayId());
+    // Runtime.enable forces main world initialization in the frame's page,
+    // and with replay-only command handling it runs only when replaying.
+    // Set it on both sides, as the root does in InitializeReplayScripts.
+    if (recordreplay::FeatureEnabled("force-main-world-initialization")) {
+      localFrame->GetSettings()->SetForceMainWorldInitialization(true);
+    }
+    if (IsCommandHandlingEnabled() && gCDPMessageCallback) {
+      RecordReplayEnableRuntimeForLocalRoot(isolate, localFrame);
+    }
+  }
 
   LocalFrame* parentFrame = DynamicTo<LocalFrame>(localFrame->Parent());
   recordreplay::Print(

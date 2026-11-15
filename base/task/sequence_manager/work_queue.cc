@@ -221,6 +221,12 @@ Task WorkQueue::TakeTaskFromWorkQueue() {
 
   Task pending_task = std::move(tasks_.front());
   tasks_.pop_front();
+  if (!recordreplay::AreEventsUnavailable() &&
+      !recordreplay::AreEventsPassedThrough() &&
+      !pending_task.RecordReplayId()) {
+    recordreplay::Warning("DivergentTaskTakenFromWorkQueue",
+                          {{"postedFrom", pending_task.posted_from.ToString()}});
+  }
   // NB immediate tasks have a different pipeline to delayed ones.
   if (tasks_.empty()) {
     // NB delayed tasks are inserted via Push, no don't need to reload those.
@@ -233,8 +239,8 @@ Task WorkQueue::TakeTaskFromWorkQueue() {
     }
 
     // https://linear.app/replay/issue/RUN-1150
-    recordreplay::Assert("[RUN-1150] WorkQueue::TakeTaskFromWorkQueue #2 %zu",
-                         tasks_.size());
+    REPLAY_ASSERT("[RUN-1150] WorkQueue::TakeTaskFromWorkQueue #2 %zu %d",
+                         tasks_.size(), pending_task.RecordReplayId());
   }
 
   DCHECK(work_queue_sets_);

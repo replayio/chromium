@@ -86,7 +86,7 @@ CachedMatchedProperties::CachedMatchedProperties(
       entries({Entry{style, parent_style, layout_parent_style,
                      originating_element_style, element_type, clock}}) {
   for (const auto& new_matched_properties : properties) {
-    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+    if (recordreplay::IsRecordingOrReplaying("leak-references",
                                              "CachedMatchedProperties")) {
       replay_matched_properties_strong_.push_back(
           new_matched_properties.properties);

@@ -4,12 +4,15 @@
 
 #include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
 
+#include <unordered_map>
+
 #include "base/base64.h"
 #include "base/compiler_specific.h"
 #include "base/json/json_writer.h"
 #include "base/values.h"
 #include "net/base/net_errors.h"
 #include "third_party/blink/public/platform/web_url_error.h"
+#include "third_party/blink/renderer/bindings/core/v8/capture_source_location.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/scriptable_document_parser.h"
 #include "third_party/blink/renderer/core/html/html_frame_owner_element.h"
@@ -20,6 +23,7 @@
 #include "third_party/blink/renderer/platform/loader/fetch/resource_request.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_response.h"
 #include "third_party/blink/renderer/platform/network/encoded_form_data.h"
+#include "third_party/blink/renderer/platform/network/http_names.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "v8/include/v8.h"
 
@@ -27,7 +31,7 @@ using namespace blink;
 
 namespace recordreplay {
 
-static bool PermitRecordReplayBrowserEvents() {
+bool ShouldEmitRecordReplayNetworkBrowserEvents() {
   return IsRecordingOrReplaying("notify-network") && v8::IsMainThread();
 }
 
@@ -48,15 +52,88 @@ static const char* HttpVersionToString(blink::ResourceResponse::HTTPVersion vers
   }
 }
 
-static std::string RecordReplayNetworkRequestId(uint64_t inspector_id) {
+struct ReplayNetworkRequestState {
+  size_t redirect_count = 0;
+  bool has_form_body = false;
+  std::string form_body;
+  // Initiated by a Replay-injected script: not app traffic.
+  bool replay_internal = false;
+};
+
+// This is keyed by the original inspector identifier. It tracks producer-side
+// request-chain state used to derive replay request ids and preserve request
+// body data for redirected hops when Blink no longer exposes the redirected
+// body on the prepared ResourceRequest.
+static std::unordered_map<uint64_t, ReplayNetworkRequestState>*
+    gReplayNetworkRequestStates = nullptr;
+
+static std::unordered_map<uint64_t, ReplayNetworkRequestState>&
+GetReplayNetworkRequestStates() {
+  if (!gReplayNetworkRequestStates) {
+    gReplayNetworkRequestStates =
+        new std::unordered_map<uint64_t, ReplayNetworkRequestState>();
+  }
+  return *gReplayNetworkRequestStates;
+}
+
+static uint64_t RecordReplayNetworkInspectorId(uint64_t inspector_id) {
   // Inspector identifiers can vary when replaying due to differences in inspector
   // behavior. Make sure the identifiers we report to the recorder are consistent
   // by manually recording/replaying the identifier.
-  uint64_t identifier = RecordReplayValue("NetworkRequestId", inspector_id);
+  return RecordReplayValue("NetworkInspectorId", inspector_id);
+}
 
+static std::string NetworkRequestIdForIdentifier(uint64_t identifier) {
   char request_id[64];
-  snprintf(request_id, 64, "%d.%lu", (int) base::GetCurrentProcId(), (unsigned long) identifier);
-  return std::string(request_id);
+  snprintf(request_id, 64, "%d.%lu", (int) base::GetCurrentProcId(),
+           (unsigned long)identifier);
+  std::string root_request_id(request_id);
+
+  auto& request_states = GetReplayNetworkRequestStates();
+  auto it = request_states.find(identifier);
+  if (it == request_states.end() || it->second.redirect_count == 0) {
+    return root_request_id;
+  }
+
+  return root_request_id + ":" + std::to_string(it->second.redirect_count);
+}
+
+static std::string RecordReplayNetworkRequestId(uint64_t inspector_id) {
+  return NetworkRequestIdForIdentifier(
+      RecordReplayNetworkInspectorId(inspector_id));
+}
+
+static void RecordReplayNetworkIncrementRedirectCount(uint64_t inspector_id) {
+  const uint64_t identifier = RecordReplayNetworkInspectorId(inspector_id);
+  GetReplayNetworkRequestStates()[identifier].redirect_count++;
+}
+
+static void RecordReplayNetworkClearRequestState(uint64_t inspector_id) {
+  const uint64_t identifier = RecordReplayNetworkInspectorId(inspector_id);
+  GetReplayNetworkRequestStates().erase(identifier);
+}
+
+static bool IsReplayInternalRequest(uint64_t identifier) {
+  auto& request_states = GetReplayNetworkRequestStates();
+  auto it = request_states.find(identifier);
+  return it != request_states.end() && it->second.replay_internal;
+}
+
+// Whether the topmost named JS frame is a Replay-injected script.
+// Must match between recording and replaying: it gates NewBookmark().
+static bool IsInReplayScriptFrame() {
+  v8::Isolate* isolate = v8::Isolate::TryGetCurrent();
+  return isolate &&
+         CaptureCurrentScriptUrl(isolate).StartsWith("record-replay-");
+}
+
+static void EmitRequestDataFormEvent(const std::string& request_id,
+                                     const std::string& data) {
+  base::DictValue requestDataDict;
+  requestDataDict.Set("requestId", request_id);
+  requestDataDict.Set("data", data);
+  requestDataDict.Set("dataLength", (int)data.size());
+  BrowserEvent("Network.RequestData.Form", requestDataDict);
 }
 
 static const char* GetRequestCauseString(const ResourceRequest& req) {
@@ -189,10 +266,28 @@ BuildInitiatorObject(const blink::Document* document,
   return std::optional<base::DictValue>();
 }
 
-void OnNetworkPrepareRequest(const blink::Document* document, const blink::Resource* resource,
+void OnNetworkPrepareRequest(const blink::Document* document,
+                             const blink::Resource* resource,
                              const blink::ResourceRequest& request) {
-  if (!PermitRecordReplayBrowserEvents()) {
+  const blink::ResourceResponse redirect_response;
+  OnNetworkPrepareRequest(document, resource, request, redirect_response);
+}
+
+void OnNetworkPrepareRequest(const blink::Document* document,
+                             const blink::Resource* resource,
+                             const blink::ResourceRequest& request,
+                             const blink::ResourceResponse& redirect_response) {
+  if (!ShouldEmitRecordReplayNetworkBrowserEvents()) {
     return;
+  }
+
+  const uint64_t inspector_identifier =
+      RecordReplayNetworkInspectorId(request.InspectorId());
+
+  // Redirected hops inherit their chain's initiator.
+  auto& request_state = GetReplayNetworkRequestStates()[inspector_identifier];
+  if (redirect_response.IsNull() && IsInReplayScriptFrame()) {
+    request_state.replay_internal = true;
   }
 
   // We must allow user agent scripts when taking a new bookmark.
@@ -201,11 +296,17 @@ void OnNetworkPrepareRequest(const blink::Document* document, const blink::Resou
 
   // Capture the record replay bookmark for the network request here,
   // where the devtools stack id is taken.
-  uint64_t bookmark = NewBookmark();
+  uint64_t bookmark = request_state.replay_internal ? 0 : NewBookmark();
 
+  std::string redirect_source_id;
+  if (!redirect_response.IsNull()) {
+    redirect_source_id = RecordReplayNetworkRequestId(request.InspectorId());
+    RecordReplayNetworkIncrementRedirectCount(request.InspectorId());
+  }
   std::string requestId = RecordReplayNetworkRequestId(request.InspectorId());
 
-  if (recordreplay::DependencyGraphEnabled()) {
+  if (recordreplay::DependencyGraphEnabled() &&
+      !request_state.replay_internal) {
     base::DictValue info;
     info.Set("kind", "networkRequest");
     info.Set("requestId", requestId);
@@ -234,6 +335,13 @@ void OnNetworkPrepareRequest(const blink::Document* document, const blink::Resou
   }
   dict.Set("requestHeaders", std::move(headers));
 
+  if (!redirect_response.IsNull()) {
+    dict.Set("redirectSourceId", redirect_source_id);
+  }
+  if (request_state.replay_internal) {
+    dict.Set("replayInternal", true);
+  }
+
   if (resource) {
     const blink::FetchInitiatorInfo& initiator_info = resource->Options().initiator_info;
     std::optional<base::DictValue> initiator_obj = BuildInitiatorObject(document, initiator_info);
@@ -249,45 +357,78 @@ void OnNetworkPrepareRequest(const blink::Document* document, const blink::Resou
     request.Body().FormBody();
   if (form_body) {
     String data = form_body->FlattenToString();
-    base::DictValue requestDataDict;
-    requestDataDict.Set("requestId", requestId);
     std::string dataStr = data.Utf8();
-    requestDataDict.Set("data", dataStr);
-    requestDataDict.Set("dataLength", (int)dataStr.size());
-    BrowserEvent("Network.RequestData.Form", requestDataDict);
+    request_state.has_form_body = true;
+    request_state.form_body = dataStr;
+    EmitRequestDataFormEvent(requestId, dataStr);
+  } else if (!redirect_response.IsNull() && request_state.has_form_body &&
+             request.HttpMethod() != http_names::kGET &&
+             request.HttpMethod() != http_names::kHEAD) {
+    // Blink can stop exposing the upload body on the redirected prepared
+    // request. If the redirected method is still non-GET/HEAD here, Chromium
+    // preserved the upload semantics across the redirect; otherwise the method
+    // would already have been rewritten to GET and the body dropped.
+    // Reuse the cached original form body for that redirected hop.
+    EmitRequestDataFormEvent(requestId, request_state.form_body);
   }
 }
 
-void OnNetworkResourceRedirect(uint64_t inspector_id, const blink::KURL& new_url,
-                               blink::ResourceRequest* new_request) {
-  if (!PermitRecordReplayBrowserEvents()) {
+void OnNetworkNavigationRedirect(uint64_t inspector_id,
+                                 const blink::KURL& new_url,
+                                 const blink::ResourceRequest& request,
+                                 const blink::ResourceResponse& redirect_response) {
+  if (!ShouldEmitRecordReplayNetworkBrowserEvents()) {
     return;
   }
 
+  const std::string previous_request_id =
+      RecordReplayNetworkRequestId(inspector_id);
+  RecordReplayNetworkIncrementRedirectCount(inspector_id);
+  const std::string redirected_request_id =
+      RecordReplayNetworkRequestId(inspector_id);
   base::DictValue dict;
-  dict.Set("requestId", RecordReplayNetworkRequestId(inspector_id));
+  dict.Set("requestId", redirected_request_id);
+  dict.Set("redirectSourceId", previous_request_id);
   dict.Set("requestUrl", new_url.GetString().Utf8());
+  dict.Set("requestMethod", request.HttpMethod().Utf8());
 
   base::ListValue headers;
-  if (new_request) {
-    for (auto header : new_request->HttpHeaderFields()) {
-      base::DictValue header_obj;
-      header_obj.Set("name", header.key.Utf8());
-      header_obj.Set("value", header.value.Utf8());
-      headers.Append(std::move(header_obj));
-    }
+  for (auto header : request.HttpHeaderFields()) {
+    base::DictValue header_obj;
+    header_obj.Set("name", header.key.Utf8());
+    header_obj.Set("value", header.value.Utf8());
+    headers.Append(std::move(header_obj));
   }
   dict.Set("requestHeaders", std::move(headers));
 
-  BrowserEvent("Network.ResourceRedirect", dict);
+  {
+    // Include the redirect response information as well since that is useful for understanding the redirect chain and why a request was redirected.
+    const char* http_version = HttpVersionToString(redirect_response.HttpVersion());
+    base::ListValue response_headers;
+    for (auto header : redirect_response.HttpHeaderFields()) {
+      base::DictValue header_obj;
+      header_obj.Set("name", header.key.Utf8());
+      header_obj.Set("value", header.value.Utf8());
+      response_headers.Append(std::move(header_obj));
+    }
+    dict.Set("responseHeaders", std::move(response_headers));
+    dict.Set("responseProtocolVersion", http_version);
+    dict.Set("responseStatus", redirect_response.HttpStatusCode());
+    dict.Set("responseStatusText", redirect_response.HttpStatusText().Utf8());
+    dict.Set("responseFromCache", redirect_response.WasCached());
+  }
+
+  BrowserEvent("Network.NavigationRedirect", dict);
 }
 
 void OnNetworkReceiveResponse(uint64_t inspector_id,
-                              const blink::ResourceResponse& response) {
-  if (!PermitRecordReplayBrowserEvents()) {
+                              const blink::ResourceResponse& response,
+                              std::optional<bool> response_from_cache) {
+  if (!ShouldEmitRecordReplayNetworkBrowserEvents()) {
     return;
   }
 
+  blink::ScriptForbiddenScope::AllowUserAgentScript allow_script;
   base::DictValue dict;
   dict.Set("requestId", RecordReplayNetworkRequestId(inspector_id));
   const char* http_version = HttpVersionToString(response.HttpVersion());
@@ -302,18 +443,22 @@ void OnNetworkReceiveResponse(uint64_t inspector_id,
   dict.Set("responseProtocolVersion", http_version);
   dict.Set("responseStatus", response.HttpStatusCode());
   dict.Set("responseStatusText", response.HttpStatusText().Utf8());
-  dict.Set("responseFromCache", response.WasCached());
+  dict.Set("responseFromCache",
+           response_from_cache.value_or(response.WasCached()));
   BrowserEvent("Network.DidReceiveResponse", dict);
 }
 
 void OnNetworkReceiveData(uint64_t inspector_id, const char* data, int length) {
-  if (!PermitRecordReplayBrowserEvents()) {
+  if (!ShouldEmitRecordReplayNetworkBrowserEvents()) {
     return;
   }
 
-  std::string requestId = RecordReplayNetworkRequestId(inspector_id);
+  blink::ScriptForbiddenScope::AllowUserAgentScript allow_script;
+  const uint64_t identifier = RecordReplayNetworkInspectorId(inspector_id);
+  std::string requestId = NetworkRequestIdForIdentifier(identifier);
 
-  if (recordreplay::DependencyGraphEnabled()) {
+  if (recordreplay::DependencyGraphEnabled() &&
+      !IsReplayInternalRequest(identifier)) {
     base::DictValue info;
     info.Set("kind", "networkReceiveData");
     info.Set("requestId", requestId);
@@ -341,13 +486,16 @@ void OnNetworkReceiveData(uint64_t inspector_id, const char* data, int length) {
 void OnNetworkFinishLoading(uint64_t inspector_id,
                             int64_t encoded_body_length,
                             int64_t decoded_body_length) {
-  if (!PermitRecordReplayBrowserEvents()) {
+  if (!ShouldEmitRecordReplayNetworkBrowserEvents()) {
     return;
   }
 
-  std::string requestId = RecordReplayNetworkRequestId(inspector_id);
+  blink::ScriptForbiddenScope::AllowUserAgentScript allow_script;
+  const uint64_t identifier = RecordReplayNetworkInspectorId(inspector_id);
+  std::string requestId = NetworkRequestIdForIdentifier(identifier);
 
-  if (recordreplay::DependencyGraphEnabled()) {
+  if (recordreplay::DependencyGraphEnabled() &&
+      !IsReplayInternalRequest(identifier)) {
     base::DictValue info;
     info.Set("kind", "networkFinishLoading");
     info.Set("requestId", requestId);
@@ -361,16 +509,20 @@ void OnNetworkFinishLoading(uint64_t inspector_id,
   dict.Set("encodedBodySize", (double) encoded_body_length);
   dict.Set("decodedBodySize", (double) decoded_body_length);
   BrowserEvent("Network.DidFinishLoading", dict);
+  RecordReplayNetworkClearRequestState(inspector_id);
 }
 
 void OnNetworkFail(uint64_t inspector_id, const blink::WebURLError& error) {
-  if (!PermitRecordReplayBrowserEvents()) {
+  if (!ShouldEmitRecordReplayNetworkBrowserEvents()) {
     return;
   }
 
-  std::string requestId = RecordReplayNetworkRequestId(inspector_id);
+  blink::ScriptForbiddenScope::AllowUserAgentScript allow_script;
+  const uint64_t identifier = RecordReplayNetworkInspectorId(inspector_id);
+  std::string requestId = NetworkRequestIdForIdentifier(identifier);
 
-  if (recordreplay::DependencyGraphEnabled()) {
+  if (recordreplay::DependencyGraphEnabled() &&
+      !IsReplayInternalRequest(identifier)) {
     base::DictValue info;
     info.Set("kind", "networkFail");
     info.Set("requestId", requestId);
@@ -384,6 +536,7 @@ void OnNetworkFail(uint64_t inspector_id, const blink::WebURLError& error) {
   dict.Set("requestId", requestId);
   dict.Set("requestFailedReason", std::move(reason));
   BrowserEvent("Network.DidFailLoading", dict);
+  RecordReplayNetworkClearRequestState(inspector_id);
 }
 
 }  // namespace recordreplay

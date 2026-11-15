@@ -40,6 +40,13 @@
 namespace blink {
 
 void DeferredTaskHandler::Lock() {
+  // Audio nodes finalized in GCs take the lock at different points when
+  // replaying, where it can't be ordered (see AudioNode::Dispose).
+  if (recordreplay::AreEventsDisallowed()) {
+    recordreplay::AutoPassThroughEvents pass_through;
+    context_graph_mutex_.Acquire();
+    return;
+  }
   context_graph_mutex_.Acquire();
 }
 
@@ -48,6 +55,12 @@ bool DeferredTaskHandler::TryLock() {
 }
 
 void DeferredTaskHandler::Unlock() {
+  // See Lock().
+  if (recordreplay::AreEventsDisallowed()) {
+    recordreplay::AutoPassThroughEvents pass_through;
+    context_graph_mutex_.Release();
+    return;
+  }
   context_graph_mutex_.Release();
 }
 
@@ -368,6 +381,21 @@ void DeferredTaskHandler::AddRenderingOrphanHandler(
   rendering_orphan_handlers_.push_back(std::move(handler));
 }
 
+void DeferredTaskHandler::RecordReplayKeepDisposedHandler(
+    scoped_refptr<AudioHandler> handler) {
+  DCHECK(IsMainThread());
+  replay_strong_disposed_handlers_.push_back(std::move(handler));
+}
+
+void DeferredTaskHandler::RecordReplayLeakDisposedHandlers() {
+  AssertGraphOwner();
+  for (scoped_refptr<AudioHandler>& handler :
+       replay_strong_disposed_handlers_) {
+    handler->AddRef();
+  }
+  replay_strong_disposed_handlers_.clear();
+}
+
 void DeferredTaskHandler::RequestToDeleteHandlersOnMainThread() {
   DCHECK(IsAudioThread());
   AssertGraphOwner();
@@ -412,6 +440,9 @@ void DeferredTaskHandler::ClearHandlersToBeDeleted() {
   finished_tail_processing_handlers_.clear();
   rendering_orphan_handlers_.clear();
   deletable_orphan_handlers_.clear();
+  // Kept handlers weren't disposed, so their outputs can still be wired to
+  // each other's inputs, and destroying them would touch freed outputs.
+  RecordReplayLeakDisposedHandlers();
   automatic_pull_handlers_.clear();
   finished_source_handlers_.clear();
   active_source_handlers_.clear();

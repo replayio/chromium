@@ -110,7 +110,7 @@ class BiquadFilterHandler final : public AudioHandler {
   AudioFloatArray detune_sample_accurate_values_;
 
   // Synchronize process() with getting and setting the filter coefficients.
-  mutable base::Lock process_lock_;
+  mutable base::Lock process_lock_{"BiquadFilterHandler"};
 
   base::WeakPtrFactory<BiquadFilterHandler> weak_ptr_factory_{this};
 };

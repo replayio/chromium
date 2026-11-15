@@ -476,6 +476,11 @@ void TaskQueueImpl::PostImmediateTaskImplOrdered(PostedTask task,
     any_thread_.immediate_incoming_queue.push_back(
         Task(std::move(task), sequence_number, sequence_number, queue_time));
 
+    REPLAY_ASSERT(
+        "[RUN-1126] TaskQueueImpl::PostImmediateTaskImpl 1 %d %d",
+        add_queue_time_to_tasks || delayed_fence_allowed_,
+        any_thread_.immediate_incoming_queue.back().RecordReplayId());
+
     sequence_manager_->WillQueueTask(
         &any_thread_.immediate_incoming_queue.back());
     MaybeReportIpcTaskQueuedFromAnyThreadLocked(
@@ -531,10 +536,6 @@ void TaskQueueImpl::PostImmediateTaskImplUnordered(PostedTask task,
 
   bool add_queue_time_to_tasks = sequence_manager_->GetAddQueueTimeToTasks();
   TimeTicks queue_time;
-
-  recordreplay::Assert(
-      "[RUN-1126] TaskQueueImpl::PostImmediateTaskImpl 1 %d",
-      add_queue_time_to_tasks || delayed_fence_allowed_);
 
   if (add_queue_time_to_tasks || delayed_fence_allowed_)
     queue_time = sequence_manager_->any_thread_clock_maybe_events_disallowed()->NowTicks();

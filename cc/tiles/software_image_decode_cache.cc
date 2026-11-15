@@ -90,7 +90,8 @@ class SoftwareImageDecodeTaskImpl : public TileTask {
         devtools_instrumentation::ScopedImageDecodeTask::DecodeType::kSoftware,
         ImageDecodeCache::ToScopedTaskType(task_type_),
         ImageDecodeCache::ToScopedImageType(image_type));
-    recordreplay::Assert("[RUN-593-1824] RunOnWorkerThread %s", image_key_.ToString().c_str());
+    REPLAY_ASSERT("[RUN-593-1824] RunOnWorkerThread %s %d",
+                         image_key_.ToString().c_str(), RecordReplayId());
     SoftwareImageDecodeCache::TaskProcessingResult result =
         cache_->DecodeImageInTask(image_key_, paint_image_, task_type_);
 
@@ -373,9 +374,9 @@ SoftwareImageDecodeCache::DecodeImageIfNecessary(const CacheKey& key,
       return TaskProcessingResult::kLockOnly;
   }
 
-  recordreplay::Assert(
-      "[RUN-593-1824] SoftwareImageDecodeCache::DecodeImageIfNecessary B %d",
-      (int)key.type());
+  REPLAY_ASSERT(
+      "[RUN-593-1824] SoftwareImageDecodeCache::DecodeImageIfNecessary B %d %d",
+      (int)key.type(), paint_image.stable_id());
 
   std::unique_ptr<CacheEntry> local_cache_entry;
   // If we can use the original decode, we'll definitely need a decode.

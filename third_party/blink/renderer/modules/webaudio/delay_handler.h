@@ -56,7 +56,7 @@ class MODULES_EXPORT DelayHandler final : public AudioHandler {
   unsigned render_quantum_frames_;
 
   Vector<std::unique_ptr<Delay>> kernels_ GUARDED_BY(process_lock_);
-  mutable base::Lock process_lock_;
+  mutable base::Lock process_lock_{"DelayHandler"};
 
   scoped_refptr<AudioParamHandler> delay_time_;
   double max_delay_time_;

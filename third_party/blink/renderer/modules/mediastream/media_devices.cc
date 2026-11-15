@@ -10,6 +10,7 @@
 #include "base/feature_list.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
+#include "base/record_replay.h"
 #include "base/strings/strcat.h"
 #include "base/strings/stringprintf.h"
 #include "base/uuid.h"
@@ -557,11 +558,14 @@ ScriptPromise<IDLSequence<MediaDeviceInfo>> MediaDevices::enumerateDevices(
             kEnumerateDevicesTimeout + base::Milliseconds(100));
   }
 
+  // There is no video capture while recording/replaying, so cameras are not
+  // listed.
+  const bool video_input = !recordreplay::IsRecordingOrReplaying("no-video");
   LocalFrame* frame = LocalDOMWindow::From(script_state)->GetFrame();
   GetDispatcherHost(frame).EnumerateDevices(
-      /*request_audio_input=*/true, /*request_video_input=*/true,
+      /*request_audio_input=*/true, /*request_video_input=*/video_input,
       /*request_audio_output=*/true,
-      /*request_video_input_capabilities=*/true,
+      /*request_video_input_capabilities=*/video_input,
       /*request_audio_input_capabilities=*/
       base::FeatureList::IsEnabled(kEnumerateDevicesRequestAudioCapabilities),
       BindOnce(&MediaDevices::DevicesEnumerated, WrapPersistent(this),
@@ -1364,9 +1368,10 @@ void MediaDevices::StartObserving() {
   }
 
   starting_observation_ = true;
+  const bool video_input = !recordreplay::IsRecordingOrReplaying("no-video");
   GetDispatcherHost(window->GetFrame())
       .EnumerateDevices(/*request_audio_input=*/true,
-                        /*request_video_input=*/true,
+                        /*request_video_input=*/video_input,
                         /*request_audio_output=*/true,
                         /*request_video_input_capabilities=*/false,
                         /*request_audio_input_capabilities=*/false,
@@ -1393,8 +1398,9 @@ void MediaDevices::FinalizeStartObserving(
 
   current_device_infos_ = enumeration;
 
+  const bool video_input = !recordreplay::IsRecordingOrReplaying("no-video");
   GetDispatcherHost(window->GetFrame())
-      .AddMediaDevicesListener(true /* audio input */, true /* video input */,
+      .AddMediaDevicesListener(true /* audio input */, video_input,
                                true /* audio output */,
                                receiver_.BindNewPipeAndPassRemote(
                                    GetExecutionContext()->GetTaskRunner(

@@ -199,6 +199,15 @@ class PLATFORM_EXPORT ParkableStringImpl
     return &metadata_->digest_;
   }
 
+  // Record/replay diagnostics: a lock-free-to-consume snapshot of the state
+  // feeding |MaybeAgeOrParkString()|. Captured under |lock_|, no Assert inside.
+  struct AgeStateSnapshot {
+    int status;  // Status ordinal.
+    int age;     // Age ordinal.
+    int has_one_ref;  // 1/0, or -1 when |string_| is null.
+  };
+  AgeStateSnapshot CaptureAgeStateSnapshot();
+
   void Release() const LOCKS_EXCLUDED(metadata_->lock_) {
     if (!may_be_parked()) {
       if (RefCountedThreadSafeBase::Release()) {

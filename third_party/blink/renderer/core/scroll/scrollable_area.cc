@@ -37,6 +37,7 @@
 #include "base/functional/callback_helpers.h"
 #include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
+#include "base/record_replay.h"
 #include "cc/input/main_thread_scrolling_reason.h"
 #include "cc/input/scroll_snap_data.h"
 #include "cc/input/scroll_utils.h"
@@ -388,6 +389,11 @@ bool ScrollableArea::SetScrollOffsetInternal(
       break;
 
     case mojom::blink::ScrollType::kProgrammatic:
+      // Layout C++ callers share this; JS APIs throw at their IDL entry points.
+      // Dropping `scroll_tracker` settles a pending scroll promise.
+      if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
+        return false;
+      }
       return InitiateScrollAnimation(clamped_offset, scroll_type, behavior,
                                      animation_adjustment, source_type,
                                      std::move(scroll_tracker));

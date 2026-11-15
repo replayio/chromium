@@ -23,6 +23,7 @@
 #include "third_party/blink/renderer/core/typed_arrays/dom_array_buffer.h"
 #include "third_party/blink/renderer/core/url/url_search_params.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/v8_throw_exception.h"
 #include "third_party/blink/renderer/platform/heap/disallow_new_wrapper.h"
@@ -325,6 +326,17 @@ ScriptPromise<DOMArrayBuffer> Body::arrayBuffer(
 
 ScriptPromise<Blob> Body::blob(ScriptState* script_state,
                                ExceptionState& exception_state) {
+  // Reject invalid consumption first, as LoadAndConvertBody() does below.
+  RejectInvalidConsumption(exception_state);
+  if (exception_state.HadException())
+    return EmptyPromise();
+
+  // Copying the body into a blob needs a data pipe, whose shared memory comes
+  // from a synchronous broker call to the browser process, and registering
+  // the blob needs the browser process too.
+  if (RecordReplayThrowIfEventsUnavailable("Body.blob", &exception_state))
+    return EmptyPromise();
+
   auto create_loader = [this, script_state]() {
     ExecutionContext* context = ExecutionContext::From(script_state);
     return FetchDataLoader::CreateLoaderAsBlobHandle(

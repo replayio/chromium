@@ -113,21 +113,21 @@ void EventHandlerRegistry::UpdateEventHandlerTargets(
   switch (op) {
     case kAdd:
       targets->insert(target);
-      if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+      if (recordreplay::IsRecordingOrReplaying("leak-references",
                                                "EventHandlerRegistry")) {
         replay_strong_targets_.insert(target);
       }
       return;
     case kRemove:
       targets->erase(target);
-      if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+      if (recordreplay::IsRecordingOrReplaying("leak-references",
                                                "EventHandlerRegistry")) {
         replay_strong_targets_.erase(target);
       }
       return;
     case kRemoveAll:
       targets->RemoveAll(target);
-      if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+      if (recordreplay::IsRecordingOrReplaying("leak-references",
                                                "EventHandlerRegistry")) {
         replay_strong_targets_.RemoveAll(target);
       }

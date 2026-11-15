@@ -17,6 +17,7 @@
 #include "v8/include/replayio-macros.h"
 
 #include <cstdint>
+#include <initializer_list>
 #include <memory>
 #include <string>
 #include <vector>
@@ -44,7 +45,14 @@ void Print(const char* format, ...);
 void Diagnostic(const char* format, ...);
 void CommandDiagnostic(const char* format, ...);
 void CommandDiagnosticTrace(const char* format, ...);
-void Warning(const char* format, ...);
+// Adds a warning about unexpected behavior to the recording. kind names the
+// condition, fields hold the details that differ between occurrences.
+void Warning(const char* kind,
+             std::initializer_list<RecordReplayWarningField> fields = {});
+// Same as above, for a field list built at runtime.
+void Warning(const char* kind,
+             const RecordReplayWarningField* fields,
+             size_t count);
 void Trace(const char* format, ...);
 
 bool HadMismatch();
@@ -70,6 +78,8 @@ struct AutoOrderedLock {
 
 void InvalidateRecording(const char* why);
 void NewCheckpoint();
+void NewCheckpointFlushed();
+void SetScriptAlive(bool alive);
 
 uint64_t NewBookmark();
 void OnAnnotation(const char* kind, const char* contents);
@@ -97,6 +107,14 @@ void ExitReplayCode();
 
 bool FeatureEnabled(const char* feature, const char* subfeature = nullptr);
 bool HasDisabledFeatures();
+
+// Gate a LeakMemory intervention and breadcrumb it into crash-report diagnostics.
+inline bool EnterLeakMemory(const char* label) {
+  if (!IsRecordingOrReplaying("leak-references", label))
+    return false;
+  Diagnostic("LeakMemory %s", label);
+  return true;
+}
 
 /**
  * Get the current JS stack, if there is any.
@@ -149,6 +167,12 @@ bool IsInReplayCode(const char* why = nullptr);
 // Return whether we are in a divergent code segment where we cannot
 // read/write the recording stream.
 bool AreEventsUnavailable(const char* why = nullptr);
+
+// Set/get the V8 old space size limit in MB requested by the driver via
+// REPLAY_RECORD_MAX_OLD_SPACE_MB / REPLAY_REPLAY_MAX_OLD_SPACE_MB, or 0 if
+// V8's default limit should be used.
+void SetMaxOldSpaceMb(size_t mb);
+size_t MaxOldSpaceMb();
 
 
 // Mark a region where record/replay specific scripts are executing.

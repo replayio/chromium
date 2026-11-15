@@ -232,6 +232,12 @@ Profiler* ProfilerGroup::CreateProfiler(ScriptState* script_state,
           "Reached maximum concurrent amount of profilers");
       return nullptr;
     }
+    case v8::CpuProfilingStatus::kErrorNotSupported: {
+      exception_state.ThrowDOMException(
+          DOMExceptionCode::kNotSupportedError,
+          "JS profiling is not supported in Replay-recorded processes.");
+      return nullptr;
+    }
     case v8::CpuProfilingStatus::kAlreadyStarted: {
       // Since we increment the profiler id for every invocation of
       // StartProfiling, we do not expect to hit kAlreadyStarted status

@@ -558,6 +558,14 @@ bool ResourceLoader::WillFollowRedirect(
                             GURL(new_url.GetString().Utf8()), removed_headers);
   }
 
+  const ResourceResponse& redirect_response(
+      passed_redirect_response.ToResourceResponse());
+
+  // Record the redirect response once here before follow/block handling
+  // splits. The redirected PrepareRequest then only needs to model the new hop.
+  recordreplay::OnNetworkReceiveResponse(resource_->InspectorId(),
+                                         redirect_response);
+
   if (is_cache_aware_loading_activated_) {
     // Fail as cache miss if cached response is a redirect.
     HandleError(
@@ -594,9 +602,6 @@ bool ResourceLoader::WillFollowRedirect(
       initial_request.GetCredentialsMode();
 
   const ResourceLoaderOptions& options = resource_->Options();
-
-  const ResourceResponse& redirect_response(
-      passed_redirect_response.ToResourceResponse());
 
   const KURL& url_before_redirects = initial_request.Url();
 
@@ -695,9 +700,6 @@ bool ResourceLoader::WillFollowRedirect(
                                       ResourceRequestBlockedReason::kOther);
     return false;
   }
-
-  recordreplay::OnNetworkResourceRedirect(resource_->InspectorId(),
-                                          new_request->Url(), new_request.get());
 
   has_devtools_request_id = !new_request->GetDevToolsId().IsNull();
   return true;
@@ -1119,8 +1121,6 @@ void ResourceLoader::DidFinishLoading(base::TimeTicks response_end_time,
   resource_->SetEncodedBodyLength(encoded_body_length);
   resource_->SetDecodedBodyLength(decoded_body_length);
 
-  recordreplay::OnNetworkFinishLoading(resource_->InspectorId(), encoded_body_length, decoded_body_length);
-
   response_end_time_for_error_cases_ = response_end_time;
 
   if ((response_body_loader_ && !has_seen_end_of_body_ &&
@@ -1152,6 +1152,13 @@ void ResourceLoader::DidFinishLoading(base::TimeTicks response_end_time,
       perfetto::NamedTrack("BlinkResourceID", resource_->InspectorId()),
       "outcome", RequestOutcomeToString(RequestOutcome::kSuccess));
 
+  // Emit finish only once the deferred body-drain path has resolved. This
+  // matches the real DevTools loadingFinished timing more closely and avoids
+  // reporting the same request completion twice.
+  recordreplay::OnNetworkFinishLoading(resource_->InspectorId(),
+                                       encoded_body_length,
+                                       decoded_body_length);
+
   fetcher_->HandleLoaderFinish(resource_.Get(), response_end_time,
                                ResourceFetcher::kDidFinishLoading,
                                inflight_keepalive_bytes_);
@@ -1164,8 +1171,6 @@ void ResourceLoader::DidFail(const WebURLError& error,
                              int64_t decoded_body_length) {
   response_end_time_for_error_cases_ = response_end_time;
 
-  recordreplay::OnNetworkFail(resource_->InspectorId(), error);
-
   resource_->SetEncodedDataLength(encoded_data_length);
   resource_->SetEncodedBodyLength(encoded_body_length);
   resource_->SetDecodedBodyLength(decoded_body_length);
@@ -1177,6 +1182,9 @@ void ResourceLoader::CountFeature(blink::mojom::WebFeature feature) {
 }
 
 void ResourceLoader::HandleError(const ResourceError& error) {
+  recordreplay::OnNetworkFail(resource_->InspectorId(),
+                              static_cast<WebURLError>(error));
+
   if (resource_->GetResourceRequest().GetKeepalive()) {
     FetchUtils::LogFetchKeepAliveRequestMetric(
         resource_->GetResourceRequest().GetRequestContext(),
@@ -1277,6 +1285,11 @@ void ResourceLoader::RequestSynchronously() {
       response_out = WrappedResourceResponse(response);
       data_out = std::move(data);
     }
+  } else if (recordreplay::AreEventsUnavailable()) {
+    DidFail(WebURLError(net::ERR_FAILED, resource_->Url()),
+            base::TimeTicks::Now(), URLLoaderClient::kUnknownEncodedDataLength,
+            0, 0);
+    return;
   } else {
     CHECK(network_resource_request_);
     CHECK(loader_);
@@ -1329,9 +1342,13 @@ void ResourceLoader::RequestSynchronously() {
 }
 
 void ResourceLoader::RequestAsynchronously() {
-  // After diverging from the recording we can't access system resources anymore.
-  if (recordreplay::HasDivergedFromRecording())
+  // When events are unavailable we can't access system resources anymore.
+  if (recordreplay::AreEventsUnavailable()) {
+    DidFail(WebURLError(net::ERR_FAILED, resource_->Url()),
+            base::TimeTicks::Now(), URLLoaderClient::kUnknownEncodedDataLength,
+            0, 0);
     return;
+  }
 
   if (resource_->Url().ProtocolIsData()) {
     CHECK(!network_resource_request_);

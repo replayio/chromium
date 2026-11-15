@@ -62,6 +62,9 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   if (!urls)
     return;
 
+  // Yield so full-source SHA256 runs after sync script registration, not under ProcessCompileEvent.
+  await Promise.resolve();
+
   const scriptSource = getScriptSource(scriptId);
   const generatedScriptHash = sha256DigestHex(scriptSource);
 
@@ -142,7 +145,7 @@ addNewScriptHandler(async (scriptId, sourceURL, relativeSourceMapURL) => {
   }
   log(`[sourcemaps] Finished downloading ${sources.length} sources for "${sourceMapURL}".`);
   } catch (err) {
-    warning(`[RuntimeError][sourcemaps] Exception - ${err?.stack || err}`);
+    warning("SourceMapCollectionException", { error: `${err?.stack || err}` });
   }
 });
 

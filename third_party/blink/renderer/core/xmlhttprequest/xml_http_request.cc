@@ -875,17 +875,14 @@ void XMLHttpRequest::send(const String& body, ExceptionState& exception_state) {
       bool mismatch_too_large =
         (length < recorded_length * 0.95 || length > recorded_length * 1.05) &&
         (length < recorded_length - 2 || length > recorded_length + 2);
-      recordreplay::Warning(
-        "XMLHttpRequest::Send length mismatch recorded(%zu) != replayed(%zu) toolarge=%s",
-        recorded_length, length,
-        mismatch_too_large ? "yes" : "no"
-      );
+      recordreplay::Warning("XMLHttpRequestSendLengthMismatch",
+                            {{"recordedLength", recorded_length},
+                             {"replayedLength", length},
+                             {"tooLarge", mismatch_too_large}});
       // If the difference in strings is too big (off by more than 5 percent
       // or so, then don't adjust the string).
       if (mismatch_too_large) {
-        recordreplay::Warning(
-          "XMLHttpRequest::Send length mismatch too large, not adjusting"
-        );
+        recordreplay::Warning("XMLHttpRequestSendLengthMismatchNotAdjusted");
       } else if (length < recorded_length) {
         size_t padding = recorded_length - length;
         Vector<char> buffer(static_cast<wtf_size_t>(padding), ' ');
@@ -1202,6 +1199,16 @@ void XMLHttpRequest::CreateRequest(scoped_refptr<EncodedFormData> http_body,
                         WebFeature::kXMLHttpRequestSynchronousInWorker);
     }
     resource_loader_options.synchronous_policy = kRequestSynchronously;
+  }
+
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
+    HandleNetworkError();
+    ThrowForLoadFailureIfNeeded(
+        exception_state,
+        "This evaluation tried to read network contents that were not captured "
+        "in the recording. Replay cannot perform fresh network reads "
+        "divergently.");
+    return;
   }
 
   exception_code_ = DOMExceptionCode::kNoError;

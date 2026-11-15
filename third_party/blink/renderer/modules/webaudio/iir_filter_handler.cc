@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "base/compiler_specific.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_node.h"
@@ -242,6 +243,8 @@ double IIRFilterHandler::LatencyTime() const {
 
 void IIRFilterHandler::PullInputs(uint32_t frames_to_process) {
   // Render directly into output bus for in-place processing
+  REPLAY_ASSERT("IIRFilterHandler::PullInputs %d %d",
+                recordreplay::PointerId(this), (int)GetNodeType());
   Input(0).Pull(Output(0).Bus(), frames_to_process);
 }
 

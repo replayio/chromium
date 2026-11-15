@@ -52,7 +52,7 @@ class WaveShaperHandler final : public AudioHandler {
   const unsigned render_quantum_frames_;
   const uint32_t sub_block_frames_;
 
-  mutable base::Lock process_lock_;
+  mutable base::Lock process_lock_{"WaveShaperHandler"};
   Vector<std::unique_ptr<WaveShaperKernel>> kernels_ GUARDED_BY(process_lock_);
 
   // Tail time for the WaveShaper.  This basically can have two values: 0 and

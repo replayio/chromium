@@ -31,12 +31,16 @@ class SelfKeepAliveCreationKey final {
   friend class InspectorFileReaderLoaderClient;
   friend class LanguageModelPromptBuilder;
   friend class MediaStreamAudioTrackUnderlyingSource;
+  // Replay: kept alive while recording/replaying (replay_strong_self_).
+  friend class MediaStreamTrackImpl;
   friend class MIDIAccessInitializer;
   friend class MojoWatcher;
   friend class PausableScriptExecutor;
   friend class RefCountedAndGarbageCollected;
   friend class Responder;
   friend class RTCDataChannel;
+  // Replay: kept alive while recording/replaying (replay_strong_self_).
+  friend class RTCPeerConnection;
   friend class ScriptState;
   friend class SetMediaKeysHandler;
   friend class ThreadedMessagingProxyBase;

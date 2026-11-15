@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_INSPECTOR_INSPECTOR_TASK_RUNNER_H_
 
 #include "base/memory/raw_ptr.h"
+#include "base/record_replay.h"
 #include "base/synchronization/condition_variable.h"
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
@@ -63,6 +64,13 @@ class CORE_EXPORT InspectorTaskRunner final
   bool AppendTaskDontInterrupt(Task) LOCKS_EXCLUDED(lock_);
 
   scoped_refptr<base::SingleThreadTaskRunner> isolate_task_runner() {
+    // Dispose() can clear the runner from another thread, and a task taken
+    // before it can read the runner after it. When recording/replaying, read it under
+    // the lock, which orders the read with Dispose().
+    if (recordreplay::IsRecordingOrReplaying()) {
+      base::AutoLock locker(lock_);
+      return isolate_task_runner_;
+    }
     return isolate_task_runner_;
   }
 

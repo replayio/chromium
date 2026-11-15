@@ -101,7 +101,10 @@ SVGImage::SVGImage(ImageObserver* observer, bool is_multipart)
                                  ->Scheduler()
                                  ->ToMainThreadScheduler()
                                  ->CreateAgentGroupScheduler()),
-      has_pending_timeline_rewind_(false) {}
+      has_pending_timeline_rewind_(false) {
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "SVGImage"))
+    replay_strong_image_observer_ = observer;
+}
 
 SVGImage::~SVGImage() {
   // Leak the agent_group_scheduler_ when removed during GC.
@@ -109,14 +112,32 @@ SVGImage::~SVGImage() {
   // AgentGroupScheduler is an Oilpan GarbageCollected object, so the member is
   // a Persistent (no .release()). Root it forever via an intentionally-leaked
   // heap Persistent so the object is never finalized.
-  if (recordreplay::AreEventsDisallowed("~SVGImage"))
+  if (recordreplay::AreEventsDisallowed("~SVGImage") &&
+      recordreplay::EnterLeakMemory("SVGImage"))
     new Persistent<AgentGroupScheduler>(agent_group_scheduler_);
 
   if (document_host_) {
-    // Store `document_host_` in a local variable and clear it so that
-    // SVGImageChromeClient knows we're destructed.
-    auto* document_host = document_host_.Release();
-    document_host->Shutdown();
+    // Leak the document host and its Page during nondeterministic GC sweep:
+    // Shutdown() calls Page::WillBeDestroyed(), which would erase the page from
+    // AllPages(), diverging membership at iteration time.
+    if (recordreplay::AreEventsDisallowed("~SVGImage") &&
+        recordreplay::EnterLeakMemory("SVGImage")) {
+      // Rooted like the scheduler above, via an intentionally-leaked heap
+      // Persistent, so that nothing is allocated on the GC heap here.
+      new Persistent<IsolatedSVGDocumentHost>(document_host_.Release());
+      // Null dangling image_ that WillBeDestroyed() would have cleared (UAF).
+      chrome_client_->ChromeDestroyed();
+      // Warn once if the leak grows large.
+      static size_t leaked_document_host_count = 0;
+      if (++leaked_document_host_count == 500) {
+        recordreplay::Warning("ManyLeakedSVGImagePages");
+      }
+    } else {
+      // Store `document_host_` in a local variable and clear it so that
+      // SVGImageChromeClient knows we're destructed.
+      auto* document_host = document_host_.Release();
+      document_host->Shutdown();
+    }
   }
 
   // Verify that page teardown destroyed the Chrome

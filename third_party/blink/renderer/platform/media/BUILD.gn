@@ -62,6 +62,7 @@ component("media") {
     "resource_fetch_context.h",
     "resource_multi_buffer_data_provider.cc",
     "resource_multi_buffer_data_provider.h",
+    "stub_web_media_player.cc",
     "url_index.cc",
     "url_index.h",
     "video_decode_stats_reporter.cc",

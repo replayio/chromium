@@ -66,7 +66,8 @@ class CORE_EXPORT File final : public Blob {
   static File* Create(ExecutionContext*,
                       const HeapVector<Member<V8BlobPart>>& file_bits,
                       const String& file_name,
-                      const FilePropertyBag* options);
+                      const FilePropertyBag* options,
+                      ExceptionState&);
 
   // For deserialization.
   static File* CreateFromSerialization(

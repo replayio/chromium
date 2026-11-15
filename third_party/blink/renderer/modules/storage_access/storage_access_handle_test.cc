@@ -288,7 +288,8 @@ TEST_P(StorageAccessHandleTest, LoadHandle) {
   {
     V8TestingScope scope;
     storage_access_handle->createObjectURL(
-        Blob::Create(scope.GetExecutionContext()), scope.GetExceptionState());
+        Blob::Create(scope.GetExecutionContext(), ASSERT_NO_EXCEPTION),
+        scope.GetExceptionState());
     EXPECT_EQ(scope.GetExceptionState().CodeAs<DOMExceptionCode>(),
               (all() || createObjectURL()) ? DOMExceptionCode::kNoError
                                            : DOMExceptionCode::kSecurityError);

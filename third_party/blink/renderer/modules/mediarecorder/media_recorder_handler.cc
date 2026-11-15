@@ -17,6 +17,7 @@
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/record_replay.h"
 #include "base/system/sys_info.h"
 #include "base/task/bind_post_task.h"
 #include "base/task/sequenced_task_runner.h"
@@ -228,8 +229,15 @@ bool MediaRecorderHandler::CanSupportMimeType(const String& type,
   if (!video && !audio)
     return false;
 
+  // While recording/replaying no video encoder is available: |video| types
+  // only support audio codecs (see CanSupportMimeTypeForCodec), and need them
+  // listed because their default codecs include a video one.
+  const bool no_video_codecs =
+      video && recordreplay::IsRecordingOrReplaying("no-video");
   std::vector<std::string> codecs_list;
   media::SplitCodecs(web_codecs.Utf8(), &codecs_list);
+  if (no_video_codecs && codecs_list.empty())
+    return false;
 
   for (const auto& codec : codecs_list) {
     const auto profile = VideoStringToCodecProfile(String(codec));
@@ -269,7 +277,10 @@ const char* MediaRecorderHandler::StringFromCanSupportMimeTypeCaller(
 
 bool MediaRecorderHandler::CanSupportMimeTypeForCodec(const String& type,
                                                       std::string_view codec) {
-  const bool video = CanSupportVideoType(type);
+  // While recording/replaying no video encoder is available: |video| types
+  // only support audio codecs.
+  const bool video = CanSupportVideoType(type) &&
+                     !recordreplay::IsRecordingOrReplaying("no-video");
 
   // Both |video| and |audio| support empty |codecs|; |type| == "video" supports
   // vp8, vp9, h264, avc1, avc3, av01, av1, hvc1, hev1, opus, or pcm; |type| =

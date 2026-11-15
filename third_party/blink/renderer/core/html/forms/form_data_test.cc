@@ -10,6 +10,7 @@
 #include "third_party/blink/renderer/core/fileapi/file.h"
 #include "third_party/blink/renderer/core/html/forms/form_controller.h"
 #include "third_party/blink/renderer/core/testing/null_execution_context.h"
+#include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/testing/task_environment.h"
 
@@ -99,7 +100,7 @@ TEST(FormDataTest, getAll) {
 
 TEST(FormDataTest, BlobEntryCreatesFileOnce) {
   test::TaskEnvironment task_environment;
-  auto* blob = Blob::Create(nullptr);
+  auto* blob = Blob::Create(nullptr, ASSERT_NO_EXCEPTION);
   auto* fd = MakeGarbageCollected<FormData>(Utf8Encoding());
   fd->append("blob", blob);
 

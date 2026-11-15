@@ -15,6 +15,7 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/notimplemented.h"
 #include "base/numerics/clamped_math.h"
+#include "base/record_replay.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/trace_event/common/trace_event_common.h"
@@ -462,6 +463,12 @@ VideoEncoderTraits::ParsedConfig* ParseConfigStatic(
 
 bool VerifyCodecSupportStatic(VideoEncoderTraits::ParsedConfig* config,
                               String* js_error_message) {
+  // Video encoding is unsupported while recording/replaying.
+  if (recordreplay::IsRecordingOrReplaying("no-video")) {
+    *js_error_message = "Unsupported codec type.";
+    return false;
+  }
+
   if (config->not_supported_error_message) {
     *js_error_message = *config->not_supported_error_message;
     return false;

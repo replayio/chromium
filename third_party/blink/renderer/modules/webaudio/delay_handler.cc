@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/modules/webaudio/delay_handler.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_node_input.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_node_output.h"
 #include "third_party/blink/renderer/modules/webaudio/base_audio_context.h"
@@ -223,6 +224,8 @@ double DelayHandler::LatencyTime() const {
 
 void DelayHandler::PullInputs(uint32_t frames_to_process) {
   // Render directly into output bus for in-place processing
+  REPLAY_ASSERT("DelayHandler::PullInputs %d %d",
+                recordreplay::PointerId(this), (int)GetNodeType());
   Input(0).Pull(Output(0).Bus(), frames_to_process);
 }
 

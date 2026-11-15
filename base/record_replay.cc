@@ -72,8 +72,9 @@ namespace recordreplay {
         (const char* format, va_list args),                             \
         (format, args))                                                 \
   Macro(V8RecordReplayWarning,                                          \
-        (const char* format, va_list args),                             \
-        (format, args))                                                 \
+        (const char* kind, const RecordReplayWarningField* fields,      \
+         size_t count),                                                 \
+        (kind, fields, count))                                          \
   Macro(V8RecordReplayTrace,                                            \
         (const char* format, va_list args),                             \
         (format, args))                                                 \
@@ -86,6 +87,8 @@ namespace recordreplay {
   Macro(V8RecordReplayOrderedLock, (int lock), (lock))                  \
   Macro(V8RecordReplayOrderedUnlock, (int lock), (lock))                \
   Macro(V8RecordReplayNewCheckpoint, (), ())                            \
+  Macro(V8RecordReplayNewCheckpointFlushed, (), ())                     \
+  Macro(V8RecordReplaySetScriptAlive, (bool alive), (alive))            \
   Macro(V8RecordReplayOnAnnotation,                                     \
         (const char* kind, const char* contents),                       \
         (kind, contents))                                               \
@@ -311,12 +314,16 @@ void CommandDiagnosticTrace(const char* format, ...) {
 #endif
 }
 
-void Warning(const char* format, ...) {
+void Warning(const char* kind,
+             std::initializer_list<RecordReplayWarningField> fields) {
+  Warning(kind, fields.begin(), fields.size());
+}
+
+void Warning(const char* kind,
+             const RecordReplayWarningField* fields,
+             size_t count) {
 #ifndef NACL_TC_REV
-  va_list ap;
-  va_start(ap, format);
-  V8RecordReplayWarning(format, ap);
-  va_end(ap);
+  V8RecordReplayWarning(kind, fields, count);
 #endif
 }
 
@@ -376,6 +383,14 @@ void OrderedUnlock(int lock) {
 
 void NewCheckpoint() {
   V8RecordReplayNewCheckpoint();
+}
+
+void NewCheckpointFlushed() {
+  V8RecordReplayNewCheckpointFlushed();
+}
+
+void SetScriptAlive(bool alive) {
+  V8RecordReplaySetScriptAlive(alive);
 }
 
 uint64_t NewBookmark() {
@@ -579,7 +594,7 @@ static bool CheckNewId(const char* name) {
     // IDs can be created when events are disallowed when our own scripts
     // create URL objects. This would be nice to improve.
     if (!IsInReplayCode()) {
-      Warning("NewId when not allowed %s", name);
+      Warning("NewIdWithEventsDisallowed", {{"name", name}});
     }
     return false;
   }
@@ -628,6 +643,16 @@ void ExitReplayCode() {
 
 bool AreEventsUnavailable(const char* why) {
   return AreEventsDisallowed(why) || HasDivergedFromRecording();
+}
+
+static size_t gMaxOldSpaceMb;
+
+void SetMaxOldSpaceMb(size_t mb) {
+  gMaxOldSpaceMb = mb;
+}
+
+size_t MaxOldSpaceMb() {
+  return gMaxOldSpaceMb;
 }
 
 AutoMarkReplayCode::AutoMarkReplayCode() {

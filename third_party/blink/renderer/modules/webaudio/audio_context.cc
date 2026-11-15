@@ -10,6 +10,7 @@
 #include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/record_replay.h"
 #include "base/strings/strcat.h"
 #include "base/strings/to_string.h"
 #include "base/trace_event/trace_event.h"
@@ -1730,9 +1731,13 @@ void AudioContext::HandleAudibility(AudioBus* destination_bus) {
     new_audible_state = false;
   }
 
+  REPLAY_ASSERT("AudioContext::HandleAudibility bus %d %u %u",
+                destination_bus && destination_bus->IsSilent(),
+                destination_bus ? destination_bus->NumberOfChannels() : 0u,
+                destination_bus ? destination_bus->length() : 0u);
+  REPLAY_ASSERT("AudioContext::HandleAudibility %d %d", previous_audible,
+                new_audible_state);
   if (previous_audible != new_audible_state) {
-    recordreplay::Assert("[RUN-1506] AudioContext::HandleAudibility %d %d", previous_audible, new_audible_state);
-
     was_audible_.store(new_audible_state, std::memory_order_relaxed);
     if (new_audible_state) {
       PostCrossThreadTask(

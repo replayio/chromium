@@ -18,6 +18,7 @@ const {
   setClearPauseDataCallback,
   addNewScriptHandler,
   getCurrentError,
+  forceCheckpoint,
 
   layoutDom,
 
@@ -25,6 +26,9 @@ const {
   fromJsGetArgumentsInFrame,
   fromJsGetObjectByCdpId,
   fromJsIsBlinkObject,
+  fromJsIsBlinkNodeObject,
+  fromJsIsBlinkElementObject,
+  fromJsIsBlinkCSSStyleDeclarationObject,
   fromJsHasReturnValue,
   fromJsGetReturnValue,
   fromJsGetNodeIdByCpdId,
@@ -33,7 +37,7 @@ const {
   fromJsCssGetStylesheetByCpdId,
   fromJsCollectEventListeners,
   fromJsDomPerformSearch,
-  getCurrentViewportPixelSize,
+  fromJsGetDevicePixelRatio,
 
   // network
   getCurrentNetworkRequestEvent,
@@ -85,8 +89,10 @@ function logTrace(...args) {
   logTrace_(args.join(' '));
 }
 
-function warning(...args) {
-  warning_(args.join(' '));
+// Adds a warning to the recording. kind names the condition, data is an
+// optional plain object holding the details that differ between occurrences.
+function warning(kind, data) {
+  warning_(kind, data);
 }
 
 function assert(v, msg = "") {
@@ -114,9 +120,71 @@ const gSourceMapData = new Map();
 
 const JSON_stringify = JSON.stringify;
 const JSON_parse = JSON.parse;
+const URL_ = URL;
 
 // RUN-3067
 const Array_push = Array.prototype.push;
+const Object_toString = Object.prototype.toString;
+const String_ = String;
+const String_slice = String.prototype.slice;
+const { bind, call } = Function.prototype;
+const uncurryThis = bind.bind(call);
+const ObjectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const ObjectHasOwn = Object.hasOwn;
+const uncurryGetter = (proto, key) =>
+  uncurryThis(ObjectGetOwnPropertyDescriptor(proto, key).get);
+const ArrayPrototypeFind = uncurryThis(Array.prototype.find);
+const MapPrototypeGetSize = uncurryGetter(Map.prototype, "size");
+const SetPrototypeGetSize = uncurryGetter(Set.prototype, "size");
+const TypedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype);
+const TypedArrayPrototypeGetLength = uncurryGetter(TypedArrayPrototype, "length");
+const TypedArrayPrototypeGetByteLength = uncurryGetter(TypedArrayPrototype, "byteLength");
+const TypedArrayPrototypeGetByteOffset = uncurryGetter(TypedArrayPrototype, "byteOffset");
+const TypedArrayPrototypeGetBuffer = uncurryGetter(TypedArrayPrototype, "buffer");
+
+function isArrayLike(obj) {
+  return obj != null && typeof obj.length === "number";
+}
+
+function describeValueShape(value) {
+  let str;
+  try {
+    str = String_(value);
+  } catch {
+    str = "<String failed>";
+  }
+  if (str.length > 120) {
+    str = String_slice.call(str, 0, 120) + "...";
+  }
+  let tag;
+  try {
+    tag = Object_toString.call(value);
+  } catch {
+    tag = "<toString failed>";
+  }
+  return `${str} (typeof=${typeof value}, ctor=${value?.constructor?.name}, tag=${tag}, length=${value?.length}, blink=${!!fromJsIsBlinkObject(value)})`;
+}
+
+function iterateArrayLike(obj, fn, label) {
+  if (isIterable(obj)) {
+    for (const item of obj) {
+      fn(item);
+    }
+  } else if (isArrayLike(obj)) {
+    warning("IterateArrayLikeNotIterable", {
+      label,
+      value: describeValueShape(obj),
+    });
+    for (let i = 0; i < obj.length; i++) {
+      fn(obj[i]);
+    }
+  } else if (obj != null) {
+    warning("IterateArrayLikeNotArrayLike", {
+      label,
+      value: describeValueShape(obj),
+    });
+  }
+}
 
 function getSourceMapURLs(sourceURL, relativeSourceMapURL) {
   let sourceBaseURL;
@@ -128,7 +196,7 @@ function getSourceMapURLs(sourceURL, relativeSourceMapURL) {
 
   let sourceMapURL;
   try {
-    sourceMapURL = new URL(relativeSourceMapURL, sourceBaseURL).toString();
+    sourceMapURL = new URL_(relativeSourceMapURL, sourceBaseURL).toString();
   } catch (err) {
     log("[RuntimeError] Failed to process sourcemap url: " + err.message);
     return null;
@@ -144,7 +212,7 @@ function getSourceMapURLs(sourceURL, relativeSourceMapURL) {
 
 function isValidBaseURL(url) {
   try {
-    new URL("", url);
+    new URL_("", url);
     return true;
   } catch {
     return false;
@@ -196,7 +264,7 @@ class CDPMessageError extends Error {
   }
 }
 
-function sendCDPMessage(method, params) {
+function sendCDPMessage(method, params, contextId) {
   CHECK_ALIVE(`sendCDPMessage ${method}`);
 
   const id = gNextMessageId++;
@@ -204,7 +272,11 @@ function sendCDPMessage(method, params) {
   Array_push.call(gCdpRequestStack, cdpRequest);
   const cdpArgs = JSON_stringify({ method, params, id });
   try {
-    sendCDPMessageRaw(cdpArgs);
+    if (contextId === undefined) {
+      sendCDPMessageRaw(cdpArgs);
+    } else {
+      sendCDPMessageRaw(cdpArgs, contextId);
+    }
   } catch (err) {
     if (!cdpRequest.result) {
       throw err;
@@ -259,7 +331,7 @@ function messageCallback(message) {
       }
     }
   } catch (e) {
-    warning(`JS Message callback exception: ${e?.stack || e}`);
+    warning("CDPMessageCallbackException", { error: `${e?.stack || e}` });
 
     return JSON_stringify({
       is_error: true,
@@ -318,7 +390,7 @@ function CHECK_ALIVE(message) {
     } else {
       // Since we don't know enough about the circumstances here yet,
       // let's not crash an RTP for it.
-      warning(err.stack);
+      warning("ReplayScriptNotAlive", { message, jsStack: err.stack });
     }
   }
 }
@@ -399,7 +471,7 @@ function Target_getCurrentMessageContents() {
     return {
       source: "UnknownMessageError",
       level: "error",
-      text: "Could not look up message contents"
+      text: "[RuntimeError] Could not look up message contents"
     };
   }
 
@@ -463,7 +535,7 @@ function Target_getCurrentNetworkRequestEvent() {
     const obj = JSON_parse(getCurrentNetworkRequestEvent());
     return { data: obj };
   } catch (e) {
-    warning(`JS Target.getCurrentNetworkRequestEvent exception: ${e}`);
+    warning("GetCurrentNetworkRequestEventException", { error: `${e}` });
   }
 }
 
@@ -472,7 +544,7 @@ function Target_getCurrentNetworkStreamData(params) {
   if (data) {
     return { data };
   } else {
-    warning(`JS Target.getCurrentNetworkStreamData returned no data.`);
+    warning("GetCurrentNetworkStreamDataEmpty");
   }
 }
 
@@ -490,7 +562,7 @@ function Target_topFrameLocation() {
     if (e instanceof CDPMessageError) {
       // No available context group; this can happen, so just return nothing.
       if (e.code == CDPERROR_MISSINGCONTEXT) {
-        warning(`[RUN-2600] JS Target_topFrameLocation has no context.`);
+        warning("TopFrameLocationMissingContext");
         return {};
       }
     }
@@ -519,7 +591,7 @@ function getStackFrames() {
     if (e instanceof CDPMessageError) {
       // No available context group; this can happen, so just return nothing.
       if (e.code == CDPERROR_MISSINGCONTEXT) {
-        warning(`[RUN-2600] JS getStackFrames has no context.`);
+        warning("GetStackFramesMissingContext");
         return [];
       }
     }
@@ -621,7 +693,8 @@ function Pause_evaluateInFrame({ frameId: frameIndexStr, expression }) {
         callFrameId: frame.callFrameId,
         expression,
         objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
-      }
+      },
+      frame.contextId
     );
   }
 }
@@ -651,7 +724,7 @@ function buildEvalResult(cdpResult) {
   if (usedReplayApi && cdpResult?.exceptionDetails) {
     // Emit warning if an eval that used the Replay API throws.
     const cdpException = cdpResult.exceptionDetails.exception?.description || cdpResult.exceptionDetails;
-    warning(`REPLAY_API_EVAL_ERROR ${JSON_stringify(cdpException)}`);
+    warning("ReplayApiEvalError", { exception: cdpException });
   }
   return buildRrpObjectResult(cdpResult);
 }
@@ -700,22 +773,7 @@ function Pause_getScope({ scope }) {
 }
 
 function Graphics_getDevicePixelRatio() {
-  // RUN-2989: On Mac, devicePixelRatio is incorrect in the early lifetime
-  // of the process, so we need to compute the actual pixel ratio of hardware
-  // pixels to page pixels.
-  const size = getCurrentViewportPixelSize();
-  if (size.width) {
-    // Note1: This size might not yet have been initialized, in which case,
-    //          it will default to {0,0}.
-    // Note2: X and Y ratios should be the same.
-    const ratioX = size.width / innerWidth;
-    return {
-      ratio: ratioX
-    };
-  }
-  return {
-    ratio: window?.devicePixelRatio || 0
-  };
+  return { ratio: fromJsGetDevicePixelRatio() || 0 };
 }
 
 
@@ -723,14 +781,23 @@ function Graphics_getDevicePixelRatio() {
 // Utilities
 ///////////////////////////////////////////////////////////////////////////////
 
-function isPrototype(x) {
-  // Note: This can invoke getters or proxy hooks on page objects,
-  // so we watch for exceptions being thrown.
-  try {
-    return x === x?.constructor?.prototype;
-  } catch (e) {
+/**
+ * Whether `x` is the `prototype` of the function in its own `constructor` data
+ * property. Reads V8's own property descriptors of `x` and of that function
+ * only, so no page getter or proxy trap runs.
+ */
+function isPrototype(x, cdpProperties) {
+  const constructor = ArrayPrototypeFind(
+    cdpProperties.result,
+    prop => prop.name === "constructor" && prop.isOwn
+  )?.value;
+  if (constructor?.type !== "function" || !constructor.objectId) {
     return false;
   }
+  const constructorObject = fromJsGetObjectByCdpId(constructor.objectId);
+  const prototype =
+    constructorObject && ObjectGetOwnPropertyDescriptor(constructorObject, "prototype");
+  return !!prototype && ObjectHasOwn(prototype, "value") && prototype.value === x;
 }
 
 /**
@@ -740,50 +807,7 @@ function isBlinkObject(x) {
   return fromJsIsBlinkObject(x);
 }
 
-/**
- * Check whether given object `x` is a blink object and its
- * class name is `target.name`.
- * Note: This is a hackfix to work-around the fact that we have to be able
- * to deal with objects from multiple `global` contexts.
- */
-function isBlinkInstanceOf(x, target) {
-  return (
-    // Is Blink/native object.
-    isBlinkObject(x) &&
-    // Is not a function (to exclude classes themselves).
-    !isFunction(x) &&
-    // Has a ctor.
-    x.constructor &&
-    // The target has a name.
-    target?.name &&
-    // The target's name is in object's prototype chain.
-    hasInProtoChain(
-      x.constructor,
-      target.name
-    )
-  );
-}
 
-/**
- * This is kinda like `instanceof`, but window-independent.
- * NOTE: ideal solution is `x instanceof global[name]`, but we cannot do that since it does not work when dealing
- * with multiple instance of `global` (i.e. windows).
- * @see https://linear.app/replay/issue/RUN-1014/chromium-find-better-way-of-determining-dom-class-membership
- *
- * NOTE: `instanceof` is implemented in `Object::InstanceOf` -> `JSReceiver::HasInPrototypeChain`
- * @see https://github.com/replayio/gecko-dev/blob/592992ff7e15cb8ad1dd6fb109f19bd3523cd452/devtools/server/actors/replay/module.js#L1937
- * @see https://github.com/replayio/chromium-v8/blob/51140a440949dbbeea7a4e6c2185ccdeb8b6276e/src/objects/objects.cc#L929
- * @see https://github.com/replayio/chromium-v8/blob/51140a440949dbbeea7a4e6c2185ccdeb8b6276e/src/objects/js-objects.cc#170
- */
-function hasInProtoChain(x, name) {
-  if (x.name === name) {
-    return true;
-  }
-  if (!x.__proto__) {
-    return false;
-  }
-  return hasInProtoChain(x.__proto__, name);
-}
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -847,12 +871,19 @@ function clearPauseDataCallback() {
     gCssRulesByNodeRrpId.clear();
     gLastRrpId = 0;
 
+    if (!isReplayScriptAlive()) {
+      return;
+    }
+
     // RUN-1832
     sendCDPMessage("Runtime.releaseObjectGroup", {
       objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP,
     });
   } catch (e) {
-    warning(`JS clearPauseDataCallback exception: ${e}`);
+    if (e instanceof CDPMessageError && e.code == CDPERROR_MISSINGCONTEXT) {
+      return;
+    }
+    warning("ClearPauseDataException", { error: `${e}` });
   }
 }
 
@@ -1276,7 +1307,7 @@ ProtocolObjectPreview.prototype = {
     Array_push.call(this.properties, rrpProp);
   },
 
-  addGetterValue(propKey, ownerCdpObject, force = false) {
+  addGetterValue(propKey, ownerCdpObject, getter, force = false) {
     if (isObjectPropertyBlacklisted(ownerCdpObject, propKey)) {
       return;
     }
@@ -1288,7 +1319,7 @@ ProtocolObjectPreview.prototype = {
       return;
     }
 
-    const rrpValue = evalPropRrpNotNull(this.raw, propKey);
+    const rrpValue = evalPropRrpNotNull(this.raw, propKey, getter);
     if (rrpValue) {
       this.setGetterValueUnchecked(propKey, rrpValue, force);
     }
@@ -1410,9 +1441,13 @@ ProtocolObjectPreview.prototype = {
           objectGroup: REPLAY_CDT_PAUSE_OBJECT_GROUP
         });
       } catch (e) {
-        // No available context group; this can happen, so just return nothing.
-        if (e.code == CDPERROR_MISSINGCONTEXT) {
-          warning(`[RUN-2600] JS ProtocolObjectPreview.fill has no context.`);
+        // Preview is best-effort: any CDP failure → empty props (match Chrome expand).
+        // Rethrow would become commandCallback is_error → Command.cpp Die.
+        if (e instanceof CDPMessageError) {
+          warning("ObjectPreviewCDPError", {
+            code: e.code,
+            message: e.cdpMessage || e.message,
+          });
           cdpProperties = { result: [] };
         } else {
           throw e;
@@ -1462,7 +1497,7 @@ ProtocolObjectPreview.prototype = {
      */
 
     // Add builtin-specific data.
-    if (!isPrototype(this.raw)) { // Ignore prototype itself.
+    if (!isPrototype(this.raw, cdpProperties)) { // Ignore prototype itself.
       const previewers = CustomPreviewers[this.cdpObj.className];
       if (previewers) {
         for (const entry of previewers) {
@@ -1530,13 +1565,13 @@ function getExtraObjectPreviewData(cdpObject, cdpProperties) {
     };
   } else {
     const plainObject = getPlainObjectByRrpId(rrpId);
-    if (isBlinkInstanceOf(plainObject, Node)) {
+    if (fromJsIsBlinkNodeObject(plainObject)) {
       return {
         node: previewBlinkNode(plainObject)
       }
     }
 
-    if (isBlinkInstanceOf(plainObject, CSSStyleDeclaration)) {
+    if (fromJsIsBlinkCSSStyleDeclarationObject(plainObject)) {
       return {
         style: previewBlinkStyle(plainObject)
       }
@@ -1546,11 +1581,11 @@ function getExtraObjectPreviewData(cdpObject, cdpProperties) {
 
 function previewBlinkNode(node) {
   let attributes, pseudoType;
-  if (isBlinkInstanceOf(node, Element)) {
+  if (fromJsIsBlinkElementObject(node)) {
     attributes = [];
-    for (const { name, value } of node.attributes || []) {
+    iterateArrayLike(node.attributes, ({ name, value }) => {
       Array_push.call(attributes, { name, value });
-    }
+    }, "Element.attributes");
     // TODO: We cannot access pseudo elements using the JS DOM API - https://linear.app/replay/issue/RUN-953/
     // pseudoType = node.localName;
   }
@@ -1578,7 +1613,12 @@ function previewBlinkNode(node) {
     const iframes = node.defaultView.parent.document.getElementsByTagName(
       "iframe"
     );
-    const iframe = [...iframes].find((f) => f.contentDocument == node);
+    let iframe;
+    iterateArrayLike(iframes, (f) => {
+      if (!iframe && f.contentDocument == node) {
+        iframe = f;
+      }
+    }, "Document.getElementsByTagName(iframe)");
     if (iframe) {
       parentNode = registerPlainObject(iframe);
     }
@@ -1607,7 +1647,10 @@ function previewBlinkNode(node) {
     // Treat an iframe's content document as one of its child nodes.
     childNodes = [registerPlainObject(node.contentDocument)];
   } else if (node.childNodes?.length) {
-    childNodes = [...node.childNodes].map((n) => registerPlainObject(n));
+    childNodes = [];
+    iterateArrayLike(node.childNodes, (n) => {
+      Array_push.call(childNodes, registerPlainObject(n));
+    }, "Node.childNodes");
   }
 
   if (childNodes) {
@@ -1654,10 +1697,10 @@ function previewArray(_cdpProperties) {
 
 function previewTypedArray() {
   // simply invoke the native getter
-  this.addGetterValue('length', this.cdpObj, /* force */ true);
-  this.addGetterValue('byteLength', this.cdpObj, /* force */ true);
-  this.addGetterValue('byteOffset', this.cdpObj, /* force */ true);
-  this.addGetterValue('buffer', this.cdpObj, /* force */ true);
+  this.addGetterValue('length', this.cdpObj, TypedArrayPrototypeGetLength, /* force */ true);
+  this.addGetterValue('byteLength', this.cdpObj, TypedArrayPrototypeGetByteLength, /* force */ true);
+  this.addGetterValue('byteOffset', this.cdpObj, TypedArrayPrototypeGetByteOffset, /* force */ true);
+  this.addGetterValue('buffer', this.cdpObj, TypedArrayPrototypeGetBuffer, /* force */ true);
 }
 
 /**
@@ -1684,7 +1727,12 @@ function previewSetMap(cdpProperties) {
     // debugger (RUN-1315), and it might have (albeit small) negative impacts
     // like this.
     // SLN: Simply query the size getter instead.
-    size = this.raw.size;
+    // `raw` is null if the cdpId lookup fails post-divergence.
+    size = this.raw
+      ? this.cdpObj.className === "Map"
+        ? MapPrototypeGetSize(this.raw)
+        : SetPrototypeGetSize(this.raw)
+      : 0;
     const rrpSize = { name: "size", value: size };
     this.addPropertyUnchecked(rrpSize, /* force */ true);
     this.setGetterValueUnchecked(rrpSize.name, rrpSize, /* force */ true);
@@ -1927,7 +1975,10 @@ function previewFunction(cdpProperties) {
   if (locationProperty) {
     const loc = locationProperty?.value?.value || "";
     if (!loc) {
-      warning(`[RUN-1991] previewFunction missing location: ${JSON_stringify(nameProperty)}, ${JSON_stringify(locationProperty)}`);
+      warning("PreviewFunctionMissingLocation", {
+        nameProperty: JSON_stringify(nameProperty),
+        locationProperty: JSON_stringify(locationProperty),
+      });
     }
     this.extra.functionLocation = createProtocolLocation(loc);
   }
@@ -1975,17 +2026,26 @@ const CustomPreviewers = {
  * Since we only use this for a small set of well defined
  * props, we emit a warning if the result is undefined or null.
  */
-function evalPropRrpNotNull(owner, propKey) {
+function evalPropRrpNotNull(owner, propKey, getter) {
   try {
-    const plainValue = owner[propKey];
+    const plainValue = getter(owner);
     if (plainValue === undefined || plainValue === null) {
       // [RUN-2223] This should not happen.
       const e = new Error("");
-      warning(`[RUN-2223] JS evalPropRrpNotNull got ${plainValue} when evaluating ${propKey} on ${typeof owner}, stack=${e.stack}`);
+      warning("EvalPropNullOrUndefined", {
+        value: String(plainValue),
+        propKey: String(propKey),
+        ownerType: typeof owner,
+        jsStack: e.stack,
+      });
     }
     return createRrpValueRaw(plainValue);
   } catch (err) {
-    warning(`JS evalPropRrpNotNull exception - calling ${propKey?.toString?.()} on ${typeof owner} - ${err?.stack || err}`);
+    warning("EvalPropException", {
+      propKey: `${propKey?.toString?.()}`,
+      ownerType: typeof owner,
+      error: `${err?.stack || err}`,
+    });
     return null;
   }
 }
@@ -2163,11 +2223,12 @@ function DOM_getAllBoundingClientRects() {
       }
 
       // Get all client rects.
-      const clientRects = [...elem.raw.getClientRects()].map(r => {
+      const clientRects = [];
+      iterateArrayLike(elem.raw.getClientRects(), (r) => {
         const { left, top, right, bottom } =
           shiftRect(r, elem.offset, transformMatrix);
-        return [left, top, right, bottom];
-      });
+        Array_push.call(clientRects, [left, top, right, bottom]);
+      }, "Element.getClientRects");
 
       const clipBounds =
         shiftRect(elem.clipBounds, elem.offset, transformMatrix);
@@ -2261,7 +2322,7 @@ function DOM_getBoxModel({ node: nodeRrpId }) {
     node: nodeRrpId
   };
 
-  if (isBlinkInstanceOf(nodeObj, Element)) {
+  if (fromJsIsBlinkElementObject(nodeObj)) {
     const nodeId = getBlinkNodeIdByRrpId(nodeRrpId);
     /**
      * @see https://chromedevtools.github.io/devtools-protocol/tot/DOM/#type-BoxModel
@@ -2374,7 +2435,7 @@ function CSS_getComputedStyle({ node }) {
   const nodeObj = getPlainObjectByRrpId(node);
 
   const computedStyle = [];
-  if (isBlinkInstanceOf(nodeObj, Element)) {
+  if (fromJsIsBlinkElementObject(nodeObj)) {
     // NOTE: tested successfully for same-CSP elements of different iframes
     const ownerGlobal = window;
 
@@ -2600,21 +2661,21 @@ function CSS_getAppliedRules({ node: nodeRrpId }) {
   let rules = gCssRulesByNodeRrpId.get(nodeRrpId);
   const data = {};
 
-  if (!rules && isBlinkInstanceOf(nodeObj, Node)) {
+  if (!rules && fromJsIsBlinkNodeObject(nodeObj)) {
     const nodeId = getBlinkNodeIdByRrpId(nodeRrpId);
 
     // NOTE: CDP CSS domain commands are not enabled, so we have to get the data indirectly.
     // const cdpMatchedStyles = sendCDPMessage('CSS.getMatchedStylesForNode', { nodeId });
-    if (isBlinkInstanceOf(nodeObj, Element)) {
+    if (fromJsIsBlinkElementObject(nodeObj)) {
       const cdpMatchedStyles = fromJsGetMatchedStylesForElement(nodeId) || { };
       rules = convertCdpToRrpCssRules(nodeObj, cdpMatchedStyles);
     } else {
       rules = [];
     }
     gCssRulesByNodeRrpId.set(nodeRrpId, rules);
-  } else {
+  } else if (!rules) {
     // The target is not a node.
-    log(`[RuntimeWarning] CSS.getAppliedRules called with non-node: ${nodeRrpId} ${isBlinkObject(nodeObj)} ${nodeObj?.constructor?.name} ${nodeObj?.constructor}.`);
+    log(`[RuntimeWarning] CSS.getAppliedRules called with non-node: ${nodeRrpId} ${isBlinkObject(nodeObj)} ${typeof nodeObj}.`);
     rules = [];
   }
 
@@ -3044,33 +3105,35 @@ StackingContext.prototype = {
   },
 
   addChildren(parentNode) {
-    for (const child of parentNode.children) {
-      if (!isBlinkInstanceOf(child, Element)) {
-        continue;
+    iterateArrayLike(parentNode.children, (child) => {
+      if (!fromJsIsBlinkElementObject(child)) {
+        return;
       }
       this.add(child, undefined, this.offset);
-    }
+    }, "Element.children");
   },
 
   addChildrenWithParent(cx) {
-    if (!isIterable(cx.raw.children)) {
+    const children = cx.raw.children;
+    if (!isIterable(children) && !isArrayLike(children)) {
       // [TT-253] `cx.raw` should always be an Element and
       // Element.prototype.children should always return an `HTMLCollection`.
       // Not sure why it sometimes complains about not being iterable.
-      if (!isBlinkInstanceOf(cx.raw, Element) && !gStackingContextWarn) {
+      if (!fromJsIsBlinkElementObject(cx.raw) && !gStackingContextWarn) {
         ++gStackingContextWarn;
-        warning(
-          `[TT-253] cx.raw should be Element but is not: ${cx.raw} (${typeof cx.raw}), ${cx.raw.children} (${typeof cx.raw.children}})`
-        );
+        warning("StackingContextNonElement", {
+          value: describeValueShape(cx.raw),
+          children: describeValueShape(children),
+        });
       }
       return;
     }
-    for (const child of cx.raw.children) {
-      if (!isBlinkInstanceOf(child, Element)) {
-        continue;
+    iterateArrayLike(children, (child) => {
+      if (!fromJsIsBlinkElementObject(child)) {
+        return;
       }
       this.add(child, cx, this.offset);
-    }
+    }, "StackingContext Element.children");
   },
 
   // Get the elements in this context ordered back-to-front.
@@ -3187,7 +3250,7 @@ function parseCssTransformStringToMatrix(transform) {
 function computeTransformMatrix(element, window) {
   let curMatrix = [1,0,0,1,0,0]; // start with identity matrix
   let curElem = element;
-  while(curElem && isBlinkInstanceOf(curElem, Element)) {
+  while(curElem && fromJsIsBlinkElementObject(curElem)) {
     const transformStr = window.getComputedStyle(curElem).transform;
     const transformMatrix = parseCssTransformStringToMatrix(transformStr);
     if (transformMatrix) {
@@ -3277,7 +3340,7 @@ function replayEval(fn) {
     // `Runtime_UnwindAndFindExceptionHandler`.
     // TODO: We should just crash here, since its the responsibility of the
     // caller of replayEval to make sure the cb won't throw.
-    warning(`replayEval ERROR: ${err?.stack || err}`);
+    warning("ReplayEvalException", { error: `${err?.stack || err}` });
   } finally {
     endReplayCode();
   }
@@ -3300,6 +3363,7 @@ Object.assign(__RECORD_REPLAY__, {
   getFrameArgumentsArray,
   getCurrentEvaluateFrame,
   replayEval,
+  forceCheckpoint,
   forTestingSerializeValueToArray
 });
 

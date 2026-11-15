@@ -153,6 +153,7 @@
 #include "third_party/blink/renderer/core/trustedtypes/trusted_script.h"
 #include "third_party/blink/renderer/core/xml_names.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/graphics/subtree_paint_property_update_reason.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/thread_state.h"
@@ -3737,6 +3738,10 @@ void HTMLElement::setSpellcheck(bool enable) {
 }
 
 void HTMLElement::click() {
+  if (RecordReplayThrowIfEventsUnavailable("HTMLElement.click")) {
+    return;
+  }
+
   DispatchSimulatedClick(nullptr, SimulatedClickCreationScope::kFromScript);
   if (IsA<HTMLInputElement>(this)) {
     UseCounter::Count(GetDocument(),

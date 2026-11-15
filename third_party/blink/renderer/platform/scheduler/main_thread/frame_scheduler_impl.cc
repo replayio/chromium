@@ -292,6 +292,9 @@ FrameSchedulerImpl::~FrameSchedulerImpl() {
     if (opted_out_from_aggressive_throttling())
       parent_page_scheduler_->OnThrottlingStatusUpdated();
   }
+
+  if (replay_scheduling_owner_release_)
+    std::move(replay_scheduling_owner_release_).Run();
 }
 
 AgentGroupSchedulerImpl& FrameSchedulerImpl::GetAgentGroupSchedulerImpl() {
@@ -1415,6 +1418,11 @@ FrameSchedulerImpl::CreateWebSchedulingTaskQueue(
           queue_type, priority);
   return std::make_unique<MainThreadWebSchedulingTaskQueueImpl>(
       immediate_task_queue->AsWeakPtr(), delayed_task_queue->AsWeakPtr());
+}
+
+void FrameSchedulerImpl::SetReplaySchedulingOwnerRelease(
+    base::OnceClosure release) {
+  replay_scheduling_owner_release_ = std::move(release);
 }
 
 void FrameSchedulerImpl::OnWebSchedulingTaskQueuePriorityChanged(

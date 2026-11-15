@@ -86,6 +86,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/capture_source_location.h"
 #include "third_party/blink/renderer/bindings/core/v8/frozen_array.h"
 #include "third_party/blink/renderer/bindings/core/v8/isolated_world_csp.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_controller.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
@@ -3408,6 +3409,10 @@ void Document::Shutdown() {
   if (!IsActive())
     return;
 
+  // Replay: seal the last live root document state. Precedes the scopers
+  // below, since command handling at the checkpoint can run script.
+  RecordReplayBeforeDocumentShutdown(*this);
+
   // An active Document must have an associated window.
   CHECK(dom_window_);
 
@@ -4396,7 +4401,7 @@ void Document::RecordReplayOnRemoveLoadEventDelay() {
     if (node_id) {
       record_replay_load_event_dependency_nodes_.push_back(node_id);
     } else {
-      recordreplay::Warning("DependencyGraph load event delay unknown node");
+      recordreplay::Warning("DependencyGraphLoadEventDelayUnknownNode");
     }
   }
 }
@@ -7035,7 +7040,7 @@ String Document::cookie(ExceptionState& exception_state) const {
     CountUse(WebFeature::kFileAccessedCookies);
   }
 
-  return cookie_jar_->Cookies();
+  return cookie_jar_->Cookies(exception_state);
 }
 
 void Document::setCookie(const String& value, ExceptionState& exception_state) {
@@ -7060,7 +7065,7 @@ void Document::setCookie(const String& value, ExceptionState& exception_state) {
     UseCounter::Count(*this, WebFeature::kFileAccessedCookies);
   }
 
-  if (cookie_jar_->SetCookie(value)) {
+  if (cookie_jar_->SetCookie(value, exception_state)) {
     IncrementCookieModificationCount();
   }
 }
@@ -8659,6 +8664,10 @@ ukm::UkmRecorder* Document::UkmRecorder() {
           mojo_recorder->GetWeakPtr());
     }
     ukm_recorder_ = std::move(mojo_recorder);
+
+    recordreplay::Assert("Document::UkmRecorder mint doc=%d sourceId=%lld",
+                         recordreplay::PointerId(this),
+                         (long long)UkmSourceID());
   }
 
   if (WebTestSupport::IsRunningWebTest()) {

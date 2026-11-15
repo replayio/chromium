@@ -29,6 +29,7 @@
 
 #include "base/check_op.h"
 #include "base/functional/callback_helpers.h"
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "media/base/media_switches.h"
 #include "third_party/blink/public/common/features.h"
@@ -304,6 +305,13 @@ MediaStreamTrackImpl::MediaStreamTrackImpl(
   if (ready_state_ != MediaStreamSource::kReadyStateEnded) {
     EnsureFeatureHandleForScheduler();
   }
+
+  if ((ready_state_ != MediaStreamSource::kReadyStateEnded ||
+       component_->GetReadyState() != MediaStreamSource::kReadyStateEnded) &&
+      recordreplay::IsRecordingOrReplaying("leak-references",
+                                           "MediaStreamTrackImpl")) {
+    replay_strong_self_ = this;
+  }
   const std::optional<const MediaStreamDevice> source_device = device();
   if (source_device && source_device->display_media_info) {
     zoom_level_ = source_device->display_media_info->initial_zoom_level;
@@ -418,6 +426,9 @@ void MediaStreamTrackImpl::setReadyState(
   if (ready_state_ != MediaStreamSource::kReadyStateEnded &&
       ready_state_ != ready_state) {
     ready_state_ = ready_state;
+    if (ready_state_ == MediaStreamSource::kReadyStateEnded) {
+      replay_strong_self_.Clear();
+    }
     SendLogMessage(
         StrCat({__func__, "({ready_state=", readyState().AsCStr(), "})"}));
 
@@ -928,6 +939,10 @@ bool MediaStreamTrackImpl::Ended() const {
 }
 
 void MediaStreamTrackImpl::SourceChangedState() {
+  // A track of a destroyed context returns below without ending.
+  if (component_->GetReadyState() == MediaStreamSource::kReadyStateEnded) {
+    replay_strong_self_.Clear();
+  }
   if (Ended()) {
     return;
   }

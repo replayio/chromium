@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <atomic>
+
 #include "base/record_replay.h"
 #include "base/record_replay_paint_surface.h"
 
@@ -11,15 +13,15 @@
 
 namespace recordreplay {
 
-// Callback to reset the paint surface.
-static ResetPaintSurfaceCallback gResetPaintSurfaceCallback = nullptr;
-void SetResetPaintSurfaceCallback(ResetPaintSurfaceCallback reset_paint_surface) {
-  gResetPaintSurfaceCallback = reset_paint_surface;
-}
+static std::atomic<bool> gPaintSurfaceResetRequested{false};
+
 void DoResetPaintSurface() {
-  if (gResetPaintSurfaceCallback) {
-    gResetPaintSurfaceCallback();
-  }
+  gPaintSurfaceResetRequested.store(true);
+}
+
+bool TakePaintSurfaceReset() {
+  bool requested = gPaintSurfaceResetRequested.exchange(false);
+  return RecordReplayValue("TakePaintSurfaceReset", requested);
 }
 
 }  // namespace recordreplay

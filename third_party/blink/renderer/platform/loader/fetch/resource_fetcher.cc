@@ -105,6 +105,7 @@
 #include "third_party/blink/renderer/platform/weborigin/scheme_registry.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 #include "third_party/blink/renderer/platform/weborigin/security_policy.h"
+#include "third_party/blink/renderer/platform/wtf/shared_buffer.h"
 #include "third_party/blink/renderer/platform/wtf/text/strcat.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
@@ -959,8 +960,22 @@ void ResourceFetcher::DidLoadResourceFromMemoryCache(
         request.InspectorId(), request, resource->GetResponse(), resource,
         ResourceLoadObserver::ResponseSource::kFromMemoryCache);
 
-    recordreplay::OnNetworkReceiveResponse(resource->InspectorId(), resource->GetResponse());
-    recordreplay::OnNetworkFinishLoading(resource->InspectorId(),
+    recordreplay::OnNetworkReceiveResponse(request.InspectorId(), resource->GetResponse(),
+                                           /* response_from_cache = */ true);
+
+    if (recordreplay::ShouldEmitRecordReplayNetworkBrowserEvents()) {
+      if (scoped_refptr<const SharedBuffer> resource_buffer =
+              resource->ResourceBuffer()) {
+        SharedBuffer::DeprecatedFlatData flat_data(resource_buffer.get());
+        if (flat_data.size() > 0) {
+          recordreplay::OnNetworkReceiveData(
+              request.InspectorId(), flat_data.data(),
+              static_cast<int>(flat_data.size()));
+        }
+      }
+    }
+
+    recordreplay::OnNetworkFinishLoading(request.InspectorId(),
                                          resource->GetResponse().EncodedBodyLength(),
                                          resource->GetResponse().DecodedBodyLength());
 

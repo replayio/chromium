@@ -148,6 +148,7 @@
 #include "third_party/blink/renderer/platform/back_forward_cache_buffer_limit_tracker.h"
 #include "third_party/blink/renderer/platform/bindings/dom_wrapper_world.h"
 #include "third_party/blink/renderer/platform/bindings/exception_messages.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_throw.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/source_location.h"
 #include "third_party/blink/renderer/platform/blob/blob_url.h"
@@ -2009,6 +2010,10 @@ ScriptPromise<ScrollResult> LocalDOMWindow::scrollBy(ScriptState* script_state,
 ScriptPromise<ScrollResult> LocalDOMWindow::scrollBy(
     ScriptState* script_state,
     const ScrollToOptions* scroll_to_options) const {
+  if (RecordReplayThrowIfEventsUnavailable("Window.scrollBy")) {
+    return EmptyPromise();
+  }
+
   ScrollPromiseResolver* resolver =
       MakeGarbageCollected<ScrollPromiseResolver>(script_state);
 
@@ -2076,6 +2081,10 @@ ScriptPromise<ScrollResult> LocalDOMWindow::scrollTo(ScriptState* script_state,
 ScriptPromise<ScrollResult> LocalDOMWindow::scrollTo(
     ScriptState* script_state,
     const ScrollToOptions* scroll_to_options) const {
+  if (RecordReplayThrowIfEventsUnavailable("Window.scrollTo")) {
+    return EmptyPromise();
+  }
+
   ScrollPromiseResolver* resolver =
       MakeGarbageCollected<ScrollPromiseResolver>(script_state);
 

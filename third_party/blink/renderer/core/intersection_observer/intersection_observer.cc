@@ -355,7 +355,10 @@ IntersectionObserver::IntersectionObserver(
     DCHECK(track_visibility_);
     DCHECK(!hit_node_cb_->is_null());
   }
-  // Pointer registration is needed for sorting in IntersectionObserverController::ComputeIntersections.
+  // Pointer registration gives observers a deterministic order while
+  // recording/replaying: in ElementIntersectionObserverData's hash tables,
+  // keyed by the pointer id, and in the sorting in
+  // IntersectionObserverController::ComputeIntersections.
   recordreplay::RegisterPointer("IntersectionObserver", this);
 }
 
@@ -386,7 +389,7 @@ void IntersectionObserver::observe(Element* target,
       MakeGarbageCollected<IntersectionObservation>(*this, *target);
   target->EnsureIntersectionObserverData().AddObservation(*observation);
   observations_.insert(observation);
-  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "IntersectionObserver")) {
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "IntersectionObserver")) {
     replay_strong_observations_.insert(observation);
   }
   if (root()) {
@@ -418,7 +421,7 @@ void IntersectionObserver::unobserve(Element* target,
 
   observation->Disconnect();
   observations_.erase(observation);
-  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "IntersectionObserver")) {
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "IntersectionObserver")) {
     replay_strong_observations_.erase(observation);
   }
   active_observations_.erase(observation);
@@ -434,7 +437,7 @@ void IntersectionObserver::disconnect(ExceptionState& exception_state) {
   for (auto& observation : observations_)
     observation->Disconnect();
   observations_.clear();
-  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "IntersectionObserver")) {
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "IntersectionObserver")) {
     replay_strong_observations_.clear();
   }
   active_observations_.clear();

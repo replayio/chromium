@@ -16,6 +16,7 @@
 #include "base/feature_list.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "base/strings/strcat.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
@@ -43,6 +44,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_response_init.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_throw_dom_exception.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
 #include "third_party/blink/renderer/core/dom/abort_signal.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
@@ -1087,6 +1089,20 @@ void FetchManager::Loader::Dispose() {
 // To abort a fetch() call with a promise, request, responseObject, and an
 // error:
 void FetchManager::Loader::Abort() {
+  // FetchLoaderBase binds this to the signal through a WeakPersistent.
+  // While fetch_manager_ is set, its loaders_ holds this loader, so this runs
+  // at the same point when recording and replaying, and everything below
+  // interacts with the recording as usual. Dispose() clears fetch_manager_ once
+  // the loader finished, failed or lost its context, which happens at the same
+  // point in both. From then on nothing holds the loader strongly, and the GC,
+  // whose timing differs between recording and replaying, decides whether this
+  // runs at all. It must not interact with the recording then, and it has
+  // nothing left to do: threadable_loader_ was cleared by Dispose(), and
+  // NotifyFinished() needs fetch_manager_. Returning early makes both outcomes
+  // of the GC identical.
+  if (recordreplay::IsRecordingOrReplaying() && !fetch_manager_)
+    return;
+
   ScriptState* script_state = GetScriptState();
   v8::Local<v8::Value> error = Signal()->reason(script_state).V8Value();
   // 1. Reject promise with error.
@@ -1742,6 +1758,14 @@ ScriptPromise<Response> FetchManager::Fetch(ScriptState* script_state,
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver<Response>>(
       script_state, exception_state.GetContext());
   auto promise = resolver->Promise();
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
+    resolver->Reject(V8ThrowException::CreateTypeError(
+        script_state->GetIsolate(),
+        "This evaluation tried to read network contents that were not captured "
+        "in the recording. Replay cannot perform fresh network reads "
+        "divergently."));
+    return promise;
+  }
 
   auto* loader = MakeGarbageCollected<Loader>(
       GetExecutionContext(), this, resolver, request, script_state, signal);

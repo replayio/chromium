@@ -6,6 +6,7 @@
 
 #include "base/feature_list.h"
 #include "base/numerics/byte_conversions.h"
+#include "base/record_replay.h"
 #include "third_party/blink/public/mojom/use_counter/metrics/web_feature.mojom-blink.h"
 #include "third_party/blink/public/platform/web_blob_info.h"
 #include "third_party/blink/renderer/bindings/core/v8/native_value_traits_impl.h"
@@ -68,6 +69,20 @@
 #include "third_party/blink/renderer/platform/wtf/text/string_utf8_adaptor.h"
 
 namespace blink {
+
+namespace {
+
+// Same algorithm as v8::internal::HashBytes in value-serializer.cc.
+int HashBytes(const void* aPtr, size_t aSize) {
+  int hash = 0;
+  const uint8_t* ptr = static_cast<const uint8_t*>(aPtr);
+  for (size_t i = 0; i < aSize; i++) {
+    hash = (((hash << 5) - hash) + UNSAFE_BUFFERS(ptr[i])) | 0;
+  }
+  return hash;
+}
+
+}  // namespace
 
 // The "Blink-side" serialization version, which defines how Blink will behave
 // during the serialization process, is in
@@ -295,6 +310,9 @@ scoped_refptr<SerializedScriptValue> V8ScriptValueSerializer::Serialize(
   serialized_script_value_->MoveSharedImmutableBackingStores(
       serializer_.ReleaseSharedImmutableBackingStores());
   auto [buffer_ptr, buffer_size] = serializer_.Release();
+  REPLAY_ASSERT("[TT-492] V8ScriptValueSerializer::Serialize %u %d",
+                static_cast<unsigned>(buffer_size),
+                HashBytes(buffer_ptr, buffer_size));
   auto buffer =
       // SAFETY: The size from Release() is promised to be the size of the
       // allocation for the returned pointer. The pointer is allocated by the

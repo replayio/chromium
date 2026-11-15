@@ -154,8 +154,7 @@ void ImageResourceContent::HandleObserverFinished(
     if (it != observers_.end()) {
       observers_.erase(it);
       finished_observers_.insert(observer);
-      if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
-                                               "ImageResourceContent")) {
+      if (recordreplay::EnterLeakMemory("ImageResourceContent")) {
         replay_strong_observers_.erase(replay_strong_observers_.find(observer));
         replay_strong_finished_observers_.insert(observer);
       }
@@ -181,8 +180,7 @@ void ImageResourceContent::AddObserver(ImageResourceObserver* observer) {
           observer->CachedSpeculativeDecodeQuality());
     }
 
-    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
-                                              "ImageResourceContent")) {
+    if (recordreplay::EnterLeakMemory("ImageResourceContent")) {
       replay_strong_observers_.insert(observer);
     }
   }
@@ -217,8 +215,7 @@ void ImageResourceContent::RemoveObserver(ImageResourceObserver* observer) {
     fully_erased = observers_.erase(it) && finished_observers_.find(observer) ==
                                                finished_observers_.end();
     
-    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
-                                              "ImageResourceContent")) {
+    if (recordreplay::EnterLeakMemory("ImageResourceContent")) {
       replay_strong_observers_.erase(replay_strong_observers_.find(observer));
     }
   } else {
@@ -226,8 +223,7 @@ void ImageResourceContent::RemoveObserver(ImageResourceObserver* observer) {
     CHECK(it != finished_observers_.end());
     fully_erased = finished_observers_.erase(it);
     
-    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
-                                              "ImageResourceContent")) {
+    if (recordreplay::EnterLeakMemory("ImageResourceContent")) {
       replay_strong_finished_observers_.erase(replay_strong_finished_observers_.find(observer));
     }
   }

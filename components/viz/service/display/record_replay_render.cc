@@ -4,7 +4,10 @@
 
 #include "components/viz/service/display/record_replay_render.h"
 
+#include <algorithm>
+
 #include "base/base64.h"
+#include "base/no_destructor.h"
 #include "base/record_replay.h"
 #include "base/record_replay_paint_surface.h"
 #include "base/record_replay_render_interface.h"
@@ -46,16 +49,17 @@ static viz::SoftwareOutputSurface* gOutputSurface;
 static viz::SoftwareRenderer* gRenderer;
 
 // For now we only support drawing a single surface, which is the first one
-// which the process tried to draw.  This variable can be reset when the
-// target surface is expected to change, such as after a navigation, so that
-// the new surface is not ignored.
-// The `SetResetPaintSurfaceCallback` call below is used to install a callback
-// that chrome invokes when the target surface is expected to change.
+// which the process tried to draw.  This variable is reset when the target
+// surface is expected to change, such as after a navigation, so that the new
+// surface is not ignored: other threads request that with
+// `recordreplay::DoResetPaintSurface` and the next submitted frame applies it.
 // See https://linear.app/replay/issue/RUN-2400
 static viz::LocalSurfaceId* gSurfaceId;
-static void ResetSurfaceId() {
-  gSurfaceId = nullptr;
-}
+
+// Embed token of `gSurfaceId`, which identifies the window owning the paint
+// surface, for repaints on the main thread: `gSurfaceId` belongs to the
+// compositor thread.
+static std::atomic<const base::UnguessableToken*> gSurfaceEmbedToken;
 
 static void InitializeRenderer() {
   std::unique_ptr<viz::SoftwareOutputDevice> output_device =
@@ -68,7 +72,6 @@ static void InitializeRenderer() {
                                         nullptr,
                                         nullptr);
 
-  recordreplay::SetResetPaintSurfaceCallback(ResetSurfaceId);
   recordreplay::SetGetCurrentViewportPixelSizeCallback(GetCurrentViewportPixelSizeImpl);
 }
 
@@ -87,13 +90,25 @@ void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
                            const viz::CompositorFrame& frame) {
   CHECK(IsRecordingOrReplaying());
 
+  if (TakePaintSurfaceReset()) {
+    gSurfaceId = nullptr;
+  }
+
   if (!gSurfaceId) {
     gSurfaceId = new viz::LocalSurfaceId(local_surface_id);
+    gSurfaceEmbedToken =
+        new base::UnguessableToken(local_surface_id.embed_token());
     InitializeRenderer();
   }
 
   // Surfaces are allowed to have different parent sequence numbers from the
-  // original one.
+  // original one, and newer child sequence numbers: the widget allocates one
+  // whenever its frame sink is recreated, e.g. after the GPU process restarts.
+  if (gSurfaceId->embed_token() == local_surface_id.embed_token() &&
+      local_surface_id.child_sequence_number() >
+          gSurfaceId->child_sequence_number()) {
+    *gSurfaceId = local_surface_id;
+  }
   if (gSurfaceId->child_sequence_number() != local_surface_id.child_sequence_number() ||
       gSurfaceId->embed_token() != local_surface_id.embed_token()) {
     Print("Ignoring composite to unknown surface %s, expected %s",
@@ -286,9 +301,19 @@ void OnRepaintFinished() {
 
 static cc::ProxyMain* gCurrentCompositorProxy;
 
+// The main thread's live compositor proxies. A process has one for each
+// window it renders, e.g. a page and a popup it opened.
+static std::vector<cc::ProxyMain*>* gCompositorProxies;
+
 void SetCompositorProxy(cc::ProxyMain* proxy) {
   if (IsMainThread()) {
     gCurrentCompositorProxy = proxy;
+    if (!gCompositorProxies) {
+      gCompositorProxies = new std::vector<cc::ProxyMain*>();
+    }
+    if (!std::ranges::contains(*gCompositorProxies, proxy)) {
+      gCompositorProxies->push_back(proxy);
+    }
   }
 }
 
@@ -297,20 +322,43 @@ void CompositorProxyDestroyed(cc::ProxyMain* proxy) {
     CHECK(IsMainThread());
     gCurrentCompositorProxy = nullptr;
   }
+  if (gCompositorProxies && IsMainThread()) {
+    std::erase(*gCompositorProxies, proxy);
+  }
+}
+
+// The proxy to repaint with. Only frames submitted to the paint surface are
+// drawn, so a repaint needs the proxy of the window which owns that surface.
+// The current proxy is the one which last began a main frame, and with several
+// windows in the process that can be another window's: after a page opens a
+// popup, either window can own the paint surface while both keep running main
+// frames. A repaint with the other window's proxy draws a frame which
+// SubmitCompositorFrame ignores, and returns nothing.
+//
+// When no live proxy owns the paint surface (its window was closed and no
+// frame has claimed the surface since), the current proxy is used and the
+// repaint still returns nothing, unless a paint surface reset is pending.
+static cc::ProxyMain* RepaintCompositorProxy() {
+  const base::UnguessableToken* embed_token = gSurfaceEmbedToken;
+  if (embed_token && gCompositorProxies) {
+    for (cc::ProxyMain* proxy : *gCompositorProxies) {
+      if (proxy->RecordReplayLocalSurfaceId().embed_token() == *embed_token) {
+        return proxy;
+      }
+    }
+  }
+  return gCurrentCompositorProxy;
 }
 
 static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
   CHECK(IsMainThread());
 
+  gCurrentCompositorProxy = RepaintCompositorProxy();
   if (!gCurrentCompositorProxy)
     return nullptr;
 
   gRepaintMimeType = mime_type;
   gRepaintJPEGQuality = jpeg_quality;
-  gRepaintResult = nullptr;
-
-  base::WaitableEvent event;
-  gRepaintEvent = &event;
 
   // Update layout state on the main thread and commit a new paint.
   std::unique_ptr<cc::BeginMainFrameAndCommitState> begin_main_frame_state(
@@ -318,13 +366,27 @@ static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
   begin_main_frame_state->mutator_events = std::make_unique<cc::AnimationEvents>();
   begin_main_frame_state->commit_data = std::make_unique<cc::CompositorCommitData>();
 
+  // The pause can leave a frame's tree pending behind one that was never
+  // drawn, so the compositor has to be told about the repaint before its
+  // commit, which waits for the pending tree.
+  gCurrentCompositorProxy->RecordReplayRepaintPending();
   gCurrentCompositorProxy->BeginMainFrameWithBlocking(std::move(begin_main_frame_state), true);
+
+  // A draw that an earlier repaint which timed out still forces doesn't
+  // finish this one: there's no event to signal until this repaint's commit,
+  // and the commit clears the earlier forced draw. Such a draw can still
+  // signal the event after its repaint stopped waiting, so the event outlives
+  // repaints.
+  static base::NoDestructor<base::WaitableEvent> event;
+  event->Reset();
+  gRepaintResult = nullptr;
+  gRepaintEvent = event.get();
 
   // Trigger a new frame on the compositor thread.
   gCurrentCompositorProxy->RecordReplayRepaint();
 
   // Wait for the repainting frame to complete.
-  bool signaled = event.TimedWait(base::Milliseconds(3000));
+  bool signaled = event->TimedWait(base::Milliseconds(3000));
   if (!signaled) {
     Print("[RuntimeError] Failed waiting to get a repaint.");
     gRepaintResult = nullptr;

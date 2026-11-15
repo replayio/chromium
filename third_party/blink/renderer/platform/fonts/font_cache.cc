@@ -61,6 +61,7 @@
 #include "third_party/blink/renderer/platform/fonts/font_platform_data_cache.h"
 #include "third_party/blink/renderer/platform/fonts/font_unique_name_lookup.h"
 #include "third_party/blink/renderer/platform/fonts/simple_font_data.h"
+#include "third_party/blink/renderer/platform/heap/persistent.h"
 #include "third_party/blink/renderer/platform/heap/thread_state.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/web_memory_allocator_dump.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/web_process_memory_dump.h"
@@ -86,6 +87,17 @@ const char kMonoEmojiLocale[] = "und-Zsym";
 #if BUILDFLAG(IS_ANDROID)
 extern const char kNotoColorEmojiCompat[] = "Noto Color Emoji Compat";
 #endif
+
+namespace {
+
+// SimpleFontData is garbage collected, so the font is retained with a
+// persistent handle, which belongs to the main thread's heap.
+Persistent<const SimpleFontData>& ReplayLastResortSimpleFontDataStorage() {
+  DEFINE_STATIC_LOCAL(Persistent<const SimpleFontData>, font_data, ());
+  return font_data;
+}
+
+}  // namespace
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 float FontCache::device_scale_factor_ = 1.0;
@@ -225,6 +237,22 @@ String FontCache::FirstAvailableOrFirst(const String& families) {
   // setting change/script.
   return String::FromUtf8(
       gfx::FontList::FirstAvailableOrFirst(families.Utf8()));
+}
+
+void FontCache::WarmReplayLastResortFont() {
+  if (!IsMainThread())
+    return;
+  Persistent<const SimpleFontData>& font_data =
+      ReplayLastResortSimpleFontDataStorage();
+  if (font_data)
+    return;
+  font_data = FontCache::Get().GetLastResortFallbackFont(FontDescription());
+}
+
+const SimpleFontData* FontCache::ReplayLastResortSimpleFontData() {
+  if (!IsMainThread())
+    return nullptr;
+  return ReplayLastResortSimpleFontDataStorage().Get();
 }
 
 const SimpleFontData* FontCache::FallbackFontForCharacter(

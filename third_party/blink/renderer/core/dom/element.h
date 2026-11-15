@@ -592,6 +592,10 @@ class CORE_EXPORT Element : public ContainerNode {
                                     bool include_self = false,
                                     ScrollPromiseResolver* = nullptr);
   void scrollIntoViewIfNeeded(bool center_if_needed = true);
+  // The IDL entry point. It throws when events are unavailable; the C++
+  // callers of scrollIntoViewIfNeeded() would leave that exception pending.
+  void RecordReplayScrollIntoViewIfNeededForBinding(
+      bool center_if_needed = true);
 
   int OffsetLeft();
   int OffsetTop();

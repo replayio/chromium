@@ -163,6 +163,10 @@ FontDataForRangeSet* FontFallbackIterator::Next(const HintCharList& hint_list) {
         return UniqueOrNext(
             MakeGarbageCollected<FontDataForRangeSet>(system_font), hint_list);
       }
+      // [RecordReplay] crash-0079: match upstream kOutOfLuck — empty set, never
+      // null. Diverged UniqueSystemFontForHintList can leave first_candidate_
+      // unset; returning null made ShapeSegment skipCheck-break without clear.
+      return MakeGarbageCollected<FontDataForRangeSet>();
     }
     return first_candidate_;
   }
@@ -273,7 +277,7 @@ const SimpleFontData* FontFallbackIterator::UniqueSystemFontForHintList(
   if (!hint_list.size())
     return nullptr;
 
-  if (recordreplay::IsReplaying() && recordreplay::HasDivergedFromRecording()) {
+  if (recordreplay::AreEventsUnavailable("UniqueSystemFontForHintList")) {
     // If we've run out of recording data, then following this chain of logic will lead to
     // hangs, as we await conditional vars on epoll waiters that don't actually exist, held
     // by threads that are dead (waiting forever.)  Luckily, it seems we can just early out 

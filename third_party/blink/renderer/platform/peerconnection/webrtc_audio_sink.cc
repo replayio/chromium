@@ -18,6 +18,7 @@
 #include "base/logging.h"
 #include "base/memory/aligned_memory.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/record_replay.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/to_string.h"
 #include "base/synchronization/lock.h"
@@ -113,6 +114,8 @@ void WebRtcAudioSink::OnData(const media::AudioBus& audio_bus,
   // places where |AudioPushFifo| is applied. So a update to |AudioPushFifo|
   // will be a joint effort, and should be carefully carried out.
   last_estimated_capture_time_ = estimated_capture_time;
+
+  REPLAY_ASSERT("WebRtcAudioSink::OnData %d", audio_bus.frames());
 
   // The following will result in zero, one, or multiple synchronous calls to
   // DeliverRebufferedAudio().

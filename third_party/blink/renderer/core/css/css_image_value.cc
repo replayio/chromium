@@ -183,8 +183,7 @@ StyleImage* CSSImageValue::CacheImage(Document& document,
       image_content, *url_data.MakeResolvedIfDanglingMarkup(document), document,
       params.Url(), override_image_resolution);
 
-  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
-                                           "StyleImageCache")) {
+  if (recordreplay::EnterLeakMemory("StyleImageCache")) {
     // `image` is statically `StyleImage*` but was just created as a concrete
     // `StyleFetchedImage` above, so the checked downcast is safe.
     document.GetStyleEngine().RetainStyleImageForReplay(
