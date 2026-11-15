@@ -39,6 +39,7 @@
 #include "third_party/blink/renderer/platform/media/media_player_client.h"
 #include "third_party/blink/renderer/platform/media/player_id_generator.h"
 #include "third_party/blink/renderer/platform/media/web_media_source_impl.h"
+#include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "url/gurl.h"
 
 namespace blink {
@@ -144,7 +145,7 @@ class StubWebMediaPlayer : public WebMediaPlayer,
       StartMediaSource();
     } else {
       if (load_type == kLoadTypeURL)
-        url_ = GURL(source.GetAsURL());
+        url_ = KURL(source.GetAsURL());
       PostTask(&StubWebMediaPlayer::FinishLoad);
     }
     return LoadTiming::kImmediate;
@@ -268,7 +269,7 @@ class StubWebMediaPlayer : public WebMediaPlayer,
     return std::nullopt;
   }
   int GetPlayerId() override { return player_id_; }
-  GURL GetSrcAfterRedirects() override { return url_; }
+  GURL GetSrcAfterRedirects() override { return GURL(url_); }
   base::WeakPtr<WebMediaPlayer> AsWeakPtr() override {
     return weak_factory_.GetWeakPtr();
   }
@@ -519,7 +520,7 @@ class StubWebMediaPlayer : public WebMediaPlayer,
   const int player_id_;
 
   LoadType load_type_ = kLoadTypeURL;
-  GURL url_;
+  KURL url_;
   NetworkState network_state_ = kNetworkStateEmpty;
   ReadyState ready_state_ = kReadyStateHaveNothing;
   bool loading_progressed_ = false;

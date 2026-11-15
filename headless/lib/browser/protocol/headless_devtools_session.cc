@@ -6,6 +6,7 @@
 
 #include "base/command_line.h"
 #include "base/containers/span.h"
+#include "base/record_replay.h"
 #include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/devtools_agent_host_client.h"
 #include "content/public/browser/devtools_agent_host_client_channel.h"

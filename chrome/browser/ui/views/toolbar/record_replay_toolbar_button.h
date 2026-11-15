@@ -5,10 +5,13 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_TOOLBAR_RECORD_REPLAY_TOOLBAR_BUTTON_H_
 #define CHROME_BROWSER_UI_VIEWS_TOOLBAR_RECORD_REPLAY_TOOLBAR_BUTTON_H_
 
+#include <memory>
+
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_button.h"
 #include "content/public/browser/web_contents.h"
 
-class Browser;
+class BrowserWindowInterface;
 
 struct RecordReplayToolbarButtonWebContentsObserver;
 
@@ -16,7 +19,7 @@ class RecordReplayToolbarButton: public ToolbarButton {
  METADATA_HEADER(RecordReplayToolbarButton, ToolbarButton)
  friend struct RecordReplayToolbarButtonWebContentsObserver;
  public:
-  explicit RecordReplayToolbarButton(Browser* browser);
+  explicit RecordReplayToolbarButton(BrowserWindowInterface* browser);
   RecordReplayToolbarButton(const RecordReplayToolbarButton&) = delete;
   RecordReplayToolbarButton& operator=(const RecordReplayToolbarButton&) = delete;
   ~RecordReplayToolbarButton() override;
@@ -32,7 +35,7 @@ class RecordReplayToolbarButton: public ToolbarButton {
   void RefreshIconState();
   void CreatePostRecordingWebContents();
 
-  const raw_ptr<Browser> browser_;
+  const raw_ptr<BrowserWindowInterface> browser_;
   raw_ptr<content::WebContents> web_contents_;
   std::unique_ptr<RecordReplayToolbarButtonWebContentsObserver>
     web_contents_observer_;

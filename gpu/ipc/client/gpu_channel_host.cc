@@ -426,11 +426,11 @@ void GpuChannelHost::InternalFlush(uint32_t deferred_message_id) {
   // here, at a point which isn't the same on a replay, so whether there is
   // anything to flush is recorded: a replay then flushes where the recording
   // did, whatever it has queued.
-  const bool flush = !!recordreplay::RecordReplayValueIfAllowed(
+  const bool should_flush = !!recordreplay::RecordReplayValueIfAllowed(
       "GpuChannelHost::InternalFlush",
       !deferred_messages_.empty() &&
           deferred_message_id > flushed_deferred_message_id_);
-  if (flush) {
+  if (should_flush) {
     if (TRACE_EVENT_CATEGORY_ENABLED("gpu,toplevel.flow")) {
       for (auto& message : deferred_messages_) {
         if (message->params->is_command_buffer_request()) {

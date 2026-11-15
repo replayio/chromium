@@ -13,6 +13,7 @@
 #include "base/files/file_path.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
+#include "base/record_replay.h"
 #include "base/strings/string_util.h"
 #include "base/time/time.h"
 #include "chrome/browser/profiles/profile.h"

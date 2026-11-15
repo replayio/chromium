@@ -888,7 +888,7 @@ void XMLHttpRequest::send(const String& body, ExceptionState& exception_state) {
         Vector<char> buffer(static_cast<wtf_size_t>(padding), ' ');
         adj_body = body + String(base::span(buffer));
       } else {
-        adj_body = body.Substring(0, (unsigned int) recorded_length);
+        adj_body = body.substr(0, static_cast<wtf_size_t>(recorded_length));
       }
     }
   }

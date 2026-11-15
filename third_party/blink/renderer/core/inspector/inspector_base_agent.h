@@ -103,6 +103,14 @@ class InspectorBaseAgent : public InspectorAgent,
   V8SessionHolder V8Session() const { return v8_session_; }
   bool IsTrustedClient() const { return client_is_trusted_; }
 
+  // [replay] Replay's command handlers create agents without a
+  // DevToolsSession, so Init() never runs (no dispatcher, no frontend). The
+  // agents still need the V8 session, which upstream used to pass to their
+  // constructors and now passes to Init().
+  void RecordReplaySetV8Session(V8SessionHolder v8_session) {
+    v8_session_ = std::move(v8_session);
+  }
+
  protected:
   InspectorBaseAgent() : agent_state_(DomainMetainfo::domainName) {}
   ~InspectorBaseAgent() override {

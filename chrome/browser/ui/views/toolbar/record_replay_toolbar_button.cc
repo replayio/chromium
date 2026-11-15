@@ -8,11 +8,19 @@
 
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/tabs/tab_enums.h"
+#include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/common/webui_url_constants.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/page_transition_types.h"
+#include "url/gurl.h"
 #include "ui/views/controls/button/button_controller.h"
+#include "content/public/browser/navigation_controller.h"
+#include "content/public/browser/site_instance.h"
 #include "content/public/browser/web_contents_observer.h"
+#include "content/public/common/referrer.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 struct RecordReplayToolbarButtonWebContentsObserver
@@ -34,7 +42,8 @@ struct RecordReplayToolbarButtonWebContentsObserver
   raw_ptr<RecordReplayToolbarButton> button_;
 };
 
-RecordReplayToolbarButton::RecordReplayToolbarButton(Browser* browser)
+RecordReplayToolbarButton::RecordReplayToolbarButton(
+    BrowserWindowInterface* browser)
     : ToolbarButton(base::BindRepeating(&RecordReplayToolbarButton::ButtonPressed,
                                         base::Unretained(this))),
       browser_(browser),
@@ -59,16 +68,18 @@ void RecordReplayToolbarButton::OnPaintBackground(gfx::Canvas* canvas) {
 void RecordReplayToolbarButton::CreateHiddenWebContents() {
   // create a hidden webcontents to run the business logic
   content::WebContents::CreateParams recordreplay_params(
-    browser_->profile(),
+    browser_->GetProfile(),
     content::SiteInstance::CreateForURL(
-      browser_->profile(),
+      browser_->GetProfile(),
       GURL(std::string_view(chrome::kChromeUIRecordReplayPageURL))
     )
   );
   recordreplay_params.is_never_composited = true;
 
   recordreplay_contents_ = content::WebContents::Create(recordreplay_params);
-  recordreplay_contents_->SetDelegate(browser_); // what does the delegate do?
+  // The browser's WebContentsDelegate is no longer the Browser itself.
+  recordreplay_contents_->SetDelegate(
+      BrowserWebContentsDelegate::From(browser_)); // what does the delegate do?
   recordreplay_contents_->GetController().LoadURL(
     GURL(std::string_view(chrome::kChromeUIRecordReplayPageURL)),
     content::Referrer(),
@@ -91,7 +102,7 @@ void RecordReplayToolbarButton::ButtonPressed() {
 
 void RecordReplayToolbarButton::StartRecording() {
   // Get the current active tab.  This provides the URL we'll be recording.
-  TabStripModel* tab_strip_model = browser_->tab_strip_model();
+  TabStripModel* tab_strip_model = browser_->GetTabStripModel();
   content::WebContents* old_web_contents = tab_strip_model->GetActiveWebContents();
   if (!old_web_contents) {
     return;
@@ -137,7 +148,7 @@ void RecordReplayToolbarButton::StopRecording() {
     return;
   }
 
-  TabStripModel* tab_strip_model = browser_->tab_strip_model();
+  TabStripModel* tab_strip_model = browser_->GetTabStripModel();
   int index = tab_strip_model->GetIndexOfWebContents(web_contents_);
   if (index == TabStripModel::kNoTab) {
     // TODO: Print a warning.  The web contents we have a reference to
@@ -172,7 +183,7 @@ void RecordReplayToolbarButton::CreatePostRecordingWebContents() {
   content::WebContents::CreateParams new_params(web_contents_->GetBrowserContext());
   std::unique_ptr<content::WebContents> post_recording_web_contents(
     content::WebContents::Create(new_params));
-  TabStripModel* tab_strip_model = browser_->tab_strip_model();
+  TabStripModel* tab_strip_model = browser_->GetTabStripModel();
 
   // TODO: Make this URL point to `app.replay.io` URL for the recording.
   // TODO: this should also maybe be done via WebContents::CreateParams if it can?

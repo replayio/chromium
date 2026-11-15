@@ -2402,7 +2402,7 @@ void Node::setTextContent(const String& text_arg) {
     size_t recordedLength = recordreplay::RecordReplayValue("Node::setTextContent length", contents.length());
     contents.resize(recordedLength, ' ');
     recordreplay::RecordReplayBytes("Node::setTextContent string", &contents[0], recordedLength);
-    text = String::FromUTF8(contents);
+    text = String::FromUtf8(contents);
 
     // https://linear.app/replay/issue/RUN-809
     recordreplay::Assert("Node::setTextContent %zu", text.length());

@@ -259,12 +259,17 @@ struct UntracedMemberHashTraits
 template <typename T>
 struct HashTraits<blink::UntracedMember<T>> : UntracedMemberHashTraits<T> {};
 
+// Replay: the default traits of Member<>-derived elements already hash by
+// RecordReplayId() (BaseMemberHashTraits::GetHash). These names are the
+// default traits themselves, so that a container spelled with them is the
+// same type as one spelled without: upstream signatures take the latter, e.g.
+// StyleSheetCollection::UpdateMixins(HeapHashSet<Member<TreeScope>>&).
 template <typename T>
-using MemberHashRecordReplayId = MemberHashTraits<T>;
+using MemberHashRecordReplayId = HashTraits<blink::Member<T>>;
 template <typename T>
-using WeakMemberHashRecordReplayId = WeakMemberHashTraits<T>;
+using WeakMemberHashRecordReplayId = HashTraits<blink::WeakMember<T>>;
 template <typename T>
-using UntracedMemberHashRecordReplayId = UntracedMemberHashTraits<T>;
+using UntracedMemberHashRecordReplayId = HashTraits<blink::UntracedMember<T>>;
 
 // Replay intervention: deterministic hashing keyed by the registered-pointer-id
 // registry (recordreplay::PointerId). Distinct from the RecordReplayId() family

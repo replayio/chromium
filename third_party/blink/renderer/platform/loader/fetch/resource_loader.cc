@@ -1044,7 +1044,7 @@ void ResourceLoader::DidReceiveData(base::span<const char> data) {
                        data.size());
 
   recordreplay::OnNetworkReceiveData(resource_->InspectorId(), data.data(),
-                                     data.size());
+                                     static_cast<int>(data.size()));
 
   DidReceiveDataImpl(data);
 }

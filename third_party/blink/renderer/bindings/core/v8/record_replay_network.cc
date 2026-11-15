@@ -124,7 +124,7 @@ static bool IsReplayInternalRequest(uint64_t identifier) {
 static bool IsInReplayScriptFrame() {
   v8::Isolate* isolate = v8::Isolate::TryGetCurrent();
   return isolate &&
-         CaptureCurrentScriptUrl(isolate).StartsWith("record-replay-");
+         CaptureCurrentScriptUrl(isolate).starts_with("record-replay-");
 }
 
 static void EmitRequestDataFormEvent(const std::string& request_id,

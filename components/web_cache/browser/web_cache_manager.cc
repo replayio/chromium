@@ -90,7 +90,7 @@ void WebCacheManager::ClearRendererCache(
   for (auto& service : web_cache_services_) {
     recordreplay::Assert(
         "[RUN-1975-2287] WebCacheManager::ClearRendererCache A %d %d",
-        service.first, (int)occasion);
+        service.first.GetUnsafeValue(), (int)occasion);
     // It is possible to have a renderer host that is not ready and is still
     // present in 'web_cache_services_' because the notification has not reach
     // this instance. This can happen if  'ClearRendererCache' is called by an

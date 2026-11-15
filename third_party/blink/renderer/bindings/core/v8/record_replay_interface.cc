@@ -13,16 +13,19 @@
 #include "base/base64.h"
 // `base/compiler_specific.h` provides the `UNSAFE_BUFFERS`/`UNSAFE_TODO` macros
 // used below to opt out of `-Wunsafe-buffer-usage` on Replay intervention sites.
+#include "base/check.h"
+#include "base/check_op.h"
 #include "base/compiler_specific.h"
+#include "base/containers/span.h"
+#include "base/files/file_path.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
+#include "base/logging.h"
 #include "base/path_service.h"
 #include "base/process/process_handle.h"
 #include "base/record_replay.h"
 #include "base/record_replay_paint_surface.h"
 #include "base/record_replay_render_interface.h"
-#include "content/public/renderer/render_thread.h"
-#include "content/public/renderer/v8_value_converter.h"
 #include "third_party/blink/renderer/bindings/core/v8/serialization/serialized_script_value.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_css_style_declaration.h"
@@ -37,6 +40,7 @@
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/dom_node_ids.h"
 #include "third_party/blink/renderer/core/dom/events/custom_event.h"
+#include "third_party/blink/renderer/core/dom/weak_identifier_map.h"
 // `event_interface_names::kCustomEvent` is used to type-check events without
 // `DowncastTraits<CustomEvent>` (which does not exist).
 #include "third_party/blink/renderer/core/event_interface_names.h"
@@ -51,8 +55,11 @@
 #include "third_party/blink/renderer/core/inspector/inspector_resource_content_loader.h"
 #include "third_party/blink/renderer/core/inspector/main_thread_debugger.h"
 #include "third_party/blink/renderer/core/inspector/resolve_node.h"
+#include "third_party/blink/renderer/core/inspector/v8_inspector_string.h"
+#include "third_party/blink/renderer/core/inspector/v8_session_holder.h"
 #include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
+#include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
 #include "third_party/blink/renderer/platform/bindings/v8_dom_wrapper.h"
 #include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
@@ -62,11 +69,20 @@
 #include "v8/include/v8-inspector.h"
 
 #include <array>
+#include <cassert>
+#include <cerrno>
 #include <cinttypes>
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
 #include <fstream>
+#include <memory>
+#include <optional>
+#include <sstream>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 #include "crypto/secure_hash.h"
 #include "crypto/sha2.h"
@@ -258,7 +274,7 @@ static String ReadReplayAssetFile(const char* fname) {
   // Important: Treat as UTF-8.
   // SAFETY: `len` is the byte length written by `ReadReplayAssetFile` for the
   // same buffer whose `.c_str()` is passed here, so the span bounds match.
-  String result = String::FromUTF8(UNSAFE_BUFFERS(base::span<const uint8_t>(
+  String result = String::FromUtf8(UNSAFE_BUFFERS(base::span<const uint8_t>(
       reinterpret_cast<const uint8_t*>(ReadReplayAssetFile(fname, len).c_str()),
       len)));
   if (!len) {
@@ -274,7 +290,7 @@ static String ReadReplayCommandAssetFile(const char* fname) {
   // SAFETY: `len` is the byte length written for whichever buffer pointer is
   // selected below (both paths populate `len` for the buffer they return), so
   // the span bounds match.
-  String result = String::FromUTF8(UNSAFE_BUFFERS(base::span<const uint8_t>(
+  String result = String::FromUtf8(UNSAFE_BUFFERS(base::span<const uint8_t>(
     reinterpret_cast<const uint8_t*>(
       IsCommandHandlingEnabledWhenRecording()
         // Recording + Replay.
@@ -1032,7 +1048,7 @@ extern "C" void ClearContextGroupIdForSendCDPMessage() {
   gContextGroupIdForSendCDPMessageDepth--;
 }
 
-absl::optional<int> GetCurrentContextGroupIdForIsolate(v8::Isolate* isolate) {
+std::optional<int> GetCurrentContextGroupIdForIsolate(v8::Isolate* isolate) {
   LocalFrame* local_frame_root = GetLocalFrameRoot(isolate);
 
   if (local_frame_root != nullptr) {
@@ -1040,7 +1056,7 @@ absl::optional<int> GetCurrentContextGroupIdForIsolate(v8::Isolate* isolate) {
     return WeakIdentifierMap<LocalFrame>::Identifier(local_frame_root);
   }
 
-  return absl::optional<int>();
+  return std::optional<int>();
 }
 
 InspectorData* getInspectorFor(v8::Isolate* isolate, int contextGroupId) {
@@ -1102,6 +1118,16 @@ v8_inspector::V8InspectorSession* getInspectorSession(v8::Isolate* isolate, int 
   return data->inspectorSession;
 }
 
+// The agents hold their V8 session in a V8SessionHolder (a shared_ptr). The
+// session belongs to InspectorData and is never destroyed, so the holder
+// doesn't own it.
+static V8SessionHolder getInspectorSessionHolder(v8::Isolate* isolate,
+                                                 int contextGroupId) {
+  return V8SessionHolder(std::shared_ptr<v8_inspector::V8InspectorSession>(
+      getInspectorSession(isolate, contextGroupId),
+      [](v8_inspector::V8InspectorSession*) {}));
+}
+
 // Console API calls and execution contexts are reported only to sessions of
 // the context group they belong to that enabled the Runtime domain. The
 // command handlers enable it in the root's group; other local roots (popups,
@@ -1159,7 +1185,7 @@ static void SendCDPMissingContextError(v8::Isolate* isolate,
   // Ensure the message has an ID. If not, handle the error in JavaScript.
   v8::String::Utf8Value inmessage(isolate, message_arg);
   std::string nmessage(*inmessage);
-  absl::optional<base::Value> jsonMessage = base::JSONReader::Read(nmessage, base::JSON_PARSE_RFC);
+  std::optional<base::Value> jsonMessage = base::JSONReader::Read(nmessage, base::JSON_PARSE_RFC);
   base::DictValue* messageDict = jsonMessage->GetIfDict();
   CHECK(messageDict != nullptr);
   CHECK(messageDict->FindInt("id").has_value());
@@ -1179,31 +1205,31 @@ static void SendCDPMissingContextError(v8::Isolate* isolate,
   SendMessageToFrontend(message);
 }
 
-static absl::optional<int> ContextGroupIdFromInspectorContextId(
+static std::optional<int> ContextGroupIdFromInspectorContextId(
     v8::Isolate* isolate,
     int context_id) {
   if (context_id <= 0 || !gV8Inspectors)
-    return absl::nullopt;
+    return std::nullopt;
 
   auto it = gV8Inspectors->find(isolate);
   if (it == gV8Inspectors->end() || !it->second)
-    return absl::nullopt;
+    return std::nullopt;
 
   v8::HandleScope handle_scope(isolate);
   v8::Local<v8::Context> context;
   if (!it->second->contextById(context_id).ToLocal(&context))
-    return absl::nullopt;
+    return std::nullopt;
 
   LocalDOMWindow* window =
       DynamicTo<LocalDOMWindow>(ToExecutionContext(context));
   LocalFrame* frame = window ? window->GetFrame() : nullptr;
   if (!frame)
-    return absl::nullopt;
+    return std::nullopt;
 
   // Same map GetCurrentContextGroupIdForIsolate uses; do not create.
   LocalFrame& root = frame->LocalFrameRoot();
   if (!WeakIdentifierMap<LocalFrame>::HasIdentifier(&root))
-    return absl::nullopt;
+    return std::nullopt;
   return WeakIdentifierMap<LocalFrame>::Identifier(&root);
 }
 
@@ -1222,7 +1248,7 @@ static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
   v8::String::Utf8Value message(isolate, args[0]);
   std::string nmessage(*message);
 
-  absl::optional<int> contextGroupId;
+  std::optional<int> contextGroupId;
   if (gContextGroupIdForSendCDPMessageDepth > 0) {
     contextGroupId = UNSAFE_BUFFERS(
         gContextGroupIdForSendCDPMessageStack[gContextGroupIdForSendCDPMessageDepth - 1]);
@@ -1546,10 +1572,10 @@ static InspectedFrames* getOrCreateInspectedFrames(v8::Isolate* isolate, int con
 // NOTE: we need to instantiate all inspectors indivudally because we
 //    are not fully hooked up with a `DevToolsSession` + `UberDispatcher`.
 //    We also cannot enable them for the same reason.
-absl::optional<InspectorDOMAgent*> getOrCreateInspectorDOMAgent(v8::Isolate* isolate) {
+std::optional<InspectorDOMAgent*> getOrCreateInspectorDOMAgent(v8::Isolate* isolate) {
   auto contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
   if (!contextGroupId.has_value()) {
-    return absl::optional<InspectorDOMAgent*>();
+    return std::optional<InspectorDOMAgent*>();
   }
 
   InspectorData *data = getInspectorFor(isolate, *contextGroupId);
@@ -1557,19 +1583,21 @@ absl::optional<InspectorDOMAgent*> getOrCreateInspectorDOMAgent(v8::Isolate* iso
   if (!data->inspectorDomAgent) {
     // NOTE: based on WebDevToolsAgentImpl::AttachSession
     InspectedFrames* inspectedFrames = getOrCreateInspectedFrames(isolate, *contextGroupId);
-    data->inspectorDomAgent = MakeGarbageCollected<InspectorDOMAgent>(
-        isolate, inspectedFrames, getInspectorSession(isolate, *contextGroupId));
+    data->inspectorDomAgent =
+        MakeGarbageCollected<InspectorDOMAgent>(isolate, inspectedFrames);
+    data->inspectorDomAgent->RecordReplaySetV8Session(
+        getInspectorSessionHolder(isolate, *contextGroupId));
     data->inspectorDomAgent->FrameDocumentUpdated(data->GetLocalFrameRoot());
   }
   return data->inspectorDomAgent;
 }
 
-absl::optional<InspectorDOMDebuggerAgent*> getOrCreateInspectorDOMDebuggerAgent(
+std::optional<InspectorDOMDebuggerAgent*> getOrCreateInspectorDOMDebuggerAgent(
     v8::Isolate* isolate) {
   auto contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
 
   if (!contextGroupId.has_value()) {
-    return absl::optional<InspectorDOMDebuggerAgent*>();
+    return std::optional<InspectorDOMDebuggerAgent*>();
   }
 
   InspectorData *data = getInspectorFor(isolate, *contextGroupId);
@@ -1577,7 +1605,9 @@ absl::optional<InspectorDOMDebuggerAgent*> getOrCreateInspectorDOMDebuggerAgent(
   if (!data->inspectorDomDebuggerAgent) {
     data->inspectorDomDebuggerAgent =
         MakeGarbageCollected<InspectorDOMDebuggerAgent>(
-            isolate, *getOrCreateInspectorDOMAgent(isolate), getInspectorSession(isolate, *contextGroupId));
+            isolate, *getOrCreateInspectorDOMAgent(isolate));
+    data->inspectorDomDebuggerAgent->RecordReplaySetV8Session(
+        getInspectorSessionHolder(isolate, *contextGroupId));
 
     // RUN-1061: registering the agent here allows it to receive `UserCallback`
     // events.
@@ -1586,26 +1616,27 @@ absl::optional<InspectorDOMDebuggerAgent*> getOrCreateInspectorDOMDebuggerAgent(
   return data->inspectorDomDebuggerAgent;
 }
 
-absl::optional<InspectorNetworkAgent*> getOrCreateInspectorNetworkAgent(v8::Isolate* isolate) {
-  absl::optional<int> contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
+std::optional<InspectorNetworkAgent*> getOrCreateInspectorNetworkAgent(v8::Isolate* isolate) {
+  std::optional<int> contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
   if (!contextGroupId.has_value()) {
-    return absl::optional<InspectorNetworkAgent*>();
+    return std::optional<InspectorNetworkAgent*>();
   }
 
   InspectorData *data = getInspectorFor(isolate, *contextGroupId);
   
   if (!data->inspectorNetworkAgent) {
     InspectedFrames* inspectedFrames = getOrCreateInspectedFrames(isolate, *contextGroupId);
-    data->inspectorNetworkAgent = MakeGarbageCollected<InspectorNetworkAgent>(
-        inspectedFrames, nullptr, getInspectorSession(isolate, *contextGroupId));
+    // The network agent no longer takes or uses the V8 session.
+    data->inspectorNetworkAgent =
+        MakeGarbageCollected<InspectorNetworkAgent>(inspectedFrames, nullptr);
   }
   return data->inspectorNetworkAgent;
 }
 
-absl::optional<InspectorCSSAgent*> getOrCreateInspectorCSSAgent(v8::Isolate* isolate) {
-  absl::optional<int> contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
+std::optional<InspectorCSSAgent*> getOrCreateInspectorCSSAgent(v8::Isolate* isolate) {
+  std::optional<int> contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
   if (!contextGroupId.has_value()) {
-    return absl::optional<InspectorCSSAgent*>();
+    return std::optional<InspectorCSSAgent*>();
   }
 
   InspectorData *data = getInspectorFor(isolate, *contextGroupId);
@@ -1646,7 +1677,7 @@ getObjectByCdpId(v8::Isolate* isolate,
   std::unique_ptr<v8_inspector::StringBuffer> error;
   v8::Local<v8::Value> unwrapped;
 
-  absl::optional<int> contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
+  std::optional<int> contextGroupId = GetCurrentContextGroupIdForIsolate(isolate);
   if (!contextGroupId.has_value()) {
     recordreplay::Warning("GetObjectByCdpIdMissingContextGroup");
     return false;

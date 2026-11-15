@@ -8,6 +8,8 @@
 #include "base/values.h"
 
 #include <stdarg.h>
+
+#include <atomic>
 #include <sstream>
 
 #if BUILDFLAG(IS_WIN)

@@ -5,8 +5,11 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_HTML_FORMS_CONTROL_KEY_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_HTML_FORMS_CONTROL_KEY_H_
 
+#include <string.h>
+
 #include <utility>
 
+#include "base/compiler_specific.h"
 #include "third_party/blink/renderer/platform/wtf/hash_traits.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string_hash.h"
@@ -26,12 +29,12 @@ static inline int CompareControlKeyStrings(StringImpl* a, StringImpl* b) {
     // (errors under -Werror); UNSAFE_BUFFERS is non-semantic and preserves the
     // byte-exact comparison order required for deterministic ControlKey sorting.
     return UNSAFE_BUFFERS(
-        memcmp(a->Characters8(), b->Characters8(), a->length()));
+        memcmp(a->Span8().data(), b->Span8().data(), a->length()));
   }
   // Replay (force-determinism): see above; raw-ptr memcmp wrapped in
   // UNSAFE_BUFFERS to satisfy -Wunsafe-buffer-usage without changing semantics.
   return UNSAFE_BUFFERS(
-      memcmp(a->Characters16(), b->Characters16(), a->length() * 2));
+      memcmp(a->Span16().data(), b->Span16().data(), a->length() * 2));
 }
 
 // ControlKey class represents a pair of a name attribute value and a control

@@ -4,7 +4,10 @@
 
 #include "base/record_replay.h"
 #include "third_party/blink/renderer/bindings/core/v8/record_replay_events.h"
+#include "third_party/blink/renderer/core/dom/events/event_target.h"
+#include "third_party/blink/renderer/core/dom/node.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
+#include "third_party/blink/renderer/platform/wtf/wtf.h"
 
 using namespace blink;
 
