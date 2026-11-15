@@ -1,4 +1,4 @@
-# Chromium 157 Replay runtime (rebase/157/*): Linux x86_64, build only.
+# Chromium 157 Replay runtime (rebase/157/*): Linux x86_64 build and one record -> replay test.
 #
 # Uploaded by the `chromium-build` pipeline's settings step, which fetches this
 # file by URL for the build's branch. Builds are created on that pipeline
@@ -65,14 +65,70 @@ steps:
       export ENGFLOW_CERT_FILE="$$WS/engflow-m157.crt" ENGFLOW_KEY_FILE="$$WS/engflow-m157.key"
       .ci-boot-m157/replay_build_scripts/ci/job.sh
 
-  # ===========================================================================
-  # TEST STEP: none yet (157 is build-only).
-  #
-  # Add it here, with
-  #   depends_on: "build-chromium-157-linux-x86_64"
-  # The runtime is a Buildkite artifact of the build step, not an S3 object:
-  #   buildkite-agent artifact download "build_id/linux/x86_64/*" .
-  # gives build_id and <build id>.tar.xz (replay-chromium/). master's test
-  # steps resolve a build id against S3 / static.replay.io, where a 157 build
-  # is never uploaded, so they cannot be copied as they are.
-  # ===========================================================================
+  # One record -> replay case of the backend's test/chromium-recording suite,
+  # with the runtime the build step made. From master's "Chromium Recording
+  # Tests" step; the differences:
+  # - the runtime is the build step's Buildkite artifact (a 157 build is never
+  #   uploaded to S3 / static.replay.io), handed over as
+  #   REPLAY_CHROMIUM_EXECUTABLE_PATH;
+  # - one case, not the suite: REPLAY_157_TEST_CASE of the Buildkite build
+  #   (default below), a path under test/chromium-recording.
+  # REPLAY_BACKEND_REV (env of the Buildkite build) is the backend commit whose
+  # driver the runtime embeds and whose linker replays the recording.
+  - label: ":memo: Chromium 157 record -> replay (one case)"
+    key: "chromium-157-recording-linux-x86_64"
+    depends_on: "build-chromium-157-linux-x86_64"
+    timeout_in_minutes: 30
+    agents:
+      - "e2e=true"
+    plugins:
+      - thedyrt/skip-checkout#v0.1.1: ~
+      - seek-oss/aws-sm#v2.3.1:
+          region: us-east-2
+          env:
+            HASURA_ADMIN_SECRET: "prod/hasura-admin-secret"
+            RECORD_REPLAY_API_KEY: "prod/public-api-key"
+    env:
+      PLAYWRIGHT_HEADLESS: "true"
+      CI: "1"
+    command: |
+      set -euo pipefail
+      PIN="$$REPLAY_BACKEND_REV"
+      test -n "$$PIN"
+      CASE="$${REPLAY_157_TEST_CASE:-tests/evaluate/outbound-fetch}"
+      WORKDIR=$$(mktemp -d "/tmp/chromium157-recording-$${BUILDKITE_JOB_ID}.XXXXXX")
+      # Short path: unix socket paths under TMPDIR are length-limited.
+      TMPDIR=$$(mktemp -d /tmp/c157.XXXXXX)
+      export TMPDIR
+      trap 'rm -rf "$$WORKDIR" "$$TMPDIR"' EXIT
+      export RECORD_REPLAY_DIRECTORY="$$WORKDIR/replay"
+      BACKEND_DIR="$$WORKDIR/backend"
+      mkdir -p "$$BACKEND_DIR" "$$RECORD_REPLAY_DIRECTORY" "$$WORKDIR/runtime"
+      git -C "$$BACKEND_DIR" init
+      git -C "$$BACKEND_DIR" remote add origin git@github.com:replayio/backend.git
+      git -C "$$BACKEND_DIR" fetch --depth 1 origin "$$PIN"
+      git -C "$$BACKEND_DIR" checkout FETCH_HEAD
+      "$$BACKEND_DIR/scripts/kill-linker-processes.sh"
+      trap '"$$BACKEND_DIR/scripts/kill-linker-processes.sh"; rm -rf "$$WORKDIR" "$$TMPDIR"' EXIT
+      buildkite-agent artifact download "build_id/linux/x86_64/*" "$$WORKDIR/" --step "build-chromium-157-linux-x86_64"
+      BUILD_ID="$$(cat "$$WORKDIR/build_id/linux/x86_64/build_id")"
+      test -n "$$BUILD_ID"
+      tar -xJf "$$WORKDIR/build_id/linux/x86_64/$$BUILD_ID.tar.xz" -C "$$WORKDIR/runtime"
+      export REPLAY_CHROMIUM_EXECUTABLE_PATH="$$WORKDIR/runtime/replay-chromium/chrome"
+      export RECORD_REPLAY_ASSETS_DIRECTORY="$$WORKDIR/runtime/replay-chromium/replay-assets"
+      test -x "$$REPLAY_CHROMIUM_EXECUTABLE_PATH"
+      cd "$$BACKEND_DIR"
+      unset REPLAY_LOCAL_DRIVER_DIR || true
+      # The agents' Node is older than the backend's: a user-space copy of the
+      # pinned backend's .nvmrc version, as master does.
+      NODE_VERSION="$$(sed 's/^v//' .nvmrc)"
+      test -n "$$NODE_VERSION"
+      NODE_PREFIX="$$WORKDIR/node-v$${NODE_VERSION}-linux-x64"
+      curl -fsSL "https://nodejs.org/dist/v$${NODE_VERSION}/node-v$${NODE_VERSION}-linux-x64.tar.xz" | tar -xJ -C "$$WORKDIR"
+      export PATH="$${NODE_PREFIX}/bin:$$PATH"
+      hash -r
+      node --version
+      npx --yes pnpm@10.11.0 install --frozen-lockfile
+      echo "--- record -> replay: $$CASE ($$BUILD_ID)"
+      cd test/chromium-recording
+      npx playwright test --config=playwright.config.ts "$$CASE"
