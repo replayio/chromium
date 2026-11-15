@@ -1,0 +1,22 @@
+# gclient solution of the Chromium 157 CI checkout. checkout.sh installs it as
+# <root>/.gclient before every sync.
+#
+# src is unmanaged: container/sync.sh puts it at the commit being built.
+# custom_vars feed DEPS' configure_siso hook, which writes
+# build/config/siso/.sisoenv and copies the backend config (a path relative to
+# build/config/siso/backend_config) to backend.star. Without them the hook
+# configures Google's RBE.
+solutions = [
+  {
+    "name": "src",
+    "url": "https://github.com/replayio/chromium.git",
+    "managed": False,
+    "custom_deps": {},
+    "custom_vars": {
+      "reapi_address": "simpsonite.cluster.engflow.com:443",
+      "reapi_instance": "default",
+      "reapi_backend_config_path": "replay_engflow.star",
+    },
+  },
+]
+target_os = ["linux"]

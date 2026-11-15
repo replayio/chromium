@@ -1,6 +1,9 @@
 # Build arguments go here.
 # See "gn args <out_dir> --list" for available build arguments.
 
+# Siso with remote execution (EngFlow), no reclient. The backend is configured
+# by gclient's configure_siso hook from .gclient custom_vars
+# (replay_build_scripts/ci/gclient).
 use_siso = true
 use_remoteexec = true
 use_reclient = false
@@ -9,6 +12,7 @@ symbol_level = 1
 is_debug = false
 dcheck_always_on = false # disable dchecks
 
-use_allocator = "none"
+# Replay records malloc as the system one: no allocator shim, so PartitionAlloc
+# is not malloc (use_partition_alloc_as_malloc follows use_allocator_shim).
 use_allocator_shim = false
 enable_backup_ref_ptr_support = false
