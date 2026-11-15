@@ -517,6 +517,8 @@ AudioDestination::AudioDestination(
               : nullptr) {
   CHECK(web_audio_device_);
 
+  recordreplay::Assert("[RUN-1345] callback_buffer_size_ is big: %d", (callback_buffer_size_ > render_quantum_frames_ * 2));
+
   // If any of the critical audio buses or FIFOs failed to allocate, exit early.
   // Exiting a C++ constructor early via a bare return is standard; the
   // factory method AudioDestination::Create() will detect this via

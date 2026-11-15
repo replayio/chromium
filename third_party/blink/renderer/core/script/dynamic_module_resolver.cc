@@ -26,6 +26,8 @@
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "v8/include/v8.h"
 
+#include "base/json/json_writer.h"
+
 namespace blink {
 
 namespace {
@@ -172,6 +174,18 @@ void DynamicImportTreeClient::NotifyModuleTreeLoadFinished(
     v8::Local<v8::Value> wasm_module = module_script->WasmModule();
     promise_resolver_->Resolve(wasm_module);
     return;
+  }
+
+  std::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::DictValue info;
+    info.Set("kind", "dynamicImportTreeLoadFinished");
+    if (module_script)
+      info.Set("url", module_script->SourceUrl().GetString().Utf8());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
+    execute.emplace(node_id);
   }
 
   // https://github.com/MicrosoftEdge/MSEdgeExplainers/blob/main/ResourceTimingInitiatorInfo/explainer.md

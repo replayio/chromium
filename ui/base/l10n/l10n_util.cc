@@ -33,6 +33,7 @@
 #include "base/logging.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
+#include "base/record_replay.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
@@ -219,11 +220,23 @@ std::string GetApplicationLocaleInternal(std::string_view pref_locale) {
     }
   }
 
-  for (const LanguageTag& candidate : GetCandidates()) {
+  const std::vector<LanguageTag> candidates = GetCandidates();
+  if (recordreplay::IsRecordingOrReplaying()) {
+    recordreplay::Assert("GetApplicationLocaleInternalNonMac candidates count=%d",
+                         static_cast<int>(candidates.size()));
+  }
+
+  for (size_t i = 0; i < candidates.size(); ++i) {
+    const LanguageTag& candidate = candidates[i];
     // If an exact match is found and resource-bundle data on-disk is found, it
     // is returned immediately.
     if (ui_l10n::GetPlatformLanguageMatcher().HasExactMatch(candidate) &&
         IsResourceBundleLocale(candidate)) {
+      if (recordreplay::IsRecordingOrReplaying()) {
+        recordreplay::Assert(
+            "GetApplicationLocaleInternalNonMac resolved index=%d",
+            static_cast<int>(i));
+      }
       return std::string(candidate.tag_string());
     }
 
@@ -233,6 +246,11 @@ std::string GetApplicationLocaleInternal(std::string_view pref_locale) {
     if (std::optional<LanguageTag> resolved = CheckAndResolveLocale(
             candidate, CheckLocaleMode::kVerifyLocalizationDataExists);
         resolved) {
+      if (recordreplay::IsRecordingOrReplaying()) {
+        recordreplay::Assert(
+            "GetApplicationLocaleInternalNonMac resolved index=%d",
+            static_cast<int>(i));
+      }
       return std::string(resolved->tag_string());
     }
   }

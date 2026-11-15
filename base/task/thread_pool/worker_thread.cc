@@ -45,6 +45,9 @@
 #include "partition_alloc/thread_cache.h"  // nogncheck
 #endif
 
+#include "base/record_replay.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+
 namespace base::internal {
 
 constexpr TimeDelta WorkerThread::Delegate::kPurgeThreadCacheIdleDelay;
@@ -151,6 +154,7 @@ WorkerThread::WorkerThread(ThreadType thread_type_hint,
       flow_terminator_(flow_terminator == nullptr
                            ? reinterpret_cast<intptr_t>(this)
                            : reinterpret_cast<intptr_t>(flow_terminator)),
+      record_replay_unordered_(recordreplay::AreEventsDisallowed()),
       delegate_(std::move(delegate)) {
   CHECK(task_tracker_);
   CHECK(CanUseBackgroundThreadTypeForWorkerThread() ||
@@ -304,6 +308,10 @@ bool WorkerThread::ShouldExit() const {
 }
 
 void WorkerThread::ThreadMain() {
+  absl::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (record_replay_unordered_)
+    disallow.emplace("WorkerThread::ThreadMain");
+
 #if BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
   DCHECK(io_thread_task_runner_);
   FileDescriptorWatcher file_descriptor_watcher(io_thread_task_runner_);

@@ -40,6 +40,8 @@
 #include "third_party/blink/renderer/platform/scheduler/worker/worker_scheduler_proxy.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 namespace scheduler {
@@ -243,6 +245,9 @@ FrameSchedulerImpl::FrameSchedulerImpl(
               *tracing_track_),
           &tracing_controller_,
           YesNoStateToString) {
+  // Pointer registration is needed for sorting in PageSchedulerImpl.
+  recordreplay::RegisterPointer("FrameSchedulerImpl", this);
+
   frame_task_queue_controller_ = base::WrapUnique(
       new FrameTaskQueueController(main_thread_scheduler_, this, this));
   back_forward_cache_disabling_feature_tracker_.SetDelegate(delegate_);
@@ -259,6 +264,7 @@ FrameSchedulerImpl::FrameSchedulerImpl()
                          FrameType::kSubframe) {}
 
 FrameSchedulerImpl::~FrameSchedulerImpl() {
+  recordreplay::UnregisterPointer(this);
   weak_factory_.InvalidateWeakPtrs();
 
   TRACE_EVENT_END("renderer.scheduler.status", url_track_);
@@ -846,6 +852,9 @@ base::WeakPtr<const FrameSchedulerImpl> FrameSchedulerImpl::GetWeakPtr() const {
 }
 
 void FrameSchedulerImpl::ReportActiveSchedulerTrackedFeatures() {
+  // https://linear.app/replay/issue/RUN-825
+  recordreplay::Assert("FrameSchedulerImpl::ReportActiveSchedulerTrackedFeatures");
+
   back_forward_cache_disabling_feature_tracker_.ReportFeaturesToDelegate();
 }
 
@@ -1417,6 +1426,9 @@ void FrameSchedulerImpl::OnWebSchedulingTaskQueuePriorityChanged(
 
 void FrameSchedulerImpl::OnWebSchedulingTaskQueueDestroyed(
     MainThreadTaskQueue* queue) {
+  REPLAY_ASSERT("[TT-1465] FrameSchedulerImpl::OnWebSchedulingTaskQueueDestroyed %d",
+    recordreplay::PointerId(queue));
+
   if (queue->CanBeThrottled()) {
     RemoveThrottleableQueueFromBudgetPools(queue);
   }

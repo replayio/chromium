@@ -34,6 +34,7 @@
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/modules/webaudio/recursive_mutex.h"
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
+#include "third_party/blink/renderer/platform/wtf/replay_pointer_id_hash_traits.h"
 #include "third_party/blink/renderer/platform/wtf/thread_safe_ref_counted.h"
 #include "third_party/blink/renderer/platform/wtf/threading.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
@@ -212,7 +213,7 @@ class MODULES_EXPORT LOCKABLE DeferredTaskHandler final
   // In DCHECK builds, fails if this thread does not own the context's lock.
   void AssertGraphOwner() const ASSERT_EXCLUSIVE_LOCK();
 
-  HashSet<scoped_refptr<AudioHandler>>* GetActiveSourceHandlers() {
+  HashSet<scoped_refptr<AudioHandler>, recordreplay::ReplayRefPointerIdHashTraits<AudioHandler>>* GetActiveSourceHandlers() {
     return &active_source_handlers_;
   }
 
@@ -252,7 +253,7 @@ class MODULES_EXPORT LOCKABLE DeferredTaskHandler final
   // `rendering_automatic_pull_handlers_`. This storage will be copied from
   // `automatic_pull_handlers` by `UpdateAutomaticPullNodes()` at the beginning
   // or end of the render quantum.
-  HashSet<scoped_refptr<AudioHandler>> automatic_pull_handlers_;
+  HashSet<scoped_refptr<AudioHandler>, recordreplay::ReplayRefPointerIdHashTraits<AudioHandler>> automatic_pull_handlers_;
   Vector<scoped_refptr<AudioHandler>> rendering_automatic_pull_handlers_
       GUARDED_BY(automatic_pull_handlers_lock_);
 
@@ -272,15 +273,15 @@ class MODULES_EXPORT LOCKABLE DeferredTaskHandler final
   // Collection of nodes where the channel count mode has changed. We want the
   // channel count mode to change in the pre- or post-rendering phase so as
   // not to disturb the running audio thread.
-  HashSet<AudioHandler*> deferred_count_mode_change_ GUARDED_BY(*this);
+  HashSet<AudioHandler*, recordreplay::ReplayPointerIdHashTraits<AudioHandler>> deferred_count_mode_change_ GUARDED_BY(*this);
 
-  HashSet<AudioHandler*> deferred_channel_interpretation_change_
+  HashSet<AudioHandler*, recordreplay::ReplayPointerIdHashTraits<AudioHandler>> deferred_channel_interpretation_change_
       GUARDED_BY(*this);
 
   // These two HashSet must be accessed only when the graph lock is held.
   // These raw pointers are safe because their destructors unregister them.
-  HashSet<AudioSummingJunction*> dirty_summing_junctions_ GUARDED_BY(*this);
-  HashSet<AudioNodeOutput*> dirty_audio_node_outputs_ GUARDED_BY(*this);
+  HashSet<AudioSummingJunction*, recordreplay::ReplayPointerIdHashTraits<AudioSummingJunction>> dirty_summing_junctions_ GUARDED_BY(*this);
+  HashSet<AudioNodeOutput*, recordreplay::ReplayPointerIdHashTraits<AudioNodeOutput>> dirty_audio_node_outputs_ GUARDED_BY(*this);
 
   Vector<scoped_refptr<AudioHandler>> rendering_orphan_handlers_
       GUARDED_BY(*this);
@@ -308,7 +309,7 @@ class MODULES_EXPORT LOCKABLE DeferredTaskHandler final
   //
   // This can be accessed from either the main thread or the audio thread, so it
   // must be protected by the graph lock.
-  HashSet<scoped_refptr<AudioHandler>> active_source_handlers_
+  HashSet<scoped_refptr<AudioHandler>, recordreplay::ReplayRefPointerIdHashTraits<AudioHandler>> active_source_handlers_
       GUARDED_BY(*this);
 
   // When source nodes are finished, the handler is placed here to make a note

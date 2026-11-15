@@ -238,7 +238,13 @@ class CORE_EXPORT IntersectionObserver final
   // sleep() calls to tests to wait for notifications to show up.
   static void SetThrottleDelayEnabledForTesting(bool);
 
-  const HeapLinkedHashSet<WeakMember<IntersectionObservation>>& Observations() {
+  // Replay: v147 reduced HeapLinkedHashSet to <T, Traits>; carry the
+  // deterministic pointer-id hashing via the Traits argument (WeakMember
+  // variant matches the WeakMember<> slot shape).
+  const HeapLinkedHashSet<
+      WeakMember<IntersectionObservation>,
+      blink::WeakMemberHashRecordReplayRegisteredPointerId<IntersectionObservation>
+    >& Observations() {
     return observations_;
   }
 
@@ -254,9 +260,16 @@ class CORE_EXPORT IntersectionObserver final
   // We use UntracedMember<> here to do custom weak processing.
   UntracedMember<Node> root_;
 
-  HeapLinkedHashSet<WeakMember<IntersectionObservation>> observations_;
+  // Replay: v147 reduced HeapLinkedHashSet to <T, Traits>; carry the
+  // deterministic pointer-id hashing via the Traits argument (WeakMember
+  // variant matches the WeakMember<> slot shape).
+  HeapLinkedHashSet<
+    WeakMember<IntersectionObservation>,
+    blink::WeakMemberHashRecordReplayRegisteredPointerId<IntersectionObservation>
+  > observations_;
+  HeapLinkedHashSet<Member<IntersectionObservation>> replay_strong_observations_;
   // Observations that have updates waiting to be delivered
-  HeapHashSet<Member<IntersectionObservation>> active_observations_;
+  HeapHashSet<Member<IntersectionObservation>, blink::MemberHashRecordReplayRegisteredPointerId<IntersectionObservation>> active_observations_;
   const Vector<float> thresholds_;
   const base::TimeDelta delay_;
   const Vector<Length> margin_;

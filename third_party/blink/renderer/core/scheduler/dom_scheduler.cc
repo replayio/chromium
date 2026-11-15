@@ -86,6 +86,9 @@ DOMScheduler::DOMScheduler(ExecutionContext* context)
 }
 
 void DOMScheduler::ContextDestroyed() {
+  REPLAY_ASSERT("[TT-1465] DOMScheduler::ContextDestroyed %u %u",
+    fixed_priority_task_queues_.size(),
+    signal_to_task_queue_map_.size());
   fixed_priority_task_queues_.clear();
   signal_to_task_queue_map_.clear();
 }
@@ -96,6 +99,7 @@ void DOMScheduler::Trace(Visitor* visitor) const {
   visitor->Trace(fixed_priority_task_signals_);
   visitor->Trace(signal_to_task_queue_map_);
   visitor->Trace(signal_to_continuation_queue_map_);
+  visitor->Trace(replay_strong_signal_);
   ScriptWrappable::Trace(visitor);
   ExecutionContextLifecycleObserver::Trace(visitor);
   Supplement<ExecutionContext>::Trace(visitor);

@@ -776,7 +776,7 @@ void BaseAudioContext::SetContextState(V8AudioContextState::Enum new_state) {
 }
 
 void BaseAudioContext::NotifyStateChange() {
-  DispatchEvent(*Event::Create(event_type_names::kStatechange));
+  DispatchEvent(*Event::Create(event_type_names::kStatechange), "BaseAudioContext::NotifyStateChange");
 }
 
 void BaseAudioContext::NotifySourceNodeFinishedProcessing(
@@ -813,7 +813,7 @@ void BaseAudioContext::HandleStoppableSourceNodes() {
   DCHECK(IsAudioThread());
   AssertGraphOwner();
 
-  HashSet<scoped_refptr<AudioHandler>>* active_source_handlers =
+  HashSet<scoped_refptr<AudioHandler>, recordreplay::ReplayRefPointerIdHashTraits<AudioHandler>>* active_source_handlers =
       GetDeferredTaskHandler().GetActiveSourceHandlers();
 
   if (active_source_handlers->size()) {

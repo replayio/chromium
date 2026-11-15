@@ -11,6 +11,7 @@
 #include "base/metrics/histogram_macros.h"
 #include "third_party/blink/public/common/scheduler/task_attribution_id.h"
 #include "third_party/blink/renderer/bindings/core/v8/idl_types.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_events.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
@@ -159,6 +160,8 @@ void DOMTask::InvokeInternal(ScriptState* script_state) {
       task_id_for_tracing_, task_queue_->GetPriority(),
       delay_.InMillisecondsF());
   probe::AsyncTask async_task(context, &async_task_context_);
+
+  recordreplay::UserEventProbe replayEvent("postTask", AtomicString());
 
   std::optional<scheduler::TaskAttributionTracker::TaskScope>
       task_attribution_scope;

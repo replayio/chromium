@@ -55,6 +55,9 @@ class CORE_EXPORT CachedMatchedProperties final
     MatchedProperties::Data data;
   };
   Vector<Key> matched_properties;
+  // Strong references to CSSPropertyValueSet to avoid weak pointer
+  // nondeterminism during record/replay (see "avoid-weak-pointers").
+  HeapVector<Member<CSSPropertyValueSet>> replay_matched_properties_strong_;
 
   struct Entry {
     DISALLOW_NEW();
@@ -110,7 +113,10 @@ class CORE_EXPORT CachedMatchedProperties final
 
   void Clear();
 
-  void Trace(Visitor* visitor) const { visitor->Trace(entries); }
+  void Trace(Visitor* visitor) const {
+    visitor->Trace(entries);
+    visitor->Trace(replay_matched_properties_strong_);
+  }
 
   bool CorrespondsTo(const MatchedPropertiesVector& lookup_properties) const;
   void RefreshKey(const MatchedPropertiesVector& lookup_properties);

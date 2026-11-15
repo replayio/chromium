@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/modules/peerconnection/peer_connection_tracker.h"
 #include "third_party/blink/renderer/modules/peerconnection/rtc_peer_connection_handler.h"
 #include "third_party/blink/renderer/platform/json/json_values.h"
@@ -76,6 +77,15 @@ String SerializeSessionDescription(
   StringBuilder result;
   json->WriteJSON(&result);
   return result.ToString();
+}
+
+// The descriptor string can differ when replaying for unknown reasons,
+// so for now we force it to match.
+String RecordReplaySessionDescriptionValue(const String& value) {
+  std::string result_utf8 = value.Utf8();
+  result_utf8.resize(recordreplay::RecordReplayValue("CreateSessionDescriptionRequest::OnSuccess value length", result_utf8.length()));
+  recordreplay::RecordReplayBytes("CreateSessionDescriptionRequest::OnSuccess value contents", &result_utf8[0], result_utf8.length());
+  return String::FromUtf8(result_utf8);
 }
 
 // Serializes the fields RTCIceCandidatePlatform needs, so that the garbage
@@ -169,6 +179,7 @@ void RTCPeerConnectionTracerImpl::OnCreateOfferSuccess(
   PostToTracker(CrossThreadBindOnce(
       [](String value, String session_id, PeerConnectionTracker* tracker,
          RTCPeerConnectionHandler* handler) {
+        value = RecordReplaySessionDescriptionValue(value);
         tracker->TrackSessionDescriptionCallback(
             handler, PeerConnectionTracker::kActionCreateOffer, "OnSuccess",
             value);
@@ -215,6 +226,7 @@ void RTCPeerConnectionTracerImpl::OnCreateAnswerSuccess(
   PostToTracker(CrossThreadBindOnce(
       [](String value, String session_id, PeerConnectionTracker* tracker,
          RTCPeerConnectionHandler* handler) {
+        value = RecordReplaySessionDescriptionValue(value);
         tracker->TrackSessionDescriptionCallback(
             handler, PeerConnectionTracker::kActionCreateAnswer, "OnSuccess",
             value);

@@ -7,6 +7,7 @@
 #include <atomic>
 #include <utility>
 
+#include "base/record_replay.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/numerics/safe_conversions.h"
@@ -76,7 +77,9 @@ void AudioOutputDeviceThreadCallback::Process(uint32_t control_signal) {
   media::AudioGlitchInfo glitch_info =
       buffer_helper_.GetGlitchIncrementSinceLastCall(buffer->params);
 
-  base::TimeDelta delay = base::Microseconds(buffer->params.delay_us);
+  // RUN-1667: Record the delay_us param from the shared memory buffer (this is mutated by the other end.)
+  base::TimeDelta delay = base::Microseconds(
+    recordreplay::RecordReplayValue("audioparams::delay_us", buffer->params.delay_us));
 
   base::TimeTicks delay_timestamp =
       base::TimeTicks() + base::Microseconds(buffer->params.delay_timestamp_us);

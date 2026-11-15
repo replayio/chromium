@@ -236,7 +236,7 @@ bool ScrollSnapshotTimeline::UpdateSnapshotInternal(bool service_animations) {
     SetHasPendingCompositorUpdate(true);
   }
 
-  const HeapHashSet<WeakMember<Animation>>& animations = GetAnimations();
+  const auto& animations = GetAnimations();
 
   auto should_skip_validation = [service_animations](Animation* animation) {
     // For scroll-driven aimations, we should avoid setting a deferred start

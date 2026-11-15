@@ -38,7 +38,7 @@ void SVGImageLoader::DispatchLoadEvent() {
 }
 
 void SVGImageLoader::DispatchErrorEvent() {
-  GetElement()->DispatchEvent(*Event::Create(event_type_names::kError));
+  GetElement()->DispatchEvent(*Event::Create(event_type_names::kError), "SVGImageLoader::DispatchErrorEvent");
 }
 
 }  // namespace blink

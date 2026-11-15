@@ -20,7 +20,10 @@ namespace blink {
 
 IntersectionObservation::IntersectionObservation(IntersectionObserver& observer,
                                                  Element& target)
-    : observer_(observer), target_(&target) {}
+    : observer_(observer), target_(&target) {
+  // Pointer registration is needed for sorting in IntersectionObserverController::ComputeIntersections.
+  recordreplay::RegisterPointer("IntersectionObservation", this);
+}
 
 int64_t IntersectionObservation::ComputeIntersection(
     ComputeFlags compute_flags,
@@ -47,9 +50,21 @@ int64_t IntersectionObservation::ComputeIntersection(
     needs_update_ = true;
   }
 
+  REPLAY_ASSERT("[TT-1483-1499] IntersectionObservation::ComputeIntersection A %d %u %d %d",
+    needs_update_,
+    static_cast<unsigned>(compute_flags.ToEnumBitmask()),
+    ShouldCompute(compute_flags),
+    !context.GetMonotonicTime().is_null());
+
   if (!CanCompute() || !ShouldCompute(compute_flags)) {
     return 0;
   }
+
+  REPLAY_ASSERT("[TT-1483-1499] IntersectionObservation::ComputeIntersection B %d %u %d %d",
+    needs_update_,
+    static_cast<unsigned>(compute_flags.ToEnumBitmask()),
+    ShouldCompute(compute_flags),
+    !context.GetMonotonicTime().is_null());
   if (MaybeDelayAndReschedule(compute_flags, context)) {
     return 0;
   }
@@ -153,6 +168,8 @@ bool IntersectionObservation::ShouldCompute(ComputeFlags flags) const {
 bool IntersectionObservation::MaybeDelayAndReschedule(
     ComputeFlags flags,
     ComputeIntersectionsContext& context) {
+  REPLAY_ASSERT("[TT-1483-1499] IntersectionObservation::MaybeDelayAndReschedule %d",
+    last_run_time_.is_null());
   if (flags.Has(kIgnoreDelay)) {
     return false;
   }

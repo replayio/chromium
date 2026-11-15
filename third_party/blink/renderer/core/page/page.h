@@ -61,6 +61,7 @@
 #include "third_party/blink/renderer/platform/scheduler/public/page_scheduler.h"
 #include "third_party/blink/renderer/platform/supplementable.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
+#include "third_party/blink/renderer/platform/wtf/hash_functions.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "ui/gfx/geometry/insets.h"
 
@@ -147,6 +148,9 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
   void CloseSoon();
   bool IsClosing() const { return is_closing_; }
 
+  // recordreplay: deterministic page-set ordering is provided by the default
+  // HashTraits<WeakMember<Page>>, which hash by Page::RecordReplayId() (see
+  // member.h BaseMemberHashTraits). No custom hasher needed.
   using PageSet = HeapHashSet<WeakMember<Page>>;
 
   // Return the current set of full-fledged, ordinary pages.
@@ -545,6 +549,8 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
     return has_other_related_pages_during_commit_;
   }
 
+  int RecordReplayId() const { return record_replay_id_; }
+
  private:
   friend class TextFragmentAnchorTestBase;
   friend class TextFragmentAnchorTest;
@@ -749,6 +755,8 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
   RendererPreferences renderer_preferences_;
 
   Member<CloseTaskHandler> close_task_handler_;
+
+  int record_replay_id_;
 };
 
 extern template class CORE_EXTERN_TEMPLATE_EXPORT Supplement<Page>;

@@ -412,20 +412,23 @@ bool SchedulerStateMachine::ShouldDraw() const {
 
   // Do not draw more than once in the deadline. Aborted draws are ok because
   // those are effectively nops.
-  if (did_draw_)
+  if (!replay_force_draw_ && did_draw_) {
     return false;
+  }
 
   // Don't draw if an early check determined the frame does not have damage.
-  if (skip_draw_)
+  if (!replay_force_draw_ && skip_draw_) {
     return false;
+  }
 
   // Don't draw if we are waiting on the first commit after a surface.
   if (layer_tree_frame_sink_state_ != LayerTreeFrameSinkState::ACTIVE)
     return false;
 
   // Do not queue too many draws.
-  if (IsDrawThrottled())
+  if (!replay_force_draw_ && IsDrawThrottled()) {
     return false;
+  }
 
   // Except for the cases above, do not draw outside of the BeginImplFrame
   // deadline.
@@ -445,7 +448,7 @@ bool SchedulerStateMachine::ShouldDraw() const {
   if (forced_redraw_state_ == ForcedRedrawOnTimeoutState::WAITING_FOR_DRAW)
     return true;
 
-  return needs_redraw_;
+  return replay_force_draw_ || needs_redraw_;
 }
 
 bool SchedulerStateMachine::ShouldActivateSyncTreeBeforeDraw() const {
@@ -742,6 +745,9 @@ SchedulerStateMachine::Action SchedulerStateMachine::NextAction() const {
   if (ShouldCommit())
     return Action::COMMIT;
   if (ShouldDraw()) {
+    if (replay_force_draw_) {
+      return Action::DRAW_FORCED;
+    }
     if (PendingDrawsShouldBeAborted())
       return Action::DRAW_ABORT;
     else if (forced_redraw_state_ ==
@@ -1274,7 +1280,8 @@ bool SchedulerStateMachine::ProactiveBeginFrameWanted() const {
   return false;
 }
 
-void SchedulerStateMachine::OnBeginImplFrame(const viz::BeginFrameArgs& args) {
+void SchedulerStateMachine::OnBeginImplFrame(const viz::BeginFrameArgs& args,
+                                             bool replay_force_draw) {
   begin_impl_frame_state_ = BeginImplFrameState::INSIDE_BEGIN_FRAME;
   current_frame_number_++;
   begin_frame_is_animate_only_ = args.animate_only;
@@ -1304,6 +1311,8 @@ void SchedulerStateMachine::OnBeginImplFrame(const viz::BeginFrameArgs& args) {
     UMA_HISTOGRAM_BOOLEAN("Compositing.Scheduler.HighFramerateRequested",
                           high_framerate_requests_count_ > 0);
   }
+
+  replay_force_draw_ = replay_force_draw;
 }
 
 void SchedulerStateMachine::OnBeginImplFrameDeadline() {

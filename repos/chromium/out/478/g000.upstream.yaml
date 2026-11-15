@@ -1,0 +1,18 @@
+changes:
+  - kind: remove
+    symbol: state_change_lock_
+    explanation: The state_change_lock_ member was removed from AudioDestination; its initializer no longer exists.
+    removalReason: Lock-based state tracking was replaced; the member is no longer needed.
+  - kind: remove
+    symbol: AudioDestination::RenderQuantumFrames
+    explanation: The RenderQuantumFrames() accessor method was removed from AudioDestination; only the render_quantum_frames_ data member remains.
+    removalReason: Accessor superseded by direct use of the render_quantum_frames_ member / render_quantum_frames parameter.
+  - kind: transform
+    symbol: AudioDestination::AudioDestination
+    explanation: Constructor signature gained a WebAudioSinkDescriptor parameter and switched absl::optional to std::optional; callback_buffer_size_ is now initialized in the member initializer list instead of being assigned in the body, so the anchor line for the recordreplay::Assert no longer exists.
+    context: The previous body statement `callback_buffer_size_ = web_audio_device_->FramesPerBuffer();` was hoisted into the initializer list, and CHECK(web_audio_device_) replaces the prior DCHECK after device creation.
+    targetLocations:
+      - path: third_party/blink/renderer/platform/audio/audio_destination.cc
+        symbol: AudioDestination::AudioDestination
+nonSemanticChanges: |
+  A TRACE_EVENT0("webaudio", "AudioDestination::Create") was added in Create(). The SendLogMessage call style was reformatted, a TRACE_EVENT1 for sink information was added, and an is_output_buffer_bypassed_ branch was introduced around the FIFO priming loop, shifting surrounding context near the assert insertion point.

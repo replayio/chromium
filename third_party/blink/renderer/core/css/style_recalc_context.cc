@@ -45,6 +45,7 @@ StyleRecalcContext StyleRecalcContext::FromInclusiveAncestors(
     Element& start_element,
     PseudoId pseudo_id) {
   StyleRecalcContext result;
+  recordreplay::Assert("[RUN-2424-3005] StyleRecalcContext::FromInclusiveAncestors %d", start_element.RecordReplayId());
   result.is_overscroll_container_child =
       IsOrWasOverscrollContainer(start_element);
   for (Element* element = &start_element; element;

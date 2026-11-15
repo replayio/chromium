@@ -8,7 +8,9 @@
 #include <algorithm>
 
 #include "base/auto_reset.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
 #include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/heap/visitor.h"
@@ -36,6 +38,9 @@ class PLATFORM_EXPORT HeapObserverList final {
     // this fact.
     observers_.push_back(observer);
     observers_to_indices_.insert(observer, observers_.size() - 1);
+    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+                                             "HeapObserverList"))
+      replay_observers_strong_.insert(observer);
     if (check_capacity_) [[unlikely]] {
       // On first addition after GC, check whether we need to shrink to a
       // reasoanble capacity.
@@ -70,6 +75,9 @@ class PLATFORM_EXPORT HeapObserverList final {
     // `observers_` is already clean. It may just mean that more observer may be
     // removed from the data structure.
     observers_to_indices_.erase(it);
+    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+                                             "HeapObserverList"))
+      replay_observers_strong_.erase(observer);
 
     observers_.ShrinkToReasonableCapacity();
     // observers_to_indices_ did already shrink if necessary due to erase().
@@ -91,6 +99,9 @@ class PLATFORM_EXPORT HeapObserverList final {
     CHECK(mutation_state_ & kAllowRemoval);
     observers_.clear();
     observers_to_indices_.clear();
+    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+                                             "HeapObserverList"))
+      replay_observers_strong_.clear();
   }
 
   // Iterate over the registered lifecycle observers in an unpredictable order.
@@ -120,6 +131,7 @@ class PLATFORM_EXPORT HeapObserverList final {
     visitor->RegisterWeakCallbackMethod<
         HeapObserverList, &HeapObserverList::CleanupDeadObservers>(this);
     visitor->Trace(observers_to_indices_);
+    visitor->Trace(replay_observers_strong_);
   }
 
  private:
@@ -186,6 +198,7 @@ class PLATFORM_EXPORT HeapObserverList final {
   // Mapping observers to indices in `observers_`. Observers may be missing in
   // here temporarily as modification treats `observers_` as source of truth.
   HeapHashMap<WeakMember<ObserverType>, wtf_size_t> observers_to_indices_;
+  HeapHashSet<Member<ObserverType>> replay_observers_strong_;
 };
 
 }  // namespace blink

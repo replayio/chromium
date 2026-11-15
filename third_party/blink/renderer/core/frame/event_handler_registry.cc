@@ -113,12 +113,24 @@ void EventHandlerRegistry::UpdateEventHandlerTargets(
   switch (op) {
     case kAdd:
       targets->insert(target);
+      if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+                                               "EventHandlerRegistry")) {
+        replay_strong_targets_.insert(target);
+      }
       return;
     case kRemove:
       targets->erase(target);
+      if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+                                               "EventHandlerRegistry")) {
+        replay_strong_targets_.erase(target);
+      }
       return;
     case kRemoveAll:
       targets->RemoveAll(target);
+      if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+                                               "EventHandlerRegistry")) {
+        replay_strong_targets_.RemoveAll(target);
+      }
       return;
   }
   NOTREACHED();
@@ -133,6 +145,10 @@ bool EventHandlerRegistry::UpdateEventHandlerInternal(
   unsigned new_num_handlers = targets_[handler_class].size();
 
   bool handlers_changed = old_num_handlers != new_num_handlers;
+
+  recordreplay::AssertMaybeEventsDisallowed(
+        "[RUN-2300] EventHandlerRegistry::UpdateEventHandlerInternal %d %d %d",
+        target->RecordReplayId(), (int)op, handlers_changed);
   if (op != kRemoveAll && handlers_changed)
     NotifyHandlersChanged(target, handler_class, new_num_handlers > 0);
 
@@ -243,6 +259,14 @@ void EventHandlerRegistry::NotifyHandlersChanged(
   if (!GetPage())
     return;
 
+  // Avoid updating state in other components at non-deterministic points.
+  if (recordreplay::AreEventsDisallowed("EventHandlerRegistry::NotifyHandlersChanged"))
+    return;
+
+  recordreplay::Assert(
+      "[RUN-2300] EventHandlerRegistry::UpdateEventHandlerInternal %d",
+      target->RecordReplayId(), (int)handler_class);
+
   switch (handler_class) {
     case kScrollEvent:
       GetPage()->GetChromeClient().SetHasScrollEventHandlers(
@@ -326,6 +350,7 @@ void EventHandlerRegistry::Trace(Visitor* visitor) const {
   visitor->Trace(frame_);
   visitor->template RegisterWeakCallbackMethod<
       EventHandlerRegistry, &EventHandlerRegistry::ProcessCustomWeakness>(this);
+  visitor->Trace(replay_strong_targets_);
 }
 
 void EventHandlerRegistry::ProcessCustomWeakness(const LivenessBroker& info) {

@@ -9,6 +9,7 @@
 #include <memory>
 #include <optional>
 
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/thread_annotations.h"

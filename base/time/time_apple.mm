@@ -99,7 +99,17 @@ int64_t ComputeCurrentRealTicks() {
   return MachTimeToMicroseconds(mach_continuous_time());
 }
 
+static inline bool MaybeRecordingOrReplaying() {
+  return true;
+}
+
 int64_t ComputeThreadTicks() {
+  // Per-thread CPU time is non-deterministic and unsupported when
+  // recording/replaying.
+  if (MaybeRecordingOrReplaying()) {
+    return 0;
+  }
+
   struct timespec ts = {};
   CHECK(clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts) == 0);
   base::CheckedNumeric<int64_t> absolute_micros(ts.tv_sec);

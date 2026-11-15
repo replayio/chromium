@@ -37,7 +37,20 @@ FrameTaskQueueController::FrameTaskQueueController(
   DCHECK(delegate_);
 }
 
-FrameTaskQueueController::~FrameTaskQueueController() = default;
+FrameTaskQueueController::~FrameTaskQueueController() {
+  // Destroy queue enabled voters in a deterministic order, as changing
+  // task queue enabled status will interact with the recording.
+  std::vector<MainThreadTaskQueue*> queues;
+  for (const auto& entry : all_task_queues_and_voters_) {
+    queues.push_back(entry.first);
+  }
+  std::sort(queues.begin(), queues.end(), recordreplay::CompareByPointerId());
+  for (MainThreadTaskQueue* queue : queues) {
+    auto it = task_queue_enabled_voters_.find(queue);
+    CHECK(it != task_queue_enabled_voters_.end());
+    it->value.reset();
+  }
+}
 
 scoped_refptr<MainThreadTaskQueue>
 FrameTaskQueueController::GetTaskQueue(

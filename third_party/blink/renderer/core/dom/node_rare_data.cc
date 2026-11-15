@@ -236,6 +236,12 @@ NodeRareData::EnsureInlineCSSStyleDeclaration(Element* owner_element) {
                                                 owner_element);
 }
 
+// Replay edit: see declaration.
+InlineCSSStyleDeclaration* NodeRareData::GetInlineCSSStyleDeclaration() const {
+  return static_cast<InlineCSSStyleDeclaration*>(
+      GetField(FieldId::kCssomWrapper));
+}
+
 ShadowRoot* NodeRareData::GetShadowRoot() const {
   return static_cast<ShadowRoot*>(GetField(FieldId::kShadowRoot));
 }

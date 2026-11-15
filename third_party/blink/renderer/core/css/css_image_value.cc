@@ -183,6 +183,14 @@ StyleImage* CSSImageValue::CacheImage(Document& document,
       image_content, *url_data.MakeResolvedIfDanglingMarkup(document), document,
       params.Url(), override_image_resolution);
 
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+                                           "StyleImageCache")) {
+    // `image` is statically `StyleImage*` but was just created as a concrete
+    // `StyleFetchedImage` above, so the checked downcast is safe.
+    document.GetStyleEngine().RetainStyleImageForReplay(
+        To<StyleFetchedImage>(image));
+  }
+
   if (fetcher &&
       RuntimeEnabledFeatures::StyleResourceFetcherIdentityCheckEnabled()) {
     cached_images_.Set(fetcher, image);
@@ -195,6 +203,11 @@ StyleImage* CSSImageValue::CacheImage(Document& document,
 void CSSImageValue::RestoreCachedResourceIfNeeded(
     const Document& document) const {
   ResourceFetcher* fetcher = document.Fetcher();
+  recordreplay::Assert(
+      "[RUN-1436-2226] CSSImageValue::RestoreCachedResourceIfNeeded %d %d %d "
+      "%d",
+      !!CachedImage(fetcher), !!fetcher, !!UrlData().ResolvedUrl().IsNull(),
+      CachedImage(fetcher) && CachedImage(fetcher)->CachedImage());
   if (!fetcher || UrlData().ResolvedUrl().IsNull()) {
     return;
   }

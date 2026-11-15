@@ -31,12 +31,15 @@
 #include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "base/process/internal_linux.h"
+#include "base/record_replay.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "base/threading/platform_thread_internal_posix.h"
 #include "base/threading/thread_id_name_manager.h"
 #include "base/threading/thread_type_delegate.h"
 #include "build/build_config.h"
+
+#include "base/record_replay.h"
 
 namespace base {
 
@@ -111,12 +114,18 @@ bool CanSetThreadTypeToRealtimeAudio() {
 
 void SetCurrentThreadTypeImpl(ThreadType thread_type,
                               MessagePumpType pump_type_hint) {
+  recordreplay::Assert("[RUN-1967-2038] SetCurrentThreadTypeImpl A %d %d",
+                       thread_type, (int)pump_type_hint);
+
   const PlatformThreadId thread_id = PlatformThread::CurrentId();
 
   if (g_thread_type_delegate &&
       g_thread_type_delegate->HandleThreadTypeChange(thread_id, thread_type)) {
     return;
   }
+
+  recordreplay::Assert("[RUN-1967-2038] SetCurrentThreadTypeImpl B %d %d",
+                       thread_type, (int)pump_type_hint);
 
   internal::SetThreadType(getpid(), thread_id, thread_type);
 }
@@ -210,11 +219,16 @@ bool PlatformThreadLinux::IsThreadBackgroundedForTest(
 void PlatformThreadBase::SetName(const std::string& name) {
   SetNameCommon(name);
 
+  if (recordreplay::AreEventsDisallowed("PlatformThread::SetName"))
+    return;
+
   // On linux we can get the thread names to show up in the debugger by setting
   // the process name for the LWP.  We don't want to do this for the main
   // thread because that would rename the process, causing tools like killall
-  // to stop working.
-  if (PlatformThread::CurrentId().raw() == getpid()) {
+  // to stop working. This comparison needs to be recorded/replayed because thread
+  // IDs are different when replaying.
+  if (recordreplay::RecordReplayValue("PlatformThread::SetName",
+                                      PlatformThread::CurrentId().raw() == getpid())) {
     return;
   }
 

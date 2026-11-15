@@ -33,6 +33,8 @@
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_encoding.h"
 
+#include "base/json/json_writer.h"
+
 namespace blink {
 
 namespace {
@@ -40,10 +42,12 @@ namespace {
 class BodyConsumerBase : public GarbageCollected<BodyConsumerBase>,
                          public FetchDataLoader::Client {
  public:
-  explicit BodyConsumerBase(ScriptPromiseResolverBase* resolver)
+  explicit BodyConsumerBase(ScriptPromiseResolverBase* resolver,
+                            const std::string& url)
       : resolver_(resolver),
         task_runner_(ExecutionContext::From(resolver_->GetScriptState())
                          ->GetTaskRunner(TaskType::kNetworking)) {
+    url_ = url;
   }
   BodyConsumerBase(const BodyConsumerBase&) = delete;
   BodyConsumerBase& operator=(const BodyConsumerBase&) = delete;
@@ -59,6 +63,8 @@ class BodyConsumerBase : public GarbageCollected<BodyConsumerBase>,
   }
 
   void Abort(ScriptValue reason) override {
+    recordreplay::Assert("[RUN-1182] BodyConsumerBase::Abort");
+
     if (RuntimeEnabledFeatures::ForwardReasonToFetchBodyAbortEnabled()) {
       // This is the standardized behavior, but is currently behind an
       // experiment as it's a potentially breaking change.
@@ -74,6 +80,14 @@ class BodyConsumerBase : public GarbageCollected<BodyConsumerBase>,
   // TODO(yhirano): Fix this problem in a more sophisticated way.
   template <typename IDLType, typename T>
   void ResolveLater(const T& object) {
+    if (recordreplay::DependencyGraphEnabled()) {
+      base::DictValue info;
+      info.Set("kind", "scheduleResolveBodyConsumer");
+      info.Set("url", url_);
+      std::string json;
+      base::JSONWriter::Write(info, &json);
+      record_replay_scheduled_node_id_ = recordreplay::NewDependencyGraphNode(json.c_str());
+    }
     task_runner_->PostTask(FROM_HERE,
                            BindOnce(&BodyConsumerBase::ResolveNow<IDLType, T>,
                                     WrapPersistent(this), object));
@@ -98,23 +112,59 @@ class BodyConsumerBase : public GarbageCollected<BodyConsumerBase>,
     requires(!std::is_same<IDLType, IDLAny>::value &&
              !IsNotShared<IDLType>::value)
   void ResolveNow(const T& object) {
+    std::optional<recordreplay::AutoDependencyExecution> execute;
+    if (recordreplay::DependencyGraphEnabled()) {
+      int node_id = recordreplay::NewDependencyGraphNode(
+        "{\"kind\":\"resolveBodyConsumer\"}"
+      );
+      recordreplay::AddDependencyGraphEdge(
+        record_replay_scheduled_node_id_, node_id, "{\"kind\":\"scheduler\"}"
+      );
+      execute.emplace(node_id);
+    }
+
     resolver_->DowncastTo<IDLType>()->Resolve(object);
   }
 
   template <typename IDLType, typename T>
     requires std::is_same<IDLType, IDLAny>::value
   void ResolveNow(const Persistent<DisallowNewWrapper<ScriptValue>>& object) {
+    std::optional<recordreplay::AutoDependencyExecution> execute;
+    if (recordreplay::DependencyGraphEnabled()) {
+      int node_id = recordreplay::NewDependencyGraphNode(
+        "{\"kind\":\"resolveBodyConsumer\"}"
+      );
+      recordreplay::AddDependencyGraphEdge(
+        record_replay_scheduled_node_id_, node_id, "{\"kind\":\"scheduler\"}"
+      );
+      execute.emplace(node_id);
+    }
+
     resolver_->DowncastTo<IDLType>()->Resolve(object->Value());
   }
 
   template <typename IDLType, typename T>
     requires IsNotShared<IDLType>::value
   void ResolveNow(const T& object) {
+    std::optional<recordreplay::AutoDependencyExecution> execute;
+    if (recordreplay::DependencyGraphEnabled()) {
+      int node_id = recordreplay::NewDependencyGraphNode(
+        "{\"kind\":\"resolveBodyConsumer\"}"
+      );
+      recordreplay::AddDependencyGraphEdge(
+        record_replay_scheduled_node_id_, node_id, "{\"kind\":\"scheduler\"}"
+      );
+      execute.emplace(node_id);
+    }
+
     resolver_->DowncastTo<IDLType>()->Resolve(NotShared<DOMUint8Array>(object));
   }
 
   const Member<ScriptPromiseResolverBase> resolver_;
   const scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
+
+  std::string url_;
+  int record_replay_scheduled_node_id_ = 0;
 };
 class BodyBlobConsumer final : public BodyConsumerBase {
  public:
@@ -249,7 +299,7 @@ ScriptPromise<typename Consumer::ResolveType> Body::LoadAndConvertBody(
   auto promise = resolver->Promise();
   if (auto* body_buffer = BodyBuffer()) {
     body_buffer->StartLoading(create_loader(),
-                              MakeGarbageCollected<Consumer>(resolver),
+                              MakeGarbageCollected<Consumer>(resolver, GetUrl()),
                               exception_state);
     if (exception_state.HadException()) {
       resolver->Detach();

@@ -37,6 +37,7 @@
 
 #include "base/metrics/histogram_functions.h"
 #include "base/rand_util.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/css/css_property_value_set.h"
 #include "third_party/blink/renderer/core/css/properties/css_property_ref.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver_state.h"
@@ -83,10 +84,19 @@ CachedMatchedProperties::CachedMatchedProperties(
                                       property.data_};
                          }),
       entries({Entry{style, parent_style, layout_parent_style,
-                     originating_element_style, element_type, clock}}) {}
+                     originating_element_style, element_type, clock}}) {
+  for (const auto& new_matched_properties : properties) {
+    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+                                             "CachedMatchedProperties")) {
+      replay_matched_properties_strong_.push_back(
+          new_matched_properties.properties);
+    }
+  }
+}
 
 void CachedMatchedProperties::Clear() {
   matched_properties.clear();
+  replay_matched_properties_strong_.clear();
   entries.clear();
 }
 

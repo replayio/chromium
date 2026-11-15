@@ -390,6 +390,11 @@ bool PaintController::UseCachedSubsequenceIfPossible(
     return false;
 
   num_cached_new_items_ += end_item_index - start_item_index;
+
+  recordreplay::AssertMaybeEventsDisallowed(
+      "[RUN-2104-2296] PaintController::UseCachedSubsequenceIfPossible %u %u",
+      (unsigned)num_cached_new_items_, (unsigned)num_cached_new_subsequences_);
+
   ++num_cached_new_subsequences_;
 
   if (RuntimeEnabledFeatures::PaintUnderInvalidationCheckingEnabled()) {
@@ -629,6 +634,11 @@ void PaintController::UpdateCurrentPaintChunkProperties(
 
 bool PaintController::ClientCacheIsValid(
     const DisplayItemClient& client) const {
+  recordreplay::AssertMaybeEventsDisallowed(
+      "[RUN-2104-2296] PaintController::ClientCacheIsValid %u %d %d %d",
+      (unsigned)num_cached_new_items_, IsSkippingCache(),
+      persistent_data_ ? persistent_data_->cache_is_all_invalid_ : true,
+      client.IsValid());
   if (IsSkippingCache()) {
     return false;
   }
@@ -832,6 +842,16 @@ const PaintArtifact& PaintController::CommitNewDisplayItems() {
   }
 
   paint_chunker_.Finish();
+
+  recordreplay::Assert(
+      "[RUN-2104-2296] PaintController::CommitNewDisplayItems %u %u %u %u",
+      (unsigned)num_cached_new_items_, (unsigned)num_cached_new_subsequences_,
+      (unsigned)new_paint_artifact_->GetDisplayItemList().size(),
+      persistent_data_ && persistent_data_->current_paint_artifact_
+          ? (unsigned)persistent_data_->current_paint_artifact_
+                ->GetDisplayItemList()
+                .size()
+          : 0);
 
   PaintArtifact& paint_artifact = *new_paint_artifact_;
   // Any new paint operation will crash on nullptr.

@@ -728,6 +728,10 @@
     "META": {"sizes": {"includes": [20]}},
     "includes": [4700],
   },
+  "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/record_replay/resources.grd": {
+    "META": {"sizes": {"includes": [200]}},
+    "includes": [4710],
+  },
   "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/segmentation_internals/resources.grd": {
     "META": {"sizes": {"includes": [10]}},
     "includes": [4720],

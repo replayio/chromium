@@ -375,6 +375,8 @@ if (!is_android && !is_mac) {
       }
     }
 
+    data_deps += [ "//replay-assets" ]
+
     # The step's output are needed at runtime, so we need a data_dep.
     # Note: Do not add ":packed_resources" to deps/public_deps here, as that
     # forces all C++ compilations in chrome_initial to wait for resources.pak.
@@ -598,6 +600,9 @@ if (is_win) {
       # This is a bit of a hack, since GN deliberately terminates its search
       # for runtime_deps at create_bundle nodes (https://crbug.com/40101435).
       data_deps = [ ":chrome_framework" ]
+      data_deps += [ "//replay-assets" ]
+    } else {
+      data_deps = [ "//replay-assets" ]
     }
   }
 

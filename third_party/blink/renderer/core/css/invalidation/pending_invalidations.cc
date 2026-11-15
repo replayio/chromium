@@ -45,6 +45,7 @@ void PendingInvalidations::ScheduleInvalidationSetsForNode(
               To<Element>(*subtree_root), kInvalidationSetInvalidatesSubtree,
               *invalidation_set);
         }
+
         subtree_root->SetNeedsStyleRecalc(
             kSubtreeStyleChange, StyleChangeReasonForTracing::Create(
                                      style_change_reason::kRelatedStyleRule));

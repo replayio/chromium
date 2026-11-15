@@ -159,8 +159,14 @@ void BodyStreamBuffer::Init() {
     if (signal_->aborted()) {
       Abort();
     } else {
-      stream_buffer_abort_handle_ = signal_->AddAlgorithm(
-          BindOnce(&BodyStreamBuffer::Abort, WrapWeakPersistent(this)));
+      if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "BodyStreamBuffer")) {
+        // Abort() interacts with the recording so we need it to run consistently.
+        stream_buffer_abort_handle_ = signal_->AddAlgorithm(
+            BindOnce(&BodyStreamBuffer::Abort, WrapPersistent(this)));
+      } else {
+        stream_buffer_abort_handle_ = signal_->AddAlgorithm(
+            BindOnce(&BodyStreamBuffer::Abort, WrapWeakPersistent(this)));
+      }
     }
   }
   OnStateChange();
@@ -263,9 +269,16 @@ void BodyStreamBuffer::StartLoading(FetchDataLoader* loader,
       AbortLoader(client);
       return;
     }
-    loader_client_abort_handle_ = signal_->AddAlgorithm(
-        BindOnce(&BodyStreamBuffer::AbortLoader, WrapWeakPersistent(this),
-                 WrapWeakPersistent(client)));
+    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "BodyStreamBuffer")) {
+      // Client aborts can interact with the recording, so we want them to run consistently.
+      loader_client_abort_handle_ = signal_->AddAlgorithm(
+          BindOnce(&BodyStreamBuffer::AbortLoader, WrapPersistent(this),
+                   WrapPersistent(client)));
+    } else {
+      loader_client_abort_handle_ = signal_->AddAlgorithm(
+          BindOnce(&BodyStreamBuffer::AbortLoader, WrapWeakPersistent(this),
+                   WrapWeakPersistent(client)));
+    }
   }
   loader_ = loader;
   auto* handle = ReleaseHandle(exception_state);
@@ -463,10 +476,15 @@ void BodyStreamBuffer::Trace(Visitor* visitor) const {
 }
 
 void BodyStreamBuffer::Abort() {
+  recordreplay::Assert("[RUN-1182] BodyStreamBuffer::Abort");
+
   if (!GetExecutionContext()) {
     DCHECK(!consumer_);
     return;
   }
+
+  recordreplay::Assert("[RUN-1182] BodyStreamBuffer::Abort #1");
+
   auto* byte_controller =
       To<ReadableByteStreamController>(stream_->GetController());
 

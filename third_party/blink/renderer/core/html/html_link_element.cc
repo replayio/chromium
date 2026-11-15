@@ -432,7 +432,11 @@ void HTMLLinkElement::DispatchEventWithTaskState(
       SetCurrentTaskStateIfTopLevel(task_state,
                                     GetDocument().GetExecutionContext(),
                                     TaskScopeType::kMiscEvent));
-  DispatchEvent(*Event::Create(type));
+  if (type == event_type_names::kLoad) {
+    DispatchEvent(*Event::Create(type), "HTMLLinkElement::LinkLoaded");
+  } else {
+    DispatchEvent(*Event::Create(type), "HTMLLinkElement::LinkLoadingErrored");
+  }
 }
 
 bool HTMLLinkElement::SheetLoaded() {
@@ -456,6 +460,10 @@ void HTMLLinkElement::DispatchPendingEvent(
 
   // Checks Document's load event synchronously here for performance.
   // This is safe because dispatchPendingEvent() is called asynchronously.
+  recordreplay::AutoMarkerDependencyExecution execute(
+    "LoadEventDelay",
+    "HTMLLinkElement::DispatchPendingEvent"
+  );
   count->ClearAndCheckLoadEvent();
 }
 

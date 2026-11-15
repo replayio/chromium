@@ -250,6 +250,7 @@ template("chrome_extra_paks") {
         "$root_gen_dir/chrome/organizer_panel_resources.pak",
         "$root_gen_dir/chrome/password_manager_resources.pak",
         "$root_gen_dir/chrome/profile_internals_resources.pak",
+        "$root_gen_dir/chrome/record_replay_resources.pak",
         "$root_gen_dir/chrome/search_engine_choice_resources.pak",
         "$root_gen_dir/chrome/settings_resources.pak",
         "$root_gen_dir/chrome/side_panel_bookmarks_resources.pak",
@@ -280,6 +281,7 @@ template("chrome_extra_paks") {
         "//chrome/browser/actor/resources:browser_resources",
         "//chrome/browser/indigo/resources:browser_resources",
         "//chrome/browser/resources/contextual_cueing/internals:resources",
+        "//chrome/browser/resources/record_replay:resources",
         "//components/headless/command_handler",
         "//content/browser/tracing:resources",
       ]

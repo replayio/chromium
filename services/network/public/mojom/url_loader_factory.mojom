@@ -63,6 +63,9 @@ const uint32 kURLLoadOptionBlockLocalRequest = 256;
 // be used together.
 const uint32 kURLLoadOptionReadAndDiscardBody = 512;
 
+// [TT-1422] Ignore CORS and other limitations for Replay fetch requests.
+const uint32 kURLLoadOptionReplayRequest = 1024;
+
 // URLLoaderFactory is an interface for requesting URLs. It creates URLLoader
 // instances. One URLLoader instance can load one URL.
 interface URLLoaderFactory {

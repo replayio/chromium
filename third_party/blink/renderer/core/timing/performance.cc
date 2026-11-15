@@ -302,6 +302,8 @@ Performance::Performance(
       declarative_performance_observer_host_(context) {
   unix_at_zero_monotonic_ =
       GetUnixAtZeroMonotonic(base::DefaultClock::GetInstance());
+  recordreplay::RegisterPointer("Performance", this);
+
   // |context| may be null in tests.
   if (context) {
     background_tracing_helper_ =
@@ -314,7 +316,9 @@ Performance::Performance(
   }
 }
 
-Performance::~Performance() = default;
+Performance::~Performance() {
+  recordreplay::UnregisterPointer(this);
+}
 
 const AtomicString& Performance::InterfaceName() const {
   return event_target_names::kPerformance;
@@ -705,7 +709,7 @@ void Performance::FireResourceTimingBufferFull(TimerBase*) {
     int excess_entries_before = resource_timing_secondary_buffer_.size();
     if (!CanAddResourceTimingEntry()) {
       DispatchEvent(
-          *Event::Create(event_type_names::kResourcetimingbufferfull));
+          *Event::Create(event_type_names::kResourcetimingbufferfull), "Performance::FireResourceTimingBufferFull");
     }
     CopySecondaryBuffer();
     int excess_entries_after = resource_timing_secondary_buffer_.size();
@@ -1296,6 +1300,10 @@ void Performance::DeliverObservationsTimerFired(TimerBase*) {
   if (HasObserverFor(PerformanceEntry::kContainer)) {
     PopulateContainerTimingEntries();
   }
+  recordreplay::AutoMarkerDependencyExecution execute(
+    "ScriptExecution", "Performance::DeliverObservationsTimerFired"
+  );
+
   decltype(active_observers_) observers;
   active_observers_.Swap(observers);
   for (const auto& observer : observers) {
@@ -1352,6 +1360,7 @@ DOMHighResTimeStamp Performance::MonotonicTimeToDOMHighResTimeStamp(
 }
 
 DOMHighResTimeStamp Performance::now() const {
+  recordreplay::Assert("[RUN-2860-2933] Performance::now");
   return MonotonicTimeToDOMHighResTimeStamp(base::TimeTicks::Now());
 }
 

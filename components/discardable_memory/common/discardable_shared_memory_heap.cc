@@ -20,6 +20,8 @@
 #include "base/strings/stringprintf.h"
 #include "base/trace_event/memory_dump_manager.h"
 
+#include "base/record_replay.h"
+
 namespace discardable_memory {
 
 namespace {
@@ -38,7 +40,16 @@ DiscardableSharedMemoryHeap::Span::Span(
     : memory_segment_(memory_segment),
       shared_memory_(shared_memory),
       first_block_(first_block),
-      num_blocks_(num_blocks) {}
+      num_blocks_(num_blocks) {
+  INIT_RECORD_REPLAY_ID(DiscardableSharedMemoryHeap::Span);
+  recordreplay::Assert(
+    "[TT-1252-1255] ClientDiscardableSharedMemoryManager::DiscardableMemoryImpl::Purge %d %d",
+      record_replay_id_,
+      shared_memory_ ?
+        recordreplay::PointerId(shared_memory_) :
+        -1
+  );
+}
 
 DiscardableSharedMemoryHeap::ScopedMemorySegment::ScopedMemorySegment(
     DiscardableSharedMemoryHeap* heap,
@@ -156,11 +167,19 @@ void DiscardableSharedMemoryHeap::MergeIntoFreeListsClean(
   // First add length of |span| to |num_free_blocks_|.
   num_free_blocks_ += span->num_blocks_;
 
+  recordreplay::Assert(
+      "[TT-1252-1255] DiscardableSharedMemoryHeap::MergeIntoFreeListsClean A %d %d",
+      span->RecordReplayId(),
+      recordreplay::PointerId(span->shared_memory_));
+
   // Merge with previous span if possible.
   auto begin_key = SpanBeginKey(*span);
   begin_key.second -= 1u;
   auto prev_it = spans_.find(begin_key);
   if (prev_it != spans_.end() && IsInFreeList(prev_it->second)) {
+    recordreplay::Assert(
+        "[TT-1252-1255] DiscardableSharedMemoryHeap::MergeIntoFreeListsClean "
+        "B");
     std::unique_ptr<Span> prev = RemoveFromFreeList(prev_it->second);
     DCHECK_EQ(prev->first_block_ + prev->num_blocks_, span->first_block_);
     UnregisterSpan(prev.get());
@@ -177,6 +196,9 @@ void DiscardableSharedMemoryHeap::MergeIntoFreeListsClean(
   end_key.second += 1u;
   auto next_it = spans_.find(end_key);
   if (next_it != spans_.end() && IsInFreeList(next_it->second)) {
+    recordreplay::Assert(
+        "[TT-1252-1255] DiscardableSharedMemoryHeap::MergeIntoFreeListsClean "
+        "C");
     std::unique_ptr<Span> next = RemoveFromFreeList(next_it->second);
     DCHECK_EQ(next->first_block_, span->first_block_ + span->num_blocks_);
     UnregisterSpan(next.get());
@@ -186,6 +208,9 @@ void DiscardableSharedMemoryHeap::MergeIntoFreeListsClean(
     span->num_blocks_ += next->num_blocks_;
     spans_[SpanEndKey(*span)] = span.get();
   }
+
+  recordreplay::Assert(
+      "[TT-1252-1255] DiscardableSharedMemoryHeap::MergeIntoFreeListsClean D");
 
   InsertIntoFreeList(std::move(span));
 }
@@ -263,6 +288,10 @@ void DiscardableSharedMemoryHeap::ReleasePurgedMemory() {
                        return segment->IsResident();
                      }),
       memory_segments_.end());
+
+  recordreplay::Assert(
+    "[TT-1252-1255] DiscardableSharedMemoryHeap::ReleasePurgedMemory A %zu",
+    memory_segments_.size());
 }
 
 size_t DiscardableSharedMemoryHeap::GetSize() const {
@@ -344,12 +373,24 @@ void DiscardableSharedMemoryHeap::InsertIntoFreeList(
   DCHECK(!IsInFreeList(span.get()));
   size_t index = std::min(span->num_blocks_, std::size(free_spans_)) - 1;
 
+  recordreplay::Assert(
+      "[TT-1252-1255] DiscardableSharedMemoryHeap::InsertIntoFreeList %d %d %zu",
+      span->RecordReplayId(),
+      recordreplay::PointerId(span->shared_memory()),
+      index);
+
   free_spans_[index].Append(span.release());
 }
 
 std::unique_ptr<DiscardableSharedMemoryHeap::Span>
 DiscardableSharedMemoryHeap::RemoveFromFreeList(Span* span) {
   DCHECK(IsInFreeList(span));
+
+  recordreplay::Assert(
+      "[TT-1252-1255] DiscardableSharedMemoryHeap::RemoveFromFreeList %d %d",
+      span->RecordReplayId(),
+      recordreplay::PointerId(span->shared_memory()));
+
   span->RemoveFromList();
   return base::WrapUnique(span);
 }
@@ -393,6 +434,12 @@ void DiscardableSharedMemoryHeap::RegisterSpan(Span* span) {
 
 void DiscardableSharedMemoryHeap::UnregisterSpan(Span* span) {
   CHECK_EQ(spans_[SpanBeginKey(*span)], span);
+
+  recordreplay::Assert(
+    "[TT-1252-1255] DiscardableSharedMemoryHeap::UnregisterSpan %d",
+      span->RecordReplayId()
+  );
+
   spans_.erase(SpanBeginKey(*span));
   if (span->num_blocks_ > 1u) {
     CHECK_EQ(spans_[SpanEndKey(*span)], span);
@@ -420,6 +467,11 @@ void DiscardableSharedMemoryHeap::ReleaseMemory(
     size_t size) {
   size_t offset = 0u;
   size_t end = size / block_size_;
+
+  recordreplay::Assert(
+      "[TT-1252-1255] DiscardableSharedMemoryHeap::ReleaseMemory A %zu %d",
+      end - offset, recordreplay::PointerId(shared_memory));
+
   while (offset < end) {
     Span* span = spans_[{shared_memory, offset}];
     UnregisterSpan(span);

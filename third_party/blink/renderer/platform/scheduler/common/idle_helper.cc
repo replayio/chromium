@@ -7,6 +7,7 @@
 #include "base/feature_list.h"
 #include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/record_replay.h"
 #include "base/task/sequence_manager/sequence_manager.h"
 #include "base/task/sequence_manager/task_queue.h"
 #include "base/task/sequence_manager/time_domain.h"
@@ -297,6 +298,13 @@ void IdleHelper::OnIdleTaskPostedOnMainThread() {
                "OnIdleTaskPostedOnMainThread");
   if (is_shutdown_)
     return;
+
+  // Avoid updating idle state non-deterministically.
+  if (recordreplay::AreEventsDisallowed("IdleHelper::OnIdleTaskPostedOnMainThread"))
+    return;
+
+  // RecordReplay issue RUN-1021
+  // Only call OnPendingTasksChanged when events aren't disallowed.
   delegate_->OnPendingTasksChanged(true);
   if (idle_period_state_ == IdlePeriodState::kInLongIdlePeriodPaused) {
     // Restart long idle period ticks.

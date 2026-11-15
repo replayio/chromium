@@ -4,6 +4,7 @@
 
 module content.mojom;
 
+import "mojo/public/mojom/base/values.mojom";
 import "content/common/agent_scheduling_group.mojom";
 import "ipc/ipc.mojom";
 import "mojo/public/mojom/base/generic_pending_receiver.mojom";
@@ -134,6 +135,12 @@ interface Renderer {
   //
   // This is called at most once on process startup.
   SetIsWebSecurityDisabled(bool value);
+
+  // A single API call to convey record/replay events
+  // from the browser to the renderer.
+  RecordReplayBrowserEvent(
+      string name,
+      mojo_base.mojom.DictionaryValue params);
 
   // Set whether this renderer process is allowed to use Isolated Context APIs.
   // Similarly to the `SetIsCrossOriginIsolated()` method above, this flag is

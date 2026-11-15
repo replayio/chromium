@@ -291,8 +291,11 @@ static void InitLibcLocaltimeFunctionsImpl() {
 // references to localtime() will resolve to this function. Notice that we need
 // to set visibility attribute to "default" to export the symbol, as it is set
 // to "hidden" by default in chrome per build/common.gypi.
-__attribute__((__visibility__("default"))) struct tm* localtime_override(
-    const time_t* timep) __asm__("localtime");
+
+// Disabled for now, this confuses the linker reference changes done when
+// recording/replaying, where the sandbox isn't used.
+//__attribute__((__visibility__("default"))) struct tm* localtime_override(
+//    const time_t* timep) __asm__("localtime");
 
 NO_SANITIZE("cfi-icall")
 __attribute__((__visibility__("default"))) struct tm* localtime_override(
@@ -317,8 +320,8 @@ __attribute__((__visibility__("default"))) struct tm* localtime_override(
 }
 
 // Use same trick to override localtime64(), localtime_r() and localtime64_r().
-__attribute__((__visibility__("default"))) struct tm* localtime64_override(
-    const time_t* timep) __asm__("localtime64");
+//__attribute__((__visibility__("default"))) struct tm* localtime64_override(
+//    const time_t* timep) __asm__("localtime64");
 
 NO_SANITIZE("cfi-icall")
 __attribute__((__visibility__("default"))) struct tm* localtime64_override(
@@ -342,9 +345,9 @@ __attribute__((__visibility__("default"))) struct tm* localtime64_override(
   return res;
 }
 
-__attribute__((__visibility__("default"))) struct tm* localtime_r_override(
-    const time_t* timep,
-    struct tm* result) __asm__("localtime_r");
+//__attribute__((__visibility__("default"))) struct tm* localtime_r_override(
+//    const time_t* timep,
+//    struct tm* result) __asm__("localtime_r");
 
 NO_SANITIZE("cfi-icall")
 __attribute__((__visibility__("default"))) struct tm* localtime_r_override(
@@ -366,9 +369,9 @@ __attribute__((__visibility__("default"))) struct tm* localtime_r_override(
   return res;
 }
 
-__attribute__((__visibility__("default"))) struct tm* localtime64_r_override(
-    const time_t* timep,
-    struct tm* result) __asm__("localtime64_r");
+//__attribute__((__visibility__("default"))) struct tm* localtime64_r_override(
+//    const time_t* timep,
+//    struct tm* result) __asm__("localtime64_r");
 
 NO_SANITIZE("cfi-icall")
 __attribute__((__visibility__("default"))) struct tm* localtime64_r_override(
@@ -414,6 +417,9 @@ namespace {
 std::atomic<bool> g_getaddrinfo_discouraged{false};
 }  // namespace
 
+// Disabled as dlsym doesn't work as expected with this wrapper when
+// recording/replaying.
+/*
 extern "C" {
 __attribute__((visibility("default"), noinline)) int getaddrinfo(
     const char* node,
@@ -429,6 +435,7 @@ __attribute__((visibility("default"), noinline)) int getaddrinfo(
   return CALL_FUNC(getaddrinfo, node, service, hints, res);
 }
 }
+*/
 
 void DiscourageGetaddrinfo() {
   g_getaddrinfo_discouraged = true;

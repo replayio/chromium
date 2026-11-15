@@ -59,7 +59,15 @@ AudioNode::~AudioNode() {
   // The graph lock is required to destroy the handler. And we can't use
   // `context_` to touch it, since that object may also be a dead heap object.
   {
+    // Avoid warning when the audio node is destroyed at a non-deterministic point.
+    if (recordreplay::AreEventsDisallowed())
+      recordreplay::BeginPassThroughEvents();
+
     DeferredTaskHandler::GraphAutoLocker locker(*deferred_task_handler_);
+
+    if (recordreplay::AreEventsDisallowed())
+      recordreplay::EndPassThroughEvents();
+
     handler_ = nullptr;
   }
 }
@@ -71,8 +79,16 @@ void AudioNode::Dispose() {
           this, Handler().GetNodeType(), handler_.get(),
           context()->currentTime());
 #endif
+  // Avoid warning when the audio node is destroyed at a non-deterministic point.
+  if (recordreplay::AreEventsDisallowed())
+    recordreplay::BeginPassThroughEvents();
+
   DeferredTaskHandler::GraphAutoLocker locker(
       context()->GetDeferredTaskHandler());
+
+  if (recordreplay::AreEventsDisallowed())
+    recordreplay::EndPassThroughEvents();
+
   Handler().Dispose();
 
   // Add the handler to the orphan list.  This keeps the handler alive until it

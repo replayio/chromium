@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "base/check_op.h"
+#include "base/record_replay.h"
 #include "cc/base/math_util.h"
 #include "cc/cc_export.h"
 #include "cc/debug/debug_colors.h"
@@ -626,6 +627,8 @@ bool TileBasedLayerImpl<Tiling>::AppendQuadForTile(
     append_quads_data->approximated_visible_content_area +=
         visible_geometry_rect.size().Area64();
   }
+  recordreplay::Assert("[RUN-550-1536] PictureLayerImpl::AppendQuads C");
+
   produced_tile_last_append_quads_ = true;
   AddScaleToLastAppendQuadsScales(iter.CurrentTiling()->contents_scale_key());
 

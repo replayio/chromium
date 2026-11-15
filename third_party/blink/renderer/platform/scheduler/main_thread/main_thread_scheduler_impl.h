@@ -21,6 +21,7 @@
 #include "base/metrics/single_sample_metrics.h"
 #include "base/observer_list.h"
 #include "base/profiler/sample_metadata.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "base/task/sequence_manager/task_queue.h"
 #include "base/task/sequence_manager/task_time_observer.h"
@@ -715,7 +716,9 @@ class PLATFORM_EXPORT MainThreadSchedulerImpl
   using TaskQueueVoterMap ALLOW_DISCOURAGED_TYPE("TODO(crbug.com/1404327)") =
       std::map<scoped_refptr<MainThreadTaskQueue>,
                std::unique_ptr<
-                   base::sequence_manager::TaskQueue::QueueEnabledVoter>>;
+                   base::sequence_manager::TaskQueue::QueueEnabledVoter>,
+               recordreplay::CompareRefptrByPointerId<
+                   scoped_refptr<MainThreadTaskQueue>>>;
 
   TaskQueueVoterMap task_runners_;
 
@@ -822,7 +825,7 @@ class PLATFORM_EXPORT MainThreadSchedulerImpl
 
     Vector<AgentGroupSchedulerScope> agent_group_scheduler_scope_stack;
 
-    Persistent<GCedHeapHashSet<WeakMember<AgentGroupSchedulerImpl>>>
+    Persistent<GCedHeapHashSet<WeakMember<AgentGroupSchedulerImpl>, blink::WeakMemberHashRecordReplayId<AgentGroupSchedulerImpl>>>
         agent_group_schedulers;
     // Task queues that have been detached from their scheduler and may have
     // pending tasks that need to run.

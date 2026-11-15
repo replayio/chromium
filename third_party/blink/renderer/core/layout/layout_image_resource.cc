@@ -208,6 +208,9 @@ scoped_refptr<Image> LayoutImageResource::GetImage(
 
 scoped_refptr<Image> LayoutImageResource::GetImage(
     const gfx::SizeF& container_size) const {
+  recordreplay::Assert("[RUN-658-1901] LayoutImageResource::GetImage A %d %d %d",
+                       !!cached_image_, !cached_image_->ErrorOccurred(),
+                       cached_image_->HasImage());
   if (!cached_image_)
     return Image::NullImage();
 
@@ -220,15 +223,19 @@ scoped_refptr<Image> LayoutImageResource::GetImage(
   Image* image = cached_image_->GetImage();
 
   auto* svg_image = DynamicTo<SVGImage>(image);
+  recordreplay::Assert(
+      "[RUN-658-1901] LayoutImageResource::GetImage B %d", !!svg_image);
   if (!svg_image)
     return image;
 
+  recordreplay::Assert("[RUN-658-1901] LayoutImageResource::GetImage C");
   const ComputedStyle& style = layout_object_->Style();
   auto preferred_color_scheme = layout_object_->GetDocument()
                                     .GetStyleEngine()
                                     .ResolveColorSchemeForEmbedding(&style);
   const SVGImageViewInfo* view_info = SVGImageForContainer::CreateViewInfo(
       *svg_image, layout_object_->GetNode());
+  recordreplay::Assert("[RUN-658-1901] LayoutImageResource::GetImage D");
   return SVGImageForContainer::Create(*svg_image, container_size,
                                       style.EffectiveZoom(), view_info,
                                       preferred_color_scheme);

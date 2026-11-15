@@ -101,6 +101,7 @@ class RuleFeatureSet;
 class DocumentStyleEnvironmentVariables;
 class CascadeLayerMap;
 class SpaceSplitString;
+class StyleFetchedImage;
 class StyleResolver;
 class StyleResolverStats;
 class StyleRuleFontFace;
@@ -127,7 +128,7 @@ using ScrollTargetGroupScopeTree = OrderedScopeTree<HTMLAnchorElement>;
 enum InvalidationScope { kInvalidateCurrentScope, kInvalidateAllScopes };
 
 using StyleSheetKey = AtomicString;
-using UnorderedTreeScopeSet = HeapHashSet<Member<TreeScope>>;
+using UnorderedTreeScopeSet = HeapHashSet<Member<TreeScope>, blink::MemberHashRecordReplayId<TreeScope>>;
 
 // The StyleEngine class manages style-related state for the document. There is
 // a 1-1 relationship of Document to StyleEngine. The document calls the
@@ -791,6 +792,11 @@ class CORE_EXPORT StyleEngine final : public GarbageCollected<StyleEngine>,
                                                 params);
   }
 
+  // Replay: see StyleImageCache::RetainStyleImageForReplay.
+  void RetainStyleImageForReplay(StyleFetchedImage* image) {
+    style_image_cache_.RetainStyleImageForReplay(image);
+  }
+
   void AddCachedFillOrClipPathURIValue(const AtomicString& string,
                                        const CSSValue& value);
   const CSSValue* GetCachedFillOrClipPathURIValue(const AtomicString& string);
@@ -1157,6 +1163,10 @@ class CORE_EXPORT StyleEngine final : public GarbageCollected<StyleEngine>,
 
   HeapHashMap<AtomicString, WeakMember<StyleSheetContents>>
       text_to_sheet_cache_;
+
+  // Keep strong pointer on cached `StyleSheetContents` to prevent divergence.
+  // see https://linear.app/replay/issue/RUN-1065#comment-7e345cbc
+  HeapHashSet<Member<StyleSheetContents>> style_sheet_contents_strong_;
 
   std::unique_ptr<StyleResolverStats> style_resolver_stats_;
   unsigned style_for_element_count_{0};

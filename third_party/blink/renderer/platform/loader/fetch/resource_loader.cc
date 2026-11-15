@@ -34,6 +34,7 @@
 #include <utility>
 #include <variant>
 
+#include "base/base64.h"
 #include "base/compiler_specific.h"
 #include "base/containers/span.h"
 #include "base/feature_list.h"
@@ -106,6 +107,9 @@
 #include "third_party/blink/renderer/platform/wtf/text/strcat.h"
 #include "third_party/perfetto/include/perfetto/tracing/track.h"
 #include "url/url_constants.h"
+
+#include "net/base/net_errors.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
 
 namespace blink {
 
@@ -226,6 +230,8 @@ ResourceLoader::ResourceLoader(ResourceFetcher* fetcher,
       cancel_timer_(fetcher_->GetUnfreezableTaskRunner(),
                     this,
                     &ResourceLoader::CancelTimerFired) {
+  // Pointer registration is needed for sorting in ResourceFetcher.
+  recordreplay::RegisterPointer("ResourceLoader", this);
   DCHECK(resource_);
   DCHECK(fetcher_);
 
@@ -252,7 +258,9 @@ ResourceLoader::ResourceLoader(ResourceFetcher* fetcher,
   resource_->SetLoader(this);
 }
 
-ResourceLoader::~ResourceLoader() = default;
+ResourceLoader::~ResourceLoader() {
+  recordreplay::UnregisterPointer(this);
+}
 
 void ResourceLoader::Trace(Visitor* visitor) const {
   visitor->Trace(fetcher_);
@@ -688,6 +696,9 @@ bool ResourceLoader::WillFollowRedirect(
     return false;
   }
 
+  recordreplay::OnNetworkResourceRedirect(resource_->InspectorId(),
+                                          new_request->Url(), new_request.get());
+
   has_devtools_request_id = !new_request->GetDevToolsId().IsNull();
   return true;
 }
@@ -982,6 +993,8 @@ void ResourceLoader::DidReceiveResponseInternal(
 
   resource_->ResponseReceived(response);
 
+  recordreplay::OnNetworkReceiveResponse(resource_->InspectorId(), response);
+
   if (resource_->Loader() && fetcher_->GetProperties().IsDetached()) {
     // If the fetch context is already detached, we don't need further signals,
     // so let's cancel the request.
@@ -1025,6 +1038,12 @@ void ResourceLoader::DidReceiveResponseInternal(
 }
 
 void ResourceLoader::DidReceiveData(base::span<const char> data) {
+  recordreplay::Assert("[RUN-1436] ResourceLoader::DidReceiveData %zu",
+                       data.size());
+
+  recordreplay::OnNetworkReceiveData(resource_->InspectorId(), data.data(),
+                                     data.size());
+
   DidReceiveDataImpl(data);
 }
 
@@ -1100,6 +1119,8 @@ void ResourceLoader::DidFinishLoading(base::TimeTicks response_end_time,
   resource_->SetEncodedBodyLength(encoded_body_length);
   resource_->SetDecodedBodyLength(decoded_body_length);
 
+  recordreplay::OnNetworkFinishLoading(resource_->InspectorId(), encoded_body_length, decoded_body_length);
+
   response_end_time_for_error_cases_ = response_end_time;
 
   if ((response_body_loader_ && !has_seen_end_of_body_ &&
@@ -1142,6 +1163,8 @@ void ResourceLoader::DidFail(const WebURLError& error,
                              uint64_t encoded_body_length,
                              int64_t decoded_body_length) {
   response_end_time_for_error_cases_ = response_end_time;
+
+  recordreplay::OnNetworkFail(resource_->InspectorId(), error);
 
   resource_->SetEncodedDataLength(encoded_data_length);
   resource_->SetEncodedBodyLength(encoded_body_length);
@@ -1306,6 +1329,10 @@ void ResourceLoader::RequestSynchronously() {
 }
 
 void ResourceLoader::RequestAsynchronously() {
+  // After diverging from the recording we can't access system resources anymore.
+  if (recordreplay::HasDivergedFromRecording())
+    return;
+
   if (resource_->Url().ProtocolIsData()) {
     CHECK(!network_resource_request_);
     CHECK(!loader_);
@@ -1332,6 +1359,17 @@ void ResourceLoader::RequestAsynchronously() {
   // Don't do mime sniffing for fetch (crbug.com/2016)
   bool no_mime_sniffing = resource_->GetResourceRequest().GetRequestContext() ==
                           blink::mojom::blink::RequestContextType::FETCH;
+
+  recordreplay::Assert(
+      "[RUN-1725-1852] ResourceLoader::RequestAsynchronously %zu %zu %zu %zu",
+      network_resource_request_->method.size(),
+      network_resource_request_->fetch_integrity.size(),
+      network_resource_request_->devtools_request_id
+          ? network_resource_request_->devtools_request_id->size()
+          : 0,
+      network_resource_request_->devtools_stack_id
+          ? network_resource_request_->devtools_stack_id->size()
+          : 0);
 
   // Don't pass a CodeCacheHost when DownloadToBlob is true. The detailed
   // decision logic for whether or not to fetch code cache from the isolated

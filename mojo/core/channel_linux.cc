@@ -47,6 +47,8 @@
 #include "mojo/buildflags.h"
 #include "mojo/core/embedder/features.h"
 
+#include "base/record_replay.h"
+
 namespace mojo::core {
 
 // DataAvailableNotifier is a simple interface which allows us to
@@ -584,6 +586,9 @@ void ChannelLinux::Write(MessagePtr message) {
 
   {
     base::AutoLock lock(memfd_write_lock_);
+    recordreplay::Assert("[RUN-1307-1773] ChannelLinux::Write %d %d %d",
+                         !shared_mem_writer_, message->has_handles(),
+                         (int)reject_writes_);
     if (shared_mem_writer_ && !message->has_handles() && !reject_writes_) {
       SharedBuffer::Error write_result =
           write_buffer_->TryWrite(message->data(), payload_size);

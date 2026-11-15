@@ -436,11 +436,14 @@ void SVGElement::AddInstance(SVGElement* instance) {
   DCHECK(instance);
   DCHECK(instance->InUseShadowTree());
 
-  HeapHashSet<WeakMember<SVGElement>>& instances =
+  HeapHashSet<WeakMember<SVGElement>, blink::WeakMemberHashRecordReplayId<SVGElement>>& instances =
       EnsureSVGRareData()->ElementInstances();
   DCHECK(!instances.Contains(instance));
 
   instances.insert(instance);
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers",
+                                           "SVGElement"))
+    EnsureSVGRareData()->ReplayStrongElementInstances().insert(instance);
 }
 
 void SVGElement::RemoveInstance(SVGElement* instance) {
@@ -448,21 +451,25 @@ void SVGElement::RemoveInstance(SVGElement* instance) {
   // Called during instance->RemovedFrom() after removal from shadow tree
   DCHECK(!instance->isConnected());
 
-  HeapHashSet<WeakMember<SVGElement>>& instances =
+  HeapHashSet<WeakMember<SVGElement>, blink::WeakMemberHashRecordReplayId<SVGElement>>& instances =
       SvgRareData()->ElementInstances();
 
   instances.erase(instance);
+
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "SVGElement"))
+    EnsureSVGRareData()->ReplayStrongElementInstances().erase(instance);
 }
 
-static HeapHashSet<WeakMember<SVGElement>>& EmptyInstances() {
-  using EmptyInstanceHolder =
-      DisallowNewWrapper<HeapHashSet<WeakMember<SVGElement>>>;
+using ReplaySVGElementSet = HeapHashSet<WeakMember<SVGElement>, blink::WeakMemberHashRecordReplayId<SVGElement>>;
+
+static ReplaySVGElementSet& EmptyInstances() {
+  using EmptyInstanceHolder = DisallowNewWrapper<ReplaySVGElementSet>;
   DEFINE_STATIC_LOCAL(Persistent<EmptyInstanceHolder>, empty_instances,
                       (MakeGarbageCollected<EmptyInstanceHolder>()));
   return empty_instances->Value();
 }
 
-const HeapHashSet<WeakMember<SVGElement>>& SVGElement::InstancesForElement()
+const HeapHashSet<WeakMember<SVGElement>, blink::WeakMemberHashRecordReplayId<SVGElement>>& SVGElement::InstancesForElement()
     const {
   if (!HasSVGRareData())
     return EmptyInstances();
@@ -627,7 +634,7 @@ void SVGElement::AddedEventListener(
   }
 
   // Add event listener to all shadow tree DOM element instances
-  HeapHashSet<WeakMember<SVGElement>> instances = InstancesForElement();
+  HeapHashSet<WeakMember<SVGElement>, blink::WeakMemberHashRecordReplayId<SVGElement>> instances = InstancesForElement();
   AddEventListenerOptionsResolved options = registered_listener.Options();
   EventListener* listener = registered_listener.Callback();
   for (SVGElement* element : instances) {
@@ -651,7 +658,7 @@ void SVGElement::RemovedEventListener(
   }
 
   // Remove event listener from all shadow tree DOM element instances
-  HeapHashSet<WeakMember<SVGElement>> instances = InstancesForElement();
+  HeapHashSet<WeakMember<SVGElement>, blink::WeakMemberHashRecordReplayId<SVGElement>> instances = InstancesForElement();
   RegisteredEventListener::OptionsForMatching options =
       registered_listener.GetOptionsForMatching();
   const EventListener* listener = registered_listener.Callback();
@@ -688,7 +695,7 @@ bool SVGElement::SendSVGLoadEventIfPossible() {
     return false;
   if ((IsStructurallyExternal() || IsA<SVGSVGElement>(*this)) &&
       HasLoadListener(this))
-    DispatchEvent(*Event::Create(event_type_names::kLoad));
+    DispatchEvent(*Event::Create(event_type_names::kLoad), "SVGElement::SendSVGLoadEventIfPossible");
   return true;
 }
 
@@ -971,7 +978,7 @@ void SVGElement::InvalidateStyleAttribute(
 }
 
 void SVGElement::InvalidateInstances() {
-  const HeapHashSet<WeakMember<SVGElement>>& set = InstancesForElement();
+  const HeapHashSet<WeakMember<SVGElement>, blink::WeakMemberHashRecordReplayId<SVGElement>>& set = InstancesForElement();
   if (set.empty())
     return;
 
@@ -986,16 +993,27 @@ void SVGElement::InvalidateInstances() {
   }
 
   SvgRareData()->ElementInstances().clear();
+
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "SVGElement"))
+    EnsureSVGRareData()->ReplayStrongElementInstances().clear();
 }
 
 void SVGElement::SetNeedsStyleRecalcForInstances(
     StyleChangeType change_type,
     const StyleChangeReasonForTracing& reason) {
-  const HeapHashSet<WeakMember<SVGElement>>& set = InstancesForElement();
+  const HeapHashSet<WeakMember<SVGElement>, blink::WeakMemberHashRecordReplayId<SVGElement>>& set = InstancesForElement();
   if (set.empty())
     return;
 
+  HeapVector<Member<SVGElement>> members;
   for (SVGElement* instance : set)
+    members.push_back(instance);
+  std::sort(members.begin(), members.end(),
+            [](SVGElement* a, SVGElement* b) {
+              return recordreplay::CompareByRecordReplayId()(a, b);
+            });
+
+  for (SVGElement* instance : members)
     instance->SetNeedsStyleRecalc(change_type, reason);
 }
 
@@ -1214,7 +1232,7 @@ void SVGElement::SynchronizeAttributeInShadowInstances(
     return;
   }
 
-  HeapHashSet<WeakMember<SVGElement>> instances = InstancesForElement();
+  ReplaySVGElementSet instances = InstancesForElement();
   for (SVGElement* instance : instances) {
     instance->SetAttributeWithoutValidation(name, value);
   }

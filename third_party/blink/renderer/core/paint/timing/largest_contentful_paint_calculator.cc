@@ -184,6 +184,13 @@ void LargestContentfulPaintCalculator::
   uint64_t image_size = largest_presented_image_
                             ? largest_presented_image_->EffectiveVisualSize()
                             : 0u;
+
+  recordreplay::Assert(
+      "[RUN-2317-2316] "
+      "LargestContentfulPaintCalculator::UpdateLargestContentfulPaintIfNeeded "
+      "%llu %llu",
+      image_size, text_size);
+
   if (image_size > text_size) {
     if (image_size > largest_reported_size_) {
       CHECK(largest_presented_image_->HasPaintTime());
@@ -255,6 +262,12 @@ void LargestContentfulPaintCalculator::UpdateWebExposedLargestContentfulText(
   if (!text_node) {
     return;
   }
+
+  recordreplay::Assert(
+      "[RUN-2317-2316] "
+      "LargestContentfulPaintCalculator::UpdateLargestContentfulText %d",
+      text_node->RecordReplayId());
+
   largest_reported_size_ = largest_text.EffectiveVisualSize();
   // Do not expose element attribution from shadow trees. Also note that @page
   // margin boxes do not create Element nodes.

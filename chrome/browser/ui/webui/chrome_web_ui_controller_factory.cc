@@ -79,6 +79,7 @@
 #include "chrome/browser/ui/webui/management/management_ui.h"
 #include "chrome/browser/ui/webui/new_tab_page/new_tab_page_ui.h"
 #include "chrome/browser/ui/webui/password_manager/password_manager_ui.h"
+#include "chrome/browser/ui/webui/record_replay/record_replay_ui.h"
 #include "chrome/browser/ui/webui/settings/settings_utils.h"
 #include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_url_info.h"
 #include "chrome/browser/web_applications/model/web_app_icon_types.h"
@@ -353,7 +354,9 @@ bool ChromeWebUIControllerFactory::IsWebUIAllowedToMakeNetworkRequests(
       // https://crbug.com/376417346
       origin.host() == chrome::kChromeUIExtensionsHost ||
       // https://crbug.com/509216218
-      origin.host() == chrome::kChromeUIDrivePickerHostHost;
+      origin.host() == chrome::kChromeUIDrivePickerHostHost ||
+      // recordreplay
+      origin.host() == chrome::kChromeUIRecordReplayHost;
 }
 
 ChromeWebUIControllerFactory::ChromeWebUIControllerFactory() = default;

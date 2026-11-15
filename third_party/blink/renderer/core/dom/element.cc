@@ -34,6 +34,7 @@
 #include <utility>
 
 #include "base/feature_list.h"
+#include "base/record_replay.h"
 #include "cc/input/snap_selection_strategy.h"
 #include "components/viz/common/surfaces/tracked_element_rects.h"
 #include "third_party/blink/public/common/features.h"
@@ -93,6 +94,9 @@
 #include "third_party/blink/renderer/core/css/css_style_sheet.h"
 #include "third_party/blink/renderer/core/css/css_value.h"
 #include "third_party/blink/renderer/core/css/cssom/inline_style_property_map.h"
+// Replay edit: Full definition needed so Element::style()'s Replay-only code
+// path can convert InlineCSSStyleDeclaration* to its CSSStyleDeclaration* base.
+#include "third_party/blink/renderer/core/css/inline_css_style_declaration.h"
 #include "third_party/blink/renderer/core/css/native_paint_image_generator.h"
 #include "third_party/blink/renderer/core/css/out_of_flow_data.h"
 #include "third_party/blink/renderer/core/css/parser/container_query_parser.h"
@@ -1820,6 +1824,16 @@ void Element::setAriaOwnsElements(
 
 NamedNodeMap* Element::attributesForBindings() const {
   auto* mutable_this = const_cast<Element*>(this);
+
+  if (recordreplay::IsInReplayCode() &&
+      !recordreplay::HasDivergedFromRecording()) {
+    if (!mutable_this->EnsureRareData().HasAttributeMap()) {
+      // [RUN-1764] Do not try to create blink API objects in our Replay-only
+      // scripts, unless explicitly diverged. Creating rare data is fine.
+      return nullptr;
+    }
+  }
+
   return &mutable_this->EnsureRareData()
               .EnsureAttributeMap(*mutable_this)
               .RefreshNodeAndUnwrap(*mutable_this);
@@ -5241,8 +5255,9 @@ const ComputedStyle* Element::StyleForLayoutObject(
   }
 
   new_style_recalc_context.old_style = PostStyleUpdateScope::GetOldStyle(*this);
+  bool has_custom_style_callbacks = HasCustomStyleCallbacks();
   const ComputedStyle* style =
-      HasCustomStyleCallbacks()
+      has_custom_style_callbacks
           ? CustomStyleForLayoutObject(new_style_recalc_context)
           : OriginalStyleForLayoutObject(new_style_recalc_context);
   if (!style) {
@@ -5255,7 +5270,7 @@ const ComputedStyle* Element::StyleForLayoutObject(
     // style with @starting-style applied.
     new_style_recalc_context.old_style =
         style->Display() == EDisplay::kNone ? nullptr : style;
-    style = HasCustomStyleCallbacks()
+    style = has_custom_style_callbacks
                 ? CustomStyleForLayoutObject(new_style_recalc_context)
                 : OriginalStyleForLayoutObject(new_style_recalc_context);
     if (!style) {
@@ -5430,6 +5445,10 @@ void Element::RecalcStyle(const StyleRecalcChange change,
          this == GetDocument().documentElement())
       << "No recalc for Elements outside flat tree";
 
+  recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle A %d %d", 
+                       RecordReplayId(),
+                       HasCustomStyleCallbacks());
+
   DisplayLockStyleScope display_lock_style_scope(this);
   if (HasCustomStyleCallbacks()) {
     WillRecalcStyle(change);
@@ -5483,6 +5502,7 @@ void Element::RecalcStyle(const StyleRecalcChange change,
     if (HasCustomStyleCallbacks()) {
       DidRecalcStyle(child_change);
     }
+    recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle B");
     return;
   }
 
@@ -5509,6 +5529,7 @@ void Element::RecalcStyle(const StyleRecalcChange change,
       if (!change.IsSuppressed()) {
         if (SkipStyleRecalcForContainer(*style, child_change,
                                         style_recalc_context)) {
+          recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle C");
           return;
         }
       }
@@ -5603,6 +5624,7 @@ void Element::RecalcStyle(const StyleRecalcChange change,
     }
   }
 
+  recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle D %d", !!GetShadowRoot());
   if (child_change.TraverseChildren(*this)) {
     if (ShadowRoot* root = GetShadowRoot()) {
       root->RecalcDescendantStyles(child_change, child_recalc_context, *this);
@@ -5614,6 +5636,7 @@ void Element::RecalcStyle(const StyleRecalcChange change,
       RecalcDescendantStyles(child_change, child_recalc_context, *this);
     }
   }
+  recordreplay::Assert("[RUN-1436-1437] Element::RecalcStyle E");
 
   if (child_change.TraversePseudoElements(*this)) {
     // Scroll markers have special rules for the document element.
@@ -6225,6 +6248,8 @@ StyleRecalcChange Element::RecalcOwnStyle(
       layout_object->Remove();
     }
     layout_object->SetStyle(*layout_style, apply_changes);
+    recordreplay::Assert("[RUN-3109-3242] Element::RecalcOwnStyle B %d",
+                         !!layout_style);
     if (needs_reinsert) {
       LayoutTreeBuilderTraversal::ParentLayoutObject(*this)->AddChild(
           layout_object,
@@ -6233,6 +6258,8 @@ StyleRecalcChange Element::RecalcOwnStyle(
     }
   }
 
+  recordreplay::Assert("[RUN-3109-3242] Element::RecalcOwnStyle C %d %d",
+                       !!new_style, !!old_style);
   return child_change;
 }
 
@@ -9861,7 +9888,7 @@ bool Element::DispatchFocusEvent(Element* old_focused_element,
   Document& document = GetDocument();
   if (DispatchEvent(*FocusEvent::Create(
           event_type_names::kFocus, Event::Bubbles::kNo, document.domWindow(),
-          0, old_focused_element, source_capabilities)) !=
+          0, old_focused_element, source_capabilities), "Element::DispatchFocusEvent") !=
       DispatchEventResult::kNotCanceled) {
     return false;
   }
@@ -9873,7 +9900,7 @@ void Element::DispatchBlurEvent(Element* new_focused_element,
                                 InputDeviceCapabilities* source_capabilities) {
   DispatchEvent(*FocusEvent::Create(
       event_type_names::kBlur, Event::Bubbles::kNo, GetDocument().domWindow(),
-      0, new_focused_element, source_capabilities));
+      0, new_focused_element, source_capabilities), "Element::DispatchBlurEvent");
 }
 
 void Element::DispatchFocusInEvent(
@@ -10540,6 +10567,9 @@ const ComputedStyle* Element::EnsureComputedStyle(
   // because there is always a possibility that it could allocate something on
   // the V8 heap.
   DCHECK(ThreadState::Current()->IsAllocationAllowed());
+
+  recordreplay::Assert("[RUN-2424-3227] Element::EnsureComputedStyle %d",
+    RecordReplayId());
 
   StyleEngine::InEnsureComputedStyleScope ensure_scope(
       GetDocument().GetStyleEngine());
@@ -11905,6 +11935,13 @@ Element* Element::closest(const AtomicString& selectors) {
 }
 
 DOMTokenList& Element::classList() {
+  // https://linear.app/replay/issue/RUN-1040
+  recordreplay::Assert("Element::classList %d", RecordReplayId());
+
+  if (!EnsureRareData().GetClassList()) {
+    // https://linear.app/replay/issue/RUN-1040
+    recordreplay::Assert("Element::classList #1");
+  }
   return EnsureRareData().EnsureClassList(*this).RefreshNodeAndUnwrap(*this);
 }
 
@@ -12713,6 +12750,14 @@ CSSStyleDeclaration* Element::style() {
   if (!IsStyledElement()) {
     return nullptr;
   }
+
+  if (recordreplay::IsInReplayCode() &&
+      !recordreplay::HasDivergedFromRecording()) {
+    // [RUN-1764] Do not try to create blink API objects in our Replay-only
+    // scripts, unless explicitly diverged.
+    return EnsureRareData().GetInlineCSSStyleDeclaration();
+  }
+
   return &EnsureRareData()
               .EnsureInlineCSSStyleDeclaration(this)
               .RefreshNodeAndUnwrap(*this);

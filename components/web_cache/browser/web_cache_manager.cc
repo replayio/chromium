@@ -5,6 +5,7 @@
 #include "components/web_cache/browser/web_cache_manager.h"
 
 #include "base/no_destructor.h"
+#include "base/record_replay.h"
 
 namespace web_cache {
 
@@ -87,14 +88,21 @@ void WebCacheManager::ClearCacheForProcess(content::ChildProcessId process_id) {
 void WebCacheManager::ClearRendererCache(
     WebCacheManager::ClearCacheOccasion occasion) {
   for (auto& service : web_cache_services_) {
+    recordreplay::Assert(
+        "[RUN-1975-2287] WebCacheManager::ClearRendererCache A %d %d",
+        service.first, (int)occasion);
     // It is possible to have a renderer host that is not ready and is still
     // present in 'web_cache_services_' because the notification has not reach
     // this instance. This can happen if  'ClearRendererCache' is called by an
     // other observer during 'RenderProcessHostImpl::ProcessDied'.
     if (content::RenderProcessHost::FromID(service.first)->IsReady()) {
+      recordreplay::Assert(
+          "[RUN-1975-2287] WebCacheManager::ClearRendererCache B");
       service.second->ClearCache(occasion == ON_NAVIGATION);
     }
   }
+  recordreplay::Assert(
+      "[RUN-1975-2287] WebCacheManager::ClearRendererCache C");
 }
 
 }  // namespace web_cache

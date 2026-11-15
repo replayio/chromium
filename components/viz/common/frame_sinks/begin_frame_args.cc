@@ -112,7 +112,8 @@ BeginFrameArgs::BeginFrameArgs()
       deadline(base::TimeTicks::Min()),
       interval(base::Microseconds(-1)),
       unthrottled_interval(base::Microseconds(-1)),
-      frame_id(BeginFrameId(0, kInvalidFrameNumber)) {}
+      frame_id(BeginFrameId(0, kInvalidFrameNumber)),
+      replay_force_draw(false) {}
 
 BeginFrameArgs::~BeginFrameArgs() = default;
 
@@ -122,14 +123,16 @@ BeginFrameArgs::BeginFrameArgs(uint64_t source_id,
                                base::TimeTicks deadline,
                                base::TimeDelta interval,
                                BeginFrameArgs::BeginFrameArgsType type,
-                               base::TimeDelta unthrottled_interval)
+                               base::TimeDelta unthrottled_interval,
+                               bool force_draw)
     : frame_time(frame_time),
       deadline(deadline),
       interval(interval),
       unthrottled_interval(
           unthrottled_interval.is_positive() ? unthrottled_interval : interval),
       frame_id(BeginFrameId(source_id, sequence_number)),
-      type(type) {
+      type(type),
+      replay_force_draw(force_draw) {
   DCHECK_LE(kStartingFrameNumber, sequence_number);
 #if !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_ANDROID)
   // TODO(crbug.com/477242770): Re-enable on Mac. Changing the system display
@@ -157,15 +160,17 @@ BeginFrameArgs BeginFrameArgs::Create(BeginFrameArgs::CreationLocation location,
                                       base::TimeTicks deadline,
                                       base::TimeDelta interval,
                                       BeginFrameArgs::BeginFrameArgsType type,
-                                      base::TimeDelta unthrottled_interval) {
+                                      base::TimeDelta unthrottled_interval,
+                                      bool replay_force_draw) {
   DCHECK_NE(type, BeginFrameArgs::INVALID);
 #ifdef NDEBUG
   return BeginFrameArgs(source_id, sequence_number, frame_time, deadline,
-                        interval, type, unthrottled_interval);
+                        interval, type, unthrottled_interval,
+                        replay_force_draw);
 #else
   BeginFrameArgs args =
       BeginFrameArgs(source_id, sequence_number, frame_time, deadline, interval,
-                     type, unthrottled_interval);
+                     type, unthrottled_interval, replay_force_draw);
   args.created_from = location;
   return args;
 #endif

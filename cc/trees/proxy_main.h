@@ -67,6 +67,8 @@ class CC_EXPORT ProxyMain : public Proxy {
   void BeginMainFrame(
       std::unique_ptr<BeginMainFrameAndCommitState> begin_main_frame_state);
   void DidChangeBeginFrameSourcePaused(bool paused);
+  void BeginMainFrameWithBlocking(
+      std::unique_ptr<BeginMainFrameAndCommitState> begin_main_frame_state, bool force_blocking);
   void DidCompleteCommit(int source_frame_number, CommitTimestamps);
   void DidPresentCompositorFrame(
       uint32_t frame_token,
@@ -114,6 +116,8 @@ class CC_EXPORT ProxyMain : public Proxy {
   }
 
   ProxyImpl* proxy_impl_for_testing() const { return proxy_impl_.get(); }
+
+  void RecordReplayRepaint();
 
  private:
   // Proxy implementation.

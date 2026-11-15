@@ -35,6 +35,7 @@
 #include "third_party/blink/renderer/core/svg_names.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 
 namespace blink {
 
@@ -294,7 +295,7 @@ class CORE_EXPORT SVGSMILElement : public SVGElement {
   bool is_waiting_for_first_interval_;
   bool is_scheduled_;
 
-  using TimeDependentSet = HeapHashSet<Member<SVGSMILElement>>;
+  using TimeDependentSet = HeapHashSet<Member<SVGSMILElement>, blink::MemberHashRecordReplayId<SVGSMILElement>>;
   TimeDependentSet sync_base_dependents_;
 
   // Instance time lists

@@ -144,6 +144,9 @@ void Serial::OnPortConnectedStateChanged(
   bool connected = port_info->connected;
   const AtomicString& event_type =
       connected ? event_type_names::kConnect : event_type_names::kDisconnect;
+  const char* record_replay_why =
+      connected ? "Serial::OnPortConnectedStateChanged(connected)"
+                : "Serial::OnPortConnectedStateChanged(disconnected)";
 
   if (RuntimeEnabledFeatures::WebSerialWorldIsolatedCacheEnabled()) {
     ExecutionContext* context = GetExecutionContext();
@@ -176,7 +179,8 @@ void Serial::OnPortConnectedStateChanged(
           SerialPort* port = GetOrCreatePort(*world, port_info->Clone());
           port->set_connected(connected);
           port->DispatchEvent(
-              *MakeGarbageCollected<SerialConnectionEvent>(event_type, world));
+              *MakeGarbageCollected<SerialConnectionEvent>(event_type, world),
+              record_replay_why);
         }
       }
     } else if (context->IsWorkerGlobalScope()) {
@@ -198,7 +202,8 @@ void Serial::OnPortConnectedStateChanged(
           SerialPort* port = GetOrCreatePort(world, std::move(port_info));
           port->set_connected(connected);
           port->DispatchEvent(
-              *MakeGarbageCollected<SerialConnectionEvent>(event_type, &world));
+              *MakeGarbageCollected<SerialConnectionEvent>(event_type, &world),
+              record_replay_why);
         }
       }
     }
@@ -209,7 +214,7 @@ void Serial::OnPortConnectedStateChanged(
     SerialPort* port = GetOrCreatePort(std::move(port_info));
     port->set_connected(connected);
     port->DispatchEvent(*MakeGarbageCollected<SerialConnectionEvent>(
-        event_type, /*world=*/nullptr));
+        event_type, /*world=*/nullptr), record_replay_why);
   }
 }
 

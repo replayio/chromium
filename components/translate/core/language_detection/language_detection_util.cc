@@ -26,6 +26,8 @@
 #include "components/translate/core/common/translate_metrics.h"
 #include "third_party/cld_3/src/src/nnet_language_identifier.h"
 
+#include "base/record_replay.h"
+
 namespace translate {
 namespace {
 
@@ -138,6 +140,12 @@ std::optional<LanguageTag> DetermineTextLanguage(
     const std::string& utf8_text,
     bool* is_model_reliable,
     float& model_reliability_score) {
+  // Don't bother with language detection when recording/replaying, as this has
+  // caused some crashes and isn't likely to be needed by anyone.
+  if (recordreplay::IsRecordingOrReplaying("no-language-detection")) {
+    return std::nullopt;
+  }
+
   // Make a prediction.
   chrome_lang_id::NNetLanguageIdentifier lang_id;
   const chrome_lang_id::NNetLanguageIdentifier::Result lang_id_result =

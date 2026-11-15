@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/core/intersection_observer/intersection_observer_controller.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/element.h"
@@ -168,6 +169,14 @@ void IntersectionObserverController::ComputeIntersections(
 
   auto compute_observer_intersections = [&](IntersectionObserver& observer,
                                             const auto& observations) {
+    REPLAY_ASSERT("[TT-1483-1527] IntersectionObserver::ComputeIntersections A %d %d %u",
+      !!observer.RootIsValid(),
+      !!observer.GetExecutionContext(),
+      (unsigned)observations.size());
+    REPLAY_ASSERT("[TT-1483-1527] IntersectionObserver::ComputeIntersections B %d %d",
+      flags.Has(IntersectionObservation::kPostLayoutDeliveryOnly),
+      observer.GetDeliveryBehavior() ==
+          IntersectionObserver::kDeliverDuringPostLayoutSteps);
     if (metrics_timer && observer.GetUkmMetricId()) {
       metrics_timer->StartInterval(observer.GetUkmMetricId().value());
     }
@@ -182,6 +191,11 @@ void IntersectionObserverController::ComputeIntersections(
     }
   };
 
+  REPLAY_ASSERT("[TT-1483-1499] IntersectionObserverController::ComputeIntersections %u %u %u",
+    static_cast<unsigned>(flags.ToEnumBitmask()),
+    tracked_explicit_root_observers_.size(),
+    tracked_implicit_root_observations_.size());
+
   bool update_tracking = flags.Has(IntersectionObservation::kUpdateTracking);
   if (update_tracking) {
     // If the root has disappeared, then this observer is toast. If the
@@ -192,6 +206,14 @@ void IntersectionObserverController::ComputeIntersections(
                  observer->root()->GetDocument().GetFrame() !=
                      &frame_view.GetFrame();
         });
+    if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "IntersectionObserverController")) {
+      replay_strong_tracked_explicit_root_observers_.erase_if(
+          [&frame_view](const auto& observer) {
+            return !observer->HasObservations() || !observer->root() ||
+                   observer->root()->GetDocument().GetFrame() !=
+                       &frame_view.GetFrame();
+          });
+    }
   }
   for (auto& observer : tracked_explicit_root_observers_) {
     DCHECK(!observer->RootIsImplicit());
@@ -254,6 +276,9 @@ void IntersectionObserverController::AddTrackedObserver(
   if (observer.RootIsImplicit() || !observer.HasObservations())
     return;
   tracked_explicit_root_observers_.insert(&observer);
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "IntersectionObserverController")) {
+    replay_strong_tracked_explicit_root_observers_.insert(&observer);
+  }
   if (observer.trackVisibility()) {
     if (LocalFrameView* frame_view = observer.root()->GetDocument().View()) {
       if (FrameOwner* frame_owner = frame_view->GetFrame().Owner()) {
@@ -276,6 +301,9 @@ void IntersectionObserverController::RemoveTrackedObserver(
   // compelling reason to do it here, so we avoid the iteration through
   // observers and observations here.
   tracked_explicit_root_observers_.erase(&observer);
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "IntersectionObserverController")) {
+    replay_strong_tracked_explicit_root_observers_.erase(&observer);
+  }
 }
 
 void IntersectionObserverController::AddTrackedObservation(
@@ -285,8 +313,14 @@ void IntersectionObserverController::AddTrackedObservation(
   if (!observer->RootIsImplicit())
     return;
   tracked_implicit_root_observations_
-      .insert(observer, HeapHashSet<Member<IntersectionObservation>>())
+      .insert(observer,
+              HeapHashSet<Member<IntersectionObservation>,
+                          blink::MemberHashRecordReplayRegisteredPointerId<
+                              IntersectionObservation>>())
       .stored_value->value.insert(&observation);
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "IntersectionObserverController")) {
+    replay_strong_tracked_implicit_root_observations_.insert(&observation);
+  }
   if (observer->trackVisibility()) {
     if (LocalFrameView* frame_view =
             observation.Target()->GetDocument().View()) {
@@ -310,6 +344,9 @@ void IntersectionObserverController::RemoveTrackedObservation(
       tracked_implicit_root_observations_.erase(it);
     }
   }
+  if (recordreplay::IsRecordingOrReplaying("avoid-weak-pointers", "IntersectionObserverController")) {
+    replay_strong_tracked_implicit_root_observations_.erase(&observation);
+  }
 }
 
 wtf_size_t
@@ -324,6 +361,8 @@ IntersectionObserverController::GetTrackedObservationCountForTesting() const {
 void IntersectionObserverController::Trace(Visitor* visitor) const {
   visitor->Trace(tracked_explicit_root_observers_);
   visitor->Trace(tracked_implicit_root_observations_);
+  visitor->Trace(replay_strong_tracked_explicit_root_observers_);
+  visitor->Trace(replay_strong_tracked_implicit_root_observations_);
   visitor->Trace(pending_intersection_observers_);
   ExecutionContextClient::Trace(visitor);
 }

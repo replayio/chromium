@@ -13,6 +13,7 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+#include <cstdio>
 
 #include "base/allocator/partition_alloc_support.h"
 #include "base/at_exit.h"
@@ -21,6 +22,7 @@
 #include "base/feature_list.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
+#include "base/json/json_writer.h"
 #include "base/lazy_instance.h"
 #include "base/logging.h"
 #include "base/memory/discardable_memory_allocator.h"
@@ -37,6 +39,7 @@
 #include "base/path_service.h"
 #include "base/process/process.h"
 #include "base/process/process_metrics.h"
+#include "base/record_replay.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
@@ -224,6 +227,15 @@
 #if BUILDFLAG(CLANG_PROFILING_INSIDE_SANDBOX)
 #include "base/test/clang_profiling.h"
 #endif
+
+// [DeterminatorConflict] Re-apply RecordReplayBrowserEvent.
+// Replaced the blink-internal record_replay_interface.h include (a content-layer
+// layering violation: it transitively pulls local_frame.h -> *.mojom-blink.h,
+// which #error "must only be imported inside blink") with the pure v8 umbrella.
+// render_thread_impl.cc only needs v8::IsMainThread() from that header chain;
+// V8RecordReplayBrowserEvent is provided by a local extern "C" decl below and
+// blink::SetIsIsolatedContext by the already-included public blink.h.
+#include "v8/include/v8.h"
 
 namespace content {
 
@@ -1342,6 +1354,28 @@ void RenderThreadImpl::SetIsWebSecurityDisabled(bool value) {
 
 void RenderThreadImpl::SetIsIsolatedContext(bool value) {
   blink::SetIsIsolatedContext(value);
+}
+
+extern "C" void V8RecordReplayBrowserEvent(const char* name,
+                                           const char* payload);
+
+void RenderThreadImpl::RecordReplayBrowserEvent(const std::string& name,
+                                                base::DictValue value) {
+  // Do nothing if not in record/replay mode.
+  if (!recordreplay::IsRecordingOrReplaying("browser-event") ||
+      !v8::IsMainThread()) {
+    return;
+  }
+
+  // For now these events are always ignored unless a special env var is set,
+  // see discussion in https://linear.app/replay/issue/RUN-2961
+  if (!getenv("RECORD_REPLAY_REPORT_BROWSER_PROCESS_EVENTS")) {
+    return;
+  }
+
+  std::string json;
+  base::JSONWriter::Write(value, &json);
+  V8RecordReplayBrowserEvent(name.c_str(), json.c_str());
 }
 
 void RenderThreadImpl::SetWebUIResourceUrlToCodeCacheMap(

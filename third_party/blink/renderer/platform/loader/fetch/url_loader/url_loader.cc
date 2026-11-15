@@ -20,6 +20,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
@@ -423,11 +424,16 @@ URLLoader::URLLoader(
                                              std::move(url_loader_factory),
                                              std::move(keep_alive_handle),
                                              back_forward_cache_loader_helper,
-                                             std::move(throttles))) {}
+                                             std::move(throttles))) {
+  recordreplay::RegisterPointer("URLLoader", this);
+}
 
-URLLoader::URLLoader() = default;
+URLLoader::URLLoader() {
+  recordreplay::RegisterPointer("URLLoader", this);
+}
 
 URLLoader::~URLLoader() {
+  recordreplay::UnregisterPointer(this);
   Cancel();
 }
 

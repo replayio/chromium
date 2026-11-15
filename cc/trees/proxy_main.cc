@@ -42,9 +42,12 @@
 #include "cc/trees/swap_promise.h"
 #include "cc/trees/trace_utils.h"
 #include "components/viz/common/view_transition_element_resource_id.h"
+#include "components/viz/service/display/record_replay_render.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
 #include "third_party/abseil-cpp/absl/cleanup/cleanup.h"
 #include "third_party/perfetto/include/perfetto/tracing/track.h"
+
+#include "base/record_replay.h"
 
 namespace cc {
 
@@ -69,9 +72,16 @@ ProxyMain::ProxyMain(LayerTreeHost* layer_tree_host,
   TRACE_EVENT0("cc", "ProxyMain::ProxyMain");
   DCHECK(task_runner_provider_);
   DCHECK(IsMainThread());
+  
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    recordreplay::InitPaintCallback();
+    recordreplay::SetCompositorProxy(this);
+  }
 }
 
 ProxyMain::~ProxyMain() {
+  recordreplay::CompositorProxyDestroyed(this);
+
   TRACE_EVENT0("cc", "ProxyMain::~ProxyMain");
   DCHECK(IsMainThread());
   DCHECK(!started_);
@@ -80,12 +90,19 @@ ProxyMain::~ProxyMain() {
 void ProxyMain::InitializeOnImplThread(CompletionEvent* completion_event,
                                        int id,
                                        const LayerTreeSettings* settings) {
+  recordreplay::Assert("[RUN-1881] ProxyMain::InitializeOnImplThread");
+
   DCHECK(task_runner_provider_->IsImplThread());
   DCHECK(!proxy_impl_);
   proxy_impl_ =
       std::make_unique<ProxyImpl>(weak_factory_.GetWeakPtr(), layer_tree_host_,
                                   id, settings, task_runner_provider_);
+
+  recordreplay::Assert("[RUN-1881] ProxyMain::InitializeOnImplThread #1");
+
   completion_event->Signal();
+
+  recordreplay::Assert("[RUN-1881] ProxyMain::InitializeOnImplThread Done");
 }
 
 void ProxyMain::DestroyProxyImplOnImplThread(
@@ -173,6 +190,17 @@ void ProxyMain::RecordBeginMainFrameMetrics(
 
 void ProxyMain::BeginMainFrame(
     std::unique_ptr<BeginMainFrameAndCommitState> begin_main_frame_state) {
+  
+  BeginMainFrameWithBlocking(std::move(begin_main_frame_state), false);
+}
+
+void ProxyMain::BeginMainFrameWithBlocking(
+    std::unique_ptr<BeginMainFrameAndCommitState> begin_main_frame_state,
+    bool force_blocking) {
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    recordreplay::SetCompositorProxy(this);
+  }
+
   DCHECK(IsMainThread());
   DCHECK_EQ(NO_PIPELINE_STAGE, current_pipeline_stage_);
   // Record the final status, subsampled. Use an RAII object as this function
@@ -334,7 +362,7 @@ void ProxyMain::BeginMainFrame(
     commit_timeout = true;
   }
 
-  bool blocking = block_on_next_commit_;
+  bool blocking = force_blocking || block_on_next_commit_;
   block_on_next_commit_ = false;
 
   bool scroll_and_viewport_changes_synced = false;
@@ -457,7 +485,13 @@ void ProxyMain::BeginMainFrame(
   }
 
   // If updating the layers resulted in a content update, we need a commit.
-  if (updated) {
+  //
+  // [RecordReplay] Scroll events do not always perform a paint commit, however
+  // one is necessary for paint events to be properly collected during scrolling.
+  // Force commits if we're recording or replaying.
+  //
+  // See #RUN-2434 (https://linear.app/replay/issue/RUN-2434)
+  if (updated || recordreplay::IsRecordingOrReplaying("notify-paints")) {
     final_pipeline_stage_ = COMMIT_PIPELINE_STAGE;
   }
   bool has_updates = (final_pipeline_stage_ == COMMIT_PIPELINE_STAGE);
@@ -552,6 +586,10 @@ void ProxyMain::BeginMainFrame(
     if (blocking)
       main_thread_blocked.emplace(task_runner_provider_);
 
+    if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+      recordreplay::OnCommitPaint();
+    }
+
     ImplThreadTaskRunner()->PostTask(
         FROM_HERE, base::BindOnce(&ProxyImpl::NotifyReadyToCommitOnImpl,
                                   base::Unretained(proxy_impl_.get()),
@@ -577,6 +615,7 @@ void ProxyMain::BeginMainFrame(
   layer_tree_host_->RecordEndOfFrameMetrics(
       begin_main_frame_start_time,
       begin_main_frame_state->active_sequence_trackers);
+  recordreplay::Assert("[RUN-1675-1826] ProxyMain::BeginMainFrame");
 }
 
 void ProxyMain::DidChangeBeginFrameSourcePaused(bool paused) {
@@ -610,6 +649,10 @@ void ProxyMain::DidPresentCompositorFrame(
     std::vector<PresentationTimeCallbackBuffer::SuccessfulCallbackWithDetails>
         sucessful_presentation_callbacks,
     const viz::FrameTimingDetails& frame_timing_details) {
+
+  recordreplay::Assert(
+      "[RUN-2317-2366] ProxyMain::DidPresentCompositorFrame %u", frame_token);
+
   layer_tree_host_->DidPresentCompositorFrame(
       frame_token, std::move(presentation_callbacks),
       std::move(sucessful_presentation_callbacks), frame_timing_details);
@@ -1198,6 +1241,12 @@ void ProxyMain::NotifyNewLocalSurfaceIdExpectedWhilePaused() {
       FROM_HERE,
       base::BindOnce(&ProxyImpl::NotifyNewLocalSurfaceIdExpectedWhilePaused,
                      base::Unretained(proxy_impl_.get())));
+}
+
+void ProxyMain::RecordReplayRepaint() {
+  ImplThreadTaskRunner()->PostTask(
+      FROM_HERE, base::BindOnce(&ProxyImpl::RecordReplayRepaint,
+                                base::Unretained(proxy_impl_.get())));
 }
 
 }  // namespace cc

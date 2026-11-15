@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/core/css/css_numeric_literal_value.h"
 
 #include "base/numerics/angle_conversions.h"
+#include "base/record_replay.h"
 #include "third_party/abseil-cpp/absl/strings/str_format.h"
 #include "third_party/blink/renderer/core/css/css_length_resolver.h"
 #include "third_party/blink/renderer/core/css/css_value_clamping_utils.h"
@@ -306,6 +307,15 @@ String CSSNumericLiteralValue::CustomCSSText() const {
         } else {
           text =
               FormatNumber(value, UnitTypeToString(GetType()).Utf8().c_str());
+
+          if (!recordreplay::AreEventsDisallowed()) {
+            // [RUN-1918] Workaround divergent floating point sprintf.
+            std::string textStr = text.Ascii();
+            recordreplay::RecordReplayString("CSSNumericLiteralValue::CustomCSSText", textStr);
+            // [RUN-1918] Upstream dropped the 2-arg (ptr,len) FromUTF8; textStr
+            // is a std::string, which binds to the std::string_view overload.
+            text = String::FromUtf8(textStr);
+          }
         }
       } else {
         StringBuilder builder;

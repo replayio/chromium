@@ -320,6 +320,7 @@ BlobDataHandle::BlobDataHandle(const String& type,
 void BlobDataHandle::Register(Vector<mojom::blink::DataElementPtr> elements) {
   base::AutoLock locker(blob_remote_lock_);
   TRACE_EVENT0("Blob", "Registry::RegisterBlob");
+  mojo::internal::AutoRecordReplayAssertBufferAllocations assertsEnabled("RUN-2859-2904");
   GetThreadSpecificRegistry()->Register(
       blob_remote_.InitWithNewPipeAndPassReceiver(),
       type_.IsNull() ? "" : type_, std::move(elements),

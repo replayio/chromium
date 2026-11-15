@@ -3176,7 +3176,7 @@ void RTCPeerConnection::MaybeDispatchEvent(Event* event) {
   if (suppress_events_) {
     return;
   }
-  DispatchEvent(*event);
+  DispatchEvent(*event, "RTCPeerConnection::MaybeDispatchEvent");
 }
 
 void RTCPeerConnection::ScheduleDispatchEvent(Event* event) {
@@ -3239,7 +3239,7 @@ void RTCPeerConnection::DispatchScheduledEvents() {
 
   for (auto& event : events) {
     if (event->Setup()) {
-      DispatchEvent(*event->event_.Release());
+      DispatchEvent(*event->event_.Release(), "RTCPeerConnection::DispatchScheduledEvents");
     }
   }
 

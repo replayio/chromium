@@ -9,6 +9,7 @@
 #include <ranges>
 
 #include "base/notreached.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/animation/css/css_animations.h"
 #include "third_party/blink/renderer/core/animation/css_interpolation_environment.h"
 #include "third_party/blink/renderer/core/animation/interpolation_types_map.h"
@@ -292,6 +293,9 @@ void StyleCascade::AddInterpolations(const ActiveInterpolationsMap* map,
 }
 
 void StyleCascade::Apply(CascadeFilter filter) {
+  recordreplay::Assert("[RUN-2424-3053] StyleCascade::Apply %d",
+                       state_.GetElement().RecordReplayId());
+
   CollectDeclarationsIfNeeded();
   state_.InvalidateLengthConversionData();
 

@@ -36,6 +36,8 @@
 #include "mojo/core/channel_linux.h"
 #endif
 
+#include "base/record_replay.h"
+
 namespace mojo::core {
 
 namespace {
@@ -123,7 +125,8 @@ ChannelPosix::ChannelPosix(
     scoped_refptr<base::SingleThreadTaskRunner> io_task_runner)
     : Channel(delegate, handle_policy),
       self_(this),
-      io_task_runner_(io_task_runner) {
+      io_task_runner_(io_task_runner),
+      write_lock_("ChannelPosix.write_lock_") {
   socket_ = connection_params.TakeEndpoint().TakePlatformHandle().TakeFD();
   CHECK(socket_.is_valid());
 }
@@ -153,6 +156,9 @@ void ChannelPosix::Write(MessagePtr message) {
 
   base::TimeTicks start_time = base::TimeTicks::Now();
 
+  // https://linear.app/replay/issue/RUN-618
+  recordreplay::Assert("ChannelPosix::Write Start");
+
   bool write_error = false;
   {
     base::AutoLock lock(write_lock_);
@@ -160,6 +166,8 @@ void ChannelPosix::Write(MessagePtr message) {
       return;
     }
     if (outgoing_messages_.empty()) {
+      // https://linear.app/replay/issue/RUN-618
+      recordreplay::Assert("ChannelPosix::Write #1");
       if (!WriteNoLock(MessageView(std::move(message), 0, start_time))) {
         reject_writes_ = write_error = true;
       }

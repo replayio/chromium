@@ -8,6 +8,7 @@
 #include "base/compiler_specific.h"
 #include "base/containers/span.h"
 #include "base/functional/bind.h"
+#include "base/record_replay.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/trace_event/trace_event.h"
@@ -16,6 +17,7 @@
 namespace base {
 
 WaitableEvent::~WaitableEvent() {
+  recordreplay::UnregisterPointer(this);
   // As requested in the documentation of perfetto::Flow::FromPointer, we should
   // emit a TerminatingFlow(this) from our destructor if we ever emitted a
   // Flow(this) which may be unmatched since the ptr value of `this` may be
@@ -34,6 +36,10 @@ WaitableEvent::~WaitableEvent() {
 }
 
 void WaitableEvent::Signal() {
+  std::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (!record_replay_ordered_lock_id_)
+    disallow.emplace("WaitableEvent::Signal");
+
   // Must be ordered before SignalImpl() to guarantee it's emitted before the
   // matching TerminatingFlow in TimedWait().
   if (!only_used_while_idle_) {
@@ -52,6 +58,10 @@ bool WaitableEvent::TimedWait(TimeDelta wait_delta, const Location& location) {
   if (wait_delta <= TimeDelta()) {
     return IsSignaled();
   }
+
+  std::optional<recordreplay::AutoDisallowEvents> disallow;
+  if (!record_replay_ordered_lock_id_)
+    disallow.emplace("WaitableEvent::TimedWait");
 
   // Consider this thread blocked unless the event is already signaled. Ignore
   // this for non-blocking WaitableEvents.

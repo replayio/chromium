@@ -29,6 +29,8 @@
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/web/web_crypto_histograms.h"
 
+#include "base/record_replay.h"
+
 namespace webcrypto {
 
 using webcrypto::Status;
@@ -336,6 +338,14 @@ void WebCryptoImpl::Encrypt(
   {
     TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("devtools.timeline"),
                  "DoEncryptReply");
+
+    // As for DoExportKeyReply, contents can vary when replaying for an unknown reason.
+    if (recordreplay::IsRecordingOrReplaying("values", "DoEncryptReply")) {
+      size_t numBytes = recordreplay::RecordReplayValue("DoEncryptReply size", buffer.size());
+      buffer.resize(numBytes);
+      recordreplay::RecordReplayBytes("DoEncryptReply buffer", &buffer[0], buffer.size());
+    }
+
     CompleteWithBufferOrError(status, buffer, &result);
   }
 }
@@ -356,6 +366,16 @@ void WebCryptoImpl::Decrypt(
   {
     TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("devtools.timeline"), "DoDecrypt");
     status = webcrypto::Decrypt(algorithm, key, data, &buffer);
+
+    // Decryption might fail when replaying and not while recording.
+    // As with other record/replay issues in this file, record/replay the
+    // successful decryptions directly to workaround this.
+    if (recordreplay::RecordReplayValue("DoDecrypt success", status.IsSuccess())) {
+      status = Status::Success();
+      size_t numBytes = recordreplay::RecordReplayValue("DoDecrypt size", buffer.size());
+      buffer.resize(numBytes);
+      recordreplay::RecordReplayBytes("DoDecrypt buffer", &buffer[0], buffer.size());
+    }
   }
   {
     TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("devtools.timeline"),
@@ -479,6 +499,17 @@ void WebCryptoImpl::ExportKey(
   {
     TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("devtools.timeline"),
                  "DoExportKeyReply");
+
+    // Contents of the exported key can vary when replaying, presumably due to
+    // different behavior in the crypto library. The underlying cause isn't known,
+    // and for now we're patching over this by forcing the exported buffer to
+    // be identical.
+    if (recordreplay::IsRecordingOrReplaying("values", "DoExportKeyReply")) {
+      size_t numBytes = recordreplay::RecordReplayValue("DoExportKeyReply size", buffer.size());
+      buffer.resize(numBytes);
+      recordreplay::RecordReplayBytes("DoExportKeyReply buffer", &buffer[0], buffer.size());
+    }
+
     if (format != blink::kWebCryptoKeyFormatJwk) {
       CompleteWithBufferOrError(status, buffer, &result);
       return;

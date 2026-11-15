@@ -16,6 +16,7 @@
 #include "third_party/blink/renderer/platform/scheduler/public/worker_scheduler.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
+#include "third_party/blink/renderer/platform/wtf/replay_pointer_id_hash_traits.h"
 
 namespace blink {
 namespace scheduler {
@@ -125,7 +126,8 @@ class PLATFORM_EXPORT WorkerSchedulerImpl : public WorkerScheduler {
 
   using TaskQueueVoterMap = HashMap<
       scoped_refptr<NonMainThreadTaskQueue>,
-      std::unique_ptr<base::sequence_manager::TaskQueue::QueueEnabledVoter>>;
+      std::unique_ptr<base::sequence_manager::TaskQueue::QueueEnabledVoter>,
+      recordreplay::ReplayRefPointerIdHashTraits<NonMainThreadTaskQueue>>;
 
   // `task_runners_` includes the queues listed above along with the associated
   // voters, plus any task queues and voter pairs created with

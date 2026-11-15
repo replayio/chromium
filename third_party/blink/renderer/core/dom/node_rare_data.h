@@ -50,6 +50,7 @@ class ExplicitlySetAttrElementsMap;
 class FlatTreeNodeData;
 class FloatClipRect;
 class HTMLElement;
+class InlineCSSStyleDeclaration;
 class InlineStylePropertyMap;
 class InterestInvokerTargetData;
 class InvokerData;
@@ -210,6 +211,10 @@ class CORE_EXPORT NodeRareData final : public GarbageCollected<NodeRareData> {
 
   RareDataUpdate<CSSStyleDeclaration> EnsureInlineCSSStyleDeclaration(
       Element* owner_element);
+
+  // Replay edit: Returns the existing inline CSS style declaration without
+  // creating one, for use in Replay-only code paths.
+  InlineCSSStyleDeclaration* GetInlineCSSStyleDeclaration() const;
 
   ShadowRoot* GetShadowRoot() const;
   [[nodiscard]] RareDataUpdate<void> SetShadowRoot(ShadowRoot& shadow_root);

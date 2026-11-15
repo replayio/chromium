@@ -117,28 +117,32 @@ class PLATFORM_EXPORT RuntimeCallTimer {
   raw_ptr<const base::TickClock> clock_ = nullptr;
 };
 
+// Force-disable call stats when recording/replaying, as calls can occur at
+// non-deterministic points and will also bloat the recording.
+PLATFORM_EXPORT bool BlinkRuntimeCallStatsEnabled();
+
 // Macros that take RuntimeCallStats as a parameter; used only in
 // RuntimeCallStatsTest.
 #define RUNTIME_CALL_STATS_ENTER_WITH_RCS(runtime_call_stats, timer, \
                                           counterId)                 \
-  if (RuntimeCallStats::IsEnabled()) [[unlikely]] {                  \
+  if (BlinkRuntimeCallStatsEnabled()) [[unlikely]] {                  \
     (runtime_call_stats)->Enter(timer, counterId);                   \
   }
 
 #define RUNTIME_CALL_STATS_LEAVE_WITH_RCS(runtime_call_stats, timer) \
-  if (RuntimeCallStats::IsEnabled()) [[unlikely]] {                  \
+  if (BlinkRuntimeCallStatsEnabled()) [[unlikely]] {                  \
     (runtime_call_stats)->Leave(timer);                              \
   }
 
 #define RUNTIME_CALL_TIMER_SCOPE_WITH_RCS(runtime_call_stats, counterId) \
   std::optional<RuntimeCallTimerScope> rcs_scope;                        \
-  if (RuntimeCallStats::IsEnabled()) [[unlikely]] {                      \
+  if (BlinkRuntimeCallStatsEnabled()) [[unlikely]] {                      \
     rcs_scope.emplace(runtime_call_stats, counterId);                    \
   }
 
 #define RUNTIME_CALL_TIMER_SCOPE_WITH_OPTIONAL_RCS(             \
     optional_scope_name, runtime_call_stats, counterId)         \
-  if (RuntimeCallStats::IsEnabled()) [[unlikely]] {             \
+  if (BlinkRuntimeCallStatsEnabled()) [[unlikely]] {             \
     optional_scope_name.emplace(runtime_call_stats, counterId); \
   }
 
@@ -387,7 +391,7 @@ class PLATFORM_EXPORT RuntimeCallStatsScopedTracer {
 
  public:
   explicit RuntimeCallStatsScopedTracer(v8::Isolate* isolate) {
-    if (RuntimeCallStats::IsEnabled()) [[unlikely]] {
+    if (BlinkRuntimeCallStatsEnabled()) [[unlikely]] {
       AddBeginTraceEventIfEnabled(isolate);
     }
   }

@@ -62,6 +62,7 @@ class LOCKABLE MODULES_EXPORT RecursiveMutex {
   // Private constructor to ensure that no new users appear. This class will be
   // removed.
   RecursiveMutex() = default;
+  RecursiveMutex(const char* replay_ordered_name);
   void UpdateStateAfterLockAcquired(base::PlatformThreadId thread_id)
       EXCLUSIVE_LOCKS_REQUIRED(lock_);
 

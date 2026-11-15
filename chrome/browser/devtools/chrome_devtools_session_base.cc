@@ -14,6 +14,7 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/metrics_hashes.h"
+#include "base/record_replay.h"
 #include "chrome/browser/devtools/devtools_availability_checker.h"
 #include "chrome/browser/policy/developer_tools_policy_checker.h"
 #include "chrome/browser/policy/developer_tools_policy_checker_factory.h"
@@ -106,4 +107,7 @@ void ChromeDevToolsSessionBase::SendProtocolNotification(
   client_channel_->DispatchProtocolMessageToClient(message->Serialize());
 }
 
-void ChromeDevToolsSessionBase::FlushProtocolNotifications() {}
+void ChromeDevToolsSessionBase::FlushProtocolNotifications() {
+  // https://linear.app/replay/issue/RUN-885
+  recordreplay::Assert("ChromeDevToolsSession::FlushProtocolNotifications");
+}

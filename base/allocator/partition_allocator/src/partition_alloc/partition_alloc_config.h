@@ -145,7 +145,8 @@ static_assert(sizeof(void*) == 8);
 
 // On Android, we have to go through emutls, since this is always a shared
 // library, so don't bother.
-#if PA_CONFIG(THREAD_LOCAL_TLS) && !PA_BUILDFLAG(IS_ANDROID)
+// Disabled due to problems using thread_local when replaying.
+#if 0 && PA_CONFIG(THREAD_LOCAL_TLS) && !PA_BUILDFLAG(IS_ANDROID)
 #define PA_CONFIG_THREAD_CACHE_FAST_TLS() 1
 #else
 #define PA_CONFIG_THREAD_CACHE_FAST_TLS() 0

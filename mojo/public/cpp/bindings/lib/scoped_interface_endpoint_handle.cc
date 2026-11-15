@@ -9,6 +9,7 @@
 
 #include "base/check.h"
 #include "base/functional/bind.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "base/task/sequenced_task_runner.h"
 #include "mojo/public/cpp/bindings/associated_group_controller.h"
@@ -35,7 +36,7 @@ class ScopedInterfaceEndpointHandle::State
     DCHECK(!lock_);
     DCHECK(!pending_association_);
 
-    lock_.emplace();
+    lock_.emplace("ScopedInterfaceEndpointHandle::State.lock_");
     pending_association_ = true;
     peer_state_ = std::move(peer);
   }

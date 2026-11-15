@@ -201,6 +201,8 @@
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
+
 namespace blink {
 namespace {
 
@@ -1403,6 +1405,8 @@ void DocumentLoader::BodyDataReceivedImpl(BodyData& data) {
                                                   encoded_data.size());
     probe::DidReceiveData(probe::ToCoreProbeSink(GetFrame()),
                           main_resource_identifier_, this, encoded_data);
+    recordreplay::OnNetworkReceiveData(main_resource_identifier_,
+                                       encoded_data.ptr_or_null_if_no_data(), (int)encoded_data.size());
   }
 
   TRACE_EVENT("loading", "DocumentLoader::HandleData",
@@ -1448,6 +1452,9 @@ void DocumentLoader::BodyLoadingFinished(
         probe::ToCoreProbeSink(GetFrame()), main_resource_identifier_, this,
         completion_time, total_encoded_data_length, total_encoded_body_length,
         total_decoded_body_length);
+    recordreplay::OnNetworkFinishLoading(main_resource_identifier_,
+                                         total_encoded_data_length,
+                                         total_decoded_body_length);
 
     DOMWindowPerformance::performance(*frame_->DomWindow())
         ->OnBodyLoadFinished(total_encoded_body_length,
@@ -1487,6 +1494,7 @@ void DocumentLoader::BodyLoadingFinished(
   probe::DidFailLoading(probe::ToCoreProbeSink(GetFrame()),
                         main_resource_identifier_, this, resource_error,
                         frame_->GetDevToolsFrameToken());
+  recordreplay::OnNetworkFail(main_resource_identifier_, *error);
   GetFrame()->Console().DidFailLoading(this, main_resource_identifier_,
                                        resource_error);
   LoadFailed(resource_error);
@@ -1591,6 +1599,7 @@ void DocumentLoader::HandleRedirect(
   probe::WillSendNavigationRequest(
       probe::ToCoreProbeSink(GetFrame()), main_resource_identifier_, this,
       url_after_redirect, http_method_, http_body_.get());
+  recordreplay::OnNetworkResourceRedirect(main_resource_identifier_, url_after_redirect, nullptr);
 
   DCHECK(!GetTiming().FetchStart().is_null());
   GetTiming().AddRedirect(url_before_redirect, url_after_redirect);
@@ -2131,6 +2140,12 @@ void DocumentLoader::StartLoadingInternal() {
   // so we don't MarkFetchStart here.
   main_resource_identifier_ = CreateUniqueIdentifier();
 
+  if (recordreplay::IsRecordingOrReplaying("notify-network")) {
+    ResourceRequest request(url_);
+    request.SetInspectorId(main_resource_identifier_);
+    recordreplay::OnNetworkPrepareRequest(nullptr, nullptr, request);
+  }
+
   virtual_time_pauser_ =
       frame_->GetFrameScheduler()->CreateWebScopedVirtualTimePauser(
           url_.GetString(),
@@ -2162,6 +2177,7 @@ void DocumentLoader::StartLoadingInternal() {
   probe::DidReceiveResourceResponse(probe::ToCoreProbeSink(GetFrame()),
                                     main_resource_identifier_, this, response_,
                                     nullptr /* resource */);
+  recordreplay::OnNetworkReceiveResponse(main_resource_identifier_, response_);
 
   HandleResponse();
 
@@ -2215,6 +2231,14 @@ void DocumentLoader::StartLoadingResponse() {
   CHECK_GE(state_, kCommitted);
 
   CreateParserPostCommit();
+
+  // The above call will initialize the LocalWindowProxy for the initial
+  // document which creates the first record/replay checkpoint. Nodes/edges
+  // we create before this point will be ignored so we indicate the document
+  // is starting to load right afterwards.
+  recordreplay::AutoDependencyExecution execute(
+    recordreplay::NewDependencyGraphNode("{\"kind\":\"documentStartLoadingResponse\"}")
+  );
 
   // The main document from an MHTML archive is not loaded from its HTTP
   // response, but from the main resource within the archive (in the response).
@@ -3442,6 +3466,9 @@ void DocumentLoader::CreateParserPostCommit() {
   TRACE_EVENT("loading", "DocumentLoader::CreateParserPostCommit",
               perfetto::Flow::FromPointer(this));
   base::ElapsedTimer timer;
+  // https://linear.app/replay/issue/BAC-2424
+  recordreplay::Assert("DocumentLoader::CreateParserPostCommit");
+
   SpeculationRulesHeader::ProcessHeadersForDocumentResponse(
       response_, *frame_->DomWindow());
 

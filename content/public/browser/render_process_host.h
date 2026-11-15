@@ -72,6 +72,7 @@ namespace base {
 class PersistentMemoryAllocator;
 class TimeDelta;
 class Token;
+class Value;
 #if BUILDFLAG(IS_ANDROID)
 namespace android {
 enum class ChildBindingState;
@@ -835,6 +836,11 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Listener,
   // Write a representation of this object into a trace.
   virtual void WriteIntoTrace(
       perfetto::TracedProto<TraceProto> proto) const = 0;
+
+  // Send a record-replay event to the render process.
+  virtual void SendRecordReplayBrowserEvent(
+    const std::string& name,
+    base::Value&& value) = 0;
 
 #if BUILDFLAG(CLANG_PROFILING_INSIDE_SANDBOX)
   // Ask the renderer process to dump its profiling data to disk. Invokes

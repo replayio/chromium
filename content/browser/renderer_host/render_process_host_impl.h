@@ -256,6 +256,9 @@ class CONTENT_EXPORT RenderProcessHostImpl
   bool AreV8OptimizationsDisabled() override;
   bool DisallowV8FeatureFlagOverrides() override;
   bool IsPdf() override;
+  bool IsRecordReplayForRecording() {
+    return !!(flags_ & RenderProcessFlags::kRecordReplayForRecording);
+  }
   StoragePartitionImpl* GetStoragePartition() override;
   bool Shutdown(int exit_code) override;
   bool ShutdownRequested() override;
@@ -367,6 +370,9 @@ class CONTENT_EXPORT RenderProcessHostImpl
   void CrashHungProcess() override;
   std::string GetInfoForBrowserContextDestructionCrashReporting() override;
   void WriteIntoTrace(perfetto::TracedProto<TraceProto> proto) const override;
+  void SendRecordReplayBrowserEvent(
+      const std::string& name,
+      base::Value&& value) override;
 #if BUILDFLAG(CLANG_PROFILING_INSIDE_SANDBOX)
   void DumpProfilingData(base::OnceClosure callback) override;
 #endif
@@ -1003,6 +1009,10 @@ class CONTENT_EXPORT RenderProcessHostImpl
     // running during process setup (e.g. delivery of extension content scripts)
     // can already tell that the process is privileged.
     kPrivileged = 1 << 6,
+
+    // Indicates whether the render process backing this host should
+    // be recorded using the RecordReplay infrastructure.
+    kRecordReplayForRecording = 1 << 7,
   };
 
 #if BUILDFLAG(IS_ANDROID)

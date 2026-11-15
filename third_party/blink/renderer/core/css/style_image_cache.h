@@ -7,6 +7,7 @@
 
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_hash.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
@@ -16,6 +17,7 @@ namespace blink {
 class FetchParameters;
 class ImageResourceContent;
 class ResourceFetcher;
+class StyleFetchedImage;
 
 // A per-StyleEngine cache for ImageResourceContent for StyleImages. A
 // CSSImageValue points to a StyleImage, but different CSSImageValue objects
@@ -31,6 +33,10 @@ class CORE_EXPORT StyleImageCache {
   // add it to the cache, and start the fetch.
   ImageResourceContent* CacheImageContent(ResourceFetcher*, FetchParameters&);
 
+  // Replay: keep a strong reference to the cached StyleFetchedImage to avoid
+  // weak-pointer-driven divergence between record and replay.
+  void RetainStyleImageForReplay(StyleFetchedImage*);
+
   void Trace(Visitor*) const;
 
  private:
@@ -38,6 +44,10 @@ class CORE_EXPORT StyleImageCache {
   // makes sure the entry is removed when no style declarations nor computed
   // styles have a reference to the image.
   HeapHashMap<String, WeakMember<ImageResourceContent>> fetched_image_map_;
+
+  // Keep strong pointer on cached `StyleFetchedImage`s to prevent divergence.
+  // see https://linear.app/replay/issue/RUN-1065#comment-7e345cbc
+  HeapHashSet<Member<StyleFetchedImage>> fetched_image_map_strong_;
 
   friend class StyleImageCacheTest;
 };

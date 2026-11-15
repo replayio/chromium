@@ -6,6 +6,7 @@
 
 #include <optional>
 
+#include "base/record_replay.h"
 #include "base/task/sequence_manager/associated_thread_id.h"
 #include "base/task/sequence_manager/sequence_manager_impl.h"
 #include "base/task/sequence_manager/task_queue_impl.h"
@@ -66,6 +67,10 @@ void WakeUpQueue::SetNextWakeUpForQueue(internal::TaskQueueImpl* queue,
   }
 
   std::optional<WakeUp> new_wake_up = GetNextDelayedWakeUp();
+
+  recordreplay::Assert(
+    "[RUN-2801-2978] WakeUpQueue::SetNextWakeUpForQueue %d",
+    new_wake_up != previous_wake_up);
 
   if (new_wake_up != previous_wake_up) {
     OnNextWakeUpChanged(lazy_now, GetNextDelayedWakeUp());

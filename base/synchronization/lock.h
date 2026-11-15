@@ -30,7 +30,7 @@ class LOCKABLE BASE_EXPORT Lock {
   static const LockMetricTag& GetBaseLockMetricTag();
   static const LockMetricTagList& GetBaseLockMetricTagList();
 
-  Lock() = default;
+  Lock(const char* ordered_name = nullptr) : lock_(ordered_name) {}
 
   Lock(const Lock&) = delete;
   Lock& operator=(const Lock&) = delete;

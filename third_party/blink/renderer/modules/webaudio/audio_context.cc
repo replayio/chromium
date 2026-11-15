@@ -1731,6 +1731,8 @@ void AudioContext::HandleAudibility(AudioBus* destination_bus) {
   }
 
   if (previous_audible != new_audible_state) {
+    recordreplay::Assert("[RUN-1506] AudioContext::HandleAudibility %d %d", previous_audible, new_audible_state);
+
     was_audible_.store(new_audible_state, std::memory_order_relaxed);
     if (new_audible_state) {
       PostCrossThreadTask(

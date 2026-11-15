@@ -30,6 +30,8 @@
 #include "third_party/blink/renderer/platform/wtf/text/ascii_ctype.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 
+#include "base/record_replay.h"
+
 namespace blink::date_time_format {
 
 static const std::array<FieldType, 26> kLowerCaseToFieldTypeMap = {
@@ -103,6 +105,8 @@ static FieldType MapCharacterToFieldType(const UChar ch) {
 }
 
 bool Parse(const String& source, TokenHandler& token_handler) {
+  recordreplay::Assert("[RUN-1548] DateTimeFormat::Parse %s", source.Utf8().c_str());
+
   enum State {
     kStateInQuote,
     kStateInQuoteQuote,

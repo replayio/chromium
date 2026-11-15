@@ -46,7 +46,10 @@ class OnceCallbackAlgorithm final : public AbortSignal::Algorithm {
       : callback_(std::move(callback)) {}
   ~OnceCallbackAlgorithm() override = default;
 
-  void Run() override { std::move(callback_).Run(); }
+  void Run() override {
+    recordreplay::Assert("[RUN-1182] OnceCallbackAlgorithm::Run");
+    std::move(callback_).Run();
+  }
 
  private:
   base::OnceClosure callback_;
@@ -57,6 +60,8 @@ class OnceCallbackAlgorithm final : public AbortSignal::Algorithm {
 AbortSignal::AbortSignal(ExecutionContext* execution_context)
     : ExecutionContextLifecycleObserver(execution_context),
       signal_type_(SignalType::kComposite) {
+  // https://linear.app/replay/issue/RUN-1182
+  recordreplay::RegisterPointer("AbortSignal", this);
   InitializeCompositeSignal(HeapVector<Member<AbortSignal>>());
 }
 
@@ -68,12 +73,16 @@ AbortSignal::AbortSignal(ExecutionContext* execution_context,
           *this,
           AbortSignalCompositionType::kAbort)) {
   DCHECK_NE(signal_type, SignalType::kComposite);
+  // https://linear.app/replay/issue/RUN-1182
+  recordreplay::RegisterPointer("AbortSignal", this);
 }
 
 AbortSignal::AbortSignal(ScriptState* script_state,
                          const HeapVector<Member<AbortSignal>>& source_signals)
     : ExecutionContextLifecycleObserver(ExecutionContext::From(script_state)),
       signal_type_(SignalType::kComposite) {
+  // https://linear.app/replay/issue/RUN-1182
+  recordreplay::RegisterPointer("AbortSignal", this);
   // If any of the signals are aborted, skip the linking and just abort this
   // signal.
   for (auto& source : source_signals) {
@@ -98,7 +107,9 @@ void AbortSignal::InitializeCompositeSignal(
   AbortSignalRegistry::From(CHECK_DEREF(GetExecutionContext()));
 }
 
-AbortSignal::~AbortSignal() = default;
+AbortSignal::~AbortSignal() {
+  recordreplay::UnregisterPointer(this);
+}
 
 // static
 AbortSignal* AbortSignal::abort(ScriptState* script_state) {
@@ -201,6 +212,9 @@ ExecutionContext* AbortSignal::GetExecutionContext() const {
 }
 
 AbortSignal::AlgorithmHandle* AbortSignal::AddAlgorithm(Algorithm* algorithm) {
+  recordreplay::Assert("[RUN-1182] AbortSignal::AddAlgorithm v1 %d %d",
+                       recordreplay::PointerId(this), aborted());
+
   if (aborted() || composition_manager_->IsSettled()) {
     return nullptr;
   }
@@ -214,6 +228,9 @@ AbortSignal::AlgorithmHandle* AbortSignal::AddAlgorithm(Algorithm* algorithm) {
 
 AbortSignal::AlgorithmHandle* AbortSignal::AddAlgorithm(
     base::OnceClosure algorithm) {
+  recordreplay::Assert("[RUN-1182] AbortSignal::AddAlgorithm v2 %d %d",
+                       recordreplay::PointerId(this), aborted());
+
   if (aborted() || composition_manager_->IsSettled()) {
     return nullptr;
   }
@@ -240,7 +257,11 @@ void AbortSignal::SignalAbort(ScriptState* script_state,
                               ScriptValue reason,
                               SignalAbortPassKey) {
   DCHECK(!reason.IsEmpty());
+
+  recordreplay::Assert("[RUN-1182] AbortSignal::SignalAbort %d", recordreplay::PointerId(this));
+
   if (aborted()) {
+    recordreplay::Assert("[RUN-1182] AbortSignal::SignalAbort #1");
     return;
   }
 
@@ -280,12 +301,14 @@ void AbortSignal::SetAbortReason(ScriptState* script_state,
                                  ScriptValue reason) {
   CHECK(!aborted());
   if (reason.IsUndefined()) {
+    recordreplay::Assert("[RUN-1182] AbortSignal::SignalAbort #2");
     abort_reason_ = ScriptValue(
         script_state->GetIsolate(),
         V8ThrowDOMException::CreateOrEmpty(
             script_state->GetIsolate(), DOMExceptionCode::kAbortError,
             "signal is aborted with undefined reason"));
   } else {
+    recordreplay::Assert("[RUN-1182] AbortSignal::SignalAbort #3");
     abort_reason_ = reason;
   }
 }
@@ -308,10 +331,13 @@ void AbortSignal::RunAbortSteps() {
                             static_cast<int>(abort_algorithms_.size()));
     CHECK(handle);
     CHECK(handle->GetAlgorithm());
+    recordreplay::Assert("[RUN-1182] AbortSignal::SignalAbort #4");
     handle->GetAlgorithm()->Run();
   }
 
-  DispatchEvent(*Event::Create(event_type_names::kAbort));
+  recordreplay::Assert("[RUN-1182] AbortSignal::SignalAbort Done");
+
+  DispatchEvent(*Event::Create(event_type_names::kAbort), "AbortSignal::SignalAbort");
 }
 
 void AbortSignal::Trace(Visitor* visitor) const {

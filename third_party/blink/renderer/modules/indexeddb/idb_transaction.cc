@@ -113,6 +113,10 @@ IDBTransaction::IDBTransaction(
           BindOnce(&IDBTransaction::SetActive, WrapPersistent(this), false));
 
   database_->TransactionCreated(this);
+
+  record_replay_created_node_id_ = recordreplay::NewDependencyGraphNode(
+    "{\"kind\":\"newIDBTransaction\"}"
+  );
 }
 
 IDBTransaction::IDBTransaction(ExecutionContext* execution_context,
@@ -136,6 +140,10 @@ IDBTransaction::IDBTransaction(ExecutionContext* execution_context,
   DCHECK(scope_.empty());
 
   database_->TransactionCreated(this);
+
+  record_replay_created_node_id_ = recordreplay::NewDependencyGraphNode(
+    "{\"kind\":\"newIDBTransaction\"}"
+  );
 }
 
 IDBTransaction::~IDBTransaction() {
@@ -558,8 +566,15 @@ void IDBTransaction::Put(int64_t object_store_id,
     return;
   }
 
+  mojo::internal::AutoRecordReplayAssertBufferAllocations rraba(
+      "RUN-1806-2265");
+
   remote_->Put(object_store_id, std::move(value), std::move(primary_key),
                put_mode, std::move(index_keys), std::move(callback));
+
+  recordreplay::Assert(
+      "[RUN-1806-2265] WebIDBTransaction::Put %lld %lld %zu",
+      id_, object_store_id, estimated_size);
 }
 
 void IDBTransaction::SetIndexKeys(int64_t object_store_id,

@@ -188,6 +188,7 @@ class CORE_EXPORT DOMScheduler : public ScriptWrappable,
   // removed automatically when either the corresponding signal or DOMTaskQueue
   // is garbage collected. This will be empty when the window is detached.
   SignalToTaskQueueMap signal_to_task_queue_map_;
+  HeapHashSet<Member<DOMTaskSignal>> replay_strong_signal_;
 
   // Same as `signal_to_task_queue_map_` but for continuation queues.
   SignalToTaskQueueMap signal_to_continuation_queue_map_;

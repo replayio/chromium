@@ -9,6 +9,7 @@
 
 #include "base/check_op.h"
 #include "base/containers/span.h"
+#include "base/record_replay.h"
 #include "base/system/sys_info.h"
 #include "build/build_config.h"
 #include "media/base/media_switches.h"
@@ -93,6 +94,7 @@ void AudioDeviceThread::ThreadMain() {
   base::PlatformThread::SetName(thread_name_);
   callback_->InitializeOnAudioThread();
 
+  uint32_t record_replay_iteration_idx = 0;
   uint32_t buffer_index = 0;
   while (true) {
     if (in_shutdown_.load()) {
@@ -100,6 +102,14 @@ void AudioDeviceThread::ThreadMain() {
     }
     uint32_t pending_data = 0;
     size_t bytes_read = socket_.Receive(base::byte_span_from_ref(pending_data));
+    recordreplay::Assert(
+      "[RUN-1667-1674] AudioDeviceThread::ThreadMain %u %u %u %u",
+      (unsigned) record_replay_iteration_idx,
+      (unsigned) buffer_index,
+      (unsigned) pending_data,
+      (unsigned) bytes_read
+    );
+    record_replay_iteration_idx++;
     if (bytes_read != sizeof(pending_data))
       break;
 

@@ -148,8 +148,9 @@ declare_args() {
 }
 
 # Sanitizers replace the allocator, don't use our own.
-memory_tool_replaces_allocator =
-    is_asan || is_hwasan || is_lsan || is_tsan || is_msan
+#
+# [Replay] This primarily disables PartitionAlloc.
+memory_tool_replaces_allocator = true
 
 pa_buildflag_header("buildflags") {
   header = "buildflags.h"
@@ -605,6 +606,7 @@ if (is_clang_or_gcc) {
     deps = [
       ":allocator_base",
       ":internal_headers",
+      "//base:debugging_buildflags",
     ]
     if (use_partition_alloc_as_malloc_on_win_component_build) {
       # We need to add explicit libc++ dependency here because of

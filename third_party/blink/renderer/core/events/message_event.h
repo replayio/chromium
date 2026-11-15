@@ -262,6 +262,12 @@ class CORE_EXPORT MessageEvent final : public Event {
     return origin_;
   }
 
+  // Dependency graph node ID for when this event was created.
+  int RecordReplayDependencyGraphNodeId() const {
+    return record_replay_dependency_graph_node_id_;
+  }
+  void RecordReplayInitDependencyGraphNodeId();
+
  private:
   enum DataType {
     kDataTypeNull,  // For "messageerror" events.
@@ -313,6 +319,7 @@ class CORE_EXPORT MessageEvent final : public Event {
   // to the agent cluster.
   bool locked_to_agent_cluster_ = false;
   uint64_t trace_id_;
+  int record_replay_dependency_graph_node_id_ = 0;
 };
 
 template <>

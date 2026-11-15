@@ -5,6 +5,9 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_HEAP_MEMBER_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_HEAP_MEMBER_H_
 
+#include "base/check_op.h"
+#include "base/record_replay.h"
+#include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/heap/persistent.h"
 #include "third_party/blink/renderer/platform/heap/thread_state_storage.h"
 #include "third_party/blink/renderer/platform/heap/write_barrier.h"
@@ -131,6 +134,23 @@ class ValuePeeker final {
   T* ptr_;
 };
 
+// Replay: detect whether a T provides RecordReplayId(), so that hashing of
+// Member<>-wrapped elements can use the deterministic Replay id instead of a
+// raw pointer value.
+template <typename T>
+class HasRecordReplayId {
+  template <typename U>
+  static auto Check(U* u) -> decltype(u->RecordReplayId(), std::true_type());
+  template <typename>
+  static std::false_type Check(...);
+
+ public:
+  static constexpr bool value = decltype(Check<T>(nullptr))::value;
+};
+
+template <typename T>
+constexpr bool has_record_replay_id = HasRecordReplayId<T>::value;
+
 // Default hash for hash tables with Member<>-derived elements.
 template <typename T, typename MemberType>
 struct BaseMemberHashTraits : SimpleClassHashTraits<MemberType> {
@@ -143,6 +163,22 @@ struct BaseMemberHashTraits : SimpleClassHashTraits<MemberType> {
   // Member. Prefer compressing raw pointers instead of decompressing Members,
   // assuming the former is cheaper.
   static uint32_t GetHash(const T* key) {
+    if constexpr (has_record_replay_id<T>) {
+      // Replay intervention: use the deterministic RecordReplayId so that
+      // hash-table ordering matches between record and replay.
+      if (recordreplay::IsRecordingOrReplaying("pointer-ids")) {
+        int id = key->RecordReplayId();
+        // Ids are allowed to be zero if we've diverged from the recording.
+        if (recordreplay::HasDivergedFromRecording()) {
+          if (id > 0) {
+            return blink::GetHash(id);
+          }
+        } else {
+          CHECK(id > 0);  // Should have been registered.
+          return blink::GetHash(id);
+        }
+      }
+    }
 #if defined(CPPGC_POINTER_COMPRESSION)
     cppgc::internal::CompressedPointer st(key);
 #else
@@ -153,8 +189,30 @@ struct BaseMemberHashTraits : SimpleClassHashTraits<MemberType> {
   template <typename Member>
     requires(IsAnyMemberType<Member>::value)
   static uint32_t GetHash(const Member& m) {
+    if constexpr (has_record_replay_id<T>) {
+      // Replay intervention: use the deterministic RecordReplayId so that
+      // hash-table ordering matches between record and replay.
+      if (recordreplay::IsRecordingOrReplaying("pointer-ids")) {
+        int id = m.Get()->RecordReplayId();
+        // Ids are allowed to be zero if we've diverged from the recording.
+        if (recordreplay::HasDivergedFromRecording()) {
+          if (id > 0) {
+            return blink::GetHash(id);
+          }
+        } else {
+          CHECK(id > 0);  // Should have been registered.
+          return blink::GetHash(id);
+        }
+      }
+    }
     return blink::GetHash(m.GetRawStorage().GetAsInteger());
   }
+
+  // Replay: signal deterministic hashing for types that expose a
+  // RecordReplayId(), so that IsRecordReplayNonDeterministicContainerV is
+  // false for them.
+  static constexpr bool kIsRecordReplayDeterministicHash =
+      has_record_replay_id<T>;
 
   static constexpr bool kEmptyValueIsZero = true;
 
@@ -200,6 +258,76 @@ struct UntracedMemberHashTraits
     : BaseMemberHashTraits<T, blink::UntracedMember<T>> {};
 template <typename T>
 struct HashTraits<blink::UntracedMember<T>> : UntracedMemberHashTraits<T> {};
+
+template <typename T>
+using MemberHashRecordReplayId = MemberHashTraits<T>;
+template <typename T>
+using WeakMemberHashRecordReplayId = WeakMemberHashTraits<T>;
+template <typename T>
+using UntracedMemberHashRecordReplayId = UntracedMemberHashTraits<T>;
+
+// Replay intervention: deterministic hashing keyed by the registered-pointer-id
+// registry (recordreplay::PointerId). Distinct from the RecordReplayId() family
+// above — different registry, different determinism contract. Unregistered
+// pointers return id 0 and silently fall through to RawStorage (no CHECK and no
+// HasDivergedFromRecording branch — registration is opt-in per call site).
+//
+// Shared hash body — gate, registry lookup, RawStorage fallback. The two
+// overloads accept a raw pointer or any Member-shaped slot; everything else is
+// slot-shape plumbing (Iterator/Peek/ConstructDeletedValue) which we inherit
+// from the per-slot parent trait below.
+template <typename T>
+ALWAYS_INLINE unsigned PointerIdHash(const T* key) {
+  if (recordreplay::IsRecordingOrReplaying("pointer-ids")) {
+    if (int id = recordreplay::PointerId(key)) {
+      return blink::GetHash(id);
+    }
+  }
+#if defined(CPPGC_POINTER_COMPRESSION)
+  cppgc::internal::CompressedPointer st(key);
+#else
+  cppgc::internal::RawPointer st(key);
+#endif
+  return blink::GetHash(st.GetAsInteger());
+}
+template <typename Member>
+  requires(IsAnyMemberType<Member>::value)
+ALWAYS_INLINE unsigned PointerIdHash(const Member& m) {
+  if (recordreplay::IsRecordingOrReplaying("pointer-ids")) {
+    if (int id = recordreplay::PointerId(m.Get())) {
+      return blink::GetHash(id);
+    }
+  }
+  return blink::GetHash(m.GetRawStorage().GetAsInteger());
+}
+
+// Mixin that swaps a parent trait's GetHash for the pointer-id variant.
+// `Parent` supplies all slot-shape plumbing (the existing MemberHashTraits /
+// WeakMemberHashTraits / HashTraits<T*>); we override hashing only.
+template <typename T, typename Parent>
+struct PointerIdHashTraitsMixin : Parent {
+  static unsigned GetHash(const T* key) { return PointerIdHash(key); }
+  template <typename Member>
+    requires(IsAnyMemberType<Member>::value)
+  static unsigned GetHash(const Member& m) {
+    return PointerIdHash(m);
+  }
+  static constexpr bool kIsRecordReplayDeterministicHash = true;
+};
+
+template <typename T>
+using MemberHashRecordReplayRegisteredPointerId =
+    PointerIdHashTraitsMixin<T, MemberHashTraits<T>>;
+template <typename T>
+using WeakMemberHashRecordReplayRegisteredPointerId =
+    PointerIdHashTraitsMixin<T, WeakMemberHashTraits<T>>;
+template <typename T>
+using RawPtrHashRecordReplayRegisteredPointerId =
+    PointerIdHashTraitsMixin<T, HashTraits<T*>>;
+
+}  // namespace blink
+
+namespace blink {
 
 template <typename T>
 class MemberConstructTraits {
@@ -262,6 +390,16 @@ class ConstructTraits<Member<T>, Traits, Allocator> final
 template <typename T, typename Traits, typename Allocator>
 class ConstructTraits<WeakMember<T>, Traits, Allocator> final
     : public MemberConstructTraits<WeakMember<T>> {};
+
+}  // namespace blink
+
+namespace blink {
+
+template <typename T>
+struct IsPointerType<blink::WeakMember<T>> : std::true_type {};
+
+template <typename T>
+struct IsPointerType<blink::Member<T>> : std::true_type {};
 
 }  // namespace blink
 

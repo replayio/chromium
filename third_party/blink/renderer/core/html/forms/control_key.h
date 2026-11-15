@@ -10,8 +10,29 @@
 #include "third_party/blink/renderer/platform/wtf/hash_traits.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string_hash.h"
+#include "third_party/blink/renderer/platform/wtf/text/string_impl.h"
 
 namespace blink {
+
+static inline int CompareControlKeyStrings(StringImpl* a, StringImpl* b) {
+  if (a->length() != b->length()) {
+    return a->length() - b->length();
+  }
+  if (a->Is8Bit() != b->Is8Bit()) {
+    return a->Is8Bit() ? -1 : 1;
+  }
+  if (a->Is8Bit()) {
+    // Replay (force-determinism): raw-ptr memcmp trips -Wunsafe-buffer-usage
+    // (errors under -Werror); UNSAFE_BUFFERS is non-semantic and preserves the
+    // byte-exact comparison order required for deterministic ControlKey sorting.
+    return UNSAFE_BUFFERS(
+        memcmp(a->Characters8(), b->Characters8(), a->length()));
+  }
+  // Replay (force-determinism): see above; raw-ptr memcmp wrapped in
+  // UNSAFE_BUFFERS to satisfy -Wunsafe-buffer-usage without changing semantics.
+  return UNSAFE_BUFFERS(
+      memcmp(a->Characters16(), b->Characters16(), a->length() * 2));
+}
 
 // ControlKey class represents a pair of a name attribute value and a control
 // type of a form control element.  It's used in blink::SavedFormState.
@@ -36,6 +57,14 @@ class ControlKey {
   bool IsHashTableDeletedValue() const { return type_ == g_star_atom; }
 
   friend bool operator==(const ControlKey&, const ControlKey&) = default;
+
+  bool operator<(const ControlKey& o) const {
+    int compare_name = CompareControlKeyStrings(name_.Impl(), o.name_.Impl());
+    if (compare_name != 0) {
+      return compare_name < 0;
+    }
+    return CompareControlKeyStrings(type_.Impl(), o.type_.Impl()) < 0;
+  }
 
  private:
   AtomicString name_;

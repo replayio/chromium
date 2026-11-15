@@ -7,6 +7,7 @@
 #include <optional>
 
 #include "base/debug/alias.h"
+#include "base/record_replay.h"
 #include "base/task/common/task_annotator.h"
 #include "base/task/sequence_manager/fence.h"
 #include "base/task/sequence_manager/sequence_manager_impl.h"
@@ -21,7 +22,9 @@ namespace base::sequence_manager::internal {
 WorkQueue::WorkQueue(TaskQueueImpl* task_queue,
                      const char* name,
                      QueueType queue_type)
-    : task_queue_(task_queue), name_(name), queue_type_(queue_type) {}
+    : task_queue_(task_queue), name_(name), queue_type_(queue_type) {
+  recordreplay::RegisterPointer("WorkQueue", this);
+}
 
 ListValue WorkQueue::AsValue(TimeTicks now) const {
   ListValue state;
@@ -32,6 +35,7 @@ ListValue WorkQueue::AsValue(TimeTicks now) const {
 }
 
 WorkQueue::~WorkQueue() {
+  recordreplay::UnregisterPointer(this);
   DCHECK(!work_queue_sets_) << task_queue_->GetName() << " : "
                             << work_queue_sets_->GetName() << " : " << name_;
 }
@@ -184,10 +188,23 @@ void WorkQueue::PushNonNestableTaskToFront(Task task) {
   }
 }
 
+void WorkQueue::RecordReplayRunUnorderedTasks(TaskQueueImpl::TaskDeque* queue) {
+  recordreplay::AutoDisallowEvents disallow("WorkQueue::RecordReplayRunUnorderedTasks");
+  while (!queue->empty()) {
+    Task pending_task = std::move(queue->front());
+    queue->pop_front();
+    std::move(pending_task.task).Run();
+  }
+}
+
 void WorkQueue::TakeImmediateIncomingQueueTasks() {
   DCHECK(tasks_.empty());
 
-  task_queue_->TakeImmediateIncomingQueueTasks(&tasks_);
+  TaskQueueImpl::TaskDeque record_replay_unordered_queue;
+
+  task_queue_->TakeImmediateIncomingQueueTasks(&tasks_, &record_replay_unordered_queue);
+  RecordReplayRunUnorderedTasks(&record_replay_unordered_queue);
+
   if (tasks_.empty()) {
     return;
   }
@@ -210,8 +227,14 @@ Task WorkQueue::TakeTaskFromWorkQueue() {
     if (queue_type_ == QueueType::kImmediate) {
       // Short-circuit the queue reload so that OnPopMinQueueInSet does the
       // right thing.
-      task_queue_->TakeImmediateIncomingQueueTasks(&tasks_);
+      TaskQueueImpl::TaskDeque record_replay_unordered_queue;
+      task_queue_->TakeImmediateIncomingQueueTasks(&tasks_, &record_replay_unordered_queue);
+      RecordReplayRunUnorderedTasks(&record_replay_unordered_queue);
     }
+
+    // https://linear.app/replay/issue/RUN-1150
+    recordreplay::Assert("[RUN-1150] WorkQueue::TakeTaskFromWorkQueue #2 %zu",
+                         tasks_.size());
   }
 
   DCHECK(work_queue_sets_);
@@ -225,6 +248,7 @@ Task WorkQueue::TakeTaskFromWorkQueue() {
   work_queue_sets_->OnPopMinQueueInSet(this);
 #endif
   task_queue_->TraceQueueSize();
+
   return pending_task;
 }
 
@@ -275,7 +299,9 @@ bool WorkQueue::RemoveCancelledTasks(RemoveCancelledTasksPolicy policy) {
     if (queue_type_ == QueueType::kImmediate) {
       // Short-circuit the queue reload so that OnPopMinQueueInSet does the
       // right thing.
-      task_queue_->TakeImmediateIncomingQueueTasks(&tasks_);
+      TaskQueueImpl::TaskDeque record_replay_unordered_queue;
+      task_queue_->TakeImmediateIncomingQueueTasks(&tasks_, &record_replay_unordered_queue);
+      RecordReplayRunUnorderedTasks(&record_replay_unordered_queue);
     }
   }
 

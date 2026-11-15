@@ -9,6 +9,7 @@
 #include "base/check_op.h"
 #include "base/feature_list.h"
 #include "base/memory/ptr_util.h"
+#include "base/record_replay.h"
 #include "base/task/task_features.h"
 #include "base/task/thread_pool/task_tracker.h"
 
@@ -37,6 +38,8 @@ void TaskSource::Transaction::UpdatePriority(TaskPriority priority) {
   task_source_->traits_.UpdatePriority(priority);
   task_source_->thread_type_racy_.store(TaskPriorityToThreadType(priority),
                                         std::memory_order_relaxed);
+  task_source_->priority_racy_.store(task_source_->traits_.priority(),
+                                     std::memory_order_relaxed);
 }
 
 ThreadType TaskSource::Transaction::thread_type() const {
@@ -68,6 +71,15 @@ void TaskSource::ClearDelayedHeapHandle() {
   delayed_pq_heap_handle_ = HeapHandle();
 }
 
+TaskPriority TaskSource::priority_racy() const {
+  // Record/replay priority value instead of ordering reads/writes.
+  TaskPriority priority = priority_racy_.load(std::memory_order_relaxed);
+  if (recordreplay::AreEventsDisallowed())
+    return priority;
+  return (TaskPriority)recordreplay::RecordReplayValue("TaskSource::priority_racy",
+                                                       (uintptr_t)priority);
+}
+
 TaskSource::TaskSource(const TaskTraits& traits,
                        TaskSourceExecutionMode execution_mode,
                        ThreadType originating_thread_type,
@@ -76,8 +88,10 @@ TaskSource::TaskSource(const TaskTraits& traits,
       thread_type_racy_(EffectiveThreadType(traits,
                                             originating_thread_type,
                                             inherit_by_default)),
+      priority_racy_(traits.priority()),
       originating_thread_type_(originating_thread_type),
       inherit_by_default_(inherit_by_default),
+      lock_(recordreplay::AreEventsDisallowed() ? nullptr : "TaskSource.lock_"),
       execution_mode_(execution_mode) {}
 
 TaskSource::~TaskSource() {

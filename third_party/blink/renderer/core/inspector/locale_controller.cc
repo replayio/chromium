@@ -50,6 +50,9 @@ String LocaleController::SetLocaleOverride(const String& locale,
     return "Another locale override is already in effect";
   }
 
+  recordreplay::Assert(
+      "[RUN-1537-1681] LocaleController::SetLocaleOverride A %s %s",
+      locale_override_.Utf8().c_str(), locale.Utf8().c_str());
   if (locale_override_ == locale)
     return String();
   if (locale.empty()) {
@@ -57,6 +60,10 @@ String LocaleController::SetLocaleOverride(const String& locale,
   } else {
     std::optional<base::i18n::LanguageTag> language_tag =
         base::i18n::GetLanguageTagFromString(locale.Ascii());
+    recordreplay::Assert(
+        "[RUN-1537-1681] LocaleController::SetLocaleOverride B %s",
+        language_tag ? std::string(language_tag->language_subtag()).c_str()
+                     : "");
     if (!language_tag) {
       return "Invalid locale name";
     }

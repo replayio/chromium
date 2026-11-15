@@ -294,10 +294,12 @@ vars = {
   # RBE project to download rewrapper config files for. Only needed if
   # different from the project used in 'rbe_instance'
   'rewrapper_cfg_project': Str(''),
+  # By default, check out the re-client binaries.
+  'checkout_reclient': True,
   # reclient CIPD package
   'reclient_package': 'infra/rbe/client/',
   # reclient CIPD package version
-  'reclient_version': 're_client_version:0.185.0.db415f21-gomaip',
+  'reclient_version': 're_client_version:0.126.0.4aaef37-gomaip',
 
   # screen-ai CIPD packages
   'screen_ai_linux': 'version:153.04',
@@ -330,11 +332,15 @@ vars = {
   # Three lines of non-changing comments so that
   # the commit queue can handle CLs rolling Skia
   # and whatever else without interference from each other.
-  'skia_revision': 'fd8edd3ef1ea7bcca699edf7577dc08d59fb5308',
+  'skia_revision': '4b7b6ef9e9a128329ac0dfc1f38dce47c1d6086c',
   # Three lines of non-changing comments so that
   # the commit queue can handle CLs rolling V8
   # and whatever else without interference from each other.
-  'v8_revision': 'd2463ed6f2dfd0bdbb642624bd3d0e7d3e792555',
+  'v8_revision': '205dff6de44bcef8c50843d41035c171131e2754',
+  # Three lines of non-changing comments so that
+  # the commit queue can handle CLs rolling swarming_client
+  # and whatever else without interference from each other.
+  'swarming_revision': 'a32a1607f6093d338f756c7e7c7b4333b0c50c9c',
   # Three lines of non-changing comments so that
   # the commit queue can handle CLs rolling ANGLE
   # and whatever else without interference from each other.
@@ -350,7 +356,7 @@ vars = {
   # Three lines of non-changing comments so that
   # the commit queue can handle CLs rolling BoringSSL
   # and whatever else without interference from each other.
-  'boringssl_revision': '5b83e5d1abf0ae0033ae52ab579d906b67633b2c',
+  'boringssl_revision': 'aa924720aa02db97cb94de2127f4c29c1be9eb49',
   # Three lines of non-changing comments so that
   # the commit queue can handle CLs rolling Fuchsia sdk
   # and whatever else without interference from each other.
@@ -2163,7 +2169,7 @@ deps = {
   },
 
   'src/third_party/boringssl/src':
-    Var('boringssl_git') + '/boringssl.git' + '@' +  Var('boringssl_revision'),
+    'https://github.com/replayio/boringssl' + '@' +  Var('boringssl_revision'),
 
   'src/third_party/breakpad/breakpad':
     Var('chromium_git') + '/breakpad/breakpad.git' + '@' + Var('breakpad_revision'),
@@ -3080,7 +3086,7 @@ deps = {
     Var('chromium_git') + '/external/github.com/cisco/sframe' + '@' + '6a37f061f4eda0c6594c91ecf99b5ff498c8c124',
 
   'src/third_party/skia':
-    Var('skia_git') + '/skia.git' + '@' +  Var('skia_revision'),
+    'https://github.com/replayio/chromium-skia.git' + '@' +  Var('skia_revision'),
 
   'src/third_party/smhasher/src':
     Var('chromium_git') + '/external/smhasher.git' + '@' + '07bb4de10a63e8cc2e1724865454eba635742383',
@@ -3274,7 +3280,7 @@ deps = {
     Var('chromium_git') + '/webpagereplay.git' + '@' + Var('webpagereplay_revision'),
 
   'src/third_party/webrtc':
-    Var('webrtc_git') + '/src.git' + '@' + 'b321f634929af0af61a8964487fbd7894a008f12',
+    'https://github.com/replayio/chromium-webrtc.git' + '@' + '558cff336797fa47a8b2d071e453dc78f82050bb',
 
   # Wuffs' canonical repository is at github.com/google/wuffs, but we use
   # Skia's mirror of Wuffs, the same as in upstream Skia's DEPS file.
@@ -3347,7 +3353,7 @@ deps = {
   },
 
   'src/v8':
-    Var('chromium_git') + '/v8/v8.git' + '@' +  Var('v8_revision'),
+    'https://github.com/replayio/chromium-v8.git' + '@' +  Var('v8_revision'),
 
 # See checkout_src_internal_infra declaration.
 # LINT.IfChange
@@ -4107,6 +4113,7 @@ deps = {
         'e4bd19f95afa6483a54906c2a3e5d329d2d81690',
       'condition': 'checkout_src_internal',
   },
+  'src/third_party/reclient_configs': 'https://github.com/EngFlow/reclient-configs.git@c7c2f495ab4637bf5977a8f8f7c65ded468843b3',
 }
 
 
@@ -4950,6 +4957,11 @@ hooks = [
                '-a', 'src/chromeos/tast_control_additional_cq_tests.txt',
                '-m', 'src/build/cros_cache/chrome-sdk/misc/test_metadata.jsonpb',
                '-b', '{cros_boards}'],
+  },
+  {
+    'name': 'configure_reclient',
+    'pattern': '.',
+    'action': ['python3', 'src/third_party/reclient_configs/configure_reclient.py', '--src_dir=src'],
   },
 
 ]

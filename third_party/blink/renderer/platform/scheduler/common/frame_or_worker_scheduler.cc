@@ -4,8 +4,10 @@
 
 #include "third_party/blink/renderer/platform/scheduler/public/frame_or_worker_scheduler.h"
 
+#include <algorithm>
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include "base/feature_list.h"
 #include "base/functional/callback.h"
@@ -15,6 +17,8 @@
 #include "third_party/blink/renderer/platform/bindings/source_location.h"
 #include "v8/include/v8-isolate.h"
 
+#include "base/record_replay.h"
+
 namespace blink {
 
 FrameOrWorkerScheduler::LifecycleObserverHandle::LifecycleObserverHandle(
@@ -23,9 +27,15 @@ FrameOrWorkerScheduler::LifecycleObserverHandle::LifecycleObserverHandle(
     OnLifecycleStateChangedCallback callback)
     : scheduler_(scheduler->GetWeakPtr()),
       observer_type_(observer_type),
-      callback_(std::move(callback)) {}
+      callback_(std::move(callback)) {
+  // Pointer registration is needed for sorting in
+  // FrameOrWorkerScheduler::NotifyLifecycleObservers.
+  recordreplay::RegisterPointer("FrameOrWorkerScheduler::LifecycleObserverHandle",
+                                this);
+}
 
 FrameOrWorkerScheduler::LifecycleObserverHandle::~LifecycleObserverHandle() {
+  recordreplay::UnregisterPointer(this);
   if (scheduler_)
     scheduler_->RemoveLifecycleObserver(this);
 }
@@ -135,8 +145,15 @@ void FrameOrWorkerScheduler::RemoveLifecycleObserver(
 }
 
 void FrameOrWorkerScheduler::NotifyLifecycleObservers() {
-  for (auto& observer : lifecycle_observers_) {
-    observer.callback_.Run(CalculateLifecycleState(observer.observer_type_));
+  std::vector<LifecycleObserverHandle*> observers;
+  for (auto& observer : lifecycle_observers_)
+    observers.push_back(&observer);
+  std::sort(observers.begin(), observers.end(),
+            recordreplay::CompareByPointerId());
+
+  for (auto* observer : observers) {
+    observer->callback_.Run(
+        CalculateLifecycleState(observer->observer_type_));
   }
 }
 

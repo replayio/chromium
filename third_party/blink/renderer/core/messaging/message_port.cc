@@ -62,6 +62,8 @@
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
 
+#include "base/json/json_writer.h"
+
 namespace blink {
 
 namespace {
@@ -116,6 +118,19 @@ MessagePort::MessagePort(ExecutionContext& execution_context)
 
 void MessagePort::Dispose() {
   DCHECK(!started_ || !IsEntangled());
+
+  // Mojo resources can't be destroyed or otherwise operating on at non-deterministic
+  // points, so leak them if necessary.
+  if (recordreplay::AreEventsDisallowed("~MessagePort")) {
+    if (connector_) {
+      connector_->set_incoming_receiver(nullptr);
+      connector_->set_connection_error_handler(base::OnceClosure());
+      connector_.release();
+    }
+    new MessagePortDescriptor(std::move(port_descriptor_));
+    return;
+  }
+
   if (!IsNeutered()) {
     // Disentangle before teardown. The MessagePortDescriptor will blow up if it
     // hasn't had its underlying handle returned to it before teardown.
@@ -197,6 +212,21 @@ void MessagePort::postMessage(ScriptState* script_state,
     }
   }
 
+  if (recordreplay::IsRecordingOrReplaying() && IsMainThread()) {
+    msg.record_replay_message_id = recordreplay::NewIdMainThread("MessagePort::postMessage");
+    msg.record_replay_process_id = (int)base::GetCurrentProcId();
+
+    if (recordreplay::DependencyGraphEnabled()) {
+      base::DictValue info;
+      info.Set("kind", "postMessage");
+      info.Set("messageId", msg.record_replay_message_id);
+      info.Set("processId", msg.record_replay_process_id);
+      std::string json;
+      base::JSONWriter::Write(info, &json);
+      recordreplay::NewDependencyGraphNode(json.c_str());
+    }
+  }
+
   mojo::Message mojo_message =
       mojom::blink::TransferableMessage::WrapAsMessage(std::move(msg));
   connector_->Accept(&mojo_message);
@@ -235,9 +265,15 @@ void MessagePort::close() {
   // A closed port should not be neutered, so rather than merely disconnecting
   // from the mojo message pipe, also entangle with a new dangling message pipe.
   if (!IsNeutered()) {
-    Disentangle().ReleaseHandle();
-    MessagePortDescriptorPair pipe;
-    Entangle(pipe.TakePort0(), nullptr);
+    // Refuse to entangle the port at non-deterministic points, as this requires
+    // creating mojo resources. close() calls are always treated as non-deterministic
+    // because the port's lifetime is managed by the GC and on destruction the
+    // port is detached from the connector.
+    if (!recordreplay::IsRecordingOrReplaying("disallow-events", "MessagePort::close")) {
+      Disentangle().ReleaseHandle();
+      MessagePortDescriptorPair pipe;
+      Entangle(pipe.TakePort0(), nullptr);
+    }
   }
   closed_ = true;
 }
@@ -382,13 +418,30 @@ void MessagePort::Trace(Visitor* visitor) const {
 bool MessagePort::Accept(mojo::Message* mojo_message) {
   TRACE_EVENT0("blink", "MessagePort::Accept");
 
+  recordreplay::Assert("[RUN-1126] MessagePort::Accept");
+
   BlinkTransferableMessage message;
   if (!mojom::blink::TransferableMessage::DeserializeFromMessage(
           std::move(*mojo_message), &message)) {
     return false;
   }
 
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::DictValue info;
+    info.Set("kind", "acceptMessage");
+    info.Set("messageId", message.record_replay_message_id);
+    info.Set("processId", message.record_replay_process_id);
+    info.Set("currentProcessId", (int)base::GetCurrentProcId());
+    std::string json;
+    base::JSONWriter::Write(info, &json);
+    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
+  }
+
   ExecutionContext* context = GetExecutionContext();
+  if (!context)
+    return true;
+
   if (base::FeatureList::IsEnabled(features::kBFCacheWithSharedWorker) &&
       context->is_in_back_forward_cache()) {
     if (IsSharedWorkerPort()) {
@@ -420,6 +473,9 @@ bool MessagePort::Accept(mojo::Message* mojo_message) {
 
 void MessagePort::DispatchMessageEvent(BlinkTransferableMessage message) {
   ExecutionContext* context = GetExecutionContext();
+  if (!context)
+    return;
+
   // WorkerGlobalScope::close() in Worker onmessage handler should prevent
   // the next message from dispatching.
   if (auto* scope = DynamicTo<WorkerGlobalScope>(context)) {
@@ -454,12 +510,14 @@ void MessagePort::DispatchMessageEvent(BlinkTransferableMessage message) {
   ThreadDebugger* debugger = ThreadDebugger::From(isolate);
   if (debugger)
     debugger->ExternalAsyncTaskStarted(message.sender_stack_trace_id);
-  DispatchEvent(*evt);
+  DispatchEvent(*evt, "MessagePort::Accept");
   if (debugger)
     debugger->ExternalAsyncTaskFinished(message.sender_stack_trace_id);
 }
 
 Event* MessagePort::CreateMessageEvent(BlinkTransferableMessage& message) {
+  recordreplay::Assert("[RUN-1126] MessagePort::CreateMessageEvent");
+
   ExecutionContext* context = GetExecutionContext();
   // Dispatch a messageerror event when the target is a remote origin that is
   // not allowed to access the message's data.
@@ -502,6 +560,8 @@ Event* MessagePort::CreateMessageEvent(BlinkTransferableMessage& message) {
         message.user_activation->has_been_active,
         message.user_activation->was_active);
   }
+
+  recordreplay::Assert("[RUN-1126] MessagePort::CreateMessageEvent #5");
 
   return MessageEvent::Create(ports, std::move(message.message),
                               user_activation);

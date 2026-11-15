@@ -1421,6 +1421,10 @@ const ComputedStyle* StyleResolver::ResolveStyle(
     Element* element,
     const StyleRecalcContext& style_recalc_context,
     const StyleRequest& style_request) {
+  recordreplay::Assert("[RUN-2424-3005] StyleResolver::ResolveStyle %d %d", 
+    ((ScriptWrappable*)&GetDocument())->RecordReplayId(),
+    element ? element->RecordReplayId() : -1
+  );
   if (!element) {
     DCHECK(style_request.IsPseudoStyleRequest());
     return nullptr;
@@ -3378,6 +3382,7 @@ void StyleResolver::ApplyPropertiesFromCascade(StyleResolverState& state,
     const ComputedStyle* non_legacy_style = state.StyleBuilder().CloneStyle();
     // Re-apply all overlapping properties (both legacy and non-legacy).
     cascade.Apply(filter.Add(CSSProperty::kOverlapping));
+
     UseCountLegacyOverlapping(GetDocument(), *non_legacy_style,
                               state.StyleBuilder());
   }

@@ -107,7 +107,7 @@ void DeferredTaskHandler::HandleDirtyAudioSummingJunctions() {
 void DeferredTaskHandler::HandleDirtyAudioNodeOutputs() {
   AssertGraphOwner();
 
-  HashSet<AudioNodeOutput*> dirty_outputs;
+  HashSet<AudioNodeOutput*, recordreplay::ReplayPointerIdHashTraits<AudioNodeOutput>> dirty_outputs;
   dirty_audio_node_outputs_.swap(dirty_outputs);
 
   // Note: the updating of rendering state may cause output nodes
@@ -331,6 +331,7 @@ DeferredTaskHandler::DeferredTaskHandler(
       defer_pull_status_update_(base::FeatureList::IsEnabled(
           features::kWebAudioDeferPullStatusUpdate)),
       task_runner_(std::move(task_runner)),
+      context_graph_mutex_("DeferredTaskHandler"),
       audio_thread_(base::kInvalidThreadId) {}
 
 scoped_refptr<DeferredTaskHandler> DeferredTaskHandler::Create(
@@ -418,6 +419,14 @@ void DeferredTaskHandler::ClearHandlersToBeDeleted() {
 
 void DeferredTaskHandler::ClearContextFromOrphanHandlers() {
   DCHECK(IsMainThread());
+
+  if (recordreplay::AreEventsDisallowed() && recordreplay::IsRecordingOrReplaying(
+          "leak-references",
+          "DeferredTaskHandler::ClearContextFromOrphanHandlers")) {
+    // This is called during GC.
+    // → Don't take the lock.
+    return;
+  }
 
   // `rendering_orphan_handlers_` and `deletable_orphan_handlers_` can
   // be modified on the audio thread.
