@@ -28,6 +28,7 @@
 #include "third_party/abseil-cpp/absl/container/flat_hash_map.h"
 #include "third_party/abseil-cpp/absl/container/flat_hash_set.h"
 #include "third_party/abseil-cpp/absl/synchronization/mutex.h"
+#include "util/ordered_mutex.h"
 #include "third_party/abseil-cpp/absl/types/span.h"
 #include "util/ref_counted.h"
 
@@ -307,7 +308,7 @@ class NodeLink : public msg::NodeMessageListener {
   const Ref<DriverTransport> transport_;
   const Ref<NodeLinkMemory> memory_;
 
-  absl::Mutex mutex_;
+  OrderedMutex mutex_{"ipcz.NodeLink"};
   ActivationState activation_state_ ABSL_GUARDED_BY(mutex_);
 
   // Messages transmitted from this NodeLink may traverse either the driver

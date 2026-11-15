@@ -513,12 +513,12 @@ bool InterfaceEndpointClient::AcceptWithResponder(
 // aren't resize the message to its size when recording so that we are
 // more likely to be able to continue replaying.
 static void RecordReplayEnsureConsistentMessageSize(Message* message) {
-  recordreplay::Assert("EnsureConsistentMessageSize %zu",
-                       message->data_num_bytes());
-
   size_t recorded_bytes =
     recordreplay::RecordReplayValue("EnsureConsistentMessageSize",
                                     message->data_num_bytes());
+
+  recordreplay::Assert("EnsureConsistentMessageSize %zu %zu",
+                       recorded_bytes, message->data_num_bytes());
 
   if (recorded_bytes != message->data_num_bytes()) {
     char* new_payload = new char[recorded_bytes];
@@ -709,7 +709,11 @@ void InterfaceEndpointClient::NotifyError(
   CHECK(sequence_checker_.CalledOnValidSequence());
 
   // https://linear.app/replay/issue/RUN-965
-  recordreplay::Assert("InterfaceEndpointClient::NotifyError %d", encountered_error_);
+  recordreplay::Assert(
+      "InterfaceEndpointClient::NotifyError %d %d %s %d %d",
+      encountered_error_, recordreplay::PointerId(this),
+      interface_name_ ? interface_name_ : "", !!error_handler_,
+      !!error_with_reason_handler_);
 
   if (encountered_error_) {
     return;
@@ -723,12 +727,63 @@ void InterfaceEndpointClient::NotifyError(
   // callback may own this endpoint, so we simply move the responders onto the
   // stack here and let them be destroyed when the stack unwinds.
   AsyncResponderMap responders;
+  size_t async_n;
   {
     base::AutoLock lock(async_responders_lock_);
+    async_n = async_responders_.size();
     std::swap(responders, async_responders_);
   }
 
   control_message_proxy_.OnConnectionError();
+
+  // crash-0100: breadcrumb before possibly-bad handler invoke.
+  {
+    const bool has_eh = !!error_handler_;
+    const bool has_ewrh = !!error_with_reason_handler_;
+    const int branch = has_eh ? 1 : (has_ewrh ? (reason ? 2 : 3) : 0);
+    const void* cb =
+        has_eh ? static_cast<const void*>(&error_handler_)
+               : (has_ewrh ? static_cast<const void*>(&error_with_reason_handler_)
+                           : nullptr);
+    uintptr_t bind_state = 0;
+    uintptr_t invoke = 0;
+    if (cb) {
+      // OnceCallback layout: sole member is BindStateHolder::bind_state_.
+      bind_state = *reinterpret_cast<const uintptr_t*>(cb);
+      if (bind_state) {
+        invoke = *reinterpret_cast<const uintptr_t*>(bind_state + 8);
+      }
+    }
+    const auto& hr = handle_.disconnect_reason();
+    recordreplay::Diagnostic(
+        "[crash-0100] NotifyError this=%d iface=%s "
+        "handle_valid=%d handle_id=%u pending=%d "
+        "arg_reason=%d arg_custom=%u arg_desc=%s "
+        "handle_reason=%d handle_custom=%u handle_desc=%s "
+        "has_eh=%d has_ewrh=%d branch=%d "
+        "bind_state=%p invoke=%p leaked=%d "
+        "next_req=%llu async_n=%zu sync_n=%zu ctrl=%d recv=%d",
+        recordreplay::PointerId(this),
+        interface_name_ ? interface_name_ : "",
+        handle_.is_valid(), handle_.id(), handle_.pending_association(),
+        !!reason, reason ? reason->custom_reason : 0u,
+        reason ? reason->description.c_str() : "",
+        hr.has_value(), hr ? hr->custom_reason : 0u,
+        hr ? hr->description.c_str() : "",
+        has_eh, has_ewrh, branch,
+        reinterpret_cast<void*>(bind_state),
+        reinterpret_cast<void*>(invoke),
+        record_replay_leaked_,
+        static_cast<unsigned long long>(next_request_id_),
+        async_n, sync_responses_.size(),
+        recordreplay::PointerId(controller_),
+        recordreplay::PointerId(incoming_receiver_));
+  }
+
+  // Skip user Callback Invokes on a leaked client (owner already gone).
+  if (record_replay_leaked_) {
+    return;
+  }
 
   if (error_handler_) {
     std::move(error_handler_).Run();
@@ -809,7 +864,9 @@ bool InterfaceEndpointClient::AcceptNotifyIdle() {
 
   // With no outstanding unacked messages, a NotifyIdle received implies that
   // the peer really is idle. We can invoke our idle handler.
-  idle_handler_.Run();
+  if (!record_replay_leaked_) {
+    idle_handler_.Run();
+  }
   return true;
 }
 
@@ -981,14 +1038,20 @@ bool InterfaceEndpointClient::HandleValidatedMessage(Message* message) {
   if (message->has_flag(Message::kFlagExpectsResponse)) {
     recordreplay::Assert("[RUN-2229-2231] InterfaceEndpointClient::HandleValidatedMessage B");
     has_response = true;
-    auto responder = std::make_unique<internal::ResponderThunk>(
-        weak_ptr_factory_.GetWeakPtr(), task_runner_);
     if (mojo::internal::ControlMessageHandler::IsControlMessage(message)) {
       recordreplay::Assert(
           "[RUN-2229-2231] InterfaceEndpointClient::HandleValidatedMessage C");
+      auto responder = std::make_unique<internal::ResponderThunk>(
+          weak_ptr_factory_.GetWeakPtr(), task_runner_);
       return control_message_handler_.AcceptWithResponder(message,
                                                           std::move(responder));
+    } else if (record_replay_leaked_) {
+      // Do not build a ResponderThunk: its dtor RaiseError() would reset the
+      // pipe (shared MultiplexRouter) after a leak skip.
+      accepted_interface_message = true;
     } else {
+      auto responder = std::make_unique<internal::ResponderThunk>(
+          weak_ptr_factory_.GetWeakPtr(), task_runner_);
       if (idle_tracking_connection_group_) {
         responder->set_connection_group(idle_tracking_connection_group_);
       }
@@ -1051,7 +1114,8 @@ bool InterfaceEndpointClient::HandleValidatedMessage(Message* message) {
     internal::MessageDispatchContext dispatch_context(message);
     recordreplay::Assert(
         "[RUN-2229-2231] InterfaceEndpointClient::HandleValidatedMessage J");
-    return pending_response->responder->Accept(message);
+    return record_replay_leaked_ ||
+           pending_response->responder->Accept(message);
   } else {
     if (mojo::internal::ControlMessageHandler::IsControlMessage(message)) {
       recordreplay::Assert(

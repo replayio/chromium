@@ -81,11 +81,18 @@ void RemoteRouterLink::SetLinkState(FragmentRef<RouterLinkState> state) {
   link_state_fragment_ = std::move(state);
 
   std::vector<std::function<void()>> callbacks;
+  bool side_is_stable;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     // This store-release is balanced by a load-acquire in GetLinkState().
     link_state_.store(link_state_fragment_.get(), std::memory_order_release);
     link_state_callbacks_.swap(callbacks);
+
+    // Read under `mutex_`, which MarkSideStable() holds while setting it. This
+    // orders the two when recording/replaying: whether MarkSideStable() is
+    // called below must not depend on which thread got here first. The acquire
+    // here is balanced by a release in MarkSideStable().
+    side_is_stable = side_is_stable_.load(std::memory_order_acquire);
   }
 
   for (auto& callback : callbacks) {
@@ -95,9 +102,8 @@ void RemoteRouterLink::SetLinkState(FragmentRef<RouterLinkState> state) {
   // If this side of the link was already marked stable before the
   // RouterLinkState was available, `side_is_stable_` will be true. In that
   // case, set the stable bit in RouterLinkState immediately. This may unblock
-  // some routing work. The acquire here is balanced by a release in
-  // MarkSideStable().
-  if (side_is_stable_.load(std::memory_order_acquire)) {
+  // some routing work.
+  if (side_is_stable) {
     MarkSideStable();
   }
 }
@@ -107,12 +113,20 @@ LinkType RemoteRouterLink::GetType() const {
 }
 
 RouterLinkState* RemoteRouterLink::GetLinkState() const {
+  if (mutex_.ordered_lock_id()) {
+    // Whether the link state is available yet depends on when the thread
+    // which received its buffer called SetLinkState(). SetLinkState() stores
+    // it under `mutex_`, so load it under `mutex_` as well when
+    // recording/replaying, which orders the load with the store.
+    OrderedMutexLock lock(&mutex_);
+    return link_state_.load(std::memory_order_acquire);
+  }
   return link_state_.load(std::memory_order_acquire);
 }
 
 void RemoteRouterLink::WaitForLinkStateAsync(std::function<void()> callback) {
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     if (!link_state_.load(std::memory_order_relaxed)) {
       link_state_callbacks_.push_back(std::move(callback));
       return;
@@ -386,7 +400,11 @@ void RemoteRouterLink::AcceptRouteDisconnected() {
 }
 
 void RemoteRouterLink::MarkSideStable() {
-  side_is_stable_.store(true, std::memory_order_release);
+  {
+    // Ordered with the load in SetLinkState(), see there.
+    OrderedMutexLock lock(&mutex_);
+    side_is_stable_.store(true, std::memory_order_release);
+  }
   if (RouterLinkState* state = GetLinkState()) {
     state->SetSideStable(side_);
   }
@@ -432,9 +450,8 @@ bool RemoteRouterLink::CanNodeRequestBypass(
     return false;
   }
 
-  NodeName allowed_source = state->allowed_bypass_request_source.LoadAcquire();
-  return state->is_locked_by(side_.opposite()) &&
-         allowed_source == bypass_request_source;
+  return state->IsLockedForBypassRequestFrom(side_.opposite(),
+                                             bypass_request_source);
 }
 
 void RemoteRouterLink::Deactivate() {

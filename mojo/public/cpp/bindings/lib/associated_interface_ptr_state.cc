@@ -23,6 +23,9 @@ AssociatedInterfacePtrStateBase::~AssociatedInterfacePtrStateBase() {
   // Endpoint clients must be destroyed at deterministic points, so leak the endpoint
   // if this state is destroyed during a GC.
   if (recordreplay::AreEventsDisallowed("~AssociatedInterfacePtrStateBase")) {
+    if (endpoint_client_) {
+      endpoint_client_->record_replay_leak();
+    }
     endpoint_client_.release();
   }
 }

@@ -296,7 +296,7 @@ class MOJO_SYSTEM_IMPL_EXPORT Transport : public Object<Transport>,
   // factor.
   PlatformChannelEndpoint inactive_endpoint_;
 
-  base::Lock lock_;
+  base::Lock lock_{"Transport.lock_"};
   scoped_refptr<Channel> channel_ GUARDED_BY(lock_);
 
   // Transmissions prior to activation must be queued, as the Channel is not

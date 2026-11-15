@@ -4,16 +4,19 @@
 
 #include "mojo/core/ipcz_driver/mojo_trap.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <tuple>
 #include <utility>
+#include <vector>
 
 #include "base/check_op.h"
 #include "base/compiler_specific.h"
 #include "base/feature_list.h"
 #include "base/memory/ref_counted.h"
 #include "base/notreached.h"
+#include "base/record_replay.h"
 #include "base/threading/platform_thread.h"
 #include "base/threading/thread_restrictions.h"
 #include "mojo/core/ipcz_api.h"
@@ -189,13 +192,40 @@ struct MojoTrap::Trigger : public base::RefCountedThreadSafe<Trigger> {
   bool armed = false;
   bool removed = false;
 
+  // Which trigger this was among all triggers added to `mojo_trap`, counting
+  // from one. Unlike `trigger_context` this is the same when replaying as when
+  // recording.
+  uint64_t added_order = 0;
+
  private:
   friend class base::RefCountedThreadSafe<Trigger>;
 
   ~Trigger() = default;
 };
 
-MojoTrap::MojoTrap(MojoTrapEventHandler handler) : handler_(handler) {}
+MojoTrap::MojoTrap(MojoTrapEventHandler handler) : handler_(handler) {
+  // https://linear.app/replay/issue/RUN-999
+  CHECK(!recordreplay::AreEventsDisallowed() ||
+        recordreplay::HasDivergedFromRecording() ||
+        recordreplay::HasDisabledFeatures());
+}
+
+// static
+std::vector<MojoTrap::Trigger*> MojoTrap::GetTriggersInVisitOrder(
+    const TriggerMap& triggers) {
+  std::vector<Trigger*> ordered;
+  ordered.reserve(triggers.size());
+  for (const auto& [trigger_context, trigger] : triggers) {
+    ordered.push_back(trigger.get());
+  }
+  if (recordreplay::IsRecordingOrReplaying("pointer-ids")) {
+    std::sort(ordered.begin(), ordered.end(),
+              [](const Trigger* a, const Trigger* b) {
+                return a->added_order < b->added_order;
+              });
+  }
+  return ordered;
+}
 
 MojoTrap::~MojoTrap() = default;
 
@@ -243,7 +273,9 @@ MojoResult MojoTrap::AddTrigger(MojoHandle handle,
     return MOJO_RESULT_ALREADY_EXISTS;
   }
 
+  trigger->added_order = ++num_triggers_added_;
   next_trigger_ = triggers_.begin();
+  record_replay_next_trigger_order_ = 0;
 
   // Install an ipcz trap to effectively monitor the lifetime of the watched
   // object referenced by `handle`. Installation of the trap should always
@@ -289,6 +321,7 @@ MojoResult MojoTrap::RemoveTrigger(uintptr_t trigger_context) {
   trigger->armed = false;
   triggers_.erase(it);
   next_trigger_ = triggers_.begin();
+  record_replay_next_trigger_order_ = 0;
   DispatchOrQueueTriggerRemoval(*trigger);
   return MOJO_RESULT_OK;
 }
@@ -316,6 +349,66 @@ MojoResult MojoTrap::Arm(MojoTrapEvent* blocking_events,
   }
 
   uint32_t num_events_returned = 0;
+
+  if (recordreplay::IsRecordingOrReplaying("pointer-ids")) {
+    // `triggers_` is sorted by trigger context. Contexts are addresses, so
+    // when recording/replaying the round-robin below goes over the triggers
+    // in the order they were added in, and continues after the `added_order`
+    // the last Arm() stopped at instead of after an iterator into `triggers_`.
+    // Arming a trigger takes its router's locks and the order of the blocking
+    // events is visible to the caller, so both need a consistent order.
+    const std::vector<Trigger*> ordered = GetTriggersInVisitOrder(triggers_);
+    auto increment_wrapped_index = [&ordered](size_t index) {
+      return index + 1 < ordered.size() ? index + 1 : 0;
+    };
+
+    size_t next_index = 0;
+    while (next_index < ordered.size() &&
+           ordered[next_index]->added_order <
+               record_replay_next_trigger_order_) {
+      ++next_index;
+    }
+    if (next_index == ordered.size()) {
+      next_index = 0;
+    }
+
+    const size_t end_index = next_index;
+    do {
+      Trigger& trigger = *ordered[next_index];
+      next_index = increment_wrapped_index(next_index);
+
+      MojoTrapEvent event;
+      const IpczResult result = ArmTrigger(trigger, event);
+      if (result == IPCZ_RESULT_OK) {
+        continue;
+      }
+
+      if (result != IPCZ_RESULT_FAILED_PRECONDITION) {
+        NOTREACHED();
+      }
+
+      if (event_capacity == 0) {
+        return MOJO_RESULT_FAILED_PRECONDITION;
+      }
+
+      UNSAFE_TODO(blocking_events[num_events_returned++]) = event;
+    } while (next_index != end_index &&
+             (num_events_returned == 0 || num_events_returned < event_capacity));
+
+    if (next_index == end_index) {
+      next_index = increment_wrapped_index(next_index);
+    }
+    record_replay_next_trigger_order_ = ordered[next_index]->added_order;
+
+    if (num_events_returned > 0) {
+      *num_blocking_events = num_events_returned;
+      return MOJO_RESULT_FAILED_PRECONDITION;
+    }
+
+    armed_ = true;
+    return MOJO_RESULT_OK;
+  }
+
   auto increment_wrapped = [this](TriggerMap::iterator it) {
     lock_.AssertAcquired();
     if (++it != triggers_.end()) {
@@ -380,7 +473,8 @@ void MojoTrap::Close() {
   TriggerMap triggers;
   std::swap(triggers, triggers_);
   next_trigger_ = triggers_.begin();
-  for (auto& [trigger_context, trigger] : triggers) {
+  record_replay_next_trigger_order_ = 0;
+  for (Trigger* trigger : GetTriggersInVisitOrder(triggers)) {
     trigger->armed = false;
 
     DCHECK(!trigger->removed);
@@ -471,6 +565,7 @@ void MojoTrap::HandleTrapRemoved(const IpczTrapEvent& event) {
   triggers_.erase(trigger.trigger_context);
   DispatchOrQueueTriggerRemoval(trigger);
   next_trigger_ = triggers_.begin();
+  record_replay_next_trigger_order_ = 0;
 }
 
 IpczResult MojoTrap::ArmTrigger(Trigger& trigger, MojoTrapEvent& event) {

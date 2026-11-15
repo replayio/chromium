@@ -177,7 +177,7 @@ class DataPipe : public Object<DataPipe> {
   const EndpointType endpoint_type_;
   const size_t element_size_;
 
-  mutable base::Lock lock_;
+  mutable base::Lock lock_{"DataPipe.lock_"};
 
   // A portal used to transfer control messages between producer and consumer.
   // Ref-counted separately since this object needs to maintain thread-safe

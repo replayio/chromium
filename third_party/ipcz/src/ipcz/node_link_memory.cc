@@ -4,6 +4,7 @@
 
 #include "ipcz/node_link_memory.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -20,7 +21,9 @@
 #include "third_party/abseil-cpp/absl/base/macros.h"
 #include "third_party/abseil-cpp/absl/numeric/bits.h"
 #include "third_party/abseil-cpp/absl/synchronization/mutex.h"
+#include "util/ordered_mutex.h"
 #include "util/log.h"
+#include "util/record_replay.h"
 #include "util/ref_counted.h"
 
 namespace ipcz {
@@ -187,7 +190,7 @@ NodeLinkMemory::~NodeLinkMemory() = default;
 void NodeLinkMemory::SetNodeLink(Ref<NodeLink> link) {
   std::vector<size_t> block_sizes_needed;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     node_link_ = std::move(link);
     if (!node_link_) {
       return;
@@ -199,6 +202,10 @@ void NodeLinkMemory::SetNodeLink(Ref<NodeLink> link) {
       block_sizes_needed.push_back(size);
     }
   }
+
+  // The order of a hash map's entries is not the same when replaying. Each
+  // request below allocates and shares a buffer, so request in a fixed order.
+  std::sort(block_sizes_needed.begin(), block_sizes_needed.end());
 
   for (size_t size : block_sizes_needed) {
     RequestBlockCapacity(size, [](bool) {});
@@ -256,23 +263,33 @@ BufferId NodeLinkMemory::AllocateNewBufferId() {
   if (available_features_.mem_v2()) {
     const uint64_t side_bit =
         link_side_.is_side_b() ? 1ull << kLinkSideBIdBit : 0;
-    return BufferId{next_buffer_id_.fetch_add(1, std::memory_order_relaxed) |
-                    side_bit};
+    // Taken from a counter which any thread of this node can take from.
+    return BufferId{static_cast<uint64_t>(replay::Value(
+        "ipcz NodeLinkMemory::AllocateNewBufferId",
+        next_buffer_id_.fetch_add(1, std::memory_order_relaxed) | side_bit))};
   }
-  return BufferId{primary_buffer_.header.next_buffer_id.fetch_add(
-      1, std::memory_order_relaxed)};
+  // Taken from a counter in shared memory which both nodes take from.
+  return BufferId{static_cast<uint64_t>(replay::Value(
+      "ipcz NodeLinkMemory::AllocateNewBufferId",
+      primary_buffer_.header.next_buffer_id.fetch_add(
+          1, std::memory_order_relaxed)))};
 }
 
 SublinkId NodeLinkMemory::AllocateSublinkIds(size_t count) {
   if (available_features_.mem_v2()) {
     const uint64_t side_bit =
         link_side_.is_side_b() ? 1ull << kLinkSideBIdBit : 0;
-    return SublinkId{
+    // Taken from a counter which any thread of this node can take from.
+    return SublinkId{static_cast<uint64_t>(replay::Value(
+        "ipcz NodeLinkMemory::AllocateSublinkIds",
         next_sublink_id_.fetch_add(count, std::memory_order_relaxed) |
-        side_bit};
+            side_bit))};
   }
-  return SublinkId{primary_buffer_.header.next_sublink_id.fetch_add(
-      count, std::memory_order_relaxed)};
+  // Taken from a counter in shared memory which both nodes take from.
+  return SublinkId{static_cast<uint64_t>(replay::Value(
+      "ipcz NodeLinkMemory::AllocateSublinkIds",
+      primary_buffer_.header.next_sublink_id.fetch_add(
+          count, std::memory_order_relaxed)))};
 }
 
 FragmentRef<RouterLinkState> NodeLinkMemory::GetInitialRouterLinkState(
@@ -437,7 +454,7 @@ void NodeLinkMemory::RequestBlockCapacity(
 
   Ref<NodeLink> link;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     auto [it, need_new_request] =
         capacity_callbacks_.emplace(block_size, CapacityCallbackList());
     it->second.push_back(std::move(callback));
@@ -492,7 +509,7 @@ void NodeLinkMemory::OnCapacityRequestComplete(size_t block_size,
                                                bool success) {
   CapacityCallbackList callbacks;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     auto it = capacity_callbacks_.find(block_size);
     if (it == capacity_callbacks_.end()) {
       return;

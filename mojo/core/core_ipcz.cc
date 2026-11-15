@@ -23,6 +23,7 @@
 #include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "base/strings/strcat.h"
 #include "base/synchronization/lock.h"
 #include "base/time/time.h"
@@ -116,6 +117,14 @@ MojoResult MojoCloseIpcz(MojoHandle handle) {
   if (handle == MOJO_HANDLE_INVALID) {
     return MOJO_RESULT_INVALID_ARGUMENT;
   }
+
+  // Refuse to close handles at non-deterministic points, as this requires a lot
+  // of interaction with other mojo components.
+  if (recordreplay::AreEventsDisallowed() &&
+      recordreplay::FeatureEnabled("leak-references", "Core::Close")) {
+    return MOJO_RESULT_OK;
+  }
+
   return GetIpczAPI().Close(handle, IPCZ_NO_FLAGS, nullptr);
 }
 

@@ -193,6 +193,9 @@ class SharedRemoteBase
         // points when recording/replaying, so leak the remote instead.
         if (recordreplay::AreEventsDisallowed() &&
             recordreplay::FeatureEnabled("leak-references", "RemoteWrapper::DeleteOnCorrectThread")) {
+          // Skip-delete never runs ~InterfacePtrState*; arm flag so Invoker
+          // guards see the IEC MultiplexRouter still holds.
+          remote_.record_replay_leak();
           return;
         }
 

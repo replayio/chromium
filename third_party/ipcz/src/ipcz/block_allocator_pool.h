@@ -14,6 +14,7 @@
 #include "ipcz/fragment.h"
 #include "third_party/abseil-cpp/absl/container/flat_hash_map.h"
 #include "third_party/abseil-cpp/absl/synchronization/mutex.h"
+#include "util/ordered_mutex.h"
 #include "third_party/abseil-cpp/absl/types/span.h"
 
 namespace ipcz {
@@ -69,7 +70,7 @@ class BlockAllocatorPool {
     Entry* next = nullptr;
   };
 
-  absl::Mutex mutex_;
+  OrderedMutex mutex_{"ipcz.BlockAllocatorPool"};
 
   // List of all allocators added to this pool. Once added, elements are never
   // removed from this list. Note that std::list is chosen so that Entry

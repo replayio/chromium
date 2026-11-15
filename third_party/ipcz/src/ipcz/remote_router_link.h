@@ -16,6 +16,7 @@
 #include "ipcz/router_link_state.h"
 #include "ipcz/sublink_id.h"
 #include "third_party/abseil-cpp/absl/synchronization/mutex.h"
+#include "util/ordered_mutex.h"
 #include "util/ref_counted.h"
 
 namespace ipcz {
@@ -122,7 +123,7 @@ class RemoteRouterLink : public RouterLink {
   std::atomic<RouterLinkState*> link_state_{nullptr};
 
   // Set of callbacks to be invoked as soon as this link has a RouterLinkState.
-  absl::Mutex mutex_;
+  mutable OrderedMutex mutex_{"ipcz.RemoteRouterLink"};
   std::vector<std::function<void()>> link_state_callbacks_
       ABSL_GUARDED_BY(mutex_);
 };

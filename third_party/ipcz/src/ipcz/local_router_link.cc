@@ -12,6 +12,7 @@
 #include "ipcz/router.h"
 #include "ipcz/router_link_state.h"
 #include "third_party/abseil-cpp/absl/synchronization/mutex.h"
+#include "util/ordered_mutex.h"
 #include "util/ref_counted.h"
 
 namespace ipcz {
@@ -42,7 +43,7 @@ class LocalRouterLink::SharedState
   // return null if the Router in question has been deactivated, for example due
   // to the application closing the Router's controlling portal.
   Ref<Router> GetRouter(LinkSide side) {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     switch (side.value()) {
       case LinkSide::kA:
         return router_a_;
@@ -53,7 +54,7 @@ class LocalRouterLink::SharedState
   }
 
   void Deactivate(LinkSide side) {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     switch (side.value()) {
       case LinkSide::kA:
         router_a_.reset();
@@ -72,7 +73,7 @@ class LocalRouterLink::SharedState
 
   const LinkType type_;
 
-  absl::Mutex mutex_;
+  OrderedMutex mutex_{"ipcz.LocalRouterLink"};
   RouterLinkState link_state_;
   Ref<Router> router_a_ ABSL_GUARDED_BY(mutex_);
   Ref<Router> router_b_ ABSL_GUARDED_BY(mutex_);
@@ -179,11 +180,8 @@ bool LocalRouterLink::FlushOtherSideIfWaiting() {
 
 bool LocalRouterLink::CanNodeRequestBypass(
     const NodeName& bypass_request_source) {
-  // Balanced by a release in TryLockForBypass().
-  const NodeName allowed_source =
-      state_->link_state().allowed_bypass_request_source.LoadAcquire();
-  return state_->link_state().is_locked_by(side_.opposite()) &&
-         allowed_source == bypass_request_source;
+  return state_->link_state().IsLockedForBypassRequestFrom(
+      side_.opposite(), bypass_request_source);
 }
 
 void LocalRouterLink::BypassPeer(const NodeName& bypass_target_node,

@@ -948,6 +948,8 @@ void MultiplexRouter::OnPipeConnectionError(bool force_async_dispatch) {
   }
 
   for (const auto& endpoint : endpoint_vector) {
+    REPLAY_ASSERT("MultiplexRouter::OnPipeConnectionError %u %d",
+                  endpoint->id(), !!endpoint->client());
     if (endpoint->client()) {
       base::flat_set<uint64_t> request_ids =
           endpoint->UnregisterAllExternalSyncWaiters();
@@ -1149,6 +1151,16 @@ bool MultiplexRouter::ProcessNotifyErrorTask(
   InterfaceEndpointClient* client = endpoint->client();
   std::optional<DisconnectReason> disconnect_reason(
       endpoint->disconnect_reason());
+
+  // crash-0100: router→client breadcrumb before NotifyError.
+  recordreplay::Diagnostic(
+      "[crash-0100] ProcessNotifyErrorTask this=%d endpoint=%u client=%d "
+      "reason=%d custom=%u desc=%s",
+      recordreplay::PointerId(this), endpoint->id(),
+      recordreplay::PointerId(client),
+      disconnect_reason.has_value(),
+      disconnect_reason ? disconnect_reason->custom_reason : 0u,
+      disconnect_reason ? disconnect_reason->description.c_str() : "");
 
   {
     // We must unlock before calling into |client| because it may call this

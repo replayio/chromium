@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <algorithm>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -19,6 +20,7 @@
 #include "third_party/abseil-cpp/absl/cleanup/cleanup.h"
 #include "third_party/abseil-cpp/absl/container/inlined_vector.h"
 #include "third_party/abseil-cpp/absl/synchronization/mutex.h"
+#include "util/ordered_mutex.h"
 #include "third_party/abseil-cpp/absl/types/span.h"
 #include "util/log.h"
 #include "util/ref_counted.h"
@@ -149,12 +151,12 @@ IpczResult Node::ConnectNode(IpczDriverHandle driver_transport,
 }
 
 NodeName Node::GetAssignedName() {
-  absl::MutexLock lock(&mutex_);
+  OrderedMutexLock lock(&mutex_);
   return assigned_name_;
 }
 
 Ref<NodeLink> Node::GetBrokerLink() {
-  absl::MutexLock lock(&mutex_);
+  OrderedMutexLock lock(&mutex_);
   return broker_link_;
 }
 
@@ -162,7 +164,7 @@ bool Node::AddConnection(const NodeName& remote_node_name,
                          Connection connection) {
   std::vector<BrokerLinkCallback> callbacks;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     for (;;) {
       auto it = connections_.find(remote_node_name);
       if (it == connections_.end()) {
@@ -206,7 +208,7 @@ bool Node::AddConnection(const NodeName& remote_node_name,
 }
 
 std::optional<Node::Connection> Node::GetConnection(const NodeName& name) {
-  absl::MutexLock lock(&mutex_);
+  OrderedMutexLock lock(&mutex_);
   auto it = connections_.find(name);
   if (it == connections_.end()) {
     return std::nullopt;
@@ -215,7 +217,7 @@ std::optional<Node::Connection> Node::GetConnection(const NodeName& name) {
 }
 
 Ref<NodeLink> Node::GetLink(const NodeName& name) {
-  absl::MutexLock lock(&mutex_);
+  OrderedMutexLock lock(&mutex_);
   auto it = connections_.find(name);
   if (it == connections_.end()) {
     return nullptr;
@@ -232,7 +234,7 @@ NodeName Node::GenerateRandomName() const {
 }
 
 void Node::SetAllocationDelegate(Ref<NodeLink> link) {
-  absl::MutexLock lock(&mutex_);
+  OrderedMutexLock lock(&mutex_);
   allocation_delegate_link_ = std::move(link);
 }
 
@@ -240,7 +242,7 @@ void Node::AllocateSharedMemory(size_t size,
                                 AllocateSharedMemoryCallback callback) {
   Ref<NodeLink> delegate;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     delegate = allocation_delegate_link_;
   }
 
@@ -255,7 +257,7 @@ void Node::EstablishLink(const NodeName& name, EstablishLinkCallback callback) {
   Ref<NodeLink> existing_link;
   absl::InlinedVector<Ref<NodeLink>, 2> brokers_to_query;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     auto it = connections_.find(name);
     if (it != connections_.end()) {
       existing_link = it->second.link;
@@ -386,7 +388,7 @@ void Node::AcceptIntroduction(NodeLink& from_node_link,
 
   std::unique_ptr<PendingIntroduction> pending_introduction;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     if (type_ == Type::kNormal && !broker_link_) {
       // If we've lost our broker connection, we should ignore any further
       // introductions that arrive.
@@ -428,7 +430,7 @@ void Node::NotifyIntroductionFailed(NodeLink& from_broker,
                                     const NodeName& name) {
   std::unique_ptr<PendingIntroduction> failed_introduction;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     auto it = pending_introductions_.find(name);
     if (it == pending_introductions_.end()) {
       return;
@@ -478,7 +480,7 @@ void Node::DropConnection(const NodeLink& connection_link) {
   std::vector<NodeName> pending_introductions;
   bool lost_broker = false;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     auto it = connections_.find(connection_link.remote_node_name());
     if (it == connections_.end() || it->second.link != &connection_link) {
       return;
@@ -512,6 +514,10 @@ void Node::DropConnection(const NodeLink& connection_link) {
     }
   }
 
+  // The order of a hash map's entries is not the same when replaying, and the
+  // notifications below take locks and may send messages. Go by name.
+  std::sort(pending_introductions.begin(), pending_introductions.end());
+
   link->Deactivate();
 
   if (lost_broker) {
@@ -526,7 +532,7 @@ void Node::DropConnection(const NodeLink& connection_link) {
 void Node::WaitForBrokerLinkAsync(BrokerLinkCallback callback) {
   Ref<NodeLink> broker_link;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     if (!broker_link_) {
       broker_link_callbacks_.push_back(std::move(callback));
       return;
@@ -588,7 +594,7 @@ void Node::ShutDown() {
   ConnectionMap connections;
   std::vector<BrokerLinkCallback> broker_link_callbacks;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     connections_.swap(connections);
     broker_link_.reset();
     broker_link_callbacks.swap(broker_link_callbacks_);
@@ -597,8 +603,17 @@ void Node::ShutDown() {
     assigned_name_ = {};
   }
 
+  // The order of a hash map's entries is not the same when replaying, and
+  // deactivating a link takes locks and shuts down its transport. Go by name.
+  std::vector<std::pair<NodeName, Ref<NodeLink>>> links;
+  links.reserve(connections.size());
   for (const auto& entry : connections) {
-    entry.second.link->Deactivate();
+    links.emplace_back(entry.first, entry.second.link);
+  }
+  std::sort(links.begin(), links.end(),
+            [](const auto& a, const auto& b) { return a.first < b.first; });
+  for (const auto& link : links) {
+    link.second->Deactivate();
   }
 
   CancelAllIntroductions();
@@ -607,11 +622,19 @@ void Node::ShutDown() {
 void Node::CancelAllIntroductions() {
   PendingIntroductionMap introductions;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     introductions.swap(pending_introductions_);
   }
+  // In order of name, as in ShutDown().
+  std::vector<std::pair<NodeName, PendingIntroduction*>> pending;
+  pending.reserve(introductions.size());
   for (auto& [name, intro] : introductions) {
-    intro->Finish(nullptr);
+    pending.emplace_back(name, intro.get());
+  }
+  std::sort(pending.begin(), pending.end(),
+            [](const auto& a, const auto& b) { return a.first < b.first; });
+  for (auto& entry : pending) {
+    entry.second->Finish(nullptr);
   }
 }
 
@@ -623,7 +646,7 @@ void Node::IntroduceRemoteNodes(NodeLink& first, NodeLink& second) {
                        ? IntroductionKey(first_name, second_name)
                        : IntroductionKey(second_name, first_name);
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     auto [it, inserted] = in_progress_introductions_.insert(key);
     if (!inserted) {
       return;
@@ -631,7 +654,7 @@ void Node::IntroduceRemoteNodes(NodeLink& first, NodeLink& second) {
   }
 
   const absl::Cleanup remove_intro_key = [this, &key] {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     in_progress_introductions_.erase(key);
   };
 

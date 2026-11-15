@@ -17,6 +17,7 @@
 #include "base/memory/ref_counted.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/numerics/safe_math.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "mojo/core/ipcz_api.h"
 #include "mojo/core/ipcz_driver/ring_buffer.h"
@@ -399,6 +400,13 @@ MojoResult DataPipe::ReadData(void* elements,
       num_bytes = base::checked_cast<uint32_t>(read_size);
     }
 
+    // The data was copied out of a buffer shared with the producer, which is
+    // another process.
+    if (!discard && read_size != 0) {
+      recordreplay::RecordReplayBytes("DataPipe::ReadData",
+                                      output_bytes.data(), read_size);
+    }
+
     if (peek || read_size == 0) {
       return MOJO_RESULT_OK;
     }
@@ -432,6 +440,11 @@ MojoResult DataPipe::BeginReadData(const void*& buffer,
   buffer = two_phase_reader_->bytes().data();
   buffer_num_bytes =
       base::checked_cast<uint32_t>(two_phase_reader_->bytes().size());
+
+  // The caller reads directly from the buffer shared with the producer.
+  recordreplay::RecordReplayBytes("DataPipe::BeginReadData",
+                                  const_cast<void*>(buffer), buffer_num_bytes);
+
   has_new_data_ = false;
   return IPCZ_RESULT_OK;
 }
@@ -470,7 +483,7 @@ void DataPipe::Close() {
   // this stack unwinds and, if applicable, after any other threads or done
   // using it.
   scoped_refptr<PortalWrapper> portal;
-  base::AutoLock lock(lock_);
+  recordreplay::AutoLockMaybeEventsDisallowed lock(lock_);
   portal_.swap(portal);
 }
 

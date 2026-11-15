@@ -16,6 +16,7 @@
 #include "ipcz/fragment_descriptor.h"
 #include "third_party/abseil-cpp/absl/container/flat_hash_map.h"
 #include "third_party/abseil-cpp/absl/synchronization/mutex.h"
+#include "util/ordered_mutex.h"
 #include "third_party/abseil-cpp/absl/types/span.h"
 
 namespace ipcz {
@@ -94,7 +95,20 @@ class BufferPool {
   void DropPendingBufferCallbacks();
 
  private:
-  absl::Mutex mutex_;
+  // The implementations of AllocateBlock(), AllocateBlockBestEffort() and
+  // FreeBlock(). Block allocators live in memory which both nodes allocate
+  // from. When recording/replaying, the public methods record the outcome of
+  // allocations and a replaying node takes the recorded outcome instead of
+  // allocating.
+  Fragment AllocateBlockInternal(size_t block_size);
+  Fragment AllocateBlockBestEffortInternal(size_t preferred_block_size);
+  bool FreeBlockInternal(const Fragment& fragment);
+
+  // Records the block in `fragment` when recording. When replaying, returns
+  // the block which was allocated when recording instead.
+  Fragment RecordReplayAllocatedBlock(const Fragment& fragment);
+
+  OrderedMutex mutex_{"ipcz.BufferPool"};
   absl::flat_hash_map<BufferId, DriverMemoryMapping> mappings_
       ABSL_GUARDED_BY(mutex_);
 

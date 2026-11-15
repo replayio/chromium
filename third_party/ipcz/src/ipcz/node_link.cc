@@ -96,7 +96,7 @@ NodeLink::NodeLink(Ref<Node> node,
 }
 
 NodeLink::~NodeLink() {
-  absl::MutexLock lock(&mutex_);
+  OrderedMutexLock lock(&mutex_);
   ABSL_HARDENING_ASSERT(activation_state_ != kActive);
 }
 
@@ -105,7 +105,7 @@ void NodeLink::Activate() {
   memory_->SetNodeLink(WrapRefCounted(this));
 
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     ABSL_ASSERT(activation_state_ == kNeverActivated);
     activation_state_ = kActive;
   }
@@ -122,7 +122,7 @@ Ref<RemoteRouterLink> NodeLink::AddRemoteRouterLink(
   auto link = RemoteRouterLink::Create(WrapRefCounted(this), sublink,
                                        std::move(link_state), type, side);
 
-  absl::MutexLock lock(&mutex_);
+  OrderedMutexLock lock(&mutex_);
   if (activation_state_ == kDeactivated) {
     // We don't bind new RemoteRouterLinks once we've been deactivated, lest we
     // incur leaky NodeLink references.
@@ -141,14 +141,14 @@ Ref<RemoteRouterLink> NodeLink::AddRemoteRouterLink(
 }
 
 void NodeLink::RemoveRemoteRouterLink(SublinkId sublink) {
-  absl::MutexLock lock(&mutex_);
+  OrderedMutexLock lock(&mutex_);
   DVLOG(4) << "Removing RemoteRouterLink for sublink " << sublink;
   sublinks_.erase(sublink);
   deleted_sublinks_.Insert(sublink);
 }
 
 std::optional<NodeLink::Sublink> NodeLink::GetSublink(SublinkId sublink) {
-  absl::MutexLock lock(&mutex_);
+  OrderedMutexLock lock(&mutex_);
   auto it = sublinks_.find(sublink);
   if (it == sublinks_.end()) {
     return std::nullopt;
@@ -157,7 +157,7 @@ std::optional<NodeLink::Sublink> NodeLink::GetSublink(SublinkId sublink) {
 }
 
 Ref<Router> NodeLink::GetRouter(SublinkId sublink) {
-  absl::MutexLock lock(&mutex_);
+  OrderedMutexLock lock(&mutex_);
   auto it = sublinks_.find(sublink);
   if (it == sublinks_.end()) {
     return nullptr;
@@ -221,7 +221,7 @@ void NodeLink::ReferNonBroker(Ref<DriverTransport> transport,
 
   uint64_t referral_id;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     for (;;) {
       referral_id = next_referral_id_++;
       auto [it, inserted] =
@@ -259,7 +259,7 @@ void NodeLink::AcceptBypassLink(
 void NodeLink::RequestMemory(size_t size, RequestMemoryCallback callback) {
   const uint32_t size32 = checked_cast<uint32_t>(size);
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     pending_memory_requests_[size32].push_back(std::move(callback));
   }
 
@@ -318,7 +318,7 @@ bool NodeLink::DispatchRelayedMessage(msg::AcceptRelayedMessage& accept) {
 
 void NodeLink::Deactivate() {
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     if (activation_state_ != kActive) {
       return;
     }
@@ -349,19 +349,19 @@ void NodeLink::Transmit(Message& message) {
 }
 
 size_t NodeLink::DeletedSublinkCountForTesting() {
-  absl::MutexLock lock(&mutex_);
+  OrderedMutexLock lock(&mutex_);
   return deleted_sublinks_.Size();
 }
 
 size_t NodeLink::EarlyParcelCountForTesting() {
-  absl::MutexLock lock(&mutex_);
+  OrderedMutexLock lock(&mutex_);
   return early_parcels_for_sublink_.size();
 }
 
 void NodeLink::AcceptEarlyParcelsForSublink(SublinkId sublink_id) {
   std::vector<std::unique_ptr<Parcel>> early_parcels;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     auto it = early_parcels_for_sublink_.find(sublink_id);
     if (it != early_parcels_for_sublink_.end()) {
       early_parcels.swap(it->second);
@@ -418,7 +418,7 @@ bool NodeLink::OnNonBrokerReferralAccepted(
 
   ReferralCallback callback;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     auto it = pending_referrals_.find(accepted.v0()->referral_id);
     if (it == pending_referrals_.end()) {
       return false;
@@ -463,7 +463,7 @@ bool NodeLink::OnNonBrokerReferralRejected(
 
   ReferralCallback callback;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     auto it = pending_referrals_.find(rejected.v0()->referral_id);
     if (it == pending_referrals_.end()) {
       return false;
@@ -822,7 +822,7 @@ bool NodeLink::OnProvideMemory(msg::ProvideMemory& provide) {
   DriverMemory memory(provide.TakeDriverObject(provide.v0()->buffer));
   RequestMemoryCallback callback;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     auto it = pending_memory_requests_.find(provide.v0()->size);
     if (it == pending_memory_requests_.end()) {
       return false;
@@ -869,7 +869,7 @@ void NodeLink::HandleTransportError() {
   ReferralCallbackMap pending_referrals;
   SublinkEarlyParcelsMap early_parcels_for_sublink;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     sublinks.swap(sublinks_);
     deleted_sublinks_.Clear();
     early_parcels_for_sublink_.swap(early_parcels_for_sublink);
@@ -877,15 +877,30 @@ void NodeLink::HandleTransportError() {
     pending_referrals.swap(pending_referrals_);
   }
 
+  // The order of a hash map's entries is not the same when replaying, and
+  // each notification below takes locks and may send messages. Go by ID.
+  std::vector<SublinkId> sublink_ids;
+  sublink_ids.reserve(sublinks.size());
   for (auto& [id, sublink] : sublinks) {
+    sublink_ids.push_back(id);
+  }
+  std::sort(sublink_ids.begin(), sublink_ids.end());
+  for (SublinkId id : sublink_ids) {
+    Sublink& sublink = sublinks.find(id)->second;
     DVLOG(4) << "NodeLink disconnection dropping "
              << sublink.router_link->Describe() << " which is bound to router "
              << sublink.receiver.get();
     sublink.receiver->NotifyLinkDisconnected(*sublink.router_link);
   }
 
+  std::vector<uint64_t> referral_ids;
+  referral_ids.reserve(pending_referrals.size());
   for (auto& [id, callback] : pending_referrals) {
-    callback(/*link=*/nullptr, /*num_portals=*/0);
+    referral_ids.push_back(id);
+  }
+  std::sort(referral_ids.begin(), referral_ids.end());
+  for (uint64_t id : referral_ids) {
+    pending_referrals.find(id)->second(/*link=*/nullptr, /*num_portals=*/0);
   }
 
   Ref<NodeLink> self = WrapRefCounted(this);
@@ -928,7 +943,7 @@ bool NodeLink::AcceptParcelWithoutDriverObjects(
   const auto key = std::make_tuple(for_sublink, parcel->sequence_number());
   std::unique_ptr<Parcel> parcel_with_driver_objects;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
 
     // Note that `parcel` is not actually moved here unless try_emplace
     // succeeds.
@@ -950,7 +965,7 @@ bool NodeLink::AcceptParcelDriverObjects(SublinkId for_sublink,
   const auto key = std::make_tuple(for_sublink, parcel->sequence_number());
   std::unique_ptr<Parcel> parcel_without_driver_objects;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     auto [it, inserted] = partial_parcels_.try_emplace(key, std::move(parcel));
     if (inserted) {
       return true;
@@ -1005,7 +1020,7 @@ bool NodeLink::AcceptCompleteParcel(SublinkId for_sublink,
                                     std::unique_ptr<Parcel> parcel) {
   const std::optional<Sublink> sublink = GetSublink(for_sublink);
   if (!sublink) {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     if (!deleted_sublinks_.Contains(for_sublink)) {
       DVLOG(4) << "Queuing " << parcel->Describe() << " at "
                << local_node_name_.ToString() << ", arriving from "
@@ -1022,7 +1037,7 @@ bool NodeLink::AcceptCompleteParcel(SublinkId for_sublink,
   const size_t num_subparcels = parcel->num_subparcels();
   if (num_subparcels > 1) {
     auto key = std::make_tuple(for_sublink, parcel->sequence_number());
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     auto [it, inserted] =
         subparcel_trackers_.try_emplace(key, SubparcelTracker{});
     SubparcelTracker& tracker = it->second;

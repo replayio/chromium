@@ -12,6 +12,8 @@
 #include "third_party/abseil-cpp/absl/container/flat_hash_map.h"
 #include "third_party/abseil-cpp/absl/numeric/bits.h"
 #include "third_party/abseil-cpp/absl/synchronization/mutex.h"
+#include "util/ordered_mutex.h"
+#include "util/record_replay.h"
 
 namespace ipcz {
 
@@ -24,7 +26,7 @@ Fragment BufferPool::GetFragment(const FragmentDescriptor& descriptor) {
     return {};
   }
 
-  absl::MutexLock lock(&mutex_);
+  OrderedMutexLock lock(&mutex_);
   auto it = mappings_.find(descriptor.buffer_id());
   if (it == mappings_.end()) {
     return Fragment::PendingFromDescriptor(descriptor);
@@ -68,7 +70,7 @@ bool BufferPool::AddBlockBuffer(
 
   std::vector<WaitForBufferCallback> callbacks;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     auto [it, inserted] = mappings_.insert({id, std::move(mapping)});
     if (!inserted) {
       return false;
@@ -103,7 +105,7 @@ bool BufferPool::AddBlockBuffer(
 size_t BufferPool::GetTotalBlockCapacity(size_t block_size) {
   BlockAllocatorPool* pool;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     auto it = block_allocator_pools_.find(block_size);
     if (it == block_allocator_pools_.end()) {
       return 0;
@@ -115,12 +117,95 @@ size_t BufferPool::GetTotalBlockCapacity(size_t block_size) {
   return pool->GetCapacity();
 }
 
+Fragment BufferPool::RecordReplayAllocatedBlock(const Fragment& fragment) {
+  // The allocation looked its buffer up without ordering this pool's mutex.
+  // Acquire the mutex here, ordered, both when recording and when replaying:
+  // a replaying thread then only gets past this point once the thread which
+  // added the block's buffer when recording has added it when replaying.
+  { OrderedMutexLock lock(&mutex_); }
+
+  const uint64_t buffer_id = static_cast<uint64_t>(replay::Value(
+      "ipcz BufferPool block buffer",
+      fragment.is_null() ? kInvalidBufferId.value()
+                         : fragment.buffer_id().value()));
+  const uint32_t offset = static_cast<uint32_t>(replay::Value(
+      "ipcz BufferPool block offset",
+      fragment.is_null() ? 0 : fragment.offset()));
+  const uint32_t size = static_cast<uint32_t>(replay::Value(
+      "ipcz BufferPool block size", fragment.is_null() ? 0 : fragment.size()));
+  if (!::recordreplay::IsReplaying()) {
+    return fragment;
+  }
+  if (buffer_id == kInvalidBufferId.value()) {
+    return {};
+  }
+
+  // The lookup below stands in for the one made by the allocation when
+  // recording, which was not ordered either.
+  ::recordreplay::AutoPassThroughEvents pass_through;
+  const Fragment recorded_fragment =
+      GetFragment(FragmentDescriptor(BufferId{buffer_id}, offset, size));
+  if (!recorded_fragment.is_addressable()) {
+    return {};
+  }
+  return recorded_fragment;
+}
+
 Fragment BufferPool::AllocateBlock(size_t block_size) {
+  if (!replay::IsRecordable()) {
+    return AllocateBlockInternal(block_size);
+  }
+
+  // Which block an allocation gets depends on what the other node allocated
+  // and freed. Record it, and when replaying take the recorded block without
+  // touching the allocators: the other node is not there and this node's copy
+  // of their memory does not have the state they had when recording. The
+  // allocation itself is passed through, as the locks it takes depend on the
+  // state of the allocators.
+  Fragment fragment;
+  if (!::recordreplay::IsReplaying()) {
+    ::recordreplay::AutoPassThroughEvents pass_through;
+    fragment = AllocateBlockInternal(block_size);
+  }
+  return RecordReplayAllocatedBlock(fragment);
+}
+
+Fragment BufferPool::AllocateBlockBestEffort(size_t preferred_block_size) {
+  if (!replay::IsRecordable()) {
+    return AllocateBlockBestEffortInternal(preferred_block_size);
+  }
+
+  // See AllocateBlock().
+  Fragment fragment;
+  if (!::recordreplay::IsReplaying()) {
+    ::recordreplay::AutoPassThroughEvents pass_through;
+    fragment = AllocateBlockBestEffortInternal(preferred_block_size);
+  }
+  return RecordReplayAllocatedBlock(fragment);
+}
+
+bool BufferPool::FreeBlock(const Fragment& fragment) {
+  if (!replay::IsRecordable()) {
+    return FreeBlockInternal(fragment);
+  }
+
+  // Blocks are freed when the last reference to an object is dropped, which
+  // can happen on another thread when replaying, and whether a fragment is
+  // freed at all depends on a reference count the other node shares. So unlike
+  // allocation, freeing adds nothing to the recording: it is passed through
+  // and its locks are not ordered. A replaying node frees into its own copy of
+  // the allocators, which recorded allocations never take from (see
+  // AllocateBlock()).
+  ::recordreplay::AutoPassThroughEvents pass_through;
+  return FreeBlockInternal(fragment);
+}
+
+Fragment BufferPool::AllocateBlockInternal(size_t block_size) {
   ABSL_ASSERT(absl::has_single_bit(block_size));
 
   BlockAllocatorPool* pool;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     auto it = block_allocator_pools_.lower_bound(block_size);
     if (it == block_allocator_pools_.end()) {
       metrics::RecordAllocateBlockResult(
@@ -144,7 +229,8 @@ Fragment BufferPool::AllocateBlock(size_t block_size) {
   return fragment;
 }
 
-Fragment BufferPool::AllocateBlockBestEffort(size_t preferred_block_size) {
+Fragment BufferPool::AllocateBlockBestEffortInternal(
+    size_t preferred_block_size) {
   ABSL_ASSERT(absl::has_single_bit(preferred_block_size));
 
   // Limit the number of attempts we make to scale down the requested size in
@@ -154,7 +240,7 @@ Fragment BufferPool::AllocateBlockBestEffort(size_t preferred_block_size) {
   BlockAllocatorPoolMap::iterator pool_iter;
   BlockAllocatorPool* pool;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     if (block_allocator_pools_.empty()) {
       return {};
     }
@@ -173,7 +259,7 @@ Fragment BufferPool::AllocateBlockBestEffort(size_t preferred_block_size) {
       return fragment;
     }
 
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     if (pool_iter == block_allocator_pools_.begin()) {
       return {};
     }
@@ -185,10 +271,10 @@ Fragment BufferPool::AllocateBlockBestEffort(size_t preferred_block_size) {
   return {};
 }
 
-bool BufferPool::FreeBlock(const Fragment& fragment) {
+bool BufferPool::FreeBlockInternal(const Fragment& fragment) {
   BlockAllocatorPool* pool;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     auto it = block_allocator_pools_.find(fragment.size());
     if (it == block_allocator_pools_.end()) {
       return false;
@@ -203,7 +289,7 @@ bool BufferPool::FreeBlock(const Fragment& fragment) {
 void BufferPool::WaitForBufferAsync(BufferId id,
                                     WaitForBufferCallback callback) {
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     auto it = mappings_.find(id);
     if (it == mappings_.end()) {
       buffer_callbacks_[id].push_back(std::move(callback));
@@ -218,7 +304,7 @@ void BufferPool::DropPendingBufferCallbacks() {
   // Dropping callbacks may have side-effects, so do it outside of a lock.
   BufferCallbackMap buffer_callbacks;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     buffer_callbacks.swap(buffer_callbacks_);
   }
 }

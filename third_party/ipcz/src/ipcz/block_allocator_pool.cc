@@ -5,6 +5,7 @@
 #include "ipcz/block_allocator_pool.h"
 
 #include "third_party/abseil-cpp/absl/synchronization/mutex.h"
+#include "util/ordered_mutex.h"
 #include "util/log.h"
 #include "util/safe_math.h"
 
@@ -15,14 +16,14 @@ BlockAllocatorPool::BlockAllocatorPool() = default;
 BlockAllocatorPool::~BlockAllocatorPool() = default;
 
 size_t BlockAllocatorPool::GetCapacity() {
-  absl::MutexLock lock(&mutex_);
+  OrderedMutexLock lock(&mutex_);
   return capacity_;
 }
 
 bool BlockAllocatorPool::Add(BufferId buffer_id,
                              absl::Span<uint8_t> buffer_memory,
                              const BlockAllocator& allocator) {
-  absl::MutexLock lock(&mutex_);
+  OrderedMutexLock lock(&mutex_);
   Entry* previous_tail = nullptr;
   Entry* new_entry;
   if (!entries_.empty()) {
@@ -90,7 +91,7 @@ Fragment BlockAllocatorPool::Allocate() {
     }
 
     // Allocation from the active allocator failed. Try another if available.
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     entry = entry->next;
   } while (entry && entry != starting_entry);
 
@@ -100,7 +101,7 @@ Fragment BlockAllocatorPool::Allocate() {
 bool BlockAllocatorPool::Free(const Fragment& fragment) {
   Entry* entry;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     auto it = entry_map_.find(fragment.buffer_id());
     if (it == entry_map_.end()) {
       DLOG(ERROR) << "Invalid Free() call on BlockAllocatorPool";

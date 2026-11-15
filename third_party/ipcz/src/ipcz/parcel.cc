@@ -4,6 +4,7 @@
 
 #include "ipcz/parcel.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
@@ -16,6 +17,7 @@
 #include "ipcz/node_link_memory.h"
 #include "third_party/abseil-cpp/absl/base/macros.h"
 #include "third_party/abseil-cpp/absl/types/span.h"
+#include "util/record_replay.h"
 
 namespace ipcz {
 
@@ -86,10 +88,30 @@ bool Parcel::AdoptDataFragment(Ref<NodeLinkMemory> memory,
   // producer of this data.
   const auto& header =
       *reinterpret_cast<const FragmentHeader*>(fragment.bytes().data());
-  const uint32_t data_size = header.size.load(std::memory_order_acquire);
+  // The fragment was written by the other node, so its size is recorded.
+  const uint32_t data_size = static_cast<uint32_t>(
+      replay::Value("ipcz Parcel::AdoptDataFragment size",
+                    header.size.load(std::memory_order_acquire)));
   const size_t max_data_size = fragment.size() - sizeof(FragmentHeader);
   if (data_size > max_data_size) {
     return false;
+  }
+
+  if (replay::IsRecordable()) {
+    // The data was written by the other node as well. Copy it out of shared
+    // memory into this parcel and record the copy, like the legacy core's
+    // DataPipeConsumerDispatcher recorded what it read from its shared buffer.
+    // When replaying the other node is not there, and the copy is filled from
+    // the recording. Nothing reads the fragment after this, so it is freed.
+    std::vector<uint8_t> bytes(data_size);
+    const absl::Span<const uint8_t> fragment_data =
+        fragment.bytes().subspan(sizeof(FragmentHeader), data_size);
+    std::copy(fragment_data.begin(), fragment_data.end(), bytes.begin());
+    replay::Bytes("ipcz Parcel::AdoptDataFragment", bytes.data(), data_size);
+    data_.view = absl::MakeSpan(bytes);
+    data_.storage = std::move(bytes);
+    memory->FreeFragment(fragment);
+    return true;
   }
 
   data_.storage.emplace<DataFragment>(std::move(memory), fragment);

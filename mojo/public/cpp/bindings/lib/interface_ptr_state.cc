@@ -22,6 +22,9 @@ InterfacePtrStateBase::~InterfacePtrStateBase() {
   // Let the mojo resources leak if this is being destroyed at a non-deterministic
   // point. Mojo resources must be destroyed deterministically.
   if (recordreplay::AreEventsDisallowed("~InterfacePtrStateBase")) {
+    if (endpoint_client_) {
+      endpoint_client_->record_replay_leak();
+    }
     endpoint_client_.release();
     (void)router_.release();
     return;

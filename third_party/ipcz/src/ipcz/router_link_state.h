@@ -97,6 +97,12 @@ struct IPCZ_ALIGN(8) RouterLinkState : public RefCountedFragment {
   // In any other situation, the status is unmodified and this returns false.
   [[nodiscard]] bool TryLock(LinkSide from_side);
 
+  // Whether the link is locked by `locked_side` on behalf of a bypass request
+  // from `bypass_request_source`. Unlike is_locked_by(), the result is
+  // recorded when recording and taken from the recording when replaying.
+  bool IsLockedForBypassRequestFrom(LinkSide locked_side,
+                                    const NodeName& bypass_request_source);
+
   // Unlocks a link previously locked by TryLock().
   void Unlock(LinkSide from_side);
 
@@ -108,6 +114,12 @@ struct IPCZ_ALIGN(8) RouterLinkState : public RefCountedFragment {
   // attempt was made to TryLock() from that side, while the other side was
   // still unstable.
   bool ResetWaitingBit(LinkSide side);
+
+  // The implementations of TryLock() and ResetWaitingBit(). The status they
+  // observe is written by the other side of the link, which is another thread
+  // or another node, so their results are recorded by the public methods.
+  [[nodiscard]] bool TryLockInternal(LinkSide from_side);
+  bool ResetWaitingBitInternal(LinkSide side);
 };
 
 // The size of this structure is fixed at 64 bytes to ensure that it fits the

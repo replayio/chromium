@@ -25,6 +25,7 @@
 #include "ipcz/sublink_id.h"
 #include "third_party/abseil-cpp/absl/container/flat_hash_map.h"
 #include "third_party/abseil-cpp/absl/synchronization/mutex.h"
+#include "util/ordered_mutex.h"
 #include "third_party/abseil-cpp/absl/types/span.h"
 #include "util/ref_counted.h"
 
@@ -226,7 +227,7 @@ class NodeLinkMemory : public RefCounted<NodeLinkMemory> {
   const absl::Span<uint8_t> primary_buffer_memory_;
   PrimaryBuffer& primary_buffer_;
 
-  absl::Mutex mutex_;
+  OrderedMutex mutex_{"ipcz.NodeLinkMemory"};
 
   // The NodeLink which is using this NodeLinkMemory. Used to communicate with
   // the NodeLinkMemory on the other side of the link.

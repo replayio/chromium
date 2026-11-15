@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <vector>
 
 #include "base/containers/flat_map.h"
 #include "base/containers/span.h"
@@ -76,9 +77,18 @@ class MojoTrap : public Object<MojoTrap> {
   void DispatchEvent(const MojoTrapEvent& event)
       EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
+  using TriggerMap = base::flat_map<uintptr_t, scoped_refptr<Trigger>>;
+
+  // Returns the triggers in `triggers` in the order to visit them in. This is
+  // the order of `triggers` itself, except when recording/replaying: the map
+  // is sorted by trigger context, which is an address, so the triggers are
+  // returned in the order they were added in instead.
+  static std::vector<Trigger*> GetTriggersInVisitOrder(
+      const TriggerMap& triggers);
+
   const MojoTrapEventHandler handler_;
 
-  base::Lock lock_;
+  base::Lock lock_{"MojoTrap.lock_"};
 
   // Condition variable used to wait for any other thread to finish dispatching
   // events so that another thread may dipatch its own.
@@ -91,7 +101,6 @@ class MojoTrap : public Object<MojoTrap> {
   // this trap, if any.
   std::optional<base::PlatformThreadRef> dispatching_thread_ GUARDED_BY(lock_);
 
-  using TriggerMap = base::flat_map<uintptr_t, scoped_refptr<Trigger>>;
   TriggerMap triggers_ GUARDED_BY(lock_);
 
   // Trigger prioritization proceeds in a round-robin fashion across consecutive
@@ -101,6 +110,14 @@ class MojoTrap : public Object<MojoTrap> {
   // SUBTLE: Because it is invalidated by mutations to `triggers_`, this MUST
   // be reset any time a trigger is inserted or removed.
   TriggerMap::iterator next_trigger_ GUARDED_BY(lock_) = triggers_.end();
+
+  // The number of triggers ever added to this trap. See Trigger::added_order.
+  uint64_t num_triggers_added_ GUARDED_BY(lock_) = 0;
+
+  // Takes the place of `next_trigger_` when recording/replaying: the
+  // `added_order` of the trigger the next Arm() starts at, or 0 to start at
+  // the first one.
+  uint64_t record_replay_next_trigger_order_ GUARDED_BY(lock_) = 0;
 
   // A Mojo trap must ensure that all its event dispatches are mutually
   // exclusive. While one thread is dispatching an event, other threads must

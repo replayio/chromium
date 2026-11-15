@@ -20,6 +20,7 @@
 #include "ipcz/trap_set.h"
 #include "third_party/abseil-cpp/absl/base/thread_annotations.h"
 #include "third_party/abseil-cpp/absl/synchronization/mutex.h"
+#include "util/ordered_mutex.h"
 #include "util/ref_counted.h"
 
 namespace ipcz {
@@ -402,7 +403,7 @@ class Router : public APIObjectImpl<Router, APIObject::kPortal> {
   std::unique_ptr<Parcel> TakeNextInboundParcel(TrapEventDispatcher& dispatcher)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
-  absl::Mutex mutex_;
+  OrderedMutex mutex_{"ipcz.Router"};
 
   // Indicates whether the opposite end of the route has been closed. This is
   // the source of truth for peer closure status. The status bit

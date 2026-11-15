@@ -92,6 +92,11 @@ class ScopedInterfaceEndpointHandle::State
       }
     }
 
+    // Handles are also closed by objects finalized in GCs, which happen at
+    // different points when replaying.
+    recordreplay::AssertMaybeEventsDisallowed(
+        "ScopedInterfaceEndpointHandle::State::Close cached_group_controller %d",
+        !!cached_group_controller);
     if (cached_group_controller) {
       cached_group_controller->CloseEndpointHandle(cached_id, reason);
     } else if (cached_peer_state) {

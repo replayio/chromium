@@ -22,6 +22,7 @@
 #include "third_party/abseil-cpp/absl/container/flat_hash_map.h"
 #include "third_party/abseil-cpp/absl/container/flat_hash_set.h"
 #include "third_party/abseil-cpp/absl/synchronization/mutex.h"
+#include "util/ordered_mutex.h"
 #include "third_party/abseil-cpp/absl/types/span.h"
 
 namespace ipcz {
@@ -195,7 +196,7 @@ class Node : public APIObjectImpl<Node, APIObject::kNode> {
   const IpczCreateNodeOptions options_;
   const Features features_;
 
-  absl::Mutex mutex_;
+  OrderedMutex mutex_{"ipcz.Node"};
 
   // The name assigned to this node by the first broker it connected to, or
   // self-assigned if this is a broker node. Once assigned, this name remains

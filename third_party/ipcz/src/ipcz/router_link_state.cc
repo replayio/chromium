@@ -8,6 +8,7 @@
 #include <limits>
 
 #include "ipcz/link_side.h"
+#include "util/record_replay.h"
 
 namespace ipcz {
 
@@ -34,6 +35,17 @@ T& SelectBySide(LinkSide side, T& for_a, T& for_b) {
 
 RouterLinkState::RouterLinkState() = default;
 
+bool RouterLinkState::IsLockedForBypassRequestFrom(
+    LinkSide locked_side,
+    const NodeName& bypass_request_source) {
+  // Balanced by a release in the locking side's TryLockForBypass().
+  const NodeName allowed_source = allowed_bypass_request_source.LoadAcquire();
+  const bool locked = is_locked_by(locked_side);
+  // Both the status and the name are written by the other side of the link.
+  return replay::Value("ipcz RouterLinkState::IsLockedForBypassRequestFrom",
+                       locked && allowed_source == bypass_request_source) != 0;
+}
+
 // static
 RouterLinkState& RouterLinkState::Initialize(void* where) {
   auto& state = *static_cast<RouterLinkState*>(where);
@@ -54,6 +66,11 @@ void RouterLinkState::SetSideStable(LinkSide side) {
 }
 
 bool RouterLinkState::TryLock(LinkSide from_side) {
+  return replay::Value("ipcz RouterLinkState::TryLock",
+                       TryLockInternal(from_side)) != 0;
+}
+
+bool RouterLinkState::TryLockInternal(LinkSide from_side) {
   const Status kThisSideStable =
       from_side == LinkSide::kA ? kSideAStable : kSideBStable;
   const Status kOtherSideStable =
@@ -102,6 +119,11 @@ void RouterLinkState::Unlock(LinkSide from_side) {
 }
 
 bool RouterLinkState::ResetWaitingBit(LinkSide side) {
+  return replay::Value("ipcz RouterLinkState::ResetWaitingBit",
+                       ResetWaitingBitInternal(side)) != 0;
+}
+
+bool RouterLinkState::ResetWaitingBitInternal(LinkSide side) {
   const Status kThisSideWaiting =
       side == LinkSide::kA ? kSideAWaiting : kSideBWaiting;
   const Status kLockedByEitherSide = kLockedBySideA | kLockedBySideB;

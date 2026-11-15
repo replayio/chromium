@@ -106,6 +106,8 @@ source_set("util") {
   public = [
     "util/log.h",
     "util/multi_mutex_lock.h",
+    "util/ordered_mutex.h",
+    "util/record_replay.h",
     "util/ref_counted.h",
     "util/strong_alias.h",
     "util/unique_ptr_comparator.h",
