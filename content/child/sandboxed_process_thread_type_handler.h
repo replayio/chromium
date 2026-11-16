@@ -84,7 +84,7 @@ class CONTENT_EXPORT SandboxedProcessThreadTypeHandler
   // later change to the same thread naturally replaces an earlier one. They are
   // flushed to the browser as a single batched IPC on `task_runner_`, which
   // coalesces the burst of per-thread changes during process startup.
-  base::Lock lock_;
+  base::Lock lock_{"SandboxedProcessThreadTypeHandler.lock_"};
   base::flat_map<int32_t, base::ThreadType> pending_changes_ GUARDED_BY(lock_);
   bool flush_scheduled_ GUARDED_BY(lock_) = false;
   scoped_refptr<base::SequencedTaskRunner> task_runner_ GUARDED_BY(lock_);

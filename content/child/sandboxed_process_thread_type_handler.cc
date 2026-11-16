@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "base/functional/bind.h"
+#include "base/record_replay.h"
 #include "content/child/child_thread_impl.h"
 #include "content/common/thread_type_switcher.mojom.h"
 
@@ -55,6 +56,17 @@ SandboxedProcessThreadTypeHandler* SandboxedProcessThreadTypeHandler::Get() {
 bool SandboxedProcessThreadTypeHandler::HandleThreadTypeChange(
     base::PlatformThreadId thread_id,
     base::ThreadType thread_type) {
+  // [RecordReplay] Whether a thread posts the flush depends on what the other
+  // threads and the flush have done by then, so `lock_` is ordered: each
+  // thread then finds the state it found when recording. A thread the
+  // recording doesn't order would change that state at other times on a
+  // replay, so its change isn't sent: a thread's priority is no part of a
+  // recording.
+  if (recordreplay::AreEventsDisallowed() ||
+      recordreplay::AreEventsPassedThrough()) {
+    return true;
+  }
+
   // Invoked from arbitrary threads. Coalesce changes and flush them to the
   // browser as a single batched IPC, instead of sending one IPC per thread.
   {
