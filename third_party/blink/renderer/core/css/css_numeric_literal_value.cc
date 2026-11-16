@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <string_view>
 #include "third_party/blink/renderer/core/css/css_numeric_literal_value.h"
 
 #include "base/numerics/angle_conversions.h"
@@ -318,7 +319,7 @@ String CSSNumericLiteralValue::CustomCSSText() const {
             // [RUN-1918] Workaround divergent floating point sprintf.
             std::string textStr = text.Ascii();
             recordreplay::RecordReplayString("CSSNumericLiteralValue::CustomCSSText", textStr);
-            text = String::FromUTF8(&textStr[0], textStr.length());
+            text = String::FromUtf8(std::string_view(textStr.data(), textStr.length()));
           }
         }
       } else {

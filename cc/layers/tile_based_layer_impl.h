@@ -630,8 +630,15 @@ bool TileBasedLayerImpl<Tiling>::AppendQuadForTile(
         visible_geometry_rect.size().Area64();
   }
   produced_tile_last_append_quads_ = true;
-  recordreplay::Assert("[RUN-550-1536] PictureLayerImpl::AppendQuads B %d",
-                       iter.CurrentTiling()->record_replay_id_);
+  // Upstream templatised this body: TileBasedLayerImpl is instantiated with
+  // both PictureLayerTiling, which carries the fork's record_replay_id_, and
+  // TileDisplayLayerTiling, which does not. This assert names the
+  // PictureLayerImpl path it was written for, so it is compiled only for the
+  // tiling that has the id rather than given a meaningless one on the other.
+  if constexpr (requires { iter.CurrentTiling()->record_replay_id_; }) {
+    recordreplay::Assert("[RUN-550-1536] PictureLayerImpl::AppendQuads B %d",
+                         iter.CurrentTiling()->record_replay_id_);
+  }
   AddScaleToLastAppendQuadsScales(iter.CurrentTiling()->contents_scale_key());
 
   return /*tile_produced=*/true;

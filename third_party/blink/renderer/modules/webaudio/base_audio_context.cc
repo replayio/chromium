@@ -767,7 +767,7 @@ void BaseAudioContext::SetContextState(V8AudioContextState::Enum new_state) {
     // leaked instead (see RecordReplayKeepDisposedHandler).
     if (recordreplay::IsRecordingOrReplaying()) {
       replay_strong_connected_nodes_.clear();
-      GraphAutoLocker locker(this);
+      DeferredTaskHandler::GraphAutoLocker locker(GetDeferredTaskHandler());
       GetDeferredTaskHandler().RecordReplayLeakDisposedHandlers();
     }
   }

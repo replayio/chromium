@@ -2545,7 +2545,7 @@ bool InspectorHighlight::GetBoxModel(
   LocalFrameView* view = node->GetDocument().View();
   if (!layout_object || !view) {
     String name = node->DebugName();
-    name.Truncate(200);
+    name = name.substr(0, 200);
     recordreplay::CommandDiagnostic(
         "[RUN-2525-2538] InspectorHighlight::GetBoxModel A %d %d %d %s",
         !!layout_object, !!view, (int)node->getNodeType(), name.Utf8().c_str());
@@ -2557,7 +2557,7 @@ bool InspectorHighlight::GetBoxModel(
   if (BuildSVGQuads(node, svg_quads)) {
     if (!svg_quads.size()) {
       String name = node->DebugName();
-      name.Truncate(200);
+      name = name.substr(0, 200);
       recordreplay::CommandDiagnostic(
           "[RUN-2525-2538] InspectorHighlight::GetBoxModel B %d %s",
           (int)node->getNodeType(),
@@ -2570,7 +2570,7 @@ bool InspectorHighlight::GetBoxModel(
     margin = svg_quads[0];
   } else if (!BuildNodeQuads(node, &content, &padding, &border, &margin)) {
     String name = node->DebugName();
-    name.Truncate(200);
+    name = name.substr(0, 200);
     recordreplay::CommandDiagnostic(
         "[RUN-2525-2538] InspectorHighlight::GetBoxModel C %d %s",
         (int)node->getNodeType(), name.Utf8().c_str());

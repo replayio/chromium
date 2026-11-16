@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_WEBAUDIO_AUDIO_PARAM_HANDLER_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_WEBAUDIO_AUDIO_PARAM_HANDLER_H_
 
+#include "base/memory/raw_ptr.h"
 #include <sys/types.h>
 
 #include <atomic>
@@ -613,7 +614,7 @@ class MODULES_EXPORT AudioParamHandler final
 
   mutable base::Lock events_lock_;
 
-  DeferredTaskHandler* record_replay_handler_ = nullptr;
+  raw_ptr<DeferredTaskHandler> record_replay_handler_ = nullptr;
 
   // Whether the audio thread may read the timeline in this render.
   bool RecordReplayMayRead() const;

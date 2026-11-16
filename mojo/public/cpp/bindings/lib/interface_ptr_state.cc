@@ -45,6 +45,12 @@ bool InterfacePtrStateBase::has_pending_callbacks() const {
   return endpoint_client_ && endpoint_client_->has_pending_responders();
 }
 
+void InterfacePtrStateBase::record_replay_leak() {
+  if (endpoint_client_) {
+    endpoint_client_->record_replay_leak();
+  }
+}
+
 scoped_refptr<ThreadSafeProxy> InterfacePtrStateBase::CreateThreadSafeProxy(
     scoped_refptr<ThreadSafeProxy::Target> target,
     const base::Location& location) {

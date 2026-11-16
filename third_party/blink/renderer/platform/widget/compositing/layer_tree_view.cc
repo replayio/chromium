@@ -436,7 +436,7 @@ void LayerTreeView::DidPresentCompositorFrame(
     recordreplay::Assert(
         "[RUN-2317-2570] LayerTreeView::DidPresentCompositorFrame B %u %zu %d",
         front->first, front->second.size(),
-        viz::FrameTokenGT(front->first, frame_token));
+        front->first > frame_token);
 
     if (front->first > frame_token) {
       break;

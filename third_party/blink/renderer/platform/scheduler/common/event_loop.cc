@@ -148,7 +148,6 @@ void EventLoop::RunPendingMicrotask(v8::Local<v8::Data> data) {
   // corruption substituted a wrapper to a wrong loop.
   CHECK(!self->pending_microtasks_.empty());
 
-  base::OnceClosure task = std::move(self->pending_microtasks_.front());
   base::OnceClosure task = std::move(self->pending_microtasks_.front().first);
   int record_replay_scheduled_node_id = self->pending_microtasks_.front().second;
   self->pending_microtasks_.pop_front();

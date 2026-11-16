@@ -110,6 +110,11 @@ class RecordReplayRepaintFrameSink : public LayerTreeFrameSink,
     LayerTreeFrameSink::DetachFromClient();
   }
 
+  // Upstream added this pure virtual to LayerTreeFrameSink. This sink exists
+  // only to drive repaint frames while replaying and never shows a surface,
+  // so there is nothing to notify.
+  void NotifyNewLocalSurfaceIdExpectedWhilePaused() override {}
+
   void SetLocalSurfaceId(const viz::LocalSurfaceId& local_surface_id) override {
     local_surface_id_ = local_surface_id;
   }
@@ -1268,7 +1273,8 @@ void ProxyImpl::RecordReplayRepaint() {
                                                          now,
                                                          now,
                                                          viz::BeginFrameArgs::DefaultInterval(),
-                                                         viz::BeginFrameArgs::NORMAL, 
+                                                         viz::BeginFrameArgs::NORMAL,
+                                                         base::TimeDelta() /*unthrottled_interval*/,
                                                          true /*replay_force_draw*/);
   // The page may not have changed since its last draw, and a frame without
   // damage isn't drawn at all.

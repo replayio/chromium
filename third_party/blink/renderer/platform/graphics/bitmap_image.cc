@@ -151,7 +151,7 @@ PaintImage BitmapImage::CreatePaintImage(
     PaintImage::AnimationSequenceId reset_animation_sequence_id,
     int image_animation_repetition_count) {
   recordreplay::Assert("[RUN-1975-2036] BitmapImage::CreatePaintImage A %u %d",
-                       reset_animation_sequence_id_, !!decoder_);
+                       reset_animation_sequence_id, !!decoder_);
   sk_sp<PaintImageGenerator> generator =
       decoder_ ? decoder_->CreateGenerator() : nullptr;
 
@@ -670,8 +670,10 @@ int BitmapImage::RepetitionCount() {
 }
 
 void BitmapImage::ResetAnimation() {
-  recordreplay::Assert("[RUN-1975-2225] BitmapImage::ResetAnimation %d %u",
-                       paint_image_id(), reset_animation_sequence_id_);
+  recordreplay::Assert("[RUN-1975-2225] BitmapImage::ResetAnimation %d %u %u",
+                       paint_image_id(),
+                       reset_animation_own_timeline_sequence_id_,
+                       reset_animation_shared_timeline_sequence_id_);
   // If no PaintImage has been created yet, there is no bitmap animation
   // timeline to rewind and no existing painted frame to invalidate.
   if (RuntimeEnabledFeatures::SvgImageAnimationResetEnabled() &&

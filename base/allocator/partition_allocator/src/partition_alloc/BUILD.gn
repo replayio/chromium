@@ -529,6 +529,7 @@ if (is_clang_or_gcc) {
       "partition_tls.h",
       "random.cc",
       "random.h",
+      "record_replay_shim.h",
       "reservation_offset_table.cc",
       "reservation_offset_table.h",
       "reverse_bytes.h",

@@ -134,7 +134,7 @@ namespace {
 
 void NotifyFinishObservers(
     GCedHeapHashSet<WeakMember<ResourceFinishObserver>>* observers,
-    HeapVector<Member<ResourceFinishObserver>>* observers_strong) {
+    GCedHeapVector<Member<ResourceFinishObserver>>* observers_strong) {
   for (const auto& observer : *observers)
     observer->NotifyFinished();
 }
@@ -419,8 +419,8 @@ void Resource::TriggerNotificationForFinishObservers(
 
   // RUN-1724
   // [RUN-1457 cleanup]
-  HeapVector<Member<ResourceFinishObserver>>* new_collections_strong =
-      MakeGarbageCollected<HeapVector<Member<ResourceFinishObserver>>>();
+  GCedHeapVector<Member<ResourceFinishObserver>>* new_collections_strong =
+      MakeGarbageCollected<GCedHeapVector<Member<ResourceFinishObserver>>>();
   if (recordreplay::IsRecordingOrReplaying("leak-references", "Resource")) {
     new_collections_strong->append_range(replay_finish_observers_strong_);
     replay_finish_observers_strong_.clear();

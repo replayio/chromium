@@ -66,6 +66,29 @@
 
 namespace blink {
 
+#if DCHECK_IS_ON() || BUILDFLAG(ENABLE_HEAP_VECTOR_MODIFICATION_CHECKS)
+inline constexpr bool kEnableHeapVectorModificationChecks = true;
+#else
+inline constexpr bool kEnableHeapVectorModificationChecks = false;
+#endif
+
+#if DCHECK_IS_ON() || BUILDFLAG(ENABLE_VECTOR_MODIFICATION_CHECKS)
+inline constexpr bool kEnableVectorModificationChecks = true;
+#else
+inline constexpr bool kEnableVectorModificationChecks = false;
+#endif
+
+// Whether modification checks are enabled for the Allocator.
+// Allows HeapVector and Vector checks to be toggled independently.
+// In release builds, vectors with inline capacity opt out of modification
+// checks because they are typically short-lived stack buffers in hot loops and
+// rarely reallocate out-of-line.
+template <typename Allocator, bool kHasInlineCapacity>
+inline constexpr bool kEnableModificationChecks =
+    (DCHECK_IS_ON() || !kHasInlineCapacity) &&
+    ((Allocator::kIsGarbageCollected && kEnableHeapVectorModificationChecks) ||
+     (!Allocator::kIsGarbageCollected && kEnableVectorModificationChecks));
+
 // [Replay] Allow MEMORY_TOOL_REPLACES_ALLOCATOR to disable PartitionAlloc
 // without having this unwanted side-effect.
 #if 0  // PA_BUILDFLAG(MEMORY_TOOL_REPLACES_ALLOCATOR)

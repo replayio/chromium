@@ -29,6 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <string_view>
 #include "third_party/blink/renderer/core/page/chrome_client_impl.h"
 
 #include <memory>
@@ -493,14 +494,14 @@ void ChromeClientImpl::AddMessageToConsole(LocalFrame* local_frame,
   recordreplay::RecordReplayString(
       "ChromeClientImpl::AddMessageToConsole stack_trace", stack_trace_str);
   const String new_stack_trace =
-      String::FromUTF8(&stack_trace_str[0], stack_trace_str.length());
+      String::FromUtf8(std::string_view(stack_trace_str.data(), stack_trace_str.length()));
 
   // [RUN-2650] source_id is sometimes a divergent URL.
   std::string source_id_str = source_id.Ascii();
   recordreplay::RecordReplayString(
       "ChromeClientImpl::AddMessageToConsole source_id", source_id_str);
   const String new_source_id =
-      String::FromUTF8(&stack_trace_str[0], stack_trace_str.length());
+      String::FromUtf8(std::string_view(stack_trace_str.data(), stack_trace_str.length()));
 
   if (!message.IsNull()) {
     recordreplay::Assert(

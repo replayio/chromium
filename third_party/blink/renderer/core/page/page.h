@@ -156,7 +156,9 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
       int record_replay_id = key ? key->RecordReplayId() : -1;
       return blink::GetHash(record_replay_id);
     }
-    static unsigned GetHash(const WeakMember<Page>& key) {
+    template <typename Member>
+      requires(IsAnyMemberType<Member>::value)
+    static unsigned GetHash(const Member& key) {
       return GetHash(key.Get());
     }
 

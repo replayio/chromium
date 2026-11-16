@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <memory>
 #include "components/record_replay/services/auth_token/public/cpp/auth_token_service_factory.h"
 
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
@@ -30,9 +31,10 @@ RecordReplayAuthTokenServiceFactory::RecordReplayAuthTokenServiceFactory()
 
 RecordReplayAuthTokenServiceFactory::~RecordReplayAuthTokenServiceFactory() = default;
 
-KeyedService* RecordReplayAuthTokenServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+RecordReplayAuthTokenServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* /*context*/) const {
-  return new auth_token::RecordReplayAuthTokenService();
+  return std::make_unique<auth_token::RecordReplayAuthTokenService>();
 }
 
 // Incognito profiles should use their own instance.

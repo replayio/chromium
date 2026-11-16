@@ -722,7 +722,7 @@
   },
   "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/record_replay/resources.grd": {
     "META": {"sizes": {"includes": [200]}},
-    "includes": [1915],
+    "includes": [4675],
   },
   "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/sandbox_internals/resources.grd": {
     "META": {"sizes": {"includes": [5],}},

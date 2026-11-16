@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/compiler_specific.h"
+#include "base/containers/span.h"
 #include "third_party/blink/renderer/bindings/core/v8/serialization/v8_script_value_serializer.h"
 
 #include "base/record_replay.h"
@@ -75,9 +77,12 @@ namespace {
 // Same algorithm as v8::internal::HashBytes in value-serializer.cc.
 int HashBytes(const void* aPtr, size_t aSize) {
   int hash = 0;
-  const uint8_t* ptr = static_cast<const uint8_t*>(aPtr);
-  for (size_t i = 0; i < aSize; i++) {
-    hash = (((hash << 5) - hash) + ptr[i]) | 0;
+  // SAFETY: the caller passes a (pointer, length) pair describing a buffer it
+  // owns; this function only reads aSize bytes from it.
+  const auto bytes = UNSAFE_BUFFERS(
+      base::span(static_cast<const uint8_t*>(aPtr), aSize));
+  for (uint8_t b : bytes) {
+    hash = (((hash << 5) - hash) + b) | 0;
   }
   return hash;
 }

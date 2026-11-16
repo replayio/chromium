@@ -1240,8 +1240,14 @@ CSSStyleSheet* StyleEngine::CreateSheet(
   CSSStyleSheet* style_sheet = nullptr;
   CSSParserContext* inline_context = CSSStyleSheet::InlineParserContext(
       GetDocument(), NullUrl(), GetDocument().Encoding());
-  if (StyleSheetContents* cached =
-          FindStyleSheetContents(text, inline_context)) {
+  StyleSheetContents* cached = FindStyleSheetContents(text, inline_context);
+  // Divergence is between reusing cached contents and parsing fresh within
+  // this method. Assert the value that selects the codepath. Upstream split
+  // the text cache out into AddStyleSheetContents, so the entry-level values
+  // this used to report (result.is_new_entry, the key hash) no longer exist
+  // here -- see the defect entry.
+  recordreplay::Assert("[RUN-1065-1390] StyleEngine::CreateSheet %d", !!cached);
+  if (cached) {
     cached->SetRenderBlocking(render_blocking_behavior);
     style_sheet = CSSStyleSheet::CreateInline(cached, element, start_position);
   } else {
@@ -1260,6 +1266,9 @@ CSSStyleSheet* StyleEngine::CreateSheet(
   }
 
   DCHECK(style_sheet);
+  if (recordreplay::IsRecordingOrReplaying("leak-references", "StyleEngine")) {
+    style_sheet_contents_strong_.insert(style_sheet->Contents());
+  }
   if (!element.IsInShadowTree()) {
     String title = element.title();
     if (!title.empty()) {
@@ -1326,16 +1335,6 @@ void StyleEngine::AddStyleSheetContents(const String& text,
     key = AtomicString(text);
   }
   text_to_sheet_cache_.Set(key, contents);
-  // Divergence is between a call to ParseSheet and a call to
-  // CreateInline within this method. Assert the values that
-  // introduce the codepath divergence.
-  recordreplay::Assert("[RUN-1065-1390] StyleEngine::CreateSheet %d %d %d %lu",
-                       result.is_new_entry, !!contents,
-                       contents && contents->IsCacheableForStyleElement(),
-                       GetHash(key));
-      if (recordreplay::IsRecordingOrReplaying("leak-references", "StyleEngine")) {
-        style_sheet_contents_strong_.insert(style_sheet->Contents());
-      }
 }
 
 void StyleEngine::CollectUserStyleFeaturesTo(RuleFeatureSet& features) const {

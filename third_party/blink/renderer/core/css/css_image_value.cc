@@ -197,7 +197,7 @@ void CSSImageValue::RestoreCachedResourceIfNeeded(
   recordreplay::Assert(
       "[RUN-1436-2226] CSSImageValue::RestoreCachedResourceIfNeeded %d %d %d "
       "%d",
-      !!cached_image_, !!document.Fetcher(), !!url_data_.ResolvedUrl().IsNull(),
+      !!cached_image_, !!document.Fetcher(), !!url_data_->ResolvedUrl().IsNull(),
       cached_image_ && cached_image_->CachedImage());
   ResourceFetcher* fetcher = document.Fetcher();
   if (!fetcher || UrlData().ResolvedUrl().IsNull()) {

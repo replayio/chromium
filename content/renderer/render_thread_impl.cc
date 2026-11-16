@@ -228,7 +228,6 @@
 #include "base/test/clang_profiling.h"
 #endif
 
-#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
 
 namespace content {
 

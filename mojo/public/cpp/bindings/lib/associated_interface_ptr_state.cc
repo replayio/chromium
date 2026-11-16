@@ -87,6 +87,12 @@ bool AssociatedInterfacePtrStateBase::has_pending_callbacks() const {
   return endpoint_client_ && endpoint_client_->has_pending_responders();
 }
 
+void AssociatedInterfacePtrStateBase::record_replay_leak() {
+  if (endpoint_client_) {
+    endpoint_client_->record_replay_leak();
+  }
+}
+
 AssociatedGroup* AssociatedInterfacePtrStateBase::associated_group() {
   return endpoint_client_ ? endpoint_client_->associated_group() : nullptr;
 }

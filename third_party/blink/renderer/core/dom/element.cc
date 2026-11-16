@@ -2377,11 +2377,11 @@ ScriptPromise<ScrollResult> Element::scrollIntoView(
   return resolver->CreateScriptPromise();
 }
 
+void Element::scrollIntoViewWithOptions(const ScrollIntoViewOptions* options,
+                                        ScrollPromiseResolver* resolver) {
   if (RecordReplayThrowIfEventsUnavailable("Element.scrollIntoView")) {
     return;
   }
-void Element::scrollIntoViewWithOptions(const ScrollIntoViewOptions* options,
-                                        ScrollPromiseResolver* resolver) {
   ActivateDisplayLockIfNeeded(DisplayLockActivationReason::kScrollIntoView);
   GetDocument().UpdateStyleAndLayoutForNode(this,
                                             DocumentUpdateReason::kJavaScript);
@@ -3028,7 +3028,8 @@ ScriptPromise<ScrollResult> Element::scrollBy(
     ScriptState* script_state,
     const ScrollToOptions* scroll_to_options) {
   if (RecordReplayThrowIfEventsUnavailable("Element.scrollBy")) {
-    return CreateScrollResolvedPromise(script_state);
+    return MakeGarbageCollected<ScrollPromiseResolver>(script_state)
+        ->CreateScriptPromise();
   }
   ScrollPromiseResolver* resolver =
       MakeGarbageCollected<ScrollPromiseResolver>(script_state);
@@ -3068,6 +3069,9 @@ ScriptPromise<ScrollResult> Element::scrollTo(
     ScriptState* script_state,
     const ScrollToOptions* scroll_to_options) {
   if (RecordReplayThrowIfEventsUnavailable("Element.scrollTo")) {
+    return MakeGarbageCollected<ScrollPromiseResolver>(script_state)
+        ->CreateScriptPromise();
+  }
   ScrollPromiseResolver* resolver =
       MakeGarbageCollected<ScrollPromiseResolver>(script_state);
   ScrollTo(scroll_to_options, resolver);

@@ -2151,8 +2151,7 @@ const ShapeResult* ShapeResult::CreateForSpaces(const Font* font,
     recordreplay::Diagnostic(
         "CreateForSpaces PrimaryFont null start=%u length=%u",
         start_index, length);
-    return MakeGarbageCollected<ShapeResult>(font, start_index, length,
-                                             direction);
+    return MakeGarbageCollected<ShapeResult>(start_index, length, direction);
   }
   DCHECK(font_data);
   ShapeResult* result =

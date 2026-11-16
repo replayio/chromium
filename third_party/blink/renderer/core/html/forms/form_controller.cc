@@ -18,6 +18,7 @@
  * Boston, MA 02110-1301, USA.
  */
 
+#include <algorithm>
 #include "third_party/blink/renderer/core/html/forms/form_controller.h"
 
 #include <memory>
@@ -127,10 +128,23 @@ static int CompareStrings(StringImpl* a, StringImpl* b) {
   if (a->Is8Bit() != b->Is8Bit()) {
     return a->Is8Bit() ? -1 : 1;
   }
+  // Characters8()/Characters16() became Span8()/Span16(). Only the sign of
+  // the result is used for ordering, as the length branch above shows, so a
+  // lexicographical comparison is equivalent and avoids a libc call.
   if (a->Is8Bit()) {
-    return memcmp(a->Characters8(), b->Characters8(), a->length());
+    const auto sa = a->Span8();
+    const auto sb = b->Span8();
+    if (sa == sb) {
+      return 0;
+    }
+    return std::ranges::lexicographical_compare(sa, sb) ? -1 : 1;
   }
-  return memcmp(a->Characters16(), b->Characters16(), a->length() * 2);
+  const auto sa = a->Span16();
+  const auto sb = b->Span16();
+  if (sa == sb) {
+    return 0;
+  }
+  return std::ranges::lexicographical_compare(sa, sb) ? -1 : 1;
 }
 
 // RecordReplay: upstream moved ControlKey into control_key.h at M133, so

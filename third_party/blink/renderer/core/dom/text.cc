@@ -20,6 +20,7 @@
  * Boston, MA 02110-1301, USA.
  */
 
+#include <string_view>
 #include "third_party/blink/renderer/core/dom/text.h"
 
 #include <utility>
@@ -65,7 +66,7 @@ Text* Text::Create(Document& document, const String& data) {
     size_t recordedLength = recordreplay::RecordReplayValue("Text::Create length", contents.length());
     contents.resize(recordedLength, ' ');
     recordreplay::RecordReplayBytes("Text::Create string", &contents[0], recordedLength);
-    dataStr = String::FromUTF8(&contents[0], recordedLength);
+    dataStr = String::FromUtf8(std::string_view(contents.data(), recordedLength));
     dataPtr = &dataStr;
   } else {
     dataPtr = &data;

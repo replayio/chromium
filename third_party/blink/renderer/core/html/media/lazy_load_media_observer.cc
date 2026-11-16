@@ -123,6 +123,7 @@ void LazyLoadMediaObserver::LoadIfNearViewport(
     }
     if (!entry->isIntersecting()) {
       continue;
+    }
 
     std::optional<recordreplay::AutoDependencyExecution> execute;
     if (recordreplay::DependencyGraphEnabled()) {
@@ -133,7 +134,6 @@ void LazyLoadMediaObserver::LoadIfNearViewport(
         entry->RecordReplayCreatedNodeId(), node_id, "{\"kind\":\"observer\"}"
       );
       execute.emplace(node_id);
-    }
     }
 
     // Handle image elements.

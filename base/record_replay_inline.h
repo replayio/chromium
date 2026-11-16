@@ -1,3 +1,5 @@
+#include "base/memory/stack_allocated.h"
+
 // For use in situations when the recordreplay:: namespace isn't available
 // due to build dependency ordering.
 
@@ -18,6 +20,9 @@ static void* LookupRecordReplaySymbol(const char* name) {
 }
 
 struct RecordReplayAutoPassThroughEvents {
+  STACK_ALLOCATED();
+
+ public:
   void *fnBegin;
   void *fnEnd;
   bool didBegin;

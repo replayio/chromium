@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <vector>
 #include "third_party/blink/renderer/platform/context_lifecycle_notifier.h"
 
 #include <algorithm>
@@ -61,7 +62,7 @@ void ContextLifecycleNotifier::NotifyContextDestroyed() {
       recordreplay::FeatureEnabled("pointer-ids") &&
       !recordreplay::AreEventsDisallowed()) {
     size_t num_observers = recordreplay::RecordReplayValue("NotifyContextDestroyed NumObservers", observers.size());
-    int* observer_ids = new int[num_observers];
+    std::vector<int> observer_ids(num_observers);
 
     if (recordreplay::IsRecording()) {
       for (wtf_size_t i = 0; i < observers.size(); i++) {
@@ -72,24 +73,24 @@ void ContextLifecycleNotifier::NotifyContextDestroyed() {
     }
 
     recordreplay::RecordReplayBytes("ContextLifecycleNotifier::NotifyContextDestroyed ObserverIds",
-                                    observer_ids, num_observers * sizeof(int));
+                                    observer_ids.data(),
+                                    num_observers * sizeof(int));
 
     if (recordreplay::IsReplaying()) {
       // There can be hundreds of thousands of observers (e.g. MediaQueryLists
       // kept alive by HeapObserverSet), too many for a scan per observer.
-      std::sort(observer_ids, observer_ids + num_observers);
+      std::ranges::sort(observer_ids);
       HeapVector<Member<ContextLifecycleObserver>> new_observers;
       for (ContextLifecycleObserver* observer : observers) {
         int id = recordreplay::PointerId(observer);
         CHECK(id);
-        if (std::binary_search(observer_ids, observer_ids + num_observers, id))
+        if (std::ranges::binary_search(observer_ids, id))
           new_observers.push_back(observer);
       }
 
       observers = std::move(new_observers);
     }
 
-    delete[] observer_ids;
   }
 
   for (ContextLifecycleObserver* observer : observers) {

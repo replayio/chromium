@@ -4,7 +4,7 @@
 
 #include "partition_alloc/partition_alloc_hooks.h"
 
-#include "base/record_replay.h"
+#include "partition_alloc/record_replay_shim.h"
 
 #include <ostream>
 
@@ -57,7 +57,7 @@ void PartitionAllocHooks::SetObserverHooks(AllocationObserverHook* alloc_hook,
 void PartitionAllocHooks::SetOverrideHooks(AllocationOverrideHook* alloc_hook,
                                            FreeOverrideHook* free_hook,
                                            ReallocOverrideHook realloc_hook) {
-  if (recordreplay::IsRecordingOrReplaying()) {
+  if (record_replay::IsRecordingOrReplaying()) {
     // Always use the default allocators when recording/replaying.
     return;
   }

@@ -123,6 +123,13 @@ class ValuePeeker final {
 
   // NOLINTNEXTLINE
   ALWAYS_INLINE operator T*() const { return ptr_; }
+
+  // [Replay] ValuePeeker converts to T* but had no Get(), so a Member-keyed
+  // table looked up through a ValuePeeker matched none of the fork's
+  // RecordReplayPointerIdHashTraits::GetHash overloads, which are SFINAE'd on
+  // Get(). platform/wtf is below platform/heap and cannot name ValuePeeker,
+  // so the one line belongs here rather than in the traits.
+  ALWAYS_INLINE T* Get() const { return ptr_; }
   // NOLINTNEXTLINE
   ALWAYS_INLINE operator Member<T>() const { return ptr_; }
   // NOLINTNEXTLINE

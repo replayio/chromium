@@ -3225,7 +3225,8 @@ DISABLE_CFI_PERF
 void LayoutObject::SetStyle(const ComputedStyle& new_style,
                             ApplyStyleChanges apply_changes) {
   recordreplay::Assert("[RUN-2300] LayoutObject::SetStyle %d %d %d",
-                       RecordReplayId(), style_ == style, (int)apply_changes);
+                       RecordReplayId(), style_ == &new_style,
+                       (int)apply_changes);
 
   NOT_DESTROYED();
 

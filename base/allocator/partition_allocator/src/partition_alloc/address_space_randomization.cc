@@ -13,12 +13,12 @@
 #include <windows.h>
 #endif
 
-#include "base/record_replay.h"
+#include "partition_alloc/record_replay_shim.h"
 
 namespace partition_alloc {
 
 uintptr_t GetRandomPageBase() {
-  recordreplay::AutoDisallowEvents disallow("GetRandomPageBase");
+  record_replay::AutoDisallowEvents disallow("GetRandomPageBase");
 
   uintptr_t random = static_cast<uintptr_t>(internal::RandomValue());
 

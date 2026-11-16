@@ -31,7 +31,7 @@ Status GenerateWebCryptoSecretKey(const blink::WebCryptoKeyAlgorithm& algorithm,
     // Avoid calling RAND_bytes when recording/replaying as it can behave in
     // non-deterministic ways.
     if (recordreplay::IsRecordingOrReplaying()) {
-      crypto::RandBytes(random_bytes.data(), keylen_bytes);
+      crypto::RandBytes(random_bytes);
     } else {
       if (!RAND_bytes(random_bytes.data(), keylen_bytes))
         return Status::OperationError();

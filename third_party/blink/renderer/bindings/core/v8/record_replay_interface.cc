@@ -15,10 +15,14 @@
 #include "base/json/json_writer.h"
 #include "base/path_service.h"
 #include "base/process/process_handle.h"
+#include <string_view>
+#include "base/containers/span.h"
+#include "base/strings/string_util.h"
+#include "base/strings/string_number_conversions.h"
+
 #include "base/record_replay.h"
 #include "base/record_replay_paint_surface.h"
 #include "base/record_replay_render_interface.h"
-#include "content/public/renderer/render_thread.h"
 #include "content/public/renderer/v8_value_converter.h"
 #include "third_party/blink/renderer/bindings/core/v8/serialization/serialized_script_value.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
@@ -30,9 +34,11 @@
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/dom_node_ids.h"
 #include "third_party/blink/renderer/core/dom/events/custom_event.h"
+#include "third_party/blink/renderer/core/event_interface_names.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/settings.h"
 #include "third_party/blink/renderer/core/inspector/inspected_frames.h"
+#include "third_party/blink/renderer/core/css/css_style_sheet.h"
 #include "third_party/blink/renderer/core/inspector/inspector_css_agent.h"
 #include "third_party/blink/renderer/core/inspector/inspector_dom_agent.h"
 #include "third_party/blink/renderer/core/inspector/inspector_dom_debugger_agent.h"
@@ -247,7 +253,8 @@ static String ReadReplayAssetFile(const char* fname) {
   size_t len;
 
   // Important: Treat as UTF-8.
-  String result = String::FromUTF8(ReadReplayAssetFile(fname, len).c_str(), len);
+  std::string contents = ReadReplayAssetFile(fname, len);
+  String result = String::FromUtf8(std::string_view(contents.c_str(), len));
   if (!len) {
     recordreplay::Crash("ReadReplayAssetFile failed: %s", fname);
   }
@@ -258,14 +265,16 @@ static String ReadReplayCommandAssetFile(const char* fname) {
   size_t len;
 
   // Important: Treat as UTF-8.
-  String result = String::FromUTF8(
-    IsCommandHandlingEnabledWhenRecording()
-      // Recording + Replay.
-      ? ReadReplayAssetFile(fname, len).c_str()
-      // Replay only.
-      : V8RecordReplayReadAssetFileContents(fname, &len),
-    len
-  );
+  String result;
+  if (IsCommandHandlingEnabledWhenRecording()) {
+    // Recording + Replay.
+    std::string contents = ReadReplayAssetFile(fname, len);
+    result = String::FromUtf8(std::string_view(contents.c_str(), len));
+  } else {
+    // Replay only.
+    const char* data = V8RecordReplayReadAssetFileContents(fname, &len);
+    result = String::FromUtf8(std::string_view(data, len));
+  }
   if (!len) {
     recordreplay::Crash("ReadReplayAssetFile failed: %s", fname);
   }
@@ -810,7 +819,7 @@ static bool IsBlankReplayWindow(LocalFrame* frame) {
   Document* document = frame->GetDocument();
   const SecurityOrigin* origin = frame->DomWindow()->GetSecurityOrigin();
   return frame == gRootLocalFrame && document &&
-         document->Url().IsAboutBlankURL() && origin &&
+         document->Url().IsAboutBlankUrl() && origin &&
          origin->Host().empty();
 }
 
@@ -901,7 +910,7 @@ void RecordReplayClearContexts(const char* reason, LocalFrame* frame) {
   if (!IsAliveRootFrame(frame)) {
     return;
   }
-  v8::Isolate* isolate = V8PerIsolateData::MainThreadIsolate();
+  v8::Isolate* isolate = v8::Isolate::GetCurrent();
   recordreplay::Print(
       "ReplayScript STATUS_CHANGE_UNALIVE - %s %s frame=%d", reason,
       v8::internal::RecordReplayContextAddressToken(
@@ -997,7 +1006,8 @@ struct InspectorChannel final : public v8_inspector::V8Inspector::Channel {
 // another console API call; a single optional cannot model that.
 // POD stack: no global ctor / exit-time dtor (-Werror).
 static constexpr size_t kMaxContextGroupIdOverrideDepth = 16;
-static int gContextGroupIdForSendCDPMessageStack[kMaxContextGroupIdOverrideDepth];
+static std::array<int, kMaxContextGroupIdOverrideDepth>
+    gContextGroupIdForSendCDPMessageStack;
 static size_t gContextGroupIdForSendCDPMessageDepth = 0;
 
 extern "C" void SetContextGroupIdForSendCDPMessage(int contextGroupId) {
@@ -1106,7 +1116,7 @@ static int GetBlinkPersistentId(v8::Local<v8::Object> object) {
 
   // Provide a unique id for Blink Objects.
   if (V8DOMWrapper::IsWrapper(isolate, object)) {
-    ScriptWrappable* wrappable = ToScriptWrappable(object);
+    ScriptWrappable* wrappable = ToAnyScriptWrappable(isolate, object);
     return wrappable->RecordReplayId();
   }
 
@@ -1141,7 +1151,8 @@ static void SendCDPMissingContextError(v8::Isolate* isolate,
   // Ensure the message has an ID. If not, handle the error in JavaScript.
   v8::String::Utf8Value inmessage(isolate, message_arg);
   std::string nmessage(*inmessage);
-  std::optional<base::Value> jsonMessage = base::JSONReader::Read(nmessage);
+  std::optional<base::Value> jsonMessage = base::JSONReader::Read(
+      nmessage, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   base::DictValue* messageDict = jsonMessage->GetIfDict();
   CHECK(messageDict != nullptr);
   CHECK(messageDict->FindInt("id").has_value());
@@ -1269,25 +1280,27 @@ static void SHA256DigestHex(const v8::FunctionCallbackInfo<v8::Value>& args) {
       "must be called with a single string");
   v8::Isolate* isolate = args.GetIsolate();
   // Zeroed: replay skips hash and only fills via RecordReplayBytes.
-  char* digestHex = new char[65]();
+  std::array<char, 65> digestHex = {};
 
   if (!recordreplay::IsReplaying()) {
     v8::String::Utf8Value content(isolate, args[0]);
     std::unique_ptr<crypto::SecureHash> hasher =
         crypto::SecureHash::Create(crypto::SecureHash::SHA256);
-    hasher->Update(*content, content.length());
-    uint8_t digest[crypto::kSHA256Length];
-    hasher->Finish(digest, crypto::kSHA256Length);
-    for (int i = 0; i < 32; i++) {
-      sprintf(digestHex + i * 2, "%02x", digest[i]);
-    }
+    hasher->Update(base::as_byte_span(
+        std::string_view(*content, content.length())));
+    std::array<uint8_t, crypto::kSHA256Length> digest;
+    hasher->Finish(digest);
+    const std::string hex = base::ToLowerASCII(base::HexEncode(digest));
+    CHECK_EQ(hex.size(), digestHex.size() - 1);
+    std::ranges::copy(hex, digestHex.begin());
   }
 
   // The content being hashed can vary when replaying if source contents have been
   // replaced, so we record/replay the result.
-  recordreplay::RecordReplayBytes("SHA256DigestHex", digestHex, 65);
+  recordreplay::RecordReplayBytes("SHA256DigestHex", digestHex.data(),
+                                 digestHex.size());
 
-  args.GetReturnValue().Set(ToV8String(isolate, digestHex));
+  args.GetReturnValue().Set(ToV8String(isolate, digestHex.data()));
 }
 
 static void GetRecordingFilePath(const v8::FunctionCallbackInfo<v8::Value>& args) {
@@ -1544,8 +1557,8 @@ std::optional<InspectorDOMAgent*> getOrCreateInspectorDOMAgent(v8::Isolate* isol
   if (!data->inspectorDomAgent) {
     // NOTE: based on WebDevToolsAgentImpl::AttachSession
     InspectedFrames* inspectedFrames = getOrCreateInspectedFrames(isolate, *contextGroupId);
-    data->inspectorDomAgent = MakeGarbageCollected<InspectorDOMAgent>(
-        isolate, inspectedFrames, getInspectorSession(isolate, *contextGroupId));
+    data->inspectorDomAgent =
+        MakeGarbageCollected<InspectorDOMAgent>(isolate, inspectedFrames);
     data->inspectorDomAgent->FrameDocumentUpdated(data->GetLocalFrameRoot());
   }
   return data->inspectorDomAgent;
@@ -1564,7 +1577,7 @@ std::optional<InspectorDOMDebuggerAgent*> getOrCreateInspectorDOMDebuggerAgent(
   if (!data->inspectorDomDebuggerAgent) {
     data->inspectorDomDebuggerAgent =
         MakeGarbageCollected<InspectorDOMDebuggerAgent>(
-            isolate, *getOrCreateInspectorDOMAgent(isolate), getInspectorSession(isolate, *contextGroupId));
+            isolate, *getOrCreateInspectorDOMAgent(isolate));
 
     // RUN-1061: registering the agent here allows it to receive `UserCallback`
     // events.
@@ -1658,8 +1671,8 @@ static bool getV8FromBlinkObject(
     ScriptWrappable* blinkObject,
     v8::Local<v8::Value>& result) {
   ScriptState* scriptState = ScriptState::ForCurrentRealm(isolate);
-  v8::Local<v8::Value> v8Object;
-  if (blinkObject->Wrap(scriptState).ToLocal(&v8Object)) {
+  v8::Local<v8::Value> v8Object = blinkObject->Wrap(scriptState);
+  if (!v8Object.IsEmpty()) {
     result = v8Object;
     return true;
   }
@@ -1805,7 +1818,8 @@ static void fromJsIsBlinkObject(
 
   v8::Isolate* isolate = args.GetIsolate();
 
-  bool result = V8DOMWrapper::IsWrapper(isolate, args[0]);
+  bool result = args[0]->IsObject() &&
+                V8DOMWrapper::IsWrapper(isolate, args[0].As<v8::Object>());
 
   args.GetReturnValue().Set(result);
 }
@@ -1899,11 +1913,10 @@ static void SetCurrentNetworkStreamData(
     size_t data_length) {
   gCurrentNetworkRequestId = &request_id;
   gCurrentNetworkStreamKind = stream_kind;
-  gCurrentNetworkStreamData->clear();
-  gCurrentNetworkStreamData->insert(
-      gCurrentNetworkStreamData->begin(),
-      data,
-      data + data_length);
+  // SAFETY: `data` and `data_length` are a (pointer, length) pair handed in
+  // by the network stack, which guarantees data_length readable bytes.
+  const auto incoming = UNSAFE_BUFFERS(base::span(data, data_length));
+  gCurrentNetworkStreamData->assign(incoming.begin(), incoming.end());
 }
 
 static void ClearCurrentNetworkStreamData() {
@@ -1973,16 +1986,10 @@ static void GetCurrentNetworkStreamData(const v8::FunctionCallbackInfo<v8::Value
     return;
   }
 
-  const uint8_t* bytes = gCurrentNetworkStreamData->data() + index;
   std::string encoded = base::Base64Encode(
-    base::span<const uint8_t>(bytes, length)
-  );
-  char* encoded_cstr = strdup(encoded.c_str());
-  char* encoded_end = encoded_cstr + encoded.length();
-  for (char *cur = encoded_cstr; cur < encoded_end; cur++) {
-    if (*cur == '-') { *cur = '+'; }
-    if (*cur == '_') { *cur = '/'; }
-  }
+      base::span(*gCurrentNetworkStreamData).subspan(index, length));
+  std::ranges::replace(encoded, '-', '+');
+  std::ranges::replace(encoded, '_', '/');
 
   v8::Local<v8::Object> result = v8::Object::New(isolate);
   result->Set(context,
@@ -1991,7 +1998,7 @@ static void GetCurrentNetworkStreamData(const v8::FunctionCallbackInfo<v8::Value
   ).Check();
   result->Set(context,
     ToV8String(isolate, "value"),
-    ToV8String(isolate, encoded_cstr)
+    ToV8String(isolate, encoded.c_str())
   ).Check();
   args.GetReturnValue().Set(result);
 }
@@ -2402,10 +2409,23 @@ static void fromJsGetMatchedStylesForElement(
   std::unique_ptr<protocol::Array<protocol::CSS::CSSKeyframesRule>> keyframesRules;
   std::optional<int> parentLayoutNodeId;
 
+  // Upstream grew this from 9 parameters to 15 and moved parentLayoutNodeId
+  // to 14th. The six additions are out-parameters this caller does not use,
+  // so they get locals that are discarded.
+  std::unique_ptr<protocol::Array<protocol::CSS::CSSPositionTryRule>>
+      positionTryRules;
+  std::optional<int> unusedNodeId;
+  std::unique_ptr<protocol::Array<protocol::CSS::CSSPropertyRule>> propertyRules;
+  std::unique_ptr<protocol::Array<protocol::CSS::CSSPropertyRegistration>>
+      propertyRegistrations;
+  std::unique_ptr<protocol::Array<protocol::CSS::CSSAtRule>> atRules;
+  std::unique_ptr<protocol::Array<protocol::CSS::CSSFunctionRule>> functionRules;
+
   auto response = (*cssAgent)->getMatchedStylesForNode(
     nodeId, &inlineStyle, &attributesStyle, &matchedRules, &pseudoIdMatches,
     &inheritedEntries, &inherited_pseudo_id_matches, &keyframesRules,
-    &parentLayoutNodeId);
+    &positionTryRules, &unusedNodeId, &propertyRules, &propertyRegistrations,
+    &atRules, &parentLayoutNodeId, &functionRules);
 
   if (!response.IsSuccess()) {
     recordreplay::Warning(
@@ -2449,7 +2469,7 @@ static void fromJsCssGetStylesheetByCpdId(
 
   v8::Isolate* isolate = args.GetIsolate();
 
-  auto sheetId = ToCoreString(args[0].As<v8::String>());
+  auto sheetId = ToCoreString(isolate, args[0].As<v8::String>());
   auto cssAgent = getOrCreateInspectorCSSAgent(isolate);
   if (!cssAgent.has_value()) {
     recordreplay::Warning("GetStylesheetByCdpIdMissingContext");
@@ -2473,7 +2493,7 @@ static void fromJsDomPerformSearch(
 
   v8::Isolate* isolate = args.GetIsolate();
 
-  auto query = ToCoreString(args[0].As<v8::String>());
+  auto query = ToCoreString(isolate, args[0].As<v8::String>());
   auto domAgent = getOrCreateInspectorDOMAgent(isolate);
   if (!domAgent.has_value()) {
     recordreplay::Warning("DomPerformSearchMissingContext");
@@ -2663,22 +2683,24 @@ static void fromJsGetDevicePixelRatio(
 
 // Handle incoming browser events.
 static void HandleBrowserEvent(const char* name, const char* payload) {
-  base::Value val = base::JSONReader::Read(payload).value_or(base::Value());
+  base::Value val = base::JSONReader::Read(payload, base::JSON_PARSE_CHROMIUM_EXTENSIONS)
+                        .value_or(base::Value());
   assert(!val.is_none() && "Browser event JSON failed");
   assert(!val.is_dict() && "Browser event JSON is not a dictionary");
-  if (!strcmp(name, "Network.PrepareRequest")) {
+  const std::string_view event_name(name);
+  if (event_name == "Network.PrepareRequest") {
     HandleNetworkPrepareRequestEvent(val.GetDict());
-  } else if (!strcmp(name, "Network.NavigationRedirect")) {
+  } else if (event_name == "Network.NavigationRedirect") {
     HandleNetworkNavigationRedirectEvent(val.GetDict());
-  } else if (!strcmp(name, "Network.RequestData.Form")) {
+  } else if (event_name == "Network.RequestData.Form") {
     HandleNetworkRequestDataFormEvent(val.GetDict());
-  } else if (!strcmp(name, "Network.DidReceiveResponse")) {
+  } else if (event_name == "Network.DidReceiveResponse") {
     HandleNetworkDidReceiveResponseEvent(val.GetDict());
-  } else if (!strcmp(name, "Network.DidFinishLoading")) {
+  } else if (event_name == "Network.DidFinishLoading") {
     HandleNetworkDidFinishLoadingEvent(val.GetDict());
-  } else if (!strcmp(name, "Network.DidFailLoading")) {
+  } else if (event_name == "Network.DidFailLoading") {
     HandleNetworkDidFailLoadingEvent(val.GetDict());
-  } else if (!strcmp(name, "Network.DidReceiveData")) {
+  } else if (event_name == "Network.DidReceiveData") {
     HandleNetworkDidReceiveDataEvent(val.GetDict());
   } else {
     recordreplay::Print("HandleBrowserEvent received unrecognized event %s", name);
@@ -3067,7 +3089,7 @@ static void RunRegisteredRootFrameScripts(v8::Isolate* isolate,
 
 void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context) {
   // 1. Register navigation event.
-  if (localFrame->GetDocument()->Url().ProtocolIsInHTTPFamily()) {
+  if (localFrame->GetDocument()->Url().ProtocolIsInHttpFamily()) {
     recordreplay::OnNavigationEvent(
         nullptr, localFrame->GetDocument()->Url().GetString().Utf8().c_str());
   }
@@ -3168,7 +3190,7 @@ static void GetCurrentError(const v8::FunctionCallbackInfo<v8::Value>& args) {
 }
 
 bool GetStringProperty(v8::Local<v8::Context> context, v8::Local<v8::Object> obj, const char* name, v8::Local<v8::String>* out) {
-  v8::Isolate* isolate = context->GetIsolate();
+  v8::Isolate* isolate = v8::Isolate::GetCurrent();
   v8::Local<v8::String> v8Name = ToV8String(isolate, name);
   v8::Local<v8::Value> v8Value = obj->Get(context, v8Name).ToLocalChecked();
 
@@ -3176,7 +3198,7 @@ bool GetStringProperty(v8::Local<v8::Context> context, v8::Local<v8::Object> obj
 }
 
 bool GetObjectProperty(v8::Local<v8::Context> context, v8::Local<v8::Object> obj, const char* name, v8::Local<v8::Object>* out) {
-  v8::Isolate* isolate = context->GetIsolate();
+  v8::Isolate* isolate = v8::Isolate::GetCurrent();
   v8::Local<v8::String> v8Name = ToV8String(isolate, name);
   v8::Local<v8::Value> v8Value = obj->Get(context, v8Name).ToLocalChecked();
 
@@ -3188,10 +3210,13 @@ bool StringEquals(v8::Isolate* isolate, v8::Local<v8::String> str1, const char* 
 }
 
 void RecordReplayEventListener::Invoke(ExecutionContext* context, Event* event) {
-  v8::Isolate* isolate = context->GetIsolate();
+  v8::Isolate* isolate = v8::Isolate::GetCurrent();
   v8::Local<v8::Context> v8_context = isolate->GetCurrentContext();
   ScriptState* scriptState = ScriptState::ForCurrentRealm(isolate);
-  CustomEvent* customEvent = To<CustomEvent>(event);
+  CustomEvent* customEvent =
+      event->InterfaceName() == event_interface_names::kCustomEvent
+          ? static_cast<CustomEvent*>(event)
+          : nullptr;
 
   if (!customEvent) {
     return;
@@ -3244,7 +3269,7 @@ void RecordReplayEventListener::Invoke(ExecutionContext* context, Event* event) 
 }
 
 void RecordReplayEventListener::HandleRecordReplayTokenMessage(v8::Local<v8::Context> context, v8::Local<v8::Object> message) {
-  v8::Isolate* isolate = context->GetIsolate();
+  v8::Isolate* isolate = v8::Isolate::GetCurrent();
 
   // cases here:
   // { "id": "record-replay-token", "message": { "type": "connect" } }      => register auth token observer
@@ -3288,7 +3313,7 @@ void RecordReplayEventListener::HandleRecordReplayTokenMessage(v8::Local<v8::Con
 }
 
 void RecordReplayEventListener::HandleRecordReplayMessage(v8::Local<v8::Context> context, v8::Local<v8::Object> message) {
-  v8::Isolate* isolate = context->GetIsolate();
+  v8::Isolate* isolate = v8::Isolate::GetCurrent();
 
   // the only message handled here is `{ user: <string|null> }`
   v8::Local<v8::Value> message_user = message->Get(context, ToV8String(isolate, "user")).ToLocalChecked();

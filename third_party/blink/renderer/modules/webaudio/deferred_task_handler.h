@@ -135,6 +135,8 @@ class MODULES_EXPORT LOCKABLE DeferredTaskHandler final
   // main thread takes it to change a timeline, and a render that couldn't take
   // it treats every timeline as locked.
   class RecordReplayRenderTimelinesLocker {
+    STACK_ALLOCATED();
+
    public:
     explicit RecordReplayRenderTimelinesLocker(DeferredTaskHandler& handler)
         NO_THREAD_SAFETY_ANALYSIS : handler_(handler) {
@@ -155,6 +157,8 @@ class MODULES_EXPORT LOCKABLE DeferredTaskHandler final
     bool acquired_ = false;
   };
   class RecordReplayMainThreadTimelinesLocker {
+    STACK_ALLOCATED();
+
    public:
     explicit RecordReplayMainThreadTimelinesLocker(DeferredTaskHandler& handler)
         : locker_(recordreplay::IsRecordingOrReplaying()

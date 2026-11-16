@@ -31,12 +31,14 @@ class SelfKeepAliveCreationKey final {
   friend class InspectorFileReaderLoaderClient;
   friend class LanguageModelPromptBuilder;
   friend class MediaStreamAudioTrackUnderlyingSource;
+  friend class MediaStreamTrackImpl;
   friend class MIDIAccessInitializer;
   friend class MojoWatcher;
   friend class PausableScriptExecutor;
   friend class RefCountedAndGarbageCollected;
   friend class Responder;
   friend class RTCDataChannel;
+  friend class RTCPeerConnection;
   friend class ScriptState;
   friend class SetMediaKeysHandler;
   friend class ThreadedMessagingProxyBase;

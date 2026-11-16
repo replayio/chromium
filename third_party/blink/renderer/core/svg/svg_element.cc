@@ -1014,10 +1014,14 @@ void SVGElement::SetNeedsStyleRecalcForInstances(
   if (set.empty())
     return;
 
-  std::vector<SVGElement*> members;
+  HeapVector<Member<SVGElement>> members;
+  members.reserve(set.size());
   for (SVGElement* instance : set)
     members.push_back(instance);
-  std::sort(members.begin(), members.end(), recordreplay::CompareByRecordReplayId());
+  std::sort(members.begin(), members.end(),
+            [](const SVGElement* a, const SVGElement* b) {
+              return recordreplay::CompareByRecordReplayId()(a, b);
+            });
 
   for (SVGElement* instance : members)
     instance->SetNeedsStyleRecalc(change_type, reason);

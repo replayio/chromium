@@ -236,7 +236,12 @@ class LocalDOMWindow::NetworkStateObserver final
       online_observer_handle_;
 };
 
-static std::unordered_set<LocalDOMWindow*>* gValidDOMWindowPointers;
+// Pointer identities only. This answers "is this pointer still a live
+// LocalDOMWindow", so it must never dereference what it holds -- and a heap
+// collection would, because BaseMemberHashTraits::GetHash reads
+// RecordReplayId() off the key. Storing erased pointers makes that invariant
+// structural and keeps the set out of the GC plugin's reach. See DSRC-344.
+static std::unordered_set<const void*>* gValidDOMWindowPointers;
 
 // Workaround for invalid window pointers being used.
 //
@@ -271,7 +276,7 @@ LocalDOMWindow::LocalDOMWindow(LocalFrame& frame, WindowAgent* agent)
           MakeGarbageCollected<CloseWatcher::WatcherStack>(this)) {
   CHECK(IsMainThread());
   if (!gValidDOMWindowPointers)
-    gValidDOMWindowPointers = new std::unordered_set<LocalDOMWindow*>();
+    gValidDOMWindowPointers = new std::unordered_set<const void*>();
   gValidDOMWindowPointers->insert(this);
 }
 
@@ -2012,7 +2017,8 @@ ScriptPromise<ScrollResult> LocalDOMWindow::scrollBy(
     ScriptState* script_state,
     const ScrollToOptions* scroll_to_options) const {
   if (RecordReplayThrowIfEventsUnavailable("Window.scrollBy")) {
-    return CreateScrollResolvedPromise(script_state);
+    return MakeGarbageCollected<ScrollPromiseResolver>(script_state)
+        ->CreateScriptPromise();
   }
   ScrollPromiseResolver* resolver =
       MakeGarbageCollected<ScrollPromiseResolver>(script_state);
@@ -2082,7 +2088,8 @@ ScriptPromise<ScrollResult> LocalDOMWindow::scrollTo(
     ScriptState* script_state,
     const ScrollToOptions* scroll_to_options) const {
   if (RecordReplayThrowIfEventsUnavailable("Window.scrollTo")) {
-    return CreateScrollResolvedPromise(script_state);
+    return MakeGarbageCollected<ScrollPromiseResolver>(script_state)
+        ->CreateScriptPromise();
   }
   ScrollPromiseResolver* resolver =
       MakeGarbageCollected<ScrollPromiseResolver>(script_state);

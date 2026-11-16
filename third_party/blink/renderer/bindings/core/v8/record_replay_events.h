@@ -15,19 +15,22 @@ namespace recordreplay {
 
 // Emulate probe::UserCallback (but without InspectorDOMDebuggerAgent).
 struct UserEventProbe {
-  String name_;
+  STACK_ALLOCATED();
+
+ public:
+  blink::String name_;
   blink::EventTarget* event_target_;
   bool is_callback_;
 
   UserEventProbe(const char* name,
-                 const AtomicString& atomic_name,
+                 const blink::AtomicString& atomic_name,
                  blink::EventTarget* event_target,
                  bool is_callback);
 
   // Used for probes::UserCallback.
   // see: https://source.chromium.org/chromium/chromium/src/+/main:out/android-Debug/gen/third_party/blink/renderer/core/core_probes_impl.cc;l=2090;drc=0c4306fc554c80506eb0f9b833a5d2a5fdd452d5;bpv=1;bpt=1
   UserEventProbe(const char* name,
-                 const AtomicString& atomic_name,
+                 const blink::AtomicString& atomic_name,
                  blink::EventTarget* event_target = nullptr);
 
   // Primarily used for probes::ExecuteScript.

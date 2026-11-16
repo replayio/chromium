@@ -1002,7 +1002,7 @@ void FetchLoaderBase::Start(ExceptionState& exception_state) {
 
   if (recordreplay::IsInReplayCode()) {
     // [TT-1422] Always allow |fetch| from Replay code.
-    PerformSchemeFetch();
+    PerformSchemeFetch(exception_state);
     return;
   }
   // "- |request|'s url's origin is same origin with |request|'s origin,

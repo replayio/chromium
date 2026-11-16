@@ -462,7 +462,7 @@ void AudioInputDevice::AudioThreadCallback::Process(uint32_t pending_data) {
                                     sizeof(params));
     for (int ch = 0; ch < capture_bus_->channels(); ++ch) {
       recordreplay::RecordReplayBytes(
-          "AudioInputDevice::Process", capture_bus_->channel(ch),
+          "AudioInputDevice::Process", capture_bus_->channel(ch).data(),
           static_cast<size_t>(capture_bus_->frames()) * sizeof(float));
     }
     audio_bus = capture_bus_.get();

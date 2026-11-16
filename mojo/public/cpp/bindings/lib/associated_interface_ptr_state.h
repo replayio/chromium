@@ -63,10 +63,7 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS) AssociatedInterfacePtrStateBase {
       scoped_refptr<ThreadSafeProxy::Target> target,
       const base::Location& location);
 
-  void record_replay_leak() {
-    if (endpoint_client_)
-      endpoint_client_->record_replay_leak();
-  }
+  void record_replay_leak();
 
  protected:
   void Swap(AssociatedInterfacePtrStateBase* other);

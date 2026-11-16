@@ -2336,8 +2336,8 @@ OutOfFlowLayoutPart::TryCalculateOffset(
       "[RUN-1239-1435] NGOutOfFlowLayoutPart::TryCalculateOffset %d %d %d %s",
       container_physical_content_size.width.RawValue(),
       container_physical_content_size.height.RawValue(),
-      container_physical_content_size
-          .ConvertToLogical(candidate_writing_direction.GetWritingMode())
+      ToLogicalSize(container_physical_content_size,
+                    candidate_writing_direction.GetWritingMode())
           .block_size.RawValue(),
       node_info.node.ToString().Utf8().c_str());
   // Create a constraint space to resolve border/padding/insets.

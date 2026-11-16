@@ -5,6 +5,14 @@
 // Routines for setting up the recorder handle when recording/replaying.
 // This is directly included from files which need it to avoid linker issues.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// This is C-style driver glue: it is #included directly rather than linked,
+// and it speaks a C API of (pointer, length) pairs and va_list, so it cannot
+// use base::span or UNSAFE_TODO without restructuring code whose shape the
+// driver dictates. Same opt-out upstream applies to its own C-style files.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "../../base/record_replay_driver.cc"
 
 #if BUILDFLAG(IS_WIN)

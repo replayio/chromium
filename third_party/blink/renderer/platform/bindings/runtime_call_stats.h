@@ -361,8 +361,17 @@ static inline bool BlinkRuntimeCallStatsEnabled() {
   // runtime_enabled_features.h include from this header, so the restated form no
   // longer compiles here.  Calling upstream's predicate also stops the duplicate
   // from rotting again.
-  return UNLIKELY(RuntimeCallStats::IsEnabled()
-               && !v8::recordreplay::IsRecordingOrReplaying("no-call-stats"));
+  //
+  // M158: UNLIKELY() is gone upstream, replaced by the C++20 [[unlikely]]
+  // attribute. That applies to a STATEMENT rather than wrapping an
+  // expression, so the branch hint moves onto an `if` -- the same shape
+  // upstream uses for this very predicate earlier in this file:
+  //     if (RuntimeCallStats::IsEnabled()) [[unlikely]] {
+  if (RuntimeCallStats::IsEnabled() &&
+      !v8::recordreplay::IsRecordingOrReplaying("no-call-stats")) [[unlikely]] {
+    return true;
+  }
+  return false;
 }
 
 // A utility class that creates a RuntimeCallTimer and uses it with

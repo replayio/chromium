@@ -1083,7 +1083,7 @@ void MatchOuterScopeRules(const Element& matching_element,
   }
   recordreplay::Assert(
       "[RUN-2424-3231] MatchElementScopeRules inline style %d",
-      element.IsStyledElement() && element.InlineStyle() &&
+      matching_element.IsStyledElement() && matching_element.InlineStyle() &&
           collector.GetPseudoId() == kPseudoIdNone);
 }
 
@@ -2219,7 +2219,7 @@ void StyleResolver::ApplyBaseStyle(
   recordreplay::Assert(
       "[RUN-2424-3228] StyleResolver::ApplyBaseStyle incremental %d",
       style_recalc_context.can_use_incremental_style &&
-          CanApplyInlineStyleIncrementally(element, state, style_request));
+          CanApplyStyleIncrementally(element, state, style_request));
   if (style_recalc_context.can_use_incremental_style &&
       CanApplyStyleIncrementally(element, state, style_request)) {
     // Reuse the previous style and apply the whole inline style, not just the

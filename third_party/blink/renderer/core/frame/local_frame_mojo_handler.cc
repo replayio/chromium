@@ -481,6 +481,8 @@ void LocalFrameMojoHandler::RegisterRecordReplayAuthTokenObserver() {
       auth_token_store_.BindNewPipeAndPassReceiver(task_runner));
   auth_token_store_->AddObserver(
       auth_token_store_observer_receiver_.BindNewPipeAndPassRemote(task_runner));
+}
+
 Page* LocalFrameMojoHandler::GetPage() const {
   return frame_->GetPage();
 }
@@ -1673,8 +1675,9 @@ void LocalFrameMojoHandler::OnRecordReplayAuthTokenChanged(const String& token) 
       .Check();
 
 
-  ExceptionState exception_state(isolate, ExceptionState::kExecutionContext,
-                                 "LocalFrameMojoHandler", "OnTokenChanged");
+  ExceptionState exception_state(
+      isolate, ExceptionContext(v8::ExceptionContext::kOperation,
+                                "LocalFrameMojoHandler", "OnTokenChanged"));
 
   CustomEventInit* ev_init = CustomEventInit::Create(isolate, v8::Null(isolate), exception_state);
   // bail if the creator of the event threw an exception
@@ -1682,7 +1685,7 @@ void LocalFrameMojoHandler::OnRecordReplayAuthTokenChanged(const String& token) 
     return;
   }
 
-  ev_init->setDetail(ScriptValue::From(script_state, detail));
+  ev_init->setDetail(ScriptValue(isolate, detail));
 
   frame_->DomWindow()->DispatchEvent(
     *CustomEvent::Create(script_state,

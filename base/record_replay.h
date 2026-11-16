@@ -9,6 +9,7 @@
 
 #include "base/check.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/memory/stack_allocated.h"
 #include "base/synchronization/lock.h"
 #include "base/thread_annotations.h"
 
@@ -307,6 +308,8 @@ struct ReplayRefPointerIdHash : ReplayPointerIdHash<T> {
 // For taking ordered locks when events might be disallowed. Passes through
 // events during the acquire to avoid generating a warning.
 class SCOPED_LOCKABLE AutoLockMaybeEventsDisallowed {
+  STACK_ALLOCATED();
+
  public:
   AutoLockMaybeEventsDisallowed(base::Lock& lock) EXCLUSIVE_LOCK_FUNCTION(lock);
   ~AutoLockMaybeEventsDisallowed() UNLOCK_FUNCTION();
@@ -318,6 +321,8 @@ class SCOPED_LOCKABLE AutoLockMaybeEventsDisallowed {
 // For releasing ordered locks when events might be disallowed. Passes through
 // events during the acquire to avoid generating a warning.
 class SCOPED_LOCKABLE AutoUnlockMaybeEventsDisallowed {
+  STACK_ALLOCATED();
+
  public:
   AutoUnlockMaybeEventsDisallowed(base::Lock& lock);
   ~AutoUnlockMaybeEventsDisallowed();

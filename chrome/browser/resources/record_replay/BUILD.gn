@@ -10,6 +10,7 @@ import("//tools/polymer/css_to_wrapper.gni")
 import("//tools/polymer/html_to_wrapper.gni")
 import("//ui/webui/resources/tools/generate_grd.gni")
 import("//ui/webui/webui_features.gni")
+import("//tools/typescript/webui_path_mappings.gni")
 import("./record_replay.gni")
 import("./preprocess_if_expr_sourcemaps.gni")
 import("./ts_library_sourcemaps.gni")
@@ -83,6 +84,15 @@ copy("copy_src") {
   outputs = [ "$target_gen_dir/{{source_file_part}}" ]
 }
 
+# The generated .mojom-webui.ts imports //resources/mojo/...; ts_library only
+# resolves that through a path-mappings file. build_webui() generates one via
+# its own :build_path_map, which this hand-rolled pipeline has to do itself.
+webui_path_mappings("build_path_map") {
+  ts_deps = [ "//ui/webui/resources/mojo:build_ts" ]
+  visibility = [ ":build_ts" ]
+  webui_context_type = "trusted"
+}
+
 ts_library_sourcemaps("build_ts") {
   root_dir = "$target_gen_dir/$preprocess_folder"
   out_dir = "$target_gen_dir/tsc"
@@ -94,7 +104,14 @@ ts_library_sourcemaps("build_ts") {
   }
   in_files = ts_files + mojo_ts_files
 
+  # The generated record_replay_manager.mojom-webui.ts imports
+  # //resources/mojo/mojo/public/js/bindings.js; this is what supplies that
+  # path mapping, and is what upstream WebUI targets list in ts_deps.
+  deps = [ "//ui/webui/resources/mojo:build_ts" ]
+  path_mappings_file = "$target_gen_dir/path_mappings_build_path_map.json"
+
   extra_deps = [
+    ":build_path_map",
     ":preprocess",
     ":copy_mojom",
     ":copy_src",

@@ -2605,13 +2605,13 @@ LayoutResult::EStatus BlockLayoutAlgorithm::FinishInflow(
       const ConstraintSpace final_child_space = CreateConstraintSpaceForChild(
           child, child_break_token, *child_data, ChildAvailableSize(),
           /* is_new_fc */ false, child_bfc_block_offset,
-      recordreplay::Assert(
-        "[RUN-1855-1862] NGBlockLayoutAlgorithm::FinishInflow space(%s)",
-        new_child_space.ToString().Ascii().c_str()
-      );
           /* has_clearance_past_adjoining_floats */ false,
           previous_inflow_position
               ->previous_sibling_block_end_annotation_space);
+      recordreplay::Assert(
+        "[RUN-1855-1862] NGBlockLayoutAlgorithm::FinishInflow space(%s)",
+        final_child_space.ToString().Ascii().c_str()
+      );
       layout_result = LayoutInflow(final_child_space, child, child_break_token,
                                    inline_child_layout_context);
     }

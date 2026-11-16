@@ -33,7 +33,9 @@
 #include "components/crash/core/common/crash_key.h"
 
 #if BUILDFLAG(IS_POSIX)
-#include "base/memory/madv_free_discardable_memory_posix.h"
+#include "base/containers/heap_array.h"
+#include "base/trace_event/process_memory_dump.h"
+#include "base/trace_event/memory_allocator_dump.h"
 #endif
 
 namespace discardable_memory {
@@ -107,11 +109,39 @@ constexpr base::MemoryConsumerTraits kMemoryConsumerTraits(
 #if BUILDFLAG(IS_POSIX)
 // The browser's segments aren't available once the replay diverges, so memory
 // is allocated in this process instead.
+// Upstream deleted base::MadvFreeDiscardableMemoryPosix, so the local
+// allocation is a plain zero-initialised heap block that never discards.
+// That is what a diverged replay wants anyway: madvise-based purging is a
+// non-deterministic input, and nothing allocated here outlives the divergence.
+class RecordReplayLocalDiscardableMemory : public base::DiscardableMemory {
+ public:
+  explicit RecordReplayLocalDiscardableMemory(size_t size)
+      : data_(base::HeapArray<uint8_t>::WithSize(size)) {}
+
+  bool Lock() override { return true; }
+  void Unlock() override {}
+  void* data() const override {
+    return const_cast<uint8_t*>(data_.data());
+  }
+  void DiscardForTesting() override {}
+
+  base::trace_event::MemoryAllocatorDump* CreateMemoryAllocatorDump(
+      const char* name,
+      base::trace_event::ProcessMemoryDump* pmd) const override {
+    base::trace_event::MemoryAllocatorDump* dump = pmd->CreateAllocatorDump(name);
+    dump->AddScalar(base::trace_event::MemoryAllocatorDump::kNameSize,
+                    base::trace_event::MemoryAllocatorDump::kUnitsBytes,
+                    static_cast<uint64_t>(data_.size()));
+    return dump;
+  }
+
+ private:
+  base::HeapArray<uint8_t> data_;
+};
+
 std::unique_ptr<base::DiscardableMemory>
 RecordReplayAllocateLocalDiscardableMemory(size_t size) {
-  static std::atomic<size_t> diverge_bytes_allocated{0};
-  return std::make_unique<base::MadvFreeDiscardableMemoryPosix>(
-      size, &diverge_bytes_allocated);
+  return std::make_unique<RecordReplayLocalDiscardableMemory>(size);
 }
 #endif
 

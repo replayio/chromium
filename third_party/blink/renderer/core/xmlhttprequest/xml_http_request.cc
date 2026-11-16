@@ -885,12 +885,13 @@ void XMLHttpRequest::send(const String& body, ExceptionState& exception_state) {
         recordreplay::Warning("XMLHttpRequestSendLengthMismatchNotAdjusted");
       } else if (length < recorded_length) {
         size_t padding = recorded_length - length;
-        std::unique_ptr<char[]> buffer(new char[padding + 1]);
-        memset(buffer.get(), ' ', padding);
-        buffer[padding] = '\0';
-        adj_body = body + String(buffer.get());
+        StringBuilder builder;
+        builder.Append(body);
+        for (size_t i = 0; i < padding; ++i)
+          builder.Append(' ');
+        adj_body = builder.ToString();
       } else {
-        adj_body = body.Substring(0, (unsigned int) recorded_length);
+        adj_body = body.substr(0, (unsigned int) recorded_length);
       }
     }
   }

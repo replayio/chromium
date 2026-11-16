@@ -1366,7 +1366,7 @@ void WindowPerformance::ReportEventTimingToPerformanceTimeline(
 
     // TODO(sullivan): Remove these events when DevTools migrates to the above
     // perfetto events.
-    unsigned hash = GetHash(entry->name());
+    unsigned hash = blink::GetHash(entry->name());
     AddFloatToHash(hash, entry->startTime());
     TRACE_EVENT_BEGIN("devtools.timeline", "EventTiming",
                       perfetto::Track::Global(hash), entryInfo->creation_time,

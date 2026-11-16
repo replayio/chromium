@@ -12,6 +12,7 @@
 // same interface but always iterate their contents in insertion order.
 
 #include <optional>
+#include "base/memory/stack_allocated.h"
 
 namespace base {
 
@@ -33,6 +34,9 @@ class deterministic_unordered_map {
 
  public:
   struct iterator {
+    STACK_ALLOCATED();
+
+   public:
     size_t index_;
     InnerVector& vector_;
     iterator(size_t index, InnerVector& vector)
@@ -72,6 +76,9 @@ class deterministic_unordered_map {
   };
 
   struct const_iterator {
+    STACK_ALLOCATED();
+
+   public:
     size_t index_;
     const InnerVector& vector_;
     const_iterator(size_t index, const InnerVector& vector)
@@ -143,6 +150,10 @@ class deterministic_unordered_map {
   }
 
   iterator end() { return iterator(vector_.size(), vector_); }
+
+  // std::unordered_map::contains (C++20). Upstream's
+  // base/observer_list_threadsafe.h calls this on the map it templates over.
+  bool contains(const Key& k) const { return map_.find(k) != map_.end(); }
   const_iterator end() const { return const_iterator(vector_.size(), vector_); }
 
   T& operator[](const Key& k) {

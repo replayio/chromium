@@ -669,7 +669,11 @@ void DOMWebSocket::CloseInternal(std::optional<uint16_t> code,
       base::DictValue info;
       info.Set("kind", "close");
       info.Set("socketId", record_replay_id_);
-      info.Set("code", code);
+      info.Set("code",
+               code.has_value()
+                   ? static_cast<int>(*code)
+                   : static_cast<int>(
+                         WebSocketChannel::kCloseEventCodeNotSpecified));
       info.Set("reason", reason.Utf8());
       base::JSONWriter::Write(info, &annotationContents);
     }

@@ -31,6 +31,8 @@
 #include "third_party/blink/renderer/platform/fonts/font_description.h"
 #include "third_party/blink/renderer/platform/fonts/font_face_creation_params.h"
 #include "third_party/blink/renderer/platform/fonts/simple_font_data.h"
+#include "third_party/blink/renderer/platform/heap/persistent.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 
 namespace blink {
 
@@ -39,9 +41,17 @@ CSSFontFaceSource::~CSSFontFaceSource() {
   // Leak the font data they cache, so that where it is destroyed, along with
   // its typeface, doesn't depend on when the GC runs.
   if (recordreplay::EnterLeakMemory("CSSFontFaceSource")) {
+    // SimpleFontData is garbage collected now, so AddRef() is gone. A
+    // Persistent root that is never cleared is the fork's own idiom for
+    // leaking a GC'd object -- see svg_image.cc's leaked_document_hosts.
+    DEFINE_STATIC_LOCAL(
+        Persistent<GCedHeapHashSet<Member<const SimpleFontData>>>,
+        leaked_font_data,
+        (MakeGarbageCollected<
+            GCedHeapHashSet<Member<const SimpleFontData>>>()));
     for (auto& entry : font_data_table_) {
       if (entry.value)
-        entry.value->AddRef();
+        leaked_font_data->insert(entry.value.Get());
     }
   }
 }

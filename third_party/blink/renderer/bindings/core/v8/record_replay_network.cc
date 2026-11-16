@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/compiler_specific.h"
 #include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
 
 #include <optional>
@@ -122,7 +123,7 @@ static bool IsReplayInternalRequest(uint64_t identifier) {
 // Must match between recording and replaying: it gates NewBookmark().
 static bool IsInReplayScriptFrame() {
   v8::Isolate* isolate = v8::Isolate::GetCurrent();
-  return isolate && CaptureCurrentScriptUrl(isolate).StartsWith("record-replay-");
+  return isolate && CaptureCurrentScriptUrl(isolate).starts_with("record-replay-");
 }
 
 static void EmitRequestDataFormEvent(const std::string& request_id,
@@ -470,12 +471,11 @@ void OnNetworkReceiveData(uint64_t inspector_id, const char* data, int length) {
   dict.Set("requestId", requestId);
   dict.Set("dataLength", (double) length);
   if (data) {
-    std::string data_base64 = base::Base64Encode(
-      base::span<const uint8_t>(
-        reinterpret_cast<const uint8_t*>(data),
-        static_cast<size_t>(length)
-      )
-    );
+    // SAFETY: `data` and `length` are a (pointer, length) pair from the
+    // network stack, which guarantees `length` readable bytes.
+    std::string data_base64 = base::Base64Encode(UNSAFE_BUFFERS(
+        base::span(reinterpret_cast<const uint8_t*>(data),
+                   static_cast<size_t>(length))));
     dict.Set("data", data_base64);
   }
   BrowserEvent("Network.DidReceiveData", base::Value(std::move(dict)));

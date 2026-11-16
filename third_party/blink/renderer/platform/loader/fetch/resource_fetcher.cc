@@ -977,10 +977,10 @@ void ResourceFetcher::DidLoadResourceFromMemoryCache(
   if (recordreplay::ShouldEmitRecordReplayNetworkBrowserEvents()) {
     if (scoped_refptr<const SharedBuffer> resource_buffer =
             resource->ResourceBuffer()) {
-      SharedBuffer::DeprecatedFlatData flat_data(resource_buffer);
+      SharedBuffer::DeprecatedFlatData flat_data(resource_buffer.get());
       if (flat_data.size() > 0) {
         recordreplay::OnNetworkReceiveData(
-            request.InspectorId(), flat_data.Data(),
+            request.InspectorId(), flat_data.data(),
             static_cast<int>(flat_data.size()));
       }
     }

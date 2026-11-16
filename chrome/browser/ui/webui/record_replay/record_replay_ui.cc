@@ -21,8 +21,6 @@ RecordReplayUI::RecordReplayUI(
 
   data_source->AddResourcePaths(kRecordReplayResources);
   data_source->AddResourcePath("", IDR_RECORD_REPLAY_RECORD_REPLAY_HTML);
-
-  content::WebUIDataSource::Add(Profile::FromWebUI(web_ui), data_source);
 }
 
 RecordReplayUI::~RecordReplayUI() = default;

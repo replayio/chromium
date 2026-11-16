@@ -769,7 +769,8 @@ RTCPeerConnection::RTCPeerConnection(
       peer_handler_unregistered_(true),
       closed_(true),
       suppress_events_(true),
-      encoded_insertable_streams_(encoded_insertable_streams) {
+      encoded_insertable_streams_(encoded_insertable_streams),
+      replay_strong_self_(SelfKeepAliveCreationKey()) {
   LocalDOMWindow* window = To<LocalDOMWindow>(context);
 
   if (AreIceCandidatesAdministrativelyProhibited(context)) {

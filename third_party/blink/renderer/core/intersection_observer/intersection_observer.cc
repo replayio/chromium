@@ -338,12 +338,12 @@ IntersectionObserver::IntersectionObserver(
       always_report_root_bounds_(params.always_report_root_bounds),
       use_overflow_clip_edge_(params.use_overflow_clip_edge),
       expose_occluder_id_(params.expose_occluder_id),
+      hit_node_cb_(std::move(params.hit_node_cb)) {
   // Pointer registration gives observers a deterministic order while
   // recording/replaying: in ElementIntersectionObserverData's hash tables,
   // keyed by the pointer id, and in the sorting in
   // IntersectionObserverController::ComputeIntersections.
   recordreplay::RegisterPointer("IntersectionObserver", this);
-      hit_node_cb_(std::move(params.hit_node_cb)) {
   if (params.root) {
     if (params.root->IsDocumentNode()) {
       To<Document>(params.root)

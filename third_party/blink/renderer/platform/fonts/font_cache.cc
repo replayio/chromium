@@ -91,11 +91,11 @@ extern const char kNotoColorEmojiCompat[] = "Noto Color Emoji Compat";
 
 namespace {
 
-Persistent<SimpleFontData>& ReplayLastResortSimpleFontDataStorage() {
+Persistent<const SimpleFontData>& ReplayLastResortSimpleFontDataStorage() {
   // M123 moved FontData to Oilpan, so the retaining reference has to be a GC
   // root: a raw pointer here would compile and let the font be collected,
   // which is the opposite of what this storage exists for.
-  static base::NoDestructor<Persistent<SimpleFontData>> font_data;
+  static base::NoDestructor<Persistent<const SimpleFontData>> font_data;
   return *font_data;
 }
 
@@ -242,7 +242,7 @@ String FontCache::FirstAvailableOrFirst(const String& families) {
 }
 
 void FontCache::WarmReplayLastResortFont() {
-  Persistent<SimpleFontData>& font_data =
+  Persistent<const SimpleFontData>& font_data =
       ReplayLastResortSimpleFontDataStorage();
   if (font_data)
     return;

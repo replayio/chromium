@@ -274,7 +274,8 @@ MediaStreamTrackImpl::MediaStreamTrackImpl(
     bool is_clone)
     : ready_state_(ready_state),
       component_(component),
-      execution_context_(context) {
+      execution_context_(context),
+      replay_strong_self_(SelfKeepAliveCreationKey()) {
   DCHECK(component_);
   component_->AddSourceObserver(this);
 
