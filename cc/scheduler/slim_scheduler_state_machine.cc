@@ -86,10 +86,9 @@ SlimSchedulerStateMachine::CurrentBeginImplFrameDeadlineMode() const {
 }
 
 void SlimSchedulerStateMachine::OnBeginImplFrame(
-    const viz::BeginFrameArgs& args,
-    bool replay_force_draw) {
+    const viz::BeginFrameArgs& args) {
   issued_actions_.clear();
-  SchedulerStateMachine::OnBeginImplFrame(args, replay_force_draw);
+  SchedulerStateMachine::OnBeginImplFrame(args);
 }
 
 bool SlimSchedulerStateMachine::ShouldBlockBeginMainFrameWhenIdle() const {

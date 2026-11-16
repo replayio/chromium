@@ -1306,8 +1306,7 @@ bool SchedulerStateMachine::ProactiveBeginFrameWanted() const {
   return false;
 }
 
-void SchedulerStateMachine::OnBeginImplFrame(const viz::BeginFrameArgs& args,
-                                             bool replay_force_draw) {
+void SchedulerStateMachine::OnBeginImplFrame(const viz::BeginFrameArgs& args) {
   begin_impl_frame_state_ = BeginImplFrameState::INSIDE_BEGIN_FRAME;
   current_frame_number_++;
   begin_frame_is_animate_only_ = args.animate_only;
@@ -1338,7 +1337,8 @@ void SchedulerStateMachine::OnBeginImplFrame(const viz::BeginFrameArgs& args,
                           high_framerate_requests_count_ > 0);
   }
 
-  replay_force_draw_ = replay_force_draw;
+  // [RecordReplay] A repaint's frame says so itself.
+  replay_force_draw_ = args.replay_force_draw;
 }
 
 void SchedulerStateMachine::OnBeginImplFrameDeadline() {

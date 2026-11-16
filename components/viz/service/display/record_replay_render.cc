@@ -141,7 +141,7 @@ void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
 
   viz::AggregatedRenderPassList render_passes;
   for (const auto& pass : frame.render_pass_list) {
-    render_passes.push_back(pass->DeepCopyAggregated());
+    render_passes.push_back(pass->DeepCopyAggregated(frame.render_pass_list));
   }
 
   std::vector<std::unique_ptr<gpu::ClientSharedImage::ScopedMapping>> mappings;

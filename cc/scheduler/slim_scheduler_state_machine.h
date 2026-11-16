@@ -33,8 +33,7 @@ class CC_EXPORT SlimSchedulerStateMachine : public SchedulerStateMachine {
 
   Action NextAction() const override;
   BeginImplFrameDeadlineMode CurrentBeginImplFrameDeadlineMode() const override;
-  void OnBeginImplFrame(const viz::BeginFrameArgs& args,
-      bool replay_force_draw = false) override;
+  void OnBeginImplFrame(const viz::BeginFrameArgs& args) override;
   bool ShouldBlockBeginMainFrameWhenIdle() const override;
 
  private:

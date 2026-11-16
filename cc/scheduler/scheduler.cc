@@ -903,13 +903,7 @@ void Scheduler::ScheduleBeginImplFrameDeadline() {
     }
     case DeadlineMode::REGULAR:
       // We are animating the active tree but we're also waiting for commit.
-
-      // This deadline is derived from time-since-reboot, which means if we're replaying on
-      // something vastly different from recording, we might see times deep into the future,
-      // which will block our ability to render divergent frames.
-      if (!recordreplay::HasDivergedFromRecording()) {
-        new_deadline = begin_impl_frame_tracker_.Current().deadline;
-      }
+      new_deadline = begin_impl_frame_tracker_.Current().deadline;
       break;
     case DeadlineMode::IMMEDIATE:
       // Avoid using Now() for immediate deadlines because it's expensive, and
@@ -922,6 +916,13 @@ void Scheduler::ScheduleBeginImplFrameDeadline() {
                      begin_impl_frame_tracker_.Current().interval *
                          settings_.scroll_deadline_ratio;
       break;
+  }
+
+  // [RecordReplay] A frame's times are the recording's, and the clock of a
+  // replay that has diverged can be behind them: a deadline computed from them
+  // would hold up a repaint's frame, which has nothing to wait for.
+  if (recordreplay::HasDivergedFromRecording()) {
+    new_deadline = base::TimeTicks();
   }
 
   // Post deadline task only if we didn't have one already or something caused

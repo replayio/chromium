@@ -1309,11 +1309,19 @@ void ProxyImpl::RecordReplayRepaint() {
   // Animations tick to the frame time, which stays that of the last frame the
   // recording began, as the page's animation time does while paused.
   const viz::BeginFrameArgs& last_args = host_impl_->CurrentBeginFrameArgs();
-  if (last_args.IsValid())
+  // The scheduler turns away a frame whose id isn't after that of the last
+  // frame it began from the same source, which an earlier repaint's was.
+  uint64_t sequence_number = RepaintSequenceNumber;
+  if (last_args.IsValid()) {
     now = last_args.frame_time;
+    if (last_args.frame_id.source_id == viz::BeginFrameArgs::kManualSourceId) {
+      sequence_number =
+          std::max(sequence_number, last_args.frame_id.sequence_number + 1);
+    }
+  }
   viz::BeginFrameArgs args = viz::BeginFrameArgs::Create(BEGINFRAME_FROM_HERE,
                                                          viz::BeginFrameArgs::kManualSourceId,
-                                                         RepaintSequenceNumber,
+                                                         sequence_number,
                                                          now,
                                                          now,
                                                          viz::BeginFrameArgs::DefaultInterval(),
@@ -1330,7 +1338,12 @@ void ProxyImpl::RecordReplayRepaint() {
   scheduler_->RecordReplayRepaintPending();
   RecordReplayEnsureRepaintFrameSink();
   scheduler_->RecordReplayWillRepaint();
-  scheduler_->OnBeginFrameDerivedImpl(args);
+  if (!scheduler_->OnBeginFrameDerivedImpl(args)) {
+    // No draw comes of a frame the scheduler didn't take.
+    recordreplay::Print(
+        "[RuntimeError] Repaint's frame was turned away by the scheduler.");
+    recordreplay::OnRepaintFinished();
+  }
 }
 
 }  // namespace cc

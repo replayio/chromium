@@ -143,8 +143,11 @@ class VIZ_COMMON_EXPORT CompositorRenderPass : public RenderPassInternal {
   std::unique_ptr<CompositorRenderPass> DeepCopy() const;
 
   // Used when recording/replaying, where render passes are not aggregated
-  // before being drawn.
-  std::unique_ptr<AggregatedRenderPass> DeepCopyAggregated() const;
+  // before being drawn. |frame_passes| are the passes of the frame this one is
+  // in, which its render pass quads draw.
+  std::unique_ptr<AggregatedRenderPass> DeepCopyAggregated(
+      const std::vector<std::unique_ptr<CompositorRenderPass>>& frame_passes)
+      const;
 
  protected:
   // This is essentially "using RenderPassInternal::RenderPassInternal", but

@@ -238,7 +238,9 @@ std::unique_ptr<CompositorRenderPass> CompositorRenderPass::DeepCopy() const {
   return copy_pass;
 }
 
-std::unique_ptr<AggregatedRenderPass> CompositorRenderPass::DeepCopyAggregated() const {
+std::unique_ptr<AggregatedRenderPass> CompositorRenderPass::DeepCopyAggregated(
+    const std::vector<std::unique_ptr<CompositorRenderPass>>& frame_passes)
+    const {
   std::unique_ptr<AggregatedRenderPass> copy_pass =
     std::make_unique<AggregatedRenderPass>(shared_quad_state_list.size(),
                                            quad_list.size());
@@ -268,8 +270,21 @@ std::unique_ptr<AggregatedRenderPass> CompositorRenderPass::DeepCopyAggregated()
 
     if (quad->material == DrawQuad::Material::kCompositorRenderPass) {
       const auto* pass_quad = CompositorRenderPassDrawQuad::MaterialCast(quad);
+      // An aggregated quad carries the filters of the pass it draws.
+      auto drawn_pass =
+          std::ranges::find_if(frame_passes, [&](const auto& pass) {
+            return pass->id == pass_quad->render_pass_id;
+          });
+      if (drawn_pass == frame_passes.end()) {
+        continue;
+      }
       auto nid = AggregatedRenderPassId::FromUnsafeValue(pass_quad->render_pass_id.GetUnsafeValue());
-      copy_pass->CopyFromAndAppendRenderPassDrawQuad(pass_quad, *this, nid);
+      copy_pass->CopyFromAndAppendRenderPassDrawQuad(pass_quad, **drawn_pass,
+                                                     nid);
+    } else if (quad->material == DrawQuad::Material::kSharedElement) {
+      // The display compositor draws these from what it keeps of a view
+      // transition. There's nothing of that in this process.
+      continue;
     } else {
       copy_pass->CopyFromAndAppendDrawQuad(quad);
     }
