@@ -64,7 +64,6 @@ def generate_buildkite_pipeline(pin):
     driver_revision = pin.commit[:12]
     pipeline = {
         "steps": [
-            driver_step(pin, driver_revision),
             {
                 "trigger": "chromium-build",
                 "build": {
@@ -76,7 +75,6 @@ def generate_buildkite_pipeline(pin):
                     "branch": "${BUILDKITE_BRANCH}",
                     "commit": "${BUILDKITE_COMMIT}",
                 },
-                "depends_on": ["build-driver-linker"],
             },
         ]
     }
