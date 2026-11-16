@@ -152,10 +152,11 @@ function enforceBackendPreludeVersion() {
 
 export function updateBackendRepo() {
   const backend = getBackendDir();
-  // if process.env.REPLAY_BACKEND_REV is set, use that, otherwise use the REPLAY_BACKEND_REV file
+  // if process.env.REPLAY_BACKEND_REV is set, use that, otherwise use the commit
+  // of the REPLAY_BACKEND_REV file, which is "<commit> [<branch>]"
   const rev = process.env.REPLAY_BACKEND_REV
     ? process.env.REPLAY_BACKEND_REV
-    : fs.readFileSync("REPLAY_BACKEND_REV", "utf8").trim();
+    : fs.readFileSync("REPLAY_BACKEND_REV", "utf8").trim().split(/\s+/)[0];
   updateRepo(backend, rev);
   enforceBackendPreludeVersion();
   // create a symlink to chromium in the backend checkout
@@ -167,7 +168,12 @@ export function updateBackendRepo() {
   fs.symlinkSync(chromiumRepoPath, chromiumPathInBackend);
 }
 
-export function updateChromiumRepo() {
+// The sources of a Chromium checkout: the fork at the revision being built and
+// the Replay forks its DEPS pins. Split out of updateChromiumRepo so that a
+// per-version checkout can be synced without running gn, which belongs in the
+// build container: the paths gn bakes into the out dir have to be the
+// container's, not the host's (replay_build_scripts/ci/).
+export function syncChromiumSources() {
   const chromium = process.cwd();
   const rev =
     process.env["CHROMIUM_REVISION"] || process.env["BUILDKITE_COMMIT"];
@@ -187,6 +193,10 @@ export function updateChromiumRepo() {
   );
 
   runGclientSync();
+}
+
+export function updateChromiumRepo() {
+  syncChromiumSources();
 
   runGnGen();
 }
