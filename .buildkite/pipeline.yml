@@ -69,14 +69,15 @@ steps:
   # - the runtime is the build step's Buildkite artifact (a 157 build is never
   #   uploaded to S3 / static.replay.io), handed over as
   #   REPLAY_CHROMIUM_EXECUTABLE_PATH;
-  # - one case, not the suite: REPLAY_157_TEST_CASE of the Buildkite build
-  #   (default below), a path under test/chromium-recording.
+  # - one case by default, not the suite: REPLAY_157_TEST_CASE of the
+  #   Buildkite build (default below), a path under test/chromium-recording;
+  #   `tests` is the whole suite, which the timeout allows for.
   # REPLAY_BACKEND_REV (env of the Buildkite build) is the backend commit whose
   # driver the runtime embeds and whose linker replays the recording.
-  - label: ":memo: Chromium 157 record -> replay (one case)"
+  - label: ":memo: Chromium 157 record -> replay"
     key: "chromium-157-recording-linux-x86_64"
     depends_on: "build-chromium-157-linux-x86_64"
-    timeout_in_minutes: 30
+    timeout_in_minutes: 180
     agents:
       - "e2e=true"
     plugins:

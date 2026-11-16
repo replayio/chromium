@@ -5,6 +5,7 @@ backend branch the commit is on: build-driver-linker's agents verify that.
 """
 
 import json
+import os
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -62,16 +63,22 @@ def generate_buildkite_pipeline(pin):
 
     # driver_revision is the first 12 characters of the commit hash.
     driver_revision = pin.commit[:12]
+    env = {
+        "DRIVER_REVISION": driver_revision,
+        "REPLAY_BACKEND_REV": pin.commit,
+    }
+    # What the 157 recording test step runs (.buildkite/pipeline.yml): set on
+    # this build, it has to reach the triggered one.
+    test_case = os.environ.get("REPLAY_157_TEST_CASE")
+    if test_case:
+        env["REPLAY_157_TEST_CASE"] = test_case
     pipeline = {
         "steps": [
             driver_step(pin, driver_revision),
             {
                 "trigger": "chromium-build",
                 "build": {
-                    "env": {
-                        "DRIVER_REVISION": driver_revision,
-                        "REPLAY_BACKEND_REV": pin.commit,
-                    },
+                    "env": env,
                     "message": "${BUILDKITE_MESSAGE}",
                     "branch": "${BUILDKITE_BRANCH}",
                     "commit": "${BUILDKITE_COMMIT}",
