@@ -22,6 +22,8 @@ steps:
     env:
       PLAYWRIGHT_HEADLESS: "true"
       CI: "1"
+      # Experiment: how far ahead of the scan frontier the processor keeps branches.
+      REPLAY_BRANCH_WALK_LOOKAHEAD: "8"
     command: |
       set -euo pipefail
       PIN="$$REPLAY_BACKEND_REV"
@@ -57,4 +59,12 @@ steps:
       node --version
       # packageManager pnpm@10.11.0; agents lack global npm write (EACCES).
       npx --yes pnpm@10.11.0 install --frozen-lockfile
+      echo "pod-cpu cpu.max=$$(cat /sys/fs/cgroup/cpu.max) nproc=$$(nproc) memory.max=$$(cat /sys/fs/cgroup/memory.max) REPLAY_BRANCH_WALK_LOOKAHEAD=$${REPLAY_BRANCH_WALK_LOOKAHEAD:-unset}"
+      # The pod's memory in MB every 5 s, until this script ends.
+      ( while kill -0 $$$$ 2>/dev/null; do
+          CURRENT=$$(cat /sys/fs/cgroup/memory.current)
+          INACTIVE_FILE=$$(awk '/^inactive_file /{print $$2}' /sys/fs/cgroup/memory.stat)
+          echo "pod-memory-mb working-set=$$(( (CURRENT - INACTIVE_FILE) / 1048576 )) current=$$(( CURRENT / 1048576 ))"
+          sleep 5
+        done ) &
       npx tsx src/build/buildRuntime.ts test-chromium-recording --build-id "$$BUILD_ID" --filter tests/manual-sessions/chatgpt-1
