@@ -70,6 +70,19 @@ steps:
       - "build_id/linux/x86_64/**"
     command: |
       set -euo pipefail
+      # artifact_paths uploads build_id/** out of this workspace however the job
+      # ends, and the workspace persists between jobs on this agent. Without
+      # this, a job that fails before it builds anything uploads the PREVIOUS
+      # build's artifacts as its own: build 5566 failed in checkout-sync for
+      # m109 and published the m108 build's build_id and symbols byte for byte
+      # (identical sha1s), naming a build this job never made.
+      #
+      # Inline and first, rather than clean_artifacts.mjs where this used to be:
+      # that ran fifth, so every way of failing before it -- the curl below, the
+      # bootstrap, the container cleanup, the checkout -- left the previous
+      # build's artifacts in place to be uploaded. This needs no scripts, no
+      # node, and nothing to have succeeded first.
+      rm -rf "$${BUILDKITE_BUILD_CHECKOUT_PATH:-$$PWD}/build_id"
       # The EngFlow client cert and key must not outlive the job, whatever
       # fails. They used to be written next to the shared checkout, where they
       # stayed between jobs inside the directory every build container mounted.
@@ -98,7 +111,6 @@ steps:
       # version's containers, so another version's build is left alone.
       be_cmd remove-stale-build-containers -- "$$SCRIPTS/remove-stale-build-containers.sh" "$$KEY"
       be_cmd checkout-sync -- "$$SCRIPTS/ci/checkout.sh" sync
-      be_cmd clean-artifacts-dir -- node "$$SCRIPTS/clean_artifacts.mjs"
       be_cmd chromium-build -- "$$SCRIPTS/ci/build-in-container.sh"
       be_cmd upload-artifacts -- "$$SCRIPTS/ci/upload-artifacts.sh"
 
