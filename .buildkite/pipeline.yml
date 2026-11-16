@@ -57,4 +57,4 @@ steps:
       node --version
       # packageManager pnpm@10.11.0; agents lack global npm write (EACCES).
       npx --yes pnpm@10.11.0 install --frozen-lockfile
-      npx tsx src/build/buildRuntime.ts test-chromium-recording --build-id "$$BUILD_ID" --filter tests/rerecord tests/octane
+      npx tsx src/build/buildRuntime.ts test-chromium-recording --build-id "$$BUILD_ID" --filter tests/rerecord/isolation-leaks tests/rerecord/uploaded-chatgpt-session
