@@ -1,12 +1,26 @@
+"""Generates the pipeline that builds the driver/linker and Chromium.
+
+REPLAY_BACKEND_REV is "<commit> [<branch>]". The branch (default: master) is the
+backend branch the commit is on: build-driver-linker's agents verify that.
+"""
+
 import json
 import urllib.error
 import urllib.request
+from dataclasses import dataclass
 
 
-def read_commit_hash(file_path):
-    """Reads the commit hash from the given file."""
+@dataclass(frozen=True)
+class BackendPin:
+    commit: str
+    branch: str
+
+
+def read_pin(file_path):
+    """Reads the backend pin from the given file."""
     with open(file_path, "r") as file:
-        return file.read().strip()
+        fields = file.read().split()
+    return BackendPin(commit=fields[0], branch=fields[1] if len(fields) > 1 else "master")
 
 
 def driver_archive_present(driver_revision):
@@ -20,7 +34,7 @@ def driver_archive_present(driver_revision):
         return False
 
 
-def driver_step(backend_commit_hash, driver_revision):
+def driver_step(pin, driver_revision):
     """trigger build-driver-linker, or DriverBuildCheck noop if archive already on S3."""
     if driver_archive_present(driver_revision):
         return {
@@ -36,26 +50,27 @@ def driver_step(backend_commit_hash, driver_revision):
         "trigger": "build-driver-linker",
         "key": "build-driver-linker",
         "build": {
-            "commit": backend_commit_hash,
+            "commit": pin.commit,
+            "branch": pin.branch,
             "message": "Triggered from chromium: ${BUILDKITE_MESSAGE}",
         },
     }
 
 
-def generate_buildkite_pipeline(backend_commit_hash):
+def generate_buildkite_pipeline(pin):
     """Generates a Buildkite pipeline with a dynamic commit hash in JSON format."""
 
     # driver_revision is the first 12 characters of the commit hash.
-    driver_revision = backend_commit_hash.split()[0][:12]
+    driver_revision = pin.commit[:12]
     pipeline = {
         "steps": [
-            driver_step(backend_commit_hash, driver_revision),
+            driver_step(pin, driver_revision),
             {
                 "trigger": "chromium-build",
                 "build": {
                     "env": {
                         "DRIVER_REVISION": driver_revision,
-                        "REPLAY_BACKEND_REV": backend_commit_hash,
+                        "REPLAY_BACKEND_REV": pin.commit,
                     },
                     "message": "${BUILDKITE_MESSAGE}",
                     "branch": "${BUILDKITE_BRANCH}",
@@ -69,8 +84,8 @@ def generate_buildkite_pipeline(backend_commit_hash):
 
 
 def main():
-    backend_commit_hash = read_commit_hash("REPLAY_BACKEND_REV")
-    pipeline_json = generate_buildkite_pipeline(backend_commit_hash)
+    pin = read_pin("REPLAY_BACKEND_REV")
+    pipeline_json = generate_buildkite_pipeline(pin)
     print(pipeline_json)
 
 

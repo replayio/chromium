@@ -152,10 +152,11 @@ function enforceBackendPreludeVersion() {
 
 export function updateBackendRepo() {
   const backend = getBackendDir();
-  // if process.env.REPLAY_BACKEND_REV is set, use that, otherwise use the REPLAY_BACKEND_REV file
+  // if process.env.REPLAY_BACKEND_REV is set, use that, otherwise use the commit
+  // of the REPLAY_BACKEND_REV file, which is "<commit> [<branch>]"
   const rev = process.env.REPLAY_BACKEND_REV
     ? process.env.REPLAY_BACKEND_REV
-    : fs.readFileSync("REPLAY_BACKEND_REV", "utf8").trim();
+    : fs.readFileSync("REPLAY_BACKEND_REV", "utf8").trim().split(/\s+/)[0];
   updateRepo(backend, rev);
   enforceBackendPreludeVersion();
   // create a symlink to chromium in the backend checkout
