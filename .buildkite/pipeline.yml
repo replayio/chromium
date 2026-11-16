@@ -3,10 +3,10 @@ env:
   GIT_TERMINAL_PROMPT: 0
 
 # CI vehicle, not for merge: only the backend's manual session recording case,
-# against an existing Chromium build.
+# against an existing Chromium build, once per processor setting under test.
 steps:
-  - label: "📝 Chromium Recording Tests (linux-x86_64)"
-    key: "chromium-recording-linux-x86_64"
+  - label: "📝 Chromium Recording Tests (linux-x86_64) [as-is]"
+    key: "chromium-recording-linux-x86_64-as-is"
     timeout_in_minutes: 30
     # In-house suite expected to pass deterministically: take shared e2e agents before E2E jobs.
     priority: 1
@@ -22,7 +22,153 @@ steps:
     env:
       PLAYWRIGHT_HEADLESS: "true"
       CI: "1"
-      # Experiment: how far ahead of the scan frontier the processor keeps branches.
+      # The line reporter prints steps only for a terminal.
+      PLAYWRIGHT_FORCE_TTY: "1"
+      VARIANT: "as-is"
+    command: |
+      set -euo pipefail
+      PIN="$$REPLAY_BACKEND_REV"
+      test -n "$$PIN"
+      WORKDIR=$$(mktemp -d "/tmp/chromium-recording-$${BUILDKITE_JOB_ID}.XXXXXX")
+      # Short path: unix socket paths under TMPDIR are length-limited.
+      TMPDIR=$$(mktemp -d /tmp/crt.XXXXXX)
+      export TMPDIR
+      trap 'rm -rf "$$WORKDIR" "$$TMPDIR"' EXIT
+      export RECORD_REPLAY_DIRECTORY="$$WORKDIR/replay"
+      BACKEND_DIR="$$WORKDIR/backend"
+      mkdir -p "$$BACKEND_DIR" "$$RECORD_REPLAY_DIRECTORY"
+      git -C "$$BACKEND_DIR" init
+      git -C "$$BACKEND_DIR" remote add origin git@github.com:replayio/backend.git
+      git -C "$$BACKEND_DIR" fetch --depth 1 origin "$$PIN"
+      git -C "$$BACKEND_DIR" checkout FETCH_HEAD
+      # LinkerZombieLeak: sweep before tests + always after (even on failure).
+      "$$BACKEND_DIR/scripts/kill-linker-processes.sh"
+      trap '"$$BACKEND_DIR/scripts/kill-linker-processes.sh"; rm -rf "$$WORKDIR" "$$TMPDIR"' EXIT
+      # The Chromium build of chromium-build #5606, which this branch does not change.
+      BUILD_ID="linux-chromium-20261115-f77676407b3a-ec966bc4572d-dev"
+      test -n "$$BUILD_ID"
+      cd "$$BACKEND_DIR"
+      unset REPLAY_LOCAL_DRIVER_DIR || true
+      # e2e pods still ship Node 18; Dockerfile.buildkite-e2e-agent installs the backend's Node
+      # (nodesource) but needs root. User-space tarball of the pinned backend's .nvmrc version.
+      NODE_VERSION="$$(sed 's/^v//' .nvmrc)"
+      test -n "$$NODE_VERSION"
+      NODE_PREFIX="$$WORKDIR/node-v$${NODE_VERSION}-linux-x64"
+      curl -fsSL "https://nodejs.org/dist/v$${NODE_VERSION}/node-v$${NODE_VERSION}-linux-x64.tar.xz" | tar -xJ -C "$$WORKDIR"
+      export PATH="$${NODE_PREFIX}/bin:$$PATH"
+      hash -r
+      node --version
+      # packageManager pnpm@10.11.0; agents lack global npm write (EACCES).
+      npx --yes pnpm@10.11.0 install --frozen-lockfile
+      echo "pod-cpu cpu.max=$$(cat /sys/fs/cgroup/cpu.max) nproc=$$(nproc) memory.max=$$(cat /sys/fs/cgroup/memory.max) variant=$$VARIANT REPLAY_MAX_LEAVES=$${REPLAY_MAX_LEAVES:-unset} REPLAY_MEMORY_BUDGET_MB=$${REPLAY_MEMORY_BUDGET_MB:-unset} REPLAY_BRANCH_WALK_LOOKAHEAD=$${REPLAY_BRANCH_WALK_LOOKAHEAD:-unset}"
+      # Every 10 s until this script ends: the pod's memory in MB, then per process
+      # name the number of processes and their summed Pss in MB.
+      ( while kill -0 $$$$ 2>/dev/null; do
+          CURRENT=$$(cat /sys/fs/cgroup/memory.current)
+          INACTIVE_FILE=$$(awk '/^inactive_file /{print $$2}' /sys/fs/cgroup/memory.stat)
+          BY_NAME=$$(for P in /proc/[0-9]*; do
+              NAME=$$(tr ' ' '_' < "$$P/comm" 2>/dev/null) || continue
+              PSS=$$(awk '/^Pss:/{print $$2}' "$$P/smaps_rollup" 2>/dev/null) || continue
+              echo "$$NAME $${PSS:-0}"
+            done | awk '{n[$$1]++; s[$$1]+=$$2} END{for (c in n) if (s[c] >= 51200) printf "%s=%dx%d ", c, n[c], s[c]/1024}') || true
+          echo "pod-memory-mb working-set=$$(( (CURRENT - INACTIVE_FILE) / 1048576 )) current=$$(( CURRENT / 1048576 )) | $$BY_NAME"
+          sleep 10
+        done ) &
+      npx tsx src/build/buildRuntime.ts test-chromium-recording --build-id "$$BUILD_ID" --filter tests/manual-sessions/chatgpt-1
+
+  - label: "📝 Chromium Recording Tests (linux-x86_64) [leaves-1]"
+    key: "chromium-recording-linux-x86_64-leaves-1"
+    timeout_in_minutes: 30
+    # In-house suite expected to pass deterministically: take shared e2e agents before E2E jobs.
+    priority: 1
+    agents:
+      - "e2e=true"
+    plugins:
+      - thedyrt/skip-checkout#v0.1.1: ~
+      - seek-oss/aws-sm#v2.3.1:
+          region: us-east-2
+          env:
+            HASURA_ADMIN_SECRET: "prod/hasura-admin-secret"
+            RECORD_REPLAY_API_KEY: "prod/public-api-key"
+    env:
+      PLAYWRIGHT_HEADLESS: "true"
+      CI: "1"
+      # The line reporter prints steps only for a terminal.
+      PLAYWRIGHT_FORCE_TTY: "1"
+      VARIANT: "leaves-1"
+      REPLAY_MAX_LEAVES: "1"
+    command: |
+      set -euo pipefail
+      PIN="$$REPLAY_BACKEND_REV"
+      test -n "$$PIN"
+      WORKDIR=$$(mktemp -d "/tmp/chromium-recording-$${BUILDKITE_JOB_ID}.XXXXXX")
+      # Short path: unix socket paths under TMPDIR are length-limited.
+      TMPDIR=$$(mktemp -d /tmp/crt.XXXXXX)
+      export TMPDIR
+      trap 'rm -rf "$$WORKDIR" "$$TMPDIR"' EXIT
+      export RECORD_REPLAY_DIRECTORY="$$WORKDIR/replay"
+      BACKEND_DIR="$$WORKDIR/backend"
+      mkdir -p "$$BACKEND_DIR" "$$RECORD_REPLAY_DIRECTORY"
+      git -C "$$BACKEND_DIR" init
+      git -C "$$BACKEND_DIR" remote add origin git@github.com:replayio/backend.git
+      git -C "$$BACKEND_DIR" fetch --depth 1 origin "$$PIN"
+      git -C "$$BACKEND_DIR" checkout FETCH_HEAD
+      # LinkerZombieLeak: sweep before tests + always after (even on failure).
+      "$$BACKEND_DIR/scripts/kill-linker-processes.sh"
+      trap '"$$BACKEND_DIR/scripts/kill-linker-processes.sh"; rm -rf "$$WORKDIR" "$$TMPDIR"' EXIT
+      # The Chromium build of chromium-build #5606, which this branch does not change.
+      BUILD_ID="linux-chromium-20261115-f77676407b3a-ec966bc4572d-dev"
+      test -n "$$BUILD_ID"
+      cd "$$BACKEND_DIR"
+      unset REPLAY_LOCAL_DRIVER_DIR || true
+      # e2e pods still ship Node 18; Dockerfile.buildkite-e2e-agent installs the backend's Node
+      # (nodesource) but needs root. User-space tarball of the pinned backend's .nvmrc version.
+      NODE_VERSION="$$(sed 's/^v//' .nvmrc)"
+      test -n "$$NODE_VERSION"
+      NODE_PREFIX="$$WORKDIR/node-v$${NODE_VERSION}-linux-x64"
+      curl -fsSL "https://nodejs.org/dist/v$${NODE_VERSION}/node-v$${NODE_VERSION}-linux-x64.tar.xz" | tar -xJ -C "$$WORKDIR"
+      export PATH="$${NODE_PREFIX}/bin:$$PATH"
+      hash -r
+      node --version
+      # packageManager pnpm@10.11.0; agents lack global npm write (EACCES).
+      npx --yes pnpm@10.11.0 install --frozen-lockfile
+      echo "pod-cpu cpu.max=$$(cat /sys/fs/cgroup/cpu.max) nproc=$$(nproc) memory.max=$$(cat /sys/fs/cgroup/memory.max) variant=$$VARIANT REPLAY_MAX_LEAVES=$${REPLAY_MAX_LEAVES:-unset} REPLAY_MEMORY_BUDGET_MB=$${REPLAY_MEMORY_BUDGET_MB:-unset} REPLAY_BRANCH_WALK_LOOKAHEAD=$${REPLAY_BRANCH_WALK_LOOKAHEAD:-unset}"
+      # Every 10 s until this script ends: the pod's memory in MB, then per process
+      # name the number of processes and their summed Pss in MB.
+      ( while kill -0 $$$$ 2>/dev/null; do
+          CURRENT=$$(cat /sys/fs/cgroup/memory.current)
+          INACTIVE_FILE=$$(awk '/^inactive_file /{print $$2}' /sys/fs/cgroup/memory.stat)
+          BY_NAME=$$(for P in /proc/[0-9]*; do
+              NAME=$$(tr ' ' '_' < "$$P/comm" 2>/dev/null) || continue
+              PSS=$$(awk '/^Pss:/{print $$2}' "$$P/smaps_rollup" 2>/dev/null) || continue
+              echo "$$NAME $${PSS:-0}"
+            done | awk '{n[$$1]++; s[$$1]+=$$2} END{for (c in n) if (s[c] >= 51200) printf "%s=%dx%d ", c, n[c], s[c]/1024}') || true
+          echo "pod-memory-mb working-set=$$(( (CURRENT - INACTIVE_FILE) / 1048576 )) current=$$(( CURRENT / 1048576 )) | $$BY_NAME"
+          sleep 10
+        done ) &
+      npx tsx src/build/buildRuntime.ts test-chromium-recording --build-id "$$BUILD_ID" --filter tests/manual-sessions/chatgpt-1
+
+  - label: "📝 Chromium Recording Tests (linux-x86_64) [budget-4g-lookahead-8]"
+    key: "chromium-recording-linux-x86_64-budget-4g-lookahead-8"
+    timeout_in_minutes: 30
+    # In-house suite expected to pass deterministically: take shared e2e agents before E2E jobs.
+    priority: 1
+    agents:
+      - "e2e=true"
+    plugins:
+      - thedyrt/skip-checkout#v0.1.1: ~
+      - seek-oss/aws-sm#v2.3.1:
+          region: us-east-2
+          env:
+            HASURA_ADMIN_SECRET: "prod/hasura-admin-secret"
+            RECORD_REPLAY_API_KEY: "prod/public-api-key"
+    env:
+      PLAYWRIGHT_HEADLESS: "true"
+      CI: "1"
+      # The line reporter prints steps only for a terminal.
+      PLAYWRIGHT_FORCE_TTY: "1"
+      VARIANT: "budget-4g-lookahead-8"
+      REPLAY_MEMORY_BUDGET_MB: "4096"
       REPLAY_BRANCH_WALK_LOOKAHEAD: "8"
     command: |
       set -euo pipefail
@@ -59,12 +205,18 @@ steps:
       node --version
       # packageManager pnpm@10.11.0; agents lack global npm write (EACCES).
       npx --yes pnpm@10.11.0 install --frozen-lockfile
-      echo "pod-cpu cpu.max=$$(cat /sys/fs/cgroup/cpu.max) nproc=$$(nproc) memory.max=$$(cat /sys/fs/cgroup/memory.max) REPLAY_BRANCH_WALK_LOOKAHEAD=$${REPLAY_BRANCH_WALK_LOOKAHEAD:-unset}"
-      # The pod's memory in MB every 5 s, until this script ends.
+      echo "pod-cpu cpu.max=$$(cat /sys/fs/cgroup/cpu.max) nproc=$$(nproc) memory.max=$$(cat /sys/fs/cgroup/memory.max) variant=$$VARIANT REPLAY_MAX_LEAVES=$${REPLAY_MAX_LEAVES:-unset} REPLAY_MEMORY_BUDGET_MB=$${REPLAY_MEMORY_BUDGET_MB:-unset} REPLAY_BRANCH_WALK_LOOKAHEAD=$${REPLAY_BRANCH_WALK_LOOKAHEAD:-unset}"
+      # Every 10 s until this script ends: the pod's memory in MB, then per process
+      # name the number of processes and their summed Pss in MB.
       ( while kill -0 $$$$ 2>/dev/null; do
           CURRENT=$$(cat /sys/fs/cgroup/memory.current)
           INACTIVE_FILE=$$(awk '/^inactive_file /{print $$2}' /sys/fs/cgroup/memory.stat)
-          echo "pod-memory-mb working-set=$$(( (CURRENT - INACTIVE_FILE) / 1048576 )) current=$$(( CURRENT / 1048576 ))"
-          sleep 5
+          BY_NAME=$$(for P in /proc/[0-9]*; do
+              NAME=$$(tr ' ' '_' < "$$P/comm" 2>/dev/null) || continue
+              PSS=$$(awk '/^Pss:/{print $$2}' "$$P/smaps_rollup" 2>/dev/null) || continue
+              echo "$$NAME $${PSS:-0}"
+            done | awk '{n[$$1]++; s[$$1]+=$$2} END{for (c in n) if (s[c] >= 51200) printf "%s=%dx%d ", c, n[c], s[c]/1024}') || true
+          echo "pod-memory-mb working-set=$$(( (CURRENT - INACTIVE_FILE) / 1048576 )) current=$$(( CURRENT / 1048576 )) | $$BY_NAME"
+          sleep 10
         done ) &
       npx tsx src/build/buildRuntime.ts test-chromium-recording --build-id "$$BUILD_ID" --filter tests/manual-sessions/chatgpt-1
