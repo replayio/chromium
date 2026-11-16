@@ -1025,28 +1025,9 @@ struct InspectorChannel final : public v8_inspector::V8Inspector::Channel {
   void flushProtocolNotifications() final {}
 };
 
-// Nestable override for SendCDPMessage context-group routing.
-// Console → OnConsoleMessage can re-enter via pause evaluate that emits
-// another console API call; a single optional cannot model that.
-// POD stack: no global ctor / exit-time dtor (-Werror).
-static constexpr size_t kMaxContextGroupIdOverrideDepth = 16;
-static int gContextGroupIdForSendCDPMessageStack[kMaxContextGroupIdOverrideDepth];
-static size_t gContextGroupIdForSendCDPMessageDepth = 0;
-
-extern "C" void SetContextGroupIdForSendCDPMessage(int contextGroupId) {
-  CHECK(v8::IsMainThread());
-  CHECK_GT(contextGroupId, 0);
-  CHECK_LT(gContextGroupIdForSendCDPMessageDepth, kMaxContextGroupIdOverrideDepth);
-  UNSAFE_BUFFERS(
-      gContextGroupIdForSendCDPMessageStack[gContextGroupIdForSendCDPMessageDepth++]) =
-      contextGroupId;
-}
-
-extern "C" void ClearContextGroupIdForSendCDPMessage() {
-  CHECK(v8::IsMainThread());
-  CHECK_GT(gContextGroupIdForSendCDPMessageDepth, 0u);
-  gContextGroupIdForSendCDPMessageDepth--;
-}
+// The context group of the console message V8 is reporting to the recorder, 0
+// if none: overrides SendCDPMessage's context-group routing.
+extern "C" int V8RecordReplayContextGroupIdForSendCDPMessage();
 
 std::optional<int> GetCurrentContextGroupIdForIsolate(v8::Isolate* isolate) {
   LocalFrame* local_frame_root = GetLocalFrameRoot(isolate);
@@ -1249,9 +1230,8 @@ static void SendCDPMessage(const v8::FunctionCallbackInfo<v8::Value>& args) {
   std::string nmessage(*message);
 
   std::optional<int> contextGroupId;
-  if (gContextGroupIdForSendCDPMessageDepth > 0) {
-    contextGroupId = UNSAFE_BUFFERS(
-        gContextGroupIdForSendCDPMessageStack[gContextGroupIdForSendCDPMessageDepth - 1]);
+  if (int overriding_group = V8RecordReplayContextGroupIdForSendCDPMessage()) {
+    contextGroupId = overriding_group;
   } else if (has_context_id) {
     contextGroupId = ContextGroupIdFromInspectorContextId(
         isolate, args[1].As<v8::Int32>()->Value());

@@ -6,6 +6,7 @@
 
 #include "base/check_op.h"
 #include "base/location.h"
+#include "base/record_replay.h"
 #include "base/threading/platform_thread.h"
 #include "base/trace_event/interned_args_helper.h"
 #include "base/trace_event/trace_event.h"
@@ -96,6 +97,15 @@ void ScopedBoostPriorityBase::Reset() {
 
 bool ScopedBoostPriorityBase::ShouldBoostTo(
     ThreadType target_thread_type) const {
+  // [RecordReplay] A thread's priority is no part of a recording, and asking
+  // whether it can be changed reads the user's ID and limits (CanLowerNiceTo)
+  // from places where nothing can be recorded: a job's Join() inside a garbage
+  // collection, V8's safepoint, an unordered worker. What those calls return
+  // there is the replaying machine's, so nothing is boosted when recording or
+  // replaying.
+  if (recordreplay::IsRecordingOrReplaying()) {
+    return false;
+  }
   return initial_thread_type_ < target_thread_type &&
          PlatformThread::CanChangeThreadType(initial_thread_type_,
                                              target_thread_type) &&

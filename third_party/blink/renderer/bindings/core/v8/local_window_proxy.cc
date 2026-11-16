@@ -852,23 +852,10 @@ void LocalWindowProxy::SetAbortScriptExecution(
   script_state_->GetContext()->SetAbortScriptExecution(callback);
 }
 
-// We keep track of the most recently created main-world local window proxy
-// for ensuring that record/replay state is initialized when
-// the first paint is triggered. FIXME clean up reference.
-static LocalWindowProxy* gLatestLocalWindowProxy;
-
 LocalWindowProxy::LocalWindowProxy(v8::Isolate* isolate,
                                    LocalFrame& frame,
                                    DOMWrapperWorld* world)
-    : WindowProxy(isolate, frame, world) {
-  // RecordReplayStateEnsureInitialized() uses this proxy to force lazy
-  // initialization before the first paint. Isolated worlds cannot initialize
-  // process-wide record/replay state, so they must not replace the main-world
-  // initialization candidate.
-  if (World().IsMainWorld()) {
-    gLatestLocalWindowProxy = this;
-  }
-}
+    : WindowProxy(isolate, frame, world) {}
 
 void RecordReplayOnInstrumentedScriptBeforeFirstCheckpoint(
     v8::Isolate* isolate,
@@ -885,8 +872,11 @@ void RecordReplayOnInstrumentedScriptBeforeFirstCheckpoint(
   LocalFrame* frame = window ? window->GetFrame() : nullptr;
   LocalFrame* top = frame ? DynamicTo<LocalFrame>(frame->Tree().Top()) : nullptr;
   // Only the tab's initial about:blank: any other page of a tab is a replay
-  // window, whose root frame started the recording already.
-  if (!top || !top->IsOutermostMainFrame() || !top->GetPage() ||
+  // window, whose root frame started the recording already. A provisional
+  // frame isn't the tab's page until its navigation commits, and its window
+  // proxy can't be initialized before that.
+  if (!top || top->IsDetached() || top->IsProvisional() ||
+      !top->IsOutermostMainFrame() || !top->GetPage() ||
       !top->GetPage()->IsOrdinary() || !top->GetDocument() ||
       !top->GetDocument()->Url().IsAboutBlankUrl() || !top->DomWindow() ||
       !top->DomWindow()->GetSecurityOrigin()->Host().empty()) {
@@ -913,11 +903,43 @@ void RecordReplayOnInstrumentedScriptBeforeFirstCheckpoint(
   OnNewWindowAfterCheckpoint(isolate, top, main_context);
 }
 
+// The window whose main-world context starts the recording when a paint is
+// committed before any replay window has run JS (a page without scripts): a
+// root frame if there is one, as the first checkpoint needs its context, else
+// any other replay window. Only frames shown by a page are looked at, through
+// the pages' frame trees. A frame that isn't in one can't take the first
+// checkpoint: a provisional frame, which every navigation makes in this
+// renderer before it commits and whose window proxy must not be initialized
+// until then, or a frame that was detached.
+static LocalFrame* RecordReplayFindWindowToInitialize() {
+  LocalFrame* other_window = nullptr;
+  for (Page* page : Page::OrdinaryPages()) {
+    for (Frame* frame = page->MainFrame(); frame;
+         frame = frame->Tree().TraverseNext()) {
+      auto* local_frame = DynamicTo<LocalFrame>(frame);
+      if (!local_frame || !RecordReplayIsReplayWindow(local_frame)) {
+        continue;
+      }
+      if (RecordReplayIsRootFrame(local_frame)) {
+        return local_frame;
+      }
+      if (!other_window) {
+        other_window = local_frame;
+      }
+    }
+  }
+  return other_window;
+}
+
 bool RecordReplayStateEnsureInitialized() {
   if (recordreplay::IsRecordingOrReplaying("commands") &&
-      !gRecordReplayStateInitialized &&
-      gLatestLocalWindowProxy) {
-    gLatestLocalWindowProxy->InitializeIfNeeded();
+      !gRecordReplayStateInitialized) {
+    if (LocalFrame* frame = RecordReplayFindWindowToInitialize()) {
+      // Creates the main world's context if it doesn't exist yet, which
+      // initializes the state and takes the first checkpoint
+      // (LocalWindowProxy::Initialize).
+      frame->WindowProxy(DOMWrapperWorld::MainWorld(ToIsolate(frame)));
+    }
   }
   return gRecordReplayStateInitialized;
 }

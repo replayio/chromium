@@ -17,6 +17,7 @@
 
 #include "base/bits.h"
 #include "base/memory/page_size.h"
+#include "base/record_replay.h"
 
 namespace base {
 
@@ -25,6 +26,12 @@ namespace {
 
 bool SetMemory(void* start, void* end, int prot) {
   CHECK(end > start);
+  // [RecordReplay] The protected section stays writable when recording or
+  // replaying: a replay maps the binary itself, and what protection a region
+  // has there is not what it was when recording.
+  if (recordreplay::IsRecordingOrReplaying()) {
+    return true;
+  }
   const uintptr_t page_start =
       bits::AlignDown(reinterpret_cast<uintptr_t>(start), GetPageSize());
   return mprotect(reinterpret_cast<void*>(page_start),
@@ -36,6 +43,12 @@ bool SetMemory(void* start, void* end, int prot) {
 namespace internal {
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_ANDROID)
 void CheckMemoryReadOnly(const void* ptr) {
+  // [RecordReplay] The section stays writable when recording or replaying
+  // (SetMemory), so there's nothing to check. The check is also a getrlimit()
+  // that is expected to fail writing its result into the section.
+  if (recordreplay::IsRecordingOrReplaying()) {
+    return;
+  }
   const uintptr_t page_start =
       bits::AlignDown(reinterpret_cast<uintptr_t>(ptr), GetPageSize());
 
@@ -47,6 +60,9 @@ void CheckMemoryReadOnly(const void* ptr) {
 }
 #elif BUILDFLAG(IS_MAC)
 void CheckMemoryReadOnly(const void* ptr) {
+  if (recordreplay::IsRecordingOrReplaying()) {
+    return;
+  }
   mach_port_t object_name;
   vm_region_basic_info_64 region_info;
   mach_vm_size_t size = 1;
