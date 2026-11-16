@@ -68,7 +68,8 @@ steps:
   # Tests" step; the differences:
   # - the runtime is the build step's Buildkite artifact (a 157 build is never
   #   uploaded to S3 / static.replay.io), handed over as
-  #   REPLAY_CHROMIUM_EXECUTABLE_PATH;
+  #   REPLAY_CHROMIUM_EXECUTABLE_PATH; its symbols archive, from the same
+  #   artifacts, as REPLAY_SYMBOLS_DIR;
   # - one case by default, not the suite: REPLAY_157_TEST_CASE of the
   #   Buildkite build (default below), a path under test/chromium-recording;
   #   `tests` is the whole suite, which the timeout allows for.
@@ -119,6 +120,12 @@ steps:
       BUILD_ID="$$(cat "$$WORKDIR/build_id/linux/x86_64/build_id")"
       test -n "$$BUILD_ID"
       tar -xJf "$$WORKDIR/build_id/linux/x86_64/$$BUILD_ID.tar.xz" -C "$$WORKDIR/runtime"
+      # The build's symbols: the backend reads <build id>.symbols.tgz from
+      # REPLAY_SYMBOLS_DIR instead of storage. The linker's, which
+      # build-driver-linker uploads, it still downloads, into the same directory.
+      mkdir -p "$$WORKDIR/symbols"
+      mv "$$WORKDIR/build_id/linux/x86_64/$$BUILD_ID.symbols.tgz" "$$WORKDIR/symbols/"
+      export REPLAY_SYMBOLS_DIR="$$WORKDIR/symbols"
       export REPLAY_CHROMIUM_EXECUTABLE_PATH="$$WORKDIR/runtime/replay-chromium/chrome"
       export RECORD_REPLAY_ASSETS_DIRECTORY="$$WORKDIR/runtime/replay-chromium/replay-assets"
       test -x "$$REPLAY_CHROMIUM_EXECUTABLE_PATH"

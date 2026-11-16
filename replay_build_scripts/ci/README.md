@@ -16,6 +16,7 @@ Scope: Linux x86_64, build only, agent `chromium-build-1`, Buildkite pipeline `c
 | 7 | container | driver download + embed, image check, remote-exec check, `args.gn`, `gn gen`, `autoninja` (siso) | `build.cjs` |
 | 8 | host | collect logs, failed-step list; upload `logs/**` (always) | `ci/job.sh` |
 | 9 | container | `replay-chromium/` → `<build id>.tar.xz`, `build_id` | `ci/container/package.sh` |
+| 9a | container | `out/Release/chrome` → `<build id>.symbols.tgz` (master's symbols archive), with the tree's node | `replay_build_scripts/symbols_archive.mjs` |
 | 10 | host | upload `build_id/linux/x86_64/**`; EXIT trap removes workspace files | `ci/job.sh`, `.buildkite/pipeline.yml` |
 
 - Commit built = HEAD of the bootstrap clone (scripts and tree cannot diverge).
@@ -40,6 +41,7 @@ Paths relative to the repository root. Origin: M = replayio/chromium `master`, 1
 | `replay_build_scripts/ci/build-image.sh` | image ref/ensure | 158 | repo `chromium157-build`; disk guard on docker root; `tag`/`build` subcommands dropped |
 | `replay_build_scripts/ci/build-in-container.sh` | `docker run` wrapper | M + 158 | fixed root (no `--root`); `/ci` read-only mount; cert mount only with `--engflow`; no `.git-cache` mount; no local-driver mount; `--oom-score-adj`; in-container deadline |
 | `replay_build_scripts/ci/remove-stale-build-containers.sh` | remove `chromium157-build-*` containers | 158 | prefix from `config.sh`; no key argument |
+| `replay_build_scripts/symbols_archive.mjs` | `<build id>.symbols.tgz` next to the packaged build | new | calls `buildSymbolsArchive` (moved from `upload_build_artifacts.mjs` into `symbolication.mjs`, unchanged) |
 | `replay_build_scripts/ci/container/package.sh` | in-image packaging | 158 (`package-artifacts.sh`), M (`copyBuildFiles` file list) | `chrome`, `locales`, `replay-assets` required; `build_id` without newline (as M) |
 | `replay_build_scripts/ci/Dockerfile` | build image | 158 | `CHROMIUM_TAG=157.0.8103.0`; depot_tools `96b9c092…` (the revision 157 `DEPS` pins for `src/third_party/depot_tools`); system `gc.auto 0` |
 | `build.cjs` | in-container build script | M (`build.js`: driver embed, build id, image check, `args.gn` import), 158 (`.cjs`, max-failures switch) | reclient + ninja-state healing removed; siso remote-exec check; siso flags; env parsed into one options object |
@@ -68,7 +70,7 @@ Paths relative to the repository root. Origin: M = replayio/chromium `master`, 1
 | `replay_build_scripts/update-all-repos.mjs`, `update-chromium-repo.mjs` | operate on the current directory's checkout + `RECORD_REPLAY_BACKEND_DIR`; steps of the 147 pipeline |
 
 - Source of the list: `/home/domi/replay/chromium/_rebase157/merge/chromium_new.txt`
-- Not touched: `buildMac.mjs`, `buildWindows.mjs`, `mac_*_args.gn`, `windows_args.gn`, `upload_build_artifacts.mjs`, `.github/workflows/*` (all `workflow_dispatch` only).
+- Not touched: `buildMac.mjs`, `buildWindows.mjs`, `mac_*_args.gn`, `windows_args.gn`, `upload_build_artifacts.mjs` (except importing `buildSymbolsArchive`), `.github/workflows/*` (all `workflow_dispatch` only).
 
 ### Branch prerequisites (outside these files)
 
@@ -190,10 +192,11 @@ Not shared: checkout, out dir, gclient/cipd state, depot_tools, git object cache
 | `logs/build.log.gz` | always (after the build ran) |
 | `logs/failed-steps.txt` (lines `FAILED: …`, ANSI stripped) | always |
 | `logs/siso_failure_summary`, `logs/siso_output.gz`, `logs/siso_failed_commands.sh` | if written by this build |
-| `build_id/linux/x86_64/build_id`, `build_id/linux/x86_64/<build id>.tar.xz` | build succeeded |
+| `build_id/linux/x86_64/build_id`, `build_id/linux/x86_64/<build id>.tar.xz`, `build_id/linux/x86_64/<build id>.symbols.tgz` | build succeeded |
 
 - Failure line format: `siso/build/cmd_output_log.go` (`"%s%s: %s %q %s\n"`, result `FAILED`).
-- Not produced (vs master): S3 / static.replay.io upload, symbols archive, `entries`, `pak-sizes`, annotations.
+- Not produced (vs master): S3 / static.replay.io upload, `entries`, `pak-sizes`, annotations.
+- Symbols archive: the one master uploads to S3 `symbols/`, here an artifact only; the test step passes its directory to the backend as `REPLAY_SYMBOLS_DIR`.
 - Build id: master's `computeBuildId`, suffix `-dev` (branch ≠ pipeline default branch).
 
 ## 10. Verification performed (local, no CI, no real docker)

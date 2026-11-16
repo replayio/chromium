@@ -21,6 +21,8 @@
 #   logs/siso_failure_summary   siso's own report of each failure
 #   logs/siso_output.gz, logs/siso_failed_commands.sh
 #   build_id/linux/x86_64/build_id, build_id/linux/x86_64/<build id>.tar.xz
+#   build_id/linux/x86_64/<build id>.symbols.tgz   chrome's symbols, in the
+#                               archive master uploads to S3 symbols/
 set -euo pipefail
 dir=$(dirname "$(readlink -f "$0")")
 # shellcheck source=config.sh
@@ -71,5 +73,8 @@ fi
 
 echo "--- :package: package"
 "$dir/build-in-container.sh" -- /ci/container/package.sh "/chromium/jobs/$job/build_id/linux/x86_64"
+# With the tree's node: the image's is too old for the script's modules.
+"$dir/build-in-container.sh" -- /chromium/src/third_party/node/linux/node-linux-x64/bin/node \
+  replay_build_scripts/symbols_archive.mjs "/chromium/jobs/$job/build_id/linux/x86_64"
 ( cd "$out" && buildkite-agent artifact upload "build_id/linux/x86_64/**" )
 echo "build id: $(cat "$out/build_id/linux/x86_64/build_id")"
