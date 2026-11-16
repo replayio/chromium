@@ -25,6 +25,11 @@
 
 #include <dlfcn.h>
 
+#if BUILDFLAG(IS_LINUX)
+#include <sys/syscall.h>
+#include <unistd.h>
+#endif
+
 #if BUILDFLAG(IS_MAC)
 #include <spawn.h>
 #endif
@@ -212,7 +217,15 @@ static DriverHandle OpenDriverHandle() {
     return nullptr;
   }
 
+#if BUILDFLAG(IS_LINUX)
+  // Not close(): this binary has its own (base/files/scoped_file_linux.cc),
+  // which looks libc's up on its first call. That lookup belongs after the
+  // attach, where the driver records it and answers with its own close, as in
+  // a process that finds the driver file written.
+  syscall(SYS_close, fd);
+#else
   close(fd);
+#endif
 
   int rv;
 
