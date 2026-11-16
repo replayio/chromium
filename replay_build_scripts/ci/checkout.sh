@@ -395,6 +395,14 @@ prepare() {
       echo "--- cloning the fork from $(fork_url)"
       git clone -q --no-checkout "$(fork_url)" "$r/src"
     fi
+    # checkout_traffic_annotation_tools gates a hook that downloads a prebuilt
+    # auditor for the network-annotations presubmit. The object m108 pins is
+    # gone from gs://chromium-tools-traffic_annotation -- it 404s, while the
+    # other buckets the same hook reads answer 200 -- and gclient stops at the
+    # first hook that fails, so everything after it is skipped. Nothing in the
+    # chrome target wants that binary. Upstream dropped the hook after m108,
+    # and gclient ignores a custom_var the DEPS no longer declare (merge_vars
+    # in gclient.py), so this stays correct as the fork moves on.
     cat > "$r/.gclient" <<'EOF'
 solutions = [
 {
@@ -402,7 +410,7 @@ solutions = [
    "url": "https://chromium.googlesource.com/chromium/src.git",
    "managed": False,
    "custom_deps": {},
-   "custom_vars": {},
+   "custom_vars": {"checkout_traffic_annotation_tools": False},
 },
 ]
 EOF
