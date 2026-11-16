@@ -69,12 +69,6 @@ fork_url() {
   echo "${CHROMIUM_FORK_URL:-git@github.com:replayio/chromium.git}"
 }
 
-# The checkout every build shared before this existed, and still shares with
-# branches that have not been rebased onto it.
-legacy_checkout() {
-  echo "${CHROMIUM_LEGACY_CHECKOUT:-$HOME/chromium}"
-}
-
 # The milestone of the tree this script came from. chrome/VERSION is in the tree
 # being built, so a job reads it from the small clone it bootstrapped these
 # scripts with, before any big checkout is involved: `git show` works there even
@@ -128,9 +122,6 @@ nearest_src() {
       return
     fi
   done
-  if [ -d "$(legacy_checkout)/src/.git" ]; then
-    echo "$(legacy_checkout)/src"
-  fi
 }
 
 stamp_file() {
@@ -147,43 +138,17 @@ created_by=$how
 EOF
 }
 
-# A key with no directory of its own, whose milestone is the one the shared
-# checkout holds, takes that checkout over: a symlink, nothing copied, nothing
-# moved, so branches that still build in it keep working. This is how the
-# current milestone arrives here without anyone doing anything by hand. A
-# milestone nobody has checked out on this machine is a different matter, since
-# making one means gclient and the 140 repositories DEPS pins (see prepare).
-link_legacy_checkout() {
-  local k=$1 r=$2 legacy major
-  legacy=$(legacy_checkout)
-  if [ ! -d "$legacy/src/.git" ]; then
-    return 1
-  fi
-  major=$(sed -n 's/^MAJOR=//p' "$legacy/src/chrome/VERSION" 2>/dev/null)
-  if [ -z "$major" ] || [ "$k" != "m$major" ]; then
-    return 1
-  fi
-  mkdir -p "$(dirname "$r")"
-  if ! ln -s "$legacy" "$r" 2>/dev/null; then
-    # Another job got there first, which is all this needed.
-    [ -d "$r/src/.git" ]
-    return
-  fi
-  mkdir -p "$r/home"
-  write_stamp "$k" "linked the shared checkout at $legacy"
-  # stderr: require's stdout is the path its callers capture.
-  echo "checkout: '$k' -> $legacy, the checkout builds shared before there was" >&2
-  echo "one per version. Nothing was copied or moved: branches that still build" >&2
-  echo "there keep working, and 'checkout.sh adopt --move' ends that when they" >&2
-  echo "are gone." >&2
-}
-
 # Prints the key's directory and nothing else: callers capture it.
 require() {
   local k=${1:-$(key)} r
   r=$(root "$k")
-  if [ ! -d "$r/src/.git" ]; then
-    link_legacy_checkout "$k" "$r" || true
+  # A key is that literal directory. A symlink is how the retired shared
+  # checkout was claimed by whichever milestone built last (#1637, build 5567):
+  # refuse one rather than build in a tree that belongs to another version.
+  if [ -L "$r" ]; then
+    echo "checkout: $r is a symlink to $(readlink "$r"), not a checkout of its own." >&2
+    echo "Remove the link and prepare '$k': checkout.sh prepare" >&2
+    exit 1
   fi
   if [ ! -d "$r/src/.git" ]; then
     cat >&2 <<EOF
@@ -199,7 +164,6 @@ clone. Make it once and every build of that version has it:
   replay_build_scripts/ci/checkout.sh adopt <dir> $k   # a tree that already exists
 
 Prepared keys here: $(ls -1 "$(checkouts_dir)" 2>/dev/null | tr '\n' ' ')
-Shared checkout: $(legacy_checkout), milestone $(sed -n 's/^MAJOR=/m/p' "$(legacy_checkout)/src/chrome/VERSION" 2>/dev/null || echo unknown)
 EOF
     exit 1
   fi
