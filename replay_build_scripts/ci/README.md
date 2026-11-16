@@ -132,18 +132,26 @@ the key has no checkout, the job fails and says what to run.
 
 ## On a build agent
 
-Nothing, for the milestone the agent is already building. The first job claims
-the shared checkout as that milestone's key itself -- a symlink, nothing copied
-or moved -- after checking that the tree's own `chrome/VERSION` is the key it
-wants. It says so in the log when it does.
+Every key is a directory somebody prepared. A build never makes one, never
+borrows another version's, and refuses a key that is a symlink.
 
-A symlink rather than a move, because `.buildkite/pipeline.yml` is fetched per
-branch: until a branch is rebased onto this change it still runs the old step,
-which builds in `/home/ubuntu/chromium/src` directly. Both kinds of job then
-build the same tree. For the same reason the old `chromium-build-new` image and
-`/home/ubuntu/depot_tools` have to stay until no branch builds the old way. When
-they are gone, `checkout.sh adopt --move /home/ubuntu/chromium m108` ends the
-arrangement and the shared path with it.
+There was a bridge, briefly: a key whose milestone matched whatever
+`/home/ubuntu/chromium` held claimed that tree by symlink, so the milestone the
+agent was already building arrived here with nobody arranging it. That read the
+identity of a 104 GB development checkout off a value any build could change,
+and two Buildkite pipeline-upload steps -- `runtime-build-and-test` and
+`manual-chromium-branch-build`, neither in this repository -- changed it, with
+`git reset --hard origin/$BUILDKITE_BRANCH` in that tree on every build of every
+branch. By the time it was removed the agent had four keys, every one a symlink
+to the same tree, and no prepared checkout at all; build 5567 took the m108 tree
+as `m110` and died in `gn gen` on an identifier that only m108's pinned pdfium
+declares.
+
+Those upload steps now take this commit's scripts by URL instead of resetting a
+checkout. Removing this does not by itself end the arrangement: every branch
+runs its own copy of these scripts, so a branch that has not been rebased still
+has the symlink code. What ends it is the agent: once `/home/ubuntu/chromium` is
+gone, every copy fails over to `require`'s message.
 
 `checkout.sh adopt [--move] <dir> [key]` is also how a tree that already exists
 somewhere else becomes a key's, which is the cheap way to give a milestone a
