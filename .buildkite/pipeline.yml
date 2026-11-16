@@ -102,19 +102,7 @@ steps:
       be_cmd chromium-build -- "$$SCRIPTS/ci/build-in-container.sh"
       be_cmd upload-artifacts -- "$$SCRIPTS/ci/upload-artifacts.sh"
 
-  - label: "📝 E2E Tests (linux-x86_64)"
-    trigger: "runtime-fe-end-to-end-tests"
-    depends_on:
-      - "build-chromium-linux-x86_64"
-    build:
-      env:
-        OS: "linux"
-        ARCH: "x86_64"
-        RECORD_REPLAY_METADATA_SOURCE_COMMIT_TITLE: "${BUILDKITE_MESSAGE}"
-        RECORD_REPLAY_METADATA_SOURCE_COMMIT_ID: "${BUILDKITE_COMMIT}"
-        RECORD_REPLAY_METADATA_SOURCE_BRANCH: "${BUILDKITE_BRANCH}"
-        RECORD_REPLAY_METADATA_SOURCE_MERGE_ID: "${BUILDKITE_PULL_REQUEST}"
-        RUNTIME_REPO: "${BUILDKITE_PULL_REQUEST_REPO}"
+  # CI vehicle, not for merge: the frontend E2E trigger is left out.
 
   # Parallel with E2E: inline chromium-recording (mirrors node test-node).
   # e2e=true: only linux class with Replay Chromium runtime libs (libnss3); can_replay lacks them.
@@ -172,7 +160,32 @@ steps:
       node --version
       # packageManager pnpm@10.11.0; agents lack global npm write (EACCES).
       npx --yes pnpm@10.11.0 install --frozen-lockfile
-      npx tsx src/build/buildRuntime.ts test-chromium-recording --build-id "$$BUILD_ID"
+      echo "pod-cpu cpu.max=$$(cat /sys/fs/cgroup/cpu.max) nproc=$$(nproc) memory.max=$$(cat /sys/fs/cgroup/memory.max)"
+      # Every 10 s until this script ends: the pod's memory in MB, per process name
+      # the number of processes and their summed Pss in MB, and the largest processes.
+      ( while kill -0 $$$$ 2>/dev/null; do
+          CURRENT=$$(cat /sys/fs/cgroup/memory.current)
+          INACTIVE_FILE=$$(awk '/^inactive_file /{print $$2}' /sys/fs/cgroup/memory.stat)
+          PROCESSES=$$(for P in /proc/[0-9]*; do
+              NAME=$$(tr ' ' '_' < "$$P/comm" 2>/dev/null) || continue
+              PSS=$$(awk '/^Pss:/{print $$2}' "$$P/smaps_rollup" 2>/dev/null) || continue
+              echo "$$NAME $${PSS:-0}"
+            done) || true
+          BY_NAME=$$(echo "$$PROCESSES" | awk '{n[$$1]++; s[$$1]+=$$2} END{for (c in n) if (s[c] >= 51200) printf "%s=%dx%d ", c, n[c], s[c]/1024}') || true
+          LARGEST=$$(echo "$$PROCESSES" | sort -k2 -nr | awk 'NR <= 8 {printf "%s:%d ", $$1, $$2/1024}') || true
+          echo "pod-memory-mb working-set=$$(( (CURRENT - INACTIVE_FILE) / 1048576 )) current=$$(( CURRENT / 1048576 )) | $$BY_NAME| largest: $$LARGEST"
+          sleep 10
+        done ) &
+      echo "chromium-build-id $$BUILD_ID"
+      STATUS=0
+      npx tsx src/build/buildRuntime.ts test-chromium-recording --build-id "$$BUILD_ID" || STATUS=$$?
+      # Which linkers the replays installed: file names only.
+      for DIR in test/chromium-recording/storage/builds storage/builds; do
+        if [ -d "$$DIR" ]; then
+          for FILE in "$$DIR"/linker-*; do echo "installed-linker $$FILE"; done
+        fi
+      done
+      exit $$STATUS
 
   # - label: "🔨 Chromium (mac-x86_64)"
   #   key: "build-chromium-mac-x86_64"
