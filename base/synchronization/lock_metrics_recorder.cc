@@ -13,6 +13,7 @@
 #include "base/features.h"
 #include "base/metrics/histogram.h"
 #include "base/no_destructor.h"
+#include "base/record_replay.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_split.h"
 #include "base/synchronization/lock.h"
@@ -203,6 +204,13 @@ void LockMetricsRecorder::ReportLockAcquisitionTimes() {
 void LockMetricsRecorder::EnableRecordingOnCurrentThread(
     std::string_view histogram_suffix) {
   CHECK(!histogram_suffix.empty());
+
+  // [RecordReplay] Lock metrics are off when recording or replaying. Workers
+  // starting together race to initialize the statics below, and the one that
+  // does it reads a feature's parameters, which isn't the same thread twice.
+  if (recordreplay::IsRecordingOrReplaying()) {
+    return;
+  }
 
   if (!base::FeatureList::IsEnabled(
           base::features::kRecordLockAcquisitionTime)) {

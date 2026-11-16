@@ -56,11 +56,37 @@ ensure_root() {
   mkdir -p "$CHECKOUT_ROOT/src" "$CHECKOUT_ROOT/home"
 }
 
+# A fetch that was killed (canceled job, timeout) leaves its partial pack as
+# tmp_pack_* in the repository's objects/pack, and nothing removes it: the
+# checkouts never gc, and a full fetch of the fork is ~56 GB. Every repository
+# of the checkout is covered. Only files from before this run that no process
+# has open are removed: the job holds the checkout's concurrency group, so
+# such a file belongs to no running fetch.
+remove_stale_tmp_packs() {
+  local started pack file holder
+  [ -d "$CHECKOUT_ROOT/src" ] || return 0
+  started=$(mktemp)
+  while IFS= read -r -d '' pack; do
+    while IFS= read -r -d '' file; do
+      holder=$(find /proc/[0-9]*/fd -maxdepth 1 -lname "$file" -print -quit 2>/dev/null || true)
+      if [ -n "$holder" ]; then
+        echo "keeping $file: open ($holder)"
+        continue
+      fi
+      echo "removing stale $(du -h "$file" | cut -f1) $file"
+      rm -f "$file"
+    done < <(find "$pack" -maxdepth 1 -type f -name 'tmp_pack_*' ! -newer "$started" -print0)
+  done < <(find "$CHECKOUT_ROOT/src" -path "$CHECKOUT_ROOT/src/out" -prune -o \
+    -type d -path '*/.git/objects/pack' -print0)
+  rm -f "$started"
+}
+
 sync() {
   local commit fork_url
   commit=$(git -C "$repo" rev-parse HEAD)
   fork_url=$(git -C "$repo" config remote.origin.url)
   ensure_root
+  remove_stale_tmp_packs
   cp "$dir/gclient" "$CHECKOUT_ROOT/.gclient"
   echo "--- checkout $CHECKOUT_ROOT -> $commit"
   "$dir/build-in-container.sh" -- /ci/container/sync.sh "$fork_url" "$commit"

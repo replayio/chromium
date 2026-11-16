@@ -14,6 +14,7 @@
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
@@ -687,6 +688,13 @@ bool BackgroundURLLoader::CanHandleRequest(
     const ResourceLoaderOptions& options,
     bool is_prefech_only_document) {
   CHECK(IsMainThread());
+  // [RecordReplay] Loading on a background thread shares each loader's state
+  // between that thread, the main thread and the pool, and which of them drops
+  // the last reference to it, and so posts its deletion, is a race a recording
+  // doesn't have in it. A recorded renderer loads on the main thread.
+  if (recordreplay::IsRecordingOrReplaying()) {
+    return false;
+  }
   auto result =
       CanHandleRequestInternal(request, options, is_prefech_only_document);
   base::UmaHistogramEnumeration(

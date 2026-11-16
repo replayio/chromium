@@ -15,6 +15,7 @@
 #include "base/check.h"
 #include "base/check_op.h"
 #include "base/containers/span.h"
+#include "base/record_replay.h"
 #include "base/time/time.h"
 
 namespace base {
@@ -221,6 +222,12 @@ MetricsSubSampler::ScopedNeverSampleForTesting::~ScopedNeverSampleForTesting() {
 }
 
 bool ShouldRecordSubsampledMetric(double probability) {
+  // [RecordReplay] Nothing is sampled when recording or replaying. Threads
+  // share the sampler, and whether one of them is picked decides whether it
+  // reads the clock: a mojo message is timestamped one time in a thousand.
+  if (recordreplay::IsRecordingOrReplaying()) {
+    return false;
+  }
   return MetricsSubSampler::GetSharedMetricsSubsampler().ShouldSample(
       probability);
 }

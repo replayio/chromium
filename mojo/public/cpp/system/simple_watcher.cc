@@ -226,7 +226,7 @@ MojoResult SimpleWatcher::Arm(MojoResult* ready_result,
   MojoResult rv = MojoArmTrap(trap_handle_.get().value(), nullptr,
                               &num_blocking_events, &blocking_event);
 
-  recordreplay::Assert("[RUN-1126] SimpleWatcher::Arm %d", rv);
+  recordreplay::AssertMaybeEventsDisallowed("[RUN-1126] SimpleWatcher::Arm %d", rv);
 
   if (rv == MOJO_RESULT_FAILED_PRECONDITION) {
     DCHECK(context_);

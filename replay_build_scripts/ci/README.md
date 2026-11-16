@@ -10,7 +10,7 @@ Scope: Linux x86_64, build only, agent `chromium-build-1`, Buildkite pipeline `c
 | 1 | agent hooks | `skip-checkout`; `aws-sm` writes `engflow-m157.crt` / `engflow-m157.key` into the job workspace | `.buildkite/pipeline.yml` |
 | 2 | host | `curl` `bootstrap.sh` at the build's commit; blob-less sparse clone of `replay_build_scripts/ci` into `.ci-boot-m157` | `ci/bootstrap.sh` |
 | 3 | host | remove containers named `chromium157-build-*` | `ci/remove-stale-build-containers.sh` |
-| 4 | host | guards (root identity, free disk); create `m157` + stamp if missing; install `.gclient` | `ci/checkout.sh sync` |
+| 4 | host | guards (root identity, free disk); create `m157` + stamp if missing; remove `tmp_pack_*` of killed fetches (older than this run, open by no process) in the checkout's repositories; install `.gclient` | `ci/checkout.sh sync` |
 | 5 | host | build image `chromium157-build:<Dockerfile hash>-u<uid>` if absent | `ci/build-image.sh ensure` |
 | 6 | container | fetch commit (depth 1), checkout, `gclient sync --nohooks --no-history -D`, `gclient runhooks`, re-stamp `LASTCHANGE` | `ci/container/sync.sh` |
 | 7 | container | driver download + embed, image check, remote-exec check, `args.gn`, `gn gen`, `autoninja` (siso) | `build.cjs` |

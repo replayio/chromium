@@ -63,16 +63,19 @@ namespace {
 // [RecordReplay] How long the pump waits for work. On Linux a thread isn't
 // woken for a task posted outside the recording (see
 // ThreadControllerWithMessagePumpImpl::ScheduleWork), so when recording or
-// replaying an idle main thread looks for work once a second by itself. A wait
-// that ends by its time is recorded, so a replay wakes where the recording
-// did. Only the main thread: a replay runs a thread through its idle wake-ups
-// without waiting for anything, and other threads would read the clock
-// seconds ahead of where the main thread is paused.
+// replaying an idle thread looks for work once a second by itself. A wait that
+// ends by its time is recorded, so a replay wakes where the recording did.
+// Every thread with this pump: with only the main thread waking, repaints at
+// paint points drew the next frame's picture. A replay runs a thread through
+// its idle wake-ups without waiting for anything, so such a thread reads the
+// clock seconds ahead of where the main thread is paused; the linker keeps a
+// pause's clock from following it (other threads count for up to a second
+// past what the main thread last read).
 TimeDelta RecordReplayWaitLimit(
     const MessagePump::Delegate::NextWorkInfo& next_work_info) {
   TimeDelta delay = next_work_info.remaining_delay();
 #if !BUILDFLAG(IS_APPLE)
-  if (recordreplay::IsRecordingOrReplaying() && recordreplay::IsMainThread()) {
+  if (recordreplay::IsRecordingOrReplaying()) {
     delay = std::min(delay, Seconds(1));
   }
 #endif
