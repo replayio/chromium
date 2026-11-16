@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "base/functional/bind.h"
+#include "base/record_replay.h"
 #include "content/child/child_thread_impl.h"
 #include "content/common/thread_type_switcher.mojom.h"
 
@@ -55,6 +56,16 @@ SandboxedProcessThreadTypeHandler* SandboxedProcessThreadTypeHandler::Get() {
 bool SandboxedProcessThreadTypeHandler::HandleThreadTypeChange(
     base::PlatformThreadId thread_id,
     base::ThreadType thread_type) {
+  // Whether a change posts a flush depends on how this thread interleaves with
+  // the others and with the flush itself, which is not the same when replaying.
+  // Send every change by itself so that each one posts the same tasks.
+  if (recordreplay::IsRecordingOrReplaying()) {
+    std::vector<mojom::ThreadTypeChangePtr> batch;
+    batch.push_back(mojom::ThreadTypeChange::New(thread_id.raw(), thread_type));
+    thread_type_switcher_->SetThreadTypes(std::move(batch));
+    return true;
+  }
+
   // Invoked from arbitrary threads. Coalesce changes and flush them to the
   // browser as a single batched IPC, instead of sending one IPC per thread.
   {
