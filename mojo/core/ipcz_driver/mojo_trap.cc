@@ -2,6 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <algorithm>
+#include <vector>
+#include "base/record_replay.h"
 #include "mojo/core/ipcz_driver/mojo_trap.h"
 
 #include <cstdint>
@@ -169,7 +172,12 @@ struct MojoTrap::Trigger : public base::RefCountedThreadSafe<Trigger> {
         handle(handle),
         data_pipe(base::WrapRefCounted(data_pipe)),
         signals(signals),
-        trigger_context(trigger_context) {}
+        trigger_context(trigger_context) {
+    // [Replay] Registered so Arm() can visit triggers in a reproducible order;
+    // see the sort there.  M108 did the same for the legacy Watch objects this
+    // machinery replaced (mojo/core/watch.cc).  DSRC-291.
+    recordreplay::RegisterPointer("MojoTrap::Trigger", this);
+  }
 
   uintptr_t ipcz_context() const { return reinterpret_cast<uintptr_t>(this); }
 
@@ -192,7 +200,7 @@ struct MojoTrap::Trigger : public base::RefCountedThreadSafe<Trigger> {
  private:
   friend class base::RefCountedThreadSafe<Trigger>;
 
-  ~Trigger() = default;
+  ~Trigger() { recordreplay::UnregisterPointer(this); }
 };
 
 MojoTrap::MojoTrap(MojoTrapEventHandler handler) : handler_(handler) {}
@@ -243,7 +251,7 @@ MojoResult MojoTrap::AddTrigger(MojoHandle handle,
     return MOJO_RESULT_ALREADY_EXISTS;
   }
 
-  next_trigger_ = triggers_.begin();
+  next_trigger_index_ = 0;
 
   // Install an ipcz trap to effectively monitor the lifetime of the watched
   // object referenced by `handle`. Installation of the trap should always
@@ -288,7 +296,7 @@ MojoResult MojoTrap::RemoveTrigger(uintptr_t trigger_context) {
   scoped_refptr<Trigger> trigger = std::move(it->second);
   trigger->armed = false;
   triggers_.erase(it);
-  next_trigger_ = triggers_.begin();
+  next_trigger_index_ = 0;
   DispatchOrQueueTriggerRemoval(*trigger);
   return MOJO_RESULT_OK;
 }
@@ -316,23 +324,40 @@ MojoResult MojoTrap::Arm(MojoTrapEvent* blocking_events,
   }
 
   uint32_t num_events_returned = 0;
-  auto increment_wrapped = [this](TriggerMap::iterator it) {
-    lock_.AssertAcquired();
-    if (++it != triggers_.end()) {
-      return it;
-    }
-    return triggers_.begin();
-  };
 
-  TriggerMap::iterator next_trigger = next_trigger_;
-  CHECK(next_trigger != triggers_.end());
+  // [Replay] `triggers_` is a flat_map keyed by the raw trigger context
+  // (reinterpret_cast<uintptr_t>(this) of the caller's object -- see
+  // WaitSet::State::Context::context_value), so iterating it visits triggers in
+  // HEAP ORDER, which a replay never reproduces.  That decides which trigger is
+  // armed first, and SyncHandleRegistry::Wait takes the first ready one, so the
+  // two sides called Router::Trap on different routers -- measured as
+  // `OrderedLock ipcz::Router::mutex_ 584` recorded against `263` replayed at
+  // an IDENTICAL stack (lock ids are recorded values, so a differing id means a
+  // different object, not a mis-assigned id).
+  //
+  // Visit them in registered-pointer-id order instead, the fork's standard
+  // answer, and the one M108 used for the legacy WatcherDispatcher's ready-watch
+  // dispatch.  DSRC-291.
+  std::vector<scoped_refptr<Trigger>> ordered_triggers;
+  ordered_triggers.reserve(triggers_.size());
+  for (auto& [trigger_context, trigger] : triggers_) {
+    ordered_triggers.push_back(trigger);
+  }
+  std::sort(ordered_triggers.begin(), ordered_triggers.end(),
+            [](const scoped_refptr<Trigger>& a, const scoped_refptr<Trigger>& b) {
+              return recordreplay::CompareByPointerId()(a.get(), b.get());
+            });
 
-  // We iterate over all triggers, starting just beyond wherever we started last
-  // time we were armed. This guards against any single trigger being starved.
-  const TriggerMap::iterator end_trigger = next_trigger;
+  // Round-robin across consecutive Arm() calls, as before, but by index into
+  // the ordered snapshot; every mutation of `triggers_` resets it to 0.
+  const size_t num_triggers = ordered_triggers.size();
+  size_t index = next_trigger_index_ % num_triggers;
+  const size_t end_index = index;
+  size_t visited = 0;
   do {
-    auto& [trigger_context, trigger] = *next_trigger;
-    next_trigger = increment_wrapped(next_trigger);
+    const scoped_refptr<Trigger>& trigger = ordered_triggers[index];
+    index = (index + 1) % num_triggers;
+    ++visited;
 
     MojoTrapEvent event;
     const IpczResult result = ArmTrigger(*trigger, event);
@@ -352,14 +377,10 @@ MojoResult MojoTrap::Arm(MojoTrapEvent* blocking_events,
     }
 
     UNSAFE_TODO(blocking_events[num_events_returned++]) = event;
-  } while (next_trigger != end_trigger &&
+  } while (visited < num_triggers &&
            (num_events_returned == 0 || num_events_returned < event_capacity));
 
-  if (next_trigger != end_trigger) {
-    next_trigger_ = next_trigger;
-  } else {
-    next_trigger_ = increment_wrapped(next_trigger);
-  }
+  next_trigger_index_ = (visited < num_triggers) ? index : (end_index + 1) % num_triggers;
 
   if (num_events_returned > 0) {
     *num_blocking_events = num_events_returned;
@@ -379,8 +400,21 @@ void MojoTrap::Close() {
   base::AutoLock lock(lock_);
   TriggerMap triggers;
   std::swap(triggers, triggers_);
-  next_trigger_ = triggers_.begin();
+  next_trigger_index_ = 0;
+  // [Replay] Visit in registered-pointer-id order, as Arm() does: a trap with
+  // more than one trigger would otherwise dispatch its removal events in heap
+  // order.  Same defect, same answer.  DSRC-291.
+  std::vector<scoped_refptr<Trigger>> ordered_triggers;
+  ordered_triggers.reserve(triggers.size());
   for (auto& [trigger_context, trigger] : triggers) {
+    ordered_triggers.push_back(trigger);
+  }
+  std::sort(ordered_triggers.begin(), ordered_triggers.end(),
+            [](const scoped_refptr<Trigger>& a, const scoped_refptr<Trigger>& b) {
+              return recordreplay::CompareByPointerId()(a.get(), b.get());
+            });
+
+  for (auto& trigger : ordered_triggers) {
     trigger->armed = false;
 
     DCHECK(!trigger->removed);
@@ -470,7 +504,7 @@ void MojoTrap::HandleTrapRemoved(const IpczTrapEvent& event) {
 
   triggers_.erase(trigger.trigger_context);
   DispatchOrQueueTriggerRemoval(trigger);
-  next_trigger_ = triggers_.begin();
+  next_trigger_index_ = 0;
 }
 
 IpczResult MojoTrap::ArmTrigger(Trigger& trigger, MojoTrapEvent& event) {

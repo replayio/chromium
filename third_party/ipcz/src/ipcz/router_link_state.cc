@@ -4,6 +4,8 @@
 
 #include "ipcz/router_link_state.h"
 
+#include "base/record_replay.h"
+
 #include <cstring>
 #include <limits>
 
@@ -86,7 +88,21 @@ bool RouterLinkState::TryLock(LinkSide from_side) {
     }
   }
 
+  // [Replay] The DECISION is recorded by the caller, not here: a caller
+  // reaches this only when it has a link state at all, and whether it does
+  // depends on shared allocator state, so recording here emits an event on one
+  // side and not the other.  See RemoteRouterLink.  DSRC-241.
   return desired_bit == kLockedByThisSide;
+}
+
+bool RouterLinkState::is_locked_by(LinkSide side) const {
+  Status s = status.load(std::memory_order_relaxed);
+  const bool locked = side == LinkSide::kA ? (s & kLockedBySideA) != 0
+                                           : (s & kLockedBySideB) != 0;
+  // [Replay] The DECISION is recorded by the caller, where it is
+  // unconditional: both callers reach this only inside a `state` null check,
+  // so recording here emits an event on one side and not the other.  DSRC-245.
+  return locked;
 }
 
 void RouterLinkState::Unlock(LinkSide from_side) {

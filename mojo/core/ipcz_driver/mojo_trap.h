@@ -78,7 +78,9 @@ class MojoTrap : public Object<MojoTrap> {
 
   const MojoTrapEventHandler handler_;
 
-  base::Lock lock_;
+  // [Replay] Ordered; M108 ordered WatcherDispatcher.lock_ for this role.
+  // DSRC-261.
+  base::Lock lock_{"MojoTrap.lock_"};
 
   // Condition variable used to wait for any other thread to finish dispatching
   // events so that another thread may dipatch its own.
@@ -100,7 +102,9 @@ class MojoTrap : public Object<MojoTrap> {
   //
   // SUBTLE: Because it is invalidated by mutations to `triggers_`, this MUST
   // be reset any time a trigger is inserted or removed.
-  TriggerMap::iterator next_trigger_ GUARDED_BY(lock_) = triggers_.end();
+  // [Replay] Index into the pointer-id-ordered snapshot Arm() builds, not an
+  // iterator into the address-ordered map.  DSRC-291.
+  size_t next_trigger_index_ GUARDED_BY(lock_) = 0;
 
   // A Mojo trap must ensure that all its event dispatches are mutually
   // exclusive. While one thread is dispatching an event, other threads must

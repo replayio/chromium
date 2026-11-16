@@ -3,6 +3,8 @@
 // found in the LICENSE file.
 
 #include <algorithm>
+
+#include "base/record_replay.h"
 #include <sstream>
 #include <utility>
 #include <vector>
@@ -30,6 +32,17 @@ RemoteRouterLink::RemoteRouterLink(Ref<NodeLink> node_link,
       sublink_(sublink),
       type_(type),
       side_(side) {
+  // [Replay] Make the last-reference drop reproducible, as Router does.
+  // ~RemoteRouterLink is `= default`, but it drops `link_state_`, and
+  // FragmentRef's destructor records a `GenericFragmentRef::ReleaseRef` value.
+  // Which thread sees the final decrement therefore decides which thread emits
+  // that event.  MEASURED: four replays of one recording diverged at four
+  // different points, one of them with the recording emitting
+  // `Value GenericFragmentRef::ReleaseRef` exactly where the replay took
+  // `OrderedLock ipcz::Router::ReleaseRef` -- the two refcount releases racing
+  // each other.  DSRC-301.
+  EnableOrderedRelease("ipcz::RemoteRouterLink::ReleaseRef");
+
   // Central links must be constructed with a valid RouterLinkState fragment.
   // Other links must not.
   ABSL_ASSERT(type.is_central() == !link_state.is_null());
@@ -393,6 +406,28 @@ void RemoteRouterLink::MarkSideStable() {
 }
 
 bool RemoteRouterLink::TryLockForBypass(const NodeName& bypass_request_source) {
+  // [Replay] Decline proxy bypass while recording or replaying.
+  //
+  // MEASURED, and the reason this is a decline rather than a recorded value:
+  // recording the decision instead -- the TryLockForClosure shape below -- and
+  // letting the bypass proceed moved the first divergence BACKWARDS, from
+  // order 24659 to 8807 (`rec: Call clock_gettime` / `rep: [RUN-1307-1773]
+  // ChannelLinux::Write`).  Pinning this one value re-enables the whole bypass
+  // path, whose other reads of peer-written shared state are not recorded, so
+  // it buys one pinned branch and exposes several unpinned ones.
+  //
+  // KNOWN COST, not yet observed in a test: upstream's failure to lock is
+  // transient and retried through the link state's waiting bit, which a hard
+  // false never sets, so the proxy stays in place for the life of the route.
+  // Closure only propagates outward under `on_central_link && ... &&
+  // TryLockForClosure()` (router.cc), so a route that never goes central never
+  // sends closure when THIS end is the one still holding the proxy.  Properly
+  // fixing that means recording the rest of the bypass path's shared reads,
+  // which is a larger port than this stage is paying for.  DSRC-238.
+  if (recordreplay::IsRecordingOrReplaying()) {
+    return false;
+  }
+
   RouterLinkState* state = GetLinkState();
   if (!state || !state->TryLock(side_)) {
     return false;
@@ -404,7 +439,13 @@ bool RemoteRouterLink::TryLockForBypass(const NodeName& bypass_request_source) {
 
 bool RemoteRouterLink::TryLockForClosure() {
   RouterLinkState* state = GetLinkState();
-  return state && state->TryLock(side_);
+  // [Replay] Record the decision HERE, where it is unconditional.  Whether a
+  // link state exists at all depends on shared allocator state the replay
+  // cannot see, so recording inside RouterLinkState::TryLock emitted an event
+  // on one side and not the other -- measured as `rec: Call clock_gettime` /
+  // `rep: Value RouterLinkState::ResetWaitingBit`.  DSRC-241.
+  return !!recordreplay::RecordReplayValue(
+      "RemoteRouterLink::TryLockForClosure", state && state->TryLock(side_));
 }
 
 void RemoteRouterLink::Unlock() {
@@ -415,7 +456,10 @@ void RemoteRouterLink::Unlock() {
 
 bool RemoteRouterLink::FlushOtherSideIfWaiting() {
   RouterLinkState* state = GetLinkState();
-  if (!state || !state->ResetWaitingBit(side_.opposite())) {
+  // [Replay] Unconditional recording; see TryLockForClosure.  DSRC-241.
+  if (!recordreplay::RecordReplayValue(
+          "RemoteRouterLink::FlushOtherSideIfWaiting",
+          state && state->ResetWaitingBit(side_.opposite()))) {
     return false;
   }
 
@@ -428,13 +472,21 @@ bool RemoteRouterLink::FlushOtherSideIfWaiting() {
 bool RemoteRouterLink::CanNodeRequestBypass(
     const NodeName& bypass_request_source) {
   RouterLinkState* state = GetLinkState();
-  if (!state) {
-    return false;
+  bool allowed = false;
+  if (state) {
+    // [Replay] `allowed_bypass_request_source` is written by the PEER (it
+    // stores the name on its side at :401) and so is the locked bit, and
+    // whether a link state exists at all depends on shared allocator state.
+    // Record the whole decision HERE, where it is unconditional, rather than
+    // inside is_locked_by where the event would be emitted on one side only.
+    // DSRC-245.
+    const NodeName allowed_source =
+        state->allowed_bypass_request_source.LoadAcquire();
+    allowed = state->is_locked_by(side_.opposite()) &&
+              allowed_source == bypass_request_source;
   }
-
-  NodeName allowed_source = state->allowed_bypass_request_source.LoadAcquire();
-  return state->is_locked_by(side_.opposite()) &&
-         allowed_source == bypass_request_source;
+  return !!recordreplay::RecordReplayValue(
+      "RemoteRouterLink::CanNodeRequestBypass", allowed);
 }
 
 void RemoteRouterLink::Deactivate() {

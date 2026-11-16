@@ -201,6 +201,11 @@ DevToolsSession::DevToolsSession(
       injected_script_manager_(
           MakeGarbageCollected<InspectorInjectedScriptManager>(
               agent_->inspected_frames_.Get())) {
+  // DSRC-214: the id must exist before anything publishes `this`.
+  // AttachSession() below puts this session into three id-hashed heap maps,
+  // and the traits CHECK(id > 0) when it is hashed.
+  record_replay_id_ = recordreplay::NewIdAnyThread("DevToolsSession");
+
   receiver_.Bind(std::move(main_receiver), mojo_task_runner);
 
   io_session_ =
@@ -233,8 +238,6 @@ DevToolsSession::DevToolsSession(
       agents_[i]->Restore();
     }
   }
-
-  record_replay_id_ = recordreplay::NewIdAnyThread("DevToolsSession");
 }
 
 DevToolsSession::~DevToolsSession() {

@@ -4,6 +4,8 @@
 
 #include "ipcz/fragment_ref.h"
 
+#include "base/record_replay.h"
+
 #include <algorithm>
 #include <utility>
 
@@ -37,7 +39,14 @@ void GenericFragmentRef::reset() {
   }
 
   auto* ref_counted = static_cast<RefCountedFragment*>(fragment.address());
-  if (ref_counted->ReleaseRef() > 1 || !memory) {
+  // [Replay] The reference count lives in the shared fragment and the PEER
+  // also holds references, so a replay decrements a count it cannot see and
+  // reaches a different verdict about who holds the last one -- which decides
+  // whether FreeFragment runs at all.  Record the verdict; the decrement
+  // itself is unconditional here, so the event is too.  DSRC-245.
+  const bool was_last_ref = !!recordreplay::RecordReplayValue(
+      "GenericFragmentRef::ReleaseRef", ref_counted->ReleaseRef() <= 1);
+  if (!was_last_ref || !memory) {
     return;
   }
 

@@ -25,9 +25,20 @@ FrameOrWorkerScheduler::LifecycleObserverHandle::LifecycleObserverHandle(
     OnLifecycleStateChangedCallback callback)
     : scheduler_(scheduler->GetWeakPtr()),
       observer_type_(observer_type),
-      callback_(std::move(callback)) {}
+      callback_(std::move(callback)) {
+  // [Replay] Pointer registration is needed for the CompareByPointerId sort in
+  // FrameOrWorkerScheduler::NotifyLifecycleObservers.  M108 registered the
+  // equivalent object in FrameOrWorkerScheduler::ObserverState's ctor; upstream
+  // replaced that class with this handle and the registration went with it,
+  // while the sort that depends on it survived.  Without this, the sort runs
+  // over unregistered pointers, where PointerId() is 0 and
+  // CompareByPointerId's CHECK(ida && idb) does not hold.  DSRC-288.
+  recordreplay::RegisterPointer("FrameOrWorkerScheduler::LifecycleObserverHandle",
+                                this);
+}
 
 FrameOrWorkerScheduler::LifecycleObserverHandle::~LifecycleObserverHandle() {
+  recordreplay::UnregisterPointer(this);
   if (scheduler_)
     scheduler_->RemoveLifecycleObserver(this);
 }

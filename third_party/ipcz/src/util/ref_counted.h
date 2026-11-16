@@ -29,8 +29,23 @@ class RefCountedBase {
   // released the last reference to the object.
   bool ReleaseImpl();
 
+  // [Replay] Opt in to a reproducible last-reference drop for this object.
+  //
+  // `ref_count_` is a bare atomic, so WHICH thread observes the final
+  // decrement -- and therefore destroys the object -- is a race the recording
+  // does not pin.  Measured: at order 13921 the recording was finishing an
+  // ordinary task while the replay was inside `Router::~Router()` called from
+  // `Router::Put`, i.e. the object died at a different point on the two sides.
+  //
+  // Ported from M108's `NodeChannel::Release`
+  // (mojo/core/node_channel.cc:880-902), which took an ordered lock around the
+  // decrement for exactly this reason.  Opt-in rather than automatic because
+  // `Parcel` is also RefCounted and far too hot to order.  DSRC-301.
+  void EnableOrderedRelease(const char* name);
+
  private:
   std::atomic_int ref_count_{1};
+  int record_replay_release_ordered_lock_id_ = 0;
 };
 
 }  // namespace internal

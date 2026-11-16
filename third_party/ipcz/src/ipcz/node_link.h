@@ -5,6 +5,7 @@
 #ifndef IPCZ_SRC_IPCZ_NODE_LINK_H_
 #define IPCZ_SRC_IPCZ_NODE_LINK_H_
 
+#include "util/ordered_mutex.h"
 #include <atomic>
 #include <chrono>
 #include <cstddef>
@@ -307,7 +308,9 @@ class NodeLink : public msg::NodeMessageListener {
   const Ref<DriverTransport> transport_;
   const Ref<NodeLinkMemory> memory_;
 
-  absl::Mutex mutex_;
+  // [Replay] Ordered; guards sublinks_ and the early-parcel tables that
+  // route decisions read across threads.  DSRC-276.
+  mutable OrderedMutex mutex_{"ipcz::NodeLink::mutex_"};
   ActivationState activation_state_ ABSL_GUARDED_BY(mutex_);
 
   // Messages transmitted from this NodeLink may traverse either the driver

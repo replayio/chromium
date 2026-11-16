@@ -4,6 +4,8 @@
 
 #include "ipcz/node_link_memory.h"
 
+#include "base/record_replay.h"
+
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -259,8 +261,17 @@ BufferId NodeLinkMemory::AllocateNewBufferId() {
     return BufferId{next_buffer_id_.fetch_add(1, std::memory_order_relaxed) |
                     side_bit};
   }
-  return BufferId{primary_buffer_.header.next_buffer_id.fetch_add(
-      1, std::memory_order_relaxed)};
+  // [Replay] This counter lives in the NodeLink's shared primary buffer and is
+  // bumped by BOTH sides, so a replay -- which has no peer to bump it -- reads
+  // a different value and hands out ids that do not match the recording's.
+  // Record what was handed out, the way DiscardableSharedMemory records the
+  // values it reads out of its shared state.  The mem_v2 path above needs
+  // nothing: it partitions the id space by link side and uses a local counter.
+  // DSRC-230.
+  return BufferId{recordreplay::RecordReplayValue(
+      "NodeLinkMemory::AllocateNewBufferId",
+      primary_buffer_.header.next_buffer_id.fetch_add(
+          1, std::memory_order_relaxed))};
 }
 
 SublinkId NodeLinkMemory::AllocateSublinkIds(size_t count) {
@@ -271,8 +282,12 @@ SublinkId NodeLinkMemory::AllocateSublinkIds(size_t count) {
         next_sublink_id_.fetch_add(count, std::memory_order_relaxed) |
         side_bit};
   }
-  return SublinkId{primary_buffer_.header.next_sublink_id.fetch_add(
-      count, std::memory_order_relaxed)};
+  // [Replay] See AllocateNewBufferId: shared counter, recorded value.
+  // DSRC-230.
+  return SublinkId{recordreplay::RecordReplayValue(
+      "NodeLinkMemory::AllocateSublinkIds",
+      primary_buffer_.header.next_sublink_id.fetch_add(
+          count, std::memory_order_relaxed))};
 }
 
 FragmentRef<RouterLinkState> NodeLinkMemory::GetInitialRouterLinkState(
@@ -332,8 +347,42 @@ Fragment NodeLinkMemory::AllocateFragmentInternal(size_t size) {
   return fragment;
 }
 
+// [Replay] Fragment allocation bottoms out in BlockAllocator free lists that
+// live in the NodeLink's shared buffer and are mutated by BOTH processes, so a
+// replay reaches different results.  Record the OUTCOME at this level and
+// nowhere lower: every inner layer calls a VARIABLE number of times
+// (AllocateFragmentBestEffort halves the block size in a loop;
+// BlockAllocatorPool::Allocate cycles its allocators), so recording down there
+// desynchronises the event stream rather than pinning it.  Measured twice:
+// recording in BlockAllocator moved the first divergence BACKWARDS
+// (26780 -> 12802), and recording in BlockAllocatorPool produced
+// `rec: BlockAllocatorPool::Free` / `rep: BlockAllocatorPool::Allocate` at the
+// same index.  DSRC-247.
+Fragment NodeLinkMemory::RecordReplayFragment(const char* why,
+                                              Fragment fragment) {
+  const uintptr_t encoded_buffer = recordreplay::RecordReplayValue(
+      why, fragment.is_null()
+               ? 0
+               : static_cast<uintptr_t>(fragment.buffer_id().value()) + 1);
+  const uintptr_t offset = recordreplay::RecordReplayValue(
+      why, fragment.is_null() ? 0 : static_cast<uintptr_t>(fragment.offset()));
+  const uintptr_t size = recordreplay::RecordReplayValue(
+      why, fragment.is_null() ? 0 : static_cast<uintptr_t>(fragment.size()));
+  if (!recordreplay::IsReplaying()) {
+    return fragment;
+  }
+  if (!encoded_buffer) {
+    return {};
+  }
+  return GetFragment(FragmentDescriptor(BufferId{encoded_buffer - 1},
+                                        static_cast<uint32_t>(offset),
+                                        static_cast<uint32_t>(size)));
+}
+
 Fragment NodeLinkMemory::AllocateFragment(size_t size) {
-  Fragment fragment = AllocateFragmentInternal(size);
+  Fragment fragment = RecordReplayFragment(
+      "NodeLinkMemory::AllocateFragment",
+      recordreplay::IsReplaying() ? Fragment() : AllocateFragmentInternal(size));
   if (size == 0) {
     return fragment;
   }
@@ -353,15 +402,21 @@ Fragment NodeLinkMemory::AllocateFragmentBestEffort(size_t size) {
   const size_t largest_block_size =
       std::min(ideal_block_size, kMaxFragmentSizeForBlockAllocation);
   const size_t smallest_block_size = kMinBestEffortFallbackBlockSize;
+  if (recordreplay::IsReplaying()) {
+    return RecordReplayFragment("NodeLinkMemory::AllocateFragmentBestEffort",
+                                Fragment());
+  }
   for (size_t block_size = largest_block_size;
        block_size >= smallest_block_size; block_size /= 2) {
     const Fragment fragment = AllocateFragmentInternal(block_size);
     if (!fragment.is_null()) {
-      return fragment;
+      return RecordReplayFragment(
+          "NodeLinkMemory::AllocateFragmentBestEffort", fragment);
     }
   }
 
-  return {};
+  return RecordReplayFragment("NodeLinkMemory::AllocateFragmentBestEffort",
+                              Fragment());
 }
 
 bool NodeLinkMemory::FreeFragment(const Fragment& fragment) {
@@ -373,11 +428,30 @@ bool NodeLinkMemory::FreeFragment(const Fragment& fragment) {
   }
 
   ABSL_ASSERT(fragment.is_addressable());
+
+  // [Replay] A replay must not touch the free list at all.  Its allocations
+  // come from recorded descriptors (see RecordReplayFragment), so its copy of
+  // the list has no relation to the recording's -- and freeing a block the
+  // PEER allocated inserts an entry the list already considers free, which can
+  // truncate or cycle it and make later allocations fail where the recording's
+  // succeeded.  Whether the free happens at all is already pinned by the
+  // recorded ReleaseRef verdict, and both callers discard this bool, so there
+  // is nothing to record here.  DSRC-247.
+  if (recordreplay::IsReplaying()) {
+    return true;
+  }
+
   return buffer_pool_.FreeBlock(fragment);
 }
 
 FragmentRef<RouterLinkState> NodeLinkMemory::TryAllocateRouterLinkState() {
-  Fragment fragment = buffer_pool_.AllocateBlock(sizeof(RouterLinkState));
+  // [Replay] This bypasses AllocateFragment(), so it needs the same recording.
+  // DSRC-247.
+  Fragment fragment = RecordReplayFragment(
+      "NodeLinkMemory::TryAllocateRouterLinkState",
+      recordreplay::IsReplaying()
+          ? Fragment()
+          : buffer_pool_.AllocateBlock(sizeof(RouterLinkState)));
   if (!fragment.is_null()) {
     return InitializeRouterLinkStateFragment(fragment);
   }
@@ -389,7 +463,12 @@ FragmentRef<RouterLinkState> NodeLinkMemory::TryAllocateRouterLinkState() {
 }
 
 void NodeLinkMemory::AllocateRouterLinkState(RouterLinkStateCallback callback) {
-  Fragment fragment = buffer_pool_.AllocateBlock(sizeof(RouterLinkState));
+  // [Replay] See TryAllocateRouterLinkState.  DSRC-247.
+  Fragment fragment = RecordReplayFragment(
+      "NodeLinkMemory::AllocateRouterLinkState",
+      recordreplay::IsReplaying()
+          ? Fragment()
+          : buffer_pool_.AllocateBlock(sizeof(RouterLinkState)));
   if (!fragment.is_null()) {
     callback(InitializeRouterLinkStateFragment(fragment));
     return;

@@ -141,7 +141,10 @@ MessagePumpEpoll::MessagePumpEpoll() {
   wake_event_.reset(eventfd(0, EFD_NONBLOCK));
   PCHECK(wake_event_.is_valid());
 
-  epoll_event wake{.events = EPOLLIN, .data = {.ptr = &wake_event_}};
+  // [Replay] The descriptor, not a pointer to it: epoll_event.data goes into
+  // the recording as part of epoll_ctl's argument and comes back out of
+  // epoll_wait, and heap addresses do not survive into a replay.  DSRC-221.
+  epoll_event wake{.events = EPOLLIN, .data = {.fd = wake_event_.get()}};
   int rv = epoll_ctl(epoll_.get(), EPOLL_CTL_ADD, wake_event_.get(), &wake);
   PCHECK(rv == 0);
 
@@ -320,7 +323,8 @@ void MessagePumpEpoll::AddEpollEvent(EpollEventEntry& entry) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   DCHECK(!entry.stopped);
   const uint32_t events = entry.ComputeActiveEvents();
-  epoll_event event{.events = events, .data = {.ptr = &entry}};
+  // [Replay] The descriptor, not the entry pointer.  DSRC-221.
+  epoll_event event{.events = events, .data = {.fd = entry.fd}};
   int rv = epoll_ctl(epoll_.get(), EPOLL_CTL_ADD, entry.fd, &event);
   DPCHECK(rv == 0);
   entry.registered_events = events;
@@ -360,7 +364,8 @@ void MessagePumpEpoll::UpdateEpollEvent(EpollEventEntry& entry) {
       // Persistent events don't need to be modified if no bits are changing.
       return;
     }
-    epoll_event event{.events = events, .data = {.ptr = &entry}};
+    // [Replay] The descriptor, not the entry pointer.  DSRC-221.
+    epoll_event event{.events = events, .data = {.fd = entry.fd}};
     int rv = epoll_ctl(epoll_.get(), EPOLL_CTL_MOD, entry.fd, &event);
     DPCHECK(rv == 0);
     entry.registered_events = events;
@@ -468,12 +473,13 @@ bool MessagePumpEpoll::WaitForEpollEvents(TimeDelta timeout) {
   }
 
   for (epoll_event& e : ready_events) {
-    if (e.data.ptr == &wake_event_) {
+    if (e.data.fd == wake_event_.get()) {
       // Wake-up events are always safe to handle immediately. Unlike other
-      // events used by MessagePumpEpoll they also don't point to an
+      // events used by MessagePumpEpoll they also don't refer to an
       // EpollEventEntry, so we handle them separately here.
       HandleWakeUp();
-      e.data.ptr = nullptr;
+      // [Replay] -1 is the consumed marker that `nullptr` used to be.
+      e.data.fd = -1;
       continue;
     }
 
@@ -482,16 +488,21 @@ bool MessagePumpEpoll::WaitForEpollEvents(TimeDelta timeout) {
     // corresponding epoll_event returned by epoll_wait(). We do this before
     // dispatching any events, and the second pass below will only dispatch an
     // event if its epoll_event data is still valid.
-    auto& entry = EpollEventEntry::FromEpollEvent(e);
-    DCHECK(!entry.active_event);
-    EpollEventEntry::FromEpollEvent(e).active_event = &e;
+    EpollEventEntry* entry = EntryFromEpollEvent(e);
+    // [Replay] A descriptor with no entry can no longer be dispatched; mark it
+    // consumed rather than dereferencing nothing.  DSRC-221.
+    if (!entry) {
+      e.data.fd = -1;
+      continue;
+    }
+    DCHECK(!entry->active_event);
+    entry->active_event = &e;
   }
 
   for (auto& e : ready_events) {
-    if (e.data.ptr) {
-      auto& entry = EpollEventEntry::FromEpollEvent(e);
-      entry.active_event = nullptr;
-      OnEpollEvent(entry, e.events);
+    if (EpollEventEntry* entry = EntryFromEpollEvent(e)) {
+      entry->active_event = nullptr;
+      OnEpollEvent(*entry, e.events);
     }
   }
 
@@ -506,6 +517,17 @@ std::vector<struct pollfd>::iterator MessagePumpEpoll::FindPollEntry(int fd) {
 
 void MessagePumpEpoll::RemovePollEntry(int fd) {
   pollfds_.erase(FindPollEntry(fd));
+}
+
+MessagePumpEpoll::EpollEventEntry* MessagePumpEpoll::EntryFromEpollEvent(
+    epoll_event& e) {
+  // [Replay] -1 is the consumed marker, and the wake-up descriptor has no
+  // entry.  DSRC-221.
+  if (e.data.fd < 0 || e.data.fd == wake_event_.get()) {
+    return nullptr;
+  }
+  auto it = entries_.find(e.data.fd);
+  return it == entries_.end() ? nullptr : &it->second;
 }
 
 bool MessagePumpEpoll::GetEventsPoll(int epoll_timeout,
@@ -528,12 +550,13 @@ bool MessagePumpEpoll::GetEventsPoll(int epoll_timeout,
 
     epoll_event event = {};
 
+    // [Replay] Keep the poll path's events in the same shape as the epoll
+    // path's: the descriptor, not a pointer.  DSRC-221.
     if (pollfd_entry.fd == wake_event_.get()) {
-      event.data.ptr = &wake_event_;
+      event.data.fd = wake_event_.get();
     } else {
-      auto entry = entries_.find(pollfd_entry.fd);
-      CHECK(entry != entries_.end());
-      event.data.ptr = &(entry->second);
+      CHECK(entries_.find(pollfd_entry.fd) != entries_.end());
+      event.data.fd = pollfd_entry.fd;
     }
 
     for (const auto& epoll_poll : kEpollToPollEvents) {
@@ -680,8 +703,9 @@ MessagePumpEpoll::EpollEventEntry::EpollEventEntry(int fd) : fd(fd) {}
 
 MessagePumpEpoll::EpollEventEntry::~EpollEventEntry() {
   if (active_event) {
-    DCHECK_EQ(this, active_event->data.ptr);
-    active_event->data.ptr = nullptr;
+    DCHECK_EQ(fd, active_event->data.fd);
+    // [Replay] -1 is the consumed marker that `nullptr` used to be.  DSRC-221.
+    active_event->data.fd = -1;
   }
 }
 

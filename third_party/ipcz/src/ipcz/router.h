@@ -5,6 +5,7 @@
 #ifndef IPCZ_SRC_IPCZ_ROUTER_H_
 #define IPCZ_SRC_IPCZ_ROUTER_H_
 
+#include "util/ordered_mutex.h"
 #include <cstdint>
 #include <utility>
 
@@ -402,7 +403,10 @@ class Router : public APIObjectImpl<Router, APIObject::kPortal> {
   std::unique_ptr<Parcel> TakeNextInboundParcel(TrapEventDispatcher& dispatcher)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
-  absl::Mutex mutex_;
+  // [Replay] Ordered, so the interleaving between the thread that
+  // delivers route closure and the thread that serializes this router is
+  // reproduced in a replay.  DSRC-276.
+  mutable OrderedMutex mutex_{"ipcz::Router::mutex_"};
 
   // Indicates whether the opposite end of the route has been closed. This is
   // the source of truth for peer closure status. The status bit

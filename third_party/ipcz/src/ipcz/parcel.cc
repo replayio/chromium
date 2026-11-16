@@ -4,6 +4,8 @@
 
 #include "ipcz/parcel.h"
 
+#include "base/record_replay.h"
+
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
@@ -46,7 +48,14 @@ void Parcel::AllocateData(size_t num_bytes,
   ABSL_ASSERT(std::holds_alternative<std::monostate>(data_.storage));
 
   Fragment fragment;
-  if (num_bytes > 0 && memory) {
+  // [Replay] Parcel data normally lives in a shared-memory fragment allocated
+  // from the NodeLink's BlockAllocator.  That allocator's state is written by
+  // BOTH processes, so a replay -- which has no peer -- gets a different
+  // allocation outcome and the parcel falls back to inline data on one side
+  // only.  Measured: the same send() carried 232 bytes while recording and 392
+  // while replaying.  Keep parcel data inline on both sides so it travels over
+  // the recorded transport and the two agree by construction.  DSRC-236.
+  if (num_bytes > 0 && memory && !recordreplay::IsRecordingOrReplaying()) {
     const size_t requested_fragment_size = num_bytes + sizeof(FragmentHeader);
     if (allow_partial) {
       fragment = memory->AllocateFragmentBestEffort(requested_fragment_size);
@@ -86,7 +95,18 @@ bool Parcel::AdoptDataFragment(Ref<NodeLinkMemory> memory,
   // producer of this data.
   const auto& header =
       *reinterpret_cast<const FragmentHeader*>(fragment.bytes().data());
-  const uint32_t data_size = header.size.load(std::memory_order_acquire);
+  // [Replay] This fragment is shared memory written by the PEER process, and
+  // the peer is not part of this recording: the browser places parcel data
+  // here and only a descriptor travels over the recorded transport.  Reading
+  // it involves no recorded event, so a replay silently consumes its own empty
+  // mapping and the divergence only surfaces later as a malformed mojo message
+  // (measured: Connector::DispatchMessage -> ValidateMessageHeader ->
+  // ReportValidationError, while the recording dispatched normally).  Record
+  // the size and the bytes, which is what Channel::ReadBuffer::Claim already
+  // does for data the recorder cannot otherwise see.  DSRC-240.
+  const uint32_t data_size = static_cast<uint32_t>(recordreplay::RecordReplayValue(
+      "Parcel::AdoptDataFragment size",
+      header.size.load(std::memory_order_acquire)));
   const size_t max_data_size = fragment.size() - sizeof(FragmentHeader);
   if (data_size > max_data_size) {
     return false;
@@ -95,6 +115,12 @@ bool Parcel::AdoptDataFragment(Ref<NodeLinkMemory> memory,
   data_.storage.emplace<DataFragment>(std::move(memory), fragment);
   data_.view =
       fragment.mutable_bytes().subspan(sizeof(FragmentHeader), data_size);
+  // [Replay] See above: restore the peer's bytes into this side's mapping so
+  // the view above refers to what the recording saw.  DSRC-240.
+  if (!data_.view.empty()) {
+    recordreplay::RecordReplayBytes("Parcel::AdoptDataFragment",
+                                    data_.view.data(), data_.view.size());
+  }
   return true;
 }
 

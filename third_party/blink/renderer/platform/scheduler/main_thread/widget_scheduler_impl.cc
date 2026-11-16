@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/widget_scheduler_impl.h"
 
 #include "base/feature_list.h"
@@ -39,9 +40,16 @@ WidgetSchedulerImpl::WidgetSchedulerImpl(
   }
 
   render_widget_signals_->IncNumVisibleRenderWidgets();
+
+  // [Replay] Registered so MainThreadSchedulerImpl can dispatch to widget
+  // schedulers in a reproducible order; see
+  // DispatchRequestBeginMainFrameNotExpected.  DSRC-294.
+  recordreplay::RegisterPointer("WidgetSchedulerImpl", this);
 }
 
-WidgetSchedulerImpl::~WidgetSchedulerImpl() = default;
+WidgetSchedulerImpl::~WidgetSchedulerImpl() {
+  recordreplay::UnregisterPointer(this);
+}
 
 void WidgetSchedulerImpl::WillShutdown() {
   if (main_thread_scheduler_) {

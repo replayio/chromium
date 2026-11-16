@@ -98,6 +98,10 @@ class NodeLinkMemory : public RefCounted<NodeLinkMemory> {
   // with the same BufferId and dimensions as `descriptor`.
   Fragment GetFragment(const FragmentDescriptor& descriptor);
 
+  // [Replay] Records a fragment allocation's outcome, or reproduces it.
+  // DSRC-247.
+  Fragment RecordReplayFragment(const char* why, Fragment fragment);
+
   // Adopts an existing reference to a RefCountedFragment within `fragment`,
   // which must be a valid, properly aligned, and sufficiently sized fragment to
   // hold a T. This does NOT increment the ref count of the RefCountedFragment.

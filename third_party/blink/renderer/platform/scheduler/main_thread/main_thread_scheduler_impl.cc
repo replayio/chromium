@@ -935,8 +935,29 @@ void MainThreadSchedulerImpl::ShutdownEmptyDetachedTaskQueues() {
   if (main_thread_only().detached_task_queues.empty()) {
     return;
   }
-  Vector<scoped_refptr<MainThreadTaskQueue>> queues_to_delete;
+  // [Replay] `detached_task_queues` is a HashSet keyed by pointer, so iterating
+  // it visits queues in heap order.  IsEmpty() takes the queue's ordered
+  // `any_thread_lock_`, so the order decides which OrderedLock events land
+  // where in the stream -- measured as `OrderedLock TaskQueueImpl.any_thread_lock_
+  // 350` recorded against `316` replayed at an identical stack.  (Lock ids are
+  // recorded values, so a differing id means a different queue was visited, not
+  // a mis-assigned id.)  This function is new since M108, so there is no lost
+  // fork line here -- it is new upstream code over a pointer-keyed container.
+  // DSRC-292.
+  Vector<scoped_refptr<MainThreadTaskQueue>> ordered_queues;
+  ordered_queues.reserve(
+      static_cast<wtf_size_t>(main_thread_only().detached_task_queues.size()));
   for (auto& queue : main_thread_only().detached_task_queues) {
+    ordered_queues.push_back(queue);
+  }
+  std::sort(ordered_queues.begin(), ordered_queues.end(),
+            [](const scoped_refptr<MainThreadTaskQueue>& a,
+               const scoped_refptr<MainThreadTaskQueue>& b) {
+              return recordreplay::CompareByPointerId()(a.get(), b.get());
+            });
+
+  Vector<scoped_refptr<MainThreadTaskQueue>> queues_to_delete;
+  for (auto& queue : ordered_queues) {
     if (queue->IsEmpty()) {
       queues_to_delete.push_back(queue);
     }
@@ -1197,7 +1218,18 @@ void MainThreadSchedulerImpl::SetBatterySaverEnabled(bool enabled) {
 
   // Energy saver gates fullscreen video timer throttling, so re-evaluate the
   // throttling policy for all pages (and their frames).
+  //
+  // [Replay] Sorted by pointer id: `page_schedulers` is pointer-keyed, so its
+  // iteration order does not survive into a replay, and UpdatePolicy() has
+  // order-sensitive side effects.  M108 sorted every page_schedulers loop that
+  // called into a page; two of those sorts were lost at M159.  DSRC-278.
+  std::vector<PageSchedulerImpl*> page_scheduler_vector;
   for (PageSchedulerImpl* page_scheduler : main_thread_only().page_schedulers) {
+    page_scheduler_vector.push_back(page_scheduler);
+  }
+  std::sort(page_scheduler_vector.begin(), page_scheduler_vector.end(),
+            recordreplay::CompareByPointerId());
+  for (PageSchedulerImpl* page_scheduler : page_scheduler_vector) {
     page_scheduler->UpdatePolicy();
   }
 }
@@ -2243,7 +2275,24 @@ void MainThreadSchedulerImpl::DispatchRequestBeginMainFrameNotExpected(
       "has_tasks", has_tasks);
   // If idle tasks are posted before compositing is initialized, the scheduler
   // will request these signals as soon as it is.
+  // [Replay] `widget_schedulers` is a HashSet keyed by pointer, so iterating it
+  // dispatches in heap order; RequestBeginMainFrameNotExpected has
+  // order-sensitive side effects.  M108 sorted the page_schedulers loop this
+  // function used to run (CompareByPointerId, main_thread_scheduler_impl.cc
+  // ~line 2001); upstream changed the loop to widget schedulers and the sort
+  // was not carried over.  DSRC-294.
+  Vector<scoped_refptr<WidgetSchedulerImpl>> ordered_widgets;
+  ordered_widgets.reserve(
+      static_cast<wtf_size_t>(main_thread_only().widget_schedulers.size()));
   for (auto& widget_scheduler : main_thread_only().widget_schedulers) {
+    ordered_widgets.push_back(widget_scheduler);
+  }
+  std::sort(ordered_widgets.begin(), ordered_widgets.end(),
+            [](const scoped_refptr<WidgetSchedulerImpl>& a,
+               const scoped_refptr<WidgetSchedulerImpl>& b) {
+              return recordreplay::CompareByPointerId()(a.get(), b.get());
+            });
+  for (auto& widget_scheduler : ordered_widgets) {
     widget_scheduler->RequestBeginMainFrameNotExpected(has_tasks);
   }
   main_thread_only().compositor_will_send_main_frame_not_expected = has_tasks;

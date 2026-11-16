@@ -17,6 +17,7 @@
 
 #include "base/bits.h"
 #include "base/memory/page_size.h"
+#include "base/record_replay.h"
 
 namespace base {
 
@@ -41,6 +42,21 @@ void CheckMemoryReadOnly(const void* ptr) {
 
   // Note: We've casted away const here, which should not be meaningful since
   // if the memory is written to we will abort immediately.
+  //
+  // [Replay] This call is a memory-protection PROBE, not a query: it hands the
+  // kernel the protected page as getrlimit's output buffer and expects to be
+  // refused.  The driver records getrlimit as
+  // `OutParam<1, Constant::sizeof_rlimit>`, so a replay replaying that call
+  // writes the recorded rlimit back into the read-only page and faults.
+  // Passing the call through is not an option either: the replay has no
+  // binding for getrlimit64 and dies with "Call to unbound symbol".  The
+  // check verifies nothing about the program, only that this process's own
+  // mprotect took effect, so skip it on both sides -- symmetric, and nothing
+  // is recorded.  DSRC-235.
+  if (recordreplay::IsRecordingOrReplaying()) {
+    return;
+  }
+
   int result =
       getrlimit(RLIMIT_NPROC, reinterpret_cast<struct rlimit*>(page_start));
   CHECK(result == -1 && errno == EFAULT);

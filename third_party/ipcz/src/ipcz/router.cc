@@ -14,6 +14,8 @@
 #include "ipcz/parcel_wrapper.h"
 #include "ipcz/remote_router_link.h"
 #include "ipcz/router.h"
+
+#include "base/record_replay.h"
 #include "ipcz/sequence_number.h"
 #include "ipcz/trap_event_dispatcher.h"
 #include "third_party/abseil-cpp/absl/base/macros.h"
@@ -84,16 +86,31 @@ bool ValidateAndAcquireObjectsForTransitFrom(
 }  // namespace
 
 Router::Router() {
+  // [Replay] MultiMutexLock sorts the mutexes it acquires, and a raw address
+  // sort is not reproducible in a replay.  Register the mutex so it has a
+  // stable id to sort by.  M108 did exactly this for the predecessor of this
+  // machinery -- see GetPortId in mojo/core/ports/port_locker.cc.  DSRC-275.
+  recordreplay::RegisterPointer("ipcz::Router::mutex_", &mutex_);
+  // [Replay] Make the last-reference drop reproducible; a Router's destructor
+  // closes links and dispatches trap events, so dying on a different thread or
+  // at a different point diverges the stream.  DSRC-301.
+  EnableOrderedRelease("ipcz::Router::ReleaseRef");
   DVLOG(5) << "Creating Router " << std::hex << this;
 }
 
 Router::~Router() {
-  // A Router MUST be serialized, closed, or merged before it can be destroyed.
-  // These operations clear `traps_` and imply that no further traps should be
-  // added.
-  absl::MutexLock lock(&mutex_);
-  ABSL_ASSERT(traps_.empty());
-  DVLOG(5) << "Deleting Router " << std::hex << this;
+  {
+    // A Router MUST be serialized, closed, or merged before it can be
+    // destroyed.  These operations clear `traps_` and imply that no further
+    // traps should be added.
+    OrderedMutexLock lock(&mutex_);
+    ABSL_ASSERT(traps_.empty());
+    DVLOG(5) << "Deleting Router " << std::hex << this;
+  }
+  // [Replay] Paired with the RegisterPointer in the constructor; without this a
+  // later Router reusing the address would inherit a stale id.  Done after the
+  // lock is dropped so nothing sorts on a half-destroyed mutex.  DSRC-275.
+  recordreplay::UnregisterPointer(&mutex_);
 }
 
 // static
@@ -119,17 +136,17 @@ bool Router::CanSendFrom(Router& sender) {
 }
 
 bool Router::IsPeerClosed() {
-  absl::MutexLock lock(&mutex_);
+  OrderedMutexLock lock(&mutex_);
   return (status_flags_ & IPCZ_PORTAL_STATUS_PEER_CLOSED) != 0;
 }
 
 bool Router::IsRouteDead() {
-  absl::MutexLock lock(&mutex_);
+  OrderedMutexLock lock(&mutex_);
   return (status_flags_ & IPCZ_PORTAL_STATUS_DEAD) != 0;
 }
 
 bool Router::IsOnCentralRemoteLink() {
-  absl::MutexLock lock(&mutex_);
+  OrderedMutexLock lock(&mutex_);
   // This may only be called on terminal Routers.
   ABSL_ASSERT(!inward_edge_);
   return outward_edge_.primary_link() && outward_edge_.is_stable() &&
@@ -138,7 +155,7 @@ bool Router::IsOnCentralRemoteLink() {
 }
 
 void Router::QueryStatus(IpczPortalStatus& status) {
-  absl::MutexLock lock(&mutex_);
+  OrderedMutexLock lock(&mutex_);
   status.size = std::min(status.size, sizeof(IpczPortalStatus));
   status.flags = status_flags_;
   status.num_local_parcels = inbound_parcels_.GetNumAvailableElements();
@@ -146,7 +163,7 @@ void Router::QueryStatus(IpczPortalStatus& status) {
 }
 
 bool Router::HasLocalPeer(Router& router) {
-  absl::MutexLock lock(&mutex_);
+  OrderedMutexLock lock(&mutex_);
   return outward_edge_.GetLocalPeer() == &router;
 }
 
@@ -154,7 +171,7 @@ std::unique_ptr<Parcel> Router::AllocateOutboundParcel(size_t num_bytes,
                                                        bool allow_partial) {
   Ref<RouterLink> outward_link;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     outward_link = outward_edge_.primary_link();
   }
 
@@ -170,7 +187,7 @@ std::unique_ptr<Parcel> Router::AllocateOutboundParcel(size_t num_bytes,
 IpczResult Router::SendOutboundParcel(std::unique_ptr<Parcel> parcel) {
   Ref<RouterLink> link;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     if (inbound_parcels_.final_sequence_length()) {
       // If the inbound sequence is finalized, the peer portal must be gone.
       return IPCZ_RESULT_NOT_FOUND;
@@ -209,7 +226,7 @@ void Router::CloseRoute() {
   TrapEventDispatcher dispatcher;
   Ref<RouterLink> link;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     outbound_parcels_.SetFinalSequenceLength(
         outbound_parcels_.GetCurrentSequenceLength());
     traps_.RemoveAll(dispatcher);
@@ -221,7 +238,7 @@ void Router::SetOutwardLink(Ref<RouterLink> link) {
   ABSL_ASSERT(link);
 
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
 
     // If we have a stable inward edge (or none at all), and the outward edge
     // is stable too, our new link can be marked stable from our side.
@@ -248,7 +265,7 @@ void Router::SetOutwardLink(Ref<RouterLink> link) {
 bool Router::AcceptInboundParcel(std::unique_ptr<Parcel> parcel) {
   TrapEventDispatcher dispatcher;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     const SequenceNumber sequence_number = parcel->sequence_number();
     if (!inbound_parcels_.Push(sequence_number, std::move(parcel))) {
       // Unexpected route disconnection can cut off inbound sequences, so don't
@@ -274,7 +291,7 @@ bool Router::AcceptInboundParcel(std::unique_ptr<Parcel> parcel) {
 
 bool Router::AcceptOutboundParcel(std::unique_ptr<Parcel> parcel) {
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
 
     // Proxied outbound parcels are always queued in a ParcelQueue even if they
     // will be forwarded immediately. This allows us to track the full sequence
@@ -301,7 +318,7 @@ bool Router::AcceptRouteClosureFrom(LinkType link_type,
                                     SequenceNumber sequence_length) {
   TrapEventDispatcher dispatcher;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     if (link_type.is_outward()) {
       if (!inbound_parcels_.SetFinalSequenceLength(sequence_length)) {
         // Ignore if and only if the sequence was terminated early.
@@ -344,7 +361,7 @@ bool Router::AcceptRouteDisconnectedFrom(LinkType link_type) {
     // If we have to drop any undeliverable parcels, make sure they're destroyed
     // outside of `lock` in case they have any attached Routers.
     std::vector<std::unique_ptr<Parcel>> dropped_parcels;
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
 
     DVLOG(4) << "Router " << this << " disconnected from "
              << link_type.ToString() << "link";
@@ -437,7 +454,7 @@ IpczResult Router::BeginPut(IpczBeginPutFlags flags,
   if (data) {
     *data = parcel->data_view().data();
   }
-  absl::MutexLock lock(&mutex_);
+  OrderedMutexLock lock(&mutex_);
   if (!pending_puts_) {
     pending_puts_ = std::make_unique<PendingTransactionSet>();
   }
@@ -458,7 +475,7 @@ IpczResult Router::EndPut(IpczTransaction transaction,
 
   std::unique_ptr<Parcel> parcel;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     if (!pending_puts_) {
       return IPCZ_RESULT_INVALID_ARGUMENT;
     }
@@ -501,7 +518,7 @@ IpczResult Router::Get(IpczGetFlags flags,
   TrapEventDispatcher dispatcher;
   std::unique_ptr<Parcel> consumed_parcel;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     if (inbound_parcels_.IsSequenceFullyConsumed()) {
       return IPCZ_RESULT_NOT_FOUND;
     }
@@ -570,7 +587,7 @@ IpczResult Router::BeginGet(IpczBeginGetFlags flags,
                             size_t* num_handles,
                             IpczTransaction* transaction) {
   TrapEventDispatcher dispatcher;
-  absl::MutexLock lock(&mutex_);
+  OrderedMutexLock lock(&mutex_);
   if (!transaction || inward_edge_) {
     return IPCZ_RESULT_INVALID_ARGUMENT;
   }
@@ -632,7 +649,7 @@ IpczResult Router::EndGet(IpczTransaction transaction,
                           IpczEndGetFlags flags,
                           IpczHandle* parcel_handle) {
   TrapEventDispatcher dispatcher;
-  absl::MutexLock lock(&mutex_);
+  OrderedMutexLock lock(&mutex_);
   if (!pending_gets_) {
     return IPCZ_RESULT_INVALID_ARGUMENT;
   }
@@ -667,7 +684,7 @@ IpczResult Router::Trap(const IpczTrapConditions& conditions,
                         uint64_t context,
                         IpczTrapConditionFlags* satisfied_condition_flags,
                         IpczPortalStatus* status) {
-  absl::MutexLock lock(&mutex_);
+  OrderedMutexLock lock(&mutex_);
   return traps_.Add(conditions, handler, context, status_flags_,
                     inbound_parcels_, satisfied_condition_flags, status);
 }
@@ -752,7 +769,7 @@ Ref<Router> Router::Deserialize(const RouterDescriptor& descriptor,
   auto router = MakeRefCounted<Router>();
   Ref<RemoteRouterLink> new_outward_link;
   {
-    absl::MutexLock lock(&router->mutex_);
+    OrderedMutexLock lock(&router->mutex_);
     router->outbound_parcels_.ResetSequence(
         descriptor.next_outgoing_sequence_number);
     router->inbound_parcels_.ResetSequence(
@@ -849,7 +866,7 @@ void Router::SerializeNewRouter(NodeLink& to_node_link,
   Ref<Router> local_peer;
   bool initiate_proxy_bypass = false;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     traps_.RemoveAll(dispatcher);
     local_peer = outward_edge_.GetLocalPeer();
     initiate_proxy_bypass = outward_edge_.primary_link() &&
@@ -950,7 +967,7 @@ void Router::SerializeNewRouterAndConfigureProxy(
     bool initiate_proxy_bypass) {
   const SublinkId new_sublink = to_node_link.memory().AllocateSublinkIds(1);
 
-  absl::MutexLock lock(&mutex_);
+  OrderedMutexLock lock(&mutex_);
   descriptor.new_sublink = new_sublink;
   descriptor.new_link_state_fragment = FragmentDescriptor();
   descriptor.proxy_already_bypassed = false;
@@ -1034,7 +1051,7 @@ void Router::BeginProxyingToNewRouter(NodeLink& to_node_link,
   Ref<RemoteRouterLink> new_primary_link = new_sublink->router_link;
   Ref<RemoteRouterLink> new_decaying_link;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     ABSL_ASSERT(inward_edge_);
 
     if (descriptor.proxy_already_bypassed) {
@@ -1100,7 +1117,7 @@ bool Router::BypassPeer(RemoteRouterLink& requestor,
   // Validate that the source of this request is actually our peripheral outward
   // peer, and that we are therefore its inward peer.
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     const Ref<RouterLink>& outward_link = outward_edge_.primary_link();
     if (!outward_link) {
       // This Router may have been disconnected already due to some other
@@ -1159,7 +1176,7 @@ bool Router::AcceptBypassLink(
   Ref<RemoteRouterLink> old_link;
   Ref<RemoteRouterLink> new_link;
   {
-    absl::ReleasableMutexLock lock(&mutex_);
+    ReleasableOrderedMutexLock lock(&mutex_);
     if (is_disconnected_ || !outward_edge_.primary_link()) {
       // We've already been unexpectedly disconnected from the proxy, so the
       // route is dysfunctional. Don't establish new links.
@@ -1236,7 +1253,7 @@ bool Router::StopProxying(SequenceNumber inbound_sequence_length,
                           SequenceNumber outbound_sequence_length) {
   Ref<Router> bridge_peer;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     if (outward_edge_.is_stable()) {
       // Proxies begin decaying their links before requesting to be bypassed,
       // and they don't adopt new links after that. So if either edge is stable
@@ -1310,7 +1327,7 @@ bool Router::StopProxying(SequenceNumber inbound_sequence_length,
 
 bool Router::NotifyProxyWillStop(SequenceNumber inbound_sequence_length) {
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     if (outward_edge_.is_stable()) {
       // If the outward edge is already stable, either this request is invalid,
       // or we've lost all links due to disconnection. In the latter case we
@@ -1336,7 +1353,7 @@ bool Router::StopProxyingToLocalPeer(SequenceNumber outbound_sequence_length) {
   Ref<Router> local_peer;
   Ref<Router> bridge_peer;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     if (bridge_) {
       bridge_peer = bridge_->GetDecayingLocalPeer();
     } else if (outward_edge_.decaying_link()) {
@@ -1386,7 +1403,7 @@ bool Router::StopProxyingToLocalPeer(SequenceNumber outbound_sequence_length) {
     // router and the bridge peer serve as "the" proxy being bypassed in this
     // case, so we'll be bypassing both of them below.
     {
-      absl::MutexLock lock(&bridge_peer->mutex_);
+      OrderedMutexLock lock(&bridge_peer->mutex_);
       if (bridge_peer->outward_edge_.is_stable()) {
         return false;
       }
@@ -1435,7 +1452,7 @@ bool Router::StopProxyingToLocalPeer(SequenceNumber outbound_sequence_length) {
 
 void Router::NotifyLinkDisconnected(RemoteRouterLink& link) {
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     if (outward_edge_.primary_link() == &link) {
       DVLOG(4) << "Primary " << link.Describe() << " disconnected";
       outward_edge_.ReleasePrimaryLink();
@@ -1476,7 +1493,7 @@ void Router::Flush(FlushBehavior behavior) {
   ParcelsToFlush parcels_to_flush;
   TrapEventDispatcher dispatcher;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
 
     // Acquire stack references to all links we might want to use, so it's safe
     // to acquire additional (unmanaged) references per ParcelToFlush.
@@ -1583,6 +1600,7 @@ void Router::Flush(FlushBehavior behavior) {
       dead_outward_link = outward_edge_.ReleasePrimaryLink();
     }
 
+
     if (inbound_parcels_.IsSequenceFullyConsumed()) {
       // We won't be receiving anything new from our peer, and if we're a proxy
       // then we've also forwarded everything already. We can propagate closure
@@ -1671,7 +1689,7 @@ bool Router::MaybeStartSelfBypass() {
   Ref<RemoteRouterLink> remote_outward_link;
   Ref<Router> local_outward_peer;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     if (!inward_edge_ || !inward_edge_->primary_link() ||
         !inward_edge_->is_stable()) {
       // Only a proxy with stable links can be bypassed.
@@ -1704,7 +1722,7 @@ bool Router::MaybeStartSelfBypass() {
     // decaying our inward and outward links and ask the inward peer to bypass
     // us ASAP.
     {
-      absl::MutexLock lock(&mutex_);
+      OrderedMutexLock lock(&mutex_);
       if (!inward_edge_ || !inward_edge_->primary_link() ||
           !outward_edge_.primary_link()) {
         // We've been disconnected since leaving the block above. Nothing to do.
@@ -1813,7 +1831,7 @@ void Router::MaybeStartBridgeBypass() {
   Ref<Router> first_bridge = WrapRefCounted(this);
   Ref<Router> second_bridge;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     if (!bridge_ || !bridge_->is_stable()) {
       return;
     }
@@ -1972,7 +1990,7 @@ void Router::StartBridgeBypassFromLocalPeer(
   Ref<Router> local_peer;
   Ref<Router> other_bridge;
   {
-    absl::MutexLock lock(&mutex_);
+    OrderedMutexLock lock(&mutex_);
     if (!bridge_ || !bridge_->is_stable()) {
       return;
     }
@@ -1986,7 +2004,7 @@ void Router::StartBridgeBypassFromLocalPeer(
 
   Ref<RemoteRouterLink> remote_link;
   {
-    absl::MutexLock lock(&other_bridge->mutex_);
+    OrderedMutexLock lock(&other_bridge->mutex_);
     if (!other_bridge->outward_edge_.primary_link()) {
       return;
     }
@@ -2087,7 +2105,7 @@ bool Router::BypassPeerWithNewRemoteLink(
   Ref<RouterLink> new_link;
   const SublinkId new_sublink = node_link.memory().AllocateSublinkIds(1);
   {
-    absl::ReleasableMutexLock lock(&mutex_);
+    ReleasableOrderedMutexLock lock(&mutex_);
     if (!outward_edge_.primary_link() || is_disconnected_) {
       // We've been disconnected since leaving the above block. Don't bother
       // to request a bypass. This is not the requestor's fault, so it's not

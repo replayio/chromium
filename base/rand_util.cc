@@ -15,6 +15,7 @@
 #include "base/check.h"
 #include "base/check_op.h"
 #include "base/containers/span.h"
+#include "base/record_replay.h"
 #include "base/time/time.h"
 
 namespace base {
@@ -173,6 +174,13 @@ double InsecureRandomGenerator::RandDouble() const {
 
 MetricsSubSampler::MetricsSubSampler() = default;
 bool MetricsSubSampler::ShouldSample(double probability) const {
+  // [Replay] See ShouldRecordSubsampledMetric: direct instances (e.g.
+  // LockMetricsRecorder's, reached from the message pump) bypass that function.
+  // This only suppresses the draw; those instances are constructed eagerly with
+  // their owner rather than lazily on first sample.  DSRC-256.
+  if (recordreplay::IsRecordingOrReplaying()) {
+    return false;
+  }
   if (g_subsampling_always_sample.load(std::memory_order_relaxed)) {
     return true;
   }
@@ -221,6 +229,32 @@ MetricsSubSampler::ScopedNeverSampleForTesting::~ScopedNeverSampleForTesting() {
 }
 
 bool ShouldRecordSubsampledMetric(double probability) {
+  // [Replay] Metrics subsampling is a PRNG-gated branch sitting on dozens of hot
+  // paths (the mojo channel's per-message latency histograms, the sequence
+  // manager's CPU-time sampling, cc, net).  Two things make it poison for a
+  // deterministic recording:
+  //
+  //  * the shared subsampler is a `static thread_local` whose constructor draws
+  //    two `base::RandUint64()` values, so each thread emits a recorded
+  //    `getrandom` the first time it samples -- and WHICH thread gets there
+  //    first depends on the interleaving, not on the program;
+  //  * a true draw gates a `base::TimeTicks::Now()`, i.e. a recorded
+  //    `clock_gettime`, so the event stream gains or loses a call per message.
+  //
+  // The recorded values are themselves deterministic; it is their POSITION in
+  // the stream that moves.  Measured consequence: one recording replayed seven
+  // times diverged five different ways, with mismatches reading
+  // "expected getrandom got clock_gettime" and "expected clock_gettime got
+  // epoll_wait".
+  //
+  // None of it is observable to the page -- every consumer is a UMA histogram --
+  // so never sample while recording or replaying.  The guard must come BEFORE
+  // GetSharedMetricsSubsampler(), or the thread_local is still constructed and
+  // still draws.  Upstream has no such function at M108; it arrived with the
+  // subsampling sweep and brought ~90 call sites with it.  DSRC-256.
+  if (recordreplay::IsRecordingOrReplaying()) {
+    return false;
+  }
   return MetricsSubSampler::GetSharedMetricsSubsampler().ShouldSample(
       probability);
 }

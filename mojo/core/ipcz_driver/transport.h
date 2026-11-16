@@ -296,7 +296,10 @@ class MOJO_SYSTEM_IMPL_EXPORT Transport : public Object<Transport>,
   // factor.
   PlatformChannelEndpoint inactive_endpoint_;
 
-  base::Lock lock_;
+  // [Replay] Ordered: this guards the transmit path, which decides when the
+  // IO thread writes.  M108's equivalents were all named; ipcz lost them with
+  // the files it replaced.  DSRC-261.
+  base::Lock lock_{"Transport.lock_"};
   scoped_refptr<Channel> channel_ GUARDED_BY(lock_);
 
   // Transmissions prior to activation must be queued, as the Channel is not

@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <algorithm>
+#include <vector>
 #include "third_party/blink/renderer/platform/scheduler/main_thread/agent_group_scheduler_impl.h"
 
 #include "base/auto_reset.h"
@@ -207,7 +209,22 @@ void AgentGroupSchedulerImpl::UpdatePolicy() {
   CHECK(!is_updating_policy_);
   base::AutoReset auto_reset(&is_updating_policy_, true);
 
+  // [Replay] `page_schedulers_` is a HashSet keyed by pointer, so its iteration
+  // order is the replay's own addresses, not the recording's.  Calling
+  // UpdatePolicy() in a different order makes the two sides update different
+  // pages' frames at the same point in the stream -- measured as the recorded
+  // side updating page id 872's main frame while the replay updated page 380's.
+  // The inner loop (PageSchedulerImpl::UpdatePolicy) has always sorted this
+  // way; this outer loop is new since M108, so the fork never instrumented it.
+  // DSRC-278.
+  std::vector<PageSchedulerImpl*> page_scheduler_vector;
   for (auto* page_scheduler : page_schedulers_) {
+    page_scheduler_vector.push_back(page_scheduler);
+  }
+  std::sort(page_scheduler_vector.begin(), page_scheduler_vector.end(),
+            recordreplay::CompareByPointerId());
+
+  for (auto* page_scheduler : page_scheduler_vector) {
     page_scheduler->UpdatePolicy();
   }
 }

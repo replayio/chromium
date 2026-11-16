@@ -145,9 +145,11 @@ class BASE_EXPORT MessagePumpEpoll : public MessagePump,
     EpollEventEntry& operator=(const EpollEventEntry&) = delete;
     ~EpollEventEntry();
 
-    static EpollEventEntry& FromEpollEvent(epoll_event& e) {
-      return *static_cast<EpollEventEntry*>(e.data.ptr);
-    }
+    // [Replay] The entry is NOT reachable from the epoll_event any more: see
+    // MessagePumpEpoll::EntryFromEpollEvent and DSRC-221.  epoll_event.data
+    // carries the file descriptor, because a pointer put there is recorded as
+    // part of epoll_ctl's argument and handed back by epoll_wait, and no heap
+    // address survives into a replay.
 
     // Returns the combined set of epoll event flags which should be monitored
     // by the epoll instance for `fd`. This is based on a combination of the
@@ -200,6 +202,11 @@ class BASE_EXPORT MessagePumpEpoll : public MessagePump,
   void UnregisterInterest(const scoped_refptr<Interest>& interest);
   bool WaitForEpollEvents(TimeDelta timeout);
   bool GetEventsPoll(int epoll_timeout, std::vector<epoll_event>* epoll_events);
+
+  // [Replay] Looks the entry up by the descriptor `e` carries, or null if it
+  // is the wake-up event, the consumed marker (-1), or an entry that has been
+  // destroyed since epoll_wait() returned.  DSRC-221.
+  EpollEventEntry* EntryFromEpollEvent(epoll_event& e);
   void OnEpollEvent(EpollEventEntry& entry, uint32_t events);
   void HandleEvent(int fd,
                    bool can_read,

@@ -74,13 +74,10 @@ struct IPCZ_ALIGN(8) RouterLinkState : public RefCountedFragment {
   // More reserved slots, padding out this structure to 64 bytes.
   uint32_t reserved1[10] = {0};
 
-  bool is_locked_by(LinkSide side) const {
-    Status s = status.load(std::memory_order_relaxed);
-    if (side == LinkSide::kA) {
-      return (s & kLockedBySideA) != 0;
-    }
-    return (s & kLockedBySideB) != 0;
-  }
+  // [Replay] `status` is peer-written shared state; record the answer rather
+  // than the memory.  Defined out of line so this header need not pull in
+  // base/.  DSRC-234.
+  bool is_locked_by(LinkSide side) const;
 
   // Updates the status to reflect that the given `side` is stable, meaning that
   // it's no longer holding onto any decaying links.
