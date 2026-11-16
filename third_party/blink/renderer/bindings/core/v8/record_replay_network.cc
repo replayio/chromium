@@ -280,7 +280,7 @@ void OnNetworkPrepareRequest(const blink::Document* document,
   const uint64_t inspector_identifier =
       RecordReplayNetworkInspectorId(request.InspectorId());
 
-  // Redirected hops inherit their chain's initiator.
+  // Redirected hops inherit their chain's Replay-internal mark.
   auto& request_state = GetReplayNetworkRequestStates()[inspector_identifier];
   if (redirect_response.IsNull() && IsInReplayScriptFrame()) {
     request_state.replay_internal = true;
@@ -291,7 +291,8 @@ void OnNetworkPrepareRequest(const blink::Document* document,
   std::string url_string = request.Url().GetString().Utf8().c_str();
 
   // Capture the record replay bookmark for the network request here,
-  // where the devtools stack id is taken.
+  // where the devtools stack id is taken. A redirected hop takes its own, at
+  // the point the redirect was followed.
   uint64_t bookmark = request_state.replay_internal ? 0 : NewBookmark();
 
   std::string redirect_source_id;
@@ -338,7 +339,11 @@ void OnNetworkPrepareRequest(const blink::Document* document,
     dict.SetBoolean("replayInternal", true);
   }
 
-  if (resource) {
+  // Only the chain's first request has an initiator. DevTools' Network panel
+  // shows a redirected hop's redirect source in place of its initiator
+  // (initiatorInfoForRequest in devtools-frontend's NetworkLog.ts), and the
+  // hop was made by the network stack, not by the page.
+  if (resource && redirect_response.IsNull()) {
     const blink::FetchInitiatorInfo& initiator_info = resource->Options().initiator_info;
     absl::optional<base::DictionaryValue> initiator_obj = BuildInitiatorObject(document, initiator_info);
     if (initiator_obj) {
@@ -382,7 +387,17 @@ void OnNetworkNavigationRedirect(uint64_t inspector_id,
   RecordReplayNetworkIncrementRedirectCount(inspector_id);
   const std::string redirected_request_id =
       RecordReplayNetworkRequestId(inspector_id);
+
+  // The redirected hop's own bookmark, at the point the redirect was followed,
+  // as for a redirected subresource (OnNetworkPrepareRequest), rather than
+  // the original request's, which can be long before it.
+  const auto& request_state = GetReplayNetworkRequestStates()
+      [RecordReplayNetworkInspectorId(inspector_id)];
+  blink::ScriptForbiddenScope::AllowUserAgentScript allow_script;
+  uint64_t bookmark = request_state.replay_internal ? 0 : NewBookmark();
+
   base::DictionaryValue dict;
+  dict.SetDoubleKey("bookmark", (double) bookmark);
   dict.SetString("requestId", redirected_request_id);
   dict.SetString("redirectSourceId", previous_request_id);
   dict.SetString("requestUrl", new_url.GetString().Utf8());
