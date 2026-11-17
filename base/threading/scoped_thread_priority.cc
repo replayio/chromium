@@ -4,6 +4,8 @@
 
 #include "base/threading/scoped_thread_priority.h"
 
+#include "base/record_replay.h"
+
 #include "base/check_op.h"
 #include "base/location.h"
 #include "base/threading/platform_thread.h"
@@ -96,6 +98,21 @@ void ScopedBoostPriorityBase::Reset() {
 
 bool ScopedBoostPriorityBase::ShouldBoostTo(
     ThreadType target_thread_type) const {
+  // [Replay] CanChangeThreadType probes the host -- geteuid() and
+  // getrlimit(RLIMIT_NICE) in base::internal::CanLowerNiceTo -- and a boost is
+  // reachable from inside a disallow-events scope: an allocation that misses
+  // scavenges inside AutoDisallowEvents("HeapAllocator::AllocateRawSlowPath"),
+  // the scavenger joins its parallel job, and JobTaskSource::WillJoin boosts
+  // the joining thread first.  Decline the boost rather than passing the probe
+  // through, which would let the ANSWER differ between a recording host and a
+  // replaying one and then run SetThreadType, which records calls of its own.
+  // This is the chokepoint for both ScopedBoostPriority and
+  // ScopedBoostablePriority, and it sits in front of SetThreadTypeOverride.
+  // Same idiom as PlatformThread::SetName.  DSRC-220.
+  if (recordreplay::AreEventsDisallowed(
+          "ScopedBoostPriorityBase::ShouldBoostTo")) {
+    return false;
+  }
   return initial_thread_type_ < target_thread_type &&
          PlatformThread::CanChangeThreadType(initial_thread_type_,
                                              target_thread_type) &&
