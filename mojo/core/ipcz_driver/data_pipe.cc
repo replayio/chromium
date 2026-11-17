@@ -417,11 +417,10 @@ MojoResult DataPipe::ReadData(void* elements,
     // caller's buffer. Peeks are recorded too: a peek fills the caller's
     // buffer just as a read does, it only leaves the data in the ring.
     //
-    // NOT COVERED, deliberately: BeginReadData/EndReadData hand the caller a
-    // pointer directly into the mapping, so there is no copy here to record
-    // and the caller reads between the two calls. If a case turns up that uses
-    // the two-phase path, it needs its own treatment -- the same shape of gap
-    // that Router::BeginGet carries.
+    // The two-phase BeginReadData/EndReadData path has the same gap and is
+    // handled separately in BeginReadData below; an earlier version of this
+    // comment claimed nothing used that path, which was wrong -- it is the
+    // path a fetch body takes.
     if (!discard && !query && read_size > 0) {
       recordreplay::RecordReplayBytes("DataPipe::ReadData",
                                       output_bytes.data(), read_size);
@@ -457,6 +456,38 @@ MojoResult DataPipe::BeginReadData(const void*& buffer,
   }
 
   two_phase_reader_.emplace(std::move(reader));
+
+  // [Replay] The two-phase path hands the caller a pointer straight into the
+  // shared mapping and the caller reads it before calling EndReadData, so
+  // there is no copy to record and nothing makes the two sides agree. This is
+  // the path Blink's loaders actually use for a fetch body: DSRC-404 was first
+  // "fixed" at DataPipe::ReadData, and that assert then fired ZERO times on
+  // the case it was meant to fix, which is how this path was found.
+  //
+  // Give the caller a private copy of the readable bytes and record that
+  // instead. Copying rather than recording over the mapping in place, because
+  // a consumer's mapping is not guaranteed writable -- RingBuffer hands out
+  // the readable view as span<const uint8_t> -- and restoring into read-only
+  // shared memory during replay would fault. The copy costs one memcpy per
+  // two-phase read and only when recording or replaying.
+  //
+  // EndReadData still discards from the ring by count, so the ring's
+  // bookkeeping is untouched.
+  if (recordreplay::IsRecordingOrReplaying("data-pipe-two-phase-read")) {
+    const auto src = two_phase_reader_->bytes();
+    record_replay_two_phase_bytes_.assign(src.begin(), src.end());
+    if (!record_replay_two_phase_bytes_.empty()) {
+      recordreplay::RecordReplayBytes("DataPipe::BeginReadData",
+                                      record_replay_two_phase_bytes_.data(),
+                                      record_replay_two_phase_bytes_.size());
+    }
+    buffer = record_replay_two_phase_bytes_.data();
+    buffer_num_bytes =
+        base::checked_cast<uint32_t>(record_replay_two_phase_bytes_.size());
+    has_new_data_ = false;
+    return IPCZ_RESULT_OK;
+  }
+
   buffer = two_phase_reader_->bytes().data();
   buffer_num_bytes =
       base::checked_cast<uint32_t>(two_phase_reader_->bytes().size());

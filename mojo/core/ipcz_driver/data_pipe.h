@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <vector>
 #include <utility>
 
 #include "base/containers/span.h"
@@ -192,6 +193,12 @@ class DataPipe : public Object<DataPipe> {
   RingBuffer data_ GUARDED_BY(lock_);
   std::optional<RingBuffer::DirectWriter> two_phase_writer_;
   std::optional<RingBuffer::DirectReader> two_phase_reader_;
+
+  // [Replay] Backing for a two-phase read while recording or replaying. See
+  // DataPipe::BeginReadData: the caller is handed a pointer to this private
+  // copy rather than into the shared mapping, so that the bytes it reads are
+  // the recorded ones. DSRC-404.
+  std::vector<uint8_t> record_replay_two_phase_bytes_ GUARDED_BY(lock_);
 
   // Indicates whether this endpoint is in the process of being serialized and
   // transmitted elsewhere.
