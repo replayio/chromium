@@ -38,6 +38,7 @@
 #   checkout.sh require [key]       fail unless that key is prepared
 #   checkout.sh sync                fetch and reset this key's tree to the build's
 #                                   commit, and its DEPS'd Replay forks with it
+#   checkout.sh backend-rev [key]   the backend commit `sync` checked out
 #   checkout.sh list [--sizes]      the keys that are prepared here
 #   checkout.sh adopt <dir> [key]   make an existing checkout a key's (migration)
 #   checkout.sh prepare [--from <key>]
@@ -210,6 +211,10 @@ sync() {
     RECORD_REPLAY_BACKEND_DIR="$r/backend" \
     CHROMIUM_REVISION="$commit" \
     node "$dir/sync-repos.mjs"
+}
+
+backend_rev() {
+  git -C "$(require "${1:-}")/backend" rev-parse HEAD
 }
 
 list() {
@@ -439,6 +444,7 @@ case ${1:-} in
   root) shift; root "${1:-}" ;;
   require) shift; require "${1:-}" ;;
   sync) sync ;;
+  backend-rev) shift; backend_rev "${1:-}" ;;
   list) shift; list "${1:-}" ;;
   adopt) shift; adopt "$@" ;;
   prepare) shift; prepare "$@" ;;
