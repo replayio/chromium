@@ -497,6 +497,26 @@ class BASE_EXPORT SequenceManagerImpl
   recordreplay::OrderedAtomic<const base::TickClock*> clock_;
   const base::TickClock* main_thread_clock() const {
     DCHECK_CALLED_ON_VALID_THREAD(associated_thread_->thread_checker);
+    // [Replay] clock_ is a recordreplay::OrderedAtomic, and OrderedAtomic
+    // decides at CONSTRUCTION whether it is ordered, so a sequence manager
+    // built with events allowed has an ordered clock_ for its whole life and
+    // reading it inside a disallow-events scope is a violation.  cppgc's
+    // sweeper posts a non-nestable delayed foreground task from
+    // SweeperImpl::Start during a GC, which lands in
+    // PostDelayedTaskImpl's main-thread branch and reads this.
+    // any_thread_clock_maybe_events_disallowed() below is the fork's own
+    // answer to exactly this question; give the main-thread sibling the same
+    // treatment.  The accessor rather than the one call site, because
+    // main_thread_clock() has a dozen callers and several of them
+    // (UpdateWakeUp, RemoveCancelledDelayedTasks) are reachable from a GC.
+    // The value is a pointer both sides compute identically, and
+    // SetTimeDomain is main-thread too, so the cross-thread race the
+    // ordering exists for is the ANY-thread accessor's -- which keeps its
+    // ordered read whenever events are allowed.  DSRC-225.
+    if (recordreplay::AreEventsDisallowed()) {
+      recordreplay::AutoPassThroughEvents pt;
+      return clock_.load(std::memory_order_relaxed);
+    }
     return clock_.load(std::memory_order_relaxed);
   }
   const base::TickClock* any_thread_clock() const {

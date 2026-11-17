@@ -567,6 +567,27 @@ void TaskQueueImpl::PostDelayedTaskImpl(PostedTask posted_task,
   // for details.
   CHECK(posted_task.callback);
 
+  // [Replay] PostImmediateTaskImpl splits by whether events are disallowed, so
+  // an immediate task posted during a GC takes an unordered route.  This
+  // function has no such split: its main-thread branch pushes onto the ordered
+  // delayed_incoming_queue and calls UpdateWakeUp, i.e. ordered locks and fork
+  // asserts.  Nothing posted a MAIN-THREAD DELAYED task from inside a
+  // disallow-events scope until cppgc's sweeper began posting
+  // PostNonNestableDelayedTask from SweeperImpl::Start during a GC, so the hole
+  // went unnoticed.  Send that case down the not-main-thread branch, which
+  // reaches PushOntoDelayedIncomingQueue -> PostImmediateTaskImpl and therefore
+  // the split that already exists.  That is an ordinary upstream path -- it is
+  // what every other thread's delayed post does -- and it ends in
+  // ScheduleDelayedWorkTask rather than a direct ordered queue push, so the
+  // task runs unordered, which is what the fork already chooses for immediate
+  // work posted during a GC.  The condition is copied verbatim from
+  // PostImmediateTaskImpl so the two cannot drift apart.  DSRC-228.
+  if (current_thread == CurrentThread::kMainThread &&
+      (recordreplay::AreEventsDisallowed("unordered-tasks") ||
+       recordreplay::AreEventsPassedThrough("unordered-tasks"))) {
+    current_thread = CurrentThread::kNotMainThread;
+  }
+
   if (current_thread == CurrentThread::kMainThread) {
     LazyNow lazy_now(sequence_manager_->main_thread_clock());
     Task pending_task = MakeDelayedTask(std::move(posted_task), &lazy_now);
@@ -575,7 +596,11 @@ void TaskQueueImpl::PostDelayedTaskImpl(PostedTask posted_task,
         std::move(pending_task), &lazy_now,
         /* notify_task_annotator */ true);
   } else {
-    LazyNow lazy_now(sequence_manager_->any_thread_clock());
+    // [Replay] This branch could only be reached with events allowed before
+    // the re-routing above, so its clock read has to use the
+    // events-disallowed-tolerant accessor now.  DSRC-228.
+    LazyNow lazy_now(
+        sequence_manager_->any_thread_clock_maybe_events_disallowed());
     PushOntoDelayedIncomingQueue(
         MakeDelayedTask(std::move(posted_task), &lazy_now));
   }
