@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "base/task/sequenced_task_runner.h"
+#include "base/record_replay.h"
 
 #include <utility>
 
@@ -130,6 +131,24 @@ bool SequencedTaskRunner::DeleteOrReleaseSoonInternal(
   // after shut down in cleanups that happen as things are reaped in the final
   // phases of shutdown (ref. crbug.com/420259698; and other instances).
   ThreadPoolInstance::ScopedFizzleBlockShutdownTasks fizzler;
+
+  // [Replay] DeleteSoon and ReleaseSoon post a task to run a destructor later,
+  // and a GC finalizer reaches them: measured on
+  // gc/svg-image-collected-before-forced-colors and mojo/closed-message-port-gc,
+  // where cppgc finalizes a LoaderFactoryForFrame, ~BackgroundCodeCacheHost
+  // calls DeleteSoon, and PostTaskWithSequence takes the sequence's lock inside
+  // the sweeper's disallow-events scope. Leak the object instead, which upstream
+  // already accepts as an outcome here -- see the shutdown comment above.
+  // Memory-safe by construction: the caller has given up its only reference and
+  // is asking for the object to be destroyed, so skipping that only leaks it.
+  // DSRC-411.
+  if (recordreplay::AreEventsDisallowed(
+          "SequencedTaskRunner::DeleteOrReleaseSoon") &&
+      recordreplay::EnterLeakMemory(
+          "SequencedTaskRunner::DeleteOrReleaseSoon")) {
+    return true;
+  }
+
   return PostNonNestableTask(from_here, BindOnce(deleter, object));
 }
 

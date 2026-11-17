@@ -7,6 +7,7 @@
 #include <bit>
 
 #include "base/debug/crash_logging.h"
+#include "base/record_replay.h"
 #include "base/feature_list.h"
 #include "base/logging.h"
 #include "build/build_config.h"
@@ -638,6 +639,20 @@ void SharedImageInterfaceProxy::CreateSharedImagePool(
 
 void SharedImageInterfaceProxy::DestroySharedImagePool(
     const SharedImagePoolId& pool_id) {
+  // [Replay] Reached from a GC finalizer: measured on
+  // gc/weak-ref-worker-offscreen-canvas, where a cppgc pre-finalizer runs
+  // OffscreenCanvasRenderingContext2D::Dispose -> ~Canvas2DResourceProvider ->
+  // ~SharedImagePool, and EnqueueDeferredMessage below takes an ordered lock
+  // inside the sweeper's disallow-events scope. Leak the service-side pool
+  // rather than send the teardown IPC from a point that differs between
+  // recording and replay. DSRC-412.
+  if (recordreplay::AreEventsDisallowed(
+          "SharedImageInterfaceProxy::DestroySharedImagePool") &&
+      recordreplay::EnterLeakMemory(
+          "SharedImageInterfaceProxy::DestroySharedImagePool")) {
+    return;
+  }
+
   auto params = mojom::DestroySharedImagePoolParams::New();
   params->pool_id = pool_id;
   {
