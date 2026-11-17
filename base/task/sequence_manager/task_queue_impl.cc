@@ -579,9 +579,16 @@ void TaskQueueImpl::PostDelayedTaskImpl(PostedTask posted_task,
   // the split that already exists.  That is an ordinary upstream path -- it is
   // what every other thread's delayed post does -- and it ends in
   // ScheduleDelayedWorkTask rather than a direct ordered queue push, so the
-  // task runs unordered, which is what the fork already chooses for immediate
+  // POST runs unordered, which is what the fork already chooses for immediate
   // work posted during a GC.  The condition is copied verbatim from
   // PostImmediateTaskImpl so the two cannot drift apart.  DSRC-228.
+  //
+  // Only the POST, though.  An earlier version of this comment claimed the
+  // task runs unordered, and that is wrong: the wrapper runs unordered and
+  // then ScheduleDelayedWorkTask does the ordered work this branch exists to
+  // avoid -- delayed_incoming_queue.push plus either UpdateWakeUp or
+  // MoveReadyDelayedTasksToWorkQueue.  DSRC-388 closes that second half; see
+  // the guard at the top of ScheduleDelayedWorkTask.
   if (current_thread == CurrentThread::kMainThread &&
       (recordreplay::AreEventsDisallowed("unordered-tasks") ||
        recordreplay::AreEventsPassedThrough("unordered-tasks"))) {
@@ -637,6 +644,51 @@ void TaskQueueImpl::PushOntoDelayedIncomingQueue(Task pending_task) {
 
 void TaskQueueImpl::ScheduleDelayedWorkTask(Task pending_task) {
   DCHECK_CALLED_ON_VALID_THREAD(associated_thread_->thread_checker);
+
+  // [Replay] This wrapper is what PushOntoDelayedIncomingQueue posts so that a
+  // delayed task posted from off the main thread (and, since DSRC-228, one
+  // posted from the main thread while events are disallowed) can enter the
+  // ordered delayed machinery here.  When the post itself was unordered the
+  // wrapper went to record_replay_unordered_immediate_incoming_queue, and
+  // WorkQueue::RecordReplayRunUnorderedTasks is running it now inside its own
+  // AutoDisallowEvents scope -- and that entry is exactly what must not
+  // happen: delayed_incoming_queue, the wake-up heap and delayed_work_queue
+  // are ordered state, and mutating them from a point that differs between
+  // recording and replay is what [RUN-2801-2978]
+  // WakeUpQueue::SetNextWakeUpForQueue and [RUN-1916]
+  // MoveReadyDelayedTasksToWorkQueue assert against.  The payload also carries
+  // no task id and a zero enqueue order (GetNextSequenceNumber zeroes it while
+  // events are disallowed), so WorkQueue::TakeTaskFromWorkQueue warns
+  // DivergentTaskTakenFromWorkQueue on it afterwards.
+  //
+  // Run the payload here instead.  That is what the fork already does with
+  // every other task posted while events are disallowed, and it is what this
+  // very task did before upstream gave cppgc's incremental sweeper a delay: at
+  // M108 IncrementalSweepTask::Post used runner->PostTask(), so the sweep task
+  // was an unordered immediate task and was drained the same way.  The delay
+  // is dropped, because honouring it needs the ordered queues this branch
+  // exists to stay out of; for the sweeper that only means a sweep slice runs
+  // at the next queue reload instead of 5 or 100 ms later.
+  //
+  // Memory safety: keep the Task's cancellation protocol instead of running
+  // the bare closure.  A cancelable delayed task reaches here too
+  // (GuardedTaskPoster::PostCancelableTask -> PostTask), and its
+  // DelayedTaskHandle owner may already have cancelled it -- DSRC-384 is that
+  // exact path, a GC finalizer cancelling a timer.  IsCanceled() is the check
+  // SelectNextTaskImpl makes through WorkQueue::RemoveCancelledTasks, and
+  // WillRunTask() is the one it makes immediately before running a task; the
+  // latter also invalidates the handle, so the owner's ~DelayedTaskHandle
+  // still sees a task that ran.  Nothing may touch |this| after Run() -- the
+  // task can drop the last reference to this queue -- hence the early return
+  // rather than falling through to TraceQueueSize().  DSRC-388.
+  if (recordreplay::AreEventsDisallowed("unordered-tasks") ||
+      recordreplay::AreEventsPassedThrough("unordered-tasks")) {
+    if (!pending_task.IsCanceled() && pending_task.WillRunTask()) {
+      std::move(pending_task.task).Run();
+    }
+    return;
+  }
+
   sequence_manager_->MaybeAddLeewayToTask(pending_task);
   TimeTicks now = sequence_manager_->main_thread_clock()->NowTicks();
   LazyNow lazy_now(now);
