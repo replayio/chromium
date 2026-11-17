@@ -6918,6 +6918,17 @@ RenderFrameImpl::GetURLLoaderThrottleProvider() {
 
 scoped_refptr<blink::WebBackgroundResourceFetchAssets>
 RenderFrameImpl::MaybeGetBackgroundResourceFetchAssets() {
+  // [Replay] BackgroundResourceFetch loads subresources on a thread pool
+  // sequence and hands each response to the main thread through
+  // BackgroundURLLoader's own cross-thread queue, so how much of a response the
+  // main thread has observed when it runs a task follows thread arrival order
+  // rather than recorded data. None of that path is instrumented. Take the path
+  // upstream takes when the feature is off and keep loading on the main thread,
+  // which is also where every load ran before the feature existed. DSRC-415.
+  if (recordreplay::IsRecordingOrReplaying("background-resource-fetch")) {
+    return nullptr;
+  }
+
   if (!base::FeatureList::IsEnabled(
           blink::features::kBackgroundResourceFetch)) {
     return nullptr;
