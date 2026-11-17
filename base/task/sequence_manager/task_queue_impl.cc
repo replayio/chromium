@@ -1320,7 +1320,11 @@ void TaskQueueImpl::ReclaimMemory(TimeTicks now) {
   // at M120 and a recorded run takes no field trials, so that value was already
   // 1 in every recording; the literal keeps this assert's text, arity and
   // recorded values exactly as they were.
-  recordreplay::Assert(
+  // [Replay] Third member of the [RUN-2801-2978] group, on the same
+  // GC-reachable delayed-task path -- ReclaimMemory sweeps cancelled delayed
+  // tasks, and a GC finalizer cancelling a timer is what gets it there.
+  // DSRC-382.
+  recordreplay::AssertMaybeEventsDisallowed(
     "[RUN-2801-2978] TaskQueueImpl::ReclaimMemory %d %d",
     1,
     !!main_thread_only().delayed_work_queue);

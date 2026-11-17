@@ -441,7 +441,12 @@ void SequenceManagerImpl::SetNextWakeUp(LazyNow* lazy_now,
                                         std::optional<WakeUp> wake_up) {
   auto next_wake_up = AdjustWakeUp(wake_up, lazy_now);
 
-  recordreplay::Assert(
+  // [Replay] Same GC-reachable path as WakeUpQueue::SetNextWakeUpForQueue: a
+  // finalizer destroying a blink::TimerBase cancels a delayed task handle,
+  // which updates the queue's wake-up from inside a GC disallow scope.  What
+  // the next wake-up is then depends on what an earlier GC left alive, which
+  // the fork deliberately does not reproduce.  DSRC-382.
+  recordreplay::AssertMaybeEventsDisallowed(
     "[RUN-2801-2978] SequenceManagerImpl::SetNextWakeUp %d",
     next_wake_up && next_wake_up->is_immediate());
 
