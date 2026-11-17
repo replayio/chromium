@@ -13,6 +13,7 @@
 #include "base/containers/span.h"
 #include "base/feature_list.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "mojo/core/embedder/features.h"
 #include "mojo/core/ipcz_api.h"
 #include "mojo/core/ipcz_driver/data_pipe.h"
@@ -141,6 +142,31 @@ void MojoMessage::SetParcel(ScopedIpczHandle parcel) {
     // `data`.
     UNSAFE_TODO(
         memcpy(data_storage_.get(), const_cast<const void*>(data), num_bytes));
+
+    // [Replay] This is THE consume site for an incoming mojo message: `data`
+    // points into a parcel's shared memory written by the PEER process, which
+    // is not part of this recording, and this copy is what every subsequent
+    // read -- including Connector::DispatchMessage's interface_id() and
+    // name() -- operates on. Upstream's comment above says that in the racy
+    // case "we don't care what's copied"; record/replay does care, because the
+    // two sides then parse different messages.
+    //
+    // Measured on frame-steps/sync-basic-one-page, with both sides consuming
+    // the same parcel (Router::Get seq 0, size 160, one object,
+    // fragment-backed) and the bytes still differing here:
+    //
+    //   REC: MojoMessage::GetData size 160 iface_id 00000000 name 00000000
+    //   REP: MojoMessage::GetData size 160 iface_id 00000000 name 00000003
+    //
+    // DSRC-240 records an adopted fragment's bytes at ADOPT time and DSRC-375
+    // records the copy Router::Get makes, but neither covers this path:
+    // MojoMessage::SetParcel takes the parcel as an object and reads its data
+    // through ipcz's two-phase Begin/EndGet, so it gets its own view of the
+    // shared memory and makes its own copy. determinism-shared-memory asks for
+    // the CONSUME site in preference to the map or adopt site, and for mojo
+    // this is it.
+    recordreplay::RecordReplayBytes("MojoMessage::SetParcel data",
+                                    data_storage_.get(), num_bytes);
   } else {
     data_storage_.reset();
   }
