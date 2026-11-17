@@ -28,6 +28,7 @@
 
 namespace ipcz {
 
+
 namespace {
 
 // Helper structure used to accumulate individual parcel flushing operations
@@ -598,9 +599,10 @@ IpczResult Router::Get(IpczGetFlags flags,
     // Asserted here rather than at NextElement() above so it fires once per
     // parcel actually consumed, not on the size-query calls that return
     // RESOURCE_EXHAUSTED first.
-    REPLAY_ASSERT("Router::Get parcel seq %llu size %zu objects %zu",
+    REPLAY_ASSERT("Router::Get parcel seq %llu size %zu objects %zu fragment %d",
                   static_cast<unsigned long long>(p->sequence_number().value()),
-                  p->data_size(), p->num_objects());
+                  p->data_size(), p->num_objects(),
+                  p->has_data_fragment() ? 1 : 0);
 
     const bool ok = inbound_parcels_.Pop(consumed_parcel);
     ABSL_ASSERT(ok);
