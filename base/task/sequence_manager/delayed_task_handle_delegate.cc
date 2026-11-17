@@ -4,6 +4,7 @@
 
 #include "base/task/sequence_manager/delayed_task_handle_delegate.h"
 
+#include "base/record_replay.h"
 #include "base/task/sequence_manager/task_queue_impl.h"
 
 namespace base::sequence_manager::internal {
@@ -36,6 +37,31 @@ void DelayedTaskHandleDelegate::CancelTask() {
   // WeakReference::Flag, as no new WeakPtrs will ever be issued from this
   // delegate.
   weak_ptr_factory_.InvalidateWeakPtrsAndDoom();
+
+  // [Replay] A GC finalizer cancels delayed tasks: ~Document destroys its
+  // element_data_cache_clear_timer_, ~TimerBase calls Stop(), and that lands
+  // here while cppgc is sweeping inside one of the fork's GC disallow scopes.
+  // Removing the task from the heap walks the whole scheduling stack --
+  // RemoveCancelableTask -> UpdateWakeUp -> WakeUpQueue -> SetNextWakeUp ->
+  // ScheduleWork -> the WorkDeduplicator's ordered lock and then the pump --
+  // mutating ordered state where nothing may be recorded.  Dooming the task
+  // above is what actually cancels it; removing it from the heap is only an
+  // optimisation, and Task::IsCanceled()/WillRunTask() both consult
+  // WasInvalidated(), so a doomed task left in the queue is discarded at its
+  // run time with events allowed.  Skip the removal and leak the queue slot,
+  // which is the same trade ShutdownTaskQueueGracefully, ~SVGImage,
+  // Core::Close and some twenty other leak-references guards already make.
+  //
+  // The guard is here rather than in ~TimerBase deliberately: the base
+  // TimerBase closure is bound with Unretained(this) (base/timer/timer.h),
+  // and only HeapTaskRunnerTimer carries a WeakPersistent, so skipping the
+  // cancel at the timer would be a use-after-free.  Here it is safe and covers
+  // every DelayedTaskHandle holder.  DSRC-384.
+  if (recordreplay::AreEventsDisallowed() &&
+      recordreplay::FeatureEnabled("leak-references",
+                                   "DelayedTaskHandleDelegate::CancelTask")) {
+    return;
+  }
 
   // If the task is still inside the heap, then it can be removed directly.
   if (heap_handle_.IsValid()) {

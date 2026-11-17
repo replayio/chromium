@@ -67,16 +67,7 @@ void WakeUpQueue::SetNextWakeUpForQueue(internal::TaskQueueImpl* queue,
 
   std::optional<WakeUp> new_wake_up = GetNextDelayedWakeUp();
 
-  // [Replay] Reachable from a GC finalizer: ~Document destroys a TimerBase,
-  // whose destructor cancels a delayed task handle, which lands in
-  // RemoveCancelableTask -> UpdateWakeUp -> here, inside cppgc's
-  // incremental-marking disallow scope.  Whether the next wake-up CHANGED then
-  // depends on which objects an earlier GC left alive and the order they are
-  // swept in, which the fork deliberately does not reproduce -- so the
-  // predicate is not assertable on that path.  AssertMaybeEventsDisallowed
-  // skips the assert when events are disallowed and keeps it everywhere else.
-  // DSRC-382.
-  recordreplay::AssertMaybeEventsDisallowed(
+  recordreplay::Assert(
     "[RUN-2801-2978] WakeUpQueue::SetNextWakeUpForQueue %d",
     new_wake_up != previous_wake_up);
 
