@@ -93,15 +93,9 @@ steps:
       # script that fetches the rest of this commit's build scripts. Everything
       # after this line is repository content at $$BUILDKITE_COMMIT, instead of
       # whatever a shared checkout happened to hold (replayio/chromium#1544).
-      # This pipeline.yml is fetched per BRANCH, so re-running an old build of a
-      # branch that has since been rebased onto this change asks for a commit
-      # that has no ci/ directory. Say that rather than just failing on a 404.
-      if ! curl -fsS "https://raw.githubusercontent.com/replayio/chromium/$$BUILDKITE_COMMIT/replay_build_scripts/ci/bootstrap.sh" -o ci-bootstrap.sh; then
-        echo "no replay_build_scripts/ci/bootstrap.sh at $$BUILDKITE_COMMIT:"
-        echo "this commit predates per-version checkouts, so it cannot be built"
-        echo "by this branch's pipeline. Build a commit that has it."
-        exit 1
-      fi
+      # The pipeline settings upload this file from that same commit, and only
+      # for a named commit that has ci/.
+      curl -fsS "https://raw.githubusercontent.com/replayio/chromium/$$BUILDKITE_COMMIT/replay_build_scripts/ci/bootstrap.sh" -o ci-bootstrap.sh
       be_cmd bootstrap-scripts -- bash ci-bootstrap.sh
       SCRIPTS=.ci-boot/replay_build_scripts
       KEY=$$("$$SCRIPTS/ci/checkout.sh" key)
@@ -111,8 +105,15 @@ steps:
       # version's containers, so another version's build is left alone.
       be_cmd remove-stale-build-containers -- "$$SCRIPTS/remove-stale-build-containers.sh" "$$KEY"
       be_cmd checkout-sync -- "$$SCRIPTS/ci/checkout.sh" sync
+      # Driver and backend come from this commit's REPLAY_BACKEND_REV, however
+      # the build was started: not from build env, never the latest driver.
+      BACKEND_REV=$$("$$SCRIPTS/ci/checkout.sh" backend-rev)
+      DRIVER_REVISION=$${BACKEND_REV:0:12}
+      export DRIVER_REVISION
       be_cmd chromium-build -- "$$SCRIPTS/ci/build-in-container.sh"
       be_cmd upload-artifacts -- "$$SCRIPTS/ci/upload-artifacts.sh"
+      # Next to build_id: the backend that steps testing this build must use.
+      echo "$$BACKEND_REV" > "$${BUILDKITE_BUILD_CHECKOUT_PATH:-$$PWD}/build_id/linux/x86_64/backend_rev"
 
   - label: "📝 E2E Tests (linux-x86_64)"
     trigger: "runtime-fe-end-to-end-tests"
@@ -151,8 +152,6 @@ steps:
       CI: "1"
     command: |
       set -euo pipefail
-      PIN="$$REPLAY_BACKEND_REV"
-      test -n "$$PIN"
       WORKDIR=$$(mktemp -d "/tmp/chromium-recording-$${BUILDKITE_JOB_ID}.XXXXXX")
       # Short path: unix socket paths under TMPDIR are length-limited.
       TMPDIR=$$(mktemp -d /tmp/crt.XXXXXX)
@@ -161,6 +160,9 @@ steps:
       export RECORD_REPLAY_DIRECTORY="$$WORKDIR/replay"
       BACKEND_DIR="$$WORKDIR/backend"
       mkdir -p "$$BACKEND_DIR" "$$RECORD_REPLAY_DIRECTORY"
+      buildkite-agent artifact download build_id/linux/x86_64/backend_rev "$$WORKDIR/"
+      PIN="$$(cat "$$WORKDIR/build_id/linux/x86_64/backend_rev")"
+      test -n "$$PIN"
       git -C "$$BACKEND_DIR" init
       git -C "$$BACKEND_DIR" remote add origin git@github.com:replayio/backend.git
       git -C "$$BACKEND_DIR" fetch --depth 1 origin "$$PIN"

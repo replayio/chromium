@@ -38,6 +38,7 @@
 #   checkout.sh require [key]       fail unless that key is prepared
 #   checkout.sh sync                fetch and reset this key's tree to the build's
 #                                   commit, and its DEPS'd Replay forks with it
+#   checkout.sh backend-rev [key]   the backend commit `sync` checked out
 #   checkout.sh list [--sizes]      the keys that are prepared here
 #   checkout.sh adopt <dir> [key]   make an existing checkout a key's (migration)
 #   checkout.sh prepare [--from <key>]
@@ -206,10 +207,17 @@ sync() {
   # REPLAY_BACKEND_REV; everything else in the tree is what `prepare` synced.
   # (gclient sync is not run per job: this fork is too old for it, see
   # common.mjs.)
-  CHROMIUM_SRC_DIR="$r/src" \
+  # The backend pin is the commit's file, never env: a build's inputs must not
+  # depend on how it was started.
+  env -u REPLAY_BACKEND_REV \
+    CHROMIUM_SRC_DIR="$r/src" \
     RECORD_REPLAY_BACKEND_DIR="$r/backend" \
     CHROMIUM_REVISION="$commit" \
     node "$dir/sync-repos.mjs"
+}
+
+backend_rev() {
+  git -C "$(require "${1:-}")/backend" rev-parse HEAD
 }
 
 list() {
@@ -238,12 +246,12 @@ list() {
 # Migration: the checkout that every build has been sharing becomes the
 # milestone's own.
 #
-# By default the key becomes a symlink to it, because .buildkite/pipeline.yml is
-# fetched per branch: every branch that has not been rebased onto this change
-# still runs the old step, which cd's into /home/ubuntu/chromium/src and builds
-# there. A symlink lets both kinds of job build the same tree, so this can land
-# without a flag day -- and for the same reason the old build image and
-# /home/ubuntu/depot_tools have to stay until those branches are gone.
+# By default the key becomes a symlink to it, so that the step from before this
+# change, which cd's into /home/ubuntu/chromium/src and builds there, and the
+# new one build the same tree. chromium-build now runs each commit's own
+# pipeline.yml and refuses commits without ci/ (its pipeline settings), so only
+# other ways of running the old step still need the link, the old build image
+# and /home/ubuntu/depot_tools.
 #
 # --move moves the directory instead, for when nothing builds the old way any
 # more. Either way it costs nothing and is undone by moving it back.
@@ -439,6 +447,7 @@ case ${1:-} in
   root) shift; root "${1:-}" ;;
   require) shift; require "${1:-}" ;;
   sync) sync ;;
+  backend-rev) shift; backend_rev "${1:-}" ;;
   list) shift; list "${1:-}" ;;
   adopt) shift; adopt "$@" ;;
   prepare) shift; prepare "$@" ;;

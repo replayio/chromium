@@ -66,12 +66,10 @@ def generate_buildkite_pipeline(pin):
         "steps": [
             driver_step(pin, driver_revision),
             {
+                # No pin in env: chromium-build reads it from the commit, as
+                # every other way of starting it must.
                 "trigger": "chromium-build",
                 "build": {
-                    "env": {
-                        "DRIVER_REVISION": driver_revision,
-                        "REPLAY_BACKEND_REV": pin.commit,
-                    },
                     "message": "${BUILDKITE_MESSAGE}",
                     "branch": "${BUILDKITE_BRANCH}",
                     "commit": "${BUILDKITE_COMMIT}",
