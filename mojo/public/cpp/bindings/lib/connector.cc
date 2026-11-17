@@ -577,7 +577,17 @@ bool Connector::DispatchMessage(ScopedMessageHandle handle) {
 
   bool receiver_result = false;
   if (recorded_has_receiver) {
-    recordreplay::Assert("Connector::DispatchMessage has_receiver %d", !!incoming_receiver_);
+    // [Replay] The message's interface id and method name are in the assert
+    // text because this is the FIRST point in this process at which the
+    // message exists, and every assert below it on the dispatch path --
+    // MessageDispatcher::Accept, MultiplexRouter::ProcessIncomingMessage --
+    // carries only flags, so a replay that dispatches a DIFFERENT message than
+    // the recording is not visible until InterfaceEndpointClient::
+    // HandleIncomingMessage, far downstream of wherever it went wrong.  Both
+    // fields are ordinals from the message header, not addresses.  DSRC-375.
+    recordreplay::Assert(
+        "Connector::DispatchMessage has_receiver %d iface_id %u name %u",
+        !!incoming_receiver_, message.interface_id(), message.name());
     receiver_result = incoming_receiver_ && incoming_receiver_->Accept(&message);
   }
 
