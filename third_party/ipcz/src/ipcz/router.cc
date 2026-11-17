@@ -559,7 +559,48 @@ IpczResult Router::Get(IpczGetFlags flags,
 
     if (data_size > 0) {
       IPCZ_UNSAFE_TODO(memcpy(data, p->data_view().data(), data_size));
+      // [Replay] Record the bytes the consumer actually receives.  A parcel
+      // backed by a data fragment lives in shared memory written by the PEER
+      // process, which is not part of this recording, and DSRC-240 already
+      // records those bytes -- but it does so at ADOPT time, and this copy
+      // happens later.  Measured on network/redirect-subresource-chain: at the
+      // first divergence both sides consume the SAME parcel (seq 0, size 160,
+      // one object, asserted below) and then mojo reads a different method
+      // ordinal out of it -- name 0 while recording, name 3 while replaying.
+      // So the fragment's contents are not the same at consume time as they
+      // were at adopt time, and recording at adopt cannot capture that.  This
+      // is why determinism-shared-memory names the CONSUME site as the place
+      // to record, in preference to the map or adopt site: the bytes the
+      // consumer sees are the bytes that have to agree.  Restricted to
+      // fragment-backed parcels because an inline parcel's data travelled over
+      // the recorded transport and is already in the stream; re-recording it
+      // would only grow the stream.  DSRC-375.
+      if (p->has_data_fragment()) {
+        recordreplay::RecordReplayBytes("Router::Get parcel data", data,
+                                        data_size);
+      }
     }
+
+    // [Replay] The consume site for mojo: this is the parcel whose bytes were
+    // just copied out and which mojo goes on to dispatch.  Identify WHICH
+    // parcel it is, because a replay dispatching a different mojo message than
+    // the recording at the same point in the stream (DSRC-375, measured on
+    // blink.mojom.MemoryUsageMonitorLinux and
+    // font_data_service.mojom.FontDataService) has two causes that nothing
+    // downstream can tell apart: the same parcel carrying different bytes, or
+    // a different parcel.  DSRC-236 keeps outgoing parcel data inline under
+    // record/replay and DSRC-240 records an adopted fragment's size and bytes,
+    // so the bytes are supposed to agree already -- which makes the sequence
+    // number the measurement that settles it.  It is a monotonic per-portal
+    // ordinal assigned by the producer, not an address, and ipcz delivers
+    // parcels through a SequenceNumber-keyed queue; if these agree while the
+    // mojo header does not, the bytes are the problem rather than the queue.
+    // Asserted here rather than at NextElement() above so it fires once per
+    // parcel actually consumed, not on the size-query calls that return
+    // RESOURCE_EXHAUSTED first.
+    REPLAY_ASSERT("Router::Get parcel seq %llu size %zu objects %zu",
+                  static_cast<unsigned long long>(p->sequence_number().value()),
+                  p->data_size(), p->num_objects());
 
     const bool ok = inbound_parcels_.Pop(consumed_parcel);
     ABSL_ASSERT(ok);
@@ -610,6 +651,18 @@ IpczResult Router::BeginGet(IpczBeginGetFlags flags,
 
   std::unique_ptr<Parcel>& p = inbound_parcels_.NextElement();
   const size_t num_objects = p->num_objects();
+  // [Replay] A TRIPWIRE, not a fix.  This two-phase API hands the caller a raw
+  // pointer into the parcel's storage (`*data = p->data_view().data()` below)
+  // and the caller reads it between here and EndGet, so for a fragment-backed
+  // parcel it reads PEER-WRITTEN SHARED MEMORY directly and there is no point
+  // on this path at which the bytes it sees can be recorded -- the same gap
+  // DSRC-375 found and fixed at Router::Get, which copies instead.  Nothing in
+  // chromium-recording reaches this path today: this assert was added to
+  // measure DSRC-375 and never fired, which is how Router::Get was identified
+  // as the real consume site.  It stays so that the first case that does reach
+  // it says so in the stream rather than diverging silently.  The sequence
+  // number is a monotonic per-portal ordinal assigned by the producer, not an
+  // address.  DSRC-375.
   const size_t handle_capacity = num_handles ? *num_handles : 0;
 
   const size_t num_handles_to_consume = std::min(handle_capacity, num_objects);
