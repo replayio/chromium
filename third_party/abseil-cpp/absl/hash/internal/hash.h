@@ -1552,16 +1552,22 @@ class ABSL_DLL MixingHashState : public HashStateBase<MixingHashState> {
   //
   // On other platforms this is still going to be non-deterministic but most
   // probably per-build and not per-process.
+  //
+  // [Replay] A constant instead of &kSeed. The replaying process maps the
+  // binary at a different address than the recording one did, so every
+  // absl::Hash value differed between the two. Swiss tables hashed with
+  // absl::Hash do not come through here, they take their seed from
+  // NextHashTableSeed(). What does is a table with a hasher that calls
+  // absl::Hash itself, such as base::TransparentHashAs, a std::unordered_map
+  // given absl::Hash, and anything that buckets or orders by absl::HashOf.
+  //
+  // It is a constant rather than a recorded value because this is inlined into
+  // hashes that run before the driver attaches and inside regions where events
+  // are disallowed, and a value read back lazily would need a static guard,
+  // which the replay does not serialize across threads. The value is the first
+  // 64 fractional bits of pi and means nothing. DSRC-418.
   ABSL_ATTRIBUTE_ALWAYS_INLINE static size_t Seed() {
-#if (!defined(__clang__) || __clang_major__ > 11) && \
-    (!defined(__apple_build_version__) ||            \
-     __apple_build_version__ >= 19558921)  // Xcode 12
-    return static_cast<size_t>(reinterpret_cast<uintptr_t>(&kSeed));
-#else
-    // Workaround the absence of
-    // https://github.com/llvm/llvm-project/commit/bc15bf66dcca76cc06fe71fca35b74dc4d521021.
-    return static_cast<size_t>(reinterpret_cast<uintptr_t>(kSeed));
-#endif
+    return static_cast<size_t>(uint64_t{0x243f6a8885a308d3});
   }
 
   uint64_t state_;

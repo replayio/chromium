@@ -1,0 +1,71 @@
+Replay: pin the hash seeds that abseil derives from addresses.
+
+Both seeds differ between a recording and its replay, which gives every
+absl hash container an iteration order the replay cannot reproduce.
+See the comments at each site. DSRC-418.
+
+--- a/absl/container/internal/raw_hash_set.cc
++++ b/absl/container/internal/raw_hash_set.cc
+@@ -135,7 +135,27 @@
+ // Must be defined out-of-line to avoid MSVC error C2482 on some platforms,
+ // which is caused by non-constexpr initialization.
+ uint8_t NextHashTableSeed() {
+-  return static_cast<uint8_t>(RandomSeed());
++  // [Replay] Every table gets the same seed. Upstream draws it from
++  // RandomSeed(), a thread-local counter XORed with that counter's own address,
++  // and draws it again each time a table allocates or grows. Neither input
++  // survives into the replay: the address is wherever the thread's TLS block
++  // landed, and the counter is how many tables this thread has seeded so far,
++  // which includes tables made where events are disallowed. A table's hash is
++  // hash_with_seed(key, this seed), so a different seed is a different
++  // iteration order for the same keys inserted in the same sequence.
++  //
++  // The seed is pinned rather than recorded because recording it would put one
++  // event in the stream per table allocation, and a table allocated before the
++  // driver attaches has nothing to record into. It is pinned in every process
++  // rather than only when recording because abseil sits below //base and
++  // cannot ask, and a run-time check would miss those same early tables. Zero
++  // is the value set_no_seed_for_testing() already uses. The seed is one byte
++  // of a counter and upstream documents it as an iteration-order randomizer
++  // only, so no flooding resistance is given up.
++  //
++  // This fixes tables whose keys hash the same way on both sides. A table
++  // keyed by pointer still iterates in address order. DSRC-418.
++  return 0;
+ }
+ 
+ GenerationType* EmptyGeneration() {
+--- a/absl/hash/internal/hash.h
++++ b/absl/hash/internal/hash.h
+@@ -1552,16 +1552,22 @@
+   //
+   // On other platforms this is still going to be non-deterministic but most
+   // probably per-build and not per-process.
++  //
++  // [Replay] A constant instead of &kSeed. The replaying process maps the
++  // binary at a different address than the recording one did, so every
++  // absl::Hash value differed between the two. Swiss tables hashed with
++  // absl::Hash do not come through here, they take their seed from
++  // NextHashTableSeed(). What does is a table with a hasher that calls
++  // absl::Hash itself, such as base::TransparentHashAs, a std::unordered_map
++  // given absl::Hash, and anything that buckets or orders by absl::HashOf.
++  //
++  // It is a constant rather than a recorded value because this is inlined into
++  // hashes that run before the driver attaches and inside regions where events
++  // are disallowed, and a value read back lazily would need a static guard,
++  // which the replay does not serialize across threads. The value is the first
++  // 64 fractional bits of pi and means nothing. DSRC-418.
+   ABSL_ATTRIBUTE_ALWAYS_INLINE static size_t Seed() {
+-#if (!defined(__clang__) || __clang_major__ > 11) && \
+-    (!defined(__apple_build_version__) ||            \
+-     __apple_build_version__ >= 19558921)  // Xcode 12
+-    return static_cast<size_t>(reinterpret_cast<uintptr_t>(&kSeed));
+-#else
+-    // Workaround the absence of
+-    // https://github.com/llvm/llvm-project/commit/bc15bf66dcca76cc06fe71fca35b74dc4d521021.
+-    return static_cast<size_t>(reinterpret_cast<uintptr_t>(kSeed));
+-#endif
++    return static_cast<size_t>(uint64_t{0x243f6a8885a308d3});
+   }
+ 
+   uint64_t state_;

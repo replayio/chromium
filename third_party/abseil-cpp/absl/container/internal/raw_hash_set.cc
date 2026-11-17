@@ -135,7 +135,27 @@ inline void* PrevSlot(void* slot, size_t slot_size) {
 // Must be defined out-of-line to avoid MSVC error C2482 on some platforms,
 // which is caused by non-constexpr initialization.
 uint8_t NextHashTableSeed() {
-  return static_cast<uint8_t>(RandomSeed());
+  // [Replay] Every table gets the same seed. Upstream draws it from
+  // RandomSeed(), a thread-local counter XORed with that counter's own address,
+  // and draws it again each time a table allocates or grows. Neither input
+  // survives into the replay: the address is wherever the thread's TLS block
+  // landed, and the counter is how many tables this thread has seeded so far,
+  // which includes tables made where events are disallowed. A table's hash is
+  // hash_with_seed(key, this seed), so a different seed is a different
+  // iteration order for the same keys inserted in the same sequence.
+  //
+  // The seed is pinned rather than recorded because recording it would put one
+  // event in the stream per table allocation, and a table allocated before the
+  // driver attaches has nothing to record into. It is pinned in every process
+  // rather than only when recording because abseil sits below //base and
+  // cannot ask, and a run-time check would miss those same early tables. Zero
+  // is the value set_no_seed_for_testing() already uses. The seed is one byte
+  // of a counter and upstream documents it as an iteration-order randomizer
+  // only, so no flooding resistance is given up.
+  //
+  // This fixes tables whose keys hash the same way on both sides. A table
+  // keyed by pointer still iterates in address order. DSRC-418.
+  return 0;
 }
 
 GenerationType* EmptyGeneration() {

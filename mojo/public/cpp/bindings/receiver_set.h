@@ -103,21 +103,7 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS) ReceiverSetState {
     const std::unique_ptr<ReceiverState> receiver_;
   };
 
-  // [Replay] Ordered, not hashed. absl::flat_hash_map seeds its hash from the
-  // address of a static (absl/hash/internal/hash.h, Seed() returns
-  // reinterpret_cast<uintptr_t>(&kSeed)), so under ASLR its iteration order
-  // differs between recording and replay even though ReceiverId is a
-  // deterministic counter. Tearing a set down then destroys receivers, and so
-  // their Connectors, SimpleWatchers and MojoTraps, in a different order.
-  // Measured: 23 crash reports across about 20 tests in every directory, all
-  // with byte-identical stacks through
-  // ReceiverSetBase::Remove -> BindingStateBase::Close ->
-  // MultiplexRouter::CloseMessagePipe -> Connector::CloseMessagePipe ->
-  // ~SimpleWatcher -> MojoTrap::RemoveTrigger, differing only in the trap's
-  // recorded lock id -- i.e. a different trap instance at the same point.
-  // ReceiverId is monotonic, so std::map iterates in insertion order.
-  // DSRC-413.
-  using EntryMap = std::map<ReceiverId, std::unique_ptr<Entry>>;
+  using EntryMap = absl::flat_hash_map<ReceiverId, std::unique_ptr<Entry>>;
 
   ReceiverSetState();
   ReceiverSetState(const ReceiverSetState&) = delete;
