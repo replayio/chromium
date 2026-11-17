@@ -6,6 +6,7 @@
 
 #include <cstdint>
 
+#include "base/record_replay.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/strcat.h"
@@ -653,6 +654,22 @@ void V8MetricsRecorder::NotifyIsolateDisposal() {
 std::optional<V8MetricsRecorder::UkmRecorderAndSourceId>
 V8MetricsRecorder::GetUkmRecorderAndSourceId(
     v8::metrics::Recorder::ContextId context_id) {
+  // [Replay] V8's GCTracer reports a cycle's metrics from inside the fork's GC
+  // disallow scopes -- StopCycle -> ReportFullCycleToRecorder lands here from
+  // cppgc's NotifySweepingCompleted -- and ExecutionContext::UkmRecorder()
+  // below binds a UkmRecorderFactory mojo pipe LAZILY, so the first GC after a
+  // document is created runs ipcz::Router::CreatePair and constructs an
+  // ordered lock where nothing may be recorded.  Measured: 4 ordered-lock
+  // warnings, 2 CreateOrderedLock asserts and the TryLock/RegisterPointer
+  // warnings in one recording all come from this one stack.  Decline the
+  // report: this is telemetry, and declining reuses the empty-optional path
+  // that every AddMainThreadEvent overload already handles for the
+  // no-recorder case.  Outside a disallow scope UKM reporting is untouched.
+  // DSRC-385.
+  if (recordreplay::AreEventsDisallowed(
+          "V8MetricsRecorder::GetUkmRecorderAndSourceId")) {
+    return std::optional<UkmRecorderAndSourceId>();
+  }
   if (!isolate_)
     return std::optional<UkmRecorderAndSourceId>();
   v8::HandleScope handle_scope(isolate_);

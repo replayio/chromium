@@ -57,9 +57,9 @@ void DelayedTaskHandleDelegate::CancelTask() {
   // and only HeapTaskRunnerTimer carries a WeakPersistent, so skipping the
   // cancel at the timer would be a use-after-free.  Here it is safe and covers
   // every DelayedTaskHandle holder.  DSRC-384.
-  if (recordreplay::AreEventsDisallowed() &&
-      recordreplay::FeatureEnabled("leak-references",
-                                   "DelayedTaskHandleDelegate::CancelTask")) {
+  if (recordreplay::AreEventsDisallowed(
+          "DelayedTaskHandleDelegate::CancelTask") &&
+      recordreplay::EnterLeakMemory("DelayedTaskHandleDelegate::CancelTask")) {
     return;
   }
 

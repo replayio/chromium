@@ -130,8 +130,8 @@ MojoResult MojoCloseIpcz(MojoHandle handle) {
   // StatsCollector::AllocatedObjectSizeSafepointImpl's disallow scope, which
   // is fatal to the recording.  Restore the refusal, which leaks the handle and
   // its portal exactly as M108 leaked ports.  DSRC-381.
-  if (recordreplay::AreEventsDisallowed() &&
-      recordreplay::FeatureEnabled("leak-references", "MojoCloseIpcz")) {
+  if (recordreplay::AreEventsDisallowed("MojoCloseIpcz") &&
+      recordreplay::EnterLeakMemory("MojoCloseIpcz")) {
     return MOJO_RESULT_OK;
   }
   return GetIpczAPI().Close(handle, IPCZ_NO_FLAGS, nullptr);
