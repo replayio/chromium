@@ -7,6 +7,7 @@
 #include <limits>
 
 #include "base/check_op.h"
+#include "base/record_replay.h"
 #include "base/logging.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/structured_shared_memory.h"
@@ -132,9 +133,14 @@ bool SharedMemoryVersionClient::CommittedWritesIsLessThan(
   }
   // Relaxed memory order because no other memory operation depends on the
   // version.
-  const auto current_count =
+  // [Replay] This mapping is written by ANOTHER PROCESS and read here, so the
+  // load is an unrecorded cross-process read: a replay sees whatever its own
+  // mapping holds and takes a different branch. See GetSharedVersion below for
+  // the measurement that found this class. DSRC-406.
+  const auto current_count = static_cast<CountType>(recordreplay::RecordReplayValue(
+      "SharedMemoryVersionClient::CommittedWritesIsLessThan",
       read_only_mapping_->ReadOnlyPtr()->committed_writes_count.load(
-          std::memory_order_relaxed);
+          std::memory_order_relaxed)));
   return current_count < count;
 }
 
@@ -142,10 +148,30 @@ VersionType SharedMemoryVersionClient::GetSharedVersion() const {
   if (!read_only_mapping_.has_value()) {
     return shared_memory_version::kInvalidVersion;
   }
-  // Relaxed memory order because no other memory operation depends on the
-  // version.
-  return read_only_mapping_->ReadOnlyRef().version.load(
-      std::memory_order_relaxed);
+  // [Replay] This mapping is written by ANOTHER PROCESS -- for the GPU channel
+  // it is the GPU process -- and the peer is not part of this recording, so
+  // the load reads whatever the replay's own mapping holds. The value gates
+  // real behaviour: GpuChannelHost::VerifyFlush skips a sync Flush() IPC when
+  // SharedVersionIsLessThan says the channel has caught up
+  // (gpu/ipc/client/gpu_channel_host.cc, the kConditionallySkipGpuChannelFlush
+  // path, which is upstream code the fork has never had to handle -- the
+  // stable fork's VerifyFlush compares local ids and maps no shared memory).
+  //
+  // Measured: 46 of 149 Mismatch reports in one suite run are this one branch,
+  // with the recording in cc::LayerTreeHostImpl::DrawLayers and the replay
+  // inside GpuChannelProxy::Flush() underneath
+  // GpuChannelHost::VerifyFlush -> ClientResourceProvider::PrepareSendToParent.
+  // The replay sent an IPC the recording did not.
+  //
+  // Record the value where it is consumed, which is what
+  // determinism-shared-memory asks for; the scalar IS the payload here, so
+  // RecordReplayValue rather than RecordReplayBytes. Only the CLIENT reads are
+  // recorded -- SharedMemoryVersionController is this process's own writer and
+  // is already deterministic. DSRC-406.
+  return static_cast<VersionType>(recordreplay::RecordReplayValue(
+      "SharedMemoryVersionClient::GetSharedVersion",
+      read_only_mapping_->ReadOnlyRef().version.load(
+          std::memory_order_relaxed)));
 }
 
 }  // namespace mojo
