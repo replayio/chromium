@@ -323,6 +323,23 @@ void GpuChannelHost::VerifyFlush(uint32_t deferred_message_id) {
     return;
   }
 
+  // [RecordReplay] Both paths below are synchronous GPU process IPCs, and a
+  // reply to either can never arrive while events are unavailable: once the
+  // replay has diverged, the renderer's IO thread is parked for good in its own
+  // recorded call, so nothing delivers the response. A repaint at a pause
+  // reaches here from its draw, through
+  // ClientResourceProvider::PrepareSendToParent verifying the frame's sync
+  // tokens, and the compositor thread then never leaves that draw: it runs no
+  // further task, so nothing forces a draw and the repaint waits for a result
+  // that is never produced. The flush only makes the requests enqueued just
+  // above visible to the GPU process, and a frame drawn while diverged never
+  // reaches that process -- a repaint draws in this one, through
+  // recordreplay::SubmitCompositorFrame -- so a diverged caller can go on as
+  // if that work were already visible.
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
+    return;
+  }
+
   bool ipc_needed = false;
   const bool skip_flush_if_possible =
       base::FeatureList::IsEnabled(features::kConditionallySkipGpuChannelFlush);
