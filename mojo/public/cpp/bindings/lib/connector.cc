@@ -356,6 +356,23 @@ MojoResult Connector::AcceptAndGetResult(Message* message) {
     }
   }
 
+  // [Replay] The SEND-side counterpart of the identity in
+  // Connector::DispatchMessage.  DSRC-375 measured a replay dispatching a
+  // DIFFERENT message than the recording at the same stream position on the
+  // SAME connector (interface_name_ matched), which means one side had a
+  // parcel the other did not EARLIER on that pipe -- and ipcz delivers
+  // parcels through a SequenceNumber-keyed queue, so misordering within a
+  // portal is impossible.  Nothing on the send path carried the message's
+  // identity, so an extra or missing send left no event to compare.  Both
+  // fields are header ordinals, not addresses.  Guarded on is_serialized()
+  // because an unserialized message has no header yet, and assert B above
+  // already pins that flag.  Read before TakeMojoMessage() consumes it.
+  if (message->is_serialized()) {
+    REPLAY_ASSERT("Connector::Accept iface %s iface_id %u name %u",
+                  interface_name_ ? interface_name_ : "?",
+                  message->interface_id(), message->name());
+  }
+
   MojoResult rv =
       WriteMessageNew(message_pipe_.get(), message->TakeMojoMessage(),
                       MOJO_WRITE_MESSAGE_FLAG_NONE);
