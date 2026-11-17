@@ -93,8 +93,8 @@ steps:
       # script that fetches the rest of this commit's build scripts. Everything
       # after this line is repository content at $$BUILDKITE_COMMIT, instead of
       # whatever a shared checkout happened to hold (replayio/chromium#1544).
-      # The pipeline settings upload this file from that same commit, so it
-      # has ci/.
+      # The pipeline settings upload this file from that same commit, and only
+      # for a named commit that has ci/.
       curl -fsS "https://raw.githubusercontent.com/replayio/chromium/$$BUILDKITE_COMMIT/replay_build_scripts/ci/bootstrap.sh" -o ci-bootstrap.sh
       be_cmd bootstrap-scripts -- bash ci-bootstrap.sh
       SCRIPTS=.ci-boot/replay_build_scripts
