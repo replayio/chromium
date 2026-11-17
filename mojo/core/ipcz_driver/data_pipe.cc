@@ -13,6 +13,7 @@
 #include <tuple>
 
 #include "base/check.h"
+#include "base/record_replay.h"
 #include "base/compiler_specific.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/unsafe_shared_memory_region.h"
@@ -397,6 +398,33 @@ MojoResult DataPipe::ReadData(void* elements,
         read_size = data_.Read(output_bytes);
       }
       num_bytes = base::checked_cast<uint32_t>(read_size);
+    }
+
+    // [Replay] A data pipe's buffer is a shared-memory mapping
+    // (ring_buffer.h includes shared_buffer_mapping.h) and the bytes in it are
+    // written by the PEER process -- for a fetch body, the network service --
+    // which is not part of this recording. Nothing in this file recorded them,
+    // so a replay read whatever its own mapping happened to contain. Measured
+    // consequence (DSRC-404): a 7236-byte sourcemap fetched by the fork's own
+    // replay_sourcemap_handler.js came back as 7236 bytes of ZERO in the
+    // replay, which is a JS string that is truthy and whose strlen is 0, and
+    // the handler then wrote an empty sourcemap into the recording directory
+    // where the recording wrote 7236 bytes.
+    //
+    // Record what the consumer actually receives.
+    // determinism-shared-memory asks for the consume site in preference to the
+    // map site, and this is where the bytes leave shared memory for the
+    // caller's buffer. Peeks are recorded too: a peek fills the caller's
+    // buffer just as a read does, it only leaves the data in the ring.
+    //
+    // NOT COVERED, deliberately: BeginReadData/EndReadData hand the caller a
+    // pointer directly into the mapping, so there is no copy here to record
+    // and the caller reads between the two calls. If a case turns up that uses
+    // the two-phase path, it needs its own treatment -- the same shape of gap
+    // that Router::BeginGet carries.
+    if (!discard && !query && read_size > 0) {
+      recordreplay::RecordReplayBytes("DataPipe::ReadData",
+                                      output_bytes.data(), read_size);
     }
 
     if (peek || read_size == 0) {
