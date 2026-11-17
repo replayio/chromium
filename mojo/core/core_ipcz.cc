@@ -4,6 +4,8 @@
 
 #include "mojo/core/core_ipcz.h"
 
+#include "base/record_replay.h"
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -115,6 +117,22 @@ MojoTimeTicks MojoGetTimeTicksNowIpcz() {
 MojoResult MojoCloseIpcz(MojoHandle handle) {
   if (handle == MOJO_HANDLE_INVALID) {
     return MOJO_RESULT_INVALID_ARGUMENT;
+  }
+  // [Replay] M108's mojo/core refused to close at nondeterministic points, in
+  // Core::Close ("this requires a lot of interaction with other mojo
+  // components") and in Node::ClosePort ("the set of ports on a node should be
+  // the same when recording vs. replaying ... This will cause ports to leak").
+  // ipcz replaced both and kept neither, and it matters MORE here: closing
+  // transmits synchronously on the calling thread, so Router::CloseRoute takes
+  // the router's ordered lock and records values inline rather than only
+  // mutating local state.  Measured: a cppgc sweep finalizes a page, runs
+  // ~DocumentLoader, and closes a handle inside
+  // StatsCollector::AllocatedObjectSizeSafepointImpl's disallow scope, which
+  // is fatal to the recording.  Restore the refusal, which leaks the handle and
+  // its portal exactly as M108 leaked ports.  DSRC-381.
+  if (recordreplay::AreEventsDisallowed() &&
+      recordreplay::FeatureEnabled("leak-references", "MojoCloseIpcz")) {
+    return MOJO_RESULT_OK;
   }
   return GetIpczAPI().Close(handle, IPCZ_NO_FLAGS, nullptr);
 }
