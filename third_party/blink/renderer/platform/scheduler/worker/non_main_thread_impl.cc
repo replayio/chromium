@@ -13,6 +13,7 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/message_loop/message_pump.h"
 #include "base/message_loop/message_pump_type.h"
+#include "base/record_replay.h"
 #include "base/run_loop.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/sequence_manager/sequence_manager.h"
@@ -58,6 +59,20 @@ NonMainThreadImpl::NonMainThreadImpl(const ThreadCreationParams& params)
   if (params.thread_type == ThreadType::kCompositorThread &&
       mojo::IsDirectReceiverSupported()) {
     message_pump_type = base::MessagePumpType::IO;
+  }
+  // [Replay] A repaint at a pause commits and draws on the compositor thread
+  // after the main thread has diverged from the recording, so this thread has
+  // to keep running tasks then. An IO pump idles in epoll_wait, which is a
+  // recorded call the driver cannot serve after the divergence, and the driver
+  // parks a non-main thread in such a call for good. The main thread then waits
+  // forever for its commit to complete. The default pump idles on a condition
+  // variable, which the driver emulates and a posted task still wakes. Upstream
+  // only asks for the IO pump so that the compositor's receivers can be
+  // DirectReceivers, and each of those falls back to an ordinary receiver on a
+  // thread that is not an IO thread. Keep the pump every NonMainThread had
+  // before the direct receivers existed. DSRC-421.
+  if (recordreplay::IsRecordingOrReplaying("compositor-default-pump")) {
+    message_pump_type = base::MessagePumpType::DEFAULT;
   }
   thread_ = std::make_unique<SimpleThreadImpl>(
       params.name ? params.name : String(), options, params.realtime_period,
