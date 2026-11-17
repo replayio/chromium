@@ -1220,8 +1220,40 @@ void PaintArtifactCompositor::Update(
   for (auto& node : scroll_translation_nodes) {
     property_tree_manager.EnsureCompositorScrollNode(*node);
   }
-  for (auto& [node, _] : painted_scroll_translations_) {
-    property_tree_manager.EnsureCompositorScrollAndTransformNode(*node);
+  // [Replay] painted_scroll_translations_ is a HeapHashMap keyed by
+  // Member<const TransformPaintPropertyNode>, and that type has no
+  // RecordReplayId(), so BaseMemberHashTraits hashes it by the compressed
+  // pointer and this loop visits the scroll translations in heap order.  The
+  // order decides which transform node EnsureCompositorTransformNode reaches
+  // first, and transform_tree_.Insert hands out cc node ids in visit order.
+  // Measured: 35,828 main thread assert events matched and then the recording
+  // queried cc node 5 before 3 while the replay queried 3 first.  Visit them
+  // ordered by the scroll node's compositor element id, which already exists
+  // for every key (EnsureCompositorScrollAndTransformNode dereferences
+  // ScrollNode() unconditionally) and is replay-stable, being derived from
+  // LayoutBox::UniqueId()'s plain counter.  Giving the node type an id instead
+  // would fix every such container at once but would emit a NewId assert per
+  // paint property node, so it is not worth it for the one container that is
+  // actually iterated.  DSRC-379.
+  if (recordreplay::IsRecordingOrReplaying("ordered-scroll-translations")) {
+    HeapVector<Member<const TransformPaintPropertyNode>> ordered;
+    ordered.ReserveInitialCapacity(painted_scroll_translations_.size());
+    for (auto& [node, _] : painted_scroll_translations_) {
+      ordered.push_back(node);
+    }
+    std::sort(ordered.begin(), ordered.end(),
+              [](const Member<const TransformPaintPropertyNode>& a,
+                 const Member<const TransformPaintPropertyNode>& b) {
+                return a->ScrollNode()->GetCompositorElementId() <
+                       b->ScrollNode()->GetCompositorElementId();
+              });
+    for (auto& node : ordered) {
+      property_tree_manager.EnsureCompositorScrollAndTransformNode(*node);
+    }
+  } else {
+    for (auto& [node, _] : painted_scroll_translations_) {
+      property_tree_manager.EnsureCompositorScrollAndTransformNode(*node);
+    }
   }
 
   cc::LayerSelection layer_selection;
