@@ -146,6 +146,38 @@ SimpleWatcher::SimpleWatcher(const base::Location& from_here,
 
 SimpleWatcher::~SimpleWatcher() {
   if (IsWatching()) {
+    // [Replay] Cancel() touches the recording twice -- MojoRemoveTrigger takes
+    // the ordered MojoTrap.lock_, and the assert below it records the result --
+    // and a watcher can be destroyed by a GC finalizer, at a point that differs
+    // between recording and replay. Measured: a cppgc sweep finalizes a
+    // blink::WorkerMainScriptLoader whose ~SimpleWatcher runs here inside
+    // HeapBase::Terminate's disallow-events scope, and the recorder dies on
+    // RecordedValueEventsDisallowed{"value","TryLock"}.
+    //
+    // Leak the trigger registration instead. This is the idiom M108 used for
+    // the same class a few frames up this very stack:
+    // mojo::internal::BindingStateBase::Close leaks its mojo resources when
+    // destroyed during a GC, with the comment "Mojo resources must be destroyed
+    // at deterministic points". DSRC-381's MojoCloseIpcz gate already leaks the
+    // trap and data-pipe handles on this path, so what is added here is the
+    // trigger and its Context.
+    //
+    // Memory-safe, and NOT the use-after-free it looks like: the trap's trigger
+    // context is a SimpleWatcher::Context, a RefCountedThreadSafe object the
+    // trap holds its own reference to, and it reaches the watcher only through
+    // a base::WeakPtr. The weak_factory_ member destructor invalidates that
+    // pointer whether or not Cancel() ran, so a late Context::Notify either
+    // fails its `weak_watcher_` null check or posts a weak-bound OnHandleReady
+    // that no-ops.
+    //
+    // At the DESTRUCTOR, not in Cancel()'s body: a watcher that survives and
+    // re-Watch()es must really drop its old trigger, because MojoTrap::Arm
+    // requires every trigger to be unready and a stale ready one would spam
+    // notifications. DSRC-410.
+    if (recordreplay::AreEventsDisallowed("SimpleWatcher::~SimpleWatcher") &&
+        recordreplay::EnterLeakMemory("SimpleWatcher::~SimpleWatcher")) {
+      return;
+    }
     Cancel();
   }
 }

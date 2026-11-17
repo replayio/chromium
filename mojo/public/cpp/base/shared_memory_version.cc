@@ -136,7 +136,7 @@ bool SharedMemoryVersionClient::CommittedWritesIsLessThan(
   // [Replay] This mapping is written by ANOTHER PROCESS and read here, so the
   // load is an unrecorded cross-process read: a replay sees whatever its own
   // mapping holds and takes a different branch. See GetSharedVersion below for
-  // the measurement that found this class. DSRC-406.
+  // the measurement that found this class. DSRC-409.
   const auto current_count = static_cast<CountType>(recordreplay::RecordReplayValue(
       "SharedMemoryVersionClient::CommittedWritesIsLessThan",
       read_only_mapping_->ReadOnlyPtr()->committed_writes_count.load(
@@ -167,7 +167,7 @@ VersionType SharedMemoryVersionClient::GetSharedVersion() const {
   // determinism-shared-memory asks for; the scalar IS the payload here, so
   // RecordReplayValue rather than RecordReplayBytes. Only the CLIENT reads are
   // recorded -- SharedMemoryVersionController is this process's own writer and
-  // is already deterministic. DSRC-406.
+  // is already deterministic. DSRC-409.
   return static_cast<VersionType>(recordreplay::RecordReplayValue(
       "SharedMemoryVersionClient::GetSharedVersion",
       read_only_mapping_->ReadOnlyRef().version.load(
