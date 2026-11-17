@@ -185,8 +185,20 @@ class WaitSet::State : public base::RefCountedThreadSafe<State> {
             auto it = contexts_.find(event.trigger_context);
             CHECK(it != contexts_.end());
             // https://linear.app/replay/issue/RUN-551
-            recordreplay::Assert("WaitSet::State::Wait #2 %u %u %d",
-                                 it->second->handle().value(), event.result, event.signals_state);
+            // [Replay] The handle used to be in this text.  Under ipcz a
+            // MojoHandle IS the object's address
+            // (ipcz/api_object.h: `return reinterpret_cast<uintptr_t>(this)`),
+            // where the legacy mojo core handed out indices from a handle
+            // table, so the assert became unsatisfiable: measured as
+            // `#2 671297440 9 4` recorded against `#2 4048380880 9 4`
+            // replayed, the low 32 bits of two heap addresses and nothing
+            // else differing.  There is no replay-stable name for the handle
+            // that would not cost more than it is worth, so this drops the
+            // field and keeps the rest; with `Wait Start` and `Wait #1` it
+            // still pins the branch, the arm result and each event's result
+            // and signals.  DSRC-377.
+            recordreplay::Assert("WaitSet::State::Wait #2 %u %d",
+                                 event.result, event.signals_state);
             ready_handles_[it->second->handle()] = {event.result,
                                                     event.signals_state};
           }
