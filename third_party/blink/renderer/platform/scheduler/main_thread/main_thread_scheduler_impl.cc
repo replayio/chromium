@@ -1721,7 +1721,10 @@ void MainThreadSchedulerImpl::UpdatePolicyLocked(UpdateType update_type) {
   new_policy.find_in_page_priority =
       find_in_page_budget_pool_controller_->CurrentTaskPriority();
 
+  // [Replay] See MaybeUpdatePolicyOnTaskCompleted: this counter is written by
+  // the IO thread, so it is not reproducible.  DSRC-378.
   new_policy.should_prioritize_ipc_tasks =
+      !recordreplay::IsRecordingOrReplaying("urgent-ipc-prioritization") &&
       num_pending_urgent_ipc_messages_.load(std::memory_order_relaxed) > 0;
 
   const bool are_all_pages_frozen = AllPagesFrozen();
@@ -2922,7 +2925,27 @@ void MainThreadSchedulerImpl::MaybeUpdatePolicyOnTaskCompleted(
 
   bool needs_policy_update = false;
 
+  // [Replay] num_pending_urgent_ipc_messages_ is incremented on the IO thread
+  // and read here at the end of EVERY main thread task, and the comparison
+  // below decides whether UpdatePolicy() runs -- which takes a lock and emits
+  // events.  A replay's IO thread reaches its increments at different points
+  // relative to the main thread's task boundaries, so the predicate flips on a
+  // different task and the replay runs a policy update the recording never
+  // ran.  Measured: 19,114 main thread assert events matched, then the
+  // recording went on to the task observers while the replay took a second
+  // any_thread_lock_ here.
+  //
+  // Decline the prioritization instead of recording the predicate.  Recording
+  // would be legal -- the read is unconditional at this point -- but it costs
+  // an event per task on the hottest path in the renderer, and the only thing
+  // the flag does is raise the kDefault queue from kNormalPriority to
+  // kVeryHighPriority in ComputePriority.  The whole feature postdates M108,
+  // so declining restores the behaviour this fork was built against rather
+  // than paying to reproduce a hint it never had.  The increments are left
+  // alone so OnUrgentMessageProcessed's CHECK_GT keeps its meaning.
+  // DSRC-378.
   bool should_prioritize_ipc_tasks =
+      !recordreplay::IsRecordingOrReplaying("urgent-ipc-prioritization") &&
       num_pending_urgent_ipc_messages_.load(std::memory_order_relaxed) > 0;
   if (should_prioritize_ipc_tasks !=
       main_thread_only().current_policy.should_prioritize_ipc_tasks) {
