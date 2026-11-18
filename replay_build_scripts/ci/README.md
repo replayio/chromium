@@ -25,9 +25,10 @@ changed.
 | `sync-repos.mjs`, `upload-artifacts.sh` | the pipeline's sync and upload steps, against the key's checkout instead of the current directory. |
 | `tools.Dockerfile`, `in-tools-image.sh` | the image those two run in, as the agent's user with its home, network and AWS identity, so an agent needs only docker, git, the aws CLI and buildkite-agent. |
 
-The build image's node is 8.10 and its git is 2.17 (bionic), so anything
-`build.js` or these scripts run inside it has to work there: no `fs.rmSync`,
-no recursive `fs.mkdirSync`, no `git sparse-checkout`.
+The build image's node is 8.10 (bionic), so anything `build.js` or these
+scripts run inside it has to work there: no `fs.rmSync`, no recursive
+`fs.mkdirSync`. Its git is built from source to what the depot_tools pin needs
+(`Dockerfile`).
 
 Builds and the tools image run as the agent's user, whatever its uid, with the
 agent's `/etc/passwd` and `/etc/group`.
@@ -55,25 +56,26 @@ key and the same as it was before this change.
 
 ## Disk
 
-A Chromium checkout here is 104 GB: 58 GB of the fork's git objects, 14 GB in
-the 140 repositories DEPS pins, and ~31 GB of working files. Two of the three
-are git objects, which are append-only and identical whatever version checked
-them out, so a second version shares them rather than copying:
+A Chromium checkout with the fork's history is 104 GB: 58 GB of the fork's git
+objects, 14 GB in the 140 repositories DEPS pins, and ~31 GB of working files.
+Two of the three are git objects, which a version need not have its own copy
+of:
 
-- The fork's history comes from a local `git clone`, which hardlinks the pack
-  files: 58 GB becomes 0.76 s and about 2 MB (measured). `prepare --from`
-  hardlinks every `.git` the same way, with `rsync --link-dest`, while copying
-  working files for real -- a gclient hook that overwrites one in place must not
-  write into the version it was copied from.
+- `prepare` fetches the fork as one commit: a build reads none of its history.
+  `prepare --from` hardlinks every `.git` of the version it copies, with
+  `rsync --link-dest`, while copying working files for real -- a gclient hook
+  that overwrites one in place must not write into the version it was copied
+  from.
 - The DEPS repositories come from gclient's own mirror of them,
-  `<checkouts dir>/.git-cache` (`GIT_CACHE_PATH`), which every version's sync
-  populates and clones from. It belongs to no key, and `wipe` cannot touch it:
+  `<checkouts dir>/.git-cache` (`GIT_CACHE_PATH`), which every version's
+  `prepare` populates and clones from. A dependency cloned from it borrows the
+  mirror's objects (git alternates, gclient's default cache mode), so the
+  mirror outlives every key. It belongs to no key, and `wipe` cannot touch it:
   a key may not begin with a dot.
 
-So a second milestone costs its working files and its build outputs, around
-35-45 GB, not another 104 GB. Hardlinked objects also keep the versions
-independent, which `--reference`/alternates would not: deleting one checkout
-leaves the others' objects alone, so `wipe` stays `rm -rf` of one directory.
+So a version costs its working files and its build outputs. Deleting one
+checkout leaves the others' objects alone, so `wipe` stays `rm -rf` of one
+directory.
 
 Not shared on purpose: the working files (they differ per milestone, and a build
 or a hook writes in them) and `out/Release`, which is the state this whole
@@ -117,27 +119,33 @@ image.
 
 ## Preparing a new version
 
+A job writes only its own key's state. A build of a version that has no
+checkout here prepares it (`checkout.sh sync`), and never falls back to another
+version's:
+
+- The fork at the commit being built, as one commit.
+- `gclient sync -D --with_branch_heads && gclient runhooks` in the build image,
+  which puts the Replay forks of v8, skia, webrtc and boringssl at their DEPS
+  revisions with everything else.
+- The backend, and last the stamp: a key without one is not prepared, and the
+  next `prepare` removes what an unfinished one left.
+
+One job of a key prepares it at a time; another job of that version waits for
+it (a lock next to the keys). `prepare` refuses if the volume has little space
+left, because every key shares it.
+
+By hand, the same, or a copy of another version's checkout without its build
+outputs:
+
 ```sh
 CHROMIUM_CHECKOUT_KEY=m140 CHROMIUM_REVISION=<commit or branch> \
-  replay_build_scripts/ci/checkout.sh prepare --from m108
+  replay_build_scripts/ci/checkout.sh prepare [--from m108]
 ```
-
-copies the nearest prepared checkout without its build outputs, checks out the
-revision the new version is for, and prints the `gclient sync` to run in the
-image. That sync is the one step of a new version that is not routine: this fork
-disabled per-build `gclient sync` ("may be too old for gclient sync to work
-properly", `common.mjs`), so for a milestone nobody has synced here before,
-expect it to need attention. It is also the step a rebase does anyway. `prepare`
-refuses if the volume has little space left, because every key shares it (and so
-do the backend's `linux_cpp_tests`, which run on this agent too).
-
-A build never prepares a checkout and never falls back to another version's: if
-the key has no checkout, the job fails and says what to run.
 
 ## On a build agent
 
-Every key is a directory somebody prepared. A build never makes one, never
-borrows another version's, and refuses a key that is a symlink.
+A key is a directory `prepare` made or `adopt` took over. A build refuses a key
+that is a symlink.
 
 There was a bridge, briefly: a key whose milestone matched whatever
 `/home/ubuntu/chromium` held claimed that tree by symlink, so the milestone the
