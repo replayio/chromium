@@ -149,7 +149,19 @@ void AudioDeviceThread::ThreadMain() {
     }
   }
 
-  if (!in_shutdown_.load()) {
+  // [RecordReplay] Do not report a socket error when recording or replaying.
+  // Upstream added this notification after the fork's M108 baseline, which had
+  // no OnSocketError at all and whose Blink implementation was an empty
+  // TODO, so there is no behaviour here to reproduce. It fires as this thread
+  // winds down, and it posts across threads: measured on the M158 leapfrog
+  // stack, the renderer's main thread closing an AudioContext parks in
+  // PlatformThreadBase::Join inside ~AudioDeviceThread while holding an
+  // ordered lock, this thread runs out of assert stream posting the
+  // notification through BlinkSchedulerSingleThreadTaskRunner, and two further
+  // threads pile up behind the lock. Byte-identical in six hanged processes
+  // over three draws. DSRC-431.
+  if (!in_shutdown_.load() &&
+      !recordreplay::IsRecordingOrReplaying("audio-device-socket-error")) {
     callback_->OnSocketError();
   }
 }
