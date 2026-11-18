@@ -159,6 +159,10 @@ class CC_EXPORT CategorizedWorkerPoolJob : public CategorizedWorkerPool {
   std::optional<TaskGraphWorkQueue::PrioritizedTask>
   GetNextTaskToRunWithLockAcquired(base::span<const TaskCategory> categories);
 
+  // [RecordReplay] Runs every ready task on the calling thread, see the
+  // definition.
+  void RecordReplayRunTasksInline();
+
   base::JobHandle* ScheduleTasksWithLockAcquired(NamespaceToken token,
                                                  TaskGraph* graph)
       EXCLUSIVE_LOCKS_REQUIRED(lock_);

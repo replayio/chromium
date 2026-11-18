@@ -320,6 +320,47 @@ void CategorizedWorkerPoolJob::FlushForTesting() {
   background_job_handle_.Join();
 }
 
+// [RecordReplay] Runs every task that is ready on the calling thread. A
+// repaint rasters after the replay has diverged from the recording, and
+// nothing then guarantees that the thread pool still has a worker to give this
+// pool's jobs: upstream deleted the dedicated raster threads the fork's M108
+// baseline relied on, which existed already in a forked pause child and slept
+// on the driver's own condition variable. A raster that never runs keeps the
+// repaint's pending tree from activating, so the repaint waits for a draw that
+// cannot happen. The tasks report back only by posting to their origin thread,
+// so running them here looks to the caller like a worker that happened to
+// finish before the call returned, which is a race the tile manager already
+// has with a fast worker. DSRC-426.
+void CategorizedWorkerPoolJob::RecordReplayRunTasksInline() {
+  while (true) {
+    std::optional<TaskGraphWorkQueue::PrioritizedTask> prioritized_task;
+    {
+      base::AutoLock lock(lock_);
+      prioritized_task =
+          GetNextTaskToRunWithLockAcquired(kNormalThreadPriorityCategories);
+      if (!prioritized_task) {
+        prioritized_task = GetNextTaskToRunWithLockAcquired(
+            kBackgroundThreadPriorityCategories);
+      }
+    }
+    if (!prioritized_task) {
+      return;
+    }
+
+    base::ScopedAllowBaseSyncPrimitives allow;
+    prioritized_task->task->RunOnWorkerThread();
+
+    {
+      base::AutoLock lock(lock_);
+      auto* task_namespace = prioritized_task->task_namespace.get();
+      work_queue_.CompleteTask(std::move(*prioritized_task));
+      if (work_queue_.HasFinishedRunningTasksInNamespace(task_namespace)) {
+        has_namespaces_with_finished_running_tasks_cv_.Signal();
+      }
+    }
+  }
+}
+
 void CategorizedWorkerPoolJob::ScheduleTasks(NamespaceToken token,
                                              TaskGraph* graph) {
   TRACE_EVENT2("disabled-by-default-cc.debug",
@@ -329,6 +370,11 @@ void CategorizedWorkerPoolJob::ScheduleTasks(NamespaceToken token,
   {
     base::AutoLock lock(lock_);
     job_handle_to_notify = ScheduleTasksWithLockAcquired(token, graph);
+  }
+  // [RecordReplay] After diverging the tasks run here instead of on a job.
+  if (recordreplay::HasDivergedFromRecording()) {
+    RecordReplayRunTasksInline();
+    return;
   }
   if (job_handle_to_notify) {
     job_handle_to_notify->NotifyConcurrencyIncrease();
@@ -347,6 +393,11 @@ void CategorizedWorkerPoolJob::ExternalDependencyCompletedForTask(
       // start a worker.
       job_handle_to_notify = GetJobHandleToNotifyWithLockAcquired();
     }
+  }
+  // [RecordReplay] After diverging the tasks run here instead of on a job.
+  if (recordreplay::HasDivergedFromRecording()) {
+    RecordReplayRunTasksInline();
+    return;
   }
   if (job_handle_to_notify) {
     job_handle_to_notify->NotifyConcurrencyIncrease();
