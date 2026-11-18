@@ -7,8 +7,9 @@
 # hash of this file, so a checkout always builds in the image its own branch
 # describes, and two Chromium versions in flight get two images.
 #
-# The package list is //Dockerfile.build's, unchanged: isolating builds should
-# not also change the build environment. The base is pinned by digest, because
+# The package list is //Dockerfile.build's, but for git (built from source
+# below): isolating builds should not also change the build environment. The
+# base is pinned by digest, because
 # bionic is end of life -- its apt archive can disappear or change under us, and
 # an image that cannot be rebuilt identically is not a pin.
 #
@@ -21,8 +22,21 @@
 FROM ubuntu:bionic@sha256:152dc042452c496007f07ca9127571cb9c29697f42acbfad72324b2bb2e43c98
 
 RUN apt-get update && \
-    apt-get install -y wget python clang llvm python3.8 mercurial git python3.8-distutils python3-pip nasm-mozilla curl make glib-2.0 glib2.0-dev libgtk-3-dev libdbus-glib-1-dev libxt-dev libpulse-dev unzip zip nodejs gperf python-setuptools lsof && \
+    apt-get install -y wget python clang llvm python3.8 mercurial python3.8-distutils python3-pip nasm-mozilla curl make glib-2.0 glib2.0-dev libgtk-3-dev libdbus-glib-1-dev libxt-dev libpulse-dev unzip zip nodejs gperf python-setuptools lsof \
+      gcc libc6-dev libcurl4-openssl-dev libexpat1-dev libssl-dev zlib1g-dev && \
     rm -rf /var/lib/apt/lists/*
+
+# git from source: the depot_tools pin below needs git 2.46+ (GIT_MIN_VERSION
+# in its git_common.py; its git_cache.py runs `git init --object-format`),
+# bionic has 2.17.
+ARG GIT_VERSION=2.47.3
+ARG GIT_SHA256=9c2eb1250781b3e5bfef098572d07fdf132d67e6c065e4307332ade9819a1501
+RUN curl -fsSL -o /tmp/git.tar.xz "https://mirrors.edge.kernel.org/pub/software/scm/git/git-$GIT_VERSION.tar.xz" && \
+    echo "$GIT_SHA256  /tmp/git.tar.xz" | sha256sum -c - && \
+    mkdir /tmp/git && tar -xJf /tmp/git.tar.xz -C /tmp/git --strip-components 1 && \
+    make -C /tmp/git -j"$(nproc)" prefix=/usr/local NO_TCLTK=1 NO_GETTEXT=1 NO_PERL=1 NO_PYTHON=1 install && \
+    rm -rf /tmp/git /tmp/git.tar.xz && \
+    git --version
 
 RUN groupadd -o -g 1000 ubuntu
 RUN useradd -o -m -s /bin/bash -g 1000 -u 1000 ubuntu

@@ -25,9 +25,10 @@ changed.
 | `sync-repos.mjs`, `upload-artifacts.sh` | the pipeline's sync and upload steps, against the key's checkout instead of the current directory. |
 | `tools.Dockerfile`, `in-tools-image.sh` | the image those two run in, as the agent's user with its home, network and AWS identity, so an agent needs only docker, git, the aws CLI and buildkite-agent. |
 
-The build image's node is 8.10 and its git is 2.17 (bionic), so anything
-`build.js` or these scripts run inside it has to work there: no `fs.rmSync`,
-no recursive `fs.mkdirSync`, no `git sparse-checkout`.
+The build image's node is 8.10 (bionic), so anything `build.js` or these
+scripts run inside it has to work there: no `fs.rmSync`, no recursive
+`fs.mkdirSync`. Its git is built from source to what the depot_tools pin needs
+(`Dockerfile`).
 
 Builds and the tools image run as the agent's user, whatever its uid, with the
 agent's `/etc/passwd` and `/etc/group`.
