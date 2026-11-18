@@ -16,7 +16,18 @@ echo "--- fetch $commit"
 # One commit, no history: the fork's history is ~56 GB and a build reads none.
 git init -q .
 git config remote.origin.url "$fork_url"
-git fetch --depth 1 origin "$commit"
+# Retried: GitHub throttles reads of this fork network (HTTP 429), and a commit
+# that does not exist looks the same to git's exit status.
+for attempt in 1 2 3 4 5; do
+  if timeout --foreground 900 git fetch --depth 1 origin "$commit"; then
+    break
+  fi
+  if [ "$attempt" = 5 ]; then
+    echo "sync: fetching $commit from $fork_url failed" >&2
+    exit 1
+  fi
+  sleep $((attempt * 60))
+done
 git checkout -f --detach FETCH_HEAD
 git log -1 --format='%H %s'
 

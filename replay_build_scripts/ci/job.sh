@@ -1,7 +1,7 @@
 #!/bin/bash
 # One Buildkite job: build Chromium 157 at this commit, upload the logs and,
 # if it built, the runtime. Runs on the agent, from the job's own clone of
-# this directory (bootstrap.sh); "this commit" is that clone's HEAD.
+# this directory (.buildkite/pipeline.yml); "this commit" is that clone's HEAD.
 #
 # Environment (set on the Buildkite build, not in pipeline.yml: a step's env
 # would override it):
