@@ -21,7 +21,7 @@ changed.
 | `build-image.sh` | builds that image and tags it with a hash of the Dockerfile, so a branch that changes it gets its own image and the two coexist. |
 | `checkout.sh` | the per-version checkouts: which one this tree uses, syncing it, preparing a new one, and wiping one. |
 | `build-in-container.sh` | runs the build (or anything else) in the image, with one version's directory as the only writable mount. |
-| `bootstrap.sh` | the four seconds at the start of a job that put this commit's scripts on disk, before any checkout is involved. |
+| `bootstrap.sh` | puts this commit's scripts on disk in a few seconds, before any checkout is involved, for steps without a checkout of their own (the Chromium step does the same fetch inline). |
 | `sync-repos.mjs`, `upload-artifacts.sh` | the pipeline's sync and upload steps, against the key's checkout instead of the current directory. |
 
 The build image's node is 8.10 and its git is 2.17 (bionic), so anything
@@ -147,8 +147,8 @@ to the same tree, and no prepared checkout at all; build 5567 took the m108 tree
 as `m110` and died in `gn gen` on an identifier that only m108's pinned pdfium
 declares.
 
-Those upload steps now take this commit's scripts by URL instead of resetting a
-checkout. Removing this does not by itself end the arrangement: every branch
+Those upload steps now read this commit's scripts with git instead of resetting
+a checkout. Removing this does not by itself end the arrangement: every branch
 runs its own copy of these scripts, so a branch that has not been rebased still
 has the symlink code. What ends it is the agent: once `/home/ubuntu/chromium` is
 gone, every copy fails over to `require`'s message.
