@@ -49,8 +49,9 @@
 #   checkout.sh wipe-out <key>      remove only that key's build outputs
 #
 # Nothing here writes outside the key's own directory but gclient's mirrors in
-# .git-cache, which only ever gain objects, so a build cannot damage another
-# version's state, and `wipe` is the whole recovery procedure.
+# .git-cache, which only ever gain objects, and the key's prepare lock next to
+# it, so a build cannot damage another version's state, and `wipe` is the whole
+# recovery procedure.
 set -euo pipefail
 
 # Bumped when the layout changes in a way that makes older directories
