@@ -35,12 +35,28 @@ steps:
     key: "build-chromium-linux-x86_64"
     # depends_on: "preflight-checks"
     timeout_in_minutes: 360
-    # No cd: the job works in its own (empty) workspace, not in a checkout
-    # shared with every other build. replay_build_scripts/ci/checkout.sh picks
-    # the checkout for this tree's Chromium version and nothing else writes to
-    # it; see replay_build_scripts/ci/README.md.
+    # No cd: the job works in its own workspace, a small checkout of this
+    # commit's build scripts, not in a checkout shared with every other build.
+    # replay_build_scripts/ci/checkout.sh picks the checkout for this tree's
+    # Chromium version and nothing else writes to it; see
+    # replay_build_scripts/ci/README.md.
     plugins:
-      - thedyrt/skip-checkout#v0.1.1: ~
+      # The workspace: this commit's replay_build_scripts/ and chrome/VERSION
+      # (checkout.sh key), shallow, blob-less and sparse, over the agent's SSH
+      # identity. Everything the job runs is repository content at
+      # $$BUILDKITE_COMMIT, instead of whatever a shared checkout happened to
+      # hold (replayio/chromium#1544), and nothing is read anonymously: GitHub
+      # throttles unauthenticated reads of this fork network (HTTP 429).
+      # Patterns, not cone directories: the agent's git (2.25) defaults to
+      # non-cone sparse checkout. No ssh-keyscan: the agent already knows
+      # github.com, and the scan would append to its known_hosts every job.
+      - sparse-checkout#v1.11.0:
+          paths:
+            - "/replay_build_scripts/"
+            - "/chrome/VERSION"
+          fetch_attempts: 5
+          clean_checkout: only-upon-failure
+          skip_ssh_keyscan: true
       - seek-oss/aws-sm#v2.3.1:
           region: us-east-2
           env:
@@ -78,11 +94,10 @@ steps:
       # (identical sha1s), naming a build this job never made.
       #
       # Inline and first, rather than clean_artifacts.mjs where this used to be:
-      # that ran fifth, so every way of failing before it -- reading the
-      # bootstrap script below, the bootstrap, the container cleanup, the
-      # checkout -- left the previous build's artifacts in place to be
-      # uploaded. This needs no scripts, no node, and nothing to have succeeded
-      # first.
+      # that ran fifth, so every way of failing before it -- the container
+      # cleanup, the checkout -- left the previous build's artifacts in place
+      # to be uploaded. This needs no scripts, no node, and nothing to have
+      # succeeded first.
       rm -rf "$${BUILDKITE_BUILD_CHECKOUT_PATH:-$$PWD}/build_id"
       # The EngFlow client cert and key must not outlive the job, whatever
       # fails. They used to be written next to the shared checkout, where they
@@ -90,17 +105,7 @@ steps:
       trap 'rm -f "$$PWD/engflow.crt" "$$PWD/engflow.key"' EXIT
       export RBE_tls_client_auth_cert="$$PWD/engflow.crt"
       export RBE_tls_client_auth_key="$$PWD/engflow.key"
-      # The one thing this job does not take from a checkout: the script that
-      # fetches the rest of this commit's build scripts. Everything after this
-      # line is repository content at $$BUILDKITE_COMMIT, instead of whatever a
-      # shared checkout happened to hold (replayio/chromium#1544). The pipeline
-      # settings read this file from that same commit, only for a named commit
-      # that has ci/, and hand it over in the build's meta-data: GitHub throttles
-      # unauthenticated reads of this fork network (HTTP 429), so it is not
-      # fetched from raw.githubusercontent.com.
-      buildkite-agent meta-data get replay-ci-bootstrap > ci-bootstrap.sh
-      be_cmd bootstrap-scripts -- bash ci-bootstrap.sh
-      SCRIPTS=.ci-boot/replay_build_scripts
+      SCRIPTS=replay_build_scripts
       KEY=$$("$$SCRIPTS/ci/checkout.sh" key)
       echo "checkout key: $$KEY"
       # Before anything touches the checkout, not after: a container left by a

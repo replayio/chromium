@@ -71,9 +71,9 @@ fork_url() {
 }
 
 # The milestone of the tree this script came from. chrome/VERSION is in the tree
-# being built, so a job reads it from the small clone it bootstrapped these
-# scripts with, before any big checkout is involved: `git show` works there even
-# though chrome/ is not checked out.
+# being built, so a job reads it from the small checkout these scripts came
+# from, before any big checkout is involved: the Chromium step checks the file
+# out with them, and in a sparse clone without it `git show` still works.
 version_major() {
   local v
   if [ -f "$repo/chrome/VERSION" ]; then

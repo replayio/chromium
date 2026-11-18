@@ -31,9 +31,10 @@
 #   then ignores it, fetching every blob of the commit (measured: still going
 #   after 1.9 GB) instead of the ~70 MB of trees this needs.
 #
-# This is the one file a job does not run from a checkout: the pipeline settings
-# read it from the commit and hand it over in the build's meta-data
-# (.buildkite/pipeline.yml says how). Everything after it is ordinary repository
+# The Chromium step does not use this: its sparse-checkout plugin checks out the
+# same files (.buildkite/pipeline.yml). This is for steps that have no checkout
+# of their own, such as the manual-chromium-branch-build pipeline upload, which
+# fetches this one file and runs it. Everything after it is ordinary repository
 # content at the right commit.
 set -euo pipefail
 
