@@ -259,6 +259,23 @@ std::unique_ptr<AggregatedRenderPass> CompositorRenderPass::DeepCopyAggregated()
     }
     DCHECK(quad->shared_quad_state == *sqs_iter);
 
+    // [RecordReplay] Leave a surface's content out. This copy stands in for the
+    // display compositor's aggregation, which is where a SurfaceDrawQuad would
+    // normally be replaced by the quads of the frame the surface holds, and
+    // there is no aggregator here: a repaint draws in the renderer that
+    // submitted the frame. A canvas moved off the main thread with
+    // transferControlToOffscreen gets its own frame sink and so puts such a
+    // quad in the renderer's frame, and SoftwareRenderer::DoDrawQuad has no
+    // case for one. Up to M108 it reached NOTREACHED() there and was silently
+    // skipped, because NOTREACHED() expanded to nothing in a release build.
+    // Upstream has since made it abort, so the same quad now kills the
+    // recorder. Dropping it here keeps the drawing M108 did and leaves
+    // upstream's renderer alone, since this method is the fork's own and has
+    // one caller. DSRC-437.
+    if (quad->material == DrawQuad::Material::kSurfaceContent) {
+      continue;
+    }
+
     if (quad->material == DrawQuad::Material::kCompositorRenderPass) {
       const auto* pass_quad = CompositorRenderPassDrawQuad::MaterialCast(quad);
       auto nid = AggregatedRenderPassId::FromUnsafeValue(pass_quad->render_pass_id.GetUnsafeValue());
