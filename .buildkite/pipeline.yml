@@ -89,13 +89,15 @@ steps:
       trap 'rm -f "$$PWD/engflow.crt" "$$PWD/engflow.key"' EXIT
       export RBE_tls_client_auth_cert="$$PWD/engflow.crt"
       export RBE_tls_client_auth_key="$$PWD/engflow.key"
-      # The one thing this job takes by URL, at the commit being built: the
-      # script that fetches the rest of this commit's build scripts. Everything
-      # after this line is repository content at $$BUILDKITE_COMMIT, instead of
-      # whatever a shared checkout happened to hold (replayio/chromium#1544).
-      # The pipeline settings upload this file from that same commit, and only
-      # for a named commit that has ci/.
-      curl -fsS "https://raw.githubusercontent.com/replayio/chromium/$$BUILDKITE_COMMIT/replay_build_scripts/ci/bootstrap.sh" -o ci-bootstrap.sh
+      # The one thing this job does not take from a checkout: the script that
+      # fetches the rest of this commit's build scripts. Everything after this
+      # line is repository content at $$BUILDKITE_COMMIT, instead of whatever a
+      # shared checkout happened to hold (replayio/chromium#1544). The pipeline
+      # settings read this file from that same commit, only for a named commit
+      # that has ci/, and hand it over in the build's meta-data: GitHub throttles
+      # unauthenticated reads of this fork network (HTTP 429), so it is not
+      # fetched from raw.githubusercontent.com.
+      buildkite-agent meta-data get replay-ci-bootstrap > ci-bootstrap.sh
       be_cmd bootstrap-scripts -- bash ci-bootstrap.sh
       SCRIPTS=.ci-boot/replay_build_scripts
       KEY=$$("$$SCRIPTS/ci/checkout.sh" key)
