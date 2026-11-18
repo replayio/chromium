@@ -472,6 +472,14 @@ static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
   // the frame that path means to answer with anyway (ProxyMain::
   // BeginMainFrameWithBlocking), though of a window this repaint did not pick
   // if none owns the paint surface.
+  //
+  // That last case is not something releasing the calls introduces: on the
+  // skipped-commit path nothing blocked between here and gRepaintEvent being
+  // set before this release existed either, so a draw already in flight could
+  // answer the repaint. Closing it means a blocking round trip to the impl
+  // thread before gRepaintEvent is set, which is more fork-only machinery than
+  // an unobserved path is worth: no case here has a layerless page at a pause.
+  // Worth building when one fails.
   recordreplay::SignalInFlightSyncCalls();
 
   gCurrentCompositorProxy = RepaintCompositorProxy();
