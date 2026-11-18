@@ -165,22 +165,8 @@ void EnsureProcessTerminated(Process process) {
     return;
   }
 
-  // [Replay] A child that is still alive gets long enough to finish its
-  // recording before it is killed.  Process::TerminateInternal already does
-  // nothing while recording, "the child process is responsible for exiting so
-  // that it can finish uploading any in progress recording", but the SIGKILL
-  // BackgroundReaper sends after this wait does not go through it, so two
-  // seconds was all a recorded renderer got once its host went away.  The
-  // driver's own budget for ending a recording is longer than that: a
-  // termination signal gives the main thread 2 s to reach a safe point
-  // (SafePointTimeoutMs) and the watchdog then up to 30 s to write the
-  // recording out (FinishTimeoutMs), so 2 s here killed renderers in the
-  // middle of writing -- leaving a recording that recordings.log never
-  // reports as written -- or before they had written anything at all.  The
-  // wait matches the driver's two timeouts; a child that is genuinely hung is
-  // still killed, 30 s later than before.  DSRC-390.
   PlatformThread::CreateNonJoinable(
-      0, MakeSelfDeleting<BackgroundReaper>(std::move(process), Seconds(32)));
+      0, MakeSelfDeleting<BackgroundReaper>(std::move(process), Seconds(2)));
 }
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)

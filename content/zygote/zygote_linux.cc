@@ -181,13 +181,10 @@ bool Zygote::ReapChild(const base::TimeTicks& now, ZygoteProcessInfo* child) {
     }
     return r == pid;
   }
-  // [Replay] The same grace base::EnsureProcessTerminated gives a child that
-  // is still writing its recording, for the renderers the zygote forked, which
-  // the browser reaps through here instead. See kill_posix.cc. DSRC-390.
-  if ((now - child->time_of_reap_request).InSeconds() < 32) {
+  if ((now - child->time_of_reap_request).InSeconds() < 2) {
     return false;
   }
-  // If the process has been requested reaped >= 32 seconds ago, kill it.
+  // If the process has been requested reaped >= 2 seconds ago, kill it.
   if (!child->sent_sigkill) {
     if (kill(pid, SIGKILL) != 0)
       DPLOG(ERROR) << "Sending SIGKILL to process " << pid << " failed";
