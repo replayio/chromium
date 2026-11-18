@@ -242,6 +242,11 @@ void UnlistInFlightSyncCall(base::WaitableEvent* event);
 // alone brings the hang back. The handling belongs in the callee, one site at
 // a time, the way VerifyFlush does it, and is worth writing when a site is
 // seen to be reached. No case in the chromium-recording suite reaches one.
+//
+// Same-sequence sync calls are never listed, so a divergence can still strand
+// them: they wait inside InterfaceEndpointClient::SendMessage through
+// controller_->SyncWatch(), on the sequence's own sync handle registry, and
+// not on a completion event of their own for this to signal.
 void SignalInFlightSyncCalls();
 
 void RegisterPointer(const char* name, const void* ptr);
