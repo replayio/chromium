@@ -1,8 +1,8 @@
 # Isolated Chromium builds
 
 Every Chromium build -- on CI and here -- runs in an image this repository
-describes, against a checkout that belongs to one Chromium version, and writes
-nothing outside that version's own directory.
+describes, against a checkout that belongs to one Chromium version, and touches
+no other version's state while any job uses it.
 
 Before this, all of it was one directory on one agent: `/home/ubuntu/chromium`,
 with one `src`, one `out/Release`, one gclient solution, one backend checkout and
@@ -81,6 +81,28 @@ Not shared on purpose: the working files (they differ per milestone, and a build
 or a hook writes in them) and `out/Release`, which is the state this whole
 arrangement exists to keep apart.
 
+### Reclaim
+
+Keys and images accumulate: every milestone, `CHROMIUM_CHECKOUT_KEY` and
+Dockerfile change leaves one behind, and a pool host's daily machine image
+carries them to the next host. So before it syncs or prepares, a job checks the
+volume, and below `CHROMIUM_CHECKOUTS_MIN_FREE_GB` (150) free it removes the
+least recently used key or image that no job is using, one at a time, until
+there is room again:
+
+- A key's last use is its stamp's mtime, which `require` touches. An image's is
+  a mark under `.images/` that `build-image.sh ensure` touches. State with no
+  record of use goes first.
+- A job holds its key's use lock (`.<key>.use`) shared from the moment it knows
+  its key until it ends. Removal takes it exclusively and skips a key it cannot
+  get, and docker refuses an image a container uses, so nothing in use goes.
+  This job's own key and images are never candidates.
+- A key goes whole, stamp first: it is then unprepared, and its next job
+  prepares it again. `.git-cache` is never removed: every key borrows from it.
+
+`prepare` still refuses below the same threshold if reclaim could not reach it.
+`checkout.sh reclaim` runs it by hand; `wipe` and `wipe-out` refuse a key in use.
+
 ## Using it
 
 ```sh
@@ -119,9 +141,9 @@ image.
 
 ## Preparing a new version
 
-A job writes only its own key's state. A build of a version that has no
-checkout here prepares it (`checkout.sh sync`), and never falls back to another
-version's:
+A job writes only its own key's state, apart from reclaim's removal of unused
+state. A build of a version that has no checkout here prepares it
+(`checkout.sh sync`), and never falls back to another version's:
 
 - The fork at the commit being built, as one commit.
 - `gclient sync -D --with_branch_heads && gclient runhooks` in the build image,
@@ -131,8 +153,8 @@ version's:
   next `prepare` removes what an unfinished one left.
 
 One job of a key prepares it at a time; another job of that version waits for
-it (a lock next to the keys). `prepare` refuses if the volume has little space
-left, because every key shares it.
+it (a lock next to the keys). Every key shares the volume, so `prepare` first
+reclaims, then refuses if there is still too little space left.
 
 By hand, the same, or a copy of another version's checkout without its build
 outputs:

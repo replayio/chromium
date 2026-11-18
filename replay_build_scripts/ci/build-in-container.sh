@@ -49,6 +49,10 @@ key=${root%/}
 key=${key##*/}
 name="chromium-build-${key//[^A-Za-z0-9_.-]/-}-${BUILDKITE_JOB_ID:-$$}"
 
+# Held until this run ends: no reclaim removes the key under it (checkout.sh).
+exec {use}>"$("$dir/checkout.sh" use-lock "$key")"
+flock -s "$use"
+
 args=(
   run --name "$name" --rm --init
   -v "$root:/chromium"
