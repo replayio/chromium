@@ -281,8 +281,14 @@ constexpr base::TimeDelta kCompositorLockTimeout = base::Milliseconds(150);
 // Flag to control whether redirect URLs are being sanitized before sending
 // them to the renderer process as part of the navigation.
 // See https://crbug.com/40095391.
+//
+// [RecordReplay] Disabled in this fork for the same reason as
+// kSanitizeOriginalUrlDuringNavigation, which the comment there sets out. The
+// intermediate URLs of a redirect chain reach a recording only through the
+// commit params, and SanitizeRedirectsForCommit reduces every one of them, and
+// every redirect_info's new URL bar the last, to its origin. DSRC-430.
 BASE_FEATURE(kSanitizeRedirectUrlsDuringNavigation,
-             base::FEATURE_ENABLED_BY_DEFAULT);
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Killswitch to replace the current NavigationEntry for same-URL navigations
 // recovering from an error document. See https://crbug.com/396645696.

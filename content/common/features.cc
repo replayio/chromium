@@ -754,8 +754,19 @@ BASE_FEATURE(kSanitizeFailedSubframeNavigationUrls,
 // Controls whether the `original_url` contains the full URL or just the
 // sanitized origin when sent to the renderer on commit.
 // See https://crbug.com/495463654.
+//
+// [RecordReplay] Disabled in this fork. A recording's navigation requests are
+// reported by the renderer out of its commit params, so a sanitized original
+// URL is recorded as the bare origin for every redirected navigation and the
+// request that was actually redirected cannot be identified. The browser has
+// no way to tell a recorded renderer from any other one, because the harness
+// records through RECORD_ALL_CONTENT, which only the child process reads, so
+// this cannot be narrowed to a recording tab. Turning it off restores what the
+// fork's M108 baseline sent to every renderer, and the sandbox escape it
+// guards against does not apply to a browser the fork already runs with
+// --no-sandbox. DSRC-430.
 BASE_FEATURE(kSanitizeOriginalUrlDuringNavigation,
-             base::FEATURE_ENABLED_BY_DEFAULT);
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 BASE_FEATURE(kServiceWorkerAvoidMainThreadForInitialization,
              base::FEATURE_ENABLED_BY_DEFAULT);
