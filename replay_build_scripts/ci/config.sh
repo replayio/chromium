@@ -17,9 +17,9 @@ readonly CHECKOUT_ROOT=$HOME/chromium-checkouts/$CHECKOUT_KEY
 readonly CHECKOUT_STAMP=$CHECKOUT_ROOT/.replay-checkout
 readonly CHECKOUT_SCHEME=1
 
-# What the build container fetches the tree from, as ./gclient names it. Not
-# the URL the job's own clone came from: that is the agent's SSH identity,
-# which the container does not have.
+# src's remote URL inside the build container, as ./gclient names it. Nothing
+# is fetched from it: checkout.sh fetches src on the host, over the job clone's
+# remote (the agent's SSH identity), which the container does not have.
 readonly FORK_URL=https://github.com/replayio/chromium.git
 
 readonly IMAGE_REPO=chromium157-build
@@ -33,6 +33,23 @@ readonly IMAGE_MIN_FREE_GB=20
 die() {
   echo "ci157: $*" >&2
   exit 1
+}
+
+# github_read <command...>: a GitHub read, retried. GitHub queues reads of the
+# fork network under load, and a commit that does not exist looks the same to
+# git's exit status. --foreground keeps the command in the job's process group,
+# so cancelling the job stops it.
+github_read() {
+  local attempt
+  for attempt in 1 2 3 4 5; do
+    if timeout --foreground 900 "$@"; then
+      return 0
+    fi
+    if [ "$attempt" = 5 ]; then
+      die "reading from GitHub failed: $*"
+    fi
+    sleep $((attempt * 60))
+  done
 }
 
 stamp_value() {

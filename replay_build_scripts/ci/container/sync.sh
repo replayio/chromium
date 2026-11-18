@@ -1,7 +1,8 @@
 #!/bin/bash
-# In the build image: put /chromium/src at <commit> of <fork url>, and
-# everything its DEPS pins (the Replay forks of v8, skia, webrtc and boringssl
-# included) at that commit's revisions.
+# In the build image: put /chromium/src at <commit>, which checkout.sh fetched
+# on the host, and everything its DEPS pins (the Replay forks of v8, skia,
+# webrtc and boringssl included) at that commit's revisions. <fork url> is
+# src's remote URL, as .gclient names it; nothing is fetched from it.
 #
 #   sync.sh <fork url> <commit>
 #
@@ -12,23 +13,18 @@ fork_url=${1:?sync: no fork url}
 commit=${2:?sync: no commit}
 
 cd /chromium/src
-echo "--- fetch $commit"
-# One commit, no history: the fork's history is ~56 GB and a build reads none.
+echo "--- checkout $commit"
 git init -q .
 git config remote.origin.url "$fork_url"
-# Retried: GitHub throttles reads of this fork network (HTTP 429), and a commit
-# that does not exist looks the same to git's exit status.
-for attempt in 1 2 3 4 5; do
-  if timeout --foreground 900 git fetch --depth 1 origin "$commit"; then
-    break
-  fi
-  if [ "$attempt" = 5 ]; then
-    echo "sync: fetching $commit from $fork_url failed" >&2
-    exit 1
-  fi
-  sleep $((attempt * 60))
-done
-git checkout -f --detach FETCH_HEAD
+# gclient's GetRemoteHeadRef (depot_tools scm.py) reads this ref first and
+# otherwise asks the remote, anonymously. Not master: a ref ending in master
+# makes it ask the remote anyway.
+git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
+if ! git rev-list --quiet --objects --no-walk "$commit"; then
+  echo "sync: $commit is not complete in /chromium/src: checkout.sh sync fetches it on the host" >&2
+  exit 1
+fi
+git checkout -f --detach "$commit"
 git log -1 --format='%H %s'
 
 cd /chromium
