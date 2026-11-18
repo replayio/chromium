@@ -97,7 +97,21 @@ void AudioDeviceThread::ThreadMain() {
   uint32_t record_replay_iteration_idx = 0;
   uint32_t buffer_index = 0;
   while (true) {
-    if (in_shutdown_.load()) {
+    // [RecordReplay] Follow the recording's answer for this check. Upstream
+    // added it after the fork's M108 baseline, whose loop had no shutdown flag
+    // at all and left on a recorded quantity every time: the bytes read, the
+    // exit signal in the data, or the bytes sent. This check is a bare atomic
+    // read of a flag the main thread sets as it destroys this thread, so the
+    // two sides need not agree on it, and disagreeing changes how many times
+    // the loop runs. Measured on the M158 leapfrog stack: the replay's audio
+    // thread runs one iteration further than the recording, exhausts its
+    // assert stream inside Receive, and the main thread waits forever in
+    // PlatformThreadBase::Join while holding an ordered lock. Recording the
+    // value rather than skipping the check keeps the recording leaving this
+    // loop the way upstream intends, since the comment above Shutdown says
+    // upstream no longer relies on the socket alone to unblock it. DSRC-432.
+    if (recordreplay::RecordReplayValue("AudioDeviceThread::InShutdown",
+                                        in_shutdown_.load())) {
       break;
     }
     uint32_t pending_data = 0;
