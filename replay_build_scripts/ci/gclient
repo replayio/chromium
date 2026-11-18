@@ -1,8 +1,8 @@
 # gclient solution of the Chromium 157 CI checkout. checkout.sh installs it as
 # <root>/.gclient before every sync.
 #
-# src is unmanaged: container/sync.sh puts it at the commit being built, from
-# config.sh's FORK_URL, the same URL as below.
+# src is unmanaged: checkout.sh fetches the commit being built on the host and
+# container/sync.sh checks it out. config.sh's FORK_URL is the same URL as below.
 # custom_vars feed DEPS' configure_siso hook, which writes
 # build/config/siso/.sisoenv and copies the backend config (a path relative to
 # build/config/siso/backend_config) to backend.star. Without them the hook

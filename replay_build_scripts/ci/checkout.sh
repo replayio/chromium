@@ -82,10 +82,40 @@ remove_stale_tmp_packs() {
 }
 
 sync() {
-  local commit
+  local commit url src=$CHECKOUT_ROOT/src lock holder
   commit=$(git -C "$repo" rev-parse HEAD)
+  url=$(git -C "$repo" config remote.origin.url) || die "no remote.origin.url in $repo"
   ensure_root
   remove_stale_tmp_packs
+  # src's commit is fetched here, on the host, over the remote this script's
+  # clone came from: the agent's SSH identity. The container has none, and
+  # GitHub throttles anonymous reads of this fork network (HTTP 429). One
+  # commit, no history: the fork's history is ~56 GB and a build reads none.
+  [ -d "$src/.git" ] || git init -q "$src"
+  git -C "$src" config gc.auto 0
+  # A fetch killed by SIGKILL leaves shallow.lock, and every later --depth
+  # fetch then fails. Removed unless a process has it open.
+  lock=$src/.git/shallow.lock
+  if [ -e "$lock" ]; then
+    holder=$(find /proc/[0-9]*/fd -maxdepth 1 -lname "$lock" -print -quit 2>/dev/null || true)
+    if [ -n "$holder" ]; then
+      die "$lock is open ($holder): another fetch is running in $src"
+    fi
+    echo "removing stale $lock"
+    rm -f "$lock"
+  fi
+  # Skipped when the commit and every object of its tree are present: a killed
+  # fetch of fewer than fetch.unpackLimit objects leaves loose objects without
+  # the rest.
+  if git -C "$src" rev-list --quiet --objects --no-walk "$commit"; then
+    echo "--- $commit is complete in $src: not fetched"
+  else
+    echo "--- fetch $commit"
+    github_read git -c protocol.version=2 -C "$src" fetch -q --depth 1 "$url" "$commit"
+    # A ref, so the next fetch offers this commit as a have and receives only
+    # what changed: src has no other refs, and fetch negotiates from refs.
+    git -C "$src" update-ref refs/ci157/fetched "$commit"
+  fi
   cp "$dir/gclient" "$CHECKOUT_ROOT/.gclient"
   echo "--- checkout $CHECKOUT_ROOT -> $commit"
   "$dir/build-in-container.sh" -- /ci/container/sync.sh "$FORK_URL" "$commit"
