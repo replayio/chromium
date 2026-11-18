@@ -48,8 +48,15 @@ TimeTicks CapAtOneDay(TimeTicks next_run_time, LazyNow* lazy_now) {
   return std::min(next_run_time, lazy_now->Now() + Days(1));
 }
 
+// [RecordReplay] Off, which is the shape the fork's M108 baseline had: neither
+// this feature nor the BeginNativeWorkBeforeDoWork path it gates exists there,
+// so the epoll dispatch path took no WorkDeduplicator lock at all. With it on,
+// render/widget-shutdown-after-cross-site-navigations diverges with the
+// recording holding OrderedLock WorkDeduplicator.state_ where the replay reads
+// a clock, which is a difference in the loop's call structure rather than in
+// which events it dispatched. DSRC-429.
 BASE_FEATURE(kAvoidScheduleWorkDuringNativeEventProcessing,
-             base::FEATURE_ENABLED_BY_DEFAULT);
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 BASE_FEATURE(kCurrentTaskRunnerInheritsThreadType,
              base::FEATURE_DISABLED_BY_DEFAULT);
