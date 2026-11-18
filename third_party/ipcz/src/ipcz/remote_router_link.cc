@@ -406,34 +406,45 @@ void RemoteRouterLink::MarkSideStable() {
 }
 
 bool RemoteRouterLink::TryLockForBypass(const NodeName& bypass_request_source) {
-  // [Replay] Decline proxy bypass while recording or replaying.
+  // [Replay] Record the bypass decision at the consume site, the same shape
+  // TryLockForClosure uses below. The link state lives in peer-written shared
+  // memory, so whether the lock was taken is not recoverable in a replay, and
+  // recording inside RouterLinkState::TryLock emitted the event on one side
+  // only when that was tried for TryLockForClosure (DSRC-241).
   //
-  // MEASURED, and the reason this is a decline rather than a recorded value:
-  // recording the decision instead -- the TryLockForClosure shape below -- and
-  // letting the bypass proceed moved the first divergence BACKWARDS, from
-  // order 24659 to 8807 (`rec: Call clock_gettime` / `rep: [RUN-1307-1773]
-  // ChannelLinux::Write`).  Pinning this one value re-enables the whole bypass
-  // path, whose other reads of peer-written shared state are not recorded, so
-  // it buys one pinned branch and exposes several unpinned ones.
+  // This replaces a hard decline. That decline kept the proxy in place for the
+  // life of every route while recording, and because closure only propagates
+  // outward from a central link, a route that never went central never sent
+  // closure from this end. That cost was predicted in this comment and has now
+  // been observed twice: gc/cache-put-response-after-blob-collected hangs
+  // because the browser never receives a data pipe's close, and a primordial
+  // replay diverges at order 2959 with the recording releasing 174 Router refs
+  // through Router::Flush <- AcceptRouteClosureFrom where the replay releases
+  // 124 and never gets there.
   //
-  // KNOWN COST, not yet observed in a test: upstream's failure to lock is
-  // transient and retried through the link state's waiting bit, which a hard
-  // false never sets, so the proxy stays in place for the life of the route.
-  // Closure only propagates outward under `on_central_link && ... &&
-  // TryLockForClosure()` (router.cc), so a route that never goes central never
-  // sends closure when THIS end is the one still holding the proxy.  Properly
-  // fixing that means recording the rest of the bypass path's shared reads,
-  // which is a larger port than this stage is paying for.  DSRC-238.
-  if (recordreplay::IsRecordingOrReplaying()) {
-    return false;
-  }
-
+  // An earlier attempt at this pin moved the first divergence backwards, from
+  // order 24659 to 8807 (rec: Call clock_gettime / rep: [RUN-1307-1773]
+  // ChannelLinux::Write), because re-enabling the bypass path exposed reads
+  // further along it. That no longer reproduces: with this pin in place the
+  // capture over gc/cache-put-response-after-blob-collected and
+  // webassembly/module-tiered-up-by-workers-at-once holds no ChannelLinux::Write
+  // mismatch and no fatal assert mismatch of any kind. The reads it used to
+  // expose are evidently covered by the pins that have landed since, the
+  // TryLockForClosure and CanNodeRequestBypass pins beside it among them.
+  // DSRC-238.
   RouterLinkState* state = GetLinkState();
-  if (!state || !state->TryLock(side_)) {
+  if (!recordreplay::RecordReplayValue(
+          "RemoteRouterLink::TryLockForBypass",
+          state && state->TryLock(side_))) {
     return false;
   }
 
-  state->allowed_bypass_request_source.StoreRelease(bypass_request_source);
+  // The recorded decision can be true on a replay whose link state the shared
+  // allocator never handed back, so the store is guarded where the record-time
+  // path did not need to be. Nothing reads it in a replay anyway.
+  if (state) {
+    state->allowed_bypass_request_source.StoreRelease(bypass_request_source);
+  }
   return true;
 }
 
