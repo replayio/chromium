@@ -41,20 +41,27 @@ steps:
     # Chromium version and nothing else writes to it; see
     # replay_build_scripts/ci/README.md.
     plugins:
-      # The workspace: this commit's replay_build_scripts/ and chrome/VERSION
-      # (checkout.sh key), shallow, blob-less and sparse, over the agent's SSH
-      # identity. Everything the job runs is repository content at
-      # $$BUILDKITE_COMMIT, instead of whatever a shared checkout happened to
-      # hold (replayio/chromium#1544), and nothing is read anonymously: GitHub
-      # throttles unauthenticated reads of this fork network (HTTP 429).
-      # Patterns, not cone directories: the agent's git (2.25) defaults to
-      # non-cone sparse checkout. No ssh-keyscan: the agent already knows
-      # github.com, and the scan would append to its known_hosts every job.
+      # The workspace (the plugin appends -sparse to the checkout path): this
+      # commit's replay_build_scripts/ and chrome/VERSION (checkout.sh key),
+      # shallow, blob-less and sparse, over the agent's SSH identity. Everything
+      # the job runs is repository content at $BUILDKITE_COMMIT, instead of
+      # whatever a shared checkout happened to hold (replayio/chromium#1544),
+      # and nothing is read anonymously: GitHub throttles unauthenticated reads
+      # of this fork network (HTTP 429).
+      # - Patterns, not cone directories: the agent's git (2.25) defaults to
+      #   non-cone sparse checkout. Revisit if that git becomes 2.37 or newer,
+      #   where cone mode is the default.
+      # - Clone and fetch retry with backoff (10 attempts, about 8.5 min); the
+      #   checkout's blob reads retry once, after a clean.
+      # - A workspace left broken (e.g. a job killed mid-clone) is not repaired
+      #   by the plugin: rebuild with BUILDKITE_CLEAN_CHECKOUT=true.
+      # - No ssh-keyscan: the agent already knows github.com, and the scan
+      #   would append to its known_hosts every job.
       - sparse-checkout#v1.11.0:
           paths:
             - "/replay_build_scripts/"
             - "/chrome/VERSION"
-          fetch_attempts: 5
+          fetch_attempts: 10
           clean_checkout: only-upon-failure
           skip_ssh_keyscan: true
       - seek-oss/aws-sm#v2.3.1:
@@ -105,6 +112,13 @@ steps:
       trap 'rm -f "$$PWD/engflow.crt" "$$PWD/engflow.key"' EXIT
       export RBE_tls_client_auth_cert="$$PWD/engflow.crt"
       export RBE_tls_client_auth_key="$$PWD/engflow.key"
+      # A build of HEAD (manual-chromium-branch-build from the UI) builds the
+      # branch tip the plugin checked out, so the tree and these scripts are
+      # one commit. checkout.sh refuses a bare HEAD.
+      if [ "$$BUILDKITE_COMMIT" = "HEAD" ] && [ -z "$${CHROMIUM_REVISION:-}" ]; then
+        CHROMIUM_REVISION=$$(git rev-parse --verify HEAD)
+        export CHROMIUM_REVISION
+      fi
       SCRIPTS=replay_build_scripts
       KEY=$$("$$SCRIPTS/ci/checkout.sh" key)
       echo "checkout key: $$KEY"

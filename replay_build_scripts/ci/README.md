@@ -21,7 +21,7 @@ changed.
 | `build-image.sh` | builds that image and tags it with a hash of the Dockerfile, so a branch that changes it gets its own image and the two coexist. |
 | `checkout.sh` | the per-version checkouts: which one this tree uses, syncing it, preparing a new one, and wiping one. |
 | `build-in-container.sh` | runs the build (or anything else) in the image, with one version's directory as the only writable mount. |
-| `bootstrap.sh` | puts this commit's scripts on disk in a few seconds, before any checkout is involved, for steps without a checkout of their own (the Chromium step gets the same files from its sparse-checkout plugin). |
+| `bootstrap.sh` | puts this commit's scripts on disk in a few seconds, before any checkout is involved, for steps without a checkout of their own (the Chromium step gets its scripts and `chrome/VERSION` from its sparse-checkout plugin instead). |
 | `sync-repos.mjs`, `upload-artifacts.sh` | the pipeline's sync and upload steps, against the key's checkout instead of the current directory. |
 
 The build image's node is 8.10 and its git is 2.17 (bionic), so anything

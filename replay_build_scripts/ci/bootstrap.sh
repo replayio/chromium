@@ -4,10 +4,10 @@
 #
 #   bootstrap.sh [<commit>] [<dir>]
 #
-# A Chromium build job has no checkout of its own (the whole point of
-# skip-checkout: a clone of this repository is ~11 GB of tracked files, ~56 GB
-# with its history), so the job's commands used to come from whatever the shared
-# checkout on the agent happened to contain. That is how the cleanup step in
+# A step without a checkout of its own (skip-checkout: a clone of this
+# repository is ~11 GB of tracked files, ~56 GB with its history) used to take
+# its commands from whatever the shared checkout on the agent happened to
+# contain. That is how the cleanup step in
 # replayio/chromium#1544 came to run a previous job's version of itself, and it
 # is why a job cannot decide anything -- which checkout to use, which image to
 # build in -- before it has reset that shared checkout.
@@ -31,11 +31,11 @@
 #   then ignores it, fetching every blob of the commit (measured: still going
 #   after 1.9 GB) instead of the ~70 MB of trees this needs.
 #
-# The Chromium step does not use this: its sparse-checkout plugin checks out the
-# same files (.buildkite/pipeline.yml). This is for steps that have no checkout
-# of their own, such as the manual-chromium-branch-build pipeline upload, which
-# fetches this one file and runs it. Everything after it is ordinary repository
-# content at the right commit.
+# The Chromium step does not use this: its sparse-checkout plugin checks out
+# its scripts and chrome/VERSION (.buildkite/pipeline.yml). This is for steps
+# that have no checkout of their own, such as the manual-chromium-branch-build
+# pipeline upload, which fetches this one file and runs it. Everything after it
+# is ordinary repository content at the right commit.
 set -euo pipefail
 
 commit=${1:-${BUILDKITE_COMMIT:-}}
