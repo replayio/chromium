@@ -43,6 +43,7 @@
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "base/time/time.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "net/base/net_errors.h"
@@ -2709,8 +2710,28 @@ ServiceWorkerGlobalScope::FetchHandlerType() {
     EventTarget* et = EventTarget::Create(script_state);
     v8::Local<v8::Value> v =
         To<JSBasedEventListener>(e->Callback())->GetListenerObject(*et);
-    if (v.IsEmpty() || !v->IsFunction() ||
-        !v.As<v8::Function>()->Experimental_IsNopFunction()) {
+    bool is_nop_handler = !v.IsEmpty() && v->IsFunction() &&
+                          v.As<v8::Function>()->Experimental_IsNopFunction();
+
+    // [RecordReplay] Whether a handler counts as a no-op is not a property of
+    // the program, it is a property of how far V8 happened to get with that
+    // function. Experimental_IsNopFunction compiles the function lazily and
+    // answers false whenever that compilation fails or the function has no
+    // bytecode yet, so the verdict depends on the tier the function is in when
+    // the browser asks, which recording and replaying need not agree on.
+    // Measured on the M158 leapfrog stack: the recording decided the test's
+    // `fetch` handler was a no-op and emitted the console warning below, while
+    // the replay decided it was not and went straight on to
+    // ServiceWorkerContextClient::SendWorkerStarted's OnStarted call, which
+    // diverges inside a single statement. Pin the verdict rather than the
+    // predicate so the computation, and the lazy compilation inside it, still
+    // runs on both sides and only the answer is taken from the recording.
+    if (!recordreplay::AreEventsDisallowed()) {
+      is_nop_handler = recordreplay::RecordReplayValue(
+          "ServiceWorkerGlobalScope::FetchHandlerType", is_nop_handler);
+    }
+
+    if (!is_nop_handler) {
       return mojom::blink::ServiceWorkerFetchHandlerType::kNotSkippable;
     }
   }
