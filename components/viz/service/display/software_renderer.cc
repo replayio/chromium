@@ -542,8 +542,20 @@ void SoftwareRenderer::DrawTextureQuad(const TextureDrawQuad* quad) {
   SkRect sk_uv_rect = gfx::RectFToSkRect(visible_uv_rect);
   SkRect quad_rect = gfx::RectToSkRect(quad->visible_rect);
 
-  const bool y_flipped = resource_provider()->GetOrigin(quad->resource_id) ==
-                         kBottomLeft_GrSurfaceOrigin;
+  // [RecordReplay] As in IsSoftwareResource above and in
+  // ScopedReadLockSkImage, a recording or replaying process has no resource
+  // provider, so an origin cannot be looked up through one. Upstream added
+  // this y-flip after the fork's M108 baseline, which drew the quad with no
+  // flip at all, so the repaint keeps that orientation.
+  //
+  // Until the tile read-back was restored this call was unreachable: without a
+  // resource provider the lock above never became valid, so DrawTextureQuad
+  // returned at !lock.valid() before getting here, and the read-back is what
+  // made the null provider reachable. DSRC-065.
+  const bool y_flipped =
+      !recordreplay::IsRecordingOrReplaying("notify-paints") &&
+      resource_provider()->GetOrigin(quad->resource_id) ==
+          kBottomLeft_GrSurfaceOrigin;
   if (y_flipped) {
     current_canvas_->translate(0, quad->rect.height());
     current_canvas_->scale(1, -1);
