@@ -17,6 +17,11 @@ readonly CHECKOUT_ROOT=$HOME/chromium-checkouts/$CHECKOUT_KEY
 readonly CHECKOUT_STAMP=$CHECKOUT_ROOT/.replay-checkout
 readonly CHECKOUT_SCHEME=1
 
+# What the build container fetches the tree from, as ./gclient names it. Not
+# the URL the job's own clone came from: that is the agent's SSH identity,
+# which the container does not have.
+readonly FORK_URL=https://github.com/replayio/chromium.git
+
 readonly IMAGE_REPO=chromium157-build
 readonly CONTAINER_PREFIX=chromium157-build
 

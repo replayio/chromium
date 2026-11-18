@@ -1,7 +1,7 @@
 # Chromium 157 Replay runtime (rebase/157/*): Linux x86_64 build and one record -> replay test.
 #
-# Uploaded by the `chromium-build` pipeline's settings step, which fetches this
-# file by URL for the build's branch. Builds are created on that pipeline
+# Uploaded by the `chromium-build` pipeline's settings step, which reads this
+# file from the build's commit. Builds are created on that pipeline
 # through the API (branch, commit, env); nothing here is triggered by a push.
 #
 # The step runs on the agent that builds Chromium 108 for production. What it
@@ -31,7 +31,7 @@ steps:
     concurrency_group: "chromium-157/linux-x86_64"
     # The plugins and versions master's build step uses, so the agent needs
     # nothing new. No repository checkout: the job works from a ~70 MB clone of
-    # replay_build_scripts/ci (bootstrap.sh).
+    # replay_build_scripts/ci, which the command fetches first.
     plugins:
       - thedyrt/skip-checkout#v0.1.1: ~
       - seek-oss/aws-sm#v2.3.1:
@@ -52,14 +52,52 @@ steps:
     command: |
       set -euo pipefail
       WS="$$PWD"
-      trap 'rm -rf "$$WS/engflow-m157.crt" "$$WS/engflow-m157.key" "$$WS/ci-bootstrap-m157.sh" "$$WS/.ci-boot-m157"' EXIT
-      # The one thing taken by URL: the script that fetches the rest of this
-      # commit's CI scripts. Everything after it is repository content at the
-      # commit being built.
+      trap 'rm -rf "$$WS/engflow-m157.crt" "$$WS/engflow-m157.key" "$$WS/.ci-boot-m157"' EXIT
+      # This commit's replay_build_scripts/ci into .ci-boot-m157: everything
+      # after this runs from that clone, at the commit being built, and its HEAD
+      # is the commit checkout.sh builds. bootstrap.sh does the same; this step
+      # has no copy of it yet.
+      # - Over the agent's SSH identity ($$BUILDKITE_REPO): GitHub throttles
+      #   unauthenticated reads of this fork network (HTTP 429).
+      # - git init + fetch of the one commit, not `git clone --depth 1
+      #   --filter=blob:none`: on this agent's git (2.25) such a clone took one
+      #   12.8 MiB pack, then repeated ~317k-object / ~49 MiB packs
+      #   (chromium-build #5838, 42 packs in ~4 min, then cancelled).
+      # - Shallow, blob-less (promisor remote), sparse (patterns, not cone
+      #   mode: git 2.25). Older git ignores the filter and fetches every blob.
+      # - Each read retried: GitHub queues authenticated reads of this fork
+      #   network under load, and a commit that does not exist looks the same
+      #   to git's exit status. Checkout with -f, so a retry overwrites what a
+      #   failed attempt left. --foreground keeps git in the job's process
+      #   group, so cancelling the job stops it.
+      case "$$(git --version)" in *\ 1.*|*\ 2.[0-9].*|*\ 2.1[0-9].*|*\ 2.2[0-4].*) echo "$$(git --version): too old for a partial fetch (2.25+)" >&2; exit 1;; esac
       REF="$$BUILDKITE_COMMIT"
-      if [ "$$REF" = "HEAD" ]; then REF="$$BUILDKITE_BRANCH"; fi
-      curl -fsS "https://raw.githubusercontent.com/replayio/chromium/$$REF/replay_build_scripts/ci/bootstrap.sh" -o ci-bootstrap-m157.sh
-      bash ci-bootstrap-m157.sh "$$REF" .ci-boot-m157
+      if [ "$$REF" = "HEAD" ]; then REF="$${BUILDKITE_BRANCH:?no commit or branch to fetch}"; fi
+      github() {
+        local attempt
+        for attempt in 1 2 3 4 5; do
+          if timeout --foreground 900 "$$@"; then return 0; fi
+          if [ "$$attempt" = 5 ]; then
+            echo "reading $$REF from GitHub failed: $$*" >&2
+            return 1
+          fi
+          sleep $$((attempt * 60))
+        done
+      }
+      rm -rf .ci-boot-m157
+      git init -q .ci-boot-m157
+      git -C .ci-boot-m157 remote add origin "$${BUILDKITE_REPO:?no repository URL}"
+      # Repository-local configuration only; the host's git configuration is not touched.
+      git -C .ci-boot-m157 config gc.auto 0
+      git -C .ci-boot-m157 config extensions.partialClone origin
+      git -C .ci-boot-m157 config remote.origin.promisor true
+      git -C .ci-boot-m157 config remote.origin.partialclonefilter blob:none
+      git -C .ci-boot-m157 config core.sparseCheckout true
+      printf '/replay_build_scripts/ci/\n' > .ci-boot-m157/.git/info/sparse-checkout
+      github git -C .ci-boot-m157 fetch -q --filter=blob:none --depth 1 origin "$$REF"
+      github git -C .ci-boot-m157 checkout -q -f --detach FETCH_HEAD
+      test -x .ci-boot-m157/replay_build_scripts/ci/job.sh
+      echo "scripts: .ci-boot-m157 is $$(git -C .ci-boot-m157 rev-parse HEAD)"
       export ENGFLOW_CERT_FILE="$$WS/engflow-m157.crt" ENGFLOW_KEY_FILE="$$WS/engflow-m157.key"
       .ci-boot-m157/replay_build_scripts/ci/job.sh
 

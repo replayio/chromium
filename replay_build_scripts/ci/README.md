@@ -6,9 +6,9 @@ Scope: Linux x86_64, build only, agent `chromium-build-1`, Buildkite pipeline `c
 
 | # | Where | Step | Script |
 |---|---|---|---|
-| 0 | Buildkite | settings step uploads the branch's `.buildkite/pipeline.yml` | (pipeline settings, unchanged) |
+| 0 | Buildkite | settings step uploads the build commit's `.buildkite/pipeline.yml` | (pipeline settings, unchanged) |
 | 1 | agent hooks | `skip-checkout`; `aws-sm` writes `engflow-m157.crt` / `engflow-m157.key` into the job workspace | `.buildkite/pipeline.yml` |
-| 2 | host | `curl` `bootstrap.sh` at the build's commit; blob-less sparse clone of `replay_build_scripts/ci` into `.ci-boot-m157` | `ci/bootstrap.sh` |
+| 2 | host | blob-less sparse clone of `replay_build_scripts/ci` at the build's commit into `.ci-boot-m157`, over the agent's SSH identity (`$BUILDKITE_REPO`), each GitHub read retried | `.buildkite/pipeline.yml` |
 | 3 | host | remove containers named `chromium157-build-*` | `ci/remove-stale-build-containers.sh` |
 | 4 | host | guards (root identity, free disk); create `m157` + stamp if missing; remove `tmp_pack_*` of killed fetches (older than this run, open by no process) in the checkout's repositories; install `.gclient` | `ci/checkout.sh sync` |
 | 5 | host | build image `chromium157-build:<Dockerfile hash>-u<uid>` if absent | `ci/build-image.sh ensure` |
@@ -20,8 +20,8 @@ Scope: Linux x86_64, build only, agent `chromium-build-1`, Buildkite pipeline `c
 | 10 | host | upload `build_id/linux/x86_64/**`; EXIT trap removes workspace files | `ci/job.sh`, `.buildkite/pipeline.yml` |
 
 - Commit built = HEAD of the bootstrap clone (scripts and tree cannot diverge).
-  - `replay_build_scripts/ci/checkout.sh` (`sync`), `replay_build_scripts/ci/bootstrap.sh`
-- `BUILDKITE_COMMIT=HEAD` → the branch tip is fetched instead.
+  - `replay_build_scripts/ci/checkout.sh` (`sync`), `.buildkite/pipeline.yml`
+- `BUILDKITE_COMMIT=HEAD` → the branch tip is fetched instead. Unreachable through `chromium-build`: its settings step refuses `HEAD`.
   - `.buildkite/pipeline.yml` (`REF`)
 
 ## 2. Files
@@ -30,13 +30,13 @@ Paths relative to the repository root. Origin: M = replayio/chromium `master`, 1
 
 | File | Purpose | Origin | Delta vs origin |
 |---|---|---|---|
-| `.buildkite/pipeline.yml` | one build step; test-step placeholder | M (step shape, plugins, agent tags, cert via aws-sm + EXIT trap), 158 (concurrency group) | no mac/windows/test/buildevents steps; own cert file names; `priority: -1`; timeout exported to the job; logic moved to `ci/job.sh` |
+| `.buildkite/pipeline.yml` | one build step; test-step placeholder | M (step shape, plugins, agent tags, cert via aws-sm + EXIT trap), 158 (concurrency group) | no mac/windows/test/buildevents steps; own cert file names; `priority: -1`; timeout exported to the job; logic moved to `ci/job.sh`, except step 2 (script fetch), inline |
 | `replay_build_scripts/build-pipeline.py` | no-op pipeline for `runtime-build-and-test` (`{"steps": ["wait"]}`) | M (file name, invocation contract) | no triggers, no file reads |
-| `replay_build_scripts/ci/config.sh` | constants (key, root, image repo, container prefix, disk minima) + guards `assert_isolated_root`, `require_free_gb` | new | — |
-| `replay_build_scripts/ci/bootstrap.sh` | job's own clone of `replay_build_scripts/ci` at the commit | M | dest `.ci-boot-m157`; sparse path `ci/` only; ref is an argument; repo-local `gc.auto 0` |
+| `replay_build_scripts/ci/config.sh` | constants (key, root, container fetch URL, image repo, container prefix, disk minima) + guards `assert_isolated_root`, `require_free_gb` | new | — |
+| `replay_build_scripts/ci/bootstrap.sh` | step 2 as a file, for steps that fetch it and run it; the `chromium-build` settings step refuses a commit without it | M | dest `.ci-boot-m157`; sparse path `ci/` only; ref is an argument; repo-local `gc.auto 0` |
 | `replay_build_scripts/ci/job.sh` | job driver: stale containers → sync → build → logs → package → upload | 158 (inline pipeline command) | script instead of YAML; artifacts staged under `m157/jobs/<job>`; siso logs; default keep-going |
 | `replay_build_scripts/ci/checkout.sh` | `root`, `sync`, `wipe`, `wipe-out` for the one fixed root | M + 158 | removed: version/env-derived key, `link_legacy_checkout`, `adopt`, `prepare --from`, `nearest_src`, `.git-cache`, backend checkout, delete-on-failure trap; all git moved into the container |
-| `replay_build_scripts/ci/container/sync.sh` | in-image: fetch/checkout commit, gclient sync, hooks, `LASTCHANGE` | 158 (`checkout.sh sync` inline `bash -c`) | idempotent `git init`; no retry loop; default gclient jobs |
+| `replay_build_scripts/ci/container/sync.sh` | in-image: fetch/checkout commit, gclient sync, hooks, `LASTCHANGE` | 158 (`checkout.sh sync` inline `bash -c`) | idempotent `git init`; fetch retried (5 attempts, `timeout 900`); default gclient jobs |
 | `replay_build_scripts/ci/gclient` | `.gclient` solution; `custom_vars` for the `configure_siso` hook | 147 (`replay.gclient`), 158 (`.gclient` heredoc) | fork URL; `reapi_backend_config_path` names a file that exists; no `rbe_instance` |
 | `replay_build_scripts/ci/build-image.sh` | image ref/ensure | 158 | repo `chromium157-build`; disk guard on docker root; `tag`/`build` subcommands dropped |
 | `replay_build_scripts/ci/build-in-container.sh` | `docker run` wrapper | M + 158 | fixed root (no `--root`); `/ci` read-only mount; cert mount only with `--engflow`; no `.git-cache` mount; no local-driver mount; `--oom-score-adj`; in-container deadline |
@@ -76,7 +76,7 @@ Paths relative to the repository root. Origin: M = replayio/chromium `master`, 1
 
 - `DEPS`: v8, skia, webrtc, boringssl → `https://github.com/replayio/{chromium-v8,chromium-skia,chromium-webrtc,boringssl}` at pushed commits; gitlinks equal (`git_dependencies = 'SYNC'`).
 - Scripts committed with the executable bit (`ci/*.sh` except `config.sh`, `ci/container/*.sh`).
-  - `bootstrap.sh` ends with `test -x …/job.sh`
+  - step 2 and `bootstrap.sh` end with `test -x …/job.sh`
 
 ## 3. Isolation model
 
@@ -87,7 +87,7 @@ Paths relative to the repository root. Origin: M = replayio/chromium `master`, 1
 | git DEPS cache | none (`--no-history`) | `~/chromium-checkouts/.git-cache` | never mounted |
 | Docker image | `chromium157-build:<hash>-u<uid>` | `chromium-build:<hash>`, `chromium-build-new:latest` | `IMAGE_REPO`; no image removal anywhere |
 | Containers | `chromium157-build-<job>-<pid>` | `chromium-build-<key>-<job>` | `CONTAINER_PREFIX`; removal filter `name=^/?chromium157-build-` |
-| Workspace files | `engflow-m157.{crt,key}`, `ci-bootstrap-m157.sh`, `.ci-boot-m157/` | `engflow.{crt,key}`, `ci-bootstrap.sh`, `.ci-boot/`, `build_id/` | distinct names; EXIT trap removes exactly these four |
+| Workspace files | `engflow-m157.{crt,key}`, `.ci-boot-m157/` | `engflow.{crt,key}`, `.ci-boot/`, `build_id/` | distinct names; EXIT trap removes exactly these three |
 | git config | image `/etc/gitconfig` (`safe.directory`, `gc.auto 0`); repo-local `gc.auto 0` in `.ci-boot-m157` | host `~/.gitconfig` | no `git config --global/--system` on the host |
 
 `assert_isolated_root` (`replay_build_scripts/ci/config.sh`), called by every entry point before any use of the root:
@@ -111,8 +111,8 @@ Not present by construction: `git gc` (and auto-gc disabled where git runs), hos
 | Path | Access | By |
 |---|---|---|
 | `<ws>/engflow-m157.crt`, `<ws>/engflow-m157.key` | write (aws-sm plugin), read-only bind mount, delete (EXIT trap) | pipeline step |
-| `<ws>/ci-bootstrap-m157.sh` | write, execute, delete | pipeline step |
-| `<ws>/.ci-boot-m157/**` | delete+create, read, read-only bind mount (`replay_build_scripts/ci` → `/ci`), delete | `bootstrap.sh`, `build-in-container.sh`, pipeline step |
+| `~/.ssh/**` (identity, `known_hosts`, config) | read by host `ssh` through `git`; never written | pipeline step |
+| `<ws>/.ci-boot-m157/**` | delete+create, read, read-only bind mount (`replay_build_scripts/ci` → `/ci`), delete | pipeline step, `build-in-container.sh` |
 | `/home/ubuntu/chromium-checkouts` | `mkdir -p` (exists), `df` | `checkout.sh` |
 | `<root>/.replay-checkout`, `<root>/.gclient` | write | `checkout.sh` |
 | `<root>/**` (`src`, `.gclient_entries`, `.cipd`, `home`) | read-write bind mount → `/chromium` | container |
@@ -120,7 +120,7 @@ Not present by construction: `git gc` (and auto-gc disabled where git runs), hos
 | `<root>/src/out/Release/siso_{failure_summary,output,failed_commands.sh}` | read | `job.sh` |
 | `/home/ubuntu` | `readlink -f` (path resolution only) | `config.sh` |
 | docker root (`docker info`, typically `/var/lib/docker`) | `df`; image layers, build cache, container layers via the daemon | `build-image.sh`, dockerd |
-| host git configuration (`/etc/gitconfig`, `~/.gitconfig`) | read implicitly by host `git`; never written | `bootstrap.sh`, `checkout.sh` |
+| host git configuration (`/etc/gitconfig`, `~/.gitconfig`) | read implicitly by host `git`; never written | pipeline step, `checkout.sh` |
 
 Never accessed: `/home/ubuntu/chromium`, `/home/ubuntu/depot_tools`, `/home/ubuntu/chromium-checkouts/m108`, `/home/ubuntu/chromium-checkouts/.git-cache`.
 
@@ -128,10 +128,10 @@ Never accessed: `/home/ubuntu/chromium`, `/home/ubuntu/depot_tools`, `/home/ubun
 
 | Script | Commands |
 |---|---|
-| pipeline step | `set`, `trap … rm -rf <4 workspace paths>`, `curl -fsS <raw.githubusercontent.com/…/bootstrap.sh>`, `bash ci-bootstrap-m157.sh`, `job.sh` |
-| `bootstrap.sh` | `git --version`, `sed`, `rm -rf .ci-boot-m157`, `git init`, `git remote add`, `git config` (repo-local ×5), `printf`, `git fetch --filter=blob:none --depth 1`, `git checkout --detach`, `test -x`, `git rev-parse` |
+| pipeline step | `set`, `trap … rm -rf <3 workspace paths>`, `git --version`, `rm -rf .ci-boot-m157`, `git init`, `git remote add`, `git config` (repo-local ×5), `printf`, `timeout 900 git fetch --filter=blob:none --depth 1`, `timeout 900 git checkout -f --detach`, `sleep` (between attempts), `test -x`, `git rev-parse`, `job.sh` |
+| `bootstrap.sh` (run by no 157 step) | `git --version`, `sed`, `rm -rf .ci-boot-m157`, `git init`, `git remote add`, `git config` (repo-local ×5), `printf`, `timeout 900 git fetch --filter=blob:none --depth 1`, `timeout 900 git checkout -f --detach`, `sleep`, `test -x`, `git rev-parse` |
 | `remove-stale-build-containers.sh` | `docker ps --all --quiet --filter name=^/?chromium157-build-`, `docker rm --force <those ids>`, `seq`, `sleep` |
-| `checkout.sh sync` | `readlink`, `dirname`, `git -C .ci-boot-m157 rev-parse HEAD`, `git -C .ci-boot-m157 config remote.origin.url`, `mkdir`, `df`, `tail`, `tr`, `sed`, `date`, `cat >`, `cp ci/gclient <root>/.gclient` |
+| `checkout.sh sync` | `readlink`, `dirname`, `git -C .ci-boot-m157 rev-parse HEAD`, `mkdir`, `df`, `tail`, `tr`, `sed`, `date`, `cat >`, `cp ci/gclient <root>/.gclient` |
 | `build-image.sh` | `sha256sum`, `cut`, `id`, `docker image inspect`, `docker info`, `df`, `docker build --platform linux/amd64 -t chromium157-build:… <ci dir>` |
 | `build-in-container.sh` | `id`, `readlink`, `docker run --name chromium157-build-… --rm --init …`, `docker rm --force <own name>` (signal handler) |
 | `job.sh` | `rm -rf <root>/jobs`, `mkdir`, `touch`, `tee`, `cp`, `sed`, `wc`, `gzip`, `head`, `cat`, `buildkite-agent artifact upload` (cwd `<root>/jobs/<job>`) |
@@ -150,6 +150,7 @@ Never accessed: `/home/ubuntu/chromium`, `/home/ubuntu/depot_tools`, `/home/ubun
 | Job workspace directory, Buildkite pipeline `chromium-build`, plugin checkouts (`skip-checkout#v0.1.1`, `aws-sm#v2.3.1`: the versions master uses) | own file names, removed on exit |
 | EngFlow cluster `simpsonite.cluster.engflow.com:443`, instance `default`; secrets `engflow-certificate`, `engflow-key` | executor capacity shared; CAS / action cache content-addressed |
 | Network egress | — |
+| The agent's GitHub SSH identity (step 2) | reads retried; GitHub queues authenticated reads of the fork network under load |
 
 Not shared: checkout, out dir, gclient/cipd state, depot_tools, git object caches, container HOME (siso/vpython caches), image, container names, siso state.
 

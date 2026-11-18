@@ -15,7 +15,7 @@
 #   checkout.sh wipe        remove <root>
 #
 # "This commit" is HEAD of the repository these scripts are in: in a job, the
-# clone bootstrap.sh made of the commit being built.
+# clone the pipeline step made of the commit being built.
 #
 # Adapted from master's and chromium-158-buildkite's checkout.sh. Removed on
 # purpose: keys derived from chrome/VERSION or the environment, linking or
@@ -82,14 +82,13 @@ remove_stale_tmp_packs() {
 }
 
 sync() {
-  local commit fork_url
+  local commit
   commit=$(git -C "$repo" rev-parse HEAD)
-  fork_url=$(git -C "$repo" config remote.origin.url)
   ensure_root
   remove_stale_tmp_packs
   cp "$dir/gclient" "$CHECKOUT_ROOT/.gclient"
   echo "--- checkout $CHECKOUT_ROOT -> $commit"
-  "$dir/build-in-container.sh" -- /ci/container/sync.sh "$fork_url" "$commit"
+  "$dir/build-in-container.sh" -- /ci/container/sync.sh "$FORK_URL" "$commit"
 }
 
 wipe() {
