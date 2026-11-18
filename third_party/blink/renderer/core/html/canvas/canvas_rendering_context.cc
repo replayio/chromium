@@ -26,6 +26,7 @@
 #include "third_party/blink/renderer/core/html/canvas/canvas_rendering_context.h"
 
 #include "base/byte_size.h"
+#include "base/record_replay.h"
 #include "base/strings/stringprintf.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "third_party/blink/public/common/features.h"
@@ -394,6 +395,21 @@ void CanvasRenderingContext::DidProcessTask(
 }
 
 void CanvasRenderingContext::MaybeRecordUKMCanvasAccessibility() {
+  // [RecordReplay] Record no canvas accessibility UKM while recording or
+  // replaying. The whole feature arrived after the fork's M108 baseline, which
+  // reports only the rendering-API metrics and does so synchronously from the
+  // context, so there is no behaviour here to reproduce. This one schedules a
+  // delayed task and, for a placeholder canvas, posts across threads from a
+  // worker, and the send ends up in an unordered task on the main thread where
+  // mojo's message-size check consumes a value with events disallowed, which
+  // the recorder refuses. Measured on the M158 leapfrog stack as the recorder
+  // crash behind gc/weak-ref-worker-offscreen-canvas. Gating here rather than
+  // at the send suppresses the delayed task, the cross-thread post and both
+  // recording sites together, and emits nothing new. DSRC-434.
+  if (recordreplay::IsRecordingOrReplaying("canvas-accessibility-ukm")) {
+    return;
+  }
+
   if (!should_record_accessibility_ukm_ || !did_process_task_) {
     return;
   }
