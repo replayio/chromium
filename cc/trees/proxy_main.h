@@ -121,6 +121,9 @@ class CC_EXPORT ProxyMain : public Proxy {
   void RecordReplayRepaint();
   // The surface this proxy's compositor submits its frames to.
   const viz::LocalSurfaceId& RecordReplayLocalSurfaceId() const;
+  // Whether this proxy's compositor can still paint: a main frame aborts when
+  // its host is not visible.
+  bool RecordReplayIsVisible() const;
 
  private:
   // Proxy implementation.

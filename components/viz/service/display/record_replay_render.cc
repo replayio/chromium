@@ -316,11 +316,27 @@ void CompositorProxyDestroyed(cc::ProxyMain* proxy) {
 // When no live proxy owns the paint surface (its window was closed and no
 // frame has claimed the surface since), the current proxy is used and the
 // repaint still returns nothing, unless a paint surface reset is pending.
+//
+// [RecordReplay] A proxy can also outlive its window while staying in that
+// list. Upstream keeps a navigated-away widget's LayerTreeView for a second
+// after the frame swap, under kDelayLayerTreeViewDeletionOnLocalSwap, hidden
+// and without a frame sink, where the fork's M108 baseline disconnected it at
+// once. Such a proxy still owns the paint surface until the new page submits
+// its first frame, and it cannot repaint: ProxyMain::BeginMainFrame aborts
+// before doing anything when its host is not visible, so the repaint's commit
+// returns having done nothing and its draw never comes. Skipping it leaves the
+// current proxy to repaint, which is what happened at M108 once the closed
+// window's proxy was gone. Measured on the M158 leapfrog stack: the pause
+// child that timed out in render/repaint-at-paint-points had taken the
+// previous about:blank page's compositor, whose scheduler was not visible,
+// while the five children of the same run that succeeded repainted the page's
+// own. DSRC-426.
 static cc::ProxyMain* RepaintCompositorProxy() {
   const base::UnguessableToken* embed_token = gSurfaceEmbedToken;
   if (embed_token && gCompositorProxies) {
     for (cc::ProxyMain* proxy : *gCompositorProxies) {
-      if (proxy->RecordReplayLocalSurfaceId().embed_token() == *embed_token) {
+      if (proxy->RecordReplayLocalSurfaceId().embed_token() == *embed_token &&
+          proxy->RecordReplayIsVisible()) {
         return proxy;
       }
     }
@@ -332,7 +348,11 @@ static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
   CHECK(IsMainThread());
 
   gCurrentCompositorProxy = RepaintCompositorProxy();
-  if (!gCurrentCompositorProxy)
+  // [RecordReplay] A compositor whose host is not visible aborts its main
+  // frame before doing anything, so a repaint on it can never draw. Fail now
+  // rather than wait out the repaint's own timeout. DSRC-426.
+  if (!gCurrentCompositorProxy ||
+      !gCurrentCompositorProxy->RecordReplayIsVisible())
     return nullptr;
 
   gRepaintMimeType = mime_type;

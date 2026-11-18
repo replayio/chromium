@@ -1292,4 +1292,8 @@ const viz::LocalSurfaceId& ProxyMain::RecordReplayLocalSurfaceId() const {
   return layer_tree_host_->local_surface_id_from_parent();
 }
 
+bool ProxyMain::RecordReplayIsVisible() const {
+  return layer_tree_host_->IsVisible();
+}
+
 }  // namespace cc
