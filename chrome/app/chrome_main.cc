@@ -113,6 +113,7 @@ namespace recordreplay { extern void InitBindings(); }
 #endif
 
 #include "base/power_monitor/power_monitor.h"
+#include "base/trace_event/trace_id_helper.h"
 #include "base/record_replay.h"
 
 // Read the old space size limit the driver wants V8 to use. This is applied
@@ -187,6 +188,17 @@ int ChromeMain(int argc, const char** argv) {
     // and runs the slow path's one-time initializations (some of which open
     // files) differs between recording and replaying.
     absl::RecordReplayInitializeMutexSlowPath();
+  }
+
+  if (recordreplay::IsRecordingOrReplaying("eager-initialization",
+                                           "GlobalTraceId")) {
+    // Every mojo message asks for a global trace id, and the id's per-process
+    // random base is drawn by a lazy static, so the getrandom call it makes
+    // belongs to whichever thread asks first. Nothing orders that between
+    // recording and replaying, so the call can land in a different thread's
+    // stream than it did when recording. Draw it here, while this is still the
+    // only thread in the process. DSRC-442.
+    base::trace_event::GetNextGlobalTraceId();
   }
 
 #if BUILDFLAG(IS_LINUX)
