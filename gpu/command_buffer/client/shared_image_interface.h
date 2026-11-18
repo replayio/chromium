@@ -47,6 +47,11 @@ class D3DSharedFence;
 #endif
 }  // namespace gfx
 
+namespace cc {
+// [RecordReplay] See cc/trees/proxy_impl.cc.
+class RecordReplayRepaintSharedImageInterface;
+}  // namespace cc
+
 namespace media {
 class MockSharedImageInterface;
 }
@@ -387,6 +392,10 @@ class GPU_COMMAND_BUFFER_CLIENT_EXPORT SharedImageInterface
   scoped_refptr<SharedImageInterfaceHolder> holder_;
 
  private:
+  // [RecordReplay] The repaint frame sink's in-process implementation, see
+  // cc/trees/proxy_impl.cc.
+  friend class cc::RecordReplayRepaintSharedImageInterface;
+
   friend class ArcSharedImageInterface;
   friend class ClientSharedImageInterface;
   friend class SharedImageInterfaceInProcessBase;

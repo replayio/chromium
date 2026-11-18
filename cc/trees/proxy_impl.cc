@@ -3,6 +3,12 @@
 // found in the LICENSE file.
 
 #include "cc/trees/proxy_impl.h"
+#include "ui/gfx/gpu_memory_buffer_handle.h"
+#include "ui/gfx/gpu_fence.h"
+#include "gpu/command_buffer/common/shared_image_capabilities.h"
+#include "gpu/command_buffer/common/mailbox.h"
+#include "gpu/command_buffer/client/shared_image_interface.h"
+#include "gpu/command_buffer/client/client_shared_image.h"
 
 #include <string.h>
 
@@ -61,6 +67,69 @@
 
 namespace cc {
 
+// [RecordReplay] The SharedImageInterface of a repaint's frame sink. Upstream
+// moved the software compositor's buffers from shared bitmaps, which a frame
+// sink registered with the display compositor, to shared images, which this
+// interface registers with the GPU process, and it deleted the bitmap raster
+// provider the fork's M108 baseline used. A repaint draws in this process and
+// its frames reach neither the display compositor nor the GPU process, so the
+// memory is only mapped here and nothing is registered, exactly as the repaint
+// frame sink used to ignore DidAllocateSharedBitmap.
+//
+// No interface from the recording can be reused: a lost frame sink drops its
+// own in GpuChannelLostOnClientThread, and one whose channel is lost cannot be
+// bound to a new sink, because AddGpuChannelLostObserver fails when the channel
+// is disconnected. Sync tokens are empty because they order work in the GPU
+// process and there is none to order, and VerifySyncTokens treats a token with
+// no data as already verified, so this never reaches the synchronous flush that
+// DSRC-424 guards. DSRC-425.
+class RecordReplayRepaintSharedImageInterface : public gpu::SharedImageInterface {
+ public:
+  RecordReplayRepaintSharedImageInterface() = default;
+
+  scoped_refptr<gpu::ClientSharedImage> CreateSharedImage( const gpu::SharedImageInfo& si_info, gpu::SurfaceHandle surface_handle, std::optional<gpu::SharedImagePoolId> pool_id /*=std::nullopt*/) override { NOTREACHED(); }
+  scoped_refptr<gpu::ClientSharedImage> CreateSharedImage( const gpu::SharedImageInfo& si_info, base::span<const uint8_t> pixel_data) override { NOTREACHED(); }
+  scoped_refptr<gpu::ClientSharedImage> CreateSharedImage( const gpu::SharedImageInfo& si_info, gpu::SurfaceHandle surface_handle, gfx::BufferUsage buffer_usage, gfx::GpuMemoryBufferHandle buffer_handle) override { NOTREACHED(); }
+  scoped_refptr<gpu::ClientSharedImage> CreateSharedImage( const gpu::SharedImageInfo& si_info, gfx::GpuMemoryBufferHandle buffer_handle) override { NOTREACHED(); }
+  scoped_refptr<gpu::ClientSharedImage> CreateSharedImageForMLTensor( std::string debug_label, viz::SharedImageFormat format, const gfx::Size& size, gpu::SharedImageUsageSet usage) override { NOTREACHED(); }
+  scoped_refptr<gpu::ClientSharedImage> CreateSharedImageForSoftwareCompositor(const gpu::SharedImageInfo& si_info) override {
+    base::WritableSharedMemoryMapping mapping;
+    gfx::GpuMemoryBufferHandle handle;
+    CreateSharedMemoryRegionFromSIInfo(si_info, mapping, handle);
+    return base::MakeRefCounted<gpu::ClientSharedImage>(
+        gpu::Mailbox::Generate(), si_info, gpu::SyncToken(), holder_,
+        std::move(mapping));
+  }
+  void UpdateSharedImage(const gpu::SyncToken& sync_token, const gpu::Mailbox& mailbox) override { NOTREACHED(); }
+  void UpdateSharedImage(const gpu::SyncToken& sync_token, std::unique_ptr<gfx::GpuFence> acquire_fence, const gpu::Mailbox& mailbox) override { NOTREACHED(); }
+  void DestroySharedImage(std::vector<gpu::SyncToken> sync_tokens, const gpu::Mailbox& mailbox) override {}
+  scoped_refptr<gpu::ClientSharedImage> ImportSharedImage( gpu::ExportedSharedImage exported_shared_image) override { NOTREACHED(); }
+  #if BUILDFLAG(IS_FUCHSIA)
+  void RegisterSysmemBufferCollection( zx::eventpair service_handle, zx::channel sysmem_token, const viz::SharedImageFormat& format, gfx::BufferUsage usage, bool register_with_image_pipe) override { NOTREACHED(); }
+#endif
+  gpu::SyncToken GenUnverifiedSyncToken() override { return gpu::SyncToken(); }
+  gpu::SyncToken GenVerifiedSyncToken() override { return gpu::SyncToken(); }
+  void VerifySyncToken(gpu::SyncToken& sync_token) override { sync_token.SetVerifyFlush(); }
+  bool CanVerifySyncToken(const gpu::SyncToken& sync_token) override { return false; }
+  void VerifyFlush() override {}
+  void WaitSyncToken(const gpu::SyncToken& sync_token) override {}
+  const gpu::SharedImageCapabilities& GetCapabilities() override { return capabilities_; }
+
+  // A software frame sink watches its interface for a lost GPU channel, and
+  // this one has no channel to lose.
+  bool IsLost() const override { return false; }
+  bool AddGpuChannelLostObserver(gpu::GpuChannelLostObserver*) override {
+    return true;
+  }
+  void RemoveGpuChannelLostObserver(gpu::GpuChannelLostObserver*) override {}
+
+ private:
+  ~RecordReplayRepaintSharedImageInterface() override = default;
+
+  gpu::SharedImageCapabilities capabilities_;
+};
+
+
 namespace {
 
 // Measured in seconds.
@@ -91,8 +160,9 @@ class RecordReplayRepaintFrameSink : public LayerTreeFrameSink,
  public:
   explicit RecordReplayRepaintFrameSink(
       scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner)
-      : LayerTreeFrameSink(nullptr, nullptr, std::move(compositor_task_runner),
-                           nullptr) {}
+      : LayerTreeFrameSink(
+            nullptr, nullptr, std::move(compositor_task_runner),
+            base::MakeRefCounted<RecordReplayRepaintSharedImageInterface>()) {}
 
   bool BindToClient(LayerTreeFrameSinkClient* client) override {
     if (!LayerTreeFrameSink::BindToClient(client)) {
