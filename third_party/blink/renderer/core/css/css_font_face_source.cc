@@ -36,25 +36,19 @@
 
 namespace blink {
 
-CSSFontFaceSource::~CSSFontFaceSource() {
-  // The GC finalizes sources at different points when recording and replaying.
-  // Leak the font data they cache, so that where it is destroyed, along with
-  // its typeface, doesn't depend on when the GC runs.
-  if (recordreplay::EnterLeakMemory("CSSFontFaceSource")) {
-    // SimpleFontData is garbage collected now, so AddRef() is gone. A
-    // Persistent root that is never cleared is the fork's own idiom for
-    // leaking a GC'd object -- see svg_image.cc's leaked_document_hosts.
-    DEFINE_STATIC_LOCAL(
-        Persistent<GCedHeapHashSet<Member<const SimpleFontData>>>,
-        leaked_font_data,
-        (MakeGarbageCollected<
-            GCedHeapHashSet<Member<const SimpleFontData>>>()));
-    for (auto& entry : font_data_table_) {
-      if (entry.value)
-        leaked_font_data->insert(entry.value.Get());
-    }
-  }
-}
+// [RecordReplay] No leak gate here any more. The fork's M108 baseline kept the
+// cached font data alive from this destructor, because FontDataTable was then
+// an off-heap HashMap holding the last strong reference to each SimpleFontData,
+// so when the GC finalized a source decided when its typeface died. Upstream
+// has since made SimpleFontData garbage collected and the table a
+// HeapHashMap of WeakMember, which is not an owner, so collecting a source can
+// no longer move that point and there is nothing left for a gate to pin. The
+// port of the old gate was actively harmful: it ran inside
+// SweepFinalizer::FinalizePage, where iterating the table compares FontCacheKeys
+// whose strings may already be swept, and resurrecting a weakly held object into
+// a Persistent hands the next concurrent marker an object the sweeper is still
+// freeing. Both shapes were measured as recorder segfaults in
+// gc/font-face-collected-before-style-recalc. DSRC-433.
 
 const SimpleFontData* CSSFontFaceSource::GetFontData(
     const FontDescription& font_description,

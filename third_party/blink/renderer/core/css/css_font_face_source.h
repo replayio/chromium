@@ -50,7 +50,7 @@ class CORE_EXPORT CSSFontFaceSource
   CSSFontFaceSource(const CSSFontFaceSource&) = delete;
   CSSFontFaceSource& operator=(const CSSFontFaceSource&) = delete;
 
-  virtual ~CSSFontFaceSource();
+  virtual ~CSSFontFaceSource() = default;
 
   // Describes whether this a LocalFontFaceSource can be retrieved locally
   // without blocking. If the local lookup needs to be done asynchronously
