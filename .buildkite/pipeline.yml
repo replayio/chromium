@@ -78,10 +78,11 @@ steps:
       # (identical sha1s), naming a build this job never made.
       #
       # Inline and first, rather than clean_artifacts.mjs where this used to be:
-      # that ran fifth, so every way of failing before it -- the curl below, the
-      # bootstrap, the container cleanup, the checkout -- left the previous
-      # build's artifacts in place to be uploaded. This needs no scripts, no
-      # node, and nothing to have succeeded first.
+      # that ran fifth, so every way of failing before it -- reading the
+      # bootstrap script below, the bootstrap, the container cleanup, the
+      # checkout -- left the previous build's artifacts in place to be
+      # uploaded. This needs no scripts, no node, and nothing to have succeeded
+      # first.
       rm -rf "$${BUILDKITE_BUILD_CHECKOUT_PATH:-$$PWD}/build_id"
       # The EngFlow client cert and key must not outlive the job, whatever
       # fails. They used to be written next to the shared checkout, where they

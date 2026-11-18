@@ -69,17 +69,26 @@ git -C "$dest" config remote.origin.partialclonefilter blob:none
 # Only the directories a job runs from; no cone mode, so old git works too.
 git -C "$dest" config core.sparseCheckout true
 printf '/replay_build_scripts/\n/.buildkite/\n' > "$dest/.git/info/sparse-checkout"
-# GitHub queues authenticated reads of this fork network when it is under load.
-for attempt in 1 2 3 4 5; do
-  if timeout 900 git -C "$dest" fetch -q --filter=blob:none --depth 1 origin "$commit"; then
-    break
-  fi
-  if [ "$attempt" = 5 ]; then
-    echo "bootstrap: fetching $commit from GitHub failed" >&2
-    exit 1
-  fi
-  sleep $((attempt * 60))
-done
-git -C "$dest" checkout -q --detach FETCH_HEAD
+# Each GitHub read, retried: GitHub queues authenticated reads of this fork
+# network when it is under load. A commit that does not exist is retried too,
+# since git's exit status does not tell the two apart.
+github() {
+  local attempt
+  for attempt in 1 2 3 4 5; do
+    if timeout 900 "$@"; then
+      return 0
+    fi
+    if [ "$attempt" = 5 ]; then
+      echo "bootstrap: reading $commit from GitHub failed: $*" >&2
+      exit 1
+    fi
+    sleep $((attempt * 60))
+  done
+}
+github git -C "$dest" fetch -q --filter=blob:none --depth 1 origin "$commit"
+# The checkout reads the blobs of the two directories, and checkout.sh key reads
+# chrome/VERSION.
+github git -C "$dest" checkout -q --detach FETCH_HEAD
+github git -C "$dest" cat-file blob HEAD:chrome/VERSION >/dev/null
 test -x "$dest/replay_build_scripts/ci/checkout.sh"
 echo "bootstrap: $dest is $(git -C "$dest" rev-parse HEAD)"

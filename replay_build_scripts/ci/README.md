@@ -147,8 +147,8 @@ to the same tree, and no prepared checkout at all; build 5567 took the m108 tree
 as `m110` and died in `gn gen` on an identifier that only m108's pinned pdfium
 declares.
 
-Those upload steps now take this commit's scripts by URL instead of resetting a
-checkout. Removing this does not by itself end the arrangement: every branch
+Those upload steps now read this commit's scripts with git instead of resetting
+a checkout. Removing this does not by itself end the arrangement: every branch
 runs its own copy of these scripts, so a branch that has not been rebased still
 has the symlink code. What ends it is the agent: once `/home/ubuntu/chromium` is
 gone, every copy fails over to `require`'s message.
