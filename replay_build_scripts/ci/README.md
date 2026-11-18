@@ -85,20 +85,26 @@ arrangement exists to keep apart.
 
 Keys and images accumulate: every milestone, `CHROMIUM_CHECKOUT_KEY` and
 Dockerfile change leaves one behind, and a pool host's daily machine image
-carries them to the next host. So before it syncs or prepares, a job checks the
-volume, and below `CHROMIUM_CHECKOUTS_MIN_FREE_GB` (150) free it removes the
-least recently used key or image that no job is using, one at a time, until
-there is room again:
+carries them to the next host. So when it syncs or prepares a key, a job
+checks the volume, and below `CHROMIUM_CHECKOUTS_MIN_FREE_GB` (150) free it
+removes the least recently used key or image that no job is using, one at a
+time, until there is room again:
 
-- A key's last use is its stamp's mtime, which `require` touches. An image's is
-  a mark under `.images/` that `build-image.sh ensure` touches. State with no
-  record of use goes first.
+- A key's last use is its stamp's mtime, which `require` touches, or the newest
+  file at the top of its `src/out/Release`, which every build writes, also one
+  of another script line's (Electron's `m157-electron`). An image's is a mark
+  under `.images/` that `build-image.sh ensure` touches; only this line's images
+  (`chromium-build`, `chromium-tools`) are candidates. State with no record of
+  use goes first.
 - A job holds its key's use lock (`.<key>.use`) shared from the moment it knows
   its key until it ends. Removal takes it exclusively and skips a key it cannot
   get, and docker refuses an image a container uses, so nothing in use goes.
-  This job's own key and images are never candidates.
-- A key goes whole, stamp first: it is then unprepared, and its next job
-  prepares it again. `.git-cache` is never removed: every key borrows from it.
+  This job's own key and images are never candidates. Jobs of other script
+  lines hold no use lock: their keys are safe because a host runs one agent.
+- A key goes whole, first renamed out of the way (`.removing.*`): a removal cut
+  short leaves trash, which the next reclaim removes first, never a half-removed
+  key. Its next job prepares it again. `.git-cache` is never removed: every key
+  borrows from it.
 
 `prepare` still refuses below the same threshold if reclaim could not reach it.
 `checkout.sh reclaim` runs it by hand; `wipe` and `wipe-out` refuse a key in use.

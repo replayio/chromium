@@ -193,8 +193,8 @@ sync() {
     exit 1
   fi
   use "$k"
-  reclaim "$k"
   ensure_prepared "$k" "$commit"
+  reclaim "$k"
   r=$(require "$k")
   echo "--- checkout '$k' at $r -> $commit"
   # The fork goes to the commit being built, the Replay forks of v8, skia,
@@ -233,7 +233,7 @@ list() {
       size=" src=$(du -sh "$d/$k/src" 2>/dev/null | cut -f1)"
       size="$size out=$(du -sh "$d/$k/src/out" 2>/dev/null | cut -f1)"
     fi
-    echo "$k  HEAD=$head  $(sed -n 's/^created=/created /p' "$stamp")  used $(date -u -r "$stamp" +%Y-%m-%dT%H:%M:%SZ)$size"
+    echo "$k  HEAD=$head  $(sed -n 's/^created=/created /p' "$stamp")  used $(date -u -d "@$(last_used "$k")" +%Y-%m-%dT%H:%M:%SZ)$size"
   done
 }
 
@@ -345,16 +345,31 @@ unused() {
   return "$status"
 }
 
-# The stamp goes first: a removal cut short leaves an unprepared key, which its
-# next prepare removes, rather than a stamped tree with files missing.
+# Out of the way first, in one rename: a removal cut short leaves no half-removed
+# key for the next job of any scheme to trip over, only trash, which reclaim
+# removes first.
 remove_key() {
-  local r
+  local r trash
   r=$(root "$1")
   echo "--- removing $r"
-  if [ ! -L "$r" ]; then
-    rm -f "$(stamp_file "$1")"
+  if [ -L "$r" ]; then
+    rm -f "$r"
+    return
   fi
-  rm -rf "$r"
+  trash=$(mktemp -d "$(checkouts_dir)/.removing.XXXXXX")
+  mv "$r" "$trash/" && rm -rf "$trash"
+}
+
+# When a job last used a key, in epoch seconds: its stamp's mtime (require
+# touches it), or the newest file at the top of its out dir, which the build of
+# any scheme writes (its logs). 0 if there is neither.
+last_used() {
+  local r t
+  r=$(root "$1")
+  t=$({ find "$(stamp_file "$1")" "$r/src/out/Release" -maxdepth 1 -printf '%T@\n' 2>/dev/null || true; } |
+    sort -n | tail -1)
+  t=${t%.*}
+  echo "${t:-0}"
 }
 
 # The space a host keeps free, in GB: one more version's checkout and its build.
@@ -379,11 +394,17 @@ image_used() {
 }
 
 # lru [<key>]: the state reclaim may remove, least recently used first, one
-# "<last used, epoch seconds> key|image <key or image ref>" per line. Neither
-# <key> nor this tree's images are listed: this job is about to use them. A key
-# or image with no record of use sorts first.
+# "<last used, epoch seconds> key|image|trash <key, image ref or path>" per
+# line. Neither <key> nor this tree's images are listed: this job is about to
+# use them. Trash, and a key or image with no record of use, sort first. Images
+# are this script line's (build-image.sh); other lines' are theirs to manage.
 lru() {
   local own=${1:-} r k
+  for r in "$(checkouts_dir)"/.removing.*; do
+    if [ -e "$r" ]; then
+      echo "0 trash $r"
+    fi
+  done
   for r in "$(checkouts_dir)"/*/; do
     r=${r%/}
     k=${r##*/}
@@ -391,7 +412,7 @@ lru() {
     if [ -L "$r" ] || ! valid_key "$k" || [ "$k" = "$own" ]; then
       continue
     fi
-    echo "$(stat -c %Y "$(stamp_file "$k")" 2>/dev/null || echo 0) key $k"
+    echo "$(last_used "$k") key $k"
   done
   local keep=("$("$dir/build-image.sh" ref)" "$("$dir/build-image.sh" --tools ref)")
   local repo ref
@@ -406,7 +427,7 @@ lru() {
 
 # reclaim [<key>]: while the volume the keys share has less than min_free_gb
 # free, remove the least recently used key or image that no job is using. A
-# key's use is its stamp's mtime (require), an image's its mark (image-used).
+# key's use is last_used, an image's its mark (image-used).
 # One reclaim at a time on this machine, so that two jobs short of the same
 # space do not both remove state for it.
 reclaim() {
@@ -424,8 +445,9 @@ reclaim() {
     if [ "$free" -ge "$min" ]; then
       break
     fi
-    echo "--- $free GB free on $(checkouts_dir), below $min: removing the least recently used $kind '$id'"
+    echo "--- $free GB free on $(checkouts_dir), below $min: removing $kind '$id', least recently used first"
     case $kind in
+      trash) rm -rf "$id" || true ;;
       key) unused "$id" remove_key "$id" || true ;;
       # docker refuses an image that a container uses.
       image) docker image rm "$id" && rm -f "$(image_mark "$id")" || true ;;
@@ -444,8 +466,8 @@ prepare_key() {
     echo "--- removing $r: a prepare that did not finish left it"
     rm -rf "$r"
   fi
-  # A version takes tens of GB here, on the volume every other version shares,
-  # and reclaim has already removed what it could.
+  # A version takes tens of GB here, on the volume every other version shares.
+  reclaim "$k"
   local free
   free=$(free_gb)
   echo "--- $free GB free on $(checkouts_dir)"
@@ -574,7 +596,6 @@ prepare() {
   local k
   k=$(key)
   use "$k"
-  reclaim "$k"
   ensure_prepared "$k" "$commit" "$from"
 }
 
