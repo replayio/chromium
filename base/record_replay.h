@@ -26,6 +26,7 @@
 
 namespace base {
   class DictValue;
+  class WaitableEvent;
 }
 
 namespace recordreplay {
@@ -212,6 +213,23 @@ struct AutoPassThroughEventsIfDisallowed {
 // of causing downstream divergences.
 bool HasDivergedFromRecording();
 bool AllowSideEffects();
+
+// The completion event of a synchronous mojo call this process is waiting for
+// a reply to, listed for as long as the call is in flight. A reply only
+// arrives while a replay is following its recording, so a thread that was
+// already inside such a call when the replay diverged waits on an event
+// nothing will ever signal. ListInFlightSyncCall signals the event at once if
+// the divergence has already happened, so a call made while it happens is
+// released whichever side gets there first.
+void ListInFlightSyncCall(base::WaitableEvent* event);
+void UnlistInFlightSyncCall(base::WaitableEvent* event);
+
+// Releases every listed call, so the threads inside them can carry on. Their
+// callers see the call as having got no reply, which is the only answer a
+// diverged child has. Any diverged path that then blocks waiting on another
+// thread of this process has to call this first: the repaint in
+// components/viz/service/display/record_replay_render.cc does.
+void SignalInFlightSyncCalls();
 
 void RegisterPointer(const char* name, const void* ptr);
 void UnregisterPointer(const void* ptr);

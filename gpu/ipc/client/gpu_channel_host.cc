@@ -324,11 +324,11 @@ void GpuChannelHost::VerifyFlush(uint32_t deferred_message_id) {
   // drawn in this process, from the resource's own memory, so nothing waits on
   // the other side having seen the flush.
   //
-  // This only catches a flush that starts after the divergence. A thread
+  // This only catches a call that starts after the divergence. A thread
   // already waiting in one when its child diverged is released by
-  // mojo::RecordReplaySignalInFlightSyncCalls(), which every diverged path
-  // that goes on to block waiting on another thread of this process has to
-  // call first.
+  // recordreplay::SignalInFlightSyncCalls(), which every diverged path that
+  // goes on to block waiting on another thread of this process has to call
+  // first.
   if (recordreplay::HasDivergedFromRecording()) {
     return;
   }

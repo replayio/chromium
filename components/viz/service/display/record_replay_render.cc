@@ -36,11 +36,6 @@ namespace blink {
 extern bool RecordReplayStateEnsureInitialized();
 }
 
-namespace mojo {
-// mojo/public/cpp/bindings/lib/interface_endpoint_client.cc
-extern void RecordReplaySignalInFlightSyncCalls();
-}
-
 namespace recordreplay {
 
 extern bool IsMainThread();
@@ -468,10 +463,16 @@ static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
   // waiting, as the divergence has already happened.
   //
   // The draw it finishes is of the tree committed before the pause, not of
-  // this repaint, and must not be answered with: it finishes before the
-  // blocking commit below is taken, which is before gRepaintEvent names an
-  // event to signal, so OnPaintFinished ignores it.
-  mojo::RecordReplaySignalInFlightSyncCalls();
+  // this repaint. Whenever the commit below blocks, that draw cannot be
+  // mistaken for this repaint's own: the commit is only taken once the
+  // compositor thread is back in its task loop, which is after the draw's
+  // OnPaintFinished has run, and gRepaintEvent names an event to signal only
+  // after the commit returns. It does not block when it skips the commit, for
+  // a page with no layers, and there such a draw can be the result -- which is
+  // the frame that path means to answer with anyway (ProxyMain::
+  // BeginMainFrameWithBlocking), though of a window this repaint did not pick
+  // if none owns the paint surface.
+  recordreplay::SignalInFlightSyncCalls();
 
   gCurrentCompositorProxy = RepaintCompositorProxy();
   if (!gCurrentCompositorProxy)
