@@ -147,6 +147,11 @@ steps:
       SCRIPTS=.ci-boot/replay_build_scripts
       KEY=$$("$$SCRIPTS/ci/checkout.sh" key)
       echo "checkout key: $$KEY"
+      # Held until the job ends: another job's reclaim, which removes the least
+      # recently used keys when the volume runs low, leaves this one alone
+      # between the steps below (checkout.sh).
+      exec {KEY_USE}>"$$("$$SCRIPTS/ci/checkout.sh" use-lock "$$KEY")"
+      flock -s "$$KEY_USE"
       # Before anything touches the checkout, not after: a container left by a
       # cancelled job keeps building in it (replayio/chromium#1540). Only this
       # version's containers, so another version's build is left alone.

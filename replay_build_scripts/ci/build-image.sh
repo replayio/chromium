@@ -6,6 +6,9 @@
 #   build-image.sh [--tools] ensure   build it unless an image with that tag is here
 #   build-image.sh [--tools] build    build it, whether or not it is here
 #
+# ensure and build record the image as used now: checkout.sh's reclaim removes
+# the least recently used images when the volume runs low.
+#
 # The tag is a hash of the Dockerfile, so a branch that changes the Dockerfile
 # gets its own image and the two coexist: nothing is ever rebuilt in place under
 # a running build, and a Chromium version's builds always run in the image its
@@ -39,13 +42,17 @@ build() {
 case ${1:-} in
   tag) echo "$tag" ;;
   ref) echo "$ref" ;;
-  build) build ;;
+  build)
+    build
+    "$dir/checkout.sh" image-used "$ref"
+    ;;
   ensure)
     if docker image inspect "$ref" >/dev/null 2>&1; then
       echo "build-image: $ref is already here"
-      exit 0
+    else
+      build
     fi
-    build
+    "$dir/checkout.sh" image-used "$ref"
     ;;
   *) echo "usage: $0 [--tools] tag|ref|ensure|build" >&2; exit 2 ;;
 esac

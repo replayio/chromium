@@ -47,11 +47,18 @@
 #                                   create this key's checkout, unless it has one
 #   checkout.sh wipe <key>          remove everything that key has
 #   checkout.sh wipe-out <key>      remove only that key's build outputs
+#   checkout.sh reclaim             remove least recently used state until the
+#                                   volume has enough room (see reclaim)
+#   checkout.sh use-lock [key]      the lock a job holds, shared, while it uses
+#                                   that key (see use)
+#   checkout.sh image-used <ref>    record that a job uses that image now
 #
-# Nothing here writes outside the key's own directory but gclient's mirrors in
-# .git-cache, which only ever gain objects, and the key's prepare lock next to
-# it, so a build cannot damage another version's state, and `wipe` is the whole
-# recovery procedure.
+# A job writes into its own key's directory, gclient's mirrors in .git-cache,
+# which only ever gain objects, and the locks and use records next to the keys.
+# Its one write to other state is reclaim: when the volume runs low, the least
+# recently used keys and images that no job is using are removed whole. Another
+# version then costs its next job a prepare, never a damaged tree, and `wipe` is
+# the whole recovery procedure.
 set -euo pipefail
 
 # Bumped when the layout changes in a way that makes older directories
@@ -104,11 +111,17 @@ key() {
   if [ -z "$k" ]; then
     k=m$(version_major)
   fi
-  if ! [[ $k =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+  if ! valid_key "$k"; then
     echo "checkout: '$k' is not a usable key (letters, digits, . _ - only)" >&2
     exit 1
   fi
   echo "$k"
+}
+
+# Never beginning with a dot, so nothing a key owns can be named like the shared
+# state next to the keys.
+valid_key() {
+  [[ $1 =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]
 }
 
 root() {
@@ -152,6 +165,8 @@ require() {
     echo "Wipe it and prepare it again: checkout.sh wipe $k" >&2
     exit 1
   fi
+  # The stamp's mtime is when a job last used the key: reclaim's recency.
+  touch -c "$(stamp_file "$k")"
   mkdir -p "$r/home"
   echo "$r"
 }
@@ -177,7 +192,9 @@ sync() {
     echo "checkout: refusing to build 'HEAD': name the commit or branch to build" >&2
     exit 1
   fi
+  use "$k"
   ensure_prepared "$k" "$commit"
+  reclaim "$k"
   r=$(require "$k")
   echo "--- checkout '$k' at $r -> $commit"
   # The fork goes to the commit being built, the Replay forks of v8, skia,
@@ -216,7 +233,7 @@ list() {
       size=" src=$(du -sh "$d/$k/src" 2>/dev/null | cut -f1)"
       size="$size out=$(du -sh "$d/$k/src/out" 2>/dev/null | cut -f1)"
     fi
-    echo "$k  HEAD=$head  $(sed -n 's/^created=/created /p' "$d/$k/.replay-checkout")$size"
+    echo "$k  HEAD=$head  $(sed -n 's/^created=/created /p' "$stamp")  used $(date -u -d "@$(last_used "$k")" +%Y-%m-%dT%H:%M:%SZ)$size"
   done
 }
 
@@ -292,6 +309,153 @@ ensure_prepared() {
   exec {lock}>&-
 }
 
+# A job holds its key's use lock, shared, for as long as it uses the key: the
+# pipeline step for the whole job, and `sync`, `prepare` and
+# build-in-container.sh for their own run. Removing a key's state takes it
+# exclusively and gives up if anyone holds it, so nothing removes a tree that a
+# job is using.
+use_lock() {
+  mkdir -p "$(checkouts_dir)"
+  echo "$(checkouts_dir)/.$1.use"
+}
+
+# use <key>: hold <key>'s use lock until this process exits.
+use() {
+  local fd
+  exec {fd}>"$(use_lock "$1")"
+  if ! flock -n -s "$fd"; then
+    echo "--- waiting for another job's removal of '$1'"
+    flock -s "$fd"
+  fi
+}
+
+# unused <key> <command...>: run the command holding <key>'s use lock
+# exclusively, or fail without running it if a job is using the key.
+unused() {
+  local k=$1 fd status=0
+  shift
+  exec {fd}>"$(use_lock "$k")"
+  if ! flock -n -x "$fd"; then
+    echo "checkout: a job is using '$k'; leaving it" >&2
+    exec {fd}>&-
+    return 1
+  fi
+  "$@" || status=$?
+  exec {fd}>&-
+  return "$status"
+}
+
+# Out of the way first, in one rename: a removal cut short leaves no half-removed
+# key for the next job of any scheme to trip over, only trash, which reclaim
+# removes first.
+remove_key() {
+  local r trash
+  r=$(root "$1")
+  echo "--- removing $r"
+  if [ -L "$r" ]; then
+    rm -f "$r"
+    return
+  fi
+  trash=$(mktemp -d "$(checkouts_dir)/.removing.XXXXXX")
+  mv "$r" "$trash/" && rm -rf "$trash"
+}
+
+# When a job last used a key, in epoch seconds: its stamp's mtime (require
+# touches it), or the newest file at the top of its out dir, which the build of
+# any scheme writes (its logs). 0 if there is neither.
+last_used() {
+  local r t
+  r=$(root "$1")
+  t=$({ find "$(stamp_file "$1")" "$r/src/out/Release" -maxdepth 1 -printf '%T@\n' 2>/dev/null || true; } |
+    sort -n | tail -1)
+  t=${t%.*}
+  echo "${t:-0}"
+}
+
+# The space a host keeps free, in GB: one more version's checkout and its build.
+min_free_gb() {
+  echo "${CHROMIUM_CHECKOUTS_MIN_FREE_GB:-150}"
+}
+
+free_gb() {
+  df -BG --output=avail "$(checkouts_dir)" | tail -1 | tr -dc 0-9
+}
+
+# When a job last used an image (build-image.sh's `ensure`).
+image_mark() {
+  echo "$(checkouts_dir)/.images/$1"
+}
+
+image_used() {
+  local mark
+  mark=$(image_mark "${1:?usage: $0 image-used <image ref>}")
+  mkdir -p "$(dirname "$mark")"
+  touch "$mark"
+}
+
+# lru [<key>]: the state reclaim may remove, least recently used first, one
+# "<last used, epoch seconds> key|image|trash <key, image ref or path>" per
+# line. Neither <key> nor this tree's images are listed: this job is about to
+# use them. Trash, and a key or image with no record of use, sort first. Images
+# are this script line's (build-image.sh); other lines' are theirs to manage.
+lru() {
+  local own=${1:-} r k
+  for r in "$(checkouts_dir)"/.removing.*; do
+    if [ -e "$r" ]; then
+      echo "0 trash $r"
+    fi
+  done
+  for r in "$(checkouts_dir)"/*/; do
+    r=${r%/}
+    k=${r##*/}
+    # A symlinked key owns nothing to free (adopt).
+    if [ -L "$r" ] || ! valid_key "$k" || [ "$k" = "$own" ]; then
+      continue
+    fi
+    echo "$(last_used "$k") key $k"
+  done
+  local keep=("$("$dir/build-image.sh" ref)" "$("$dir/build-image.sh" --tools ref)")
+  local repo ref
+  for repo in "${keep[@]%:*}"; do
+    while read -r ref; do
+      if [ "$ref" != "${keep[0]}" ] && [ "$ref" != "${keep[1]}" ]; then
+        echo "$(stat -c %Y "$(image_mark "$ref")" 2>/dev/null || echo 0) image $ref"
+      fi
+    done < <(docker image ls --format '{{.Repository}}:{{.Tag}}' "$repo")
+  done
+}
+
+# reclaim [<key>]: while the volume the keys share has less than min_free_gb
+# free, remove the least recently used key or image that no job is using. A
+# key's use is last_used, an image's its mark (image-used).
+# One reclaim at a time on this machine, so that two jobs short of the same
+# space do not both remove state for it.
+reclaim() {
+  local own=${1:-} min free lock kind id
+  mkdir -p "$(checkouts_dir)"
+  min=$(min_free_gb)
+  free=$(free_gb)
+  if [ "$free" -ge "$min" ]; then
+    return 0
+  fi
+  exec {lock}<"$(checkouts_dir)"
+  flock "$lock"
+  while read -r _ kind id; do
+    free=$(free_gb)
+    if [ "$free" -ge "$min" ]; then
+      break
+    fi
+    echo "--- $free GB free on $(checkouts_dir), below $min: removing $kind '$id', least recently used first"
+    case $kind in
+      trash) rm -rf "$id" || true ;;
+      key) unused "$id" remove_key "$id" || true ;;
+      # docker refuses an image that a container uses.
+      image) docker image rm "$id" && rm -f "$(image_mark "$id")" || true ;;
+    esac
+  done < <(lru "$own" | sort -n)
+  exec {lock}<&-
+}
+
 # prepare_key <key> <commit> [<from key>]: the fork at the commit, everything
 # its DEPS pin, the backend, and last the stamp. Writes into the key's
 # directory only, apart from gclient's mirrors.
@@ -302,19 +466,17 @@ prepare_key() {
     echo "--- removing $r: a prepare that did not finish left it"
     rm -rf "$r"
   fi
-  # A version takes tens of GB here, on the volume every other version shares,
-  # so say so before taking it.
+  # A version takes tens of GB here, on the volume every other version shares.
+  reclaim "$k"
   local free
-  free=$(df -BG --output=avail "$(dirname "$r")" 2>/dev/null | tail -1 | tr -dc 0-9)
-  if [ -n "$free" ]; then
-    echo "--- $free GB free on $(dirname "$r")"
-    if [ "$free" -lt 150 ]; then
-      echo "checkout: that is not much for a Chromium checkout and its build;" >&2
-      echo "wipe a key that is no longer in flight first (checkout.sh list)." >&2
-      echo "Set CHROMIUM_CHECKOUT_FORCE=1 to prepare anyway." >&2
-      if [ -z "${CHROMIUM_CHECKOUT_FORCE:-}" ]; then
-        exit 1
-      fi
+  free=$(free_gb)
+  echo "--- $free GB free on $(checkouts_dir)"
+  if [ "$free" -lt "$(min_free_gb)" ]; then
+    echo "checkout: that is not enough for a Chromium checkout and its build," >&2
+    echo "and reclaim found nothing more that no job is using (checkout.sh list)." >&2
+    echo "Set CHROMIUM_CHECKOUT_FORCE=1 to prepare anyway." >&2
+    if [ -z "${CHROMIUM_CHECKOUT_FORCE:-}" ]; then
+      exit 1
     fi
   fi
   mkdir -p "$r"
@@ -431,7 +593,10 @@ prepare() {
     echo "what a checkout for another one should hold)" >&2
     exit 1
   fi
-  ensure_prepared "$(key)" "$commit" "$from"
+  local k
+  k=$(key)
+  use "$k"
+  ensure_prepared "$k" "$commit" "$from"
 }
 
 wipe() {
@@ -445,15 +610,14 @@ wipe() {
     echo "checkout: nothing at $r"
     return
   fi
-  echo "--- removing $r"
-  rm -rf "$r"
+  unused "$k" remove_key "$k"
 }
 
 wipe_out() {
   local k=${1:-$(key)} r
   r=$(root "$k")
   echo "--- removing $r/src/out"
-  rm -rf "$r/src/out"
+  unused "$k" rm -rf "$r/src/out"
 }
 
 case ${1:-} in
@@ -468,8 +632,11 @@ case ${1:-} in
   prepare) shift; prepare "$@" ;;
   wipe) shift; wipe "${1:-}" ;;
   wipe-out) shift; wipe_out "${1:-}" ;;
+  reclaim) reclaim ;;
+  use-lock) shift; use_lock "${1:-$(key)}" ;;
+  image-used) shift; image_used "${1:-}" ;;
   *)
-    sed -n '/^#   checkout.sh key/,/^# Nothing here writes/p' "$(readlink -f "$0")" |
+    sed -n '/^#   checkout.sh key/,/^# A job writes/p' "$(readlink -f "$0")" |
       sed 's/^# \{0,1\}//'
     exit 2
     ;;
