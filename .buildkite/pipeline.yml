@@ -58,6 +58,8 @@ steps:
       RBE_service: simpsonite.cluster.engflow.com:443
       RBE_service_no_auth: "true"
       RBE_use_application_default_credentials: "true"
+      # The buckets' region, so the upload does not depend on the agent's AWS config.
+      AWS_DEFAULT_REGION: us-east-2
     # build-runtime=true: shared heavy-build capacity (Node + Chromium).
     # runtimeType=chromiumbuild: the host has prepared Chromium checkouts
     # (checkout.sh), which a job never creates for itself.
