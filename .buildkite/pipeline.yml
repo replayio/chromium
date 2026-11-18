@@ -107,14 +107,15 @@ steps:
       # - Each read retried: GitHub queues authenticated reads of this fork
       #   network under load, and a commit that does not exist looks the same
       #   to git's exit status. Checkout with -f, so a retry overwrites what a
-      #   failed attempt left.
+      #   failed attempt left. --foreground keeps git in the job's process
+      #   group, so cancelling the job stops it.
       case "$$(git --version)" in *\ 1.*|*\ 2.[0-9].*|*\ 2.1[0-9].*|*\ 2.2[0-4].*) echo "$$(git --version): too old for a partial fetch (2.25+)" >&2; exit 1;; esac
       BOOT_REF="$$BUILDKITE_COMMIT"
       if [ "$$BOOT_REF" = "HEAD" ]; then BOOT_REF="$${BUILDKITE_BRANCH:?no commit or branch to fetch}"; fi
       github() {
         local attempt
         for attempt in 1 2 3 4 5; do
-          if be_cmd bootstrap-scripts -- timeout 900 "$$@"; then return 0; fi
+          if be_cmd bootstrap-scripts -- timeout --foreground 900 "$$@"; then return 0; fi
           if [ "$$attempt" = 5 ]; then
             echo "reading $$BOOT_REF from GitHub failed: $$*" >&2
             return 1

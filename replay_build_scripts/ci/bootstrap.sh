@@ -71,11 +71,12 @@ git -C "$dest" config core.sparseCheckout true
 printf '/replay_build_scripts/\n/.buildkite/\n' > "$dest/.git/info/sparse-checkout"
 # Each GitHub read, retried: GitHub queues authenticated reads of this fork
 # network when it is under load. A commit that does not exist is retried too,
-# since git's exit status does not tell the two apart.
+# since git's exit status does not tell the two apart. --foreground keeps git in
+# the job's process group, so cancelling the job stops it.
 github() {
   local attempt
   for attempt in 1 2 3 4 5; do
-    if timeout 900 "$@"; then
+    if timeout --foreground 900 "$@"; then
       return 0
     fi
     if [ "$attempt" = 5 ]; then
