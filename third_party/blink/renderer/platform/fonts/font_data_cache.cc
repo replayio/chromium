@@ -80,6 +80,22 @@ const SimpleFontData* FontDataCache::Get(const FontPlatformData* platform_data,
   // lookup goes all the way back out to the font service through
   // QuerySystemRenderStyle. A replay that collects at a different point than
   // the recording did then makes a round trip the recording never made.
+  // This is the leak-memory catalogue's SkipCleanup shape, written in the
+  // legacy spelling the catalogue still sanctions. The current spelling is
+  // recordreplay::EnterLeakMemory, which would also leave a LeakMemory
+  // breadcrumb in the crash-report diagnostics that this form does not, and
+  // switching to it is worth doing. It has NOT been tried successfully here:
+  // the one attempt ran while another build had this host at load 47, so its
+  // result said nothing, and the same run reproduced the same failure with
+  // this form restored. Before switching, note that EnterLeakMemory emits its
+  // diagnostic every time the gate passes, and this gate sits in a font
+  // lookup rather than at a teardown, so the breadcrumb would land on a hot
+  // path. Whether that matters is an open question, not a measured one.
+  //
+  // What stays alive is every SimpleFontData this cache has handed out and,
+  // through cache_'s strong keys, their FontPlatformData. Nothing reclaims
+  // them while recording or replaying, so the leak bound is Unbounded rather
+  // than merely assessed, which is the cost this buys the fidelity with.
   if (!recordreplay::IsRecordingOrReplaying("font-data-cache-lru")) {
     while (strong_reference_lru_.size() > kMaxSize) {
       strong_reference_lru_.pop_back();
