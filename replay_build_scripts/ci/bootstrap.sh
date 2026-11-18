@@ -31,11 +31,10 @@
 #   then ignores it, fetching every blob of the commit (measured: still going
 #   after 1.9 GB) instead of the ~70 MB of trees this needs.
 #
-# The Chromium step does not use this: its sparse-checkout plugin checks out
-# its scripts and chrome/VERSION (.buildkite/pipeline.yml). This is for steps
-# that have no checkout of their own, such as the manual-chromium-branch-build
-# pipeline upload, which fetches this one file and runs it. Everything after it
-# is ordinary repository content at the right commit.
+# The Chromium step does the same fetch inline, since it has no copy of this
+# file yet (.buildkite/pipeline.yml). This is for steps that fetch this one file
+# and run it, such as the manual-chromium-branch-build pipeline upload.
+# Everything after it is ordinary repository content at the right commit.
 set -euo pipefail
 
 commit=${1:-${BUILDKITE_COMMIT:-}}
@@ -89,7 +88,7 @@ github() {
 github git -C "$dest" fetch -q --filter=blob:none --depth 1 origin "$commit"
 # The checkout reads the blobs of the two directories, and checkout.sh key reads
 # chrome/VERSION.
-github git -C "$dest" checkout -q --detach FETCH_HEAD
+github git -C "$dest" checkout -q -f --detach FETCH_HEAD
 github git -C "$dest" cat-file blob HEAD:chrome/VERSION >/dev/null
 test -x "$dest/replay_build_scripts/ci/checkout.sh"
 echo "bootstrap: $dest is $(git -C "$dest" rev-parse HEAD)"

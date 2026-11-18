@@ -35,35 +35,12 @@ steps:
     key: "build-chromium-linux-x86_64"
     # depends_on: "preflight-checks"
     timeout_in_minutes: 360
-    # No cd: the job works in its own workspace, a small checkout of this
-    # commit's build scripts, not in a checkout shared with every other build.
-    # replay_build_scripts/ci/checkout.sh picks the checkout for this tree's
-    # Chromium version and nothing else writes to it; see
-    # replay_build_scripts/ci/README.md.
+    # No cd: the job works in its own (empty) workspace, not in a checkout
+    # shared with every other build. replay_build_scripts/ci/checkout.sh picks
+    # the checkout for this tree's Chromium version and nothing else writes to
+    # it; see replay_build_scripts/ci/README.md.
     plugins:
-      # The workspace (the plugin appends -sparse to the checkout path): this
-      # commit's replay_build_scripts/ and chrome/VERSION (checkout.sh key),
-      # shallow, blob-less and sparse, over the agent's SSH identity. Everything
-      # the job runs is repository content at $BUILDKITE_COMMIT, instead of
-      # whatever a shared checkout happened to hold (replayio/chromium#1544),
-      # and nothing is read anonymously: GitHub throttles unauthenticated reads
-      # of this fork network (HTTP 429).
-      # - Patterns, not cone directories: the agent's git (2.25) defaults to
-      #   non-cone sparse checkout. Revisit if that git becomes 2.37 or newer,
-      #   where cone mode is the default.
-      # - Clone and fetch retry with backoff (10 attempts, about 8.5 min); the
-      #   checkout's blob reads retry once, after a clean.
-      # - A workspace left broken (e.g. a job killed mid-clone) is not repaired
-      #   by the plugin: rebuild with BUILDKITE_CLEAN_CHECKOUT=true.
-      # - No ssh-keyscan: the agent already knows github.com, and the scan
-      #   would append to its known_hosts every job.
-      - sparse-checkout#v1.11.0:
-          paths:
-            - "/replay_build_scripts/"
-            - "/chrome/VERSION"
-          fetch_attempts: 10
-          clean_checkout: only-upon-failure
-          skip_ssh_keyscan: true
+      - thedyrt/skip-checkout#v0.1.1: ~
       - seek-oss/aws-sm#v2.3.1:
           region: us-east-2
           env:
@@ -101,10 +78,10 @@ steps:
       # (identical sha1s), naming a build this job never made.
       #
       # Inline and first, rather than clean_artifacts.mjs where this used to be:
-      # that ran fifth, so every way of failing before it -- the container
-      # cleanup, the checkout -- left the previous build's artifacts in place
-      # to be uploaded. This needs no scripts, no node, and nothing to have
-      # succeeded first.
+      # that ran fifth, so every way of failing before it -- fetching the
+      # scripts below, the container cleanup, the checkout -- left the previous
+      # build's artifacts in place to be uploaded. This needs no scripts, no
+      # node, and nothing to have succeeded first.
       rm -rf "$${BUILDKITE_BUILD_CHECKOUT_PATH:-$$PWD}/build_id"
       # The EngFlow client cert and key must not outlive the job, whatever
       # fails. They used to be written next to the shared checkout, where they
@@ -112,14 +89,59 @@ steps:
       trap 'rm -f "$$PWD/engflow.crt" "$$PWD/engflow.key"' EXIT
       export RBE_tls_client_auth_cert="$$PWD/engflow.crt"
       export RBE_tls_client_auth_key="$$PWD/engflow.key"
+      # This commit's build scripts and chrome/VERSION (checkout.sh key) into
+      # .ci-boot: everything after this is repository content at the commit
+      # being built, instead of whatever a shared checkout happened to hold
+      # (replayio/chromium#1544). Inline rather than from bootstrap.sh, which
+      # does the same for steps that can run it: this step has no copy of it
+      # yet, and taking one from build meta-data would tie the step to whichever
+      # upload step set it (manual-chromium-branch-build does not).
+      # - Over the agent's SSH identity ($$BUILDKITE_REPO): GitHub throttles
+      #   unauthenticated reads of this fork network (HTTP 429).
+      # - git init + fetch of the one commit, not `git clone --depth 1
+      #   --filter=blob:none`: on this agent's git (2.25) such a clone took one
+      #   12.8 MiB pack, then repeated ~317k-object / ~49 MiB packs
+      #   (chromium-build #5838, 42 packs in ~4 min, then cancelled).
+      # - Shallow, blob-less (promisor remote), sparse (patterns, not cone
+      #   mode: git 2.25). Older git ignores the filter and fetches every blob.
+      # - Each read retried: GitHub queues authenticated reads of this fork
+      #   network under load, and a commit that does not exist looks the same
+      #   to git's exit status. Checkout with -f, so a retry overwrites what a
+      #   failed attempt left.
+      case "$$(git --version)" in *\ 1.*|*\ 2.[0-9].*|*\ 2.1[0-9].*|*\ 2.2[0-4].*) echo "$$(git --version): too old for a partial fetch (2.25+)" >&2; exit 1;; esac
+      BOOT_REF="$$BUILDKITE_COMMIT"
+      if [ "$$BOOT_REF" = "HEAD" ]; then BOOT_REF="$${BUILDKITE_BRANCH:?no commit or branch to fetch}"; fi
+      github() {
+        local attempt
+        for attempt in 1 2 3 4 5; do
+          if be_cmd bootstrap-scripts -- timeout 900 "$$@"; then return 0; fi
+          if [ "$$attempt" = 5 ]; then
+            echo "reading $$BOOT_REF from GitHub failed: $$*" >&2
+            return 1
+          fi
+          sleep $$((attempt * 60))
+        done
+      }
+      rm -rf .ci-boot
+      git init -q .ci-boot
+      git -C .ci-boot remote add origin "$$BUILDKITE_REPO"
+      git -C .ci-boot config extensions.partialClone origin
+      git -C .ci-boot config remote.origin.promisor true
+      git -C .ci-boot config remote.origin.partialclonefilter blob:none
+      git -C .ci-boot config core.sparseCheckout true
+      printf '/replay_build_scripts/\n/chrome/VERSION\n' > .ci-boot/.git/info/sparse-checkout
+      github git -C .ci-boot fetch -q --filter=blob:none --depth 1 origin "$$BOOT_REF"
+      github git -C .ci-boot checkout -q -f --detach FETCH_HEAD
+      test -x .ci-boot/replay_build_scripts/ci/checkout.sh
+      echo "scripts: .ci-boot is $$(git -C .ci-boot rev-parse HEAD)"
       # A build of HEAD (manual-chromium-branch-build from the UI) builds the
-      # branch tip the plugin checked out, so the tree and these scripts are
-      # one commit. checkout.sh refuses a bare HEAD.
+      # branch tip fetched above, so the tree and these scripts are one commit.
+      # checkout.sh refuses a bare HEAD.
       if [ "$$BUILDKITE_COMMIT" = "HEAD" ] && [ -z "$${CHROMIUM_REVISION:-}" ]; then
-        CHROMIUM_REVISION=$$(git rev-parse --verify HEAD)
+        CHROMIUM_REVISION=$$(git -C .ci-boot rev-parse --verify HEAD)
         export CHROMIUM_REVISION
       fi
-      SCRIPTS=replay_build_scripts
+      SCRIPTS=.ci-boot/replay_build_scripts
       KEY=$$("$$SCRIPTS/ci/checkout.sh" key)
       echo "checkout key: $$KEY"
       # Before anything touches the checkout, not after: a container left by a
