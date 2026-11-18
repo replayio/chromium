@@ -36,6 +36,11 @@ namespace blink {
 extern bool RecordReplayStateEnsureInitialized();
 }
 
+namespace mojo {
+// mojo/public/cpp/bindings/lib/interface_endpoint_client.cc
+extern void RecordReplaySignalInFlightSyncCalls();
+}
+
 namespace recordreplay {
 
 extern bool IsMainThread();
@@ -452,6 +457,21 @@ static cc::ProxyMain* RepaintCompositorProxy() {
 
 static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
   CHECK(IsMainThread());
+
+  // This repaint blocks on the compositor thread, which can be inside a
+  // synchronous mojo call it entered before this child diverged: a GPU channel
+  // flush for the sync tokens of the resources it was drawing with
+  // (GpuChannelHost::VerifyFlush). A diverged child gets no replies, so that
+  // call would never return and the compositor would never take the repaint's
+  // commit. Releasing the calls in flight lets it finish the draw it was in
+  // and get to this one. Any call it makes from here on returns without
+  // waiting, as the divergence has already happened.
+  //
+  // The draw it finishes is of the tree committed before the pause, not of
+  // this repaint, and must not be answered with: it finishes before the
+  // blocking commit below is taken, which is before gRepaintEvent names an
+  // event to signal, so OnPaintFinished ignores it.
+  mojo::RecordReplaySignalInFlightSyncCalls();
 
   gCurrentCompositorProxy = RepaintCompositorProxy();
   if (!gCurrentCompositorProxy)

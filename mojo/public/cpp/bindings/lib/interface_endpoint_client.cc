@@ -20,6 +20,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/no_destructor.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/bind_post_task.h"
 #include "base/task/common/task_annotator.h"
@@ -51,6 +52,23 @@ namespace mojo {
 namespace {
 
 constinit thread_local base::HistogramBase* g_end_to_end_metric = nullptr;
+
+// [RecordReplay] The completion events of the sync calls this process is
+// waiting for replies to, while replaying. A reply only arrives while the
+// replay follows its recording, so a thread already inside a sync call when
+// the replay diverges would wait for ever: these let the diverging thread
+// release it (RecordReplaySignalInFlightSyncCalls below). The list holds the
+// events of the SyncResponseInfos in flight, which is all that has to be
+// signalled, and an entry lives exactly as long as the wait it belongs to.
+base::Lock& gRecordReplaySyncCallLock() {
+  static base::NoDestructor<base::Lock> lock;
+  return *lock;
+}
+
+std::vector<base::WaitableEvent*>& gRecordReplayInFlightSyncCalls() {
+  static base::NoDestructor<std::vector<base::WaitableEvent*>> events;
+  return *events;
+}
 
 // A helper to expose a subset of an InterfaceEndpointClient's functionality
 // through a thread-safe interface. Used by SharedRemote.
@@ -249,6 +267,28 @@ class ThreadSafeInterfaceEndpointClientProxy : public ThreadSafeProxy {
 
 }  // namespace
 
+// [RecordReplay] Releases every sync call this process is waiting for a reply
+// to. A replay that has diverged from its recording gets no replies at all, so
+// a thread that was inside a sync call when the divergence happened waits on an
+// event nothing will ever signal; its caller sees the call as having got no
+// reply, which is the only answer a diverged child has. Any diverged path that
+// then blocks waiting on such a thread has to call this first. The repaint in
+// components/viz/service/display/record_replay_render.cc does: it waits on the
+// compositor thread, which can be inside GpuChannelHost::VerifyFlush().
+// Nothing is listed unless replaying, so this does nothing otherwise.
+//
+// Only the sync calls a SharedRemote makes from off its own sequence are
+// listed, which are the ones that wait on an event of their own. A sync call
+// made on the sequence its remote is bound to waits through the endpoint's
+// SyncWatch instead, and a diverged child hangs in that just as surely; no
+// such wait has been seen to matter yet, so none is released here.
+void RecordReplaySignalInFlightSyncCalls() {
+  base::AutoLock l(gRecordReplaySyncCallLock());
+  for (base::WaitableEvent* event : gRecordReplayInFlightSyncCalls()) {
+    event->Signal();
+  }
+}
+
 // ----------------------------------------------------------------------------
 
 InterfaceEndpointClient::PendingAsyncResponse::PendingAsyncResponse(
@@ -345,6 +385,20 @@ void ThreadSafeInterfaceEndpointClientProxy::SendMessageWithResponder(
     sync_calls->pending_responses.push_back(response.get());
   }
 
+  // [RecordReplay] List the event for as long as this call is in flight, so a
+  // replay that diverges while the reply is outstanding can release the wait
+  // below. The divergence is read after the entry is listed, under the same
+  // lock the signalling takes, so a divergence that happens while this call is
+  // being made is seen either here or there and never missed.
+  const bool record_replay_listed = recordreplay::IsReplaying();
+  if (record_replay_listed) {
+    base::AutoLock l(gRecordReplaySyncCallLock());
+    gRecordReplayInFlightSyncCalls().push_back(&response->event);
+    if (recordreplay::HasDivergedFromRecording()) {
+      response->event.Signal();
+    }
+  }
+
   SyncCallRestrictions::AssertSyncCallAllowed();
 
   if (allow_interrupt) {
@@ -365,6 +419,11 @@ void ThreadSafeInterfaceEndpointClientProxy::SendMessageWithResponder(
   {
     base::AutoLock l(sync_calls->lock);
     std::erase(sync_calls->pending_responses, response.get());
+  }
+
+  if (record_replay_listed) {
+    base::AutoLock l(gRecordReplaySyncCallLock());
+    std::erase(gRecordReplayInFlightSyncCalls(), &response->event);
   }
 
   if (response->received) {
