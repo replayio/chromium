@@ -4,10 +4,10 @@
 #
 #   bootstrap.sh [<commit>] [<dir>]
 #
-# A Chromium build job has no checkout of its own (the whole point of
-# skip-checkout: a clone of this repository is ~11 GB of tracked files, ~56 GB
-# with its history), so the job's commands used to come from whatever the shared
-# checkout on the agent happened to contain. That is how the cleanup step in
+# A step without a checkout of its own (skip-checkout: a clone of this
+# repository is ~11 GB of tracked files, ~56 GB with its history) used to take
+# its commands from whatever the shared checkout on the agent happened to
+# contain. That is how the cleanup step in
 # replayio/chromium#1544 came to run a previous job's version of itself, and it
 # is why a job cannot decide anything -- which checkout to use, which image to
 # build in -- before it has reset that shared checkout.
@@ -31,9 +31,10 @@
 #   then ignores it, fetching every blob of the commit (measured: still going
 #   after 1.9 GB) instead of the ~70 MB of trees this needs.
 #
-# This is the one file a job fetches by URL rather than running from a checkout
-# (.buildkite/pipeline.yml, which the pipeline also fetches by URL, says how);
-# everything after it is ordinary repository content at the right commit.
+# The Chromium step does the same fetch inline, since it has no copy of this
+# file yet (.buildkite/pipeline.yml). This is for steps that fetch this one file
+# and run it, such as the manual-chromium-branch-build pipeline upload.
+# Everything after it is ordinary repository content at the right commit.
 set -euo pipefail
 
 commit=${1:-${BUILDKITE_COMMIT:-}}
@@ -57,7 +58,9 @@ fi
 
 rm -rf "$dest"
 git init -q "$dest"
-git -C "$dest" remote add origin https://github.com/replayio/chromium.git
+# Over the agent's SSH identity, as checkout.sh fetches: GitHub throttles
+# unauthenticated reads of this fork network (HTTP 429).
+git -C "$dest" remote add origin "${CHROMIUM_FORK_URL:-git@github.com:replayio/chromium.git}"
 # A promisor remote: the fetch takes the commit's trees and no file contents,
 # and git asks for a blob when something reads it.
 git -C "$dest" config extensions.partialClone origin
@@ -66,7 +69,26 @@ git -C "$dest" config remote.origin.partialclonefilter blob:none
 # Only the directories a job runs from; no cone mode, so old git works too.
 git -C "$dest" config core.sparseCheckout true
 printf '/replay_build_scripts/\n/.buildkite/\n' > "$dest/.git/info/sparse-checkout"
-git -C "$dest" fetch -q --filter=blob:none --depth 1 origin "$commit"
-git -C "$dest" checkout -q --detach FETCH_HEAD
+# Each GitHub read, retried: GitHub queues authenticated reads of this fork
+# network when it is under load. A commit that does not exist is retried too,
+# since git's exit status does not tell the two apart.
+github() {
+  local attempt
+  for attempt in 1 2 3 4 5; do
+    if timeout 900 "$@"; then
+      return 0
+    fi
+    if [ "$attempt" = 5 ]; then
+      echo "bootstrap: reading $commit from GitHub failed: $*" >&2
+      exit 1
+    fi
+    sleep $((attempt * 60))
+  done
+}
+github git -C "$dest" fetch -q --filter=blob:none --depth 1 origin "$commit"
+# The checkout reads the blobs of the two directories, and checkout.sh key reads
+# chrome/VERSION.
+github git -C "$dest" checkout -q -f --detach FETCH_HEAD
+github git -C "$dest" cat-file blob HEAD:chrome/VERSION >/dev/null
 test -x "$dest/replay_build_scripts/ci/checkout.sh"
 echo "bootstrap: $dest is $(git -C "$dest" rev-parse HEAD)"
