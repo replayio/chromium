@@ -279,6 +279,25 @@ bool CookieJar::IPCNeeded(bool should_apply_devtools_overrides) {
     return true;
   }
 
+  // [RecordReplay] Ask the network service on every read, as this did before
+  // upstream began serving the cookie string from a cached copy. The cost is
+  // not the IPC: a page that holds its main thread can only finish its
+  // recording from inside a synchronous wait, because that is where
+  // SyncHandleRegistry::Wait calls recordreplay::MaybeTerminate, and the
+  // cached path never waits. The fork's M108 baseline called GetCookiesString
+  // on every read unconditionally.
+  //
+  // Measured in render/repaint-at-endpoint-without-frame-sink, whose page spins
+  // on document.cookie for exactly this reason. Without this, its renderer
+  // enters the wait 3 times, all before the finish is requested, then logs
+  // PendingFinishRecording and never reaches DoFinishRecording, so the
+  // recording is never written and the harness reports "found 0". With it the
+  // renderer enters the wait 100 times and the handshake completes. The case
+  // still fails, now on the repainted colour, which is a separate defect.
+  if (recordreplay::IsRecordingOrReplaying()) {
+    return true;
+  }
+
   // |last_cookies_| can be null when converting the raw mojo payload failed.
   // (See ConvertUTF8ToUTF16() for details.) In that case use an IPC to request
   // another string to be safe.
