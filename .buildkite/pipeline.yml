@@ -61,8 +61,8 @@ steps:
       # The buckets' region, so the upload does not depend on the agent's AWS config.
       AWS_DEFAULT_REGION: us-east-2
     # build-runtime=true: shared heavy-build capacity (Node + Chromium).
-    # runtimeType=chromiumbuild: the host has prepared Chromium checkouts
-    # (checkout.sh), which a job never creates for itself.
+    # runtimeType=chromiumbuild: the host keeps a Chromium checkout per version
+    # (checkout.sh); a job prepares its version's when the host has none.
     agents:
       - "build-runtime=true"
       - "runtimeType=chromiumbuild"

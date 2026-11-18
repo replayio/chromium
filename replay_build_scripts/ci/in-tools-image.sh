@@ -37,6 +37,11 @@ for path in "$HOME" "$root" "$PWD" "${BUILDKITE_BUILD_CHECKOUT_PATH:-}"; do
     args+=(-v "$path:$path")
   fi
 done
+# Where build-in-container.sh mounts it: a dependency gclient cloned from its
+# mirror borrows the mirror's objects by that path.
+cache=$("$dir/checkout.sh" git-cache)
+mkdir -p "$cache"
+args+=(-v "$cache:/chromium-git-cache")
 if [ -n "${REPLAY_LOCAL_DRIVER_DIR:-}" ]; then
   args+=(-v "$REPLAY_LOCAL_DRIVER_DIR:$REPLAY_LOCAL_DRIVER_DIR:ro")
 fi
