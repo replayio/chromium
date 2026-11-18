@@ -213,7 +213,7 @@ sync() {
     CHROMIUM_SRC_DIR="$r/src" \
     RECORD_REPLAY_BACKEND_DIR="$r/backend" \
     CHROMIUM_REVISION="$commit" \
-    node "$dir/sync-repos.mjs"
+    "$dir/in-tools-image.sh" "$r" node "$dir/sync-repos.mjs"
 }
 
 backend_rev() {

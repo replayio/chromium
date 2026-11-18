@@ -23,10 +23,14 @@ changed.
 | `build-in-container.sh` | runs the build (or anything else) in the image, with one version's directory as the only writable mount. |
 | `bootstrap.sh` | puts this commit's scripts on disk in a few seconds, before any checkout is involved, for steps without a checkout of their own (the Chromium step does the same fetch inline). |
 | `sync-repos.mjs`, `upload-artifacts.sh` | the pipeline's sync and upload steps, against the key's checkout instead of the current directory. |
+| `tools.Dockerfile`, `in-tools-image.sh` | the image those two run in, as the agent's user with its home, network and AWS identity, so an agent needs only docker, git, the aws CLI and buildkite-agent. |
 
 The build image's node is 8.10 and its git is 2.17 (bionic), so anything
 `build.js` or these scripts run inside it has to work there: no `fs.rmSync`,
 no recursive `fs.mkdirSync`, no `git sparse-checkout`.
+
+Builds and the tools image run as the agent's user, whatever its uid, with the
+agent's `/etc/passwd` and `/etc/group`.
 
 ## Keys
 
