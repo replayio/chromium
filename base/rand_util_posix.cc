@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "base/rand_util.h"
+#include "base/record_replay.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -93,7 +94,18 @@ bool GetRandomSyscall(void* output, size_t output_length) {
         // BUILDFLAG(IS_ANDROID)
 
 void RandBytesInternal(span<uint8_t> output, bool avoid_allocation) {
-  if (!avoid_allocation) {
+  // [RecordReplay] Draw straight from the kernel when recording or replaying.
+  // The fork has always wanted base's randomness to come from getrandom, one
+  // syscall per call, which is why the branch further down still bypasses the
+  // kernel-support test. Upstream has since routed the ordinary path through
+  // BoringSSL's RAND_bytes, which keeps a buffered per-thread generator and
+  // calls getrandom only when it reseeds, so the syscall's position in the
+  // recording stopped corresponding to the program's own draws and began
+  // depending on how many bytes that thread had already taken from the buffer.
+  // That left the fork's bypass sitting on a path upstream no longer takes.
+  // Taking the allocation-avoiding branch, which is upstream's own, puts the
+  // recorded and replayed draws back in step. DSRC-441.
+  if (!avoid_allocation && !recordreplay::IsRecordingOrReplaying("base-rand-bytes")) {
     // BoringSSL's RAND_bytes always returns 1. Any error aborts the program.
     (void)RAND_bytes(output.data(), output.size());
     return;
