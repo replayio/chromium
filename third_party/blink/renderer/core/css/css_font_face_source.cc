@@ -24,6 +24,7 @@
  */
 
 #include "third_party/blink/renderer/core/css/css_font_face_source.h"
+#include "base/no_destructor.h"
 
 #include "base/record_replay.h"
 #include "third_party/blink/renderer/core/css/css_font_face.h"
@@ -50,6 +51,24 @@ namespace blink {
 // freeing. Both shapes were measured as recorder segfaults in
 // gc/font-face-collected-before-style-recalc. DSRC-433.
 
+namespace {
+
+// [RecordReplay] Holds every SimpleFontData a web font source has handed out,
+// see GetFontData. The reference has to be a GC root, because M123 moved font
+// data to Oilpan and a raw pointer here would compile while letting the font be
+// collected, which is the opposite of the point. Same idiom as
+// font_cache.cc's ReplayLastResortSimpleFontDataStorage.
+Persistent<GCedHeapHashSet<Member<const SimpleFontData>>>&
+ReplayWebFontDataStorage() {
+  static base::NoDestructor<
+      Persistent<GCedHeapHashSet<Member<const SimpleFontData>>>>
+      font_data(MakeGarbageCollected<
+                GCedHeapHashSet<Member<const SimpleFontData>>>());
+  return *font_data;
+}
+
+}  // namespace
+
 const SimpleFontData* CSSFontFaceSource::GetFontData(
     const FontDescription& font_description,
     const FontSelectionCapabilities& font_selection_capabilities) {
@@ -73,6 +92,31 @@ const SimpleFontData* CSSFontFaceSource::GetFontData(
     result.stored_value->value =
         CreateFontData(font_description, font_selection_capabilities);
   }
+
+  // [RecordReplay] Keep what this source hands out. Up to the fork's M108
+  // baseline font_data_table_ held a strong reference, so a source's font data
+  // -- and through it the typeface it was built from -- lived as long as the
+  // source and was destroyed by Skia's glyph cache rather than by the GC.
+  // Upstream made that table weak when it moved font data to Oilpan, so a
+  // later lookup now misses whenever the entry was collected, which depends on
+  // when the GC ran. A miss does not merely rebuild the same font: measured on
+  // the M158 leapfrog stack, the replay in
+  // gc/font-face-collected-before-style-recalc leaves the web font entirely
+  // and takes FontCache::GetFontData's fallback path, blocking on a font
+  // service round trip the recording never made. The case gives the replay a
+  // far smaller heap than the recording on purpose, so the two sides collect at
+  // different points by design.
+  //
+  // The reference is held outside the source for the reason the M108 gate
+  // existed: the data has to outlive the source. An earlier attempt pinned
+  // FontPlatformDataCache's insert sites instead and changed nothing, because
+  // this is the site M108 owned. DSRC-440.
+  if (recordreplay::EnterLeakMemory("CSSFontFaceSource")) {
+    if (const SimpleFontData* data = result.stored_value->value.Get()) {
+      ReplayWebFontDataStorage()->insert(data);
+    }
+  }
+
   return result.stored_value->value.Get();
 }
 
