@@ -216,11 +216,27 @@ void ScriptRunner::RemoveDelayReasonFromScript(PendingScript* pending_script,
     return;
   }
 
+  // [RecordReplay] Ask once, before the dependency graph's own gate. That gate
+  // is replay-only, and at M158 this predicate reads the clock: the low
+  // priority async script feature is enabled by default now, so
+  // ClassicPendingScript::IsEligibleForLowPriorityAsyncScriptExecution
+  // compares the document's elapsed start time against the feature's limit.
+  // Asking inside the gate therefore made the replay take a recorded clock
+  // call the recording never took, which the driver reported as a
+  // RecordedCallStackMismatch on "Call clock_gettime" with the extra frame
+  // being this predicate. The same static in it also consults SysInfo for the
+  // device's memory, so asking on both sides keeps those reads matched too.
+  // Upstream asked twice in a row regardless, so one answer serves both. The
+  // feature was off by default at the fork's M108 baseline, which is why the
+  // call was harmless there. DSRC-435.
+  const bool low_priority_async =
+      pending_script->IsEligibleForLowPriorityAsyncScriptExecution();
+
   int record_replay_scheduled_node_id = 0;
   if (recordreplay::DependencyGraphEnabled()) {
     base::DictValue info;
     info.Set("kind", "scheduleExecuteAsyncScript");
-    if (pending_script->IsEligibleForLowPriorityAsyncScriptExecution()) {
+    if (low_priority_async) {
       double timeout = features::kTimeoutForLowPriorityAsyncScriptExecution.Get().InMillisecondsF();
       info.Set("lowPriorityTimeout", timeout);
     }
@@ -235,7 +251,7 @@ void ScriptRunner::RemoveDelayReasonFromScript(PendingScript* pending_script,
       &ScriptRunner::ExecuteAsyncPendingScript, WrapWeakPersistent(this),
       WrapPersistent(pending_script), base::TimeTicks::Now(),
       record_replay_scheduled_node_id);
-  if (pending_script->IsEligibleForLowPriorityAsyncScriptExecution()) {
+  if (low_priority_async) {
     PostTaskWithLowPriorityUntilTimeout(
         FROM_HERE, std::move(task),
         features::kTimeoutForLowPriorityAsyncScriptExecution.Get(),
