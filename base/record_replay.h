@@ -222,6 +222,26 @@ void UnlistInFlightSyncCall(base::WaitableEvent* event);
 // diverged child has. Any diverged path that then blocks waiting on another
 // thread of this process has to call this first: the repaint in
 // components/viz/service/display/record_replay_render.cc does.
+//
+// Whether "no reply" is a safe answer is the callee's to know, and so far only
+// GpuChannelHost::VerifyFlush says it is (gpu/ipc/client/gpu_channel_host.cc).
+// CommandBufferProxyImpl::WaitForGetOffsetInRange and WaitForTokenInRange are
+// known callees that would mishandle it: a thread released from either reaches
+// OnGpuSyncReplyError(), which sets kLostContext and disconnects the GPU
+// channel, and a diverged renderer cannot then make a replacement frame sink,
+// so a repaint would come back having drawn nothing rather than hanging --
+// a wrong answer in place of a visible failure.
+//
+// Neither of the two entry points above is selective about that.
+// SignalInFlightSyncCalls releases every listed call, and ListInFlightSyncCall
+// returns every cross-sequence sync call started after the divergence
+// unanswered, on any thread, which is the likelier of the two to reach such a
+// callee. A narrower release is not the answer: no key is sound, because a
+// repaint depends on the raster workers and on pending-tree activation as well
+// as on the compositor thread, so releasing the compositor thread's calls
+// alone brings the hang back. The handling belongs in the callee, one site at
+// a time, the way VerifyFlush does it, and is worth writing when a site is
+// seen to be reached. No case in the chromium-recording suite reaches one.
 void SignalInFlightSyncCalls();
 
 void RegisterPointer(const char* name, const void* ptr);
