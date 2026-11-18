@@ -548,7 +548,15 @@ bool AllowSideEffects() {
 }
 
 static base::Lock& InFlightSyncCallLock() {
-  static base::NoDestructor<base::Lock> lock;
+  // Never ordered, hence the empty name (see LockImpl::LockImpl). This lock is
+  // replay-only: nothing takes it while recording, so an ordered lock here
+  // would be created on a replay alone and its creation reads a value the
+  // recording never wrote, which is a mismatch. Nothing recorded and nothing
+  // ordered may run under it before the divergence, which holds: all it covers
+  // is the vector, HasDivergedFromRecording() (an atomic load in the driver)
+  // and WaitableEvent::Signal(), whose own ordered lock is only taken after
+  // the divergence, where ordering is ignored.
+  static base::NoDestructor<base::Lock> lock("");
   return *lock;
 }
 
