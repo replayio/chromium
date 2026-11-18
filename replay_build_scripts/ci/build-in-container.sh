@@ -58,9 +58,10 @@ args=(
   # nothing version-specific, so every key sees the same one.
   -v "$cache:/chromium-git-cache"
   -e GIT_CACHE_PATH=/chromium-git-cache
-  # The agent and the image's ubuntu are both uid 1000; passing it explicitly
-  # means the files a build writes belong to whoever ran it either way.
+  # As the agent's user, whatever its uid: the files a build writes belong to
+  # whoever ran it, and tools that look the user up find it.
   --user "$(id -u):$(id -g)"
+  -v /etc/passwd:/etc/passwd:ro -v /etc/group:/etc/group:ro
   -e HOME=/chromium/home
 )
 for var in BUILDKITE BUILDKITE_BRANCH BUILDKITE_PIPELINE_DEFAULT_BRANCH \

@@ -99,7 +99,7 @@ steps:
       # - Over the agent's SSH identity ($$BUILDKITE_REPO): GitHub throttles
       #   unauthenticated reads of this fork network (HTTP 429).
       # - git init + fetch of the one commit, not `git clone --depth 1
-      #   --filter=blob:none`: on this agent's git (2.25) such a clone took one
+      #   --filter=blob:none`: on git 2.25 (chromium-build-1) such a clone took one
       #   12.8 MiB pack, then repeated ~317k-object / ~49 MiB packs
       #   (chromium-build #5838, 42 packs in ~4 min, then cancelled).
       # - Shallow, blob-less (promisor remote), sparse (patterns, not cone
