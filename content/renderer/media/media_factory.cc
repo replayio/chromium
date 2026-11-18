@@ -60,6 +60,7 @@
 #include "third_party/blink/public/common/thread_safe_browser_interface_broker_proxy.h"
 #include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/platform/media/key_system_config_selector.h"
+#include "third_party/blink/public/platform/media/stub_web_media_player.h"
 #include "third_party/blink/public/platform/media/web_encrypted_media_client_impl.h"
 #include "third_party/blink/public/platform/media/web_media_player_builder.h"
 #include "third_party/blink/public/platform/platform.h"
@@ -362,9 +363,14 @@ std::unique_ptr<blink::WebMediaPlayer> MediaFactory::CreateMediaPlayer(
     scoped_refptr<base::SingleThreadTaskRunner>
         main_thread_compositor_task_runner,
     scoped_refptr<base::TaskRunner> compositor_worker_task_runner) {
-  // Media playback is not supported when recording/replaying.
+  // Media playback is not supported when recording/replaying. Media elements
+  // get a stub player unless "media-stub-player" is disabled.
   if (recordreplay::IsRecordingOrReplaying("no-media")) {
-    return nullptr;
+    if (!recordreplay::IsRecordingOrReplaying("media-stub-player"))
+      return nullptr;
+    return blink::CreateStubWebMediaPlayer(
+        client, GetWebMediaPlayerDelegate(),
+        render_frame_->GetTaskRunner(blink::TaskType::kInternalMedia));
   }
 
   blink::WebLocalFrame* web_frame = render_frame_->GetWebFrame();
