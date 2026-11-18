@@ -19,6 +19,8 @@
 #include "components/viz/common/display/renderer_settings.h"
 #include "components/viz/service/display/software_output_device.h"
 #include "components/viz/service/display/software_renderer.h"
+#include "gpu/command_buffer/client/client_shared_image.h"
+#include "components/viz/common/resources/shared_image_format_utils.h"
 #include "components/viz/service/display_embedder/software_output_surface.h"
 #include "ui/gfx/codec/jpeg_codec.h"
 
@@ -136,17 +138,63 @@ bool PopulateSkBitmapWithResource(SkBitmap* sk_bitmap, viz::ResourceId resource_
     return false;
   }
 
+  // [RecordReplay] Read the tile's pixels from the frame's own resource.
+  //
+  // Up to M133 this came from a table the raster provider filled, via
+  // NotifyRasterBuffer in cc/raster/bitmap_raster_buffer_provider.cc, and when
+  // upstream removed the SharedBitmap identity scheme at M134 and the provider
+  // itself at M136 the notification was dropped as a reversible gap rather than
+  // ported. This is that reversal, and it needs no producer side: the frame's
+  // resource already carries the image, built by ResourcePool::PrepareForExport
+  // from the backing's shared image, so the consumer can map it directly.
+  //
+  // Measured cost of the gap, which is what motivated restoring it: in
+  // render/repaint-at-endpoint-without-frame-sink the repaint's frame carries
+  // eighteen software tile quads and this function was reached for every one of
+  // them, returned false, and SoftwareRenderer skipped each quad silently, so
+  // the page's unchanged background showed through instead of the committed
+  // DOM change.
+  //
+  // The colour type comes from the resource's own format rather than
+  // MakeN32Premul, which the dropped code used. The software tiles here are
+  // BGRA_8888 while N32 is RGBA on this platform, and that swap would turn the
+  // case's expected rgb(200,40,40) into rgb(40,40,200) -- which is the value it
+  // fails with when nothing is drawn at all, so the mistake would read as a
+  // no-op rather than as a bug. DSRC-065.
+  std::unique_ptr<gpu::ClientSharedImage::ScopedMapping> mapping;
   void* pixels = nullptr;
+  size_t stride = 0;
+  if (const scoped_refptr<gpu::ClientSharedImage>& image =
+          transferable->shared_image();
+      HasDivergedFromRecording() && image && transferable->GetIsSoftware()) {
+    mapping = image->Map();
+    if (mapping) {
+      base::span<uint8_t> plane = mapping->GetMemoryForPlane(0);
+      pixels = plane.data();
+      stride = mapping->Stride(0);
+    }
+  }
 
   recordreplay::AssertMaybeEventsDisallowed("[RUN-2847-3001] recordreplay::PopulateSkBitmapWithResource B %d", !!pixels);
   if (!pixels) {
     return false;
   }
 
-  SkImageInfo info =
-      SkImageInfo::MakeN32Premul(transferable->GetSize().width(),
-                                 transferable->GetSize().height());
-  return sk_bitmap->installPixels(info, pixels, info.minRowBytes());
+  SkImageInfo info = SkImageInfo::Make(
+      transferable->GetSize().width(), transferable->GetSize().height(),
+      viz::ToClosestSkColorType(transferable->GetFormat()),
+      kPremul_SkAlphaType);
+
+  // Copy rather than alias. installPixels does not copy, and the mapping it
+  // would alias is owned by the local above, which is destroyed when this
+  // function returns, so the bitmap would be left pointing into unmapped
+  // memory and nothing here guarantees the renderer reads it before then.
+  if (!sk_bitmap->tryAllocPixels(info)) {
+    return false;
+  }
+  // Skia does the copy, because a hand-rolled one trips the tree's
+  // -Wunsafe-buffer-usage.
+  return sk_bitmap->writePixels(SkPixmap(info, pixels, stride));
 }
 
 extern "C" size_t V8RecordReplayPaintStart();
