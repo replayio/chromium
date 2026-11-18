@@ -330,10 +330,6 @@ void Process::Close() {
   // end up w/ a zombie when it does finally exit.
 }
 
-static inline bool MaybeRecordingOrReplaying() {
-  return true;
-}
-
 #if !BUILDFLAG(IS_IOS)
 bool Process::Terminate(int exit_code, bool wait) const {
   // exit_code isn't supportable.
@@ -345,11 +341,23 @@ bool Process::Terminate(int exit_code, bool wait) const {
 
 #if !BUILDFLAG(IS_IOS) || (BUILDFLAG(USE_BLINK) && TARGET_OS_SIMULATOR)
 bool Process::TerminateInternal(int exit_code, bool wait) const {
-  // When recording/replaying the child process is responsible for exiting
-  // so that it can finish uploading any in progress recording.
-  if (MaybeRecordingOrReplaying()) {
-    return false;
-  }
+  // [Replay] The SIGTERM below is what asks a recorded child to finish its
+  // recording, so it must be sent.
+  //
+  // This used to return early here, on the reasoning that "the child process is
+  // responsible for exiting so that it can finish uploading any in progress
+  // recording". That handed the child the responsibility without handing it the
+  // signal. The driver installs handlers for SIGTERM, SIGINT and SIGHUP
+  // (recording/SignalHandlers.cpp) and uses them to reach a safe point and then
+  // write the recording out, so suppressing SIGTERM is what kept that path from
+  // ever being entered. A child that will not exit on its own then never
+  // finalised anything and was SIGKILLed by the reaper instead, which is
+  // measured in render/repaint-at-endpoint-without-frame-sink: its page holds
+  // the main thread in a loop by design, and its renderer's recording is never
+  // created at all, only the browser's.
+  //
+  // Raising the reaper's grace alone does not help, because more time before a
+  // kill is still a kill; the two halves are each necessary. DSRC-390.
   // |wait| is always false when terminating badly-behaved processes.
   const bool maybe_compromised =
       !wait && exit_code == Process::kResultCodeKilledBadMessage;
