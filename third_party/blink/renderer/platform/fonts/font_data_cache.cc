@@ -30,6 +30,7 @@
 
 #include "third_party/blink/renderer/platform/fonts/font_data_cache.h"
 
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "third_party/blink/renderer/platform/fonts/simple_font_data.h"
 
@@ -68,8 +69,21 @@ const SimpleFontData* FontDataCache::Get(const FontPlatformData* platform_data,
 
   // Update our LRU to keep a strong reference to `result`.
   strong_reference_lru_.PrependOrMoveToFirst(result);
-  while (strong_reference_lru_.size() > kMaxSize) {
-    strong_reference_lru_.pop_back();
+  // [RecordReplay] Keep every entry while recording or replaying. Up to the
+  // fork's M108 baseline font data was refcounted and this cache held it
+  // strongly, so no font was ever dropped and then rebuilt. M123 moved font
+  // data to Oilpan and left only this bounded LRU holding strong references,
+  // which makes eviction depend on how many distinct fonts have been asked
+  // for since. Dropping an entry does not merely cost a rebuild: cache_ keys
+  // the platform data strongly, so losing the font data releases the platform
+  // data too, FontPlatformDataCache's weak entry goes with it, and the next
+  // lookup goes all the way back out to the font service through
+  // QuerySystemRenderStyle. A replay that collects at a different point than
+  // the recording did then makes a round trip the recording never made.
+  if (!recordreplay::IsRecordingOrReplaying("font-data-cache-lru")) {
+    while (strong_reference_lru_.size() > kMaxSize) {
+      strong_reference_lru_.pop_back();
+    }
   }
 
   return result;
