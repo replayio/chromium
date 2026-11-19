@@ -20,6 +20,7 @@
 #include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "base/sampling_heap_profiler/lock_free_address_hash_set.h"
 #include "base/sampling_heap_profiler/poisson_allocation_sampler.h"
 #include "base/sampling_heap_profiler/sampling_heap_churn_profiler.h"
@@ -159,6 +160,28 @@ SamplingHeapProfiler::~SamplingHeapProfiler() {
 std::optional<SamplingHeapProfiler::Session> SamplingHeapProfiler::Start(
     base::ByteSize sampling_interval,
     Priority priority) {
+  // [RecordReplay] Nothing records what decides when this profiler takes a
+  // sample. Each sample draws its next interval from getrandom(), a recorded
+  // call, and the draw is triggered by a per-thread count of allocated bytes
+  // that the recording does not hold. Replaying allocates what recording never
+  // did, starting with the command handler script that OnRootFrameInit reads,
+  // so the draws land at different allocations than they did while recording
+  // and the replay mismatches. The offset never recovers.
+  //
+  // Passing the draws through would keep the recording replayable and leave the
+  // replay sampling allocations the recording never sampled. Those numbers
+  // reach no one, since nothing in blink exposes this profiler and the Memory
+  // domain's requests only arrive at a paused, diverged process, so what rules
+  // that out is cost. Replays would pay for samples nobody reads, and the
+  // pass-through region would have to cover the whole sample path, including
+  // the reads of /proc/self/maps that the first stack unwind makes.
+  //
+  // A recording carries no native sampling profile as a result, and
+  // GetSamples() returns none, as it does in a process that never profiled.
+  if (recordreplay::IsRecordingOrReplaying()) {
+    return std::nullopt;
+  }
+
   const auto unwinder = ChooseStackUnwinder();
   if (unwinder == StackUnwinder::kUnavailable) {
     LOG(WARNING) << "Sampling heap profiler: Stack unwinding is not available.";
