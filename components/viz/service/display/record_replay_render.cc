@@ -463,23 +463,8 @@ static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
   // waiting, as the divergence has already happened.
   //
   // The draw it finishes is of the tree committed before the pause, not of
-  // this repaint. Whenever the commit below blocks, that draw cannot be
-  // mistaken for this repaint's own: the commit is only taken once the
-  // compositor thread is back in its task loop, which is after the draw's
-  // OnPaintFinished has run, and gRepaintEvent names an event to signal only
-  // after the commit returns. It does not block when it skips the commit, for
-  // a page with no layers, and there such a draw can be the result -- which is
-  // the frame that path means to answer with anyway (ProxyMain::
-  // BeginMainFrameWithBlocking), though of a window this repaint did not pick
-  // if none owns the paint surface.
-  //
-  // That last case is not something releasing the calls introduces: on the
-  // skipped-commit path nothing blocked between here and gRepaintEvent being
-  // set before this release existed either, so a draw already in flight could
-  // answer the repaint. Closing it means a blocking round trip to the impl
-  // thread before gRepaintEvent is set, which is more fork-only machinery than
-  // an unobserved path is worth: no case here has a layerless page at a pause.
-  // Worth building when one fails.
+  // this repaint, and whether that draw can end up answering this repaint is
+  // the question at gRepaintEvent below.
   recordreplay::SignalInFlightSyncCalls();
 
   gCurrentCompositorProxy = RepaintCompositorProxy();
@@ -532,6 +517,31 @@ static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
   gRepaintFramesSubmitted = 0;
   gRepaintFramesForOtherSurface = 0;
   gRepaintFramesPainted = 0;
+  // From here a draw that finishes encodes its frame as this repaint's result
+  // (OnPaintFinished, which only encodes one `if (gRepaintEvent)`), so what
+  // keeps an *earlier* draw from answering matters. Usually the commit above
+  // does: BeginMainFrameWithBlocking(..., true) only returns once the impl
+  // thread has run NotifyReadyToCommitOnImpl, a posted task it cannot reach
+  // until the draw it was inside has returned, and that draw's OnPaintFinished
+  // is synchronous within it. A commit is always asked for while recording or
+  // replaying -- ProxyMain::BeginMainFrameWithBlocking forces
+  // COMMIT_PIPELINE_STAGE then -- so the no-updates early return out of
+  // LayerTreeHost::WillCommit is not another way past this.
+  //
+  // It does not hold when the commit is *skipped*: force_blocking sets
+  // skip_commit = !root_layer() and that branch returns without waiting
+  // (ProxyMain::BeginMainFrameWithBlocking), so for a page with no layers a
+  // draw already in flight can be the result. That path means to answer with
+  // the tree the compositor last drew in any case, but if no window owns the
+  // paint surface the frame can be of a window this repaint did not pick.
+  // Releasing the stranded sync calls above does not introduce this -- on that
+  // branch nothing blocked between the proxy selection and this line before
+  // the release existed either; it only lets such a draw finish sooner.
+  // Closing it means a blocking round trip to the impl thread before this
+  // line, which is more fork-only machinery than an unobserved path is worth:
+  // no case in the suite pauses on a layerless page. Worth building when one
+  // fails. Ticketed in the backend's .backlog as
+  // repaint-skipped-commit-answers-stale-draw.
   gRepaintEvent = event.get();
 
   // Trigger a new frame on the compositor thread.
