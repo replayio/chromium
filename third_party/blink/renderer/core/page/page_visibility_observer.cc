@@ -30,10 +30,19 @@ void PageVisibilityObserver::SetPage(Page* page) {
   if (page_)
     page_->PageVisibilityObserverSet().erase(this);
 
+  // The page also holds a strong mirror of its observers under
+  // leak-references, so moving to another page has to release the old page's
+  // entry, as HeapObserverSet::RemoveObserver did in 108.
+  if (page_)
+    page_->RecordReplayReleaseVisibilityObserver(this);
+
   page_ = page;
 
   if (page_)
     page_->PageVisibilityObserverSet().insert(this);
+
+  if (page_)
+    page_->RecordReplayRetainVisibilityObserver(this);
 }
 
 void PageVisibilityObserver::Trace(Visitor* visitor) const {

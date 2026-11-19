@@ -1330,6 +1330,20 @@ void Page::AcceptLanguagesChanged() {
     frames[i]->DomWindow()->AcceptLanguagesChanged();
 }
 
+void Page::RecordReplayRetainVisibilityObserver(
+    PageVisibilityObserver* observer) {
+  if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                           "PageVisibilityObserverSet"))
+    replay_strong_page_visibility_observers_.insert(observer);
+}
+
+void Page::RecordReplayReleaseVisibilityObserver(
+    PageVisibilityObserver* observer) {
+  if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                           "PageVisibilityObserverSet"))
+    replay_strong_page_visibility_observers_.erase(observer);
+}
+
 void Page::Trace(Visitor* visitor) const {
   visitor->Trace(animator_);
   visitor->Trace(autoscroll_controller_);
@@ -1340,6 +1354,7 @@ void Page::Trace(Visitor* visitor) const {
   visitor->Trace(context_menu_controller_);
   visitor->Trace(page_scale_constraints_set_);
   visitor->Trace(page_visibility_observer_set_);
+  visitor->Trace(replay_strong_page_visibility_observers_);
   visitor->Trace(pointer_lock_controller_);
   visitor->Trace(scrolling_coordinator_);
   visitor->Trace(browser_controls_);
@@ -1418,6 +1433,7 @@ void Page::WillBeDestroyed() {
     observer->ObserverSetWillBeCleared();
   }
   page_visibility_observer_set_.clear();
+  replay_strong_page_visibility_observers_.clear();
 
   if (recordreplay::AreEventsDisallowed("Page::WillBeDestroyed")) {
     // If the dtor is called during GC (usually from |~SVGImage|):
