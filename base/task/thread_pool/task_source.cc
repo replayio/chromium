@@ -69,31 +69,27 @@ void TaskSource::ClearDelayedHeapHandle() {
   delayed_pq_heap_handle_ = HeapHandle();
 }
 
-// Record/replay the thread type instead of ordering reads and writes: the sort
-// keys of the priority queues are built from it, so a read that saw another
-// thread's UpdatePriority would reorder a queue on a replay.
+// [RecordReplay] Record the thread type instead of ordering the reads and
+// writes of it: the sort keys of the priority queues are built from this read,
+// so a read that saw another thread's UpdatePriority would reorder a queue on
+// a replay. The recording belongs on the accessor rather than at the call
+// sites, so that a read site added later cannot pick up an unrecorded load.
 //
-// A release build has four live reads, both GetSortKey() overrides plus
-// PostTaskWithSequenceNow() and ShouldYield(). Three are unordered by
-// construction, the GetSortKey() bodies reading their other fields through
-// TS_UNCHECKED_READ, so the recorded read cannot be narrowed off the posting
-// path. The read in PostTaskWithSequenceNow() does hold the transaction's
-// ordered TaskSource.lock_, which is where every write happens too, so there
-// the recorded value is weight rather than protection. It stays on this one
-// accessor regardless, because recording at call sites rather than at the read
-// is how the old priority_racy() came to record nothing at all.
+// RecordReplayValueIfAllowed rather than a bare AreEventsDisallowed() check.
+// The driver hands back the live value either way, but the helper skips the
+// call and with it the RecordedValueEventsPassedThrough warning that a worker
+// reading inside a pass-through region would raise on every read.
 //
-// RecordReplayValueIfAllowed rather than 108's bare AreEventsDisallowed()
-// check: the driver hands back the live value when events are disallowed,
-// passed through or diverged, so the two agree on what is recorded, but the
-// helper skips the call and with it the RecordedValueEventsPassedThrough
-// warning that a worker reading inside a pass-through region would raise on
-// every read.
+// Two limitations this accepts. With nothing being recorded a read pays an
+// out-of-line call where upstream inlines a relaxed load, and there is no
+// cheaper gate to put in the header, because the only inlinable recording flag
+// is defined in v8 and declared in no header base can include. And the read in
+// ThreadPoolImpl::ShouldYield() is on a path kept lock-free on purpose, so it
+// does not sit behind a lock the way the posting path's read does.
 //
-// The limitation this accepts: with nothing being recorded, a read costs this
-// call and two predicates returning false where upstream inlines one relaxed
-// load. There is no cheaper gate to put in the header, as the only inlinable
-// flag for it lives in v8's api.cc and no header base can include declares it.
+// Recording this read does not make a yield decision deterministic on its own,
+// because ThreadGroup::ShouldYield() mixes in an unordered read of its own
+// max_allowed_sort_key_. Chromium 108 was the same.
 ThreadType TaskSource::thread_type_racy() const {
   const ThreadType thread_type =
       thread_type_racy_.load(std::memory_order_relaxed);

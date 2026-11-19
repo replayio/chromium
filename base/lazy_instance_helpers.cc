@@ -33,23 +33,17 @@ bool NeedsLazyInstance(std::atomic<uintptr_t>& state) {
   // the associated data (buf_). Pairing Release_Store is in
   // CompleteLazyInstance().
   if (state.load(std::memory_order_acquire) == kLazyInstanceStateCreating) {
+    // [RecordReplay] Which thread makes the instance is left to the race, and
+    // the maker's identity still reaches the recording through whatever its
+    // constructor does, because naming an ordered lock or making a redirected
+    // system call records on the calling thread. So a raced
+    // Singleton<T>::get() whose constructor does either can mismatch inside
+    // that constructor, on a thread that never ran it when recording. Closing
+    // that would need a recorded value on every lazy instance and singleton
+    // read in the process.
+
     // Don't interact with the recording while we get the current time or sleep
     // in non-deterministic ways.
-    //
-    // Which thread makes the instance is left to the race, and that is not
-    // free. A caller is promised the same instance, not the same maker, but
-    // the maker's identity still reaches the streams through whatever its
-    // constructor does: the driver's CreateOrderedLock records its id on the
-    // calling thread (with a stack, when ordered-lock asserts are on), an
-    // ordered acquire records the owning thread, and a redirected system call
-    // records on the thread that makes it. So a raced Singleton<T>::get()
-    // whose constructor names a lock or does recorded I/O can mismatch inside
-    // that constructor, on a thread that never ran it when recording.
-    //
-    // We cannot afford the guarantee. Keeping it meant recording a value on
-    // every read of every LazyInstance and Singleton in the process, contended
-    // or not, each one an assert with a stack, and it put a non-inlinable call
-    // on that path in runs that record nothing at all.
     RecordReplayAutoPassThroughEvents pt;
 
     const base::TimeTicks start = base::TimeTicks::Now();
