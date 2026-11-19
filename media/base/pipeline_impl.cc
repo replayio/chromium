@@ -215,8 +215,9 @@ class PipelineImpl::RendererWrapper final : public DemuxerHost,
 
    private:
     // Named so its acquisitions are ordered on replay, as in Replay's
-    // Chromium 108. The name is 108's, where this lock was RendererWrapper's
-    // own `shared_state_lock_` member; nothing matches on the string.
+    // Chromium 108. The driver only uses the string as a label, so this keeps
+    // the name 108 gave the lock even though the member has since moved into
+    // this class and been renamed.
     mutable base::Lock lock_{
         "PipelineImpl::RendererWrapper.shared_state_lock_"};
     SharedState state_;  // Only sometimes guarded by `lock_`.
