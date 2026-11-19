@@ -8690,10 +8690,6 @@ void NavigationRequest::UpdateHistoryParamsInCommitNavigationParams() {
 void NavigationRequest::SanitizeRedirectsForCommit(
     blink::mojom::CommonNavigationParamsPtr& common_params,
     blink::mojom::CommitNavigationParamsPtr& commit_params) {
-  if (!base::FeatureList::IsEnabled(kSanitizeRedirectUrlsDuringNavigation)) {
-    return;
-  }
-
   // [RecordReplay] A recording reports each request of a redirected navigation
   // with its URL, as Chromium 108 let it. The renderer only has the URL the
   // navigation started from if the browser gives it whole, and only the hop
@@ -8701,28 +8697,32 @@ void NavigationRequest::SanitizeRedirectsForCommit(
   // `original_url` back -- kSanitizeOriginalUrlDuringNavigation
   // (content/common/features.cc) cut it to an origin on the way here, while
   // `original_url_` is that URL and is never sanitized -- and leaves the
-  // redirect URLs below alone. What a recording does not need is still cut:
-  // the error page of a failed, redirected subframe navigation that commits in
-  // its initiator's process gets origins only, and so do the cross-origin
-  // Location headers below.
+  // redirect URLs further down alone. This sits above the early return because
+  // it undoes that feature, not the one the early return tests.
   //
   // IsRecordReplayRun() is what the browser process has to go on, because it
   // never loads the driver that answers IsRecordingOrReplaying()
-  // (base/record_replay.h). Being environment-derived has two consequences
-  // worth knowing:
-  //   - it is true as soon as RECORD_ALL_CONTENT is set, the empty string
-  //     included, so @replayio/playwright's RECORD_REPLAY_NO_RECORD mode, whose
-  //     point is to record nothing, also gets the whole URLs;
+  // (base/record_replay.h). It reads the environment -- RECORD_ALL_CONTENT set
+  // and RECORD_REPLAY_DONT_RECORD not -- which has two consequences worth
+  // knowing:
+  //   - RECORD_ALL_CONTENT counts as set even when empty, so
+  //     @replayio/playwright's RECORD_REPLAY_NO_RECORD mode, whose point is to
+  //     record nothing, also gets the whole URLs;
   //   - it is false in the toolbar's per-tab recording mode (CHROMIUM_UI, which
   //     marks the recorded renderer with --record-replay-for-recording
-  //     instead), so a recording made that way reports origins where an
-  //     all-content one reports URLs. Nothing scripted records that way, and
-  //     Chromium 108 had no URL sanitization to switch off for it either. The
-  //     per-process answer, RenderProcessHost::IsRecordReplayForRecording(),
-  //     is available here if that mode ever needs covering.
+  //     instead), so a recording made that way now reports origins where it
+  //     used to report whole URLs, and where an all-content run still does.
+  //     Nothing scripted records that way. Covering it would mean asking the
+  //     process rather than the environment, which is possible here:
+  //     static_cast<RenderProcessHostImpl*>(GetRenderFrameHost()->GetProcess())
+  //         ->IsRecordReplayForRecording().
   const bool record_replay_run = recordreplay::IsRecordReplayRun();
   if (record_replay_run) {
     commit_params->original_url = original_url_;
+  }
+
+  if (!base::FeatureList::IsEnabled(kSanitizeRedirectUrlsDuringNavigation)) {
+    return;
   }
 
   // TODO(crbug.com/40134629): Remove the sanitization once Subframe Error
@@ -8740,7 +8740,10 @@ void NavigationRequest::SanitizeRedirectsForCommit(
     if (record_replay_run) {
       // [RecordReplay] Undo the restore above for this error page: it commits
       // in a process that must not be told the cross-origin URL the navigation
-      // failed on, which is what stock Chromium gives it as well.
+      // failed on, which is what stock Chromium gives it as well. A run that
+      // also disables kSanitizeRedirectUrlsDuringNavigation returns above and
+      // so keeps the whole URL here; no configuration we run does that, and a
+      // recording of this page holds the URL either way.
       commit_params->original_url =
           commit_params->original_url.DeprecatedGetOriginAsURL();
     }
