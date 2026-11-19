@@ -8697,8 +8697,8 @@ void NavigationRequest::SanitizeRedirectsForCommit(
   // `original_url` back -- kSanitizeOriginalUrlDuringNavigation
   // (content/common/features.cc) cut it to an origin on the way here, while
   // `original_url_` is that URL and is never sanitized -- and leaves the
-  // redirect URLs further down alone. This sits above the early return because
-  // it undoes that feature, not the one the early return tests.
+  // redirect URLs further down alone. The error page below still gets an
+  // origin, because the origin of the whole URL is the origin of the cut one.
   //
   // IsRecordReplayRun() is what the browser process has to go on, because it
   // never loads the driver that answers IsRecordingOrReplaying()
@@ -8721,9 +8721,9 @@ void NavigationRequest::SanitizeRedirectsForCommit(
     commit_params->original_url = original_url_;
   }
 
-  if (!base::FeatureList::IsEnabled(kSanitizeRedirectUrlsDuringNavigation)) {
-    return;
-  }
+  const bool sanitize_redirect_urls =
+      !record_replay_run &&
+      base::FeatureList::IsEnabled(kSanitizeRedirectUrlsDuringNavigation);
 
   // TODO(crbug.com/40134629): Remove the sanitization once Subframe Error
   // Pages are isolated.
@@ -8737,22 +8737,12 @@ void NavigationRequest::SanitizeRedirectsForCommit(
 
   if (should_sanitize_final_url_for_error_page) {
     common_params->url = common_params->url.DeprecatedGetOriginAsURL();
-    if (record_replay_run) {
-      // [RecordReplay] Undo the restore above for this error page: it commits
-      // in a process that must not be told the cross-origin URL the navigation
-      // failed on, which is what stock Chromium gives it as well. A run that
-      // also disables kSanitizeRedirectUrlsDuringNavigation returns above and
-      // so keeps the whole URL here; no configuration we run does that, and a
-      // recording of this page holds the URL either way.
-      commit_params->original_url =
-          commit_params->original_url.DeprecatedGetOriginAsURL();
-    }
+    commit_params->original_url =
+        commit_params->original_url.DeprecatedGetOriginAsURL();
   }
 
-  // [RecordReplay] A recording keeps the hop URLs, except the ones this error
-  // page must not see.
   const bool sanitize_urls =
-      !record_replay_run || should_sanitize_final_url_for_error_page;
+      sanitize_redirect_urls || should_sanitize_final_url_for_error_page;
 
   // It is safe to convert GURL to an Origin and back in the code below because
   // we only want to discard the rest of the URL (e.g., path and params). The
