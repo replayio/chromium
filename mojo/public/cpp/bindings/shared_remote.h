@@ -116,10 +116,10 @@ class SharedRemoteBase
           remote_(std::move(remote), task_runner_),
           associated_group_(*remote_.internal_state()->associated_group()) {
       // [RecordReplay] See Release(). A wrapper made where the recording
-      // cannot be added to gets no lock: CreateOrderedLock() takes its id from
-      // the recording, which under pass-through hands back the raw counter
-      // when recording and zero when replaying, so the two sides would
-      // disagree about whether this wrapper is ordered at all.
+      // cannot be added to gets no lock. CreateOrderedLock() reads its id out
+      // of the recording, and a region that passes events through hands back
+      // the raw counter when recording and zero when replaying, so the two
+      // sides would disagree about whether this wrapper is ordered.
       if (recordreplay::IsRecordingOrReplaying() &&
           !recordreplay::AreEventsDisallowed() &&
           !recordreplay::AreEventsPassedThrough() &&
@@ -133,21 +133,21 @@ class SharedRemoteBase
     RemoteWrapper& operator=(const RemoteWrapper&) = delete;
 
     // [RecordReplay] Any thread holding the SharedRemote can drop the last
-    // reference, and whichever does decides how this is deleted: inline, or
-    // through a DeleteSoon posted to the remote's own sequence. Which thread
-    // that is has to be the same when replaying (e.g. a widget's input
-    // handler host, cleared on the main thread while the compositor thread
-    // lets go of its copy), so decrements are ordered among threads by this
-    // wrapper's own lock. Increments are not ordered: only which thread
-    // reaches zero is in question. The deleting itself is outside the lock.
+    // reference, and whichever does decides whether this is deleted inline or
+    // through a DeleteSoon posted to the remote's own sequence. Upstream races
+    // it where WidgetInputHandlerManager::ClearClient() resets host_ on the
+    // main thread while an input-thread caller still holds the copy
+    // GetWidgetInputHandlerHost() handed it. Which thread gets there last has
+    // to be the same when replaying, so decrements are ordered among threads
+    // by this wrapper's own lock. Increments are left alone, because only the
+    // thread that reaches zero is in question, and the deleting itself happens
+    // outside the lock.
     //
-    // A decrement where the recording cannot be added to is not ordered. The
-    // driver's OrderedLock would pass such a region through anyway, but only
-    // after taking its own global lock and warning about the acquisition, and
-    // a last reference dropped by the collector is exactly that case -- which
-    // is what DeleteOnCorrectThread()'s leak-references gate is for, not this.
-    // So the thread that drops the last reference there is still decided by
-    // the race.
+    // A decrement where the recording cannot be added to is not ordered, so a
+    // last reference dropped by the collector is still decided by the race.
+    // DeleteOnCorrectThread()'s leak-references gate is what covers that case,
+    // not this. Skipping the acquisition there also keeps the driver's
+    // OrderedLock from taking its own global lock and warning about it.
     void Release() const {
       const int ordered_lock =
           record_replay_release_ordered_lock_id_ &&
@@ -263,9 +263,9 @@ class SharedRemoteBase
     RemoteType remote_;
     AssociatedGroup associated_group_;
 
-    // [RecordReplay] Orders reference count decrements; see Release(). Zero in
-    // a process that is neither recording nor replaying, and for a wrapper
-    // made where the recording cannot be added to.
+    // [RecordReplay] Orders reference count decrements. Zero in a process that
+    // is neither recording nor replaying, and for a wrapper made where the
+    // recording cannot be added to. See Release().
     int record_replay_release_ordered_lock_id_ = 0;
   };
 
