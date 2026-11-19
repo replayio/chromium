@@ -9,83 +9,11 @@
 #include "base/at_exit.h"
 #include "base/threading/platform_thread.h"
 #include "base/time/time.h"
-#include "base/record_replay.h"
 #include "base/record_replay_inline.h"
 
 namespace base::internal {
 
-namespace {
-
-constexpr uintptr_t kCreatedMask = ~kLazyInstanceStateCreating;
-
-// Whether this thread's use of a lazy instance is in the recording.
-bool RecordReplayUsesRecording() {
-  return recordreplay::IsRecordingOrReplaying() &&
-         !recordreplay::AreEventsDisallowed() &&
-         !recordreplay::AreEventsPassedThrough() &&
-         !recordreplay::HasDivergedFromRecording();
-}
-
-// Waits for the thread making the instance, without touching the recording.
-uintptr_t WaitUntilCreated(std::atomic<uintptr_t>& state) {
-  RecordReplayAutoPassThroughEvents pt;
-  uintptr_t instance;
-  while (!((instance = state.load(std::memory_order_acquire)) &
-           kCreatedMask)) {
-    PlatformThread::YieldCurrentThread();
-  }
-  return instance;
-}
-
-}  // namespace
-
-bool RecordReplayIsActiveForLazyInstance() {
-  return recordreplay::IsRecordingOrReplaying();
-}
-
-uintptr_t RecordReplayLazyInstanceState(std::atomic<uintptr_t>& state,
-                                        uintptr_t instance) {
-  if (!RecordReplayUsesRecording()) {
-    return instance;
-  }
-  const bool created = instance & kCreatedMask;
-  const bool recorded =
-      recordreplay::RecordReplayValue("LazyInstance.created", created);
-  if (recorded == created) {
-    return instance;
-  }
-  // Only when replaying. If it was made by now in the recording, another
-  // thread makes it. If it wasn't, this thread went on to NeedsLazyInstance().
-  return recorded ? WaitUntilCreated(state) : 0;
-}
-
 bool NeedsLazyInstance(std::atomic<uintptr_t>& state) {
-  if (RecordReplayUsesRecording() && recordreplay::IsReplaying()) {
-    // The thread that won this when recording wins it now.
-    if (recordreplay::RecordReplayValue("LazyInstance.won", 0)) {
-      uintptr_t none = 0;
-      if (state.compare_exchange_strong(none, kLazyInstanceStateCreating,
-                                        std::memory_order_relaxed,
-                                        std::memory_order_relaxed)) {
-        return true;
-      }
-    }
-    WaitUntilCreated(state);
-    return false;
-  }
-  if (RecordReplayUsesRecording()) {
-    uintptr_t none = 0;
-    const bool won = state.compare_exchange_strong(
-        none, kLazyInstanceStateCreating, std::memory_order_relaxed,
-        std::memory_order_relaxed);
-    recordreplay::RecordReplayValue("LazyInstance.won", won);
-    if (won) {
-      return true;
-    }
-    WaitUntilCreated(state);
-    return false;
-  }
-
   // Try to create the instance, if we're the first, will go from 0 to
   // kLazyInstanceStateCreating, otherwise we've already been beaten here.
   // The memory access has no memory ordering as state 0 and
@@ -106,7 +34,9 @@ bool NeedsLazyInstance(std::atomic<uintptr_t>& state) {
   // CompleteLazyInstance().
   if (state.load(std::memory_order_acquire) == kLazyInstanceStateCreating) {
     // Don't interact with the recording while we get the current time or sleep
-    // in non-deterministic ways.
+    // in non-deterministic ways. Which thread makes the instance is left to
+    // the race: a replay can have another one make it, and all a caller is
+    // promised is the same instance, not the same maker.
     RecordReplayAutoPassThroughEvents pt;
 
     const base::TimeTicks start = base::TimeTicks::Now();
