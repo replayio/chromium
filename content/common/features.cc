@@ -738,6 +738,10 @@ BASE_FEATURE(kSanitizeFailedSubframeNavigationUrls,
 // Controls whether the `original_url` contains the full URL or just the
 // sanitized origin when sent to the renderer on commit.
 // See https://crbug.com/495463654.
+//
+// [RecordReplay] On, as upstream has it. A recording needs the whole URL, and
+// NavigationRequest::SanitizeRedirectsForCommit puts it back for a
+// record/replay run only.
 BASE_FEATURE(kSanitizeOriginalUrlDuringNavigation,
              base::FEATURE_ENABLED_BY_DEFAULT);
 

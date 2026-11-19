@@ -280,8 +280,8 @@ constexpr base::TimeDelta kCompositorLockTimeout = base::Milliseconds(150);
 // them to the renderer process as part of the navigation.
 // See https://crbug.com/40095391.
 //
-// [RecordReplay] On, as upstream has it. SanitizeRedirectsForCommit keeps the
-// URLs whole for a record/replay run.
+// [RecordReplay] On, as upstream has it; SanitizeRedirectsForCommit skips the
+// sanitization for a record/replay run only.
 BASE_FEATURE(kSanitizeRedirectUrlsDuringNavigation,
              base::FEATURE_ENABLED_BY_DEFAULT);
 
@@ -8691,30 +8691,39 @@ void NavigationRequest::SanitizeRedirectsForCommit(
     blink::mojom::CommonNavigationParamsPtr& common_params,
     blink::mojom::CommitNavigationParamsPtr& commit_params) {
   // [RecordReplay] A recording reports each request of a redirected navigation
-  // with its URL, as Chromium 108 let it, and the renderer has those URLs only
-  // if the browser sends them whole. So a record/replay run puts `original_url`
-  // back from `original_url_`, the URL kSanitizeOriginalUrlDuringNavigation
-  // (content/common/features.cc) cut to an origin on the way here, and leaves
-  // the hop URLs below alone. The error page below still gets an origin,
-  // because the origin of the whole URL is the origin of the cut one.
+  // with its URL, as Chromium 108 let it. The renderer only has the URL the
+  // navigation started from if the browser gives it whole, and only the hop
+  // URLs if they are not cut to their origins. So a record/replay run puts
+  // `original_url` back -- kSanitizeOriginalUrlDuringNavigation
+  // (content/common/features.cc) cut it to an origin on the way here, while
+  // `original_url_` is that URL and is never sanitized -- and leaves the
+  // redirect URLs further down alone. This sits above the early return because
+  // it undoes that feature, not the one the early return tests.
   //
-  // The browser process has to ask IsRecordReplayRun(), which reads the
-  // environment, because it never loads the driver that answers
-  // IsRecordingOrReplaying() (base/record_replay.h). Reading the environment
-  // has two consequences. RECORD_ALL_CONTENT counts as set even when empty, so
-  // a run that empties it to record nothing (@replayio/playwright's
-  // RECORD_REPLAY_NO_RECORD) gets the whole URLs too. And it is false in the
-  // toolbar's per-tab recording mode, which marks only the recorded renderer,
-  // so a recording made that way reports origins where an all-content run
-  // reports whole URLs.
+  // IsRecordReplayRun() is what the browser process has to go on, because it
+  // never loads the driver that answers IsRecordingOrReplaying()
+  // (base/record_replay.h). It reads the environment -- RECORD_ALL_CONTENT set
+  // and RECORD_REPLAY_DONT_RECORD not -- which has two consequences worth
+  // knowing:
+  //   - RECORD_ALL_CONTENT counts as set even when empty, so
+  //     @replayio/playwright's RECORD_REPLAY_NO_RECORD mode, whose point is to
+  //     record nothing, also gets the whole URLs;
+  //   - it is false in the toolbar's per-tab recording mode (CHROMIUM_UI, which
+  //     marks the recorded renderer with --record-replay-for-recording
+  //     instead), so a recording made that way now reports origins where it
+  //     used to report whole URLs, and where an all-content run still does.
+  //     Nothing scripted records that way. Covering it would mean asking the
+  //     process rather than the environment, which is possible here:
+  //     static_cast<RenderProcessHostImpl*>(GetRenderFrameHost()->GetProcess())
+  //         ->IsRecordReplayForRecording().
   const bool record_replay_run = recordreplay::IsRecordReplayRun();
   if (record_replay_run) {
     commit_params->original_url = original_url_;
   }
 
-  const bool sanitize_redirect_urls =
-      !record_replay_run &&
-      base::FeatureList::IsEnabled(kSanitizeRedirectUrlsDuringNavigation);
+  if (!base::FeatureList::IsEnabled(kSanitizeRedirectUrlsDuringNavigation)) {
+    return;
+  }
 
   // TODO(crbug.com/40134629): Remove the sanitization once Subframe Error
   // Pages are isolated.
@@ -8728,12 +8737,22 @@ void NavigationRequest::SanitizeRedirectsForCommit(
 
   if (should_sanitize_final_url_for_error_page) {
     common_params->url = common_params->url.DeprecatedGetOriginAsURL();
-    commit_params->original_url =
-        commit_params->original_url.DeprecatedGetOriginAsURL();
+    if (record_replay_run) {
+      // [RecordReplay] Undo the restore above for this error page: it commits
+      // in a process that must not be told the cross-origin URL the navigation
+      // failed on, which is what stock Chromium gives it as well. A run that
+      // also disables kSanitizeRedirectUrlsDuringNavigation returns above and
+      // so keeps the whole URL here; no configuration we run does that, and a
+      // recording of this page holds the URL either way.
+      commit_params->original_url =
+          commit_params->original_url.DeprecatedGetOriginAsURL();
+    }
   }
 
+  // [RecordReplay] A recording keeps the hop URLs, except the ones this error
+  // page must not see.
   const bool sanitize_urls =
-      sanitize_redirect_urls || should_sanitize_final_url_for_error_page;
+      !record_replay_run || should_sanitize_final_url_for_error_page;
 
   // It is safe to convert GURL to an Origin and back in the code below because
   // we only want to discard the rest of the URL (e.g., path and params). The
