@@ -480,12 +480,16 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
     return page_visibility_observer_set_;
   }
 
-  // Keep an observer alive while this page observes it, under leak-references.
-  // The set above holds only WeakMembers, while 108 held this same set in a
-  // HeapObserverSet whose AddObserver/RemoveObserver maintained such a mirror,
-  // and HeapObserverList, which the other observer sets moved to, still does.
-  // Without it a notification is lost whenever a collection takes an observer
-  // the recording still had, or the other way round.
+  // Keep an observer alive while this page observes it, under
+  // leak-references, as HeapObserverList does for the observer lists it holds.
+  // The set below holds only WeakMembers, so without the mirror an observer
+  // collected between registering and the next visibility transition stops
+  // being notified, and whether that happens can differ between recording and
+  // replaying. No PageVisibilityObserver can reach that state today: every one
+  // of them is also kept alive either by the context lifecycle observer list,
+  // which has a mirror of its own, or by an owner that outlives the page. So
+  // this is the container's own guarantee rather than a fix for a loss that is
+  // reachable now.
   void RecordReplayRetainVisibilityObserver(PageVisibilityObserver* observer);
   void RecordReplayReleaseVisibilityObserver(PageVisibilityObserver* observer);
 
