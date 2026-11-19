@@ -625,6 +625,9 @@ void TaskTracker::DecrementNumItemsBlockingShutdown() {
 }
 
 void TaskTracker::DecrementNumIncompleteTaskSources() {
+  // [RecordReplay] Not a recorded value, as in Chromium 108: the thread that
+  // wins the race to zero only takes the unnamed flush_lock_ and broadcasts
+  // flush_cv_, which upstream notes is only waited upon in FlushForTesting().
   const auto prev_num_incomplete_task_sources =
       num_incomplete_task_sources_.fetch_sub(1);
   DCHECK_GE(prev_num_incomplete_task_sources, 1);
