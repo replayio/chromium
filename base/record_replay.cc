@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 
 #include "base/record_replay.h"
-#include "base/record_replay_racy_static.h"
 #include "base/json/json_writer.h"
 #include "base/values.h"
 
@@ -492,22 +491,6 @@ void EndDisallowEvents() {
 
 bool AreEventsPassedThrough(const char* why) {
   return V8RecordReplayAreEventsPassedThrough(why);
-}
-
-namespace {
-thread_local int g_unordered_lock_creation_depth = 0;
-}  // namespace
-
-AutoUnorderedLockCreation::AutoUnorderedLockCreation() {
-  g_unordered_lock_creation_depth++;
-}
-
-AutoUnorderedLockCreation::~AutoUnorderedLockCreation() {
-  g_unordered_lock_creation_depth--;
-}
-
-bool InUnorderedLockCreation() {
-  return g_unordered_lock_creation_depth > 0;
 }
 
 void BeginPassThroughEvents() {
