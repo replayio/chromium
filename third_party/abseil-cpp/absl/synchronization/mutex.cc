@@ -2620,7 +2620,8 @@ void CondVar::EnableDebugLog(const char* name) {
 
 // Remove thread s from the list of waiters on this condition variable.
 void CondVar::Remove(PerThreadSynch* s) {
-  // Spins and sleeps like {CondVarEnqueue}; see {CondVar::Signal}.
+  // Removing a waiter spins and sleeps like {CondVarEnqueue} does, for the
+  // reason {CondVar::Signal} gives.
   RecordReplayAutoDisallowEvents disallow("absl::CondVar::Remove");
 
   SchedulingGuard::ScopedDisable disable_rescheduling;
@@ -2671,8 +2672,8 @@ void CondVar::Remove(PerThreadSynch* s) {
 // mutex code.
 static void CondVarEnqueue(SynchWaitParams* waitp) {
   // Queueing on a condition variable spins against the threads signalling it
-  // and the other threads queueing, and sleeps between attempts; see
-  // {CondVar::Signal} for why that sleep must not be recorded.
+  // and the other threads queueing, and sleeps between attempts.
+  // {CondVar::Signal} says why that sleep must not be recorded.
   RecordReplayAutoDisallowEvents disallow("absl::CondVarEnqueue");
 
   // This thread might be transferred to the Mutex queue by Fer() when
@@ -2781,8 +2782,7 @@ void CondVar::Signal() {
   // attempts, so whether it sleeps at all, and how often, is contention. The
   // sleep is a recorded call, and V8 15.7 made every {base::ConditionVariable}
   // an absl one, so a replay can see nanosleep where the recording had moved
-  // on, and a worker thread's own event stream then diverges. Note that
-  // currently absl mutexes don't support ordering.
+  // on, and a worker thread's own event stream then diverges.
   RecordReplayAutoDisallowEvents disallow("absl::CondVar::Signal");
 
   SchedulingGuard::ScopedDisable disable_rescheduling;
@@ -2824,7 +2824,7 @@ void CondVar::Signal() {
 }
 
 void CondVar::SignalAll() {
-  // Spins and sleeps like {CondVar::Signal}.
+  // This spins and sleeps like {CondVar::Signal} does.
   RecordReplayAutoDisallowEvents disallow("absl::CondVar::SignalAll");
 
   ABSL_TSAN_MUTEX_PRE_SIGNAL(nullptr, 0);
