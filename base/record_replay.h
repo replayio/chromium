@@ -30,10 +30,6 @@ namespace base {
 
 namespace recordreplay {
 
-// Creates what this file needs made on the main thread before any other
-// thread exists (see AutoOrderedRefCount). Called once the driver is attached.
-void Initialize();
-
 // Whether the calling thread is the one the driver attached on.
 bool IsMainThread();
 
@@ -96,20 +92,6 @@ void OrderedUnlock(int lock);
 struct AutoOrderedLock {
   AutoOrderedLock(int id) : id_(id) { OrderedLock(id_); }
   ~AutoOrderedLock() { OrderedUnlock(id_); }
-  int id_;
-};
-
-// Orders one reference count operation among threads. For the few kinds of
-// object whose last reference any of several threads can drop, and whose
-// destruction is something a recording notes (a task posted, a lock taken):
-// the thread that destroys one when recording isn't always the one that does
-// when replaying. One lock serves all of them. Nothing is ordered where events
-// are disallowed or passed through, or before Initialize().
-struct AutoOrderedRefCount {
-  AutoOrderedRefCount();
-  ~AutoOrderedRefCount();
-  AutoOrderedRefCount(const AutoOrderedRefCount&) = delete;
-  AutoOrderedRefCount& operator=(const AutoOrderedRefCount&) = delete;
   int id_;
 };
 

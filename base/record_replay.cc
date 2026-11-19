@@ -407,32 +407,6 @@ void OrderedUnlock(int lock) {
   V8RecordReplayOrderedUnlock(lock);
 }
 
-// The lock AutoOrderedRefCount takes. Made on the main thread as the process
-// starts, before any other thread exists.
-static int gRefCountLock;
-
-void Initialize() {
-  if (IsRecordingOrReplaying() && !gRefCountLock) {
-    gRefCountLock = CreateOrderedLock("ref counts");
-  }
-}
-
-AutoOrderedRefCount::AutoOrderedRefCount()
-    : id_(gRefCountLock && !AreEventsDisallowed() &&
-                  !AreEventsPassedThrough() && !HasDivergedFromRecording()
-              ? gRefCountLock
-              : 0) {
-  if (id_) {
-    OrderedLock(id_);
-  }
-}
-
-AutoOrderedRefCount::~AutoOrderedRefCount() {
-  if (id_) {
-    OrderedUnlock(id_);
-  }
-}
-
 void NewCheckpoint() {
   V8RecordReplayNewCheckpoint();
 }
