@@ -122,12 +122,11 @@ static void RecordReplayAddOrderedPthreadMutex(const char* name,
 }
 
 LockImpl::LockImpl(const char* ordered_name) {
-  // Ordering is opt-in by name, as in Replay's Chromium 108: a lock made
-  // without one is never ordered. An empty name asks for the same thing
-  // deliberately, for a lock that must never be ordered -- one taken on a path
-  // that threads race to without any lock, so that whether it's taken at all
-  // isn't the same on a replay. Such a lock must guard nothing a recording has
-  // in it.
+  // Ordering is opt-in by name, as in Replay's Chromium 108. A lock made
+  // without a name is never ordered. An empty name asks for that deliberately,
+  // for a lock taken on a path threads race to without any lock of their own,
+  // where whether it is taken at all isn't the same on a replay. Such a lock
+  // must guard nothing a recording has in it.
   if (ordered_name && !*ordered_name) {
     ordered_name = nullptr;
   }
