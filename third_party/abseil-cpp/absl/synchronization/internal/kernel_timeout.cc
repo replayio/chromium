@@ -42,39 +42,51 @@ static void* LookupRecordReplaySymbol(const char* name) {
   return fnptr ? fnptr : reinterpret_cast<void*>(1);
 }
 
-static void RecordReplayBeginPassThroughEvents() {
-  static void* fnptr;
-  if (!fnptr) {
-    fnptr = LookupRecordReplaySymbol("RecordReplayBeginPassThroughEvents");
-  }
-  if (fnptr != reinterpret_cast<void*>(1)) {
-    reinterpret_cast<void (*)()>(fnptr)();
-  }
-}
-
-static void RecordReplayEndPassThroughEvents() {
-  static void* fnptr;
-  if (!fnptr) {
-    fnptr = LookupRecordReplaySymbol("RecordReplayEndPassThroughEvents");
-  }
-  if (fnptr != reinterpret_cast<void*>(1)) {
-    reinterpret_cast<void (*)()>(fnptr)();
-  }
-}
-
 // Keeps the clock reads a wait deadline needs out of the recording, the way
 // v8::base::ConditionVariable::WaitFor did before upstream moved the deadline
 // arithmetic in here and onto absl's primitives. Two reasons they must not be
 // recorded calls: a pending deadline is re-read on every retry of the wait, on
 // whichever thread happens to contend, so how many reads happen is contention
-// and does not replay; and a replay serves a timed futex wait by polling the
-// host clock, so a deadline built from a replayed clock value would already
-// have passed and the wait would return at once. This makes the reads real, it
-// does not order anything: absl mutexes and condition variables still have no
-// ordering route.
+// and does not replay; and a replay serves a timed futex wait against the host
+// clock, so a deadline built from a replayed clock value would be a
+// recording-era timestamp and the wait would return at once. Passing a clock
+// read through does not bypass the continuation policy the replay has for that
+// clock, which is applied to a passed-through read as well. None of this
+// orders anything: absl mutexes and condition variables have no ordering
+// route at all.
 struct RecordReplayAutoPassThroughEvents {
-  RecordReplayAutoPassThroughEvents() { RecordReplayBeginPassThroughEvents(); }
-  ~RecordReplayAutoPassThroughEvents() { RecordReplayEndPassThroughEvents(); }
+  RecordReplayAutoPassThroughEvents() {
+    // Both bindings are looked up here, before events are passed through, and
+    // kept for the life of the process. A lookup made while events are already
+    // passed through finds nothing, because the driver's own interception of
+    // dlsym is skipped then and the real dlsym cannot see a library opened
+    // without RTLD_GLOBAL. Looking the pair up together is what keeps the
+    // begin and the end balanced: an end that went missing would leave the
+    // thread passing events through, and recording nothing, for good.
+    // base/record_replay_inline.h looks them up on every use for the same
+    // reason, which a wait path can't afford. The first deadline a process
+    // computes is long after the driver loads, so a lookup that fails means
+    // there is no driver and the region is inert, which is what we want.
+    static void* begin_fn =
+        LookupRecordReplaySymbol("RecordReplayBeginPassThroughEvents");
+    static void* end_fn =
+        LookupRecordReplaySymbol("RecordReplayEndPassThroughEvents");
+    end = (begin_fn != reinterpret_cast<void*>(1) &&
+           end_fn != reinterpret_cast<void*>(1))
+              ? end_fn
+              : nullptr;
+    if (end) {
+      reinterpret_cast<void (*)()>(begin_fn)();
+    }
+  }
+
+  ~RecordReplayAutoPassThroughEvents() {
+    if (end) {
+      reinterpret_cast<void (*)()>(end)();
+    }
+  }
+
+  void* end;
 };
 
 namespace absl {
