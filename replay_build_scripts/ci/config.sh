@@ -123,6 +123,21 @@ github_read() {
   done
 }
 
+# Like github_read, but a failure is the caller's to handle, and it gives up
+# sooner: for a read that saves work rather than one the job depends on.
+github_try() {
+  local attempt
+  for attempt in 1 2 3; do
+    if timeout --foreground 300 "$@"; then
+      return 0
+    fi
+    if [ "$attempt" = 3 ]; then
+      return 1
+    fi
+    sleep $((attempt * 30))
+  done
+}
+
 stamp_value() {
   sed -n "s/^$1=//p" "$CHECKOUT_STAMP" 2>/dev/null || true
 }

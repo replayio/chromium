@@ -9,6 +9,8 @@
 #   <root>/jobs/<job id>     the current job's logs and artifacts (job.sh)
 #   <root>/.replay-checkout  stamp: key, scheme, when
 #   <root>/.replay-synced    the commit of the last sync that finished
+#   <root>/.replay-dep-pins  the DEPS revisions of Replay's forks at that
+#                            commit, written in the container, read here
 #
 #   checkout.sh root          print <root>
 #   checkout.sh sync          create <root> if it is missing, put src at this
@@ -16,6 +18,8 @@
 #                             With CHROMIUM_CHECKOUT_FROM=<key>, a <root> that
 #                             does not exist yet is copied from that key first
 #   checkout.sh synced        the commit of the last sync that finished here
+#   checkout.sh prefetch-pins the DEPS revisions of Replay's forks that this
+#                             checkout is missing, over the agent's identity
 #   checkout.sh seed-from <key>
 #                             fill this key's checkout from that one's, for a
 #                             version the host has no checkout of yet
@@ -285,6 +289,7 @@ seed_from() {
   rsync -a --delete --exclude '.git/' \
     --exclude '/src/out' --exclude '/home' --exclude '/jobs' \
     --exclude '/.replay-checkout' --exclude '/.replay-synced' \
+    --exclude '/.replay-dep-pins' \
     "$src/" "$CHECKOUT_ROOT/"
   echo "--- copying $src -> $CHECKOUT_ROOT: git objects, hardlinked"
   rsync -a --link-dest="$src" --include '*/' --include '.git/***' --exclude '*' \
@@ -308,6 +313,48 @@ seed_from_command() {
   fi
   seed_from "$from"
   echo "--- $CHECKOUT_ROOT is seeded; its first build syncs it"
+}
+
+# The revisions this commit's DEPS pins for Replay's own forks, fetched here
+# over the agent's SSH identity, one commit each.
+#
+# gclient fetches a moved pin itself, and that fetch is the expensive kind: for a
+# revision it cannot find in a dependency's checkout it runs `git fetch
+# --no-tags -- origin` with no depth and no refspec (depot_tools gclient_scm.py,
+# _Fetch from _UpdateOrCheckout), which is every branch of the fork, unshallowed,
+# over the https URL in DEPS and so anonymously -- the read GitHub throttles on
+# this fork network (HTTP 429). --no-history does not bound it: it is read only
+# when a dependency is first cloned.
+#
+# Only a dependency that is already here, and only a revision it does not have:
+# a first sync clones it shallow, which is cheap and is the path --no-history
+# applies to. A ref holds what was fetched, so nothing can prune it before
+# gclient checks it out.
+#
+# Best effort throughout. The pins come from gclient itself rather than from
+# parsing DEPS, so the list cannot drift from what the sync wants, and if any of
+# this is missing or fails, gclient does exactly what it did before.
+prefetch_fork_pins() {
+  local pins=$CHECKOUT_ROOT/.replay-dep-pins path url rev dir ssh_url
+  if [ ! -s "$pins" ]; then
+    return 0
+  fi
+  while read -r path url rev; do
+    dir=$CHECKOUT_ROOT/$path
+    if [ ! -d "$dir/.git" ]; then
+      continue
+    fi
+    if git -C "$dir" rev-parse --quiet --verify "$rev^{commit}" >/dev/null 2>&1; then
+      continue
+    fi
+    ssh_url=git@github.com:${url#*github.com/}
+    echo "--- $path: $rev over ssh, before gclient fetches every branch for it"
+    if github_try git -c protocol.version=2 -C "$dir" fetch -q --depth 1 "$ssh_url" "$rev"; then
+      git -C "$dir" update-ref refs/ci/fetched "$rev"
+    else
+      echo "checkout: could not fetch $rev for $path; gclient will fetch it" >&2
+    fi
+  done < "$pins"
 }
 
 sync() {
@@ -362,7 +409,11 @@ sync() {
   # Removed first and written last, so that a sync killed in the middle leaves a
   # checkout that says so.
   rm -f "$CHECKOUT_SYNCED"
-  "$dir/build-in-container.sh" -- /ci/container/sync.sh "$FORK_URL" "$commit"
+  # Two container runs with a host fetch between them: the first puts src at the
+  # commit and writes down what its DEPS pin, the second resolves those DEPS.
+  "$dir/build-in-container.sh" -- /ci/container/sync.sh checkout "$FORK_URL" "$commit"
+  prefetch_fork_pins
+  "$dir/build-in-container.sh" -- /ci/container/sync.sh deps
   cat > "$CHECKOUT_SYNCED" <<EOF
 commit=$commit
 synced=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -394,12 +445,13 @@ case ${1:-} in
     [ -n "$commit" ] || die "no sync has finished in $CHECKOUT_ROOT"
     echo "$commit"
     ;;
+  prefetch-pins) prefetch_fork_pins ;;
   seed-from) shift; seed_from_command "${1:-}" ;;
   reclaim) shift; reclaim "${1:-}" ;;
   use-lock) use_lock "$CHECKOUT_KEY" ;;
   image-used) shift; image_used "${1:-}" ;;
   *)
-    echo "usage: $0 root|sync|synced|seed-from <key>|wipe|wipe-out|reclaim [GB]|use-lock|image-used <ref>" >&2
+    echo "usage: $0 root|sync|synced|prefetch-pins|seed-from <key>|wipe|wipe-out|reclaim [GB]|use-lock|image-used <ref>" >&2
     exit 2
     ;;
 esac

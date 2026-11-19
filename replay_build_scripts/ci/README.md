@@ -16,7 +16,9 @@ Scope: Linux x86_64, build only, the elastic build pool's `queue=runtime` hosts 
 | 4a | host | with `CHROMIUM_CHECKOUT_FROM`, and only when this key has no checkout: that key's working files copied and every `.git` hardlinked, holding its use lock | `ci/checkout.sh` (`seed_from`) |
 | 4b | host | `DRIVER_REVISION` from the synced checkout's `REPLAY_BACKEND_REV`, ignoring build env | `ci/job.sh` |
 | 5 | host | build image `chromium-build:<Dockerfile hash>-u<uid>` if absent, and mark it used | `ci/build-image.sh ensure` |
-| 6 | container | `origin/HEAD` → `origin/main`, check the commit is complete, checkout, `gclient sync --nohooks --no-history -D`, `gclient runhooks`, re-stamp `LASTCHANGE`. `.replay-synced` is removed before this and written after, so a sync that was killed leaves a checkout that says so | `ci/container/sync.sh`, `ci/checkout.sh` |
+| 6 | container | `origin/HEAD` → `origin/main`, check the commit is complete, checkout, and write the DEPS revisions of Replay's forks to `.replay-dep-pins` (`gclient revinfo`) | `ci/container/sync.sh checkout` |
+| 6a | host | each of those revisions a dependency already here does not have, fetched depth 1 over the agent's SSH identity, with a ref to hold it | `ci/checkout.sh` (`prefetch_fork_pins`) |
+| 6b | container | `gclient sync --nohooks --no-history -D`, `gclient runhooks`, re-stamp `LASTCHANGE`. `.replay-synced` is removed before step 6 and written after this, so a sync that was killed leaves a checkout that says so | `ci/container/sync.sh deps`, `ci/checkout.sh` |
 | 7 | container | driver download + embed, image check, remote-exec check, `args.gn`, `gn gen`, `autoninja` (siso). Refused unless `.replay-synced` is there (`--require-synced`) | `build.cjs`, `ci/build-in-container.sh` |
 | 8 | host | collect logs, failed-step list; upload `logs/**` (always) | `ci/job.sh` |
 | 9 | container | `replay-chromium/` → `<build id>.tar.xz`, `build_id` | `ci/container/package.sh` |
@@ -39,8 +41,8 @@ Paths relative to the repository root. Origin: M = replayio/chromium `master`, 1
 | `replay_build_scripts/ci/config.sh` | the key and the paths, images and container names that follow from it, the disk minima, the guards `valid_key`, `assert_isolated_root`, `require_free_gb`, and the retry helper `github_read` | new, M (`version_major`, the `CHROMIUM_CHECKOUT_KEY` override, `valid_key`) | the key is worked out once, when the file is sourced, rather than per call |
 | `replay_build_scripts/ci/bootstrap.sh` | step 2 as a file, for steps that fetch it and run it; the `chromium-build` settings step refuses a commit without it | M | sparse paths `ci/` and `chrome/VERSION` (the key), not `replay_build_scripts/` whole; ref is an argument; repo-local `gc.auto 0` |
 | `replay_build_scripts/ci/job.sh` | job driver: use lock → stale containers → sync → backend pin → build → logs → package → upload | 158 (inline pipeline command), M (use lock held for the job, `DRIVER_REVISION` from the commit, `backend_rev` artifact) | script instead of YAML; artifacts staged under `<key>/jobs/<job>`; siso logs; default keep-going; the pin is read from the checkout, not a backend clone of its own |
-| `replay_build_scripts/ci/checkout.sh` | `root`, `sync`, `synced`, `seed-from`, `wipe`, `wipe-out`, `reclaim`, `use-lock`, `image-used` | M + 158 | removed: `link_legacy_checkout`, `adopt`, `nearest_src`, the shared `.git-cache`, the backend checkout, the delete-on-failure trap; all git moved into the container, except the src fetch. `sync` converges from any state, and `.replay-synced` records the last one that finished. `seed_from` is M's `prepare --from`, in `sync`'s no-checkout-yet branch rather than a `prepare` of its own, and holding the source's use lock, which M does not. Taken from M unchanged in behaviour: `use_lock`, `use`, `unused`, `valid_key`, `last_used`, `remove_key`, `image_mark`, `image_used`, `lru`, `reclaim` -- the lock, trash and mark paths are M's, so each line's reclaim sees the other's jobs |
-| `replay_build_scripts/ci/container/sync.sh` | in-image: checkout of the commit the host fetched, gclient sync, hooks, `LASTCHANGE` | 158 (`checkout.sh sync` inline `bash -c`) | idempotent `git init`; no fetch; local `origin/HEAD`; default gclient jobs |
+| `replay_build_scripts/ci/checkout.sh` | `root`, `sync`, `synced`, `seed-from`, `wipe`, `wipe-out`, `reclaim`, `use-lock`, `image-used` | M + 158 | removed: `link_legacy_checkout`, `adopt`, `nearest_src`, the shared `.git-cache`, the backend checkout, the delete-on-failure trap; all git moved into the container, except the src fetch. `sync` converges from any state, and `.replay-synced` records the last one that finished. `seed_from` is M's `prepare --from`, in `sync`'s no-checkout-yet branch rather than a `prepare` of its own, and holding the source's use lock, which M does not. `prefetch_fork_pins` has no counterpart on M, which resolves DEPS once per checkout and so rarely moves a pin in one. Taken from M unchanged in behaviour: `use_lock`, `use`, `unused`, `valid_key`, `last_used`, `remove_key`, `image_mark`, `image_used`, `lru`, `reclaim` -- the lock, trash and mark paths are M's, so each line's reclaim sees the other's jobs |
+| `replay_build_scripts/ci/container/sync.sh` | in-image, in two phases: `checkout` of the commit the host fetched plus the fork pins it declares, then `deps` for gclient sync, hooks and `LASTCHANGE` | 158 (`checkout.sh sync` inline `bash -c`) | idempotent `git init`; no fetch; local `origin/HEAD`; default gclient jobs; split so the host can fetch the pins between the phases |
 | `replay_build_scripts/ci/gclient` | `.gclient` solution; `custom_vars` for the `configure_siso` hook | 147 (`replay.gclient`), 158 (`.gclient` heredoc) | fork URL; `reapi_backend_config_path` names a file that exists; no `rbe_instance` |
 | `replay_build_scripts/ci/build-image.sh` | image tag/ref/ensure/build | 158, M (`image-used` on `ensure` and `build`) | the uid the image is built for is part of the tag; disk guard on docker root |
 | `replay_build_scripts/ci/build-in-container.sh` | `docker run` wrapper; `--require-synced` for anything but the sync itself | M + 158 | fixed root (no `--root`); `/ci` read-only mount; cert mount only with `--engflow`; no `.git-cache` mount; no local-driver mount; `--oom-score-adj`; in-container deadline |
@@ -141,6 +143,8 @@ Not present by construction: `git gc` (and auto-gc disabled where git runs), hos
 | `<keys>/.<other key>.use`, `<keys>/<other key>`, `<keys>/.removing.*` | `flock` exclusive, rename away, delete -- only below the minimum free space, and only a key no job is using | `checkout.sh reclaim` |
 | `<root>/.replay-checkout`, `<root>/.gclient` | write | `checkout.sh` |
 | `<root>/.replay-synced` | delete before a sync, write after it, read | `checkout.sh`, `build-in-container.sh` |
+| `<root>/.replay-dep-pins` | write (container), read (host) | `ci/container/sync.sh`, `checkout.sh` |
+| `<root>/src/<fork dep>/.git/**` | fetch of one commit over SSH, and a ref for it, only for a pinned revision the dependency does not have | `checkout.sh` (`prefetch_fork_pins`) |
 | `<keys>/<other key>/**` | read, with that key's use lock held, only when this key has no checkout and `CHROMIUM_CHECKOUT_FROM` names it | `checkout.sh` (`seed_from`) |
 | `<root>/src/.git/**` | `git init` if missing, repo-local config, stale `shallow.lock` removal, fetch of one commit, ref `refs/ci/fetched` | `checkout.sh sync` (host) |
 | `<root>/**` (`src`, `.gclient_entries`, `.cipd`, `home`) | read-write bind mount → `/chromium` | container |
@@ -161,6 +165,7 @@ Never accessed: `/home/ubuntu/chromium` and `/home/ubuntu/depot_tools` (both gon
 | `remove-stale-build-containers.sh` | `docker ps --all --quiet --filter name=^/?chromium-build-<key>-`, `docker rm --force <those ids>`, `seq`, `sleep` |
 | `checkout.sh sync` | `readlink`, `dirname`, `git -C .ci-boot rev-parse HEAD`, `git -C .ci-boot config remote.origin.url`, `mkdir`, `df`, `tail`, `tr`, `sed`, `date`, `cat >`, `git init <root>/src` (if missing), `git -C <root>/src config gc.auto 0`, `find /proc/*/fd`, `rm -f <root>/src/.git/shallow.lock` (if stale), `git -C <root>/src rev-list --objects --no-walk`, `timeout --foreground 900 git -C <root>/src fetch --depth 1 <SSH url> <commit>` (if incomplete), `sleep` (between attempts), `git -C <root>/src update-ref refs/ci/fetched`, `cp ci/gclient <root>/.gclient` |
 | `build-image.sh` | `sha256sum`, `cut`, `id`, `docker image inspect`, `docker info`, `df`, `docker build --platform linux/amd64 -t chromium-build:… <ci dir>`, `checkout.sh image-used` |
+| `checkout.sh prefetch-pins` (from `sync`, or by hand) | `git rev-parse --verify` per pin, `timeout --foreground 300 git -C <dep> fetch --depth 1 git@github.com:replayio/… <sha>` for the ones missing, `git update-ref refs/ci/fetched`, `sleep` between up to three attempts |
 | `checkout.sh seed-from` (from `sync` with `CHROMIUM_CHECKOUT_FROM`, or by hand) | `flock` (this key's and the source's, shared), `rsync -a --delete --exclude …`, `rsync -a --link-dest=<source> --include '.git/***'` |
 | `checkout.sh reclaim` (from `sync`, or by hand) | `df`, `flock` (on `<keys>`, and per key), `find -printf %T@`, `stat -c %Y`, `mktemp -d <keys>/.removing.XXXXXX`, `mv <keys>/<key> <trash>/`, `rm -rf <trash>`, `docker image ls --format … chromium-build`, `docker image rm <that repository's refs>` |
 | `build-in-container.sh` | `id`, `readlink`, `docker run --name chromium-build-<key>-… --rm --init …`, `docker rm --force <own name>` (signal handler) |
@@ -180,7 +185,7 @@ Never accessed: `/home/ubuntu/chromium` and `/home/ubuntu/depot_tools` (both gon
 | Job workspace directory, Buildkite pipeline `chromium-build`, plugin checkouts (`skip-checkout#v0.1.1`, `aws-sm#v2.3.1`: the versions master uses) | own file names, removed on exit |
 | EngFlow cluster `simpsonite.cluster.engflow.com:443`, instance `default`; secrets `engflow-certificate`, `engflow-key` | executor capacity shared; CAS / action cache content-addressed |
 | Network egress | — |
-| The agent's GitHub SSH identity (steps 2 and 4) | reads retried; GitHub queues authenticated reads of the fork network under load |
+| The agent's GitHub SSH identity (steps 2, 4 and 6a) | reads retried; GitHub queues authenticated reads of the fork network under load. Step 6a exists so that a moved fork pin is read with this identity rather than by gclient, which would fetch every branch of that fork anonymously |
 
 Not shared: checkout, out dir, gclient/cipd state, depot_tools, git object caches, container HOME (siso/vpython caches), image, container names, siso state.
 
@@ -258,6 +263,17 @@ Not shared: checkout, out dir, gclient/cipd state, depot_tools, git object cache
 - `.replay-synced`: `checkout.sh synced` fails before any sync has finished and
   reports the commit after one, and `build-in-container.sh --require-synced`
   refuses a checkout without it, while the sync itself does not require one.
+- The filter this applies to `gclient revinfo` output, over a sample holding a
+  pinned fork, an upstream dependency, a branch-ref dependency, a short hash, a
+  CIPD version and a `None`: only the pinned Replay GitHub URLs pass.
+- `prefetch-pins` over scratch dependencies, with git's fetch recorded and
+  failed: it fetches for the pinned revision a dependency lacks and not for one
+  it already has or for a directory with no repository, rewrites the https URL
+  to `git@github.com:`, asks for one commit, tries three times, reports a
+  failure without failing the job, and on success leaves `refs/ci/fetched` at
+  the revision. With no pins file it does nothing and prints nothing.
+- Not verified, because it needs a fork pin to move on CI: that gclient then
+  finds the revision present and skips its own fetch.
 - `reclaim` against a scratch `$HOME/chromium-checkouts` with stub `docker` and
   `df`: state with no record of use goes first (its own trash, an image with no
   mark), then keys oldest-stamp first; a key whose use lock another process
