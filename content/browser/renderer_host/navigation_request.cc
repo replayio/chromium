@@ -35,6 +35,7 @@
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/rand_util.h"
+#include "base/record_replay.h"
 #include "base/state_transitions.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
@@ -278,15 +279,8 @@ constexpr base::TimeDelta kCompositorLockTimeout = base::Milliseconds(150);
 // Flag to control whether redirect URLs are being sanitized before sending
 // them to the renderer process as part of the navigation.
 // See https://crbug.com/40095391.
-//
-// [RecordReplay] Off in this Chromium, with kSanitizeOriginalUrlDuringNavigation
-// (content/common/features.cc): a recording reports each hop of a redirected
-// navigation with its URL, as Chromium 108 let it. The renderer of a recorded
-// page is therefore told the cross-origin URLs a successful navigation passed
-// through, which stock Chromium now keeps from it. See
-// SanitizeRedirectsForCommit for what is still kept from it.
 BASE_FEATURE(kSanitizeRedirectUrlsDuringNavigation,
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Killswitch to replace the current NavigationEntry for same-URL navigations
 // recovering from an error document. See https://crbug.com/396645696.
@@ -8688,13 +8682,19 @@ void NavigationRequest::UpdateHistoryParamsInCommitNavigationParams() {
 void NavigationRequest::SanitizeRedirectsForCommit(
     blink::mojom::CommonNavigationParamsPtr& common_params,
     blink::mojom::CommitNavigationParamsPtr& commit_params) {
-  // [RecordReplay] The feature is off in this Chromium, and decides only
-  // whether a successful navigation's redirect URLs are cut to their origins.
-  // The error page of a failed, redirected subframe navigation that commits in
-  // its initiator's process still gets nothing but origins, and Location
-  // headers are still cut below: a recording needs neither.
-  const bool sanitize_redirect_urls =
-      base::FeatureList::IsEnabled(kSanitizeRedirectUrlsDuringNavigation);
+  if (!base::FeatureList::IsEnabled(kSanitizeRedirectUrlsDuringNavigation)) {
+    return;
+  }
+
+  // [RecordReplay] A recording reports each hop of a redirected navigation with
+  // its URL, as Chromium 108 let it, so a record/replay run does not cut a
+  // successful navigation's redirect URLs down to their origins. What a
+  // recording does not need is still cut: the error page of a failed,
+  // redirected subframe navigation that commits in its initiator's process gets
+  // origins only, and so do the cross-origin Location headers below. See
+  // features::RecordReplaySanitizeOriginalUrlDuringNavigation for what this
+  // predicate covers and what it does not.
+  const bool sanitize_redirect_urls = !recordreplay::IsRecordReplayRun();
 
   // TODO(crbug.com/40134629): Remove the sanitization once Subframe Error
   // Pages are isolated.
@@ -8708,8 +8708,14 @@ void NavigationRequest::SanitizeRedirectsForCommit(
 
   if (should_sanitize_final_url_for_error_page) {
     common_params->url = common_params->url.DeprecatedGetOriginAsURL();
-    commit_params->original_url =
-        commit_params->original_url.DeprecatedGetOriginAsURL();
+    if (recordreplay::IsRecordReplayRun()) {
+      // [RecordReplay] `original_url` is whole in a record/replay run (see
+      // features::RecordReplaySanitizeOriginalUrlDuringNavigation), and this
+      // error page commits in a process that must not be told the cross-origin
+      // URL the navigation failed on. Stock Chromium sanitized it already.
+      commit_params->original_url =
+          commit_params->original_url.DeprecatedGetOriginAsURL();
+    }
   }
 
   const bool sanitize_urls =
