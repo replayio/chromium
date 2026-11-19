@@ -204,9 +204,11 @@ function ninjaCrashed(rv) {
 // the checkout, so a config generated anywhere else points at a path that does
 // not exist here and deps scanning silently falls back to compiling locally.
 //
-// gclient's configure_reclient hook, which would do this, never runs on CI (see
-// runGclientSync in replay_build_scripts/common.mjs), so until now these files
-// were whatever the last person to sync the agent's checkout by hand produced.
+// gclient's configure_reclient hook does this too, and runs on every CI build
+// (replay_build_scripts/ci/checkout.sh). Doing it here as well is what covers a
+// build started outside that path, and it costs one python script; until the
+// per-version checkouts, these files were whatever the last person to sync the
+// agent's checkout by hand produced.
 // Only in our own build image, where the checkout is always at /chromium/src:
 // on a developer's machine the files belong to however they sync their tree.
 function configureReclient() {

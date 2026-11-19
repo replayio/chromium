@@ -199,15 +199,34 @@ sync() {
   echo "--- checkout '$k' at $r -> $commit"
   # The fork goes to the commit being built, the Replay forks of v8, skia,
   # webrtc and boringssl to their DEPS revisions, and the backend to
-  # REPLAY_BACKEND_REV; everything else in the tree is what `prepare` synced
-  # (gclient sync -D only moves forward, so it is not run per job: #1107).
-  # The backend pin is the commit's file, never env: a build's inputs must not
-  # depend on how it was started.
+  # REPLAY_BACKEND_REV. The backend pin is the commit's file, never env: a
+  # build's inputs must not depend on how it was started.
   env -u REPLAY_BACKEND_REV \
     CHROMIUM_SRC_DIR="$r/src" \
     RECORD_REPLAY_BACKEND_DIR="$r/backend" \
     CHROMIUM_REVISION="$commit" \
     "$dir/in-tools-image.sh" "$r" node "$dir/sync-repos.mjs"
+  # Then everything else DEPS names, at this commit's revisions. src is already
+  # there, so gclient reads the DEPS of the commit being built.
+  #
+  # Per build, not once when the key was prepared. A key outlives the commits
+  # built in it, so a commit that moves a pin other than the four forks, adds or
+  # drops a dependency, or changes a hook has to take effect. Until now none of
+  # that did: the checkout kept whatever the first build on that host resolved,
+  # two hosts could build one commit against different dependencies, and the
+  # pool's daily image spread one host's state to new ones.
+  #
+  # The reason this was once skipped does not hold here. #1107 found that
+  # `gclient sync -D` will not move a dependency back to an older revision "if
+  # the sha exists on the currently checked out branch" -- which is a dependency
+  # whose HEAD is a named branch, as the hand-managed tree of the time had.
+  # gclient leaves every checkout it creates detached, and for a detached HEAD
+  # it checks the revision out in either direction (depot_tools gclient_scm.py,
+  # case 0 of GitWrapper.update). src is the one thing it would not move, and it
+  # is unmanaged here and synced above.
+  echo "--- gclient sync and hooks"
+  "$dir/build-in-container.sh" --root "$r" -- \
+    bash -c 'cd /chromium && gclient sync -D --with_branch_heads && gclient runhooks'
 }
 
 backend_rev() {
