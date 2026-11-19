@@ -7,14 +7,14 @@
 # From master's replay_build_scripts/ci/bootstrap.sh: a blob-less, sparse,
 # one-commit clone (a few seconds, tens of MB) instead of the multi-GB tree.
 # The Chromium step does the same inline (.buildkite/pipeline.yml), since it
-# has no copy of this file yet. No 157 step runs this file: it stays because
+# has no copy of this file yet. No step here runs this file: it stays because
 # the chromium-build settings step refuses a commit without it. Everything
 # after the clone runs from it, at the commit being built, and the clone's
 # HEAD is the commit checkout.sh builds.
 set -euo pipefail
 
 ref=${1:?bootstrap: no commit or branch to fetch}
-dest=${2:-.ci-boot-m157}
+dest=${2:-.ci-boot}
 
 # Older git accepts --filter and then fetches every blob of the commit.
 version=$(git --version | sed 's/[^0-9.]*\([0-9][0-9.]*\).*/\1/')
@@ -38,7 +38,7 @@ git -C "$dest" config extensions.partialClone origin
 git -C "$dest" config remote.origin.promisor true
 git -C "$dest" config remote.origin.partialclonefilter blob:none
 git -C "$dest" config core.sparseCheckout true
-printf '/replay_build_scripts/ci/\n' > "$dest/.git/info/sparse-checkout"
+printf '/replay_build_scripts/ci/\n/chrome/VERSION\n' > "$dest/.git/info/sparse-checkout"
 # Each GitHub read, retried: GitHub queues authenticated reads of this fork
 # network when it is under load. A commit that does not exist is retried too,
 # since git's exit status does not tell the two apart. Checkout with -f, so a

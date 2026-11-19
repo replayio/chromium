@@ -1,9 +1,16 @@
-# The image Chromium 157 builds run in (build-image.sh, build-in-container.sh).
+# The image this version's builds run in (build-image.sh, build-in-container.sh).
 #
-# chromium-158-buildkite's image at Chromium 157: Ubuntu 22.04 by digest, the
-# packages Chromium's own build/install-build-deps.py asks for at the 157 tag,
-# and depot_tools at the revision 157's DEPS pins for third_party/depot_tools.
-# The agent's own depot_tools and git configuration are not used.
+# chromium-158-buildkite's image: Ubuntu 22.04 by digest, the packages Chromium's
+# own build/install-build-deps.py asks for at CHROMIUM_TAG, and depot_tools at
+# the revision this tree's DEPS pins for third_party/depot_tools. The agent's own
+# depot_tools and git configuration are not used.
+#
+# The two version numbers below cannot be read from the tree, because the image
+# is built before any checkout exists. A rebase onto a new milestone updates
+# them, and since the image tag is a hash of this file, that alone gives the new
+# milestone an image of its own. The only other value a rebase has to update is
+# the build step's concurrency group (.buildkite/pipeline.yml), for the same
+# reason: Buildkite resolves it before any script runs.
 #
 # Not here: the compiler. clang, the sysroot, rust, node and siso are
 # gclient-managed inside the checkout, so they are versioned with the tree.
@@ -17,8 +24,6 @@ RUN apt-get update && \
       ca-certificates pkg-config build-essential nodejs unzip zip lsof && \
     rm -rf /var/lib/apt/lists/*
 
-# Fetched at the tag this branch is based on: the image is built before any
-# checkout exists.
 ARG CHROMIUM_TAG=157.0.8103.0
 RUN curl -fsSL "https://chromium.googlesource.com/chromium/src/+/refs/tags/${CHROMIUM_TAG}/build/install-build-deps.py?format=TEXT" \
       | base64 -d > /tmp/install-build-deps.py && \
@@ -44,12 +49,14 @@ RUN git init -q /depot_tools && \
 ENV DEPOT_TOOLS_UPDATE=0
 ENV PATH=$PATH:/depot_tools
 
-# depot_tools downloads its own python, cipd and vpython on first use and
-# writes them into itself. Doing that here means a build never writes to
-# /depot_tools.
+# depot_tools downloads its own python, cipd, vpython and gsutil on first use
+# and writes them into itself. Doing that here means a build never writes to
+# /depot_tools, so no two jobs race over it and a DEPS hook that reads a bucket
+# does not have to fetch gsutil at hook time.
 USER ubuntu
 RUN cd /depot_tools && ./ensure_bootstrap && ./gclient --version && \
     ./cipd --version && ./vpython3 -c "import sys; print(sys.version)" && \
+    ./vpython3 gsutil.py version && \
     test -f /depot_tools/python3_bin_reldir.txt
 USER root
 

@@ -1,17 +1,26 @@
-# Chromium 157 Replay runtime (rebase/157/*): Linux x86_64 build and one record -> replay test.
+# Chromium Replay runtime on a rebase branch: Linux x86_64 build and the
+# record -> replay suite.
 #
 # Uploaded by the `chromium-build` pipeline's settings step, which reads this
 # file from the build's commit. Builds are created on that pipeline
 # through the API (branch, commit, env); nothing here is triggered by a push.
 #
-# The step runs on the agent that builds Chromium 108 for production. What it
-# may touch there is fixed in replay_build_scripts/ci/config.sh: one directory
-# (~/chromium-checkouts/m157), its own docker image and container names, and
-# files of its own in the job workspace, removed when the job ends.
+# The build step runs on a host of the elastic build pool, which builds every
+# Chromium version that targets it and, on another script line, Electron, one job
+# at a time. What this step may touch there is fixed in
+# replay_build_scripts/ci/config.sh: the checkout of the version being built
+# (~/chromium-checkouts/<key>, the milestone of the commit), containers and
+# images named for it, files of its own in the job workspace, removed when the
+# job ends, and -- when the volume they all share runs low -- the least recently
+# used checkouts and images that no job is using (checkout.sh reclaim).
 #
 # Per-build switches are env of the Buildkite build (replay_build_scripts/ci/job.sh):
-#   DRIVER_REVISION, REPLAY_BUILD_MAX_FAILURES (0: keep going, the default;
-#   1: stop at the first error), REPLAY_SISO_LOCAL_JOBS, REPLAY_SISO_CONFIG.
+#   REPLAY_BUILD_MAX_FAILURES (0: keep going, the default; 1: stop at the first
+#   error), REPLAY_SISO_LOCAL_JOBS, REPLAY_SISO_CONFIG, CHROMIUM_CHECKOUT_KEY
+#   for an experiment that wants a checkout of its own, and
+#   CHROMIUM_CHECKOUT_FROM to copy a first checkout from a key the host has.
+#   The driver and the backend are not among them: they come from the commit's
+#   REPLAY_BACKEND_REV.
 # They are deliberately not given defaults in a step `env` here: step env
 # overrides build env.
 env:
@@ -19,16 +28,27 @@ env:
   GIT_TERMINAL_PROMPT: 0
 
 steps:
-  - label: ":hammer: Chromium 157 (linux-x86_64)"
-    key: "build-chromium-157-linux-x86_64"
-    # The agent runs one job at a time, so this is also how long a 157 build
-    # can keep a 108 build waiting. A build that times out is continued by the
+  - label: "🔨 Chromium (linux-x86_64)"
+    key: "build-chromium-linux-x86_64"
+    # The agent runs one job at a time, so this is also how long this build can
+    # keep another version's waiting. A build that times out is continued by the
     # next one: the out dir and siso's state stay in the checkout.
     timeout_in_minutes: &timeout 240
-    # Below the default (0): a queued 108 build is picked before a queued 157 one.
+    # Below the default (0): a queued production build is picked before a queued
+    # rebase one.
     priority: -1
+    # One build of this key at a time. Without this, two builds of one key are
+    # dispatched to two hosts of the pool, each holding its own copy of that
+    # key's checkout and syncing it; the use lock a job takes is a file on one
+    # host and cannot stop that. On one host they would write the same out dir.
+    # The group is this tree's key, written out, because Buildkite resolves the
+    # group when the pipeline is uploaded, before any script could derive it
+    # from chrome/VERSION. A group shared by every rebase lane would instead
+    # block builds of different milestones, which have no state in common. A
+    # rebase onto a new milestone updates this with the Dockerfile's
+    # CHROMIUM_TAG.
     concurrency: 1
-    concurrency_group: "chromium-157/linux-x86_64"
+    concurrency_group: "chromium-build/m157/linux-x86_64"
     # The plugins and versions master's build step uses, so the agent needs
     # nothing new. No repository checkout: the job works from a ~70 MB clone of
     # replay_build_scripts/ci, which the command fetches first.
@@ -36,33 +56,38 @@ steps:
       - thedyrt/skip-checkout#v0.1.1: ~
       - seek-oss/aws-sm#v2.3.1:
           region: us-east-2
-          # Into the job workspace, under names only this step uses; the
-          # command removes them when the job ends, whatever fails.
+          # Into the job's workspace, not next to a checkout that every build
+          # container mounts; the command below removes them when the job ends.
           file:
-            - path: "engflow-m157.crt"
+            - path: "engflow.crt"
               secret-id: engflow-certificate
-            - path: "engflow-m157.key"
+            - path: "engflow.key"
               secret-id: engflow-key
     env:
       REPLAY_JOB_TIMEOUT_MINUTES: *timeout
+    # build-runtime=true: shared heavy-build capacity (Node + Chromium).
+    # runtimeType=chromiumbuild: the host keeps a Chromium checkout per version
+    # (checkout.sh); a job prepares its version's when the host has none.
     agents:
+      - "build-runtime=true"
       - "queue=runtime"
       - "runtimeType=chromiumbuild"
     # Artifacts are uploaded by job.sh itself, from the checkout's job directory.
     command: |
       set -euo pipefail
       WS="$$PWD"
-      trap 'rm -rf "$$WS/engflow-m157.crt" "$$WS/engflow-m157.key" "$$WS/.ci-boot-m157"' EXIT
-      # This commit's replay_build_scripts/ci into .ci-boot-m157: everything
-      # after this runs from that clone, at the commit being built, and its HEAD
-      # is the commit checkout.sh builds. bootstrap.sh does the same; this step
-      # has no copy of it yet.
+      trap 'rm -rf "$$WS/engflow.crt" "$$WS/engflow.key" "$$WS/.ci-boot"' EXIT
+      # This commit's replay_build_scripts/ci and chrome/VERSION into .ci-boot:
+      # everything after this runs from that clone, at the commit being built,
+      # its HEAD is the commit checkout.sh builds, and its chrome/VERSION is the
+      # checkout key. bootstrap.sh does the same; this step has no copy of it
+      # yet.
       # - Over the agent's SSH identity ($$BUILDKITE_REPO): GitHub throttles
       #   unauthenticated reads of this fork network (HTTP 429).
       # - git init + fetch of the one commit, not `git clone --depth 1
-      #   --filter=blob:none`: on this agent's git (2.25) such a clone took one
-      #   12.8 MiB pack, then repeated ~317k-object / ~49 MiB packs
-      #   (chromium-build #5838, 42 packs in ~4 min, then cancelled).
+      #   --filter=blob:none`: on git 2.25 such a clone took one 12.8 MiB pack,
+      #   then repeated ~317k-object / ~49 MiB packs (chromium-build #5838, 42
+      #   packs in ~4 min, then cancelled).
       # - Shallow, blob-less (promisor remote), sparse (patterns, not cone
       #   mode: git 2.25). Older git ignores the filter and fetches every blob.
       # - Each read retried: GitHub queues authenticated reads of this fork
@@ -84,39 +109,35 @@ steps:
           sleep $$((attempt * 60))
         done
       }
-      rm -rf .ci-boot-m157
-      git init -q .ci-boot-m157
-      git -C .ci-boot-m157 remote add origin "$${BUILDKITE_REPO:?no repository URL}"
+      rm -rf .ci-boot
+      git init -q .ci-boot
+      git -C .ci-boot remote add origin "$${BUILDKITE_REPO:?no repository URL}"
       # Repository-local configuration only; the host's git configuration is not touched.
-      git -C .ci-boot-m157 config gc.auto 0
-      git -C .ci-boot-m157 config extensions.partialClone origin
-      git -C .ci-boot-m157 config remote.origin.promisor true
-      git -C .ci-boot-m157 config remote.origin.partialclonefilter blob:none
-      git -C .ci-boot-m157 config core.sparseCheckout true
-      printf '/replay_build_scripts/ci/\n' > .ci-boot-m157/.git/info/sparse-checkout
-      github git -C .ci-boot-m157 fetch -q --filter=blob:none --depth 1 origin "$$REF"
-      github git -C .ci-boot-m157 checkout -q -f --detach FETCH_HEAD
-      test -x .ci-boot-m157/replay_build_scripts/ci/job.sh
-      echo "scripts: .ci-boot-m157 is $$(git -C .ci-boot-m157 rev-parse HEAD)"
-      export ENGFLOW_CERT_FILE="$$WS/engflow-m157.crt" ENGFLOW_KEY_FILE="$$WS/engflow-m157.key"
-      .ci-boot-m157/replay_build_scripts/ci/job.sh
+      git -C .ci-boot config gc.auto 0
+      git -C .ci-boot config extensions.partialClone origin
+      git -C .ci-boot config remote.origin.promisor true
+      git -C .ci-boot config remote.origin.partialclonefilter blob:none
+      git -C .ci-boot config core.sparseCheckout true
+      printf '/replay_build_scripts/ci/\n/chrome/VERSION\n' > .ci-boot/.git/info/sparse-checkout
+      github git -C .ci-boot fetch -q --filter=blob:none --depth 1 origin "$$REF"
+      github git -C .ci-boot checkout -q -f --detach FETCH_HEAD
+      test -x .ci-boot/replay_build_scripts/ci/job.sh
+      echo "scripts: .ci-boot is $$(git -C .ci-boot rev-parse HEAD)"
+      export ENGFLOW_CERT_FILE="$$WS/engflow.crt" ENGFLOW_KEY_FILE="$$WS/engflow.key"
+      .ci-boot/replay_build_scripts/ci/job.sh
 
-  # One record -> replay case of the backend's test/chromium-recording suite,
-  # with the runtime the build step made. From master's "Chromium Recording
-  # Tests" step; the differences:
-  # - the runtime is the build step's Buildkite artifact (a 157 build is never
-  #   uploaded to S3 / static.replay.io), handed over as
-  #   REPLAY_CHROMIUM_EXECUTABLE_PATH; its symbols archive, from the same
-  #   artifacts, as REPLAY_SYMBOLS_DIR;
-  # - one case by default, not the suite: REPLAY_157_TEST_CASE of the
-  #   Buildkite build (default below), a path under test/chromium-recording;
-  #   `tests` is the whole suite, which the timeout allows for.
-  # REPLAY_BACKEND_REV (env of the Buildkite build) is the backend commit whose
-  # driver the runtime embeds and whose linker replays the recording.
-  - label: ":memo: Chromium 157 record -> replay"
-    key: "chromium-157-recording-linux-x86_64"
-    depends_on: "build-chromium-157-linux-x86_64"
-    timeout_in_minutes: 180
+  # The backend's test/chromium-recording suite, with the runtime the build step
+  # made. Master's step, with one difference: the runtime and its symbols come
+  # from the build step's Buildkite artifacts, because a rebase build is not
+  # uploaded to S3 / static.replay.io for the backend to download by build id.
+  - label: "📝 Chromium Recording Tests (linux-x86_64)"
+    key: "chromium-recording-linux-x86_64"
+    depends_on:
+      - "build-chromium-linux-x86_64"
+    timeout_in_minutes: 30
+    # In-house suite expected to pass deterministically: take shared e2e agents before E2E jobs.
+    priority: 1
+    # e2e=true: only linux class with Replay Chromium runtime libs (libnss3); can_replay lacks them.
     agents:
       - "e2e=true"
     plugins:
@@ -137,40 +158,41 @@ steps:
       DEBUG: "pw:browser"
     command: |
       set -euo pipefail
-      PIN="$$REPLAY_BACKEND_REV"
-      test -n "$$PIN"
-      CASE="$${REPLAY_157_TEST_CASE:-tests/evaluate/outbound-fetch}"
-      WORKDIR=$$(mktemp -d "/tmp/chromium157-recording-$${BUILDKITE_JOB_ID}.XXXXXX")
+      WORKDIR=$$(mktemp -d "/tmp/chromium-recording-$${BUILDKITE_JOB_ID}.XXXXXX")
       # Short path: unix socket paths under TMPDIR are length-limited.
-      TMPDIR=$$(mktemp -d /tmp/c157.XXXXXX)
+      TMPDIR=$$(mktemp -d /tmp/crt.XXXXXX)
       export TMPDIR
       trap 'rm -rf "$$WORKDIR" "$$TMPDIR"' EXIT
       export RECORD_REPLAY_DIRECTORY="$$WORKDIR/replay"
       BACKEND_DIR="$$WORKDIR/backend"
       mkdir -p "$$BACKEND_DIR" "$$RECORD_REPLAY_DIRECTORY" "$$WORKDIR/runtime"
+      buildkite-agent artifact download "build_id/linux/x86_64/*" "$$WORKDIR/"
+      PIN="$$(cat "$$WORKDIR/build_id/linux/x86_64/backend_rev")"
+      test -n "$$PIN"
       git -C "$$BACKEND_DIR" init
       git -C "$$BACKEND_DIR" remote add origin git@github.com:replayio/backend.git
       git -C "$$BACKEND_DIR" fetch --depth 1 origin "$$PIN"
       git -C "$$BACKEND_DIR" checkout FETCH_HEAD
+      # LinkerZombieLeak: sweep before tests + always after (even on failure).
       "$$BACKEND_DIR/scripts/kill-linker-processes.sh"
       trap '"$$BACKEND_DIR/scripts/kill-linker-processes.sh"; rm -rf "$$WORKDIR" "$$TMPDIR"' EXIT
-      buildkite-agent artifact download "build_id/linux/x86_64/*" "$$WORKDIR/" --step "build-chromium-157-linux-x86_64"
       BUILD_ID="$$(cat "$$WORKDIR/build_id/linux/x86_64/build_id")"
       test -n "$$BUILD_ID"
+      # This build's runtime instead of a download: the backend takes
+      # REPLAY_CHROMIUM_EXECUTABLE_PATH ahead of the build id (resolveRecordBinary),
+      # and reads <build id>.symbols.tgz from REPLAY_SYMBOLS_DIR instead of
+      # storage. The linker's symbols, which build-driver-linker uploads, it
+      # still downloads into the same directory.
       tar -xJf "$$WORKDIR/build_id/linux/x86_64/$$BUILD_ID.tar.xz" -C "$$WORKDIR/runtime"
-      # The build's symbols: the backend reads <build id>.symbols.tgz from
-      # REPLAY_SYMBOLS_DIR instead of storage. The linker's, which
-      # build-driver-linker uploads, it still downloads, into the same directory.
       mkdir -p "$$WORKDIR/symbols"
       mv "$$WORKDIR/build_id/linux/x86_64/$$BUILD_ID.symbols.tgz" "$$WORKDIR/symbols/"
       export REPLAY_SYMBOLS_DIR="$$WORKDIR/symbols"
       export REPLAY_CHROMIUM_EXECUTABLE_PATH="$$WORKDIR/runtime/replay-chromium/chrome"
-      export RECORD_REPLAY_ASSETS_DIRECTORY="$$WORKDIR/runtime/replay-chromium/replay-assets"
       test -x "$$REPLAY_CHROMIUM_EXECUTABLE_PATH"
       cd "$$BACKEND_DIR"
       unset REPLAY_LOCAL_DRIVER_DIR || true
-      # The agents' Node is older than the backend's: a user-space copy of the
-      # pinned backend's .nvmrc version, as master does.
+      # e2e pods still ship Node 18; Dockerfile.buildkite-e2e-agent installs the backend's Node
+      # (nodesource) but needs root. User-space tarball of the pinned backend's .nvmrc version.
       NODE_VERSION="$$(sed 's/^v//' .nvmrc)"
       test -n "$$NODE_VERSION"
       NODE_PREFIX="$$WORKDIR/node-v$${NODE_VERSION}-linux-x64"
@@ -178,7 +200,6 @@ steps:
       export PATH="$${NODE_PREFIX}/bin:$$PATH"
       hash -r
       node --version
+      # packageManager pnpm@10.11.0; agents lack global npm write (EACCES).
       npx --yes pnpm@10.11.0 install --frozen-lockfile
-      echo "--- record -> replay: $$CASE ($$BUILD_ID)"
-      cd test/chromium-recording
-      npx playwright test --config=playwright.config.ts "$$CASE"
+      npx tsx src/build/buildRuntime.ts test-chromium-recording --build-id "$$BUILD_ID"

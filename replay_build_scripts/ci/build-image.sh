@@ -1,14 +1,19 @@
 #!/bin/bash
-# The 157 build image (Dockerfile next to this script).
+# This version's build image (Dockerfile next to this script).
 #
-#   build-image.sh ref      print chromium157-build:<tag>-u<uid>
+#   build-image.sh tag      print the tag: a hash of the Dockerfile
+#   build-image.sh ref      print chromium-build:<tag>-u<uid>
 #   build-image.sh ensure   build it unless that ref is already here
+#   build-image.sh build    build it, whether or not it is here
 #
 # From chromium-158-buildkite's build-image.sh. The tag is a hash of the
-# Dockerfile, so a changed Dockerfile is a new image next to the old one and
-# nothing is rebuilt in place. The repository name is this version's own:
-# nothing that manages the 108 images (chromium-build, chromium-build-new)
-# matches it. Images are never removed here.
+# Dockerfile and the uid the image is built for, so a changed Dockerfile is a new
+# image next to the old one, nothing is rebuilt in place, and every version's
+# builds run in the image its own tree describes.
+#
+# ensure and build record the image as used now: a Dockerfile change leaves the
+# image it replaced behind, and checkout.sh's reclaim removes the least recently
+# used of this repository's images when the volume runs low.
 set -euo pipefail
 dir=$(dirname "$(readlink -f "$0")")
 # shellcheck source=config.sh
@@ -26,7 +31,12 @@ build() {
 }
 
 case ${1:-} in
+  tag) echo "$tag" ;;
   ref) echo "$ref" ;;
+  build)
+    build
+    "$dir/checkout.sh" image-used "$ref"
+    ;;
   ensure)
     if docker image inspect "$ref" >/dev/null 2>&1; then
       echo "build-image: $ref is already here"
@@ -34,6 +44,7 @@ case ${1:-} in
       echo "--- building $ref"
       build
     fi
+    "$dir/checkout.sh" image-used "$ref"
     ;;
-  *) echo "usage: $0 ref|ensure" >&2; exit 2 ;;
+  *) echo "usage: $0 tag|ref|ensure|build" >&2; exit 2 ;;
 esac
