@@ -625,15 +625,8 @@ void TaskTracker::DecrementNumItemsBlockingShutdown() {
 }
 
 void TaskTracker::DecrementNumIncompleteTaskSources() {
-  // [RecordReplay] Threads finishing together race to be the one that takes
-  // the count to zero and wakes whoever is flushing, so what each saw is
-  // recorded.
   const auto prev_num_incomplete_task_sources =
-      static_cast<decltype(num_incomplete_task_sources_.load())>(
-          recordreplay::RecordReplayValueIfAllowed(
-              "TaskTracker::num_incomplete_task_sources_",
-              static_cast<uintptr_t>(
-                  num_incomplete_task_sources_.fetch_sub(1))));
+      num_incomplete_task_sources_.fetch_sub(1);
   DCHECK_GE(prev_num_incomplete_task_sources, 1);
   if (prev_num_incomplete_task_sources == 1) {
     {
