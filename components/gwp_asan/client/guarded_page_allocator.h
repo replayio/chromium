@@ -211,9 +211,7 @@ class GWP_ASAN_EXPORT GuardedPageAllocator {
   AllocatorState state_;
 
   // Lock that synchronizes allocating/freeing slots between threads.
-  // [RecordReplay] Never ordered: which allocations are sampled isn't the
-  // same in a replay, so nothing the allocator does can be in the recording.
-  base::Lock lock_{""};
+  base::Lock lock_;
 
   std::unique_ptr<FreeList<AllocatorState::SlotIdx>> free_slots_
       GUARDED_BY(lock_);

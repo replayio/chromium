@@ -105,9 +105,7 @@ class BASE_EXPORT ThreadSafeRangesManager final : public RangesManager {
 
  private:
   // Used to protect access to |ranges_|.
-  // Never ordered when recording (see LockImpl::LockImpl): metrics are no part
-  // of a recording, and code that runs at a pause in a replay reports them too.
-  mutable base::Lock lock_{""};
+  mutable base::Lock lock_;
 };
 
 }  // namespace base
