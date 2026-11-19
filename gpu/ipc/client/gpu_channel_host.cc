@@ -325,10 +325,8 @@ void GpuChannelHost::VerifyFlush(uint32_t deferred_message_id) {
   // the other side having seen the flush.
   //
   // This only catches a call that starts after the divergence. A thread
-  // already waiting in one when its child diverged is released by
-  // recordreplay::SignalInFlightSyncCalls(), which every diverged path that
-  // goes on to block waiting on another thread of this process has to call
-  // first.
+  // already waiting in one when the child diverged is released by
+  // recordreplay::SignalInFlightSyncCalls() instead.
   if (recordreplay::HasDivergedFromRecording()) {
     return;
   }

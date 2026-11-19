@@ -227,46 +227,24 @@ void UnlistInFlightSyncCall(base::WaitableEvent* event);
 // Releases every listed call, so the threads inside them can carry on. Their
 // callers see the call as having got no reply, which is the only answer a
 // diverged child has. A diverged path that then blocks waiting on another
-// thread of this process calls this first: the repaint in
-// components/viz/service/display/record_replay_render.cc does. That is a
-// necessary step and not a sufficient one -- all it reaches is the
-// cross-sequence mojo sync calls below, and a thread stranded on a
-// same-sequence SyncWatch or on any other cross-thread WaitableEvent is not
-// released by it.
+// thread of this process calls this first; the repaint in
+// components/viz/service/display/record_replay_render.cc does.
 //
-// Whether "no reply" is a safe answer is the callee's to know, and so far only
-// GpuChannelHost::VerifyFlush says it is (gpu/ipc/client/gpu_channel_host.cc).
+// Whether "no reply" is a safe answer is the callee's to know, and only
+// GpuChannelHost::VerifyFlush says so today. The release cannot usefully be
+// made selective -- a repaint depends on the raster workers and on
+// pending-tree activation as well as on the compositor thread, so releasing
+// one thread's calls alone brings the hang back -- so a callee that mishandles
+// "no reply" needs its own handling, the way VerifyFlush has it.
 // CommandBufferProxyImpl::WaitForGetOffsetInRange and WaitForTokenInRange are
-// known callees that would mishandle it: a thread released from either reaches
-// OnGpuSyncReplyError(), which sets kLostContext and disconnects the GPU
-// channel, and a diverged renderer cannot then make a replacement frame sink,
-// so the repaint draws nothing instead of hanging. Both outcomes fail, and
-// fail visibly -- a repaint that draws nothing prints "Repaint drew nothing"
-// and one that hangs prints "Failed waiting to get a repaint", and either way
-// the paint data is null -- so this is not a wrong answer in place of a
-// failure. What it is, is the wrong failure: the lost context is reported as
-// though the page had nothing to draw, it is indistinguishable in the log from
-// a genuine one, and the channel stays disconnected for the rest of that
-// child. Nothing reports the cascade as such; the two sites only LOG(ERROR),
-// which no replay log carries, so "when a site is seen to be reached" below
-// needs a recordreplay::Print at those two sites under
-// HasDivergedFromRecording() to be seeable at all.
+// the known examples: both reach OnGpuSyncReplyError(), which loses the GPU
+// context, and a diverged renderer cannot make a replacement frame sink, so a
+// repaint there draws nothing instead of hanging. Neither is reached by any
+// case in the chromium-recording suite.
 //
-// Neither of the two entry points above is selective about that.
-// SignalInFlightSyncCalls releases every listed call, and ListInFlightSyncCall
-// returns every cross-sequence sync call started after the divergence
-// unanswered, on any thread, which is the likelier of the two to reach such a
-// callee. A narrower release is not the answer: no key is sound, because a
-// repaint depends on the raster workers and on pending-tree activation as well
-// as on the compositor thread, so releasing the compositor thread's calls
-// alone brings the hang back. The handling belongs in the callee, one site at
-// a time, the way VerifyFlush does it, and is worth writing when a site is
-// seen to be reached. No case in the chromium-recording suite reaches one.
-//
-// Same-sequence sync calls are never listed, so a divergence can still strand
-// them: they wait inside InterfaceEndpointClient::SendMessageWithResponder
-// through controller_->SyncWatch(), on the sequence's own sync handle
-// registry, and not on a completion event of their own for this to signal.
+// Same-sequence sync calls are never listed, and a divergence can still strand
+// them: they wait through controller_->SyncWatch() on the sequence's own sync
+// handle registry, not on a completion event this could signal.
 void SignalInFlightSyncCalls();
 
 void RegisterPointer(const char* name, const void* ptr);
