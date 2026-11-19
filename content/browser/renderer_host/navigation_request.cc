@@ -279,6 +279,9 @@ constexpr base::TimeDelta kCompositorLockTimeout = base::Milliseconds(150);
 // Flag to control whether redirect URLs are being sanitized before sending
 // them to the renderer process as part of the navigation.
 // See https://crbug.com/40095391.
+//
+// [RecordReplay] On, as upstream has it; SanitizeRedirectsForCommit skips the
+// sanitization for a record/replay run only.
 BASE_FEATURE(kSanitizeRedirectUrlsDuringNavigation,
              base::FEATURE_ENABLED_BY_DEFAULT);
 
@@ -1340,7 +1343,8 @@ std::unique_ptr<NavigationRequest> NavigationRequest::CreateRendererInitiated(
       GetDestinationFromFrameTreeNode(frame_tree_node);
 
   GURL original_url = common_params->url;
-  if (features::RecordReplaySanitizeOriginalUrlDuringNavigation()) {
+  if (base::FeatureList::IsEnabled(
+          features::kSanitizeOriginalUrlDuringNavigation)) {
     // It is safe to convert GURL to an Origin and back in the code below
     // because we only want to discard the rest of the URL (e.g., path and
     // params). The actual underlying Origin is not needed, which could be
@@ -1522,7 +1526,8 @@ NavigationRequest::CreateForSynchronousRendererCommit(
   // actual underlying Origin is not needed, which could be inherited or opaque
   // in sandbox cases.
   const GURL original_url_for_renderer =
-      features::RecordReplaySanitizeOriginalUrlDuringNavigation()
+      base::FeatureList::IsEnabled(
+          features::kSanitizeOriginalUrlDuringNavigation)
           ? original_url.DeprecatedGetOriginAsURL()
           : original_url;
   blink::mojom::CommitNavigationParamsPtr commit_params =
@@ -1772,7 +1777,8 @@ NavigationRequest::NavigationRequest(
   CHECK(!blink::IsRendererDebugURL(common_params_->url));
   CHECK(common_params_->method == "POST" || !common_params_->post_data);
   CHECK_EQ(common_params_->url, original_url_);
-  if (features::RecordReplaySanitizeOriginalUrlDuringNavigation()) {
+  if (base::FeatureList::IsEnabled(
+          features::kSanitizeOriginalUrlDuringNavigation)) {
     // TODO(crbug.com/495463654): We need to get the origin of the original_url
     // here because the NavigationRequestTest helpers directly set original_url
     // without triggering paths that may sanitize it. This will no longer be an
@@ -2843,7 +2849,8 @@ void NavigationRequest::OnFencedFrameURLMappingComplete(
       properties->mapped_url()->GetValueIgnoringVisibility();
   common_params_->url = mapped_url_value;
   original_url_ = mapped_url_value;
-  if (features::RecordReplaySanitizeOriginalUrlDuringNavigation()) {
+  if (base::FeatureList::IsEnabled(
+          features::kSanitizeOriginalUrlDuringNavigation)) {
     // It is safe to convert GURL to an Origin and back in the code below
     // because we only want to discard the rest of the URL (e.g., path and
     // params). The actual underlying Origin is not needed, which could be
@@ -8227,7 +8234,8 @@ net::Error NavigationRequest::CheckContentSecurityPolicy(
       network::UpgradeInsecureRequest(&common_params_->url);
       common_params_->referrer = Referrer::SanitizeForRequest(
           common_params_->url, *common_params_->referrer);
-      if (features::RecordReplaySanitizeOriginalUrlDuringNavigation()) {
+      if (base::FeatureList::IsEnabled(
+              features::kSanitizeOriginalUrlDuringNavigation)) {
         // It is safe to convert GURL to an Origin and back in the code below
         // because we only want to discard the rest of the URL (e.g., path and
         // params). The actual underlying Origin is not needed, which could be
@@ -8686,15 +8694,36 @@ void NavigationRequest::SanitizeRedirectsForCommit(
     return;
   }
 
-  // [RecordReplay] A recording reports each hop of a redirected navigation with
-  // its URL, as Chromium 108 let it, so a record/replay run does not cut a
-  // successful navigation's redirect URLs down to their origins. What a
-  // recording does not need is still cut: the error page of a failed,
-  // redirected subframe navigation that commits in its initiator's process gets
-  // origins only, and so do the cross-origin Location headers below. See
-  // features::RecordReplaySanitizeOriginalUrlDuringNavigation for what this
-  // predicate covers and what it does not.
-  const bool sanitize_redirect_urls = !recordreplay::IsRecordReplayRun();
+  // [RecordReplay] A recording reports each request of a redirected navigation
+  // with its URL, as Chromium 108 let it. The renderer only has the URL the
+  // navigation started from if the browser gives it whole, and only the hop
+  // URLs if they are not cut to their origins. So a record/replay run puts
+  // `original_url` back -- kSanitizeOriginalUrlDuringNavigation
+  // (content/common/features.cc) cut it to an origin on the way here, while
+  // `original_url_` is that URL and is never sanitized -- and leaves the
+  // redirect URLs below alone. What a recording does not need is still cut:
+  // the error page of a failed, redirected subframe navigation that commits in
+  // its initiator's process gets origins only, and so do the cross-origin
+  // Location headers below.
+  //
+  // IsRecordReplayRun() is what the browser process has to go on, because it
+  // never loads the driver that answers IsRecordingOrReplaying()
+  // (base/record_replay.h). Being environment-derived has two consequences
+  // worth knowing:
+  //   - it is true as soon as RECORD_ALL_CONTENT is set, the empty string
+  //     included, so @replayio/playwright's RECORD_REPLAY_NO_RECORD mode, whose
+  //     point is to record nothing, also gets the whole URLs;
+  //   - it is false in the toolbar's per-tab recording mode (CHROMIUM_UI, which
+  //     marks the recorded renderer with --record-replay-for-recording
+  //     instead), so a recording made that way reports origins where an
+  //     all-content one reports URLs. Nothing scripted records that way, and
+  //     Chromium 108 had no URL sanitization to switch off for it either. The
+  //     per-process answer, RenderProcessHost::IsRecordReplayForRecording(),
+  //     is available here if that mode ever needs covering.
+  const bool record_replay_run = recordreplay::IsRecordReplayRun();
+  if (record_replay_run) {
+    commit_params->original_url = original_url_;
+  }
 
   // TODO(crbug.com/40134629): Remove the sanitization once Subframe Error
   // Pages are isolated.
@@ -8708,18 +8737,19 @@ void NavigationRequest::SanitizeRedirectsForCommit(
 
   if (should_sanitize_final_url_for_error_page) {
     common_params->url = common_params->url.DeprecatedGetOriginAsURL();
-    if (recordreplay::IsRecordReplayRun()) {
-      // [RecordReplay] `original_url` is whole in a record/replay run (see
-      // features::RecordReplaySanitizeOriginalUrlDuringNavigation), and this
-      // error page commits in a process that must not be told the cross-origin
-      // URL the navigation failed on. Stock Chromium sanitized it already.
+    if (record_replay_run) {
+      // [RecordReplay] Undo the restore above for this error page: it commits
+      // in a process that must not be told the cross-origin URL the navigation
+      // failed on, which is what stock Chromium gives it as well.
       commit_params->original_url =
           commit_params->original_url.DeprecatedGetOriginAsURL();
     }
   }
 
+  // [RecordReplay] A recording keeps the hop URLs, except the ones this error
+  // page must not see.
   const bool sanitize_urls =
-      sanitize_redirect_urls || should_sanitize_final_url_for_error_page;
+      !record_replay_run || should_sanitize_final_url_for_error_page;
 
   // It is safe to convert GURL to an Origin and back in the code below because
   // we only want to discard the rest of the URL (e.g., path and params). The

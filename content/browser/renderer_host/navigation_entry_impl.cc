@@ -1038,7 +1038,8 @@ NavigationEntryImpl::ConstructCommitNavigationParams(
   }
 
   const GURL original_url_for_renderer =
-      features::RecordReplaySanitizeOriginalUrlDuringNavigation()
+      base::FeatureList::IsEnabled(
+          features::kSanitizeOriginalUrlDuringNavigation)
           ? original_url.DeprecatedGetOriginAsURL()
           : original_url;
 
