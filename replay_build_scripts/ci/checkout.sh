@@ -8,10 +8,17 @@
 #   <root>/home              HOME inside the build container
 #   <root>/jobs/<job id>     the current job's logs and artifacts (job.sh)
 #   <root>/.replay-checkout  stamp: key, scheme, when
+#   <root>/.replay-synced    the commit of the last sync that finished
 #
 #   checkout.sh root          print <root>
 #   checkout.sh sync          create <root> if it is missing, put src at this
-#                             commit, gclient sync its DEPS and run the hooks
+#                             commit, gclient sync its DEPS and run the hooks.
+#                             With CHROMIUM_CHECKOUT_FROM=<key>, a <root> that
+#                             does not exist yet is copied from that key first
+#   checkout.sh synced        the commit of the last sync that finished here
+#   checkout.sh seed-from <key>
+#                             fill this key's checkout from that one's, for a
+#                             version the host has no checkout of yet
 #   checkout.sh wipe-out      remove the build outputs (src/out)
 #   checkout.sh wipe          remove <root>
 #   checkout.sh reclaim       remove least recently used state that no job is
@@ -113,6 +120,14 @@ last_used() {
 
 free_gb() {
   df -BG --output=avail "$CHECKOUTS_DIR" | tail -1 | tr -dc 0-9
+}
+
+# The commit of the last sync that finished in this checkout, empty if none has.
+# A build refuses a checkout without one (build-in-container.sh --require-synced):
+# everything a build reads beyond src -- the DEPS trees, the generated configs,
+# the hooks' output -- is written by that sync, and half of it is worse than none.
+synced_commit() {
+  sed -n 's/^commit=//p' "$CHECKOUT_SYNCED" 2>/dev/null || true
 }
 
 # When a job last used an image (build-image.sh's `ensure`).
@@ -239,14 +254,79 @@ remove_stale_tmp_packs() {
   rm -f "$started"
 }
 
+# seed_from <key>: fill this key's checkout from another key's, for a version
+# the host has no checkout of yet. The working files are copied, because a
+# gclient hook that overwrites one in place must not write into the key this was
+# copied from. Every .git is hardlinked instead (--link-dest), because git only
+# ever adds pack files and never rewrites one, so two checkouts can share the
+# same inodes safely -- which is what makes this cheap: a fork with its history
+# is tens of GB, and hardlinking it costs megabytes.
+#
+# The source's use lock is held, shared, so a reclaim elsewhere -- which takes it
+# exclusively -- cannot remove the tree while it is being read.
+assert_seed_source() {
+  local from=${1:-} src=$CHECKOUTS_DIR/${1:-}
+  if [ -z "$from" ] || ! valid_key "$from"; then
+    die "'$from' is not a usable key to copy a checkout from"
+  fi
+  if [ "$from" = "$CHECKOUT_KEY" ]; then
+    die "cannot copy '$CHECKOUT_KEY' from itself"
+  fi
+  if [ ! -d "$src/src/.git" ]; then
+    die "'$from' has no checkout at $src to copy from"
+  fi
+}
+
+seed_from() {
+  local from=$1 src=$CHECKOUTS_DIR/$1
+  assert_seed_source "$from"
+  use "$from"
+  echo "--- copying $src -> $CHECKOUT_ROOT: working files"
+  rsync -a --delete --exclude '.git/' \
+    --exclude '/src/out' --exclude '/home' --exclude '/jobs' \
+    --exclude '/.replay-checkout' --exclude '/.replay-synced' \
+    "$src/" "$CHECKOUT_ROOT/"
+  echo "--- copying $src -> $CHECKOUT_ROOT: git objects, hardlinked"
+  rsync -a --link-dest="$src" --include '*/' --include '.git/***' --exclude '*' \
+    "$src/" "$CHECKOUT_ROOT/"
+}
+
+# By hand, to give a version a checkout without waiting for its first build to
+# fetch and sync one from nothing.
+seed_from_command() {
+  local from=${1:-}
+  if [ -z "$from" ]; then
+    die "usage: $0 seed-from <key>"
+  fi
+  # Before the destination is created or the volume reclaimed: a bad argument
+  # should cost nothing.
+  assert_seed_source "$from"
+  use "$CHECKOUT_KEY"
+  ensure_root
+  if [ -d "$CHECKOUT_ROOT/src/.git" ]; then
+    die "$CHECKOUT_ROOT already has a checkout: checkout.sh wipe it first"
+  fi
+  seed_from "$from"
+  echo "--- $CHECKOUT_ROOT is seeded; its first build syncs it"
+}
+
 sync() {
-  local commit url src=$CHECKOUT_ROOT/src lock holder
+  local commit url src=$CHECKOUT_ROOT/src lock holder was
   commit=$(git -C "$repo" rev-parse HEAD)
   url=$(git -C "$repo" config remote.origin.url) || die "no remote.origin.url in $repo"
   # Held for this run as well as by the job, if there is one: both holds are
   # shared, and a `sync` run by hand needs one of its own.
   use "$CHECKOUT_KEY"
   ensure_root
+  was=$(synced_commit)
+  if [ -n "$was" ]; then
+    echo "--- last sync here finished at $was"
+  else
+    echo "--- no sync has finished here: this one syncs the whole checkout"
+    if [ -n "${CHROMIUM_CHECKOUT_FROM:-}" ] && [ ! -d "$src/.git" ]; then
+      seed_from "$CHROMIUM_CHECKOUT_FROM"
+    fi
+  fi
   remove_stale_tmp_packs
   # src's commit is fetched here, on the host, over the remote this script's
   # clone came from: the agent's SSH identity. The container has none, and
@@ -279,7 +359,14 @@ sync() {
   fi
   cp "$dir/gclient" "$CHECKOUT_ROOT/.gclient"
   echo "--- checkout $CHECKOUT_ROOT -> $commit"
+  # Removed first and written last, so that a sync killed in the middle leaves a
+  # checkout that says so.
+  rm -f "$CHECKOUT_SYNCED"
   "$dir/build-in-container.sh" -- /ci/container/sync.sh "$FORK_URL" "$commit"
+  cat > "$CHECKOUT_SYNCED" <<EOF
+commit=$commit
+synced=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+EOF
 }
 
 wipe() {
@@ -302,11 +389,17 @@ case ${1:-} in
   sync) sync ;;
   wipe) wipe ;;
   wipe-out) wipe_out ;;
+  synced)
+    commit=$(synced_commit)
+    [ -n "$commit" ] || die "no sync has finished in $CHECKOUT_ROOT"
+    echo "$commit"
+    ;;
+  seed-from) shift; seed_from_command "${1:-}" ;;
   reclaim) shift; reclaim "${1:-}" ;;
   use-lock) use_lock "$CHECKOUT_KEY" ;;
   image-used) shift; image_used "${1:-}" ;;
   *)
-    echo "usage: $0 root|sync|wipe|wipe-out|reclaim [GB]|use-lock|image-used <ref>" >&2
+    echo "usage: $0 root|sync|synced|seed-from <key>|wipe|wipe-out|reclaim [GB]|use-lock|image-used <ref>" >&2
     exit 2
     ;;
 esac

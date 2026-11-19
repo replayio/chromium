@@ -9,9 +9,11 @@
 # - all persistent state of this version is in CHECKOUT_ROOT; the only other
 #   host directories written are the job's workspace and, when the volume runs
 #   low, CHECKOUTS_DIR's least recently used state (checkout.sh reclaim);
-# - no other Chromium checkout, depot_tools clone or cache on the host is read
-#   or mounted, and the only write to one is that removal, which takes the
-#   key's use lock and so never touches a checkout a job is using;
+# - another Chromium checkout on the host is read only to copy a first checkout
+#   from it (CHROMIUM_CHECKOUT_FROM, checkout.sh seed-from), with that key's use
+#   lock held; the only write to one is reclaim's removal, which takes the same
+#   lock exclusively and so never touches a checkout a job is using;
+# - no depot_tools clone or cache of the host is read or mounted;
 # - docker objects are CONTAINER_PREFIX containers and images of IMAGE_REPO
 #   built from this tree's Dockerfile, and only those are ever removed.
 
@@ -50,7 +52,8 @@ version_major() {
 # new one gets a checkout of its own without anyone arranging it. A rebase
 # experiment that wants to be alone, or two experiments on one milestone, set
 # CHROMIUM_CHECKOUT_KEY (per Buildkite build, or on a branch's builds) and get a
-# directory nothing else writes to.
+# directory nothing else writes to. CHROMIUM_CHECKOUT_FROM names a key to copy
+# the first checkout from (checkout.sh).
 compute_key() {
   local k=${CHROMIUM_CHECKOUT_KEY:-}
   if [ -z "$k" ]; then
@@ -73,6 +76,11 @@ readonly CHECKOUT_KEY
 readonly CHECKOUTS_DIR=$HOME/chromium-checkouts
 readonly CHECKOUT_ROOT=$CHECKOUTS_DIR/$CHECKOUT_KEY
 readonly CHECKOUT_STAMP=$CHECKOUT_ROOT/.replay-checkout
+# Written when a gclient sync and its hooks have finished, removed before one
+# starts. The stamp cannot say this: assert_isolated_root reads its key before
+# anything else runs, so the stamp has to exist from the moment the directory
+# does, and a checkout a killed job left halfway would carry one too.
+readonly CHECKOUT_SYNCED=$CHECKOUT_ROOT/.replay-synced
 readonly CHECKOUT_SCHEME=1
 
 # src's remote URL inside the build container, as ./gclient names it. Nothing

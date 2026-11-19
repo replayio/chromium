@@ -63,7 +63,7 @@ touch "$build_started"
 
 echo "--- :hammer: build"
 status=0
-"$dir/build-in-container.sh" --engflow -- node build.cjs 2>&1 | tee "$logs/build.log" || status=$?
+"$dir/build-in-container.sh" --engflow --require-synced -- node build.cjs 2>&1 | tee "$logs/build.log" || status=$?
 
 # siso's own logs, if this build wrote them.
 for name in siso_failure_summary siso_output siso_failed_commands.sh; do
@@ -90,9 +90,9 @@ if [ "$status" != 0 ]; then
 fi
 
 echo "--- :package: package"
-"$dir/build-in-container.sh" -- /ci/container/package.sh "/chromium/jobs/$job/build_id/linux/x86_64"
+"$dir/build-in-container.sh" --require-synced -- /ci/container/package.sh "/chromium/jobs/$job/build_id/linux/x86_64"
 # With the tree's node: the image's is too old for the script's modules.
-"$dir/build-in-container.sh" -- /chromium/src/third_party/node/linux/node-linux-x64/bin/node \
+"$dir/build-in-container.sh" --require-synced -- /chromium/src/third_party/node/linux/node-linux-x64/bin/node \
   replay_build_scripts/symbols_archive.mjs "/chromium/jobs/$job/build_id/linux/x86_64"
 # Next to build_id: the backend that steps testing this build must use.
 echo "$BACKEND_REV" > "$out/build_id/linux/x86_64/backend_rev"

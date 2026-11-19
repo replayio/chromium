@@ -13,10 +13,11 @@ Scope: Linux x86_64, build only, the elastic build pool's `queue=runtime` hosts 
 | 2b | host | take the key's use lock, shared, for the whole job: another script line's reclaim then leaves this checkout alone | `ci/job.sh`, `ci/checkout.sh use-lock` |
 | 3 | host | remove containers named `chromium-build-<key>-*` | `ci/remove-stale-build-containers.sh` |
 | 4 | host | guards (root identity); below the minimum free space, remove the least recently used checkouts and this line's images that no job is using, then refuse if it is still short; create the key's directory + stamp if missing, touch the stamp; remove `tmp_pack_*` of killed fetches (older than this run, open by no process) in the checkout's repositories; fetch the commit (depth 1) into `<root>/src` over the agent's SSH identity, unless it is already complete there, retried; install `.gclient` | `ci/checkout.sh sync` |
-| 4a | host | `DRIVER_REVISION` from the synced checkout's `REPLAY_BACKEND_REV`, ignoring build env | `ci/job.sh` |
+| 4a | host | with `CHROMIUM_CHECKOUT_FROM`, and only when this key has no checkout: that key's working files copied and every `.git` hardlinked, holding its use lock | `ci/checkout.sh` (`seed_from`) |
+| 4b | host | `DRIVER_REVISION` from the synced checkout's `REPLAY_BACKEND_REV`, ignoring build env | `ci/job.sh` |
 | 5 | host | build image `chromium-build:<Dockerfile hash>-u<uid>` if absent, and mark it used | `ci/build-image.sh ensure` |
-| 6 | container | `origin/HEAD` → `origin/main`, check the commit is complete, checkout, `gclient sync --nohooks --no-history -D`, `gclient runhooks`, re-stamp `LASTCHANGE` | `ci/container/sync.sh` |
-| 7 | container | driver download + embed, image check, remote-exec check, `args.gn`, `gn gen`, `autoninja` (siso) | `build.cjs` |
+| 6 | container | `origin/HEAD` → `origin/main`, check the commit is complete, checkout, `gclient sync --nohooks --no-history -D`, `gclient runhooks`, re-stamp `LASTCHANGE`. `.replay-synced` is removed before this and written after, so a sync that was killed leaves a checkout that says so | `ci/container/sync.sh`, `ci/checkout.sh` |
+| 7 | container | driver download + embed, image check, remote-exec check, `args.gn`, `gn gen`, `autoninja` (siso). Refused unless `.replay-synced` is there (`--require-synced`) | `build.cjs`, `ci/build-in-container.sh` |
 | 8 | host | collect logs, failed-step list; upload `logs/**` (always) | `ci/job.sh` |
 | 9 | container | `replay-chromium/` → `<build id>.tar.xz`, `build_id` | `ci/container/package.sh` |
 | 9a | container | `out/Release/chrome` → `<build id>.symbols.tgz` (master's symbols archive), with the tree's node | `replay_build_scripts/symbols_archive.mjs` |
@@ -38,11 +39,11 @@ Paths relative to the repository root. Origin: M = replayio/chromium `master`, 1
 | `replay_build_scripts/ci/config.sh` | the key and the paths, images and container names that follow from it, the disk minima, the guards `valid_key`, `assert_isolated_root`, `require_free_gb`, and the retry helper `github_read` | new, M (`version_major`, the `CHROMIUM_CHECKOUT_KEY` override, `valid_key`) | the key is worked out once, when the file is sourced, rather than per call |
 | `replay_build_scripts/ci/bootstrap.sh` | step 2 as a file, for steps that fetch it and run it; the `chromium-build` settings step refuses a commit without it | M | sparse paths `ci/` and `chrome/VERSION` (the key), not `replay_build_scripts/` whole; ref is an argument; repo-local `gc.auto 0` |
 | `replay_build_scripts/ci/job.sh` | job driver: use lock → stale containers → sync → backend pin → build → logs → package → upload | 158 (inline pipeline command), M (use lock held for the job, `DRIVER_REVISION` from the commit, `backend_rev` artifact) | script instead of YAML; artifacts staged under `<key>/jobs/<job>`; siso logs; default keep-going; the pin is read from the checkout, not a backend clone of its own |
-| `replay_build_scripts/ci/checkout.sh` | `root`, `sync`, `wipe`, `wipe-out`, `reclaim`, `use-lock`, `image-used` for the one fixed root | M + 158 | removed: version/env-derived key, `link_legacy_checkout`, `adopt`, `prepare --from`, `nearest_src`, `.git-cache`, backend checkout, delete-on-failure trap; all git moved into the container, except the src fetch. Taken from M unchanged in behaviour: `use_lock`, `use`, `unused`, `valid_key`, `last_used`, `remove_key`, `image_mark`, `image_used`, `lru`, `reclaim` -- the lock, trash and mark paths are M's, so each line's reclaim sees the other's jobs |
+| `replay_build_scripts/ci/checkout.sh` | `root`, `sync`, `synced`, `seed-from`, `wipe`, `wipe-out`, `reclaim`, `use-lock`, `image-used` | M + 158 | removed: `link_legacy_checkout`, `adopt`, `nearest_src`, the shared `.git-cache`, the backend checkout, the delete-on-failure trap; all git moved into the container, except the src fetch. `sync` converges from any state, and `.replay-synced` records the last one that finished. `seed_from` is M's `prepare --from`, in `sync`'s no-checkout-yet branch rather than a `prepare` of its own, and holding the source's use lock, which M does not. Taken from M unchanged in behaviour: `use_lock`, `use`, `unused`, `valid_key`, `last_used`, `remove_key`, `image_mark`, `image_used`, `lru`, `reclaim` -- the lock, trash and mark paths are M's, so each line's reclaim sees the other's jobs |
 | `replay_build_scripts/ci/container/sync.sh` | in-image: checkout of the commit the host fetched, gclient sync, hooks, `LASTCHANGE` | 158 (`checkout.sh sync` inline `bash -c`) | idempotent `git init`; no fetch; local `origin/HEAD`; default gclient jobs |
 | `replay_build_scripts/ci/gclient` | `.gclient` solution; `custom_vars` for the `configure_siso` hook | 147 (`replay.gclient`), 158 (`.gclient` heredoc) | fork URL; `reapi_backend_config_path` names a file that exists; no `rbe_instance` |
 | `replay_build_scripts/ci/build-image.sh` | image tag/ref/ensure/build | 158, M (`image-used` on `ensure` and `build`) | the uid the image is built for is part of the tag; disk guard on docker root |
-| `replay_build_scripts/ci/build-in-container.sh` | `docker run` wrapper | M + 158 | fixed root (no `--root`); `/ci` read-only mount; cert mount only with `--engflow`; no `.git-cache` mount; no local-driver mount; `--oom-score-adj`; in-container deadline |
+| `replay_build_scripts/ci/build-in-container.sh` | `docker run` wrapper; `--require-synced` for anything but the sync itself | M + 158 | fixed root (no `--root`); `/ci` read-only mount; cert mount only with `--engflow`; no `.git-cache` mount; no local-driver mount; `--oom-score-adj`; in-container deadline |
 | `replay_build_scripts/ci/remove-stale-build-containers.sh` | remove `chromium-build-<key>-*` containers | 158 | prefix from `config.sh`, which carries the key; no key argument |
 | `replay_build_scripts/symbols_archive.mjs` | `<build id>.symbols.tgz` next to the packaged build | new | calls `buildSymbolsArchive` (moved from `upload_build_artifacts.mjs` into `symbolication.mjs`, unchanged) |
 | `replay_build_scripts/ci/container/package.sh` | in-image packaging | 158 (`package-artifacts.sh`), M (`copyBuildFiles` file list) | `chrome`, `locales`, `replay-assets` required; `build_id` without newline (as M) |
@@ -139,6 +140,8 @@ Not present by construction: `git gc` (and auto-gc disabled where git runs), hos
 | `<keys>/.images/<image ref>` | create, `touch` | `build-image.sh` → `checkout.sh image-used` |
 | `<keys>/.<other key>.use`, `<keys>/<other key>`, `<keys>/.removing.*` | `flock` exclusive, rename away, delete -- only below the minimum free space, and only a key no job is using | `checkout.sh reclaim` |
 | `<root>/.replay-checkout`, `<root>/.gclient` | write | `checkout.sh` |
+| `<root>/.replay-synced` | delete before a sync, write after it, read | `checkout.sh`, `build-in-container.sh` |
+| `<keys>/<other key>/**` | read, with that key's use lock held, only when this key has no checkout and `CHROMIUM_CHECKOUT_FROM` names it | `checkout.sh` (`seed_from`) |
 | `<root>/src/.git/**` | `git init` if missing, repo-local config, stale `shallow.lock` removal, fetch of one commit, ref `refs/ci/fetched` | `checkout.sh sync` (host) |
 | `<root>/**` (`src`, `.gclient_entries`, `.cipd`, `home`) | read-write bind mount → `/chromium` | container |
 | `<root>/jobs/**` | delete (previous job), create, write, read | `job.sh` |
@@ -158,6 +161,7 @@ Never accessed: `/home/ubuntu/chromium` and `/home/ubuntu/depot_tools` (both gon
 | `remove-stale-build-containers.sh` | `docker ps --all --quiet --filter name=^/?chromium-build-<key>-`, `docker rm --force <those ids>`, `seq`, `sleep` |
 | `checkout.sh sync` | `readlink`, `dirname`, `git -C .ci-boot rev-parse HEAD`, `git -C .ci-boot config remote.origin.url`, `mkdir`, `df`, `tail`, `tr`, `sed`, `date`, `cat >`, `git init <root>/src` (if missing), `git -C <root>/src config gc.auto 0`, `find /proc/*/fd`, `rm -f <root>/src/.git/shallow.lock` (if stale), `git -C <root>/src rev-list --objects --no-walk`, `timeout --foreground 900 git -C <root>/src fetch --depth 1 <SSH url> <commit>` (if incomplete), `sleep` (between attempts), `git -C <root>/src update-ref refs/ci/fetched`, `cp ci/gclient <root>/.gclient` |
 | `build-image.sh` | `sha256sum`, `cut`, `id`, `docker image inspect`, `docker info`, `df`, `docker build --platform linux/amd64 -t chromium-build:… <ci dir>`, `checkout.sh image-used` |
+| `checkout.sh seed-from` (from `sync` with `CHROMIUM_CHECKOUT_FROM`, or by hand) | `flock` (this key's and the source's, shared), `rsync -a --delete --exclude …`, `rsync -a --link-dest=<source> --include '.git/***'` |
 | `checkout.sh reclaim` (from `sync`, or by hand) | `df`, `flock` (on `<keys>`, and per key), `find -printf %T@`, `stat -c %Y`, `mktemp -d <keys>/.removing.XXXXXX`, `mv <keys>/<key> <trash>/`, `rm -rf <trash>`, `docker image ls --format … chromium-build`, `docker image rm <that repository's refs>` |
 | `build-in-container.sh` | `id`, `readlink`, `docker run --name chromium-build-<key>-… --rm --init …`, `docker rm --force <own name>` (signal handler) |
 | `job.sh` | `flock -s <keys>/.<key>.use`, `rm -rf <root>/jobs`, `mkdir`, `touch`, `awk` (`<root>/src/REPLAY_BACKEND_REV`), `tee`, `cp`, `sed`, `wc`, `gzip`, `head`, `cat`, `buildkite-agent artifact upload` (cwd `<root>/jobs/<job>`) |
@@ -208,6 +212,7 @@ Not shared: checkout, out dir, gclient/cipd state, depot_tools, git object cache
 | `REPLAY_SISO_LOCAL_JOBS` | unset | `-local_jobs=N` |
 | `REPLAY_SISO_CONFIG` | unset | `-config <names>` |
 | `CHROMIUM_CHECKOUT_KEY` | the commit's milestone (`m157`) | the checkout, image mark and container names this build uses; for a rebase experiment that wants a directory nothing else writes to |
+| `CHROMIUM_CHECKOUT_FROM` | unset | a key to copy this version's first checkout from, when the host has none of it: working files copied, every `.git` hardlinked. Ignored once this key has a checkout |
 
 - Defaults live in `ci/job.sh`, not in a step `env` (step env overrides build env).
 - Not switches: `DRIVER_REVISION` and `REPLAY_BACKEND_REV`. `job.sh` sets
@@ -243,6 +248,16 @@ Not shared: checkout, out dir, gclient/cipd state, depot_tools, git object cache
 - The key: `MAJOR` of `chrome/VERSION` in a sparse clone that does not have the
   file checked out (`git show` path), `CHROMIUM_CHECKOUT_KEY` honoured, and
   `../escape` and `.git-cache` refused.
+- `seed-from` between scratch checkouts with real repositories: working files
+  copied and every `.git` of every nested repository hardlinked (same inode),
+  the source's build outputs, container HOME, job directory and markers left
+  behind, this key's own stamp kept, and the copy readable as a repository at
+  the source's commit. Refused for a key that is not a directory name, for this
+  key itself, for a key with no checkout, and for a destination that already has
+  one, with the argument checked before the destination is created.
+- `.replay-synced`: `checkout.sh synced` fails before any sync has finished and
+  reports the commit after one, and `build-in-container.sh --require-synced`
+  refuses a checkout without it, while the sync itself does not require one.
 - `reclaim` against a scratch `$HOME/chromium-checkouts` with stub `docker` and
   `df`: state with no record of use goes first (its own trash, an image with no
   mark), then keys oldest-stamp first; a key whose use lock another process

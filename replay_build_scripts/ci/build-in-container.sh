@@ -1,7 +1,7 @@
 #!/bin/bash
 # Run a command in this version's build image, on its checkout.
 #
-#   build-in-container.sh [--engflow] -- <command>...
+#   build-in-container.sh [--engflow] [--require-synced] -- <command>...
 #
 # What the command sees of the host:
 #   /chromium   CHECKOUT_ROOT (config.sh), read-write; HOME is /chromium/home
@@ -18,22 +18,28 @@ dir=$(dirname "$(readlink -f "$0")")
 . "$dir/config.sh"
 
 engflow=0
+require_synced=0
 cmd=()
 while [ $# -gt 0 ]; do
   case $1 in
     --engflow) engflow=1; shift ;;
+    --require-synced) require_synced=1; shift ;;
     --) shift; cmd=("$@"); break ;;
     *) break ;;
   esac
 done
 if [ ${#cmd[@]} -eq 0 ]; then
-  echo "usage: $0 [--engflow] -- <command>..." >&2
+  echo "usage: $0 [--engflow] [--require-synced] -- <command>..." >&2
   exit 2
 fi
 
 assert_isolated_root
 if [ ! -d "$CHECKOUT_ROOT/src" ] || [ ! -d "$CHECKOUT_ROOT/home" ]; then
   die "no checkout at $CHECKOUT_ROOT: checkout.sh sync"
+fi
+# The sync itself runs without this: it is what makes the checkout usable.
+if [ "$require_synced" = 1 ] && [ ! -e "$CHECKOUT_SYNCED" ]; then
+  die "no sync has finished in $CHECKOUT_ROOT: run checkout.sh sync before building in it"
 fi
 
 image=$("$dir/build-image.sh" ref)
