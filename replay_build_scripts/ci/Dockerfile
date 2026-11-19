@@ -44,12 +44,14 @@ RUN git init -q /depot_tools && \
 ENV DEPOT_TOOLS_UPDATE=0
 ENV PATH=$PATH:/depot_tools
 
-# depot_tools downloads its own python, cipd and vpython on first use and
-# writes them into itself. Doing that here means a build never writes to
-# /depot_tools.
+# depot_tools downloads its own python, cipd, vpython and gsutil on first use
+# and writes them into itself. Doing that here means a build never writes to
+# /depot_tools, so no two jobs race over it and a DEPS hook that reads a bucket
+# does not have to fetch gsutil at hook time.
 USER ubuntu
 RUN cd /depot_tools && ./ensure_bootstrap && ./gclient --version && \
     ./cipd --version && ./vpython3 -c "import sys; print(sys.version)" && \
+    ./vpython3 gsutil.py version && \
     test -f /depot_tools/python3_bin_reldir.txt
 USER root
 

@@ -2,18 +2,27 @@
 # Identity of the Chromium 157 CI state on a build agent, and the guards every
 # script here applies before touching it. Sourced, never executed.
 #
-# The agent also builds Chromium 108 for production. The contract:
+# A host of the elastic build pool (replayio/backend
+# pulumi/build-machines/elastic_build_pool.ts) runs one agent, which also builds
+# Chromium 108 for production and, on another script line, Electron. One volume
+# holds every version's checkout. The contract:
 # - all persistent 157 state is in CHECKOUT_ROOT; the only other host
-#   directory written is the job's workspace;
-# - no other Chromium checkout, depot_tools clone or cache on the host is
-#   read, written or mounted;
+#   directories written are the job's workspace and, when the volume runs low,
+#   CHECKOUTS_DIR's least recently used state (checkout.sh reclaim);
+# - no other Chromium checkout, depot_tools clone or cache on the host is read
+#   or mounted, and the only write to one is that removal, which takes the
+#   key's use lock and so never touches a checkout a job is using;
 # - docker objects are IMAGE_REPO images and CONTAINER_PREFIX containers, and
-#   only containers with that prefix are ever removed.
+#   only images and containers with those names are ever removed.
 #
 # None of these can be overridden from the environment.
 
 readonly CHECKOUT_KEY=m157
-readonly CHECKOUT_ROOT=$HOME/chromium-checkouts/$CHECKOUT_KEY
+# Where every version's checkout lives, this one among them. The use locks, the
+# image marks and reclaim's trash sit beside the keys, so every script line that
+# builds on the host reads and writes the same ones.
+readonly CHECKOUTS_DIR=$HOME/chromium-checkouts
+readonly CHECKOUT_ROOT=$CHECKOUTS_DIR/$CHECKOUT_KEY
 readonly CHECKOUT_STAMP=$CHECKOUT_ROOT/.replay-checkout
 readonly CHECKOUT_SCHEME=1
 
@@ -25,7 +34,8 @@ readonly FORK_URL=https://github.com/replayio/chromium.git
 readonly IMAGE_REPO=chromium157-build
 readonly CONTAINER_PREFIX=chromium157-build
 
-# The volume is shared with the 108 checkout: keep headroom on it.
+# The volume is shared with every other version's checkout: keep headroom on
+# it. Below a minimum a job reclaims first (checkout.sh) and only then refuses.
 readonly PREPARE_MIN_FREE_GB=150
 readonly BUILD_MIN_FREE_GB=60
 readonly IMAGE_MIN_FREE_GB=20

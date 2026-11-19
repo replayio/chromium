@@ -4,14 +4,18 @@
 # file from the build's commit. Builds are created on that pipeline
 # through the API (branch, commit, env); nothing here is triggered by a push.
 #
-# The step runs on the agent that builds Chromium 108 for production. What it
-# may touch there is fixed in replay_build_scripts/ci/config.sh: one directory
-# (~/chromium-checkouts/m157), its own docker image and container names, and
-# files of its own in the job workspace, removed when the job ends.
+# The step runs on a host of the elastic build pool, which also builds Chromium
+# 108 for production and Electron, one job at a time. What this step may touch
+# there is fixed in replay_build_scripts/ci/config.sh: one directory
+# (~/chromium-checkouts/m157), its own docker image and container names, files
+# of its own in the job workspace, removed when the job ends, and -- when the
+# volume they all share runs low -- the least recently used checkouts and
+# images that no job is using (checkout.sh reclaim).
 #
 # Per-build switches are env of the Buildkite build (replay_build_scripts/ci/job.sh):
-#   DRIVER_REVISION, REPLAY_BUILD_MAX_FAILURES (0: keep going, the default;
-#   1: stop at the first error), REPLAY_SISO_LOCAL_JOBS, REPLAY_SISO_CONFIG.
+#   REPLAY_BUILD_MAX_FAILURES (0: keep going, the default; 1: stop at the first
+#   error), REPLAY_SISO_LOCAL_JOBS, REPLAY_SISO_CONFIG. The driver and the
+#   backend are not among them: they come from the commit's REPLAY_BACKEND_REV.
 # They are deliberately not given defaults in a step `env` here: step env
 # overrides build env.
 env:
@@ -45,7 +49,11 @@ steps:
               secret-id: engflow-key
     env:
       REPLAY_JOB_TIMEOUT_MINUTES: *timeout
+    # build-runtime=true: shared heavy-build capacity (Node + Chromium).
+    # runtimeType=chromiumbuild: the host keeps a Chromium checkout per version
+    # (checkout.sh); a job prepares its version's when the host has none.
     agents:
+      - "build-runtime=true"
       - "queue=runtime"
       - "runtimeType=chromiumbuild"
     # Artifacts are uploaded by job.sh itself, from the checkout's job directory.
@@ -111,8 +119,9 @@ steps:
   # - one case by default, not the suite: REPLAY_157_TEST_CASE of the
   #   Buildkite build (default below), a path under test/chromium-recording;
   #   `tests` is the whole suite, which the timeout allows for.
-  # REPLAY_BACKEND_REV (env of the Buildkite build) is the backend commit whose
-  # driver the runtime embeds and whose linker replays the recording.
+  # The backend commit whose driver the runtime embeds and whose linker replays
+  # the recording is the build step's backend_rev artifact: the pin of the commit
+  # that was built, not env of this build.
   - label: ":memo: Chromium 157 record -> replay"
     key: "chromium-157-recording-linux-x86_64"
     depends_on: "build-chromium-157-linux-x86_64"
@@ -137,8 +146,6 @@ steps:
       DEBUG: "pw:browser"
     command: |
       set -euo pipefail
-      PIN="$$REPLAY_BACKEND_REV"
-      test -n "$$PIN"
       CASE="$${REPLAY_157_TEST_CASE:-tests/evaluate/outbound-fetch}"
       WORKDIR=$$(mktemp -d "/tmp/chromium157-recording-$${BUILDKITE_JOB_ID}.XXXXXX")
       # Short path: unix socket paths under TMPDIR are length-limited.
@@ -148,15 +155,18 @@ steps:
       export RECORD_REPLAY_DIRECTORY="$$WORKDIR/replay"
       BACKEND_DIR="$$WORKDIR/backend"
       mkdir -p "$$BACKEND_DIR" "$$RECORD_REPLAY_DIRECTORY" "$$WORKDIR/runtime"
+      buildkite-agent artifact download "build_id/linux/x86_64/*" "$$WORKDIR/" --step "build-chromium-157-linux-x86_64"
+      BUILD_ID="$$(cat "$$WORKDIR/build_id/linux/x86_64/build_id")"
+      test -n "$$BUILD_ID"
+      # The backend this build embedded a driver of (ci/job.sh).
+      PIN="$$(cat "$$WORKDIR/build_id/linux/x86_64/backend_rev")"
+      test -n "$$PIN"
       git -C "$$BACKEND_DIR" init
       git -C "$$BACKEND_DIR" remote add origin git@github.com:replayio/backend.git
       git -C "$$BACKEND_DIR" fetch --depth 1 origin "$$PIN"
       git -C "$$BACKEND_DIR" checkout FETCH_HEAD
       "$$BACKEND_DIR/scripts/kill-linker-processes.sh"
       trap '"$$BACKEND_DIR/scripts/kill-linker-processes.sh"; rm -rf "$$WORKDIR" "$$TMPDIR"' EXIT
-      buildkite-agent artifact download "build_id/linux/x86_64/*" "$$WORKDIR/" --step "build-chromium-157-linux-x86_64"
-      BUILD_ID="$$(cat "$$WORKDIR/build_id/linux/x86_64/build_id")"
-      test -n "$$BUILD_ID"
       tar -xJf "$$WORKDIR/build_id/linux/x86_64/$$BUILD_ID.tar.xz" -C "$$WORKDIR/runtime"
       # The build's symbols: the backend reads <build id>.symbols.tgz from
       # REPLAY_SYMBOLS_DIR instead of storage. The linker's, which
