@@ -214,10 +214,13 @@ class PipelineImpl::RendererWrapper final : public DemuxerHost,
     SEQUENCE_CHECKER(media_sequence_checker);
 
    private:
-    // Named so its acquisitions are ordered on replay, as in Replay's
-    // Chromium 108. The driver only uses the string as a label, so this keeps
-    // the name 108 gave the lock even though the member has since moved into
-    // this class and been renamed.
+    // The name is what registers the lock with the driver, so it has to
+    // survive any refactor of this member. Without it the lock is not ordered
+    // while replaying, and the main sequence can read `did_loading_progress`,
+    // the statistics and the buffered ranges at a different point in the media
+    // thread's run of updates than it read them at while recording. The string
+    // is only a label that nothing compares, which is why it still names a
+    // member that has since moved into this class and been renamed.
     mutable base::Lock lock_{
         "PipelineImpl::RendererWrapper.shared_state_lock_"};
     SharedState state_;  // Only sometimes guarded by `lock_`.
