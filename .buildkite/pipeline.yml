@@ -183,7 +183,10 @@ steps:
 
   # Parallel with E2E: inline chromium-recording (mirrors node test-node).
   # e2e=true: only linux class with Replay Chromium runtime libs (libnss3); can_replay lacks them.
-  - label: "📝 Chromium Recording Tests (linux-x86_64)"
+  # CHROMIUM_RECORDING_FILTER: suite paths for --filter (relative to
+  # test/chromium-recording); unset runs every case.
+  - &chromium-recording
+    label: "📝 Chromium Recording Tests (linux-x86_64)"
     key: "chromium-recording-linux-x86_64"
     depends_on:
       - "build-chromium-linux-x86_64"
@@ -238,7 +241,17 @@ steps:
       node --version
       # packageManager pnpm@10.11.0; agents lack global npm write (EACCES).
       npx --yes pnpm@10.11.0 install --frozen-lockfile
-      npx tsx src/build/buildRuntime.ts test-chromium-recording --build-id "$$BUILD_ID"
+      npx tsx src/build/buildRuntime.ts test-chromium-recording --build-id "$$BUILD_ID" \
+        $${CHROMIUM_RECORDING_FILTER:+--filter $$CHROMIUM_RECORDING_FILTER}
+
+  # The DependencyGraph cases as their own suite. << is shallow: env is restated.
+  - <<: *chromium-recording
+    label: "📝 Chromium Recording Tests: dependency-graph (linux-x86_64)"
+    key: "chromium-recording-dependency-graph-linux-x86_64"
+    env:
+      PLAYWRIGHT_HEADLESS: "true"
+      CI: "1"
+      CHROMIUM_RECORDING_FILTER: "tests/dependency-graph"
 
   # - label: "🔨 Chromium (mac-x86_64)"
   #   key: "build-chromium-mac-x86_64"
