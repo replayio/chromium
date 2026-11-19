@@ -279,12 +279,11 @@ class PLATFORM_EXPORT AudioDestination final
 
   // This protects `device_state_` below.
   //
-  // Named so its acquisitions are ordered on replay, as in Replay's Chromium
-  // 108 (`state_change_lock_("AudioDestination")`). The name restores the
-  // `base::AutoTryLock` guarantee in RequestRender() only: `session_id_` is a
-  // separate atomic that every render path reads outside this lock, so the
-  // state transition SetDeviceState() makes is still not atomic against a
-  // render already in flight.
+  // Named so the try in RequestRender() replays with the result it had while
+  // recording, as in Replay's Chromium 108. That is all the name buys.
+  // `session_id_` is a separate atomic that every render path reads outside
+  // this lock, so the transition SetDeviceState() makes is still not atomic
+  // against a render already in flight.
   mutable base::Lock device_state_lock_{"AudioDestination"};
 
   // Modified only on the main thread, so it can be read without holding a lock
