@@ -1,6 +1,7 @@
 #!/bin/bash
-# The Chromium 157 checkout on a build agent: one directory, CHECKOUT_ROOT
-# (config.sh), holding everything a 157 build keeps there.
+# One Chromium checkout per Chromium version on a build agent: one directory,
+# CHECKOUT_ROOT (config.sh), holding everything a build of that version keeps
+# there. The version is the key, read from chrome/VERSION (config.sh).
 #
 #   <root>/src               the tree at the commit being built, with src/out
 #   <root>/.gclient          the gclient solution (./gclient), .gclient_entries, .cipd
@@ -83,14 +84,6 @@ unused() {
   "$@" || status=$?
   exec {fd}>&-
   return "$status"
-}
-
-# A key is a directory whose name begins with a letter or a digit. Everything
-# beside the keys that is not one -- the DEPS mirrors in .git-cache, the use
-# locks, the image marks, reclaim's trash -- begins with a dot, so nothing that
-# walks the keys can reach it.
-valid_key() {
-  [[ $1 =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]
 }
 
 # Out of the way first, in one rename: a removal cut short leaves no half-removed
@@ -282,7 +275,7 @@ sync() {
     github_read git -c protocol.version=2 -C "$src" fetch -q --depth 1 "$url" "$commit"
     # A ref, so the next fetch offers this commit as a have and receives only
     # what changed: src has no other refs, and fetch negotiates from refs.
-    git -C "$src" update-ref refs/ci157/fetched "$commit"
+    git -C "$src" update-ref refs/ci/fetched "$commit"
   fi
   cp "$dir/gclient" "$CHECKOUT_ROOT/.gclient"
   echo "--- checkout $CHECKOUT_ROOT -> $commit"

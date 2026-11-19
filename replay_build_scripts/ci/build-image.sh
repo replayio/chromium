@@ -1,16 +1,15 @@
 #!/bin/bash
-# The 157 build image (Dockerfile next to this script).
+# This version's build image (Dockerfile next to this script).
 #
 #   build-image.sh tag      print the tag: a hash of the Dockerfile
-#   build-image.sh ref      print chromium157-build:<tag>-u<uid>
+#   build-image.sh ref      print chromium-build:<tag>-u<uid>
 #   build-image.sh ensure   build it unless that ref is already here
 #   build-image.sh build    build it, whether or not it is here
 #
 # From chromium-158-buildkite's build-image.sh. The tag is a hash of the
-# Dockerfile, so a changed Dockerfile is a new image next to the old one and
-# nothing is rebuilt in place. The repository name is this version's own:
-# nothing that manages the 108 images (chromium-build, chromium-tools) matches
-# it.
+# Dockerfile and the uid the image is built for, so a changed Dockerfile is a new
+# image next to the old one, nothing is rebuilt in place, and every version's
+# builds run in the image its own tree describes.
 #
 # ensure and build record the image as used now: a Dockerfile change leaves the
 # image it replaced behind, and checkout.sh's reclaim removes the least recently

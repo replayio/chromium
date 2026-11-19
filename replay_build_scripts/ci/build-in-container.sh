@@ -1,5 +1,5 @@
 #!/bin/bash
-# Run a command in the 157 build image, on the 157 checkout.
+# Run a command in this version's build image, on its checkout.
 #
 #   build-in-container.sh [--engflow] -- <command>...
 #
@@ -39,8 +39,9 @@ fi
 image=$("$dir/build-image.sh" ref)
 "$dir/build-image.sh" ensure >&2
 
-# The prefix is what remove-stale-build-containers.sh and the handlers below
-# remove by; the pid keeps one job's successive containers apart.
+# The prefix carries the key, so it is what remove-stale-build-containers.sh and
+# the handlers below remove by without reaching another version's containers.
+# The pid keeps one job's successive containers apart.
 name="$CONTAINER_PREFIX-${BUILDKITE_JOB_ID:-manual}-$$"
 
 args=(
