@@ -9,6 +9,7 @@
 #include "base/cancelable_callback.h"
 #include "base/check_op.h"
 #include "base/functional/bind.h"
+#include "base/record_replay.h"
 #include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/scoped_refptr.h"
@@ -60,6 +61,11 @@ class FakeAudioWorker::Worker
   const int frames_per_read_;
 
   base::Lock worker_cb_lock_;  // Held while mutating or running |worker_cb_|.
+  // [RecordReplay] The order in which Stop() clears |worker_cb_| and DoRead()
+  // reads it decides whether a tick runs the callback at all, so that order has
+  // to be recorded. Without this the replay could skip a render the recording
+  // performed, which diverges at the TryLock inside SilentSinkSuspender::Render.
+  int worker_cb_ordered_lock_id_ = 0;
   FakeAudioWorker::Callback worker_cb_ GUARDED_BY(worker_cb_lock_);
   base::TimeTicks first_read_time_;
   int64_t frames_elapsed_;
@@ -105,6 +111,14 @@ FakeAudioWorker::Worker::Worker(
     : worker_task_runner_(worker_task_runner),
       sample_rate_(params.sample_rate()),
       frames_per_read_(params.frames_per_buffer()) {
+  // [RecordReplay] See |worker_cb_ordered_lock_id_|. A Worker can be built
+  // inside a region where events are disallowed, where creating the lock is
+  // itself an event, and zero leaves the acquisitions unordered as elsewhere.
+  worker_cb_ordered_lock_id_ =
+      recordreplay::AreEventsDisallowed()
+          ? 0
+          : recordreplay::CreateOrderedLock("FakeAudioWorker.worker_cb_");
+
   // Worker can be constructed on any thread, but will DCHECK that its
   // Start/Stop methods are called from the same thread.
   DETACH_FROM_SEQUENCE(sequence_checker_);
@@ -115,6 +129,7 @@ FakeAudioWorker::Worker::~Worker() {
 }
 
 bool FakeAudioWorker::Worker::IsStopped() {
+  recordreplay::AutoOrderedLock ordered(worker_cb_ordered_lock_id_);
   base::AutoLock scoped_lock(worker_cb_lock_);
   return !worker_cb_;
 }
@@ -123,7 +138,8 @@ void FakeAudioWorker::Worker::Start(FakeAudioWorker::Callback worker_cb) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(worker_cb);
   {
-    base::AutoLock scoped_lock(worker_cb_lock_);
+    recordreplay::AutoOrderedLock ordered(worker_cb_ordered_lock_id_);
+  base::AutoLock scoped_lock(worker_cb_lock_);
     DCHECK(!worker_cb_);
     worker_cb_ = std::move(worker_cb);
   }
@@ -142,7 +158,8 @@ void FakeAudioWorker::Worker::DoStart() {
 void FakeAudioWorker::Worker::Stop() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   {
-    base::AutoLock scoped_lock(worker_cb_lock_);
+    recordreplay::AutoOrderedLock ordered(worker_cb_ordered_lock_id_);
+  base::AutoLock scoped_lock(worker_cb_lock_);
     if (!worker_cb_)
       return;
     worker_cb_.Reset();
@@ -170,7 +187,8 @@ void FakeAudioWorker::Worker::DoRead() {
 
   base::TimeTicks now;
   {
-    base::AutoLock scoped_lock(worker_cb_lock_);
+    recordreplay::AutoOrderedLock ordered(worker_cb_ordered_lock_id_);
+  base::AutoLock scoped_lock(worker_cb_lock_);
     // Important to sample the clock after waiting to acquire the lock.
     now = base::TimeTicks::Now();
 
