@@ -208,15 +208,9 @@ class BASE_EXPORT TaskSource : public RefCountedThreadSafe<TaskSource> {
 
   HeapHandle delayed_heap_handle() const { return delayed_pq_heap_handle_; }
 
-  // Returns a racy priority of the TaskSource. Can be accessed without a
-  // Transaction but may return an outdated result.
-  TaskPriority priority_racy() const;
-
   // Returns a racy thread_type of the TaskSource. Can be accessed without a
   // Transaction but may return an outdated result.
-  ThreadType thread_type_racy() const {
-    return thread_type_racy_.load(std::memory_order_relaxed);
-  }
+  ThreadType thread_type_racy() const;
 
   // The following traits can be accessed without a Transaction because
   // they are never mutated.
@@ -258,10 +252,6 @@ class BASE_EXPORT TaskSource : public RefCountedThreadSafe<TaskSource> {
 
   // The cached thread_type for atomic access.
   std::atomic<ThreadType> thread_type_racy_;
-
-  // The cached priority for atomic access. Maintained by Replay for
-  // record/replay determinism (see out-of-line priority_racy() in .cc).
-  std::atomic<TaskPriority> priority_racy_;
 
   const ThreadType originating_thread_type_;
   const bool inherit_by_default_;

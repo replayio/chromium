@@ -38,8 +38,6 @@ void TaskSource::Transaction::UpdatePriority(TaskPriority priority) {
   task_source_->traits_.UpdatePriority(priority);
   task_source_->thread_type_racy_.store(TaskPriorityToThreadType(priority),
                                         std::memory_order_relaxed);
-  task_source_->priority_racy_.store(task_source_->traits_.priority(),
-                                     std::memory_order_relaxed);
 }
 
 ThreadType TaskSource::Transaction::thread_type() const {
@@ -71,13 +69,16 @@ void TaskSource::ClearDelayedHeapHandle() {
   delayed_pq_heap_handle_ = HeapHandle();
 }
 
-TaskPriority TaskSource::priority_racy() const {
-  // Record/replay priority value instead of ordering reads/writes.
-  TaskPriority priority = priority_racy_.load(std::memory_order_relaxed);
-  if (recordreplay::AreEventsDisallowed())
-    return priority;
-  return (TaskPriority)recordreplay::RecordReplayValue("TaskSource::priority_racy",
-                                                       (uintptr_t)priority);
+// Record/replay the thread type instead of ordering reads/writes: the sort keys
+// of the priority queues are built from it, so a read that saw another thread's
+// update would reorder the queue on a replay. Out of line so the recorded value
+// covers every read, at the cost of not inlining the load when the accessor's
+// callers run without a recording, as in Chromium 108.
+ThreadType TaskSource::thread_type_racy() const {
+  const ThreadType thread_type =
+      thread_type_racy_.load(std::memory_order_relaxed);
+  return (ThreadType)recordreplay::RecordReplayValueIfAllowed(
+      "TaskSource::thread_type_racy", (uintptr_t)thread_type);
 }
 
 TaskSource::TaskSource(const TaskTraits& traits,
@@ -88,7 +89,6 @@ TaskSource::TaskSource(const TaskTraits& traits,
       thread_type_racy_(EffectiveThreadType(traits,
                                             originating_thread_type,
                                             inherit_by_default)),
-      priority_racy_(traits.priority()),
       originating_thread_type_(originating_thread_type),
       inherit_by_default_(inherit_by_default),
       lock_(recordreplay::AreEventsDisallowed() ? nullptr : "TaskSource.lock_"),
