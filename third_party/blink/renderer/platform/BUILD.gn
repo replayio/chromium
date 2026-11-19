@@ -1446,7 +1446,6 @@ component("platform") {
     "mojo/kurl_mojom_traits.h",
     "mojo/mojo_binding_context.cc",
     "mojo/mojo_binding_context.h",
-    "mojo/record_replay_thread_remote.h",
     "mojo/security_origin_mojom_traits.h",
     "mojo/string16_mojom_traits.cc",
     "mojo/string16_mojom_traits.h",

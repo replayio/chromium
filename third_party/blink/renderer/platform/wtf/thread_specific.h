@@ -95,7 +95,10 @@ inline void ThreadSpecific<T>::Destroy(void* ptr) {
   // When recording the current thread is no longer known and calls/locks/etc.
   // made by the destructors cannot be recorded, and when replaying the destructor
   // does not run at all. To avoid these problems we skip running the destructors
-  // for now and let associated resources leak.
+  // for now and let associated resources leak. A mojo::Remote a worker thread
+  // keeps here is one of them, and leaking it is what keeps its pipe from
+  // being closed at a point no replay reproduces. With the feature off the
+  // destructor runs again and that close is unordered once more.
   if (recordreplay::IsRecordingOrReplaying("leak-references", "ThreadSpecific::Destroy"))
     return;
 
