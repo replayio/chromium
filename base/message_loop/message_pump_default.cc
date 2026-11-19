@@ -4,9 +4,12 @@
 
 #include "base/message_loop/message_pump_default.h"
 
+#include <stdlib.h>
+
 #include "base/auto_reset.h"
 #include "base/logging.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
 
 #if BUILDFLAG(IS_APPLE)
@@ -22,6 +25,24 @@
 
 namespace base {
 
+namespace {
+
+// How long the main thread idles before what it recorded is flushed, see
+// MessagePumpDefault::Run.
+constexpr TimeDelta kRecordReplayIdleFlushDelay = Milliseconds(500);
+
+// Whether the recording is uploaded while it is made. Main thread only.
+bool RecordReplayStreamedUpload() {
+  static const bool streamed = [] {
+    const char* env = getenv("RECORD_REPLAY_STREAMED_UPLOAD");
+    return !!recordreplay::RecordReplayValue(
+        "StreamedUpload", env && env[0] && env[0] != '0');
+  }();
+  return streamed;
+}
+
+}  // namespace
+
 MessagePumpDefault::MessagePumpDefault()
     : keep_running_(true),
       event_(WaitableEvent::ResetPolicy::AUTOMATIC,
@@ -33,6 +54,10 @@ MessagePumpDefault::~MessagePumpDefault() = default;
 
 void MessagePumpDefault::Run(Delegate* delegate) {
   AutoReset<bool> auto_reset_keep_running(&keep_running_, true);
+
+  // Whether a flushed checkpoint was created since the thread last waited
+  // for work.
+  bool record_replay_idle_flushed = false;
 
   for (;;) {
 #if BUILDFLAG(IS_APPLE)
@@ -82,6 +107,24 @@ void MessagePumpDefault::Run(Delegate* delegate) {
 #if BUILDFLAG(IS_WIN)
     recordreplay::Assert("[RUN-2214] MessagePumpDefault::Run #7");
 #endif
+
+    // A recording that is uploaded while it is made is available up to its
+    // last flushed checkpoint. Checkpoints are created as tasks run, so what
+    // the main thread recorded before it went idle would stay unavailable
+    // until its next task. When it has no work for a while, a flushed
+    // checkpoint is created before it waits for good.
+    if (!record_replay_idle_flushed && recordreplay::IsRecordingOrReplaying() &&
+        recordreplay::IsMainThread() && RecordReplayStreamedUpload() &&
+        (next_work_info.delayed_run_time.is_max() ||
+         next_work_info.remaining_delay() > kRecordReplayIdleFlushDelay)) {
+      bool signaled = event_.TimedWait(kRecordReplayIdleFlushDelay);
+      if (recordreplay::RecordReplayValue("MessagePumpIdleFlush", !signaled)) {
+        recordreplay::NewCheckpointFlushed();
+        record_replay_idle_flushed = true;
+      }
+      continue;
+    }
+    record_replay_idle_flushed = false;
 
     if (next_work_info.delayed_run_time.is_max()) {
       event_.Wait();

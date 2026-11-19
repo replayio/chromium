@@ -28,6 +28,7 @@ bool IsRecordingOrReplaying(const char* feature = nullptr,
                             const char* subfeature = nullptr);
 bool IsRecording();
 bool IsReplaying();
+bool IsMainThread();
 char* GetRecordingId();
 void FinishRecording();
 
