@@ -214,7 +214,11 @@ class PipelineImpl::RendererWrapper final : public DemuxerHost,
     SEQUENCE_CHECKER(media_sequence_checker);
 
    private:
-    mutable base::Lock lock_;
+    // Named so its acquisitions are ordered on replay, as in Replay's
+    // Chromium 108. The name is 108's, where this lock was RendererWrapper's
+    // own `shared_state_lock_` member; nothing matches on the string.
+    mutable base::Lock lock_{
+        "PipelineImpl::RendererWrapper.shared_state_lock_"};
     SharedState state_;  // Only sometimes guarded by `lock_`.
     LockedSharedState locked_state_ GUARDED_BY(lock_);
   };
