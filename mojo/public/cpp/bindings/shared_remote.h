@@ -114,25 +114,56 @@ class SharedRemoteBase
                   scoped_refptr<base::SequencedTaskRunner> task_runner)
         : task_runner_(std::move(task_runner)),
           remote_(std::move(remote), task_runner_),
-          associated_group_(*remote_.internal_state()->associated_group()) {}
+          associated_group_(*remote_.internal_state()->associated_group()) {
+      // [RecordReplay] See Release(). A wrapper made where the recording
+      // cannot be added to gets no lock: CreateOrderedLock() takes its id from
+      // the recording, which under pass-through hands back the raw counter
+      // when recording and zero when replaying, so the two sides would
+      // disagree about whether this wrapper is ordered at all.
+      if (recordreplay::IsRecordingOrReplaying() &&
+          !recordreplay::AreEventsDisallowed() &&
+          !recordreplay::AreEventsPassedThrough() &&
+          !recordreplay::HasDivergedFromRecording()) {
+        record_replay_release_ordered_lock_id_ =
+            recordreplay::CreateOrderedLock("RemoteWrapper");
+      }
+    }
 
     RemoteWrapper(const RemoteWrapper&) = delete;
     RemoteWrapper& operator=(const RemoteWrapper&) = delete;
 
     // [RecordReplay] Any thread holding the SharedRemote can drop the last
-    // reference, and whichever does posts the task that deletes this on its
-    // own sequence. Which thread that is has to be the same when replaying
-    // (e.g. a widget's input handler host, cleared on the main thread while
-    // the compositor thread lets go of its copy), so the count is ordered
-    // among threads. The deleting itself is outside the lock.
-    void AddRef() const {
-      recordreplay::AutoOrderedRefCount ordered;
-      base::RefCountedThreadSafe<RemoteWrapper, RemoteWrapperDeleter>::AddRef();
-    }
+    // reference, and whichever does decides how this is deleted: inline, or
+    // through a DeleteSoon posted to the remote's own sequence. Which thread
+    // that is has to be the same when replaying (e.g. a widget's input
+    // handler host, cleared on the main thread while the compositor thread
+    // lets go of its copy), so decrements are ordered among threads by this
+    // wrapper's own lock. Increments are not ordered: only which thread
+    // reaches zero is in question. The deleting itself is outside the lock.
+    //
+    // A decrement where the recording cannot be added to is not ordered. The
+    // driver's OrderedLock would pass such a region through anyway, but only
+    // after taking its own global lock and warning about the acquisition, and
+    // a last reference dropped by the collector is exactly that case -- which
+    // is what DeleteOnCorrectThread()'s leak-references gate is for, not this.
+    // So the thread that drops the last reference there is still decided by
+    // the race.
     void Release() const {
+      const int ordered_lock =
+          record_replay_release_ordered_lock_id_ &&
+                  !recordreplay::AreEventsDisallowed() &&
+                  !recordreplay::AreEventsPassedThrough() &&
+                  !recordreplay::HasDivergedFromRecording()
+              ? record_replay_release_ordered_lock_id_
+              : 0;
+      if (!ordered_lock) {
+        base::RefCountedThreadSafe<RemoteWrapper,
+                                   RemoteWrapperDeleter>::Release();
+        return;
+      }
       bool last;
       {
-        recordreplay::AutoOrderedRefCount ordered;
+        recordreplay::AutoOrderedLock ordered(ordered_lock);
         last = base::subtle::RefCountedThreadSafeBase::Release();
       }
       if (last) {
@@ -231,6 +262,11 @@ class SharedRemoteBase
     const scoped_refptr<base::SequencedTaskRunner> task_runner_;
     RemoteType remote_;
     AssociatedGroup associated_group_;
+
+    // [RecordReplay] Orders reference count decrements; see Release(). Zero in
+    // a process that is neither recording nor replaying, and for a wrapper
+    // made where the recording cannot be added to.
+    int record_replay_release_ordered_lock_id_ = 0;
   };
 
   struct RemoteWrapperDeleter {
