@@ -27,7 +27,55 @@
 
 #ifndef _WIN32
 #include <sys/types.h>
+#include <dlfcn.h>
+#else
+#include <windows.h>
 #endif
+
+static void* LookupRecordReplaySymbol(const char* name) {
+#ifndef _WIN32
+  void* fnptr = dlsym(RTLD_DEFAULT, name);
+#else
+  HMODULE module = GetModuleHandleA("windows-recordreplay.dll");
+  void* fnptr = module ? (void*)GetProcAddress(module, name) : nullptr;
+#endif
+  return fnptr ? fnptr : reinterpret_cast<void*>(1);
+}
+
+static void RecordReplayBeginPassThroughEvents() {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayBeginPassThroughEvents");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    reinterpret_cast<void (*)()>(fnptr)();
+  }
+}
+
+static void RecordReplayEndPassThroughEvents() {
+  static void* fnptr;
+  if (!fnptr) {
+    fnptr = LookupRecordReplaySymbol("RecordReplayEndPassThroughEvents");
+  }
+  if (fnptr != reinterpret_cast<void*>(1)) {
+    reinterpret_cast<void (*)()>(fnptr)();
+  }
+}
+
+// Keeps the clock reads a wait deadline needs out of the recording, the way
+// v8::base::ConditionVariable::WaitFor did before upstream moved the deadline
+// arithmetic in here and onto absl's primitives. Two reasons they must not be
+// recorded calls: a pending deadline is re-read on every retry of the wait, on
+// whichever thread happens to contend, so how many reads happen is contention
+// and does not replay; and a replay serves a timed futex wait by polling the
+// host clock, so a deadline built from a replayed clock value would already
+// have passed and the wait would return at once. This makes the reads real, it
+// does not order anything: absl mutexes and condition variables still have no
+// ordering route.
+struct RecordReplayAutoPassThroughEvents {
+  RecordReplayAutoPassThroughEvents() { RecordReplayBeginPassThroughEvents(); }
+  ~RecordReplayAutoPassThroughEvents() { RecordReplayEndPassThroughEvents(); }
+};
 
 namespace absl {
 ABSL_NAMESPACE_BEGIN
@@ -68,6 +116,8 @@ KernelTimeout::KernelTimeout(absl::Time t) {
 }
 
 KernelTimeout::KernelTimeout(absl::Duration d) {
+  RecordReplayAutoPassThroughEvents pass_through;
+
   // `absl::InfiniteDuration()` is a common "no timeout" value and cheaper to
   // compare than convert.
   if (d == absl::InfiniteDuration()) {
@@ -95,6 +145,8 @@ KernelTimeout::KernelTimeout(absl::Duration d) {
 }
 
 int64_t KernelTimeout::MakeAbsNanos() const {
+  RecordReplayAutoPassThroughEvents pass_through;
+
   if (!has_timeout()) {
     return kMaxNanos;
   }
@@ -122,6 +174,8 @@ int64_t KernelTimeout::MakeAbsNanos() const {
 }
 
 int64_t KernelTimeout::InNanosecondsFromNow() const {
+  RecordReplayAutoPassThroughEvents pass_through;
+
   if (!has_timeout()) {
     return kMaxNanos;
   }
@@ -143,6 +197,8 @@ struct timespec KernelTimeout::MakeRelativeTimespec() const {
 
 #ifndef _WIN32
 struct timespec KernelTimeout::MakeClockAbsoluteTimespec(clockid_t c) const {
+  RecordReplayAutoPassThroughEvents pass_through;
+
   if (!has_timeout()) {
     return absl::ToTimespec(absl::Nanoseconds(kMaxNanos));
   }
