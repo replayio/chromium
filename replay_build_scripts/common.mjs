@@ -177,9 +177,12 @@ export function updateBackendRepo() {
 // the Replay forks its DEPS pins. Split out of updateChromiumRepo so that a
 // per-version checkout can be synced without running gn, which belongs in the
 // build container: the paths gn bakes into the out dir have to be the
-// container's, not the host's (replay_build_scripts/ci/). gclient sync is not
-// run here: `gclient sync -D` only moves forward (#1107), so a per-version
-// checkout's DEPS are synced once, when checkout.sh prepares it.
+// container's, not the host's (replay_build_scripts/ci/).
+//
+// gclient sync is not run here but after this, in the build image, where
+// depot_tools is (replay_build_scripts/ci/checkout.sh). Putting the forks at
+// their pinned revisions first is what keeps that cheap: a revision gclient
+// cannot find in a dependency sends it to fetch every branch of that fork.
 export function syncChromiumSources() {
   const chromium = process.cwd();
   const rev =

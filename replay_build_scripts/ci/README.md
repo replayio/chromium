@@ -114,7 +114,8 @@ time, until there is room again:
 ```sh
 replay_build_scripts/ci/checkout.sh list --sizes   # what is prepared here
 replay_build_scripts/ci/checkout.sh key            # the key for this tree
-replay_build_scripts/ci/checkout.sh sync           # to the commit being built
+replay_build_scripts/ci/checkout.sh sync           # to the commit being built,
+                                                   # DEPS and hooks included
 replay_build_scripts/ci/build-in-container.sh      # build it
 ```
 
@@ -157,6 +158,16 @@ state. A build of a version that has no checkout here prepares it
   revisions with everything else.
 - The backend, and last the stamp: a key without one is not prepared, and the
   next `prepare` removes what an unfinished one left.
+
+Every build then runs that same `gclient sync` and `runhooks` again, in its own
+key's checkout, after the fork is at the commit being built. A key outlives the
+commits built in it, so the DEPS it resolved when it was prepared are the DEPS
+of whichever commit got there first: without this, a commit that moves a pin
+other than the four forks, adds or drops a dependency, or changes a hook has no
+effect, two hosts can build one commit against different dependencies, and the
+daily machine image carries one host's version of them to the next. A sync that
+has nothing to do costs the DEPS walk and the hooks, and a pin it does have to
+move is fetched from the mirror on disk rather than over the network.
 
 One job of a key prepares it at a time; another job of that version waits for
 it (a lock next to the keys). Every key shares the volume, so `prepare` first
