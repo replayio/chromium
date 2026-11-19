@@ -551,10 +551,17 @@ static base::Lock& InFlightSyncCallLock() {
   // The explicit empty name states that this lock is never ordered (see
   // LockImpl::LockImpl). It is a replay-only lock -- nothing takes it while
   // recording -- so it guards nothing a recording contains, and nothing
-  // recorded or ordered may run under it before the divergence. That holds:
-  // all it covers is the vector, HasDivergedFromRecording() (an atomic load in
-  // the driver) and WaitableEvent::Signal(), whose own ordered lock is taken
-  // only after the divergence, where ordering is ignored.
+  // recorded or ordered may run under it before the divergence. Everything it
+  // covers, and why each is all right:
+  //
+  //   - the vector's own reads and writes, which no recording holds;
+  //   - the vector's allocation, whose mutexes inside malloc are never
+  //     ordered resources (the driver's GetOrderedResourceId bails out while
+  //     it is in malloc);
+  //   - HasDivergedFromRecording(), an atomic load in the driver;
+  //   - WaitableEvent::Signal(), whose kernel lock is an ordered one
+  //     ("WaitableEventKernel.lock_") but is only ever taken from here after
+  //     the divergence, where the driver ignores acquire ordering.
   static base::NoDestructor<base::Lock> lock("");
   return *lock;
 }
