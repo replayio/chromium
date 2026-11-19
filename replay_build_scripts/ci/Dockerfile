@@ -18,18 +18,49 @@ FROM ubuntu:22.04@sha256:74b12b11ffa550fba1929ad4d8d16533c34f6612728469671afba1b
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+# Every network read below gets three attempts. Building this image is on the
+# path of a build whose version has no checkout on the agent yet, so one lost
+# read fails a job that has nothing else wrong with it.
+#
+# Acquire bounds a single apt attempt. Without a timeout apt works through
+# every address a mirror resolves to before it gives up, which is minutes per
+# attempt.
+RUN printf 'Acquire::Retries "3";\nAcquire::http::Timeout "30";\n' \
+      > /etc/apt/apt.conf.d/99-replay-acquire && \
+    printf '%s\n' \
+      '#!/bin/sh' \
+      '# retry <cmd>...: three attempts, then fail with what did not work.' \
+      'for attempt in 1 2 3; do' \
+      '  "$@" && exit 0' \
+      '  if [ "$attempt" = 3 ]; then echo "failed 3 times: $*" >&2; exit 1; fi' \
+      '  echo "attempt $attempt failed, trying again: $*" >&2' \
+      '  sleep $((attempt * 20))' \
+      'done' \
+      > /usr/local/bin/retry && \
+    chmod +x /usr/local/bin/retry
+
+# --error-on=any: a plain `apt-get update` exits 0 when it cannot fetch an
+# index. It prints "Some index files failed to download. They have been
+# ignored" and carries on, so the lists are silently incomplete and the install
+# is what fails, reporting every package as missing.
+RUN retry apt-get update --error-on=any && \
+    retry apt-get install -y --no-install-recommends \
       git curl python3 python3-pip lsb-release sudo xz-utils file \
       ca-certificates pkg-config build-essential nodejs unzip zip lsof && \
     rm -rf /var/lib/apt/lists/*
 
 ARG CHROMIUM_TAG=157.0.8103.0
-RUN curl -fsSL "https://chromium.googlesource.com/chromium/src/+/refs/tags/${CHROMIUM_TAG}/build/install-build-deps.py?format=TEXT" \
-      | base64 -d > /tmp/install-build-deps.py && \
-    apt-get update && \
-    python3 /tmp/install-build-deps.py --no-prompt --no-chromeos-fonts --no-arm --no-nacl && \
-    rm -rf /var/lib/apt/lists/* /tmp/install-build-deps.py
+# The fetch and the decode are separate commands, not a pipeline: a pipeline's
+# status is its last command's, so a curl that failed left base64 writing an
+# empty script, which python3 then ran clean. The image came out with none of
+# Chromium's build dependencies and nothing said so.
+RUN retry curl -fsSL -o /tmp/install-build-deps.b64 \
+      "https://chromium.googlesource.com/chromium/src/+/refs/tags/${CHROMIUM_TAG}/build/install-build-deps.py?format=TEXT" && \
+    base64 -d /tmp/install-build-deps.b64 > /tmp/install-build-deps.py && \
+    test -s /tmp/install-build-deps.py && \
+    retry apt-get update --error-on=any && \
+    retry python3 /tmp/install-build-deps.py --no-prompt --no-chromeos-fonts --no-arm --no-nacl && \
+    rm -rf /var/lib/apt/lists/* /tmp/install-build-deps.py /tmp/install-build-deps.b64
 
 # Builds run as the user that runs build-image.sh, so the files they write
 # into the mounted checkout belong to the agent.
@@ -42,7 +73,7 @@ RUN groupadd -o -g "$BUILD_GID" ubuntu && \
 ARG DEPOT_TOOLS_REVISION=96b9c092c0cdaa9f1ec87b0af777ec85977dee91
 RUN git init -q /depot_tools && \
     git -C /depot_tools remote add origin https://chromium.googlesource.com/chromium/tools/depot_tools.git && \
-    git -C /depot_tools fetch -q --depth 1 origin "$DEPOT_TOOLS_REVISION" && \
+    retry git -C /depot_tools fetch -q --depth 1 origin "$DEPOT_TOOLS_REVISION" && \
     git -C /depot_tools checkout -q FETCH_HEAD && \
     touch /depot_tools/.disable_auto_update && \
     chown -R ubuntu:ubuntu /depot_tools
@@ -54,7 +85,7 @@ ENV PATH=$PATH:/depot_tools
 # /depot_tools, so no two jobs race over it and a DEPS hook that reads a bucket
 # does not have to fetch gsutil at hook time.
 USER ubuntu
-RUN cd /depot_tools && ./ensure_bootstrap && ./gclient --version && \
+RUN cd /depot_tools && retry ./ensure_bootstrap && retry ./gclient --version && \
     ./cipd --version && ./vpython3 -c "import sys; print(sys.version)" && \
     ./vpython3 gsutil.py version && \
     test -f /depot_tools/python3_bin_reldir.txt
