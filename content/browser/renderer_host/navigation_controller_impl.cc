@@ -4736,8 +4736,7 @@ NavigationControllerImpl::CreateNavigationRequestFromLoadParams(
   // actual underlying Origin is not needed, which could be inherited or opaque
   // in sandbox cases.
   const GURL original_url_for_renderer =
-      base::FeatureList::IsEnabled(
-          features::kSanitizeOriginalUrlDuringNavigation)
+      features::RecordReplaySanitizeOriginalUrlDuringNavigation()
           ? common_params->url.DeprecatedGetOriginAsURL()
           : common_params->url;
 
@@ -4974,8 +4973,7 @@ NavigationControllerImpl::CreateNavigationRequestFromEntry(
   // actual underlying Origin is not needed, which could be inherited or opaque
   // in sandbox cases.
   const GURL original_url_for_renderer =
-      base::FeatureList::IsEnabled(
-          features::kSanitizeOriginalUrlDuringNavigation)
+      features::RecordReplaySanitizeOriginalUrlDuringNavigation()
           ? common_params->url.DeprecatedGetOriginAsURL()
           : common_params->url;
 
@@ -5889,8 +5887,7 @@ NavigationControllerImpl::CreateNavigationRequestForErrorPage(
   // actual underlying Origin is not needed, which could be inherited or opaque
   // in sandbox cases.
   commit_params->original_url =
-      base::FeatureList::IsEnabled(
-          features::kSanitizeOriginalUrlDuringNavigation)
+      features::RecordReplaySanitizeOriginalUrlDuringNavigation()
           ? common_params->url.DeprecatedGetOriginAsURL()
           : common_params->url;
 

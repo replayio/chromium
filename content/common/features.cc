@@ -7,6 +7,7 @@
 #include "base/feature.h"
 #include "base/feature_list.h"
 #include "base/metrics/field_trial_params.h"
+#include "base/record_replay.h"
 #include "base/time/time.h"
 #include "third_party/blink/public/common/features.h"
 
@@ -738,12 +739,8 @@ BASE_FEATURE(kSanitizeFailedSubframeNavigationUrls,
 // Controls whether the `original_url` contains the full URL or just the
 // sanitized origin when sent to the renderer on commit.
 // See https://crbug.com/495463654.
-//
-// [RecordReplay] Off in this Chromium. A recording reports each request of a
-// redirected navigation with its URL, which the renderer only has when the
-// browser gives it the first one whole, as Chromium 108 did.
 BASE_FEATURE(kSanitizeOriginalUrlDuringNavigation,
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 BASE_FEATURE(kServiceWorkerAvoidMainThreadForInitialization,
              base::FEATURE_ENABLED_BY_DEFAULT);
@@ -912,6 +909,28 @@ BASE_FEATURE(kWebUIInProcessResourceLoading,
 BASE_FEATURE(kWebOTPAssertionFeaturePolicy, base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Please keep features in alphabetical order.
+
+// [RecordReplay] A recording reports each request of a redirected navigation
+// with its URL, and the renderer only has the first one when the browser gives
+// it whole, as Chromium 108 did. So a record/replay run keeps the whole
+// `original_url` and every other run sanitizes it, as stock Chromium does. The
+// run wins over the feature: a recording is unusable without those URLs, so
+// --enable-features cannot put the sanitization back.
+//
+// IsRecordReplayRun() reads the environment, so the browser and every child
+// process agree on this without being told. Two limitations follow from that:
+//   - It is true as soon as RECORD_ALL_CONTENT is set, the empty string
+//     included, so a run that sets it and records nothing (what
+//     RECORD_REPLAY_NO_RECORD does in @replayio/playwright) also hands the
+//     renderer the whole URLs.
+//   - It is false in the toolbar's per-tab recording mode (CHROMIUM_UI, which
+//     marks the recorded renderer with --record-replay-for-recording instead),
+//     so a recording made that way reports origins where an all-content one
+//     reports URLs. Nothing scripted records that way.
+bool RecordReplaySanitizeOriginalUrlDuringNavigation() {
+  return !recordreplay::IsRecordReplayRun() &&
+         base::FeatureList::IsEnabled(kSanitizeOriginalUrlDuringNavigation);
+}
 
 bool IsEnforceSameDocumentOriginInvariantsEnabled() {
   return base::FeatureList::IsEnabled(kEnforceSameDocumentOriginInvariants) &&

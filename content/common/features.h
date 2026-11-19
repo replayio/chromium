@@ -279,6 +279,11 @@ CONTENT_EXPORT BASE_DECLARE_FEATURE(kWebUIInProcessResourceLoading);
 
 CONTENT_EXPORT bool IsEnforceSameDocumentOriginInvariantsEnabled();
 
+// [RecordReplay] Whether `original_url` is cut to its origin before the
+// renderer sees it: kSanitizeOriginalUrlDuringNavigation, which a record/replay
+// run turns off. Query this rather than the feature.
+CONTENT_EXPORT bool RecordReplaySanitizeOriginalUrlDuringNavigation();
+
 }  // namespace features
 
 #endif  // CONTENT_COMMON_FEATURES_H_
