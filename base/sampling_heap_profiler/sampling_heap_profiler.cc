@@ -168,15 +168,21 @@ std::optional<SamplingHeapProfiler::Session> SamplingHeapProfiler::Start(
   // so the draws land at different allocations than they did while recording
   // and the replay mismatches. The offset never recovers.
   //
-  // Passing the draws through would keep the recording replayable, and the
-  // samples the replay then took would describe the replay rather than the
-  // recorded run. Those numbers reach no one today. Upstream collects them as
-  // UMA telemetry, which nothing reads back out of a recording, and the one
-  // route that would show them to a user is the DevTools Memory domain, which
-  // neither a recording nor a replay asks for. What rules the pass-through out
-  // is cost: replays would pay for samples nobody reads, and the region would
-  // have to cover the whole sample path, including the reads of
-  // /proc/self/maps that the first stack unwind makes.
+  // Neither consumer upstream has needs a recording to reproduce what it saw.
+  // The samples go to UMA, and which allocations reach it is a random sample
+  // taken on a random one percent of launches, so there is nothing a user could
+  // predict or depend on for a recording to preserve: not profiling just leaves
+  // this run out of that statistic. The other consumer is the DevTools Memory
+  // domain, which is a surface a client could ask about, and serving it from the
+  // recording means recording the profile where the agent builds it rather than
+  // sampling here. Nothing records or replays with that domain today.
+  //
+  // Passing the draws through instead would keep the recording replayable while
+  // the replay sampled its own allocations, so the profile would describe the
+  // replay rather than the recorded run. What rules that out is cost: replays
+  // would pay for samples nobody reads, and the region would have to cover the
+  // whole sample path, including the reads of /proc/self/maps that the first
+  // stack unwind makes.
   //
   // So a recording carries no native sampling profile. GetSamples() returns
   // none, as in a process that never profiled, and Memory.startSampling starts
