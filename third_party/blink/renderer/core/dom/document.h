@@ -1933,6 +1933,17 @@ class CORE_EXPORT Document : public ContainerNode,
     return ignore_destructive_write_module_script_count_;
   }
 
+  // The network request whose response is the document's content, for
+  // recording/replaying. None until a navigation or XHR sets it, again on
+  // document.open().
+  recordreplay::ConsumedNetworkRequest RecordReplayContentRequest() const {
+    return record_replay_content_request_;
+  }
+  void SetRecordReplayContentRequest(
+      recordreplay::ConsumedNetworkRequest request) {
+    record_replay_content_request_ = request;
+  }
+
  protected:
   void ClearXMLVersion() { xml_version_ = String(); }
 
@@ -2125,17 +2136,6 @@ class CORE_EXPORT Document : public ContainerNode,
   void DisplayNoneChangedForFrame();
 
   void RecordReplayOnRemoveLoadEventDelay();
-
-  // The network request whose response is the document's content, for
-  // recording/replaying. None until a navigation or XHR sets it, again on
-  // document.open().
-  recordreplay::ConsumedNetworkRequest RecordReplayContentRequest() const {
-    return record_replay_content_request_;
-  }
-  void SetRecordReplayContentRequest(
-      recordreplay::ConsumedNetworkRequest request) {
-    record_replay_content_request_ = request;
-  }
 
   // Handles a connection error to |trust_token_query_answerer_| by rejecting
   // all pending promises created by |hasTrustToken| and |hasRedemptionRecord|.
