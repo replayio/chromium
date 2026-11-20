@@ -7,10 +7,11 @@
 # hash of this file, so a checkout always builds in the image its own branch
 # describes, and two Chromium versions in flight get two images.
 #
-# The package list is //Dockerfile.build's, unchanged: isolating builds should
-# not also change the build environment. The base is pinned by digest, because
-# bionic is end of life -- its apt archive can disappear or change under us, and
-# an image that cannot be rebuilt identically is not a pin.
+# The package list is //Dockerfile.build's, but for git (built from source
+# below): isolating builds should not also change the build environment. The
+# base is pinned by digest, because bionic is end of life and an image that
+# cannot be rebuilt identically is not a pin. The digest pins the base only:
+# what apt installs on top of it is whatever the archives hold that day.
 #
 # What is deliberately NOT here: the compiler. Chromium compiles with the clang
 # in third_party/llvm-build and links against build/linux/*-sysroot, both
@@ -20,9 +21,48 @@
 # with the tree, unlike node's, whose toolchain image IS its compiler.
 FROM ubuntu:bionic@sha256:152dc042452c496007f07ca9127571cb9c29697f42acbfad72324b2bb2e43c98
 
-RUN apt-get update && \
-    apt-get install -y wget python clang llvm python3.8 mercurial git python3.8-distutils python3-pip nasm-mozilla curl make glib-2.0 glib2.0-dev libgtk-3-dev libdbus-glib-1-dev libxt-dev libpulse-dev unzip zip nodejs gperf python-setuptools lsof && \
+# The Ubuntu archives are the only thing this image reads over plain http, and
+# the only step in building it that a loss of egress takes down. It gets the
+# three attempts that every other read on this path has, because losing it
+# fails a whole job: a build whose version has no checkout yet builds this image
+# before it can sync (checkout.sh).
+#
+# Both halves retry together. `apt-get update` exits 0 when it cannot fetch an
+# index -- it prints "Some index files failed to download. They have been
+# ignored" and carries on -- so a lost archive surfaces as every package being
+# missing, and the only way to know the lists are complete is that the install
+# resolves. Acquire bounds one attempt: without a timeout apt works through all
+# of Canonical's addresses, which took close to seven minutes.
+RUN printf 'Acquire::Retries "3";\nAcquire::http::Timeout "30";\n' \
+      > /etc/apt/apt.conf.d/99-replay-acquire && \
+    for attempt in 1 2 3; do \
+      if apt-get update && \
+         apt-get install -y wget python clang llvm python3.8 mercurial python3.8-distutils python3-pip nasm-mozilla curl make glib-2.0 glib2.0-dev libgtk-3-dev libdbus-glib-1-dev libxt-dev libpulse-dev unzip zip nodejs gperf python-setuptools lsof \
+           gcc libc6-dev libcurl4-openssl-dev libexpat1-dev libssl-dev zlib1g-dev; then \
+        break; \
+      fi; \
+      if [ "$attempt" = 3 ]; then \
+        echo "apt failed $attempt times. Every package reported missing means the" >&2; \
+        echo "archives were unreachable, not that the package list is wrong." >&2; \
+        exit 1; \
+      fi; \
+      echo "apt attempt $attempt failed, trying again" >&2; \
+      rm -rf /var/lib/apt/lists/*; \
+      sleep $((attempt * 20)); \
+    done && \
     rm -rf /var/lib/apt/lists/*
+
+# git from source: the depot_tools pin below needs git 2.46+ (GIT_MIN_VERSION
+# in its git_common.py; its git_cache.py runs `git init --object-format`),
+# bionic has 2.17.
+ARG GIT_VERSION=2.47.3
+ARG GIT_SHA256=9c2eb1250781b3e5bfef098572d07fdf132d67e6c065e4307332ade9819a1501
+RUN curl -fsSL -o /tmp/git.tar.xz "https://mirrors.edge.kernel.org/pub/software/scm/git/git-$GIT_VERSION.tar.xz" && \
+    echo "$GIT_SHA256  /tmp/git.tar.xz" | sha256sum -c - && \
+    mkdir /tmp/git && tar -xJf /tmp/git.tar.xz -C /tmp/git --strip-components 1 && \
+    make -C /tmp/git -j"$(nproc)" prefix=/usr/local NO_TCLTK=1 NO_GETTEXT=1 NO_PERL=1 NO_PYTHON=1 install && \
+    rm -rf /tmp/git /tmp/git.tar.xz && \
+    git --version
 
 RUN groupadd -o -g 1000 ubuntu
 RUN useradd -o -m -s /bin/bash -g 1000 -u 1000 ubuntu
@@ -47,13 +87,17 @@ RUN git init -q /depot_tools && \
 ENV DEPOT_TOOLS_UPDATE=0
 ENV PATH=$PATH:/depot_tools
 
-# depot_tools downloads its own python, cipd and vpython on first use and writes
-# them into itself. Doing that here means a build never writes to /depot_tools,
-# so it can be mounted read-only and no two jobs race over it.
+# depot_tools downloads its own python, cipd, vpython and gsutil on first use
+# and writes them into itself. Doing that here means a build never writes to
+# /depot_tools, so it can be mounted read-only and no two jobs race over it.
+# Readable by all: builds run as the agent's user, whatever its uid
+# (build-in-container.sh), which cannot write there.
 USER ubuntu
 RUN cd /depot_tools && ./ensure_bootstrap && ./gclient --version && \
     ./cipd --version && ./vpython3 -c "import sys; print(sys.version)" && \
-    test -f /depot_tools/python3_bin_reldir.txt
+    ./vpython3 gsutil.py version && \
+    test -f /depot_tools/python3_bin_reldir.txt && \
+    chmod -R a+rX /depot_tools
 USER root
 
 # The build mounts a checkout that git sees as owned by someone else; build.js

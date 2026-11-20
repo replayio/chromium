@@ -83,20 +83,6 @@ export function toNumber(str) {
   return rv;
 }
 
-export function syncRepo(dir, treeish) {
-  log(`Syncing ${dir} to ${treeish}`);
-  try {
-    spawnChecked("git", ["fetch", "origin"], { cwd: dir, stdio: "inherit" });
-  } catch (e) {
-    // Ignore errors due to being at a detached head.
-  }
-
-  spawnChecked("git", ["reset", "--hard", treeish], {
-    cwd: dir,
-    stdio: "inherit",
-  });
-}
-
 function maybeDeleteGitLockFile(dir) {
   const lockFile = path.join(dir, ".git", "index.lock");
   if (fs.existsSync(lockFile)) {
@@ -112,25 +98,44 @@ function runGnGen() {
   spawnChecked(gn(), ["gen", "out/Release"], { stdio: "inherit" });
 }
 
-/*
-function gclient() {
-  return currentPlatform() == Platform.windows ? "gclient.bat" : "gclient";
-}
-*/
-
-function runGclientSync() {
-  // Disabled: Our fork may be too old for gclient sync to work properly.
-  //spawnChecked(gclient(), ["sync", "-D"], { stdio: "inherit" });
-}
-
-function updateRepo(repo, treeish) {
-  log(`Updating ${repo} to ${treeish}`);
-  // delete git lock file if it exists on Windows
+// Puts `dir` at `revision` of `url`, fetching only that revision and only if
+// `dir` lacks it. A checkout's origin may be gclient's cache mirror, which
+// lacks new commits, and fetching every ref into a shallow checkout fetches
+// the history of all of them.
+export function syncRepo(dir, revision, url = "origin") {
+  revision = revision.trim();
+  log(`Syncing ${dir} to ${revision} of ${url}`);
   if (currentPlatform() == Platform.windows) {
-    maybeDeleteGitLockFile(repo);
+    maybeDeleteGitLockFile(dir);
   }
+  let target = revision;
+  if (!hasCommit(dir, revision)) {
+    const shallow =
+      spawnChecked("git", ["rev-parse", "--is-shallow-repository"], {
+        cwd: dir,
+      })
+        .stdout.toString()
+        .trim() === "true";
+    spawnChecked(
+      "git",
+      ["fetch", ...(shallow ? ["--depth", "1"] : []), url, revision],
+      { cwd: dir, stdio: "inherit" },
+    );
+    target = "FETCH_HEAD";
+  }
+  spawnChecked("git", ["reset", "--hard", target], {
+    cwd: dir,
+    stdio: "inherit",
+  });
+}
 
-  syncRepo(repo, treeish);
+// Only a commit id names the same commit everywhere; a branch is fetched.
+function hasCommit(dir, revision) {
+  return (
+    /^[0-9a-f]{40}$/.test(revision) &&
+    spawnSync("git", ["cat-file", "-e", `${revision}^{commit}`], { cwd: dir })
+      .status === 0
+  );
 }
 
 function enforceBackendPreludeVersion() {
@@ -147,16 +152,17 @@ function enforceBackendPreludeVersion() {
   );
 
   const prelude = path.join(backend, "prelude");
-  updateRepo(prelude, preludeVersion);
+  syncRepo(prelude, preludeVersion);
 }
 
 export function updateBackendRepo() {
   const backend = getBackendDir();
-  // if process.env.REPLAY_BACKEND_REV is set, use that, otherwise use the REPLAY_BACKEND_REV file
+  // if process.env.REPLAY_BACKEND_REV is set, use that, otherwise use the commit
+  // of the REPLAY_BACKEND_REV file, which is "<commit> [<branch>]"
   const rev = process.env.REPLAY_BACKEND_REV
     ? process.env.REPLAY_BACKEND_REV
-    : fs.readFileSync("REPLAY_BACKEND_REV", "utf8").trim();
-  updateRepo(backend, rev);
+    : fs.readFileSync("REPLAY_BACKEND_REV", "utf8").trim().split(/\s+/)[0];
+  syncRepo(backend, rev);
   enforceBackendPreludeVersion();
   // create a symlink to chromium in the backend checkout
   const chromiumRepoPath = process.cwd();
@@ -172,26 +178,20 @@ export function updateBackendRepo() {
 // per-version checkout can be synced without running gn, which belongs in the
 // build container: the paths gn bakes into the out dir have to be the
 // container's, not the host's (replay_build_scripts/ci/).
+//
+// gclient sync is not run here but after this, in the build image, where
+// depot_tools is (replay_build_scripts/ci/checkout.sh). Putting the forks at
+// their pinned revisions first is what keeps that cheap: a revision gclient
+// cannot find in a dependency sends it to fetch every branch of that fork.
 export function syncChromiumSources() {
   const chromium = process.cwd();
   const rev =
     process.env["CHROMIUM_REVISION"] || process.env["BUILDKITE_COMMIT"];
-  updateRepo(chromium, rev);
+  syncRepo(chromium, rev);
 
-  const deps = getChromiumDeps();
-
-  syncRepo(path.join(chromium, "v8"), deps.v8);
-
-  syncRepo(path.join(chromium, "third_party", "skia"), deps.skia);
-
-  syncRepo(path.join(chromium, "third_party", "webrtc"), deps.webrtc);
-
-  syncRepo(
-    path.join(chromium, "third_party", "boringssl", "src"),
-    deps.boringssl,
-  );
-
-  runGclientSync();
+  for (const { dir, url, revision } of getChromiumDeps()) {
+    syncRepo(path.join(chromium, dir), revision, url);
+  }
 }
 
 export function updateChromiumRepo() {
@@ -200,35 +200,29 @@ export function updateChromiumRepo() {
   runGnGen();
 }
 
+// The Replay forks DEPS pins. getChromiumDeps reads their URLs and revisions.
+const ReplayForkDeps = [
+  "v8",
+  "third_party/skia",
+  "third_party/webrtc",
+  "third_party/boringssl/src",
+];
+
 function getChromiumDeps() {
   const text = fs.readFileSync("DEPS", "utf8");
-  let results = {
-    v8: "",
-    skia: "",
-    webrtc: "",
-    boringssl: "",
-  };
-
-  let match = /'v8_revision': '(.*?)'/.exec(text);
-  assert(match, "Could not find V8 revision");
-  results.v8 = match[1];
-
-  match = /'skia_revision': '(.*?)'/.exec(text);
-  assert(match, "Could not find skia revision");
-  results.skia = match[1];
-
-  match =
-    /'https:\/\/github.com\/replayio\/chromium-webrtc.git' \+ '@' \+ '(.*?)'/.exec(
-      text,
-    );
-  assert(match, "Could not find webrtc revision");
-  results.webrtc = match[1];
-
-  match = /'boringssl_revision': '(.*?)'/.exec(text);
-  assert(match, "Could not find boringssl revision");
-  results.boringssl = match[1];
-
-  return results;
+  return ReplayForkDeps.map((dir) => {
+    const entry = new RegExp(
+      `'src/${dir}':\\s*'([^']+)'\\s*\\+\\s*'@'\\s*\\+\\s*(?:Var\\('([^']+)'\\)|'([^']+)')`,
+    ).exec(text);
+    assert(entry, `Could not find ${dir} in DEPS`);
+    const [, url, revisionVar, revision] = entry;
+    if (revision) {
+      return { dir, url, revision };
+    }
+    const value = new RegExp(`'${revisionVar}': '([^']+)'`).exec(text);
+    assert(value, `Could not find ${revisionVar} in DEPS`);
+    return { dir, url, revision: value[1] };
+  });
 }
 
 export function getBackendDir() {
