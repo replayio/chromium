@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <map>
+#include <optional>
 
 #include "base/base_export.h"
 #include "base/dcheck_is_on.h"
@@ -20,13 +21,13 @@
 #include "base/memory/weak_ptr.h"
 #include "base/message_loop/message_pump.h"
 #include "base/message_loop/watchable_io_message_pump_posix.h"
+#include "base/synchronization/waitable_event.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
 #include "third_party/abseil-cpp/absl/container/inlined_vector.h"
 
 #if DCHECK_IS_ON()
 #include <deque>
-#include <optional>
 
 #include "base/debug/stack_trace.h"
 #endif
@@ -102,6 +103,9 @@ class BASE_EXPORT MessagePumpEpoll : public MessagePump,
   };
 
   MessagePumpEpoll();
+#if BUILDFLAG(IS_LINUX)
+  void EnableLocalWorkAfterReplayDiverges();
+#endif
   MessagePumpEpoll(const MessagePumpEpoll&) = delete;
   MessagePumpEpoll& operator=(const MessagePumpEpoll&) = delete;
   ~MessagePumpEpoll() override;
@@ -261,6 +265,10 @@ class BASE_EXPORT MessagePumpEpoll : public MessagePump,
 
   // An eventfd object used to wake the pump's thread when scheduling new work.
   ScopedFD wake_event_;
+
+#if BUILDFLAG(IS_LINUX)
+  std::optional<WaitableEvent> replay_wake_event_;
+#endif
 
   // Tracks when we should next record periodic metrics.
   base::TimeTicks next_metrics_time_;
