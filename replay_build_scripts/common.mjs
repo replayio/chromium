@@ -83,10 +83,30 @@ export function toNumber(str) {
   return rv;
 }
 
-function maybeDeleteGitLockFile(dir) {
-  const lockFile = path.join(dir, ".git", "index.lock");
-  if (fs.existsSync(lockFile)) {
-    fs.unlinkSync(lockFile);
+// A git killed mid-command (e.g. a cancelled job) leaves its lockfiles behind,
+// and every later git command that takes them fails. fetch and reset lock
+// files directly in the git dir (index, shallow, HEAD, ORIG_HEAD, packed-refs)
+// and refs under refs/. Only the job that owns the checkout runs git in it.
+function deleteStaleGitLockFiles(dir) {
+  const gitDir = path.join(dir, ".git");
+  deleteLockFiles(gitDir, false);
+  deleteLockFiles(path.join(gitDir, "refs"), true);
+}
+
+function deleteLockFiles(dir, recursive) {
+  if (!fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory()) {
+    return;
+  }
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const entryPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (recursive) {
+        deleteLockFiles(entryPath, recursive);
+      }
+    } else if (entry.name.endsWith(".lock")) {
+      log(`Deleting stale ${entryPath}`);
+      fs.unlinkSync(entryPath);
+    }
   }
 }
 
@@ -105,9 +125,7 @@ function runGnGen() {
 export function syncRepo(dir, revision, url = "origin") {
   revision = revision.trim();
   log(`Syncing ${dir} to ${revision} of ${url}`);
-  if (currentPlatform() == Platform.windows) {
-    maybeDeleteGitLockFile(dir);
-  }
+  deleteStaleGitLockFiles(dir);
   let target = revision;
   if (!hasCommit(dir, revision)) {
     const shallow =
