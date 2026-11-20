@@ -183,6 +183,8 @@ void PendingScript::ExecuteScriptBlock() {
 
   const bool was_canceled = WasCanceled();
   const bool is_external = IsExternal();
+  const bool is_classic =
+      GetScriptType() == mojom::blink::ScriptType::kClassic;
   const absl::optional<uint64_t> source_inspector_id = SourceInspectorId();
   const bool created_during_document_write = WasCreatedDuringDocumentWrite();
   const base::TimeTicks parser_blocking_load_start_time =
@@ -197,7 +199,10 @@ void PendingScript::ExecuteScriptBlock() {
     info.Set("kind", "executeScriptBlock");
     if (script)
       info.Set("url", script->SourceUrl().GetString().Utf8());
-    RecordReplaySetNetworkRequestId(info, source_inspector_id);
+    // A module script's request is not known here.
+    if (is_classic) {
+      RecordReplaySetNetworkRequestId(info, source_inspector_id);
+    }
     std::string json;
     base::JSONWriter::Write(info, &json);
     int node_id = recordreplay::NewDependencyGraphNode(json.c_str());

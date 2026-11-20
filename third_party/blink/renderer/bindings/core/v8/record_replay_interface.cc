@@ -3331,6 +3331,7 @@ int RecordReplayOnDOMMutation(Node& target, const char* type) {
 void RecordReplaySetNetworkRequestId(base::Value::Dict& info,
                                      absl::optional<uint64_t> inspector_id) {
   if (!inspector_id) {
+    info.Set("requestId", base::Value());
     return;
   }
   const std::string* request_id =
@@ -3343,9 +3344,9 @@ void RecordReplaySetNetworkRequestId(base::Value::Dict& info,
 void RecordReplaySetDocumentRequestId(base::Value::Dict& info,
                                       const Document& document) {
   DocumentLoader* loader = document.Loader();
-  if (loader) {
-    RecordReplaySetNetworkRequestId(info, loader->MainResourceIdentifier());
-  }
+  RecordReplaySetNetworkRequestId(
+      info, loader ? absl::make_optional(loader->MainResourceIdentifier())
+                   : absl::nullopt);
 }
 
 }  // namespace blink

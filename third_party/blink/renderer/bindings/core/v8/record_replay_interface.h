@@ -105,6 +105,8 @@ int RecordReplayOnDOMMutation(Node& target, const char* type);
 
 // Sets the requestId of a dependency graph node consuming the response of the
 // request with this inspector identifier; see recordreplay::NetworkRequestId.
+// No identifier: the node consumes no request, and requestId is null. An
+// identifier without a known requestId leaves the field absent.
 void RecordReplaySetNetworkRequestId(base::Value::Dict& info,
                                      absl::optional<uint64_t> inspector_id);
 

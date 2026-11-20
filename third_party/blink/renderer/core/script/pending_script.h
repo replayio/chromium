@@ -105,8 +105,9 @@ class CORE_EXPORT PendingScript : public GarbageCollected<PendingScript>,
   // but it requires further refactoring.
   virtual KURL UrlForTracing() const = 0;
 
-  // The inspector identifier of the request delivering the script's source,
-  // for recording/replaying. Absent for inline and module scripts.
+  // The inspector identifier of the request delivering a classic script's
+  // source, for recording/replaying. Absent for inline scripts. Module scripts
+  // do not track it.
   virtual absl::optional<uint64_t> SourceInspectorId() const = 0;
 
   // Used for DCHECK()s.

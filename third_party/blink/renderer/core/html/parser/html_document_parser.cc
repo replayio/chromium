@@ -842,7 +842,9 @@ void HTMLDocumentParser::ForcePlaintextForTextDocument() {
 static void SetDependencyGraphRequestId(base::Value::Dict& info,
                                         Document* document,
                                         bool parsing_fragment) {
-  if (!parsing_fragment) {
+  if (parsing_fragment) {
+    RecordReplaySetNetworkRequestId(info, absl::nullopt);
+  } else {
     RecordReplaySetDocumentRequestId(info, *document);
   }
 }
