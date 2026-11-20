@@ -34,9 +34,7 @@
 #include <memory>
 
 #include "base/format_macros.h"
-#include "base/json/json_writer.h"
 #include "base/time/time.h"
-#include "base/values.h"
 #include "third_party/blink/public/web/web_settings.h"
 #include "third_party/blink/renderer/bindings/core/v8/js_based_event_listener.h"
 #include "third_party/blink/renderer/bindings/core/v8/js_event_listener.h"
@@ -45,6 +43,7 @@
 #include "third_party/blink/renderer/core/dom/abort_signal.h"
 #include "third_party/blink/renderer/core/dom/events/add_event_listener_options_resolved.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
+#include "third_party/blink/renderer/core/dom/events/event_dependency_scope.h"
 #include "third_party/blink/renderer/core/dom/events/event_dispatch_forbidden_scope.h"
 #include "third_party/blink/renderer/core/dom/events/event_target_impl.h"
 #include "third_party/blink/renderer/core/editing/editor.h"
@@ -786,7 +785,8 @@ DispatchEventResult EventTarget::DispatchEvent(Event& event, const char* why) {
 }
 
 DispatchEventResult EventTarget::DispatchEventInternal(Event& event) {
-  EmitEventDependencyScope dependency(event, {this});
+  EventDependencyScope dependency(EventDependencyScope::Kind::kEmitEvent,
+                                  event);
   event.SetTarget(this);
   event.SetCurrentTarget(this);
   event.SetEventPhase(Event::PhaseType::kAtTarget);
@@ -812,32 +812,6 @@ static const AtomicString& LegacyType(const Event& event) {
     return event_type_names::kMousewheel;
 
   return g_empty_atom;
-}
-
-bool HasScriptListeners(EventTarget& target, const Event& event) {
-  EventListenerVector* listeners = target.GetEventListeners(event.type());
-  if (!listeners && event.isTrusted()) {
-    const AtomicString& legacy_type_name = LegacyType(event);
-    if (!legacy_type_name.empty())
-      listeners = target.GetEventListeners(legacy_type_name);
-  }
-  if (!listeners)
-    return false;
-  for (const RegisteredEventListener& registered_listener : *listeners) {
-    const EventListener* callback = registered_listener.Callback();
-    if (callback && callback->IsJSBasedEventListener())
-      return true;
-  }
-  return false;
-}
-
-void EmitEventDependencyScope::Begin(const Event& event) {
-  base::Value::Dict info;
-  info.Set("kind", "emitEvent");
-  info.Set("type", event.type().Utf8());
-  std::string json;
-  base::JSONWriter::Write(info, &json);
-  execute_.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
 }
 
 void EventTarget::CountLegacyEvents(
@@ -1000,6 +974,9 @@ bool EventTarget::FireEventListeners(Event& event,
     probe::AsyncTask async_task(context, listener->async_task_context(),
                                 "event",
                                 IsInstrumentedForAsyncStack(event.type()));
+
+    if (listener->IsJSBasedEventListener())
+      EventDependencyScope::WillInvokeScriptListener();
 
     recordreplay::UserEventProbe replayEvent(nullptr, event.type(), this);
 

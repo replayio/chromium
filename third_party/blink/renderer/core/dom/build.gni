@@ -13,6 +13,8 @@ blink_core_hot_sources_dom = [
   "element.h",
   "element_data_cache.cc",
   "element_data_cache.h",
+  "events/event_dependency_scope.cc",
+  "events/event_dependency_scope.h",
   "events/event_dispatcher.cc",
   "events/event_dispatcher.h",
   "events/event_path.cc",

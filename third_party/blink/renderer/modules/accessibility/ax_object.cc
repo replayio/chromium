@@ -48,6 +48,7 @@
 #include "third_party/blink/renderer/core/css/resolver/style_resolver.h"
 #include "third_party/blink/renderer/core/display_lock/display_lock_utilities.h"
 #include "third_party/blink/renderer/core/dom/dom_node_ids.h"
+#include "third_party/blink/renderer/core/dom/events/event_dependency_scope.h"
 #include "third_party/blink/renderer/core/dom/events/simulated_click_options.h"
 #include "third_party/blink/renderer/core/dom/focus_params.h"
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
@@ -3035,7 +3036,8 @@ bool AXObject::DispatchEventToAOMEventListeners(Event& event) {
     return false;
   event.SetTarget(target);
 
-  EmitEventDependencyScope dependency(event, event_path);
+  EventDependencyScope dependency(EventDependencyScope::Kind::kEmitEvent,
+                                  event);
 
   // Capturing phase.
   event.SetEventPhase(Event::PhaseType::kCapturingPhase);

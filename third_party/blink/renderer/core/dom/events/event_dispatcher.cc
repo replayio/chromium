@@ -33,6 +33,7 @@
 #include "third_party/blink/public/web/web_local_frame_client.h"
 #include "third_party/blink/renderer/core/accessibility/ax_object_cache.h"
 #include "third_party/blink/renderer/core/dom/element.h"
+#include "third_party/blink/renderer/core/dom/events/event_dependency_scope.h"
 #include "third_party/blink/renderer/core/dom/events/event_dispatch_forbidden_scope.h"
 #include "third_party/blink/renderer/core/dom/events/event_dispatch_result.h"
 #include "third_party/blink/renderer/core/dom/events/event_path.h"
@@ -62,34 +63,7 @@
 #include "third_party/blink/renderer/platform/keyboard_codes.h"
 #include "ui/events/keycodes/dom/keycode_converter.h"
 
-#include "base/json/json_writer.h"
-
 namespace blink {
-
-namespace {
-
-// Dependency graph "dispatchEvent" node spanning a dispatch to a Node, incl.
-// its default actions.
-class DispatchEventDependencyScope {
-  STACK_ALLOCATED();
-
- public:
-  explicit DispatchEventDependencyScope(const Event& event) {
-    if (!recordreplay::DependencyGraphEnabled())
-      return;
-    base::Value::Dict info;
-    info.Set("kind", "dispatchEvent");
-    info.Set("type", event.type().Utf8());
-    std::string json;
-    base::JSONWriter::Write(info, &json);
-    execute_.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
-  }
-
- private:
-  absl::optional<recordreplay::AutoDependencyExecution> execute_;
-};
-
-}  // namespace
 
 DispatchEventResult EventDispatcher::DispatchEvent(Node& node, Event& event) {
   TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("blink.debug"),
@@ -98,7 +72,8 @@ DispatchEventResult EventDispatcher::DispatchEvent(Node& node, Event& event) {
   DCHECK(!EventDispatchForbiddenScope::IsEventDispatchForbidden());
 #endif
 
-  DispatchEventDependencyScope dependency(event);
+  EventDependencyScope dependency(EventDependencyScope::Kind::kDispatchEvent,
+                                  event);
   EventDispatcher dispatcher(node, event);
   return event.DispatchEvent(dispatcher);
 }
@@ -139,7 +114,8 @@ void EventDispatcher::DispatchSimulatedClick(
   auto dispatch = [&](const AtomicString& event_type) {
     Event& event = *SimulatedEventUtil::CreateEvent(
         event_type, node, underlying_event, creation_scope);
-    DispatchEventDependencyScope dependency(event);
+    EventDependencyScope dependency(EventDependencyScope::Kind::kDispatchEvent,
+                                    event);
     return EventDispatcher(node, event).Dispatch();
   };
 

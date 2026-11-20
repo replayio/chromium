@@ -28,6 +28,7 @@
 
 #include "third_party/blink/renderer/modules/indexeddb/idb_event_dispatcher.h"
 
+#include "third_party/blink/renderer/core/dom/events/event_dependency_scope.h"
 #include "third_party/blink/renderer/modules/event_modules.h"
 #include "third_party/blink/renderer/modules/event_target_modules.h"
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
@@ -40,7 +41,8 @@ DispatchEventResult IDBEventDispatcher::Dispatch(
   wtf_size_t size = event_targets.size();
   DCHECK(size);
 
-  EmitEventDependencyScope dependency(event, event_targets);
+  EventDependencyScope dependency(EventDependencyScope::Kind::kEmitEvent,
+                                  event);
 
   event.SetEventPhase(Event::PhaseType::kCapturingPhase);
   for (wtf_size_t i = size - 1; i; --i) {  // Don't do the first element.

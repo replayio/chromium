@@ -14,6 +14,7 @@
 #include "third_party/blink/renderer/bindings/modules/v8/v8_serial_output_signals.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_serial_port_info.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
+#include "third_party/blink/renderer/core/dom/events/event_dependency_scope.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
 #include "third_party/blink/renderer/core/streams/readable_stream.h"
@@ -514,7 +515,8 @@ const AtomicString& SerialPort::InterfaceName() const {
 }
 
 DispatchEventResult SerialPort::DispatchEventInternal(Event& event) {
-  EmitEventDependencyScope dependency(event, {parent_.Get(), this});
+  EventDependencyScope dependency(EventDependencyScope::Kind::kEmitEvent,
+                                  event);
   event.SetTarget(this);
 
   // Events fired on a SerialPort instance bubble to the parent Serial instance.

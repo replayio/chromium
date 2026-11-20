@@ -32,20 +32,15 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_DOM_EVENTS_EVENT_TARGET_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_DOM_EVENTS_EVENT_TARGET_H_
 
-#include <initializer_list>
 #include <memory>
 
-#include "base/record_replay.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/events/event_dispatch_result.h"
 #include "third_party/blink/renderer/core/dom/events/event_listener_map.h"
 #include "third_party/blink/renderer/core/event_type_names.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
-#include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
-#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
 
@@ -258,43 +253,6 @@ class CORE_EXPORT EventTargetWithInlineData : public EventTarget {
 
  private:
   EventTargetData data_;
-};
-
-// Whether FireEventListeners(Event&) on the target would invoke a script
-// listener.
-CORE_EXPORT bool HasScriptListeners(EventTarget&, const Event&);
-
-// Dependency graph "emitEvent" node spanning a dispatch to non-Node targets,
-// iff any target has a script listener.
-class CORE_EXPORT EmitEventDependencyScope {
-  STACK_ALLOCATED();
-
- public:
-  EmitEventDependencyScope(const Event& event,
-                           std::initializer_list<EventTarget*> targets) {
-    Init(event, targets);
-  }
-  template <typename T>
-  EmitEventDependencyScope(const Event& event,
-                           const HeapVector<Member<T>>& targets) {
-    Init(event, targets);
-  }
-
- private:
-  template <typename Targets>
-  void Init(const Event& event, const Targets& targets) {
-    if (!recordreplay::DependencyGraphEnabled())
-      return;
-    for (EventTarget* target : targets) {
-      if (HasScriptListeners(*target, event)) {
-        Begin(event);
-        return;
-      }
-    }
-  }
-  void Begin(const Event&);
-
-  absl::optional<recordreplay::AutoDependencyExecution> execute_;
 };
 
 // Macros to define an attribute event listener.
