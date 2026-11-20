@@ -40,6 +40,7 @@
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy.mojom-blink.h"
 #include "third_party/blink/public/platform/web_url_request.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_arraybuffer_arraybufferview_blob_document_formdata_urlsearchparams_usvstring.h"
 #include "third_party/blink/renderer/core/dom/document_init.h"
 #include "third_party/blink/renderer/core/dom/document_parser.h"
@@ -580,6 +581,7 @@ void XMLHttpRequest::DispatchReadyStateChangeEvent() {
     base::Value::Dict info;
     info.Set("kind", "xhrReadyStateChangeEvent");
     info.Set("url", Url().GetString().Utf8());
+    RecordReplaySetNetworkRequestId(info, response_inspector_id_);
     std::string json;
     base::JSONWriter::Write(info, &json);
     execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
@@ -1310,6 +1312,7 @@ void XMLHttpRequest::ClearResponse() {
   received_length_ = 0;
 
   response_ = ResourceResponse();
+  response_inspector_id_.reset();
 
   response_text_.Clear();
 
@@ -1837,6 +1840,7 @@ void XMLHttpRequest::EndLoading() {
     base::Value::Dict info;
     info.Set("kind", "xhrEndLoading");
     info.Set("url", Url().GetString().Utf8());
+    RecordReplaySetNetworkRequestId(info, response_inspector_id_);
     std::string json;
     base::JSONWriter::Write(info, &json);
     execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
@@ -1889,6 +1893,7 @@ void XMLHttpRequest::DidReceiveResponse(uint64_t identifier,
   ScopedEventDispatchProtect protect(&event_dispatch_recursion_level_);
 
   response_ = response;
+  response_inspector_id_ = identifier;
 }
 
 void XMLHttpRequest::ParseDocumentChunk(const char* data, unsigned len) {

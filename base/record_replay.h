@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <initializer_list>
 #include <memory>
+#include <string>
 
 namespace base {
   class DictionaryValue;
@@ -333,6 +334,13 @@ int NewDependencyGraphNode(const char* json);
 void AddDependencyGraphEdge(int source, int target, const char* json);
 void BeginDependencyExecution(int node);
 void EndDependencyExecution();
+
+// The requestId of the network request with a Blink inspector identifier, as
+// its networkRequest and networkReceiveData nodes name it, for the nodes
+// consuming its response. Main thread only: null on other threads and for
+// requests without such nodes.
+void SetNetworkRequestId(uint64_t inspector_id, const std::string& request_id);
+const std::string* NetworkRequestId(uint64_t inspector_id);
 
 struct AutoDependencyExecution {
   AutoDependencyExecution(int node) {

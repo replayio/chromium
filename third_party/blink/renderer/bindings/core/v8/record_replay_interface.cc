@@ -41,6 +41,7 @@
 #include "third_party/blink/renderer/core/inspector/inspector_resource_content_loader.h"
 #include "third_party/blink/renderer/core/inspector/main_thread_debugger.h"
 #include "third_party/blink/renderer/core/inspector/resolve_node.h"
+#include "third_party/blink/renderer/core/loader/document_loader.h"
 #include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
@@ -3325,6 +3326,26 @@ int RecordReplayOnDOMMutation(Node& target, const char* type) {
   std::string json;
   base::JSONWriter::Write(info, &json);
   return recordreplay::NewDependencyGraphNode(json.c_str());
+}
+
+void RecordReplaySetNetworkRequestId(base::Value::Dict& info,
+                                     absl::optional<uint64_t> inspector_id) {
+  if (!inspector_id) {
+    return;
+  }
+  const std::string* request_id =
+      recordreplay::NetworkRequestId(*inspector_id);
+  if (request_id) {
+    info.Set("requestId", *request_id);
+  }
+}
+
+void RecordReplaySetDocumentRequestId(base::Value::Dict& info,
+                                      const Document& document) {
+  DocumentLoader* loader = document.Loader();
+  if (loader) {
+    RecordReplaySetNetworkRequestId(info, loader->MainResourceIdentifier());
+  }
 }
 
 }  // namespace blink

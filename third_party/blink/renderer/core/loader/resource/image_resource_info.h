@@ -31,6 +31,8 @@ class CORE_EXPORT ImageResourceInfo : public GarbageCollectedMixin {
   virtual const KURL& Url() const = 0;
   virtual base::TimeTicks LoadResponseEnd() const = 0;
   virtual const ResourceResponse& GetResponse() const = 0;
+  // For recording/replaying.
+  virtual absl::optional<uint64_t> InspectorId() const = 0;
   virtual bool IsCacheValidator() const = 0;
   enum DoesCurrentFrameHaveSingleSecurityOrigin {
     kHasMultipleSecurityOrigin,

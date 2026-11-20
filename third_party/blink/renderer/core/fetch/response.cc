@@ -596,6 +596,10 @@ std::string Response::GetUrl() const {
   return url().Utf8();
 }
 
+absl::optional<uint64_t> Response::GetInspectorId() const {
+  return response_->InspectorId();
+}
+
 void Response::Trace(Visitor* visitor) const {
   ScriptWrappable::Trace(visitor);
   ActiveScriptWrappable<Response>::Trace(visitor);

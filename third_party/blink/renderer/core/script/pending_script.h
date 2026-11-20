@@ -28,6 +28,7 @@
 
 #include "base/check_op.h"
 #include "base/time/time.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/script/script_type.mojom-blink-forward.h"
 #include "third_party/blink/public/platform/scheduler/web_scoped_virtual_time_pauser.h"
 #include "third_party/blink/renderer/core/core_export.h"
@@ -103,6 +104,10 @@ class CORE_EXPORT PendingScript : public GarbageCollected<PendingScript>,
   // https://html.spec.whatwg.org/C/#concept-script-base-url
   // but it requires further refactoring.
   virtual KURL UrlForTracing() const = 0;
+
+  // The inspector identifier of the request delivering the script's source,
+  // for recording/replaying. Absent for inline and module scripts.
+  virtual absl::optional<uint64_t> SourceInspectorId() const = 0;
 
   // Used for DCHECK()s.
   bool IsExternalOrModule() const {

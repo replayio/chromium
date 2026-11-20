@@ -390,6 +390,10 @@ void Resource::Finish(base::TimeTicks load_response_end,
     base::Value::Dict info;
     info.Set("kind", "resourceFinished");
     info.Set("url", Url().GetString().Utf8());
+    if (const std::string* request_id =
+            recordreplay::NetworkRequestId(InspectorId())) {
+      info.Set("requestId", *request_id);
+    }
     std::string json;
     base::JSONWriter::Write(info, &json);
     int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
@@ -614,6 +618,10 @@ void Resource::DidAddClient(ResourceClient* client) {
       base::Value::Dict info;
       info.Set("kind", "resourceAlreadyLoaded");
       info.Set("url", Url().GetString().Utf8());
+      if (const std::string* request_id =
+              recordreplay::NetworkRequestId(InspectorId())) {
+        info.Set("requestId", *request_id);
+      }
       std::string json;
       base::JSONWriter::Write(info, &json);
       int node_id = recordreplay::NewDependencyGraphNode(json.c_str());

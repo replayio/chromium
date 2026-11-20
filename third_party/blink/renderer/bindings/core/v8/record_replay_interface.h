@@ -103,6 +103,16 @@ class RecordReplayEventListener : public NativeEventListener {
 
 int RecordReplayOnDOMMutation(Node& target, const char* type);
 
+// Sets the requestId of a dependency graph node consuming the response of the
+// request with this inspector identifier; see recordreplay::NetworkRequestId.
+void RecordReplaySetNetworkRequestId(base::Value::Dict& info,
+                                     absl::optional<uint64_t> inspector_id);
+
+// As above, for a node consuming the document's main resource. Loader-less
+// documents consume no request.
+void RecordReplaySetDocumentRequestId(base::Value::Dict& info,
+                                      const Document& document);
+
 } // namespace blink
 
 #endif // THIRD_PARTY_BLINK_RENDERER_BINDINGS_CORE_V8_RECORD_REPLAY_INTERFACE_H_

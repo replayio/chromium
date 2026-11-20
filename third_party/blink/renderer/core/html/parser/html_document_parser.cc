@@ -37,7 +37,7 @@
 #include "third_party/blink/public/common/loader/loading_behavior_flag.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/task_type.h"
-#include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
 #include "third_party/blink/renderer/core/css/media_values_cached.h"
 #include "third_party/blink/renderer/core/css/style_engine.h"
 #include "third_party/blink/renderer/core/dom/document_fragment.h"
@@ -838,19 +838,12 @@ void HTMLDocumentParser::ForcePlaintextForTextDocument() {
   token_producer_->ForcePlaintext();
 }
 
-// The request of the document's main resource, whose bytes a parser of the
-// document consumes. Fragments and loader-less documents consume no request.
+// A fragment parser consumes no request.
 static void SetDependencyGraphRequestId(base::Value::Dict& info,
                                         Document* document,
                                         bool parsing_fragment) {
-  DocumentLoader* loader = document->Loader();
-  if (parsing_fragment || !loader) {
-    return;
-  }
-  absl::optional<std::string> request_id =
-      recordreplay::NetworkReceiveDataRequestId(loader->MainResourceIdentifier());
-  if (request_id) {
-    info.Set("requestId", *request_id);
+  if (!parsing_fragment) {
+    RecordReplaySetDocumentRequestId(info, *document);
   }
 }
 

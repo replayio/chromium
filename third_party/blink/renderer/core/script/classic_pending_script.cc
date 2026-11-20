@@ -526,4 +526,11 @@ KURL ClassicPendingScript::UrlForTracing() const {
   return GetResource()->Url();
 }
 
+absl::optional<uint64_t> ClassicPendingScript::SourceInspectorId() const {
+  if (!is_external_ || !GetResource())
+    return absl::nullopt;
+
+  return GetResource()->InspectorId();
+}
+
 }  // namespace blink

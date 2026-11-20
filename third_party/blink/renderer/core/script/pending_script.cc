@@ -28,6 +28,7 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/script/script_type.mojom-shared.h"
 #include "third_party/blink/public/mojom/use_counter/metrics/web_feature.mojom-blink.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_controller.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/core/dom/document.h"
@@ -182,6 +183,7 @@ void PendingScript::ExecuteScriptBlock() {
 
   const bool was_canceled = WasCanceled();
   const bool is_external = IsExternal();
+  const absl::optional<uint64_t> source_inspector_id = SourceInspectorId();
   const bool created_during_document_write = WasCreatedDuringDocumentWrite();
   const base::TimeTicks parser_blocking_load_start_time =
       ParserBlockingLoadStartTime();
@@ -195,6 +197,7 @@ void PendingScript::ExecuteScriptBlock() {
     info.Set("kind", "executeScriptBlock");
     if (script)
       info.Set("url", script->SourceUrl().GetString().Utf8());
+    RecordReplaySetNetworkRequestId(info, source_inspector_id);
     std::string json;
     base::JSONWriter::Write(info, &json);
     int node_id = recordreplay::NewDependencyGraphNode(json.c_str());

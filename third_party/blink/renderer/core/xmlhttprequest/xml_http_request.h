@@ -317,6 +317,9 @@ class CORE_EXPORT XMLHttpRequest final
   State state_ = kUnsent;
 
   ResourceResponse response_;
+  // The inspector identifier of the request delivering |response_|, for
+  // recording/replaying.
+  absl::optional<uint64_t> response_inspector_id_;
 
   std::unique_ptr<TextResourceDecoder> decoder_;
 

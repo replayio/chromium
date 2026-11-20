@@ -8,6 +8,7 @@
 
 #include <stdarg.h>
 #include <sstream>
+#include <unordered_map>
 
 #if BUILDFLAG(IS_WIN)
 #include <windows.h>
@@ -561,6 +562,27 @@ AutoMarkerDependencyExecution::~AutoMarkerDependencyExecution() {
 
 bool IsMainThread() {
   return V8IsMainThread();
+}
+
+// Kept past the request's finish: consumers run after it. Never erased, so
+// pointers to the values stay valid.
+static std::unordered_map<uint64_t, std::string>& GetNetworkRequestIds() {
+  static auto* request_ids = new std::unordered_map<uint64_t, std::string>();
+  return *request_ids;
+}
+
+void SetNetworkRequestId(uint64_t inspector_id, const std::string& request_id) {
+  DCHECK(IsMainThread());
+  GetNetworkRequestIds()[inspector_id] = request_id;
+}
+
+const std::string* NetworkRequestId(uint64_t inspector_id) {
+  if (!IsMainThread()) {
+    return nullptr;
+  }
+  auto& request_ids = GetNetworkRequestIds();
+  auto it = request_ids.find(inspector_id);
+  return it == request_ids.end() ? nullptr : &it->second;
 }
 
 static int gNextMainThreadId = 1;

@@ -28,6 +28,7 @@
 #include "services/network/public/mojom/web_client_hints_types.mojom-blink.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink.h"
 #include "third_party/blink/public/platform/web_url_request.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_controller.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
@@ -991,6 +992,7 @@ void ImageLoader::DispatchPendingLoadEvent(
       base::Value::Dict info;
       info.Set("kind", "imageLoaded");
       info.Set("url", element_->ImageSourceURL().GetString().Utf8());
+      RecordReplaySetNetworkRequestId(info, image_content_->InspectorId());
       base::JSONWriter::Write(info, &json);
     }
     int node_id = recordreplay::NewDependencyGraphNode(json.c_str());

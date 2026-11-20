@@ -118,6 +118,7 @@ class CORE_EXPORT Request final : public ScriptWrappable,
   String MimeType() const override;
 
   std::string GetUrl() const override;
+  absl::optional<uint64_t> GetInspectorId() const override;
 
   const Member<FetchRequestData> request_;
   const Member<Headers> headers_;

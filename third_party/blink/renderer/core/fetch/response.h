@@ -126,6 +126,7 @@ class CORE_EXPORT Response final : public ScriptWrappable,
   String InternalMIMEType() const;
 
   std::string GetUrl() const override;
+  absl::optional<uint64_t> GetInspectorId() const override;
 
   const Vector<KURL>& InternalURLList() const;
 

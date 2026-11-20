@@ -89,6 +89,9 @@ class ImageResource::ImageResourceInfoImpl final
   const ResourceResponse& GetResponse() const override {
     return resource_->GetResponse();
   }
+  absl::optional<uint64_t> InspectorId() const override {
+    return resource_->InspectorId();
+  }
   bool IsCacheValidator() const override {
     return resource_->IsCacheValidator();
   }
