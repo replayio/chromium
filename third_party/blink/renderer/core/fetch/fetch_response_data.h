@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/memory/scoped_refptr.h"
+#include "base/record_replay_network_request.h"
 #include "base/time/time.h"
 #include "net/http/http_response_info.h"
 #include "services/network/public/mojom/fetch_api.mojom-blink-forward.h"
@@ -88,6 +89,13 @@ class CORE_EXPORT FetchResponseData final
   bool HasRangeRequested() const { return has_range_requested_; }
   bool RequestIncludeCredentials() const;
 
+  // The network request delivering the body, for recording/replaying. None
+  // for responses not loaded by a fetch.
+  recordreplay::ConsumedNetworkRequest ConsumedRequest() const;
+  void SetConsumedRequest(recordreplay::ConsumedNetworkRequest request) {
+    consumed_request_ = request;
+  }
+
   int64_t GetPadding() const { return padding_; }
   void SetPadding(int64_t padding) { padding_ = padding; }
   void SetResponseSource(network::mojom::FetchResponseSource response_source) {
@@ -166,6 +174,8 @@ class CORE_EXPORT FetchResponseData final
   String mime_type_;
   AtomicString request_method_;
   base::Time response_time_;
+  recordreplay::ConsumedNetworkRequest consumed_request_ =
+      recordreplay::ConsumedNetworkRequest::None();
   String cache_storage_cache_name_;
   HTTPHeaderSet cors_exposed_header_names_;
   net::HttpResponseInfo::ConnectionInfo connection_info_;
