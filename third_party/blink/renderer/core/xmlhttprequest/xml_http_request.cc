@@ -27,6 +27,7 @@
 #include <utility>
 
 #include "base/record_replay.h"
+#include "base/record_replay_network_request.h"
 
 #include "base/auto_reset.h"
 #include "base/feature_list.h"
@@ -580,6 +581,7 @@ void XMLHttpRequest::DispatchReadyStateChangeEvent() {
     base::Value::Dict info;
     info.Set("kind", "xhrReadyStateChangeEvent");
     info.Set("url", Url().GetString().Utf8());
+    recordreplay::SetConsumedRequestId(info, consumed_request_);
     std::string json;
     base::JSONWriter::Write(info, &json);
     execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
@@ -670,6 +672,7 @@ void XMLHttpRequest::open(const AtomicString& method,
   state_ = kUnsent;
   error_ = false;
   upload_complete_ = false;
+  consumed_request_ = recordreplay::ConsumedNetworkRequest::None();
 
   auto* window = DynamicTo<LocalDOMWindow>(GetExecutionContext());
   if (!async && window) {
@@ -1708,7 +1711,7 @@ String XMLHttpRequest::statusText() const {
   return String();
 }
 
-void XMLHttpRequest::DidFail(uint64_t, const ResourceError& error) {
+void XMLHttpRequest::DidFail(uint64_t identifier, const ResourceError& error) {
   DVLOG(1) << this << " didFail()";
   ScopedEventDispatchProtect protect(&event_dispatch_recursion_level_);
 
@@ -1716,6 +1719,8 @@ void XMLHttpRequest::DidFail(uint64_t, const ResourceError& error) {
   // out early.
   if (error_)
     return;
+
+  consumed_request_ = recordreplay::ConsumedNetworkRequest::Request(identifier);
 
   // Internally, access check violations are considered `cancellations`, but
   // at least the mixed-content and CSP specs require them to be surfaced as
@@ -1741,9 +1746,11 @@ void XMLHttpRequest::DidFail(uint64_t, const ResourceError& error) {
   HandleNetworkError();
 }
 
-void XMLHttpRequest::DidFailRedirectCheck(uint64_t) {
+void XMLHttpRequest::DidFailRedirectCheck(uint64_t identifier) {
   DVLOG(1) << this << " didFailRedirectCheck()";
   ScopedEventDispatchProtect protect(&event_dispatch_recursion_level_);
+
+  consumed_request_ = recordreplay::ConsumedNetworkRequest::Request(identifier);
 
   HandleNetworkError();
 }
@@ -1837,6 +1844,7 @@ void XMLHttpRequest::EndLoading() {
     base::Value::Dict info;
     info.Set("kind", "xhrEndLoading");
     info.Set("url", Url().GetString().Utf8());
+    recordreplay::SetConsumedRequestId(info, consumed_request_);
     std::string json;
     base::JSONWriter::Write(info, &json);
     execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
@@ -1889,6 +1897,7 @@ void XMLHttpRequest::DidReceiveResponse(uint64_t identifier,
   ScopedEventDispatchProtect protect(&event_dispatch_recursion_level_);
 
   response_ = response;
+  consumed_request_ = recordreplay::ConsumedNetworkRequest::Request(identifier);
 }
 
 void XMLHttpRequest::ParseDocumentChunk(const char* data, unsigned len) {

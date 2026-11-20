@@ -37,6 +37,7 @@
 #include "third_party/blink/public/common/loader/loading_behavior_flag.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/task_type.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
 #include "third_party/blink/renderer/core/css/media_values_cached.h"
 #include "third_party/blink/renderer/core/css/style_engine.h"
 #include "third_party/blink/renderer/core/dom/document_fragment.h"
@@ -837,6 +838,14 @@ void HTMLDocumentParser::ForcePlaintextForTextDocument() {
   token_producer_->ForcePlaintext();
 }
 
+// A fragment parser consumes no request.
+static recordreplay::ConsumedNetworkRequest ParserConsumedRequest(
+    const Document& document,
+    bool parsing_fragment) {
+  return parsing_fragment ? recordreplay::ConsumedNetworkRequest::None()
+                          : RecordReplayDocumentRequest(document);
+}
+
 bool HTMLDocumentParser::PumpTokenizer() {
   DCHECK(!GetDocument()->IsPrefetchOnly());
   DCHECK(!IsStopped());
@@ -847,6 +856,8 @@ bool HTMLDocumentParser::PumpTokenizer() {
     base::Value::Dict info;
     info.Set("kind", "documentPumpTokenizer");
     info.Set("url", GetDocument()->Url().GetString().Utf8());
+    recordreplay::SetConsumedRequestId(
+        info, ParserConsumedRequest(*GetDocument(), IsParsingFragment()));
     std::string json;
     base::JSONWriter::Write(info, &json);
     execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
@@ -1138,6 +1149,8 @@ void HTMLDocumentParser::Append(const String& input_source) {
     base::Value::Dict info;
     info.Set("kind", "documentAppendString");
     info.Set("url", GetDocument()->Url().GetString().Utf8());
+    recordreplay::SetConsumedRequestId(
+        info, ParserConsumedRequest(*GetDocument(), IsParsingFragment()));
     info.Set("length", (int)input_source.Utf8().length());
     std::string json;
     base::JSONWriter::Write(info, &json);

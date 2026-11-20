@@ -384,7 +384,7 @@ bool FetchManager::Loader::WillFollowRedirect(
 }
 
 void FetchManager::Loader::DidReceiveResponse(
-    uint64_t,
+    uint64_t identifier,
     const ResourceResponse& response) {
   // Verify that we're dealing with the URL we expect (which could be an
   // HTTPS-upgraded variant of `url_list_.back()`.
@@ -431,6 +431,7 @@ void FetchManager::Loader::DidReceiveResponse(
       execution_context_, response_type, url_list_,
       fetch_request_data_->Method(), fetch_request_data_->Credentials(),
       response);
+  response_data->SetInspectorId(identifier);
 
   FetchResponseData* tainted_response = nullptr;
   switch (response_type) {

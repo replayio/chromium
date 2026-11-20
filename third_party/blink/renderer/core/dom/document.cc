@@ -2272,6 +2272,8 @@ void Document::UpdateStyle() {
     base::Value::Dict info;
     info.Set("kind", "documentUpdateStyle");
     info.Set("url", Url().GetString().Utf8());
+    recordreplay::SetConsumedRequestId(info,
+                                       RecordReplayDocumentRequest(*this));
     std::string json;
     base::JSONWriter::Write(info, &json);
     execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
@@ -7228,6 +7230,8 @@ void Document::FinishedParsing() {
     base::Value::Dict info;
     info.Set("kind", "documentFinishedParsing");
     info.Set("url", Url().GetString().Utf8());
+    recordreplay::SetConsumedRequestId(info,
+                                       RecordReplayDocumentRequest(*this));
     std::string json;
     base::JSONWriter::Write(info, &json);
     execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));

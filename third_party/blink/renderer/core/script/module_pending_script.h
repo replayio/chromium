@@ -69,6 +69,10 @@ class CORE_EXPORT ModulePendingScript : public PendingScript {
   bool WasCanceled() const override { return false; }
 
   KURL UrlForTracing() const override { return NullURL(); }
+  // A ModuleScript carries no request identifier.
+  recordreplay::ConsumedNetworkRequest ConsumedRequest() const override {
+    return recordreplay::ConsumedNetworkRequest::Unknown();
+  }
 
   void DisposeInternal() override;
 

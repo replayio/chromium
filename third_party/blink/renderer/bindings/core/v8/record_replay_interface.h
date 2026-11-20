@@ -5,10 +5,11 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_BINDINGS_CORE_V8_RECORD_REPLAY_INTERFACE_H_
 #define THIRD_PARTY_BLINK_RENDERER_BINDINGS_CORE_V8_RECORD_REPLAY_INTERFACE_H_
 
+#include "base/record_replay_network_request.h"
+#include "base/values.h"
 #include "third_party/blink/renderer/core/dom/events/native_event_listener.h"
 #include "third_party/blink/renderer/core/events/error_event.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
-#include "base/values.h"
 #include "v8/include/v8.h"
 
 namespace blink {
@@ -102,6 +103,11 @@ class RecordReplayEventListener : public NativeEventListener {
 };
 
 int RecordReplayOnDOMMutation(Node& target, const char* type);
+
+// The request a node consuming the document's main resource consumes.
+// Loader-less documents consume none.
+recordreplay::ConsumedNetworkRequest RecordReplayDocumentRequest(
+    const Document& document);
 
 } // namespace blink
 
