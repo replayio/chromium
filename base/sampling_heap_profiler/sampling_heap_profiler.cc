@@ -168,16 +168,19 @@ std::optional<SamplingHeapProfiler::Session> SamplingHeapProfiler::Start(
   // so the draws land at different allocations than they did while recording
   // and the replay mismatches. The offset never recovers.
   //
-  // Passing the draws through would keep the recording replayable and leave the
-  // replay sampling allocations the recording never sampled. Those numbers
-  // reach no one, since nothing in blink exposes this profiler and the Memory
-  // domain's requests only arrive at a paused, diverged process, so what rules
-  // that out is cost. Replays would pay for samples nobody reads, and the
-  // pass-through region would have to cover the whole sample path, including
-  // the reads of /proc/self/maps that the first stack unwind makes.
+  // Passing the draws through would keep the recording replayable, and the
+  // samples the replay then took would describe the replay rather than the
+  // recorded run. Those numbers reach no one today. Upstream collects them as
+  // UMA telemetry, which nothing reads back out of a recording, and the one
+  // route that would show them to a user is the DevTools Memory domain, which
+  // neither a recording nor a replay asks for. What rules the pass-through out
+  // is cost: replays would pay for samples nobody reads, and the region would
+  // have to cover the whole sample path, including the reads of
+  // /proc/self/maps that the first stack unwind makes.
   //
-  // A recording carries no native sampling profile as a result, and
-  // GetSamples() returns none, as it does in a process that never profiled.
+  // So a recording carries no native sampling profile. GetSamples() returns
+  // none, as in a process that never profiled, and Memory.startSampling starts
+  // nothing while recording or replaying.
   if (recordreplay::IsRecordingOrReplaying()) {
     return std::nullopt;
   }
