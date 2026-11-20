@@ -27,7 +27,74 @@
 
 #ifndef _WIN32
 #include <sys/types.h>
+#include <dlfcn.h>
+#else
+#include <windows.h>
 #endif
+
+namespace {
+
+void* LookupRecordReplaySymbol(const char* name) {
+#ifndef _WIN32
+  void* fnptr = dlsym(RTLD_DEFAULT, name);
+#else
+  HMODULE module = GetModuleHandleA("windows-recordreplay.dll");
+  void* fnptr = module ? (void*)GetProcAddress(module, name) : nullptr;
+#endif
+  return fnptr ? fnptr : reinterpret_cast<void*>(1);
+}
+
+// Keeps the clock reads a wait deadline is built from out of the recording.
+// They must not be recorded calls for two reasons: a pending deadline is
+// re-read on every retry of the wait, on whichever thread happens to contend,
+// so how many reads happen is contention and does not replay; and a replay
+// serves a timed futex wait against the host clock, so a deadline built from a
+// replayed clock value would be a recording-era timestamp and the wait would
+// return at once. Passing a read through does not bypass the continuation
+// policy the replay has for that clock, which is applied to a passed-through
+// read as well.
+//
+// The bindings are looked up by name because abseil cannot depend on //base,
+// where recordreplay::AutoPassThroughEvents lives. absl's other fork hunks do
+// the same, in sysinfo.cc, thread_identity.cc and synchronization/mutex.cc.
+struct RecordReplayAutoPassThroughEvents {
+  RecordReplayAutoPassThroughEvents() {
+    // Both bindings are looked up before events are passed through, because a
+    // lookup made once they are finds nothing: the driver's own interception of
+    // dlsym is skipped then, and the real dlsym cannot see a library opened
+    // without RTLD_GLOBAL. Looking the pair up together is what keeps the begin
+    // and the end balanced, since an end that went missing would leave the
+    // thread passing events through, and recording nothing, for good.
+    //
+    // They are kept for the life of the process, unlike the pair in
+    // base/record_replay_inline.h, which is looked up on every use: a wait path
+    // cannot afford a dlsym per deadline. The cost is that a process whose
+    // first deadline is computed inside an existing pass-through region leaves
+    // this region inert, with its reads recorded, as they are without this
+    // change.
+    static void* begin_fn =
+        LookupRecordReplaySymbol("RecordReplayBeginPassThroughEvents");
+    static void* end_fn =
+        LookupRecordReplaySymbol("RecordReplayEndPassThroughEvents");
+    end = (begin_fn != reinterpret_cast<void*>(1) &&
+           end_fn != reinterpret_cast<void*>(1))
+              ? end_fn
+              : nullptr;
+    if (end) {
+      reinterpret_cast<void (*)()>(begin_fn)();
+    }
+  }
+
+  ~RecordReplayAutoPassThroughEvents() {
+    if (end) {
+      reinterpret_cast<void (*)()>(end)();
+    }
+  }
+
+  void* end;
+};
+
+}  // namespace
 
 namespace absl {
 ABSL_NAMESPACE_BEGIN
@@ -68,6 +135,8 @@ KernelTimeout::KernelTimeout(absl::Time t) {
 }
 
 KernelTimeout::KernelTimeout(absl::Duration d) {
+  RecordReplayAutoPassThroughEvents pass_through;
+
   // `absl::InfiniteDuration()` is a common "no timeout" value and cheaper to
   // compare than convert.
   if (d == absl::InfiniteDuration()) {
@@ -95,6 +164,8 @@ KernelTimeout::KernelTimeout(absl::Duration d) {
 }
 
 int64_t KernelTimeout::MakeAbsNanos() const {
+  RecordReplayAutoPassThroughEvents pass_through;
+
   if (!has_timeout()) {
     return kMaxNanos;
   }
@@ -122,6 +193,8 @@ int64_t KernelTimeout::MakeAbsNanos() const {
 }
 
 int64_t KernelTimeout::InNanosecondsFromNow() const {
+  RecordReplayAutoPassThroughEvents pass_through;
+
   if (!has_timeout()) {
     return kMaxNanos;
   }
@@ -143,6 +216,8 @@ struct timespec KernelTimeout::MakeRelativeTimespec() const {
 
 #ifndef _WIN32
 struct timespec KernelTimeout::MakeClockAbsoluteTimespec(clockid_t c) const {
+  RecordReplayAutoPassThroughEvents pass_through;
+
   if (!has_timeout()) {
     return absl::ToTimespec(absl::Nanoseconds(kMaxNanos));
   }

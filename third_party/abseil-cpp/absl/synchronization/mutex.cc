@@ -2620,6 +2620,10 @@ void CondVar::EnableDebugLog(const char* name) {
 
 // Remove thread s from the list of waiters on this condition variable.
 void CondVar::Remove(PerThreadSynch* s) {
+  // Removing a waiter spins and sleeps the way CondVarEnqueue does, for the
+  // reason given on CondVar::Signal.
+  RecordReplayAutoDisallowEvents disallow("absl::CondVar::Remove");
+
   SchedulingGuard::ScopedDisable disable_rescheduling;
   intptr_t v;
   int c = 0;
@@ -2667,6 +2671,11 @@ void CondVar::Remove(PerThreadSynch* s) {
 // importantly) after any call to an external routine that might re-enter the
 // mutex code.
 static void CondVarEnqueue(SynchWaitParams* waitp) {
+  // Queueing on a condition variable spins against the threads signalling it
+  // and the other threads queueing, and sleeps between attempts. CondVar::Signal
+  // says why that sleep must not be recorded.
+  RecordReplayAutoDisallowEvents disallow("absl::CondVarEnqueue");
+
   // This thread might be transferred to the Mutex queue by Fer() when
   // we are woken.  To make sure that is what happens, Enqueue() doesn't
   // call CondVarEnqueue() again but instead uses its normal code.  We
@@ -2769,6 +2778,14 @@ bool CondVar::WaitCommon(Mutex* mutex, KernelTimeout t) {
 }
 
 void CondVar::Signal() {
+  // Signalling spins for the condition variable's own lock and sleeps between
+  // attempts, so whether it sleeps at all, and how often, is contention. That
+  // sleep is a recorded call, and every notify in V8 arrives here, because
+  // v8::base::ConditionVariable is an absl::CondVar. A replay reaching the
+  // sleep where the recording had moved on diverges on that thread's event
+  // stream, so the region passes the sleep through instead.
+  RecordReplayAutoDisallowEvents disallow("absl::CondVar::Signal");
+
   SchedulingGuard::ScopedDisable disable_rescheduling;
   ABSL_TSAN_MUTEX_PRE_SIGNAL(nullptr, 0);
   intptr_t v;
@@ -2808,6 +2825,9 @@ void CondVar::Signal() {
 }
 
 void CondVar::SignalAll() {
+  // This spins and sleeps the way CondVar::Signal does.
+  RecordReplayAutoDisallowEvents disallow("absl::CondVar::SignalAll");
+
   ABSL_TSAN_MUTEX_PRE_SIGNAL(nullptr, 0);
   intptr_t v;
   int c = 0;
