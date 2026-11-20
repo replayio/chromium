@@ -7,6 +7,8 @@
 
 // Methods for notifying the recorder about activity related to network requests.
 
+#include <string>
+
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "base/record_replay.h"
 
@@ -50,6 +52,11 @@ void OnNetworkFinishLoading(uint64_t inspector_id,
                                int64_t decoded_body_length);
 
 void OnNetworkFail(uint64_t inspector_id, const blink::WebURLError& error);
+
+// The requestId of the networkReceiveData nodes of the request with this
+// inspector identifier, for the nodes consuming its response. Absent before
+// its first one.
+absl::optional<std::string> NetworkReceiveDataRequestId(uint64_t inspector_id);
 
 }  // namespace recordreplay
 

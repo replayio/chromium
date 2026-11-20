@@ -37,6 +37,7 @@
 #include "third_party/blink/public/common/loader/loading_behavior_flag.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/task_type.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
 #include "third_party/blink/renderer/core/css/media_values_cached.h"
 #include "third_party/blink/renderer/core/css/style_engine.h"
 #include "third_party/blink/renderer/core/dom/document_fragment.h"
@@ -837,6 +838,22 @@ void HTMLDocumentParser::ForcePlaintextForTextDocument() {
   token_producer_->ForcePlaintext();
 }
 
+// The request of the document's main resource, whose bytes a parser of the
+// document consumes. Fragments and loader-less documents consume no request.
+static void SetDependencyGraphRequestId(base::Value::Dict& info,
+                                        Document* document,
+                                        bool parsing_fragment) {
+  DocumentLoader* loader = document->Loader();
+  if (parsing_fragment || !loader) {
+    return;
+  }
+  absl::optional<std::string> request_id =
+      recordreplay::NetworkReceiveDataRequestId(loader->MainResourceIdentifier());
+  if (request_id) {
+    info.Set("requestId", *request_id);
+  }
+}
+
 bool HTMLDocumentParser::PumpTokenizer() {
   DCHECK(!GetDocument()->IsPrefetchOnly());
   DCHECK(!IsStopped());
@@ -847,6 +864,7 @@ bool HTMLDocumentParser::PumpTokenizer() {
     base::Value::Dict info;
     info.Set("kind", "documentPumpTokenizer");
     info.Set("url", GetDocument()->Url().GetString().Utf8());
+    SetDependencyGraphRequestId(info, GetDocument(), IsParsingFragment());
     std::string json;
     base::JSONWriter::Write(info, &json);
     execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
@@ -1138,6 +1156,7 @@ void HTMLDocumentParser::Append(const String& input_source) {
     base::Value::Dict info;
     info.Set("kind", "documentAppendString");
     info.Set("url", GetDocument()->Url().GetString().Utf8());
+    SetDependencyGraphRequestId(info, GetDocument(), IsParsingFragment());
     info.Set("length", (int)input_source.Utf8().length());
     std::string json;
     base::JSONWriter::Write(info, &json);

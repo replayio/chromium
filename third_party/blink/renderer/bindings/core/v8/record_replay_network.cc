@@ -73,6 +73,13 @@ GetReplayNetworkRequestStates() {
   return *gReplayNetworkRequestStates;
 }
 
+// By inspector identifier as Blink passes it: the requestId of the request's
+// networkReceiveData nodes. Kept past finish: consumers run after it.
+static std::unordered_map<uint64_t, std::string>& GetReceiveDataRequestIds() {
+  static auto* request_ids = new std::unordered_map<uint64_t, std::string>();
+  return *request_ids;
+}
+
 static uint64_t RecordReplayNetworkInspectorId(uint64_t inspector_id) {
   // Inspector identifiers can vary when replaying due to differences in inspector
   // behavior. Make sure the identifiers we report to the recorder are consistent
@@ -477,6 +484,7 @@ void OnNetworkReceiveData(uint64_t inspector_id, const char* data, int length) {
     std::string json;
     base::JSONWriter::Write(info, &json);
     recordreplay::NewDependencyGraphNode(json.c_str());
+    GetReceiveDataRequestIds()[inspector_id] = requestId;
   }
 
   base::DictionaryValue dict;
@@ -548,6 +556,15 @@ void OnNetworkFail(uint64_t inspector_id, const blink::WebURLError& error) {
   dict.SetString("requestFailedReason", std::move(reason));
   BrowserEvent("Network.DidFailLoading", dict);
   RecordReplayNetworkClearRequestState(inspector_id);
+}
+
+absl::optional<std::string> NetworkReceiveDataRequestId(uint64_t inspector_id) {
+  auto& request_ids = GetReceiveDataRequestIds();
+  auto it = request_ids.find(inspector_id);
+  if (it == request_ids.end()) {
+    return absl::nullopt;
+  }
+  return it->second;
 }
 
 }  // namespace recordreplay
