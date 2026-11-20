@@ -24,8 +24,9 @@
 # mirrors of the repositories DEPS pins, which every version's checkout clones
 # its dependencies from. It holds git objects, which are append-only and say
 # nothing about a version, so sharing it costs nothing in isolation and saves
-# most of what a checkout would otherwise take (see prepare). `wipe` cannot
-# touch it -- a key may not begin with a dot.
+# most of what a checkout would otherwise take (see prepare). A dependency
+# borrows the mirror's objects, so every key needs it. `wipe` cannot touch it --
+# a key may not begin with a dot.
 #
 # <checkouts dir> is $CHROMIUM_CHECKOUTS_DIR, or ~/chromium-checkouts. The
 # container mounts <key>/ at /chromium whatever the key is, so every path a
@@ -37,16 +38,27 @@
 #   checkout.sh git-cache           where the shared DEPS mirrors live
 #   checkout.sh require [key]       fail unless that key is prepared
 #   checkout.sh sync                fetch and reset this key's tree to the build's
-#                                   commit, and its DEPS'd Replay forks with it
+#                                   commit, and its DEPS'd Replay forks with it;
+#                                   prepare the key first if it has no checkout
+#   checkout.sh backend-rev [key]   the backend commit `sync` checked out
 #   checkout.sh list [--sizes]      the keys that are prepared here
 #   checkout.sh adopt <dir> [key]   make an existing checkout a key's (migration)
 #   checkout.sh prepare [--from <key>]
-#                                   create this key's checkout
+#                                   create this key's checkout, unless it has one
 #   checkout.sh wipe <key>          remove everything that key has
 #   checkout.sh wipe-out <key>      remove only that key's build outputs
+#   checkout.sh reclaim             remove least recently used state until the
+#                                   volume has enough room (see reclaim)
+#   checkout.sh use-lock [key]      the lock a job holds, shared, while it uses
+#                                   that key (see use)
+#   checkout.sh image-used <ref>    record that a job uses that image now
 #
-# Nothing here writes outside the key's own directory, so a build cannot damage
-# another version's state, and `wipe` is the whole recovery procedure.
+# A job writes into its own key's directory, gclient's mirrors in .git-cache,
+# which only ever gain objects, and the locks and use records next to the keys.
+# Its one write to other state is reclaim: when the volume runs low, the least
+# recently used keys and images that no job is using are removed whole. Another
+# version then costs its next job a prepare, never a damaged tree, and `wipe` is
+# the whole recovery procedure.
 set -euo pipefail
 
 # Bumped when the layout changes in a way that makes older directories
@@ -69,16 +81,10 @@ fork_url() {
   echo "${CHROMIUM_FORK_URL:-git@github.com:replayio/chromium.git}"
 }
 
-# The checkout every build shared before this existed, and still shares with
-# branches that have not been rebased onto it.
-legacy_checkout() {
-  echo "${CHROMIUM_LEGACY_CHECKOUT:-$HOME/chromium}"
-}
-
 # The milestone of the tree this script came from. chrome/VERSION is in the tree
-# being built, so a job reads it from the small clone it bootstrapped these
-# scripts with, before any big checkout is involved: `git show` works there even
-# though chrome/ is not checked out.
+# being built, so a job reads it from the small clone these scripts came from,
+# before any big checkout is involved: the Chromium step checks the file out
+# with them, and in a sparse clone without it `git show` still works.
 version_major() {
   local v
   if [ -f "$repo/chrome/VERSION" ]; then
@@ -105,32 +111,21 @@ key() {
   if [ -z "$k" ]; then
     k=m$(version_major)
   fi
-  if ! [[ $k =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+  if ! valid_key "$k"; then
     echo "checkout: '$k' is not a usable key (letters, digits, . _ - only)" >&2
     exit 1
   fi
   echo "$k"
 }
 
-root() {
-  echo "$(checkouts_dir)/${1:-$(key)}"
+# Never beginning with a dot, so nothing a key owns can be named like the shared
+# state next to the keys.
+valid_key() {
+  [[ $1 =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]
 }
 
-# Any checkout that already has the fork's history, to clone it from. Objects
-# are objects whatever version checked them out, and a local clone hardlinks
-# them.
-nearest_src() {
-  local d src
-  d=$(checkouts_dir)
-  for src in "$d"/*/src; do
-    if [ -d "$src/.git" ]; then
-      echo "$src"
-      return
-    fi
-  done
-  if [ -d "$(legacy_checkout)/src/.git" ]; then
-    echo "$(legacy_checkout)/src"
-  fi
+root() {
+  echo "$(checkouts_dir)/${1:-$(key)}"
 }
 
 stamp_file() {
@@ -147,60 +142,20 @@ created_by=$how
 EOF
 }
 
-# A key with no directory of its own, whose milestone is the one the shared
-# checkout holds, takes that checkout over: a symlink, nothing copied, nothing
-# moved, so branches that still build in it keep working. This is how the
-# current milestone arrives here without anyone doing anything by hand. A
-# milestone nobody has checked out on this machine is a different matter, since
-# making one means gclient and the 140 repositories DEPS pins (see prepare).
-link_legacy_checkout() {
-  local k=$1 r=$2 legacy major
-  legacy=$(legacy_checkout)
-  if [ ! -d "$legacy/src/.git" ]; then
-    return 1
-  fi
-  major=$(sed -n 's/^MAJOR=//p' "$legacy/src/chrome/VERSION" 2>/dev/null)
-  if [ -z "$major" ] || [ "$k" != "m$major" ]; then
-    return 1
-  fi
-  mkdir -p "$(dirname "$r")"
-  if ! ln -s "$legacy" "$r" 2>/dev/null; then
-    # Another job got there first, which is all this needed.
-    [ -d "$r/src/.git" ]
-    return
-  fi
-  mkdir -p "$r/home"
-  write_stamp "$k" "linked the shared checkout at $legacy"
-  # stderr: require's stdout is the path its callers capture.
-  echo "checkout: '$k' -> $legacy, the checkout builds shared before there was" >&2
-  echo "one per version. Nothing was copied or moved: branches that still build" >&2
-  echo "there keep working, and 'checkout.sh adopt --move' ends that when they" >&2
-  echo "are gone." >&2
-}
-
 # Prints the key's directory and nothing else: callers capture it.
 require() {
   local k=${1:-$(key)} r
   r=$(root "$k")
-  if [ ! -d "$r/src/.git" ]; then
-    link_legacy_checkout "$k" "$r" || true
+  # A key is that literal directory. A symlink is how the retired shared
+  # checkout was claimed by whichever milestone built last (#1637, build 5567):
+  # refuse one rather than build in a tree that belongs to another version.
+  if [ -L "$r" ]; then
+    echo "checkout: $r is a symlink to $(readlink "$r"), not a checkout of its own." >&2
+    echo "Remove the link and prepare '$k': checkout.sh prepare" >&2
+    exit 1
   fi
   if [ ! -d "$r/src/.git" ]; then
-    cat >&2 <<EOF
-checkout: no Chromium checkout for key '$k' at $r
-
-This machine has no tree for that Chromium version, and a build will not make
-one or borrow another version's: a Chromium checkout is the fork plus the 140
-repositories its DEPS pin, which is gclient's job and an hour of it, not a git
-clone. Make it once and every build of that version has it:
-
-  CHROMIUM_REVISION=<commit> replay_build_scripts/ci/checkout.sh prepare --from <key>
-  CHROMIUM_REVISION=<commit> replay_build_scripts/ci/checkout.sh prepare
-  replay_build_scripts/ci/checkout.sh adopt <dir> $k   # a tree that already exists
-
-Prepared keys here: $(ls -1 "$(checkouts_dir)" 2>/dev/null | tr '\n' ' ')
-Shared checkout: $(legacy_checkout), milestone $(sed -n 's/^MAJOR=/m/p' "$(legacy_checkout)/src/chrome/VERSION" 2>/dev/null || echo unknown)
-EOF
+    echo "checkout: no Chromium checkout for key '$k' at $r: checkout.sh sync or prepare makes it" >&2
     exit 1
   fi
   local have
@@ -210,6 +165,8 @@ EOF
     echo "Wipe it and prepare it again: checkout.sh wipe $k" >&2
     exit 1
   fi
+  # The stamp's mtime is when a job last used the key: reclaim's recency.
+  touch -c "$(stamp_file "$k")"
   mkdir -p "$r/home"
   echo "$r"
 }
@@ -235,17 +192,45 @@ sync() {
     echo "checkout: refusing to build 'HEAD': name the commit or branch to build" >&2
     exit 1
   fi
+  use "$k"
+  ensure_prepared "$k" "$commit"
+  reclaim "$k"
   r=$(require "$k")
   echo "--- checkout '$k' at $r -> $commit"
   # The fork goes to the commit being built, the Replay forks of v8, skia,
   # webrtc and boringssl to their DEPS revisions, and the backend to
-  # REPLAY_BACKEND_REV; everything else in the tree is what `prepare` synced.
-  # (gclient sync is not run per job: this fork is too old for it, see
-  # common.mjs.)
-  CHROMIUM_SRC_DIR="$r/src" \
+  # REPLAY_BACKEND_REV. The backend pin is the commit's file, never env: a
+  # build's inputs must not depend on how it was started.
+  env -u REPLAY_BACKEND_REV \
+    CHROMIUM_SRC_DIR="$r/src" \
     RECORD_REPLAY_BACKEND_DIR="$r/backend" \
     CHROMIUM_REVISION="$commit" \
-    node "$dir/sync-repos.mjs"
+    "$dir/in-tools-image.sh" "$r" node "$dir/sync-repos.mjs"
+  # Then everything else DEPS names, at this commit's revisions. src is already
+  # there, so gclient reads the DEPS of the commit being built.
+  #
+  # Per build, not once when the key was prepared. A key outlives the commits
+  # built in it, so a commit that moves a pin other than the four forks, adds or
+  # drops a dependency, or changes a hook has to take effect. Until now none of
+  # that did: the checkout kept whatever the first build on that host resolved,
+  # two hosts could build one commit against different dependencies, and the
+  # pool's daily image spread one host's state to new ones.
+  #
+  # The reason this was once skipped does not hold here. #1107 found that
+  # `gclient sync -D` will not move a dependency back to an older revision "if
+  # the sha exists on the currently checked out branch" -- which is a dependency
+  # whose HEAD is a named branch, as the hand-managed tree of the time had.
+  # gclient leaves every checkout it creates detached, and for a detached HEAD
+  # it checks the revision out in either direction (depot_tools gclient_scm.py,
+  # case 0 of GitWrapper.update). src is the one thing it would not move, and it
+  # is unmanaged here and synced above.
+  echo "--- gclient sync and hooks"
+  "$dir/build-in-container.sh" --root "$r" -- \
+    bash -c 'cd /chromium && gclient sync -D --with_branch_heads && gclient runhooks'
+}
+
+backend_rev() {
+  git -C "$(require "${1:-}")/backend" rev-parse HEAD
 }
 
 list() {
@@ -267,19 +252,19 @@ list() {
       size=" src=$(du -sh "$d/$k/src" 2>/dev/null | cut -f1)"
       size="$size out=$(du -sh "$d/$k/src/out" 2>/dev/null | cut -f1)"
     fi
-    echo "$k  HEAD=$head  $(sed -n 's/^created=/created /p' "$d/$k/.replay-checkout")$size"
+    echo "$k  HEAD=$head  $(sed -n 's/^created=/created /p' "$stamp")  used $(date -u -d "@$(last_used "$k")" +%Y-%m-%dT%H:%M:%SZ)$size"
   done
 }
 
 # Migration: the checkout that every build has been sharing becomes the
 # milestone's own.
 #
-# By default the key becomes a symlink to it, because .buildkite/pipeline.yml is
-# fetched per branch: every branch that has not been rebased onto this change
-# still runs the old step, which cd's into /home/ubuntu/chromium/src and builds
-# there. A symlink lets both kinds of job build the same tree, so this can land
-# without a flag day -- and for the same reason the old build image and
-# /home/ubuntu/depot_tools have to stay until those branches are gone.
+# By default the key becomes a symlink to it, so that the step from before this
+# change, which cd's into /home/ubuntu/chromium/src and builds there, and the
+# new one build the same tree. chromium-build now runs each commit's own
+# pipeline.yml and refuses commits without ci/ (its pipeline settings), so only
+# other ways of running the old step still need the link, the old build image
+# and /home/ubuntu/depot_tools.
 #
 # --move moves the directory instead, for when nothing builds the old way any
 # more. Either way it costs nothing and is undone by moving it back.
@@ -319,40 +304,198 @@ adopt() {
   echo "checkout: '$k' is $r -> $(readlink -f "$r")"
 }
 
-prepare() {
-  local from="" k r
-  while [ $# -gt 0 ]; do
-    case $1 in
-      --from) from=${2:?--from needs a key}; shift 2 ;;
-      *) echo "usage: $0 prepare [--from <key>]" >&2; exit 1 ;;
-    esac
+# The stamp is written last, so a key without one has no checkout a build can
+# use: nothing is there, or a prepare that did not finish left it.
+unprepared() {
+  [ ! -L "$(root "$1")" ] && [ ! -e "$(stamp_file "$1")" ]
+}
+
+# One prepare of a key at a time on this machine: a second job of that version
+# waits for the first one's, then builds in it. The lock is next to the keys,
+# named as no key can be (a key may not begin with a dot).
+ensure_prepared() {
+  local k=$1 lock
+  unprepared "$k" || return 0
+  mkdir -p "$(checkouts_dir)"
+  exec {lock}>"$(checkouts_dir)/.$k.lock"
+  if ! flock -n "$lock"; then
+    echo "--- waiting for another job's prepare of '$k'"
+    flock "$lock"
+  fi
+  if unprepared "$k"; then
+    prepare_key "$@"
+  fi
+  exec {lock}>&-
+}
+
+# A job holds its key's use lock, shared, for as long as it uses the key: the
+# pipeline step for the whole job, and `sync`, `prepare` and
+# build-in-container.sh for their own run. Removing a key's state takes it
+# exclusively and gives up if anyone holds it, so nothing removes a tree that a
+# job is using.
+use_lock() {
+  mkdir -p "$(checkouts_dir)"
+  echo "$(checkouts_dir)/.$1.use"
+}
+
+# use <key>: hold <key>'s use lock until this process exits.
+use() {
+  local fd
+  exec {fd}>"$(use_lock "$1")"
+  if ! flock -n -s "$fd"; then
+    echo "--- waiting for another job's removal of '$1'"
+    flock -s "$fd"
+  fi
+}
+
+# unused <key> <command...>: run the command holding <key>'s use lock
+# exclusively, or fail without running it if a job is using the key.
+unused() {
+  local k=$1 fd status=0
+  shift
+  exec {fd}>"$(use_lock "$k")"
+  if ! flock -n -x "$fd"; then
+    echo "checkout: a job is using '$k'; leaving it" >&2
+    exec {fd}>&-
+    return 1
+  fi
+  "$@" || status=$?
+  exec {fd}>&-
+  return "$status"
+}
+
+# Out of the way first, in one rename: a removal cut short leaves no half-removed
+# key for the next job of any scheme to trip over, only trash, which reclaim
+# removes first.
+remove_key() {
+  local r trash
+  r=$(root "$1")
+  echo "--- removing $r"
+  if [ -L "$r" ]; then
+    rm -f "$r"
+    return
+  fi
+  trash=$(mktemp -d "$(checkouts_dir)/.removing.XXXXXX")
+  mv "$r" "$trash/" && rm -rf "$trash"
+}
+
+# When a job last used a key, in epoch seconds: its stamp's mtime (require
+# touches it), or the newest file at the top of its out dir, which the build of
+# any scheme writes (its logs). 0 if there is neither.
+last_used() {
+  local r t
+  r=$(root "$1")
+  t=$({ find "$(stamp_file "$1")" "$r/src/out/Release" -maxdepth 1 -printf '%T@\n' 2>/dev/null || true; } |
+    sort -n | tail -1)
+  t=${t%.*}
+  echo "${t:-0}"
+}
+
+# The space a host keeps free, in GB: one more version's checkout and its build.
+min_free_gb() {
+  echo "${CHROMIUM_CHECKOUTS_MIN_FREE_GB:-150}"
+}
+
+free_gb() {
+  df -BG --output=avail "$(checkouts_dir)" | tail -1 | tr -dc 0-9
+}
+
+# When a job last used an image (build-image.sh's `ensure`).
+image_mark() {
+  echo "$(checkouts_dir)/.images/$1"
+}
+
+image_used() {
+  local mark
+  mark=$(image_mark "${1:?usage: $0 image-used <image ref>}")
+  mkdir -p "$(dirname "$mark")"
+  touch "$mark"
+}
+
+# lru [<key>]: the state reclaim may remove, least recently used first, one
+# "<last used, epoch seconds> key|image|trash <key, image ref or path>" per
+# line. Neither <key> nor this tree's images are listed: this job is about to
+# use them. Trash, and a key or image with no record of use, sort first. Images
+# are this script line's (build-image.sh); other lines' are theirs to manage.
+lru() {
+  local own=${1:-} r k
+  for r in "$(checkouts_dir)"/.removing.*; do
+    if [ -e "$r" ]; then
+      echo "0 trash $r"
+    fi
   done
-  k=$(key)
-  r=$(root "$k")
-  if [ -e "$r" ] || [ -L "$r" ]; then
-    echo "checkout: $r already exists" >&2
-    exit 1
-  fi
-  local commit=${CHROMIUM_REVISION:-}
-  if [ -z "$commit" ]; then
-    echo "checkout: set CHROMIUM_REVISION to the commit or branch '$k' is for" >&2
-    echo "(the fork's default branch is the current milestone, which is not" >&2
-    echo "what a checkout for another one should hold)" >&2
-    exit 1
-  fi
-  # A version costs 60-115 GB here, on the volume every other version and the
-  # backend's C++ test jobs share, so say so before taking it.
-  local free
-  free=$(df -BG --output=avail "$(dirname "$r")" 2>/dev/null | tail -1 | tr -dc 0-9)
-  if [ -n "$free" ]; then
-    echo "--- $free GB free on $(dirname "$r")"
-    if [ "$free" -lt 150 ]; then
-      echo "checkout: that is not much for a Chromium checkout and its build;" >&2
-      echo "wipe a key that is no longer in flight first (checkout.sh list)." >&2
-      echo "Set CHROMIUM_CHECKOUT_FORCE=1 to prepare anyway." >&2
-      if [ -z "${CHROMIUM_CHECKOUT_FORCE:-}" ]; then
-        exit 1
+  for r in "$(checkouts_dir)"/*/; do
+    r=${r%/}
+    k=${r##*/}
+    # A symlinked key owns nothing to free (adopt).
+    if [ -L "$r" ] || ! valid_key "$k" || [ "$k" = "$own" ]; then
+      continue
+    fi
+    echo "$(last_used "$k") key $k"
+  done
+  local keep=("$("$dir/build-image.sh" ref)" "$("$dir/build-image.sh" --tools ref)")
+  local repo ref
+  for repo in "${keep[@]%:*}"; do
+    while read -r ref; do
+      if [ "$ref" != "${keep[0]}" ] && [ "$ref" != "${keep[1]}" ]; then
+        echo "$(stat -c %Y "$(image_mark "$ref")" 2>/dev/null || echo 0) image $ref"
       fi
+    done < <(docker image ls --format '{{.Repository}}:{{.Tag}}' "$repo")
+  done
+}
+
+# reclaim [<key>]: while the volume the keys share has less than min_free_gb
+# free, remove the least recently used key or image that no job is using. A
+# key's use is last_used, an image's its mark (image-used).
+# One reclaim at a time on this machine, so that two jobs short of the same
+# space do not both remove state for it.
+reclaim() {
+  local own=${1:-} min free lock kind id
+  mkdir -p "$(checkouts_dir)"
+  min=$(min_free_gb)
+  free=$(free_gb)
+  if [ "$free" -ge "$min" ]; then
+    return 0
+  fi
+  exec {lock}<"$(checkouts_dir)"
+  flock "$lock"
+  while read -r _ kind id; do
+    free=$(free_gb)
+    if [ "$free" -ge "$min" ]; then
+      break
+    fi
+    echo "--- $free GB free on $(checkouts_dir), below $min: removing $kind '$id', least recently used first"
+    case $kind in
+      trash) rm -rf "$id" || true ;;
+      key) unused "$id" remove_key "$id" || true ;;
+      # docker refuses an image that a container uses.
+      image) docker image rm "$id" && rm -f "$(image_mark "$id")" || true ;;
+    esac
+  done < <(lru "$own" | sort -n)
+  exec {lock}<&-
+}
+
+# prepare_key <key> <commit> [<from key>]: the fork at the commit, everything
+# its DEPS pin, the backend, and last the stamp. Writes into the key's
+# directory only, apart from gclient's mirrors.
+prepare_key() {
+  local k=$1 commit=$2 from=${3:-} r
+  r=$(root "$k")
+  if [ -e "$r" ]; then
+    echo "--- removing $r: a prepare that did not finish left it"
+    rm -rf "$r"
+  fi
+  # A version takes tens of GB here, on the volume every other version shares.
+  reclaim "$k"
+  local free
+  free=$(free_gb)
+  echo "--- $free GB free on $(checkouts_dir)"
+  if [ "$free" -lt "$(min_free_gb)" ]; then
+    echo "checkout: that is not enough for a Chromium checkout and its build," >&2
+    echo "and reclaim found nothing more that no job is using (checkout.sh list)." >&2
+    echo "Set CHROMIUM_CHECKOUT_FORCE=1 to prepare anyway." >&2
+    if [ -z "${CHROMIUM_CHECKOUT_FORCE:-}" ]; then
+      exit 1
     fi
   fi
   mkdir -p "$r"
@@ -372,8 +515,8 @@ prepare() {
     # overwrites one in place would otherwise write into the version this was
     # copied from. Every .git is hardlinked instead (--link-dest), because git
     # only ever adds pack files and never rewrites one, so two checkouts can
-    # share the same inodes safely -- which is what makes this cheap: the
-    # fork's object store alone is 58 GB, and hardlinking it costs megabytes.
+    # share the same inodes safely -- which is what makes this cheap: a fork
+    # with its history is 58 GB, and hardlinking it costs megabytes.
     echo "--- copying $src -> $r: working files"
     rsync -a --delete --exclude '.git/' \
       --exclude '/src/out' --exclude '/home' --exclude '/.replay-checkout' \
@@ -382,61 +525,97 @@ prepare() {
     rsync -a --link-dest="$src" --include '*/' --include '.git/***' --exclude '*' \
       "$src/" "$r/"
   else
-    # A local clone hardlinks the pack files, so taking the fork's history from
-    # a checkout that already has it costs about a second and a couple of
-    # megabytes instead of 58 GB and a fetch of the whole repository.
-    local near
-    near=$(nearest_src)
-    if [ -n "$near" ]; then
-      echo "--- cloning the fork from $near (hardlinked objects)"
-      git clone -q --no-checkout "$near" "$r/src"
-      git -C "$r/src" remote set-url origin "$(fork_url)"
-    else
-      echo "--- cloning the fork from $(fork_url)"
-      git clone -q --no-checkout "$(fork_url)" "$r/src"
-    fi
-    cat > "$r/.gclient" <<'EOF'
+    git init -q "$r/src"
+    git -C "$r/src" remote add origin "$(fork_url)"
+    write_gclient "$r/.gclient"
+  fi
+  # One commit, no history, unless the copy has it: the fork's history is 58 GB
+  # and a build reads none of it.
+  local depth=(--depth 1)
+  if [ -n "$from" ] && [ "$(git -C "$r/src" rev-parse --is-shallow-repository)" = false ]; then
+    depth=()
+  fi
+  echo "--- fetching $commit from $(fork_url)"
+  git -C "$r/src" fetch "${depth[@]}" origin "$commit"
+  git -C "$r/src" checkout -q -f --detach FETCH_HEAD
+  if [ ! -d "$r/backend" ]; then
+    echo "--- cloning replayio/backend into $r/backend"
+    git clone git@github.com:replayio/backend.git "$r/backend"
+  fi
+  # In the build image: depot_tools is the pinned one, and the generated
+  # configs get the paths a build runs at. GIT_CACHE_PATH (build-in-container.sh)
+  # is gclient's mirror of every DEPS repository, shared by all versions: once
+  # any version has a repository, a checkout clones it from disk, borrowing the
+  # mirror's objects.
+  echo "--- gclient sync and hooks"
+  "$dir/build-in-container.sh" --root "$r" -- \
+    bash -c 'cd /chromium && gclient sync -D --with_branch_heads && gclient runhooks'
+  mkdir -p "$r/home"
+  write_stamp "$k" "prepare${from:+ --from $from} $commit"
+  trap - EXIT
+}
+
+# The gclient solution of a checkout prepared from nothing.
+# - checkout_traffic_annotation_tools gates a hook that downloads a prebuilt
+#   auditor for the network-annotations presubmit. The object m108 pins is gone
+#   from gs://chromium-tools-traffic_annotation -- it 404s, while the other
+#   buckets the same hook reads answer 200 -- and gclient stops at the first
+#   hook that fails, so everything after it is skipped. Nothing in the chrome
+#   target wants that binary. Upstream dropped the hook after m108, and gclient
+#   ignores a custom_var the DEPS no longer declare (merge_vars in gclient.py),
+#   so this stays correct as the fork moves on.
+# - lastchange.py stamps the newest commit with a Change-Id trailer, which a
+#   one-commit fetch of a Replay commit does not have, and m108's then fails on
+#   the empty `git log`. --filter= stamps the commit being built, as the 157
+#   checkouts do. A custom hook replaces the DEPS hook of its name.
+write_gclient() {
+  cat > "$1" <<'EOF'
 solutions = [
 {
    "name": "src",
    "url": "https://chromium.googlesource.com/chromium/src.git",
    "managed": False,
    "custom_deps": {},
-   "custom_vars": {},
+   "custom_vars": {"checkout_traffic_annotation_tools": False},
+   "custom_hooks": [
+     {
+       "name": "lastchange",
+       "pattern": ".",
+       "action": ["python3", "src/build/util/lastchange.py", "--filter=",
+                  "-o", "src/build/util/LASTCHANGE"],
+     },
+     {
+       "name": "gpu_lists_version",
+       "pattern": ".",
+       "action": ["python3", "src/build/util/lastchange.py", "--filter=",
+                  "-m", "GPU_LISTS_VERSION", "--revision-id-only",
+                  "--header", "src/gpu/config/gpu_lists_version.h"],
+     },
+   ],
 },
 ]
 EOF
+}
+
+prepare() {
+  local from=""
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --from) from=${2:?--from needs a key}; shift 2 ;;
+      *) echo "usage: $0 prepare [--from <key>]" >&2; exit 1 ;;
+    esac
+  done
+  local commit=${CHROMIUM_REVISION:-}
+  if [ -z "$commit" ]; then
+    echo "checkout: set CHROMIUM_REVISION to the commit or branch '$(key)' is for" >&2
+    echo "(the fork's default branch is the current milestone, which is not" >&2
+    echo "what a checkout for another one should hold)" >&2
+    exit 1
   fi
-  echo "--- checking out $commit"
-  git -C "$r/src" fetch origin "$commit"
-  git -C "$r/src" checkout -f --detach FETCH_HEAD
-  if [ ! -d "$r/backend" ]; then
-    echo "--- cloning replayio/backend into $r/backend"
-    git clone git@github.com:replayio/backend.git "$r/backend"
-  fi
-  mkdir -p "$r/home"
-  write_stamp "$k" "prepare${from:+ --from $from} $commit"
-  trap - EXIT
-  cat <<EOF
-
-checkout: '$k' is at $r, with the fork checked out but its DEPS not synced.
-
-Sync its DEPS in the build image, so depot_tools is the pinned one and the
-generated reclient configs get the paths a build runs at. GIT_CACHE_PATH is
-gclient's mirror of every DEPS repository, shared by all versions: with it, the
-140 repositories come from disk rather than the network, and each checkout's
-copy of them is a clone of the mirror rather than another 14 GB of objects.
-
-  $r/src/replay_build_scripts/ci/build-in-container.sh --root $r -- \\
-    bash -c 'cd /chromium && GIT_CACHE_PATH=/chromium-git-cache gclient sync -D --with_branch_heads && gclient runhooks'
-
-(build-in-container.sh mounts $(git_cache) there.)
-
-This fork disabled per-build gclient sync ("may be too old for gclient sync to
-work properly", common.mjs), so for a milestone nobody has synced here before,
-expect this to need attention -- it is the one step of a new version's checkout
-that is not routine, and it is also the step a rebase does anyway.
-EOF
+  local k
+  k=$(key)
+  use "$k"
+  ensure_prepared "$k" "$commit" "$from"
 }
 
 wipe() {
@@ -450,15 +629,14 @@ wipe() {
     echo "checkout: nothing at $r"
     return
   fi
-  echo "--- removing $r"
-  rm -rf "$r"
+  unused "$k" remove_key "$k"
 }
 
 wipe_out() {
   local k=${1:-$(key)} r
   r=$(root "$k")
   echo "--- removing $r/src/out"
-  rm -rf "$r/src/out"
+  unused "$k" rm -rf "$r/src/out"
 }
 
 case ${1:-} in
@@ -467,13 +645,17 @@ case ${1:-} in
   root) shift; root "${1:-}" ;;
   require) shift; require "${1:-}" ;;
   sync) sync ;;
+  backend-rev) shift; backend_rev "${1:-}" ;;
   list) shift; list "${1:-}" ;;
   adopt) shift; adopt "$@" ;;
   prepare) shift; prepare "$@" ;;
   wipe) shift; wipe "${1:-}" ;;
   wipe-out) shift; wipe_out "${1:-}" ;;
+  reclaim) reclaim ;;
+  use-lock) shift; use_lock "${1:-$(key)}" ;;
+  image-used) shift; image_used "${1:-}" ;;
   *)
-    sed -n '/^#   checkout.sh key/,/^# Nothing here writes/p' "$(readlink -f "$0")" |
+    sed -n '/^#   checkout.sh key/,/^# A job writes/p' "$(readlink -f "$0")" |
       sed 's/^# \{0,1\}//'
     exit 2
     ;;

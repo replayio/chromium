@@ -1,8 +1,8 @@
 # Isolated Chromium builds
 
 Every Chromium build -- on CI and here -- runs in an image this repository
-describes, against a checkout that belongs to one Chromium version, and writes
-nothing outside that version's own directory.
+describes, against a checkout that belongs to one Chromium version, and touches
+no other version's state while any job uses it.
 
 Before this, all of it was one directory on one agent: `/home/ubuntu/chromium`,
 with one `src`, one `out/Release`, one gclient solution, one backend checkout and
@@ -21,12 +21,17 @@ changed.
 | `build-image.sh` | builds that image and tags it with a hash of the Dockerfile, so a branch that changes it gets its own image and the two coexist. |
 | `checkout.sh` | the per-version checkouts: which one this tree uses, syncing it, preparing a new one, and wiping one. |
 | `build-in-container.sh` | runs the build (or anything else) in the image, with one version's directory as the only writable mount. |
-| `bootstrap.sh` | the four seconds at the start of a job that put this commit's scripts on disk, before any checkout is involved. |
+| `bootstrap.sh` | puts this commit's scripts on disk in a few seconds, before any checkout is involved, for steps without a checkout of their own (the Chromium step does the same fetch inline). |
 | `sync-repos.mjs`, `upload-artifacts.sh` | the pipeline's sync and upload steps, against the key's checkout instead of the current directory. |
+| `tools.Dockerfile`, `in-tools-image.sh` | the image those two run in, as the agent's user with its home, network and AWS identity, so an agent needs only docker, git, the aws CLI and buildkite-agent. |
 
-The build image's node is 8.10 and its git is 2.17 (bionic), so anything
-`build.js` or these scripts run inside it has to work there: no `fs.rmSync`,
-no recursive `fs.mkdirSync`, no `git sparse-checkout`.
+The build image's node is 8.10 (bionic), so anything `build.js` or these
+scripts run inside it has to work there: no `fs.rmSync`, no recursive
+`fs.mkdirSync`. Its git is built from source to what the depot_tools pin needs
+(`Dockerfile`).
+
+Builds and the tools image run as the agent's user, whatever its uid, with the
+agent's `/etc/passwd` and `/etc/group`.
 
 ## Keys
 
@@ -51,36 +56,66 @@ key and the same as it was before this change.
 
 ## Disk
 
-A Chromium checkout here is 104 GB: 58 GB of the fork's git objects, 14 GB in
-the 140 repositories DEPS pins, and ~31 GB of working files. Two of the three
-are git objects, which are append-only and identical whatever version checked
-them out, so a second version shares them rather than copying:
+A Chromium checkout with the fork's history is 104 GB: 58 GB of the fork's git
+objects, 14 GB in the 140 repositories DEPS pins, and ~31 GB of working files.
+Two of the three are git objects, which a version need not have its own copy
+of:
 
-- The fork's history comes from a local `git clone`, which hardlinks the pack
-  files: 58 GB becomes 0.76 s and about 2 MB (measured). `prepare --from`
-  hardlinks every `.git` the same way, with `rsync --link-dest`, while copying
-  working files for real -- a gclient hook that overwrites one in place must not
-  write into the version it was copied from.
+- `prepare` fetches the fork as one commit: a build reads none of its history.
+  `prepare --from` hardlinks every `.git` of the version it copies, with
+  `rsync --link-dest`, while copying working files for real -- a gclient hook
+  that overwrites one in place must not write into the version it was copied
+  from.
 - The DEPS repositories come from gclient's own mirror of them,
-  `<checkouts dir>/.git-cache` (`GIT_CACHE_PATH`), which every version's sync
-  populates and clones from. It belongs to no key, and `wipe` cannot touch it:
+  `<checkouts dir>/.git-cache` (`GIT_CACHE_PATH`), which every version's
+  `prepare` populates and clones from. A dependency cloned from it borrows the
+  mirror's objects (git alternates, gclient's default cache mode), so the
+  mirror outlives every key. It belongs to no key, and `wipe` cannot touch it:
   a key may not begin with a dot.
 
-So a second milestone costs its working files and its build outputs, around
-35-45 GB, not another 104 GB. Hardlinked objects also keep the versions
-independent, which `--reference`/alternates would not: deleting one checkout
-leaves the others' objects alone, so `wipe` stays `rm -rf` of one directory.
+So a version costs its working files and its build outputs. Deleting one
+checkout leaves the others' objects alone, so `wipe` stays `rm -rf` of one
+directory.
 
 Not shared on purpose: the working files (they differ per milestone, and a build
 or a hook writes in them) and `out/Release`, which is the state this whole
 arrangement exists to keep apart.
+
+### Reclaim
+
+Keys and images accumulate: every milestone, `CHROMIUM_CHECKOUT_KEY` and
+Dockerfile change leaves one behind, and a pool host's daily machine image
+carries them to the next host. So when it syncs or prepares a key, a job
+checks the volume, and below `CHROMIUM_CHECKOUTS_MIN_FREE_GB` (150) free it
+removes the least recently used key or image that no job is using, one at a
+time, until there is room again:
+
+- A key's last use is its stamp's mtime, which `require` touches, or the newest
+  file at the top of its `src/out/Release`, which every build writes, also one
+  of another script line's (Electron's `m157-electron`). An image's is a mark
+  under `.images/` that `build-image.sh ensure` touches; only this line's images
+  (`chromium-build`, `chromium-tools`) are candidates. State with no record of
+  use goes first.
+- A job holds its key's use lock (`.<key>.use`) shared from the moment it knows
+  its key until it ends. Removal takes it exclusively and skips a key it cannot
+  get, and docker refuses an image a container uses, so nothing in use goes.
+  This job's own key and images are never candidates. Jobs of other script
+  lines hold no use lock: their keys are safe because a host runs one agent.
+- A key goes whole, first renamed out of the way (`.removing.*`): a removal cut
+  short leaves trash, which the next reclaim removes first, never a half-removed
+  key. Its next job prepares it again. `.git-cache` is never removed: every key
+  borrows from it.
+
+`prepare` still refuses below the same threshold if reclaim could not reach it.
+`checkout.sh reclaim` runs it by hand; `wipe` and `wipe-out` refuse a key in use.
 
 ## Using it
 
 ```sh
 replay_build_scripts/ci/checkout.sh list --sizes   # what is prepared here
 replay_build_scripts/ci/checkout.sh key            # the key for this tree
-replay_build_scripts/ci/checkout.sh sync           # to the commit being built
+replay_build_scripts/ci/checkout.sh sync           # to the commit being built,
+                                                   # DEPS and hooks included
 replay_build_scripts/ci/build-in-container.sh      # build it
 ```
 
@@ -113,37 +148,61 @@ image.
 
 ## Preparing a new version
 
+A job writes only its own key's state, apart from reclaim's removal of unused
+state. A build of a version that has no checkout here prepares it
+(`checkout.sh sync`), and never falls back to another version's:
+
+- The fork at the commit being built, as one commit.
+- `gclient sync -D --with_branch_heads && gclient runhooks` in the build image,
+  which puts the Replay forks of v8, skia, webrtc and boringssl at their DEPS
+  revisions with everything else.
+- The backend, and last the stamp: a key without one is not prepared, and the
+  next `prepare` removes what an unfinished one left.
+
+Every build then runs that same `gclient sync` and `runhooks` again, in its own
+key's checkout, after the fork is at the commit being built. A key outlives the
+commits built in it, so the DEPS it resolved when it was prepared are the DEPS
+of whichever commit got there first: without this, a commit that moves a pin
+other than the four forks, adds or drops a dependency, or changes a hook has no
+effect, two hosts can build one commit against different dependencies, and the
+daily machine image carries one host's version of them to the next. A sync that
+has nothing to do costs the DEPS walk and the hooks, and a pin it does have to
+move is fetched from the mirror on disk rather than over the network.
+
+One job of a key prepares it at a time; another job of that version waits for
+it (a lock next to the keys). Every key shares the volume, so `prepare` first
+reclaims, then refuses if there is still too little space left.
+
+By hand, the same, or a copy of another version's checkout without its build
+outputs:
+
 ```sh
 CHROMIUM_CHECKOUT_KEY=m140 CHROMIUM_REVISION=<commit or branch> \
-  replay_build_scripts/ci/checkout.sh prepare --from m108
+  replay_build_scripts/ci/checkout.sh prepare [--from m108]
 ```
-
-copies the nearest prepared checkout without its build outputs, checks out the
-revision the new version is for, and prints the `gclient sync` to run in the
-image. That sync is the one step of a new version that is not routine: this fork
-disabled per-build `gclient sync` ("may be too old for gclient sync to work
-properly", `common.mjs`), so for a milestone nobody has synced here before,
-expect it to need attention. It is also the step a rebase does anyway. `prepare`
-refuses if the volume has little space left, because every key shares it (and so
-do the backend's `linux_cpp_tests`, which run on this agent too).
-
-A build never prepares a checkout and never falls back to another version's: if
-the key has no checkout, the job fails and says what to run.
 
 ## On a build agent
 
-Nothing, for the milestone the agent is already building. The first job claims
-the shared checkout as that milestone's key itself -- a symlink, nothing copied
-or moved -- after checking that the tree's own `chrome/VERSION` is the key it
-wants. It says so in the log when it does.
+A key is a directory `prepare` made or `adopt` took over. A build refuses a key
+that is a symlink.
 
-A symlink rather than a move, because `.buildkite/pipeline.yml` is fetched per
-branch: until a branch is rebased onto this change it still runs the old step,
-which builds in `/home/ubuntu/chromium/src` directly. Both kinds of job then
-build the same tree. For the same reason the old `chromium-build-new` image and
-`/home/ubuntu/depot_tools` have to stay until no branch builds the old way. When
-they are gone, `checkout.sh adopt --move /home/ubuntu/chromium m108` ends the
-arrangement and the shared path with it.
+There was a bridge, briefly: a key whose milestone matched whatever
+`/home/ubuntu/chromium` held claimed that tree by symlink, so the milestone the
+agent was already building arrived here with nobody arranging it. That read the
+identity of a 104 GB development checkout off a value any build could change,
+and two Buildkite pipeline-upload steps -- `runtime-build-and-test` and
+`manual-chromium-branch-build`, neither in this repository -- changed it, with
+`git reset --hard origin/$BUILDKITE_BRANCH` in that tree on every build of every
+branch. By the time it was removed the agent had four keys, every one a symlink
+to the same tree, and no prepared checkout at all; build 5567 took the m108 tree
+as `m110` and died in `gn gen` on an identifier that only m108's pinned pdfium
+declares.
+
+Those upload steps now read this commit's scripts with git instead of resetting
+a checkout. Removing this does not by itself end the arrangement: every branch
+runs its own copy of these scripts, so a branch that has not been rebased still
+has the symlink code. What ends it is the agent: once `/home/ubuntu/chromium` is
+gone, every copy fails over to `require`'s message.
 
 `checkout.sh adopt [--move] <dir> [key]` is also how a tree that already exists
 somewhere else becomes a key's, which is the cheap way to give a milestone a
