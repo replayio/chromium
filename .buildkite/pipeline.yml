@@ -41,8 +41,8 @@ steps:
       # LinkerZombieLeak: sweep before tests + always after (even on failure).
       "$$BACKEND_DIR/scripts/kill-linker-processes.sh"
       trap '"$$BACKEND_DIR/scripts/kill-linker-processes.sh"; rm -rf "$$WORKDIR" "$$TMPDIR"' EXIT
-      # The Chromium build of chromium-build #6110 (replayio/chromium#1690).
-      BUILD_ID="linux-chromium-20261120-ee822b914f53-c36bdc061298-dev"
+      # The Chromium build of chromium-build #6119 (replayio/chromium#1690).
+      BUILD_ID="linux-chromium-20261120-62be0ac52e2f-c36bdc061298-dev"
       test -n "$$BUILD_ID"
       cd "$$BACKEND_DIR"
       unset REPLAY_LOCAL_DRIVER_DIR || true
