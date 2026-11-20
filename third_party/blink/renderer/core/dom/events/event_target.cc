@@ -43,6 +43,7 @@
 #include "third_party/blink/renderer/core/dom/abort_signal.h"
 #include "third_party/blink/renderer/core/dom/events/add_event_listener_options_resolved.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
+#include "third_party/blink/renderer/core/dom/events/event_dependency_scope.h"
 #include "third_party/blink/renderer/core/dom/events/event_dispatch_forbidden_scope.h"
 #include "third_party/blink/renderer/core/dom/events/event_target_impl.h"
 #include "third_party/blink/renderer/core/editing/editor.h"
@@ -784,6 +785,8 @@ DispatchEventResult EventTarget::DispatchEvent(Event& event, const char* why) {
 }
 
 DispatchEventResult EventTarget::DispatchEventInternal(Event& event) {
+  EventDependencyScope dependency(EventDependencyScope::Kind::kEmitEvent,
+                                  event);
   event.SetTarget(this);
   event.SetCurrentTarget(this);
   event.SetEventPhase(Event::PhaseType::kAtTarget);
@@ -971,6 +974,9 @@ bool EventTarget::FireEventListeners(Event& event,
     probe::AsyncTask async_task(context, listener->async_task_context(),
                                 "event",
                                 IsInstrumentedForAsyncStack(event.type()));
+
+    if (listener->IsJSBasedEventListener())
+      EventDependencyScope::WillInvokeScriptListener();
 
     recordreplay::UserEventProbe replayEvent(nullptr, event.type(), this);
 
