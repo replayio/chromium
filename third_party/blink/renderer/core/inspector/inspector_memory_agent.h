@@ -74,6 +74,10 @@ class CORE_EXPORT InspectorMemoryAgent final
   Vector<String> Symbolize(const std::vector<const void*>& addresses);
   std::unique_ptr<protocol::Memory::SamplingProfile> GetSamplingProfileById(
       std::optional<base::SamplingHeapProfiler::Session> session);
+  // [RecordReplay] Answers a profile request against the recording.
+  protocol::Response RecordReplaySamplingProfile(
+      std::optional<base::SamplingHeapProfiler::Session> session,
+      std::unique_ptr<protocol::Memory::SamplingProfile>* out_profile);
 
   Member<InspectedFrames> frames_;
   std::optional<base::SamplingHeapProfiler::Session> profiling_session_;
