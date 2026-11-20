@@ -183,7 +183,11 @@ steps:
 
   # Parallel with E2E: inline chromium-recording (mirrors node test-node).
   # e2e=true: only linux class with Replay Chromium runtime libs (libnss3); can_replay lacks them.
-  - label: "📝 Chromium Recording Tests (linux-x86_64)"
+  # CHROMIUM_RECORDING_FILTER / CHROMIUM_RECORDING_EXCLUDE: space-separated
+  # suite paths for --filter / --exclude (relative to test/chromium-recording);
+  # both unset runs every case.
+  - &chromium-recording
+    label: "📝 Chromium Recording Tests (linux-x86_64)"
     key: "chromium-recording-linux-x86_64"
     depends_on:
       - "build-chromium-linux-x86_64"
@@ -200,8 +204,11 @@ steps:
             HASURA_ADMIN_SECRET: "prod/hasura-admin-secret"
             RECORD_REPLAY_API_KEY: "prod/public-api-key"
     env:
-      PLAYWRIGHT_HEADLESS: "true"
-      CI: "1"
+      <<: &chromium-recording-env
+        PLAYWRIGHT_HEADLESS: "true"
+        CI: "1"
+      # Every suite but tests/dependency-graph, which has its own step.
+      CHROMIUM_RECORDING_EXCLUDE: "tests/dependency-graph"
     command: |
       set -euo pipefail
       WORKDIR=$$(mktemp -d "/tmp/chromium-recording-$${BUILDKITE_JOB_ID}.XXXXXX")
@@ -238,7 +245,22 @@ steps:
       node --version
       # packageManager pnpm@10.11.0; agents lack global npm write (EACCES).
       npx --yes pnpm@10.11.0 install --frozen-lockfile
-      npx tsx src/build/buildRuntime.ts test-chromium-recording --build-id "$$BUILD_ID"
+      ARGS=(test-chromium-recording --build-id "$$BUILD_ID")
+      read -ra FILTER <<< "$${CHROMIUM_RECORDING_FILTER:-}"
+      read -ra EXCLUDE <<< "$${CHROMIUM_RECORDING_EXCLUDE:-}"
+      if (( $${#FILTER[@]} )); then ARGS+=(--filter "$${FILTER[@]}"); fi
+      if (( $${#EXCLUDE[@]} )); then ARGS+=(--exclude "$${EXCLUDE[@]}"); fi
+      npx tsx src/build/buildRuntime.ts "$${ARGS[@]}"
+
+  # The DependencyGraph cases as their own suite.
+  - <<: *chromium-recording
+    label: "📝 Chromium Recording Tests: dependency-graph (linux-x86_64)"
+    key: "chromium-recording-dependency-graph-linux-x86_64"
+    env:
+      <<: *chromium-recording-env
+      CHROMIUM_RECORDING_FILTER: "tests/dependency-graph"
+      # Each recording's graph entries, uploaded as dependencies-<recordingId>.json.
+      SAVE_DEPENDENCY_GRAPH_ENTRIES: "1"
 
   # - label: "🔨 Chromium (mac-x86_64)"
   #   key: "build-chromium-mac-x86_64"
