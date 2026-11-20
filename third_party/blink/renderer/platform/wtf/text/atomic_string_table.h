@@ -115,11 +115,7 @@ class WTF_EXPORT AtomicStringTable final {
 
   WeakResult WeakFindSlowForTesting(const StringView&);
 
-  // Never ordered when recording (see LockImpl::LockImpl in base). Whether
-  // adding a string takes this lock depends on whether the string is in the
-  // table already, and what a replay's own code evaluates at a pause puts
-  // strings there that the recording's run found missing.
-  base::Lock lock_{""};
+  base::Lock lock_;
   HashSet<StringImpl*> table_ GUARDED_BY(lock_);
   static_assert(HashTraits<StringImpl*>::x == 10);
 };

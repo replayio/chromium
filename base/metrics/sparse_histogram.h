@@ -92,9 +92,7 @@ class BASE_EXPORT SparseHistogram : public HistogramBase {
   friend class HistogramThreadsafeTest;
 
   // Protects access to |samples_|.
-  // Never ordered when recording (see LockImpl::LockImpl): metrics are no part
-  // of a recording, and code that runs at a pause in a replay reports them too.
-  mutable base::Lock lock_{""};
+  mutable base::Lock lock_;
 
   // Flag to indicate if PrepareFinalDelta has been previously called.
   mutable bool final_delta_created_ = false;

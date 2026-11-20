@@ -566,9 +566,9 @@ class BASE_EXPORT TaskQueueImpl : public TaskQueue {
 
   // This lock protects access to the handler callbacks, and is used in both ordered and unordered
   // contexts.  In particular, this lock must only be used around the handler
-  // An empty name: a lock that has no name is ordered when it's made with
-  // events allowed, and this one is taken by threads whose events are
-  // disallowed.
+  // An empty name says this lock must never be ordered, which an unnamed lock
+  // gets anyway. Threads whose events are disallowed take it, so no replay can
+  // reproduce the order of its acquisitions.
   mutable base::internal::CheckedLock unordered_lock_{""};
 
   TaskDeque record_replay_unordered_immediate_incoming_queue GUARDED_BY(unordered_lock_);

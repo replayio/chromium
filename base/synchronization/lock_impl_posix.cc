@@ -5,7 +5,6 @@
 #include "base/synchronization/lock_impl.h"
 
 #include <pthread.h>
-#include <stdlib.h>
 
 #include <atomic>
 #include <cstdint>
@@ -14,8 +13,6 @@
 
 #include "base/check_op.h"
 #include "base/posix/safe_strerror.h"
-#include "base/record_replay.h"
-#include "base/record_replay_racy_static.h"
 #include "base/synchronization/lock.h"
 #include "base/synchronization/lock_metrics_recorder.h"
 #include "base/synchronization/lock_subtle.h"
@@ -124,33 +121,14 @@ static void RecordReplayAddOrderedPthreadMutex(const char* name,
   gAddOrderedPthreadMutexFn(name, mutex);
 }
 
-// Whether a lock made without a name is ordered too. By default only the
-// locks Replay named are ordered, as in Replay's Chromium 108. Newer Chromium
-// has many more locks shared between threads (a thread's name is set under one
-// while an observer is added under it, for a start): with
-// RECORD_REPLAY_ORDER_UNNAMED_LOCKS set, every lock made while events are
-// allowed is ordered, under the name "base::Lock". That mode needs a driver
-// that knows the name (replayio/backend#13769, OrderedLockIsOrderedByDefault).
-static bool RecordReplayOrderUnnamedLocks() {
-  static const bool order = !!getenv("RECORD_REPLAY_ORDER_UNNAMED_LOCKS");
-  return order;
-}
-
 LockImpl::LockImpl(const char* ordered_name) {
-  // An empty name is for a lock that's never ordered: one taken on a path that
-  // threads race to without any lock, so that whether it's taken at all isn't
-  // the same on a replay. Such a lock must guard nothing a recording has in it.
-  const bool never_ordered = ordered_name && !*ordered_name;
-  if (never_ordered) {
+  // Ordering is opt-in by name, as in Replay's Chromium 108. A lock made
+  // without a name is never ordered. An empty name asks for that deliberately,
+  // for a lock taken on a path threads race to without any lock of their own,
+  // where whether it is taken at all isn't the same on a replay. Such a lock
+  // must guard nothing a recording has in it.
+  if (ordered_name && !*ordered_name) {
     ordered_name = nullptr;
-  }
-  if (!never_ordered && !ordered_name &&
-      recordreplay::IsRecordingOrReplaying() &&
-      !recordreplay::AreEventsDisallowed() &&
-      !recordreplay::AreEventsPassedThrough() &&
-      !recordreplay::InUnorderedLockCreation() &&
-      RecordReplayOrderUnnamedLocks()) {
-    ordered_name = "base::Lock";
   }
   pthread_mutexattr_t mta;
   int rv = pthread_mutexattr_init(&mta);

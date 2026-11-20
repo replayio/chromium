@@ -332,9 +332,7 @@ void StatisticsRecorder::InitLogOnShutdown() {
 
 // static
 Lock& StatisticsRecorder::GetLock() {
-  // Never ordered when recording (see LockImpl::LockImpl): metrics are no part
-  // of a recording, and code that runs at a pause in a replay reports them too.
-  static base::NoDestructor<Lock> lock("");
+  static base::NoDestructor<Lock> lock;
   return *lock;
 }
 
