@@ -34,6 +34,7 @@
 
 #include "base/debug/stack_trace.h"
 #include "base/profiler/module_cache.h"
+#include "base/record_replay.h"
 #include "base/sampling_heap_profiler/poisson_allocation_sampler.h"
 #include "base/sampling_heap_profiler/sampling_heap_profiler.h"
 #include "build/build_config.h"
@@ -140,13 +141,62 @@ protocol::Response InspectorMemoryAgent::stopSampling() {
 
 protocol::Response InspectorMemoryAgent::getAllTimeSamplingProfile(
     std::unique_ptr<protocol::Memory::SamplingProfile>* out_profile) {
+  if (recordreplay::IsRecordingOrReplaying()) {
+    return RecordReplaySamplingProfile(std::nullopt, out_profile);
+  }
   *out_profile = GetSamplingProfileById(std::nullopt);
   return protocol::Response::Success();
 }
 
 protocol::Response InspectorMemoryAgent::getSamplingProfile(
     std::unique_ptr<protocol::Memory::SamplingProfile>* out_profile) {
+  if (recordreplay::IsRecordingOrReplaying()) {
+    return RecordReplaySamplingProfile(profiling_session_, out_profile);
+  }
   *out_profile = GetSamplingProfileById(profiling_session_);
+  return protocol::Response::Success();
+}
+
+// [RecordReplay] Only a recording samples allocations, so the profile a client
+// asks for has to come from the recording however the client asks for it.
+// Building one reads /proc/self/maps for the module list and symbolizes every
+// stack, which a replay must not do: it would consume events of its own where
+// the recording holds the profile instead. So the recording builds the profile
+// with those reads passed through, keeps the serialized form, and the replay
+// parses what the recording kept.
+protocol::Response InspectorMemoryAgent::RecordReplaySamplingProfile(
+    std::optional<base::SamplingHeapProfiler::Session> session,
+    std::unique_ptr<protocol::Memory::SamplingProfile>* out_profile) {
+  // A request that arrives after the replay diverged comes from a pause, which
+  // is past the point the recording can be read at, and the samples this
+  // process has taken since are its own. Refuse rather than describe them.
+  if (recordreplay::HasDivergedFromRecording()) {
+    return protocol::Response::ServerError(
+        "No sampling profile is available after diverging from the recording.");
+  }
+
+  std::unique_ptr<protocol::Memory::SamplingProfile> profile;
+  std::string payload;
+  if (recordreplay::IsRecording()) {
+    {
+      recordreplay::AutoPassThroughEvents pass_through;
+      profile = GetSamplingProfileById(session);
+    }
+    std::vector<uint8_t> serialized = profile->Serialize();
+    payload.assign(serialized.begin(), serialized.end());
+  }
+
+  recordreplay::RecordReplayString("memory-sampling-profile", payload);
+
+  if (!profile) {
+    profile = protocol::Memory::SamplingProfile::FromBinary(
+        reinterpret_cast<const uint8_t*>(payload.data()), payload.size());
+    if (!profile) {
+      return protocol::Response::ServerError(
+          "The sampling profile in the recording could not be read.");
+    }
+  }
+  *out_profile = std::move(profile);
   return protocol::Response::Success();
 }
 

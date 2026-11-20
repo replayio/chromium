@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "base/allocator/dispatcher/reentry_guard.h"
@@ -17,6 +18,7 @@
 #include "base/compiler_specific.h"
 #include "base/no_destructor.h"
 #include "base/rand_util.h"
+#include "base/record_replay.h"
 #include "build/build_config.h"
 
 namespace base {
@@ -263,6 +265,17 @@ void PoissonAllocationSampler::DoRecordAllocation(
   intptr_t accumulated_bytes = thread_local_data->accumulated_bytes;
   if (accumulated_bytes < 0) [[likely]] {
     return;
+  }
+
+  // [RecordReplay] What happens from here on is not in the recording. The
+  // interval draws below call getrandom(), and handing a sample to the
+  // observers unwinds the stack, which dlopens libgcc the first time glibc's
+  // backtrace() runs. A replay takes no samples at all, so an event recorded
+  // here is one the replay never asks for, and that mismatches just as surely
+  // as a draw at the wrong allocation does. Pass them through instead.
+  std::optional<recordreplay::AutoPassThroughEvents> record_replay_pass_through;
+  if (recordreplay::IsRecording()) {
+    record_replay_pass_through.emplace();
   }
 
   if (!(state & ProfilingStateFlag::kIsRunning)) [[unlikely]] {
