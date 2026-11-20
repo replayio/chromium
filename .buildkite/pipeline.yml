@@ -22,6 +22,7 @@ steps:
     env:
       PLAYWRIGHT_HEADLESS: "true"
       CI: "1"
+      DEBUG: "pw:browser"
     command: |
       set -euo pipefail
       PIN="$$REPLAY_BACKEND_REV"
