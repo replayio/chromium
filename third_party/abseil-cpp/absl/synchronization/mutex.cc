@@ -2620,8 +2620,8 @@ void CondVar::EnableDebugLog(const char* name) {
 
 // Remove thread s from the list of waiters on this condition variable.
 void CondVar::Remove(PerThreadSynch* s) {
-  // Removing a waiter spins and sleeps like {CondVarEnqueue} does, for the
-  // reason {CondVar::Signal} gives.
+  // Removing a waiter spins and sleeps the way CondVarEnqueue does, for the
+  // reason given on CondVar::Signal.
   RecordReplayAutoDisallowEvents disallow("absl::CondVar::Remove");
 
   SchedulingGuard::ScopedDisable disable_rescheduling;
@@ -2672,8 +2672,8 @@ void CondVar::Remove(PerThreadSynch* s) {
 // mutex code.
 static void CondVarEnqueue(SynchWaitParams* waitp) {
   // Queueing on a condition variable spins against the threads signalling it
-  // and the other threads queueing, and sleeps between attempts.
-  // {CondVar::Signal} says why that sleep must not be recorded.
+  // and the other threads queueing, and sleeps between attempts. CondVar::Signal
+  // says why that sleep must not be recorded.
   RecordReplayAutoDisallowEvents disallow("absl::CondVarEnqueue");
 
   // This thread might be transferred to the Mutex queue by Fer() when
@@ -2778,11 +2778,12 @@ bool CondVar::WaitCommon(Mutex* mutex, KernelTimeout t) {
 }
 
 void CondVar::Signal() {
-  // Signalling spins for the condition variable's lock and sleeps between
-  // attempts, so whether it sleeps at all, and how often, is contention. The
-  // sleep is a recorded call, and V8 15.7 made every {base::ConditionVariable}
-  // an absl one, so a replay can see nanosleep where the recording had moved
-  // on, and a worker thread's own event stream then diverges.
+  // Signalling spins for the condition variable's own lock and sleeps between
+  // attempts, so whether it sleeps at all, and how often, is contention. That
+  // sleep is a recorded call, and every notify in V8 arrives here, because
+  // v8::base::ConditionVariable is an absl::CondVar. A replay reaching the
+  // sleep where the recording had moved on diverges on that thread's event
+  // stream, so the region passes the sleep through instead.
   RecordReplayAutoDisallowEvents disallow("absl::CondVar::Signal");
 
   SchedulingGuard::ScopedDisable disable_rescheduling;
@@ -2824,7 +2825,7 @@ void CondVar::Signal() {
 }
 
 void CondVar::SignalAll() {
-  // This spins and sleeps like {CondVar::Signal} does.
+  // This spins and sleeps the way CondVar::Signal does.
   RecordReplayAutoDisallowEvents disallow("absl::CondVar::SignalAll");
 
   ABSL_TSAN_MUTEX_PRE_SIGNAL(nullptr, 0);

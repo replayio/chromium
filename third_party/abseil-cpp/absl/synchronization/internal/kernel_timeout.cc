@@ -53,6 +53,10 @@ void* LookupRecordReplaySymbol(const char* name) {
 // return at once. Passing a read through does not bypass the continuation
 // policy the replay has for that clock, which is applied to a passed-through
 // read as well.
+//
+// The bindings are looked up by name because abseil cannot depend on //base,
+// where recordreplay::AutoPassThroughEvents lives. absl's other fork hunks do
+// the same, in sysinfo.cc, thread_identity.cc and synchronization/mutex.cc.
 struct RecordReplayAutoPassThroughEvents {
   RecordReplayAutoPassThroughEvents() {
     // Both bindings are looked up before events are passed through, because a
