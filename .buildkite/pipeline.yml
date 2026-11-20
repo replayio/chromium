@@ -252,6 +252,8 @@ steps:
       PLAYWRIGHT_HEADLESS: "true"
       CI: "1"
       CHROMIUM_RECORDING_FILTER: "tests/dependency-graph"
+      # Each recording's graph entries, uploaded as dependencies-<recordingId>.json.
+      SAVE_DEPENDENCY_GRAPH_ENTRIES: "1"
 
   # - label: "🔨 Chromium (mac-x86_64)"
   #   key: "build-chromium-mac-x86_64"
