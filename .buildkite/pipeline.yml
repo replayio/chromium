@@ -183,8 +183,9 @@ steps:
 
   # Parallel with E2E: inline chromium-recording (mirrors node test-node).
   # e2e=true: only linux class with Replay Chromium runtime libs (libnss3); can_replay lacks them.
-  # CHROMIUM_RECORDING_FILTER: space-separated suite paths for --filter
-  # (relative to test/chromium-recording); unset runs every case.
+  # CHROMIUM_RECORDING_FILTER / CHROMIUM_RECORDING_EXCLUDE: space-separated
+  # suite paths for --filter / --exclude (relative to test/chromium-recording);
+  # both unset runs every case.
   - &chromium-recording
     label: "📝 Chromium Recording Tests (linux-x86_64)"
     key: "chromium-recording-linux-x86_64"
@@ -206,10 +207,8 @@ steps:
       <<: &chromium-recording-env
         PLAYWRIGHT_HEADLESS: "true"
         CI: "1"
-      # Every suite but tests/dependency-graph, which has its own step. A suite
-      # added to the backend runs here only once it is listed.
-      CHROMIUM_RECORDING_FILTER: >-
-        tests/breakpoints tests/console tests/dom tests/ember tests/evaluate tests/frame-steps tests/gc tests/generators tests/jit tests/media tests/mojo tests/network tests/point-stack tests/render tests/scopes tests/soft-stack-overflow tests/styles tests/template-objects tests/v8 tests/webassembly tests/webaudio tests/webrtc tests/workers
+      # Every suite but tests/dependency-graph, which has its own step.
+      CHROMIUM_RECORDING_EXCLUDE: "tests/dependency-graph"
     command: |
       set -euo pipefail
       WORKDIR=$$(mktemp -d "/tmp/chromium-recording-$${BUILDKITE_JOB_ID}.XXXXXX")
@@ -248,7 +247,9 @@ steps:
       npx --yes pnpm@10.11.0 install --frozen-lockfile
       ARGS=(test-chromium-recording --build-id "$$BUILD_ID")
       read -ra FILTER <<< "$${CHROMIUM_RECORDING_FILTER:-}"
+      read -ra EXCLUDE <<< "$${CHROMIUM_RECORDING_EXCLUDE:-}"
       if (( $${#FILTER[@]} )); then ARGS+=(--filter "$${FILTER[@]}"); fi
+      if (( $${#EXCLUDE[@]} )); then ARGS+=(--exclude "$${EXCLUDE[@]}"); fi
       npx tsx src/build/buildRuntime.ts "$${ARGS[@]}"
 
   # The DependencyGraph cases as their own suite.
