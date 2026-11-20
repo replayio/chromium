@@ -40,6 +40,8 @@ DispatchEventResult IDBEventDispatcher::Dispatch(
   wtf_size_t size = event_targets.size();
   DCHECK(size);
 
+  EmitEventDependencyScope dependency(event, event_targets);
+
   event.SetEventPhase(Event::PhaseType::kCapturingPhase);
   for (wtf_size_t i = size - 1; i; --i) {  // Don't do the first element.
     event.SetCurrentTarget(event_targets[i].Get());

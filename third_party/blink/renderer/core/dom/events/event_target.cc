@@ -34,7 +34,9 @@
 #include <memory>
 
 #include "base/format_macros.h"
+#include "base/json/json_writer.h"
 #include "base/time/time.h"
+#include "base/values.h"
 #include "third_party/blink/public/web/web_settings.h"
 #include "third_party/blink/renderer/bindings/core/v8/js_based_event_listener.h"
 #include "third_party/blink/renderer/bindings/core/v8/js_event_listener.h"
@@ -784,6 +786,7 @@ DispatchEventResult EventTarget::DispatchEvent(Event& event, const char* why) {
 }
 
 DispatchEventResult EventTarget::DispatchEventInternal(Event& event) {
+  EmitEventDependencyScope dependency(event, {this});
   event.SetTarget(this);
   event.SetCurrentTarget(this);
   event.SetEventPhase(Event::PhaseType::kAtTarget);
@@ -809,6 +812,32 @@ static const AtomicString& LegacyType(const Event& event) {
     return event_type_names::kMousewheel;
 
   return g_empty_atom;
+}
+
+bool HasScriptListeners(EventTarget& target, const Event& event) {
+  EventListenerVector* listeners = target.GetEventListeners(event.type());
+  if (!listeners && event.isTrusted()) {
+    const AtomicString& legacy_type_name = LegacyType(event);
+    if (!legacy_type_name.empty())
+      listeners = target.GetEventListeners(legacy_type_name);
+  }
+  if (!listeners)
+    return false;
+  for (const RegisteredEventListener& registered_listener : *listeners) {
+    const EventListener* callback = registered_listener.Callback();
+    if (callback && callback->IsJSBasedEventListener())
+      return true;
+  }
+  return false;
+}
+
+void EmitEventDependencyScope::Begin(const Event& event) {
+  base::Value::Dict info;
+  info.Set("kind", "emitEvent");
+  info.Set("type", event.type().Utf8());
+  std::string json;
+  base::JSONWriter::Write(info, &json);
+  execute_.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
 }
 
 void EventTarget::CountLegacyEvents(

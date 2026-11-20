@@ -2074,6 +2074,7 @@ DispatchEventResult LocalDOMWindow::DispatchEvent(Event& event,
 
   DEVTOOLS_TIMELINE_TRACE_EVENT("EventDispatch",
                                 inspector_event_dispatch_event::Data, event);
+  EmitEventDependencyScope dependency(event, {this});
   return FireEventListeners(event);
 }
 

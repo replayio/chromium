@@ -514,6 +514,7 @@ const AtomicString& SerialPort::InterfaceName() const {
 }
 
 DispatchEventResult SerialPort::DispatchEventInternal(Event& event) {
+  EmitEventDependencyScope dependency(event, {parent_.Get(), this});
   event.SetTarget(this);
 
   // Events fired on a SerialPort instance bubble to the parent Serial instance.

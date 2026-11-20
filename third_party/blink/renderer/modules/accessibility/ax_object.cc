@@ -3035,6 +3035,8 @@ bool AXObject::DispatchEventToAOMEventListeners(Event& event) {
     return false;
   event.SetTarget(target);
 
+  EmitEventDependencyScope dependency(event, event_path);
+
   // Capturing phase.
   event.SetEventPhase(Event::PhaseType::kCapturingPhase);
   for (int i = static_cast<int>(event_path.size()) - 1; i >= 0; i--) {
