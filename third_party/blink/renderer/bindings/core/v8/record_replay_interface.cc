@@ -3163,6 +3163,21 @@ void RecordReplayOnPromiseRejection(int bookmark,
   RecordReplayOnError(bookmark, {message, location});
 }
 
+void RecordReplayOnPromiseRejectionRevoked(int bookmark) {
+  if (!recordreplay::IsRecordingOrReplaying() || !v8::IsMainThread() ||
+      !bookmark) {
+    return;
+  }
+
+  std::string contents;
+  if (recordreplay::IsReplaying()) {
+    base::Value::Dict info;
+    info.Set("bookmark", bookmark);
+    base::JSONWriter::Write(info, &contents);
+  }
+  recordreplay::OnAnnotation("ConsoleMessageRevoked", contents.c_str());
+}
+
 static void GetCurrentError(const v8::FunctionCallbackInfo<v8::Value>& args) {
   if (!gCurrentError) {
     return;

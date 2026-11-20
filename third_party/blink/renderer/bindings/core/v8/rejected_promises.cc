@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "base/memory/ptr_util.h"
+#include "base/record_replay.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
@@ -48,7 +49,8 @@ class RejectedPromises::Message final {
         collected_(false),
         should_log_to_console_(true),
         sanitize_script_errors_(sanitize_script_errors),
-        record_replay_bookmark_(record_replay_bookmark) {}
+        record_replay_bookmark_(record_replay_bookmark),
+        record_replay_reported_(false) {}
 
   bool IsCollected() { return collected_ || !script_state_->ContextIsValid(); }
 
@@ -88,6 +90,12 @@ class RejectedPromises::Message final {
     }
 
     if (should_log_to_console_) {
+      // Without the message's bookmark, a bookmark here keeps it revocable.
+      if (!record_replay_bookmark_ && recordreplay::IsRecordingOrReplaying() &&
+          v8::IsMainThread()) {
+        record_replay_bookmark_ = (int)recordreplay::NewBookmark();
+      }
+      record_replay_reported_ = true;
       RecordReplayOnPromiseRejection(
           record_replay_bookmark_,
           ThreadDebuggerCommonImpl::PromiseRejectionMessage(error_message_),
@@ -141,6 +149,9 @@ class RejectedPromises::Message final {
                                           promise_rejection_id_);
       }
     }
+
+    if (record_replay_reported_)
+      RecordReplayOnPromiseRejectionRevoked(record_replay_bookmark_);
   }
 
   void MakePromiseWeak() {
@@ -188,6 +199,7 @@ class RejectedPromises::Message final {
   bool should_log_to_console_;
   SanitizeScriptErrors sanitize_script_errors_;
   int record_replay_bookmark_;
+  bool record_replay_reported_;
 };
 
 RejectedPromises::RejectedPromises() = default;

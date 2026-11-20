@@ -70,6 +70,10 @@ void RecordReplayOnPromiseRejection(int bookmark,
                                     const String& message,
                                     const SourceLocation& location);
 
+// Notify the driver that the console message of the unhandled rejection at
+// |bookmark| is withdrawn: the promise got a handler.
+void RecordReplayOnPromiseRejectionRevoked(int bookmark);
+
 // Notify our blink bindings that the page that was running our script(s) is
 //   about to reset, and its ExecutionContext and our V8 debugger session with it.
 // From this point forward, command handling is not possible anymore
