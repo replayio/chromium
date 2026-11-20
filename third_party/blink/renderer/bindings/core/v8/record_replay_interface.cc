@@ -56,7 +56,9 @@
 #include <cinttypes>
 #include <cmath>
 #include <fstream>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 #include <vector>
 #include "crypto/secure_hash.h"
@@ -1289,24 +1291,42 @@ static void SHA256DigestHex(const v8::FunctionCallbackInfo<v8::Value>& args) {
   args.GetReturnValue().Set(ToV8String(isolate, digestHex));
 }
 
+// The path in the recording directory of the file a caller names. Any of the
+// page's code can call the helpers below, so a name is a plain file name: one
+// that would leave the directory throws instead.
+static std::optional<std::string> RecordingFilePath(v8::Isolate* isolate,
+                                                    v8::Local<v8::Value> name) {
+  v8::String::Utf8Value filename(isolate, name);
+  std::string_view file(*filename, filename.length());
+  if (file.empty() || file == "." || file == ".." ||
+      file.find_first_of(std::string_view("/\\\0", 3)) != std::string_view::npos) {
+    isolate->ThrowException(v8::Exception::TypeError(
+        ToV8String(isolate, "not a file name of the recording directory")));
+    return std::nullopt;
+  }
+  return GetRecordingDirectory() + DirectorySeparator + std::string(file);
+}
+
 static void GetRecordingFilePath(const v8::FunctionCallbackInfo<v8::Value>& args) {
   CHECK(args.Length() == 1 && args[0]->IsString() && "must be called with one string");
   v8::Isolate* isolate = args.GetIsolate();
-  v8::String::Utf8Value filename(isolate, args[0]);
+  std::optional<std::string> path = RecordingFilePath(isolate, args[0]);
+  if (!path) {
+    return;
+  }
 
-  std::string path = GetRecordingDirectory() + DirectorySeparator + std::string(*filename);
-
-  args.GetReturnValue().Set(ToV8String(isolate, path.c_str()));
+  args.GetReturnValue().Set(ToV8String(isolate, path->c_str()));
 }
 
 static void RecordingDirectoryFileExists(const v8::FunctionCallbackInfo<v8::Value>& args) {
   CHECK(args.Length() == 1 && args[0]->IsString() && "must be called with one string");
   v8::Isolate* isolate = args.GetIsolate();
-  v8::String::Utf8Value filename(isolate, args[0]);
+  std::optional<std::string> path = RecordingFilePath(isolate, args[0]);
+  if (!path) {
+    return;
+  }
 
-  std::string path = GetRecordingDirectory() + DirectorySeparator + std::string(*filename);
-
-  std::ifstream stream(path);
+  std::ifstream stream(*path);
 
   args.GetReturnValue().Set(v8::Boolean::New(isolate, stream.good()));
 }
@@ -1314,10 +1334,12 @@ static void RecordingDirectoryFileExists(const v8::FunctionCallbackInfo<v8::Valu
 static void ReadFromRecordingDirectory(const v8::FunctionCallbackInfo<v8::Value>& args) {
   CHECK(args.Length() == 1 && args[0]->IsString() && "must be called with one string");
   v8::Isolate* isolate = args.GetIsolate();
-  v8::String::Utf8Value filename(isolate, args[0]);
+  std::optional<std::string> path = RecordingFilePath(isolate, args[0]);
+  if (!path) {
+    return;
+  }
 
-  std::string path = GetRecordingDirectory() + DirectorySeparator + std::string(*filename);
-  std::ifstream stream(path);
+  std::ifstream stream(*path);
   std::string data;
   stream >> data;
   stream.close();
@@ -1329,17 +1351,20 @@ static void WriteToRecordingDirectory(const v8::FunctionCallbackInfo<v8::Value>&
   CHECK(args.Length() == 2 && args[0]->IsString() && args[1]->IsString() &&
         "must be called with two strings");
   v8::Isolate* isolate = args.GetIsolate();
+  std::optional<std::string> path = RecordingFilePath(isolate, args[0]);
+  if (!path) {
+    return;
+  }
   v8::String::Utf8Value filename(isolate, args[0]);
   v8::String::Utf8Value content(isolate, args[1]);
 
   recordreplay::Assert("[RUN-1670-1764] WriteToRecordingDirectory %s (%zu)", *filename, (size_t)strlen(*content));
 
-  std::string path = GetRecordingDirectory() + DirectorySeparator + std::string(*filename);
-  std::ofstream stream(path);
+  std::ofstream stream(*path);
   stream << *content;
   stream.close();
 
-  args.GetReturnValue().Set(ToV8String(isolate, path.c_str()));
+  args.GetReturnValue().Set(ToV8String(isolate, path->c_str()));
 }
 
 static void AddRecordingEvent(const v8::FunctionCallbackInfo<v8::Value>& args) {
