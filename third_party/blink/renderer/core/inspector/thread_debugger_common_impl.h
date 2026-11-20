@@ -39,6 +39,8 @@ class ThreadDebuggerCommonImpl : public ThreadDebugger {
                            std::unique_ptr<SourceLocation>) override;
   void PromiseRejectionRevoked(v8::Local<v8::Context>,
                                unsigned promise_rejection_id) override;
+  // Console text of an unhandled rejection with |error_message|.
+  static String PromiseRejectionMessage(const String& error_message);
 
   v8_inspector::V8StackTraceId StoreCurrentStackTrace(
       const StringView& description) override;
