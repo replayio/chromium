@@ -23,7 +23,10 @@ class CORE_EXPORT EventDependencyScope {
   enum class Kind {
     // Dispatch to a Node, incl. its default actions. Always gets a node.
     kDispatchEvent,
-    // Dispatch to non-Node targets. Gets a node at its first script listener.
+    // Dispatch to non-Node targets. Gets a node when it first attempts to
+    // invoke a script listener; that invocation may still run no script.
+    // Nodes created in the dispatch before then stay under the enclosing
+    // execution.
     kEmitEvent,
   };
 
