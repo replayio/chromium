@@ -303,10 +303,12 @@ static void PromiseRejectHandler(v8::PromiseRejectMessage data,
   String error_message;
   SanitizeScriptErrors sanitize_script_errors = SanitizeScriptErrors::kSanitize;
   std::unique_ptr<SourceLocation> location;
+  int record_replay_bookmark = 0;
 
   v8::Local<v8::Message> message =
       v8::Exception::CreateMessage(isolate, exception);
   if (!message.IsEmpty()) {
+    record_replay_bookmark = V8GetMessageRecordReplayBookmark(message);
     // message->Get() can be empty here. https://crbug.com/450330
     error_message = ToCoreStringWithNullCheck(message->Get());
     location = CaptureSourceLocation(isolate, message, context);
@@ -324,7 +326,8 @@ static void PromiseRejectHandler(v8::PromiseRejectMessage data,
 
   rejected_promises.RejectedWithNoHandler(script_state, data, error_message,
                                           std::move(location),
-                                          sanitize_script_errors);
+                                          sanitize_script_errors,
+                                          record_replay_bookmark);
 }
 
 static void PromiseRejectHandlerInMainThread(v8::PromiseRejectMessage data) {

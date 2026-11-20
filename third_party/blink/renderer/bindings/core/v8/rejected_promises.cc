@@ -8,13 +8,16 @@
 #include <utility>
 
 #include "base/memory/ptr_util.h"
+#include "base/record_replay.h"
 #include "third_party/blink/public/platform/platform.h"
+#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_promise_rejection_event_init.h"
 #include "third_party/blink/renderer/core/dom/events/event_target.h"
 #include "third_party/blink/renderer/core/events/promise_rejection_event.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
+#include "third_party/blink/renderer/core/inspector/thread_debugger_common_impl.h"
 #include "third_party/blink/renderer/platform/bindings/scoped_persistent.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/thread_debugger.h"
@@ -35,7 +38,8 @@ class RejectedPromises::Message final {
           v8::Local<v8::Value> exception,
           const String& error_message,
           std::unique_ptr<SourceLocation> location,
-          SanitizeScriptErrors sanitize_script_errors)
+          SanitizeScriptErrors sanitize_script_errors,
+          int record_replay_bookmark)
       : script_state_(script_state),
         promise_(script_state->GetIsolate(), promise),
         exception_(script_state->GetIsolate(), exception),
@@ -44,7 +48,9 @@ class RejectedPromises::Message final {
         promise_rejection_id_(0),
         collected_(false),
         should_log_to_console_(true),
-        sanitize_script_errors_(sanitize_script_errors) {}
+        sanitize_script_errors_(sanitize_script_errors),
+        record_replay_bookmark_(record_replay_bookmark),
+        record_replay_reported_(false) {}
 
   bool IsCollected() { return collected_ || !script_state_->ContextIsValid(); }
 
@@ -84,6 +90,16 @@ class RejectedPromises::Message final {
     }
 
     if (should_log_to_console_) {
+      // Without the message's bookmark, a bookmark here keeps it revocable.
+      if (!record_replay_bookmark_ && recordreplay::IsRecordingOrReplaying() &&
+          v8::IsMainThread()) {
+        record_replay_bookmark_ = (int)recordreplay::NewBookmark();
+      }
+      record_replay_reported_ = true;
+      RecordReplayOnPromiseRejection(
+          record_replay_bookmark_,
+          ThreadDebuggerCommonImpl::PromiseRejectionMessage(error_message_),
+          *location_);
       ThreadDebugger* debugger =
           ThreadDebugger::From(script_state_->GetIsolate());
       if (debugger) {
@@ -133,6 +149,9 @@ class RejectedPromises::Message final {
                                           promise_rejection_id_);
       }
     }
+
+    if (record_replay_reported_)
+      RecordReplayOnPromiseRejectionRevoked(record_replay_bookmark_);
   }
 
   void MakePromiseWeak() {
@@ -179,6 +198,8 @@ class RejectedPromises::Message final {
   bool collected_;
   bool should_log_to_console_;
   SanitizeScriptErrors sanitize_script_errors_;
+  int record_replay_bookmark_;
+  bool record_replay_reported_;
 };
 
 RejectedPromises::RejectedPromises() = default;
@@ -190,10 +211,11 @@ void RejectedPromises::RejectedWithNoHandler(
     v8::PromiseRejectMessage data,
     const String& error_message,
     std::unique_ptr<SourceLocation> location,
-    SanitizeScriptErrors sanitize_script_errors) {
+    SanitizeScriptErrors sanitize_script_errors,
+    int record_replay_bookmark) {
   queue_.push_back(std::make_unique<Message>(
       script_state, data.GetPromise(), data.GetValue(), error_message,
-      std::move(location), sanitize_script_errors));
+      std::move(location), sanitize_script_errors, record_replay_bookmark));
 }
 
 void RejectedPromises::HandlerAdded(v8::PromiseRejectMessage data) {
