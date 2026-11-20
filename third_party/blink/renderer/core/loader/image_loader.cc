@@ -72,6 +72,7 @@
 #include "third_party/blink/renderer/platform/weborigin/security_policy.h"
 
 #include "base/json/json_writer.h"
+#include "base/record_replay_network_request.h"
 
 namespace blink {
 
@@ -991,6 +992,8 @@ void ImageLoader::DispatchPendingLoadEvent(
       base::Value::Dict info;
       info.Set("kind", "imageLoaded");
       info.Set("url", element_->ImageSourceURL().GetString().Utf8());
+      recordreplay::SetConsumedRequestId(info,
+                                         image_content_->ConsumedRequest());
       base::JSONWriter::Write(info, &json);
     }
     int node_id = recordreplay::NewDependencyGraphNode(json.c_str());

@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_LOADER_RESOURCE_IMAGE_RESOURCE_INFO_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_LOADER_RESOURCE_IMAGE_RESOURCE_INFO_H_
 
+#include "base/record_replay_network_request.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -31,6 +32,8 @@ class CORE_EXPORT ImageResourceInfo : public GarbageCollectedMixin {
   virtual const KURL& Url() const = 0;
   virtual base::TimeTicks LoadResponseEnd() const = 0;
   virtual const ResourceResponse& GetResponse() const = 0;
+  // For recording/replaying.
+  virtual recordreplay::ConsumedNetworkRequest ConsumedRequest() const = 0;
   virtual bool IsCacheValidator() const = 0;
   enum DoesCurrentFrameHaveSingleSecurityOrigin {
     kHasMultipleSecurityOrigin,

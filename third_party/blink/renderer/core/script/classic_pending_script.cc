@@ -526,4 +526,13 @@ KURL ClassicPendingScript::UrlForTracing() const {
   return GetResource()->Url();
 }
 
+recordreplay::ConsumedNetworkRequest ClassicPendingScript::ConsumedRequest()
+    const {
+  // An inline script has no resource: its source is the element's text.
+  const Resource* resource = GetResource();
+  return resource ? recordreplay::ConsumedNetworkRequest::Request(
+                        resource->InspectorId())
+                  : recordreplay::ConsumedNetworkRequest::None();
+}
+
 }  // namespace blink
