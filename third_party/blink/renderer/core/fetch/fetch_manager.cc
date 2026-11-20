@@ -11,6 +11,7 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/record_replay.h"
+#include "base/record_replay_network_request.h"
 #include "base/strings/strcat.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/unguessable_token.h"
@@ -431,7 +432,8 @@ void FetchManager::Loader::DidReceiveResponse(
       execution_context_, response_type, url_list_,
       fetch_request_data_->Method(), fetch_request_data_->Credentials(),
       response);
-  response_data->SetInspectorId(identifier);
+  response_data->SetConsumedRequest(
+      recordreplay::ConsumedNetworkRequest::Request(identifier));
 
   FetchResponseData* tainted_response = nullptr;
   switch (response_type) {

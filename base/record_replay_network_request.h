@@ -52,7 +52,8 @@ class ConsumedNetworkRequest {
 };
 
 // Names the request with a Blink inspector identifier for its consumers, as
-// its networkRequest and networkReceiveData nodes do. Main thread only.
+// its latest networkRequest or networkReceiveData node does: called at each.
+// Main thread only.
 void RegisterNetworkRequestId(uint64_t inspector_id,
                               const std::string& request_id);
 

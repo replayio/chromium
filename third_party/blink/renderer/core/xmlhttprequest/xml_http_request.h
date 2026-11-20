@@ -318,8 +318,8 @@ class CORE_EXPORT XMLHttpRequest final
   State state_ = kUnsent;
 
   ResourceResponse response_;
-  // The request the response or failure comes from, for recording/replaying.
-  // None until one does, again on open().
+  // The request whose response or failure causes the current state, for
+  // recording/replaying. None from open(), abort() and timeouts.
   recordreplay::ConsumedNetworkRequest consumed_request_ =
       recordreplay::ConsumedNetworkRequest::None();
 

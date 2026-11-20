@@ -623,6 +623,7 @@ mixed_component("base") {
     "ranges/ranges.h",
     "record_replay.cc",
     "record_replay.h",
+    "record_replay_network_request.cc",
     "record_replay_network_request.h",
     "record_replay_ordered_atomic.h",
     "record_replay_paint_surface.h",

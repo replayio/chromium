@@ -37,7 +37,6 @@
 #include "third_party/blink/public/common/loader/loading_behavior_flag.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/task_type.h"
-#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
 #include "third_party/blink/renderer/core/css/media_values_cached.h"
 #include "third_party/blink/renderer/core/css/style_engine.h"
 #include "third_party/blink/renderer/core/dom/document_fragment.h"
@@ -78,6 +77,7 @@
 
 #include "base/json/json_writer.h"
 #include "base/record_replay.h"
+#include "base/record_replay_network_request.h"
 
 // V8 API for HTML parsing activity that will be reported to the record/replay driver.
 extern "C" void V8RecordReplayHTMLParseStart(void* token, const char* url);
@@ -843,7 +843,7 @@ static recordreplay::ConsumedNetworkRequest ParserConsumedRequest(
     const Document& document,
     bool parsing_fragment) {
   return parsing_fragment ? recordreplay::ConsumedNetworkRequest::None()
-                          : RecordReplayDocumentRequest(document);
+                          : document.RecordReplayContentRequest();
 }
 
 bool HTMLDocumentParser::PumpTokenizer() {

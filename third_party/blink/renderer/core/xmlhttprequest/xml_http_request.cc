@@ -364,6 +364,7 @@ void XMLHttpRequest::InitResponseDocument() {
   // FIXME: Set Last-Modified.
   response_document_->SetContextFeatures(document->GetContextFeatures());
   response_document_->SetMimeType(FinalResponseMIMETypeWithFallback());
+  response_document_->SetRecordReplayContentRequest(consumed_request_);
 }
 
 Document* XMLHttpRequest::responseXML(ExceptionState& exception_state) {
@@ -1232,6 +1233,7 @@ void XMLHttpRequest::CreateRequest(scoped_refptr<EncodedFormData> http_body,
 void XMLHttpRequest::abort() {
   DVLOG(1) << this << " abort()";
 
+  consumed_request_ = recordreplay::ConsumedNetworkRequest::None();
   InternalAbort();
 
   // The script never gets any chance to call abort() on a sync XHR between
@@ -2074,6 +2076,7 @@ void XMLHttpRequest::DidDownloadToBlob(scoped_refptr<BlobDataHandle> blob) {
 void XMLHttpRequest::HandleDidTimeout() {
   DVLOG(1) << this << " handleDidTimeout()";
 
+  consumed_request_ = recordreplay::ConsumedNetworkRequest::None();
   InternalAbort();
 
   HandleRequestError(DOMExceptionCode::kTimeoutError,

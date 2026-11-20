@@ -92,9 +92,8 @@ class CORE_EXPORT FetchResponseData final
   // The network request delivering the body, for recording/replaying. None
   // for responses not loaded by a fetch.
   recordreplay::ConsumedNetworkRequest ConsumedRequest() const;
-  void SetInspectorId(uint64_t inspector_id) {
-    consumed_request_ =
-        recordreplay::ConsumedNetworkRequest::Request(inspector_id);
+  void SetConsumedRequest(recordreplay::ConsumedNetworkRequest request) {
+    consumed_request_ = request;
   }
 
   int64_t GetPadding() const { return padding_; }

@@ -40,6 +40,7 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay_network_request.h"
 #include "base/time/default_tick_clock.h"
 #include "base/types/optional_util.h"
 #include "build/chromeos_buildflags.h"
@@ -1906,6 +1907,13 @@ void DocumentLoader::DidInstallNewDocument(Document* document) {
 
   if (history_item_ && IsBackForwardLoadType(load_type_))
     document->SetStateForNewControls(history_item_->GetDocumentState());
+
+  // The main resource's body, unless the URL loads as an empty document.
+  if (!loading_url_as_empty_document_) {
+    document->SetRecordReplayContentRequest(
+        recordreplay::ConsumedNetworkRequest::Request(
+            main_resource_identifier_));
+  }
 
   DCHECK(document->GetFrame());
   // TODO(dgozman): modify frame's client hints directly once we commit
