@@ -1506,7 +1506,13 @@ ProtocolObjectPreview.prototype = {
           } else {
             // entry should be string -> Look it up in results
             const cdpEntry = cdpProperties.result.find(prop => prop.name === entry);
-            if (cdpEntry) {
+            // Only where CDP gave a value. An accessor it would not read has
+            // none, and an entry built from that carries no value, which is
+            // exactly what an evaluated getter returning undefined looks like.
+            // Leaving the entry out keeps those apart and lets the client ask
+            // for the property with Pause.getObjectProperty, which may run the
+            // getter because it diverges the pause.
+            if (cdpEntry && "value" in cdpEntry) {
               const rrpEntry = buildRrpObjectFromCdpObject(cdpEntry.value);
               this.setGetterValueUnchecked(entry, rrpEntry);
             }
