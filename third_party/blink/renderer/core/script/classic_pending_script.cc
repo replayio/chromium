@@ -526,11 +526,14 @@ KURL ClassicPendingScript::UrlForTracing() const {
   return GetResource()->Url();
 }
 
-absl::optional<uint64_t> ClassicPendingScript::SourceInspectorId() const {
-  if (!is_external_ || !GetResource())
-    return absl::nullopt;
-
-  return GetResource()->InspectorId();
+recordreplay::ConsumedNetworkRequest ClassicPendingScript::ConsumedRequest()
+    const {
+  // An inline script's source is the element's text.
+  if (!is_external_)
+    return recordreplay::ConsumedNetworkRequest::None();
+  return GetResource() ? recordreplay::ConsumedNetworkRequest::Request(
+                             GetResource()->InspectorId())
+                       : recordreplay::ConsumedNetworkRequest::Unknown();
 }
 
 }  // namespace blink

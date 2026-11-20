@@ -3328,25 +3328,12 @@ int RecordReplayOnDOMMutation(Node& target, const char* type) {
   return recordreplay::NewDependencyGraphNode(json.c_str());
 }
 
-void RecordReplaySetNetworkRequestId(base::Value::Dict& info,
-                                     absl::optional<uint64_t> inspector_id) {
-  if (!inspector_id) {
-    info.Set("requestId", base::Value());
-    return;
-  }
-  const std::string* request_id =
-      recordreplay::NetworkRequestId(*inspector_id);
-  if (request_id) {
-    info.Set("requestId", *request_id);
-  }
-}
-
-void RecordReplaySetDocumentRequestId(base::Value::Dict& info,
-                                      const Document& document) {
+recordreplay::ConsumedNetworkRequest RecordReplayDocumentRequest(
+    const Document& document) {
   DocumentLoader* loader = document.Loader();
-  RecordReplaySetNetworkRequestId(
-      info, loader ? absl::make_optional(loader->MainResourceIdentifier())
-                   : absl::nullopt);
+  return loader ? recordreplay::ConsumedNetworkRequest::Request(
+                      loader->MainResourceIdentifier())
+                : recordreplay::ConsumedNetworkRequest::None();
 }
 
 }  // namespace blink

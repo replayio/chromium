@@ -26,6 +26,7 @@
 #include <memory>
 
 #include "base/memory/scoped_refptr.h"
+#include "base/record_replay_network_request.h"
 #include "base/time/time.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "services/network/public/mojom/trust_tokens.mojom-blink.h"
@@ -317,9 +318,10 @@ class CORE_EXPORT XMLHttpRequest final
   State state_ = kUnsent;
 
   ResourceResponse response_;
-  // The inspector identifier of the request delivering |response_|, for
-  // recording/replaying.
-  absl::optional<uint64_t> response_inspector_id_;
+  // The request the response or failure comes from, for recording/replaying.
+  // None until one does, again on open().
+  recordreplay::ConsumedNetworkRequest consumed_request_ =
+      recordreplay::ConsumedNetworkRequest::None();
 
   std::unique_ptr<TextResourceDecoder> decoder_;
 

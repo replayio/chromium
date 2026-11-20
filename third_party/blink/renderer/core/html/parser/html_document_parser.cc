@@ -839,14 +839,11 @@ void HTMLDocumentParser::ForcePlaintextForTextDocument() {
 }
 
 // A fragment parser consumes no request.
-static void SetDependencyGraphRequestId(base::Value::Dict& info,
-                                        Document* document,
-                                        bool parsing_fragment) {
-  if (parsing_fragment) {
-    RecordReplaySetNetworkRequestId(info, absl::nullopt);
-  } else {
-    RecordReplaySetDocumentRequestId(info, *document);
-  }
+static recordreplay::ConsumedNetworkRequest ParserConsumedRequest(
+    const Document& document,
+    bool parsing_fragment) {
+  return parsing_fragment ? recordreplay::ConsumedNetworkRequest::None()
+                          : RecordReplayDocumentRequest(document);
 }
 
 bool HTMLDocumentParser::PumpTokenizer() {
@@ -859,7 +856,8 @@ bool HTMLDocumentParser::PumpTokenizer() {
     base::Value::Dict info;
     info.Set("kind", "documentPumpTokenizer");
     info.Set("url", GetDocument()->Url().GetString().Utf8());
-    SetDependencyGraphRequestId(info, GetDocument(), IsParsingFragment());
+    recordreplay::SetConsumedRequestId(
+        info, ParserConsumedRequest(*GetDocument(), IsParsingFragment()));
     std::string json;
     base::JSONWriter::Write(info, &json);
     execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
@@ -1151,7 +1149,8 @@ void HTMLDocumentParser::Append(const String& input_source) {
     base::Value::Dict info;
     info.Set("kind", "documentAppendString");
     info.Set("url", GetDocument()->Url().GetString().Utf8());
-    SetDependencyGraphRequestId(info, GetDocument(), IsParsingFragment());
+    recordreplay::SetConsumedRequestId(
+        info, ParserConsumedRequest(*GetDocument(), IsParsingFragment()));
     info.Set("length", (int)input_source.Utf8().length());
     std::string json;
     base::JSONWriter::Write(info, &json);

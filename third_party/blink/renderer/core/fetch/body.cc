@@ -9,7 +9,6 @@
 
 #include "base/memory/scoped_refptr.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
-#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/fetch/body_stream_buffer.h"
@@ -31,6 +30,7 @@
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
 #include "base/json/json_writer.h"
+#include "base/record_replay_network_request.h"
 
 namespace blink {
 
@@ -41,11 +41,12 @@ class BodyConsumerBase : public GarbageCollected<BodyConsumerBase>,
  public:
   BodyConsumerBase(ScriptPromiseResolver* resolver,
                    const std::string& url,
-                   absl::optional<uint64_t> inspector_id)
+                   recordreplay::ConsumedNetworkRequest request)
       : resolver_(resolver),
         task_runner_(ExecutionContext::From(resolver_->GetScriptState())
-                         ->GetTaskRunner(TaskType::kNetworking)), url_(url),
-        inspector_id_(inspector_id) {}
+                         ->GetTaskRunner(TaskType::kNetworking)),
+        url_(url),
+        request_(request) {}
   BodyConsumerBase(const BodyConsumerBase&) = delete;
   BodyConsumerBase& operator=(const BodyConsumerBase&) = delete;
 
@@ -72,7 +73,7 @@ class BodyConsumerBase : public GarbageCollected<BodyConsumerBase>,
       base::Value::Dict info;
       info.Set("kind", "scheduleResolveBodyConsumer");
       info.Set("url", url_);
-      RecordReplaySetNetworkRequestId(info, inspector_id_);
+      recordreplay::SetConsumedRequestId(info, request_);
       std::string json;
       base::JSONWriter::Write(info, &json);
       record_replay_scheduled_node_id_ = recordreplay::NewDependencyGraphNode(json.c_str());
@@ -108,7 +109,7 @@ class BodyConsumerBase : public GarbageCollected<BodyConsumerBase>,
   const scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
 
   std::string url_;
-  absl::optional<uint64_t> inspector_id_;
+  const recordreplay::ConsumedNetworkRequest request_;
   int record_replay_scheduled_node_id_ = 0;
 };
 
@@ -210,10 +211,10 @@ ScriptPromise Body::arrayBuffer(ScriptState* script_state,
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   ScriptPromise promise = resolver->Promise();
   if (BodyBuffer()) {
-    BodyBuffer()->StartLoading(
-        FetchDataLoader::CreateLoaderAsArrayBuffer(),
-        MakeGarbageCollected<BodyArrayBufferConsumer>(resolver, GetUrl(), GetInspectorId()),
-        exception_state);
+    BodyBuffer()->StartLoading(FetchDataLoader::CreateLoaderAsArrayBuffer(),
+                               MakeGarbageCollected<BodyArrayBufferConsumer>(
+                                   resolver, GetUrl(), GetConsumedRequest()),
+                               exception_state);
     if (exception_state.HadException()) {
       // Need to resolve the ScriptPromiseResolver to avoid a DCHECK().
       resolver->Resolve();
@@ -248,7 +249,9 @@ ScriptPromise Body::blob(ScriptState* script_state,
     BodyBuffer()->StartLoading(
         FetchDataLoader::CreateLoaderAsBlobHandle(
             MimeType(), context->GetTaskRunner(TaskType::kNetworking)),
-        MakeGarbageCollected<BodyBlobConsumer>(resolver, GetUrl(), GetInspectorId()), exception_state);
+        MakeGarbageCollected<BodyBlobConsumer>(resolver, GetUrl(),
+                                               GetConsumedRequest()),
+        exception_state);
     if (exception_state.HadException()) {
       // Need to resolve the ScriptPromiseResolver to avoid a DCHECK().
       resolver->Resolve();
@@ -284,7 +287,8 @@ ScriptPromise Body::formData(ScriptState* script_state,
     if (body_buffer && !boundary.empty()) {
       body_buffer->StartLoading(
           FetchDataLoader::CreateLoaderAsFormData(boundary),
-          MakeGarbageCollected<BodyFormDataConsumer>(resolver, GetUrl(), GetInspectorId()),
+          MakeGarbageCollected<BodyFormDataConsumer>(resolver, GetUrl(),
+                                                     GetConsumedRequest()),
           exception_state);
       if (exception_state.HadException()) {
         // Need to resolve the ScriptPromiseResolver to avoid a DCHECK().
@@ -302,7 +306,8 @@ ScriptPromise Body::formData(ScriptState* script_state,
       BodyBuffer()->StartLoading(
           FetchDataLoader::CreateLoaderAsString(
               TextResourceDecoderOptions::CreateUTF8DecodeWithoutBOM()),
-          MakeGarbageCollected<BodyFormDataConsumer>(resolver, GetUrl(), GetInspectorId()),
+          MakeGarbageCollected<BodyFormDataConsumer>(resolver, GetUrl(),
+                                                     GetConsumedRequest()),
           exception_state);
       if (exception_state.HadException()) {
         // Need to resolve the ScriptPromiseResolver to avoid a DCHECK().
@@ -315,10 +320,10 @@ ScriptPromise Body::formData(ScriptState* script_state,
     return promise;
   } else {
     if (BodyBuffer()) {
-      BodyBuffer()->StartLoading(
-          FetchDataLoader::CreateLoaderAsFailure(),
-          MakeGarbageCollected<BodyFormDataConsumer>(resolver, GetUrl(), GetInspectorId()),
-          exception_state);
+      BodyBuffer()->StartLoading(FetchDataLoader::CreateLoaderAsFailure(),
+                                 MakeGarbageCollected<BodyFormDataConsumer>(
+                                     resolver, GetUrl(), GetConsumedRequest()),
+                                 exception_state);
       if (exception_state.HadException()) {
         // Need to resolve the ScriptPromiseResolver to avoid a DCHECK().
         resolver->Resolve();
@@ -349,7 +354,9 @@ ScriptPromise Body::json(ScriptState* script_state,
     BodyBuffer()->StartLoading(
         FetchDataLoader::CreateLoaderAsString(
             TextResourceDecoderOptions::CreateUTF8Decode()),
-        MakeGarbageCollected<BodyJsonConsumer>(resolver, GetUrl(), GetInspectorId()), exception_state);
+        MakeGarbageCollected<BodyJsonConsumer>(resolver, GetUrl(),
+                                               GetConsumedRequest()),
+        exception_state);
     if (exception_state.HadException()) {
       // Need to resolve the ScriptPromiseResolver to avoid a DCHECK().
       resolver->Resolve();
@@ -378,7 +385,9 @@ ScriptPromise Body::text(ScriptState* script_state,
     BodyBuffer()->StartLoading(
         FetchDataLoader::CreateLoaderAsString(
             TextResourceDecoderOptions::CreateUTF8Decode()),
-        MakeGarbageCollected<BodyTextConsumer>(resolver, GetUrl(), GetInspectorId()), exception_state);
+        MakeGarbageCollected<BodyTextConsumer>(resolver, GetUrl(),
+                                               GetConsumedRequest()),
+        exception_state);
     if (exception_state.HadException()) {
       // Need to resolve the ScriptPromiseResolver to avoid a DCHECK().
       resolver->Resolve();

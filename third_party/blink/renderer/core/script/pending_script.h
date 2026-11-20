@@ -27,8 +27,8 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_SCRIPT_PENDING_SCRIPT_H_
 
 #include "base/check_op.h"
+#include "base/record_replay_network_request.h"
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/script/script_type.mojom-blink-forward.h"
 #include "third_party/blink/public/platform/scheduler/web_scoped_virtual_time_pauser.h"
 #include "third_party/blink/renderer/core/core_export.h"
@@ -105,10 +105,8 @@ class CORE_EXPORT PendingScript : public GarbageCollected<PendingScript>,
   // but it requires further refactoring.
   virtual KURL UrlForTracing() const = 0;
 
-  // The inspector identifier of the request delivering a classic script's
-  // source, for recording/replaying. Absent for inline scripts. Module scripts
-  // do not track it.
-  virtual absl::optional<uint64_t> SourceInspectorId() const = 0;
+  // The request delivering the script's source, for recording/replaying.
+  virtual recordreplay::ConsumedNetworkRequest ConsumedRequest() const = 0;
 
   // Used for DCHECK()s.
   bool IsExternalOrModule() const {

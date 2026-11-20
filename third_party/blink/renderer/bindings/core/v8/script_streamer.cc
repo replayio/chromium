@@ -15,7 +15,6 @@
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/mojom/script/script_type.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/script/script_type.mojom-shared.h"
-#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_code_cache.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/element.h"
@@ -42,6 +41,7 @@
 
 #include "base/json/json_writer.h"
 #include "base/record_replay.h"
+#include "base/record_replay_network_request.h"
 
 namespace recordreplay {
 
@@ -807,7 +807,9 @@ bool ResourceScriptStreamer::TryStartStreamingTask() {
     base::Value::Dict info;
     info.Set("kind", "scheduleScriptStreamingTask");
     info.Set("url", ScriptURLString().Utf8());
-    RecordReplaySetNetworkRequestId(info, script_resource_->InspectorId());
+    recordreplay::SetConsumedRequestId(
+        info, recordreplay::ConsumedNetworkRequest::Request(
+                  script_resource_->InspectorId()));
     std::string json;
     base::JSONWriter::Write(info, &json);
     record_replay_scheduled_node_id_ = recordreplay::NewDependencyGraphNode(json.c_str());

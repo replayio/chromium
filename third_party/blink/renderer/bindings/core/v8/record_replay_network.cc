@@ -8,6 +8,7 @@
 
 #include "base/base64.h"
 #include "base/json/json_writer.h"
+#include "base/record_replay_network_request.h"
 #include "base/values.h"
 #include "net/base/net_errors.h"
 #include "third_party/blink/public/platform/web_url_error.h"
@@ -302,15 +303,18 @@ void OnNetworkPrepareRequest(const blink::Document* document,
   }
   std::string requestId = RecordReplayNetworkRequestId(request.InspectorId());
 
-  if (recordreplay::DependencyGraphEnabled() &&
-      !request_state.replay_internal) {
-    base::Value::Dict info;
-    info.Set("kind", "networkRequest");
-    info.Set("requestId", requestId);
-    std::string json;
-    base::JSONWriter::Write(info, &json);
-    recordreplay::NewDependencyGraphNode(json.c_str());
-    recordreplay::SetNetworkRequestId(request.InspectorId(), requestId);
+  if (recordreplay::DependencyGraphEnabled()) {
+    if (request_state.replay_internal) {
+      recordreplay::RegisterReplayInternalNetworkRequest(request.InspectorId());
+    } else {
+      base::Value::Dict info;
+      info.Set("kind", "networkRequest");
+      info.Set("requestId", requestId);
+      std::string json;
+      base::JSONWriter::Write(info, &json);
+      recordreplay::NewDependencyGraphNode(json.c_str());
+      recordreplay::RegisterNetworkRequestId(request.InspectorId(), requestId);
+    }
   }
 
   base::DictionaryValue dict;
@@ -478,7 +482,7 @@ void OnNetworkReceiveData(uint64_t inspector_id, const char* data, int length) {
     std::string json;
     base::JSONWriter::Write(info, &json);
     recordreplay::NewDependencyGraphNode(json.c_str());
-    recordreplay::SetNetworkRequestId(inspector_id, requestId);
+    recordreplay::RegisterNetworkRequestId(inspector_id, requestId);
   }
 
   base::DictionaryValue dict;

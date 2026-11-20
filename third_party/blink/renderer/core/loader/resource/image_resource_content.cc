@@ -46,8 +46,8 @@ class NullImageResourceInfo final
   const KURL& Url() const override { return url_; }
   base::TimeTicks LoadResponseEnd() const override { return base::TimeTicks(); }
   const ResourceResponse& GetResponse() const override { return response_; }
-  absl::optional<uint64_t> InspectorId() const override {
-    return absl::nullopt;
+  recordreplay::ConsumedNetworkRequest ConsumedRequest() const override {
+    return recordreplay::ConsumedNetworkRequest::None();
   }
   bool IsCacheValidator() const override { return false; }
   bool IsAccessAllowed(
@@ -712,8 +712,9 @@ const ResourceResponse& ImageResourceContent::GetResponse() const {
   return info_->GetResponse();
 }
 
-absl::optional<uint64_t> ImageResourceContent::InspectorId() const {
-  return info_->InspectorId();
+recordreplay::ConsumedNetworkRequest ImageResourceContent::ConsumedRequest()
+    const {
+  return info_->ConsumedRequest();
 }
 
 absl::optional<ResourceError> ImageResourceContent::GetResourceError() const {

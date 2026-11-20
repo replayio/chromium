@@ -1069,9 +1069,9 @@ std::string Request::GetUrl() const {
   return url().GetString().Utf8();
 }
 
-absl::optional<uint64_t> Request::GetInspectorId() const {
+recordreplay::ConsumedNetworkRequest Request::GetConsumedRequest() const {
   // A request's body is sent, not received.
-  return absl::nullopt;
+  return recordreplay::ConsumedNetworkRequest::None();
 }
 
 mojom::blink::RequestContextType Request::GetRequestContextType() const {

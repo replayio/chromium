@@ -596,8 +596,8 @@ std::string Response::GetUrl() const {
   return url().Utf8();
 }
 
-absl::optional<uint64_t> Response::GetInspectorId() const {
-  return response_->InspectorId();
+recordreplay::ConsumedNetworkRequest Response::GetConsumedRequest() const {
+  return response_->ConsumedRequest();
 }
 
 void Response::Trace(Visitor* visitor) const {

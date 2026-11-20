@@ -167,9 +167,10 @@ BodyStreamBuffer* FetchResponseData::InternalBuffer() const {
   return buffer_;
 }
 
-absl::optional<uint64_t> FetchResponseData::InspectorId() const {
-  return internal_response_ ? internal_response_->InspectorId()
-                            : inspector_id_;
+recordreplay::ConsumedNetworkRequest FetchResponseData::ConsumedRequest()
+    const {
+  return internal_response_ ? internal_response_->ConsumedRequest()
+                            : consumed_request_;
 }
 
 String FetchResponseData::InternalMIMEType() const {
@@ -212,7 +213,7 @@ FetchResponseData* FetchResponseData::Clone(ScriptState* script_state,
   new_response->mime_type_ = mime_type_;
   new_response->request_method_ = request_method_;
   new_response->response_time_ = response_time_;
-  new_response->inspector_id_ = inspector_id_;
+  new_response->consumed_request_ = consumed_request_;
   new_response->cache_storage_cache_name_ = cache_storage_cache_name_;
   new_response->cors_exposed_header_names_ = cors_exposed_header_names_;
   new_response->connection_info_ = connection_info_;

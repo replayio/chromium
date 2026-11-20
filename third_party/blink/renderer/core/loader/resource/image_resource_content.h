@@ -10,6 +10,7 @@
 #include "base/auto_reset.h"
 #include "base/dcheck_is_on.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/record_replay_network_request.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/loader/resource/image_resource_observer.h"
 #include "third_party/blink/renderer/platform/graphics/image.h"
@@ -138,7 +139,7 @@ class CORE_EXPORT ImageResourceContent final
   base::TimeTicks LoadResponseEnd() const;
   bool IsAccessAllowed() const;
   const ResourceResponse& GetResponse() const;
-  absl::optional<uint64_t> InspectorId() const;
+  recordreplay::ConsumedNetworkRequest ConsumedRequest() const;
   absl::optional<ResourceError> GetResourceError() const;
   // DEPRECATED: ImageResourceContents consumers shouldn't need to worry about
   // whether the underlying Resource is being revalidated.

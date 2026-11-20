@@ -28,7 +28,6 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/script/script_type.mojom-shared.h"
 #include "third_party/blink/public/mojom/use_counter/metrics/web_feature.mojom-blink.h"
-#include "third_party/blink/renderer/bindings/core/v8/record_replay_interface.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_controller.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/core/dom/document.h"
@@ -44,6 +43,7 @@
 #include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
 
 #include "base/json/json_writer.h"
+#include "base/record_replay_network_request.h"
 
 namespace blink {
 
@@ -183,9 +183,8 @@ void PendingScript::ExecuteScriptBlock() {
 
   const bool was_canceled = WasCanceled();
   const bool is_external = IsExternal();
-  const bool is_classic =
-      GetScriptType() == mojom::blink::ScriptType::kClassic;
-  const absl::optional<uint64_t> source_inspector_id = SourceInspectorId();
+  const recordreplay::ConsumedNetworkRequest consumed_request =
+      ConsumedRequest();
   const bool created_during_document_write = WasCreatedDuringDocumentWrite();
   const base::TimeTicks parser_blocking_load_start_time =
       ParserBlockingLoadStartTime();
@@ -199,10 +198,7 @@ void PendingScript::ExecuteScriptBlock() {
     info.Set("kind", "executeScriptBlock");
     if (script)
       info.Set("url", script->SourceUrl().GetString().Utf8());
-    // A module script's request is not known here.
-    if (is_classic) {
-      RecordReplaySetNetworkRequestId(info, source_inspector_id);
-    }
+    recordreplay::SetConsumedRequestId(info, consumed_request);
     std::string json;
     base::JSONWriter::Write(info, &json);
     int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
