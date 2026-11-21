@@ -11,6 +11,8 @@ namespace recordreplay {
 
 void InitPaintCallback() {}
 
+void NotifyRasterBuffer(const gpu::Mailbox& mailbox, void* memory, size_t stride) {}
+
 void OnCommitPaint() {}
 
 void OnReadyToCommit() {}

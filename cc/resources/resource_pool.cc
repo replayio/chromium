@@ -36,6 +36,7 @@
 #include "gpu/command_buffer/common/mailbox.h"
 
 #include "base/record_replay.h"
+#include "components/viz/service/display/record_replay_render.h"
 
 using base::trace_event::MemoryAllocatorDump;
 using base::trace_event::MemoryDumpLevelOfDetail;
@@ -133,6 +134,17 @@ void ResourcePool::InUsePoolResource::InstallSoftwareBacking(
   auto backing =
       std::make_unique<ResourcePool::Backing>(size(), format(), color_space());
   backing->CreateSharedImageForSoftwareCompositor(sii.get(), debug_label);
+  // [RecordReplay] Frames are drawn in this process while recording or
+  // replaying, from the memory software raster writes.
+  if (recordreplay::IsRecordingOrReplaying("notify-paints") &&
+      backing->shared_image()) {
+    auto mapping = backing->shared_image()->Map();
+    if (mapping) {
+      recordreplay::NotifyRasterBuffer(backing->shared_image()->mailbox(),
+                                       mapping->GetMemoryForPlane(0).data(),
+                                       mapping->Stride(0));
+    }
+  }
   set_backing(std::move(backing));
 }
 

@@ -9,6 +9,7 @@
 #include "components/viz/common/resources/resource_id.h"
 #include "components/viz/common/surfaces/local_surface_id.h"
 #include "components/viz/common/quads/compositor_frame.h"
+#include "gpu/command_buffer/common/mailbox.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkPixmap.h"
 
@@ -39,6 +40,10 @@ void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
 
 // Called to populate a bitmap with information for the given resource in the current frame.
 bool PopulateSkBitmapWithResource(SkBitmap* sk_bitmap, viz::ResourceId resource_id);
+
+// Gives the memory a software tile rasters into, for drawing frames that use
+// its shared image.
+void NotifyRasterBuffer(const gpu::Mailbox& mailbox, void* memory, size_t stride);
 
 // Called on the compositor thread when painting to the software output device has finished.
 void OnPaintFinished(const SkPixmap& pixmap);

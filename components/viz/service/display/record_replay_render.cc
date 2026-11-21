@@ -5,8 +5,10 @@
 #include "components/viz/service/display/record_replay_render.h"
 
 #include <algorithm>
+#include <map>
 
 #include "base/base64.h"
+#include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
 #include "base/record_replay.h"
 #include "base/record_replay_paint_surface.h"
@@ -18,6 +20,7 @@
 #include "components/viz/service/display/software_output_device.h"
 #include "components/viz/service/display/software_renderer.h"
 #include "components/viz/service/display_embedder/software_output_surface.h"
+#include "gpu/command_buffer/common/mailbox.h"
 #include "ui/gfx/codec/jpeg_codec.h"
 
 namespace blink {
@@ -68,6 +71,24 @@ static std::string SurfaceIdString(const viz::LocalSurfaceId& local_surface_id) 
 
 // Current compositor frame.
 static const viz::CompositorFrame* gCurrentFrame;
+
+// Memory of the software tiles, by the mailbox of their shared image. Entries
+// stay after their image is gone, as mailboxes are not reused. Only the
+// compositor thread uses this.
+struct RasterBufferInfo {
+  raw_ptr<uint8_t, AllowPtrArithmetic> memory;
+  size_t stride;
+};
+static std::map<gpu::Mailbox, RasterBufferInfo>& RasterBuffers() {
+  static base::NoDestructor<std::map<gpu::Mailbox, RasterBufferInfo>> buffers;
+  return *buffers;
+}
+
+void NotifyRasterBuffer(const gpu::Mailbox& mailbox,
+                        void* memory,
+                        size_t stride) {
+  RasterBuffers()[mailbox] = {static_cast<uint8_t*>(memory), stride};
+}
 
 void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
                            const viz::CompositorFrame& frame) {
@@ -133,7 +154,8 @@ bool PopulateSkBitmapWithResource(SkBitmap* sk_bitmap, viz::ResourceId resource_
     return false;
   }
 
-  void* pixels = nullptr;
+  auto it = RasterBuffers().find(transferable->mailbox());
+  void* pixels = it != RasterBuffers().end() ? it->second.memory.get() : nullptr;
 
   recordreplay::AssertMaybeEventsDisallowed("[RUN-2847-3001] recordreplay::PopulateSkBitmapWithResource B %d", !!pixels);
   if (!pixels) {
@@ -143,7 +165,7 @@ bool PopulateSkBitmapWithResource(SkBitmap* sk_bitmap, viz::ResourceId resource_
   SkImageInfo info =
       SkImageInfo::MakeN32Premul(transferable->size.width(),
                                  transferable->size.height());
-  return sk_bitmap->installPixels(info, pixels, info.minRowBytes());
+  return sk_bitmap->installPixels(info, pixels, it->second.stride);
 }
 
 extern "C" size_t V8RecordReplayPaintStart();
