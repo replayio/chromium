@@ -314,6 +314,22 @@ void CompositorProxyDestroyed(cc::ProxyMain* proxy) {
 // frame has claimed the surface since), the current proxy is used and the
 // repaint still returns nothing, unless a paint surface reset is pending.
 static cc::ProxyMain* RepaintCompositorProxy() {
+  // A pending reset gives the paint surface to the next frame submitted, and
+  // only a visible window submits one. The window owning the surface can be
+  // hidden by then: a main frame navigation gives the new document a widget
+  // of its own and hides the old one, whose compositor drops a repaint's
+  // frame.
+  if (IsPaintSurfaceResetPending() && gCompositorProxies) {
+    if (gCurrentCompositorProxy &&
+        gCurrentCompositorProxy->RecordReplayIsVisible()) {
+      return gCurrentCompositorProxy;
+    }
+    for (cc::ProxyMain* proxy : *gCompositorProxies) {
+      if (proxy->RecordReplayIsVisible()) {
+        return proxy;
+      }
+    }
+  }
   const base::UnguessableToken* embed_token = gSurfaceEmbedToken;
   if (embed_token && gCompositorProxies) {
     for (cc::ProxyMain* proxy : *gCompositorProxies) {

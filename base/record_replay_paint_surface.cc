@@ -24,4 +24,8 @@ bool TakePaintSurfaceReset() {
   return RecordReplayValue("TakePaintSurfaceReset", requested);
 }
 
+bool IsPaintSurfaceResetPending() {
+  return gPaintSurfaceResetRequested.load();
+}
+
 }  // namespace recordreplay
