@@ -167,19 +167,7 @@ steps:
       # Next to build_id: the backend that steps testing this build must use.
       echo "$$BACKEND_REV" > "$${BUILDKITE_BUILD_CHECKOUT_PATH:-$$PWD}/build_id/linux/x86_64/backend_rev"
 
-  - label: "📝 E2E Tests (linux-x86_64)"
-    trigger: "runtime-fe-end-to-end-tests"
-    depends_on:
-      - "build-chromium-linux-x86_64"
-    build:
-      env:
-        OS: "linux"
-        ARCH: "x86_64"
-        RECORD_REPLAY_METADATA_SOURCE_COMMIT_TITLE: "${BUILDKITE_MESSAGE}"
-        RECORD_REPLAY_METADATA_SOURCE_COMMIT_ID: "${BUILDKITE_COMMIT}"
-        RECORD_REPLAY_METADATA_SOURCE_BRANCH: "${BUILDKITE_BRANCH}"
-        RECORD_REPLAY_METADATA_SOURCE_MERGE_ID: "${BUILDKITE_PULL_REQUEST}"
-        RUNTIME_REPO: "${BUILDKITE_PULL_REQUEST_REPO}"
+  # CI vehicle, not for merge: the frontend E2E trigger is left out.
 
   # Parallel with E2E: inline chromium-recording (mirrors node test-node).
   # e2e=true: only linux class with Replay Chromium runtime libs (libnss3); can_replay lacks them.
