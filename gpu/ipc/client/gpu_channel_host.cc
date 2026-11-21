@@ -305,6 +305,12 @@ void GpuChannelHost::EnsureFlush(uint32_t deferred_message_id) {
 }
 
 void GpuChannelHost::VerifyFlush(uint32_t deferred_message_id) {
+  // After a replay diverges from its recording there is no GPU process to
+  // answer the sync calls below.
+  if (recordreplay::AreEventsUnavailable("divergent-side-effect")) {
+    return;
+  }
+
   uint32_t cached_flushed_deferred_message_id;
   {
     AutoLock lock(deferred_message_lock_);
