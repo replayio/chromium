@@ -51,7 +51,6 @@
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/platform/blob/blob_bytes_provider.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
-#include "third_party/blink/renderer/platform/mojo/record_replay_thread_remote.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/text/line_ending.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_encoding.h"
@@ -112,7 +111,6 @@ mojom::blink::BlobRegistry* GetThreadSpecificRegistry() {
     // workers wouldn't need to do that.
     Platform::Current()->GetBrowserInterfaceBroker()->GetInterface(
         (*registry).BindNewPipeAndPassReceiver());
-    RecordReplayResetBeforeThreadEnds(&*registry);
   }
   return registry->get();
 }
