@@ -31,7 +31,7 @@ namespace base {
 namespace recordreplay {
 
 // Creates what this file needs made on the main thread before any other
-// thread exists (see AutoOrderedRefCount). Called once the driver is attached.
+// thread exists (see AutoOrderedRelease). Called once the driver is attached.
 void Initialize();
 
 // Whether the calling thread is the one the driver attached on.
@@ -99,17 +99,36 @@ struct AutoOrderedLock {
   int id_;
 };
 
-// Orders one reference count operation among threads. For the few kinds of
+// Orders one reference count decrement among threads. For the few kinds of
 // object whose last reference any of several threads can drop, and whose
-// destruction is something a recording notes (a task posted, a lock taken):
-// the thread that destroys one when recording isn't always the one that does
-// when replaying. One lock serves all of them. Nothing is ordered where events
-// are disallowed or passed through, or before Initialize().
-struct AutoOrderedRefCount {
-  AutoOrderedRefCount();
-  ~AutoOrderedRefCount();
-  AutoOrderedRefCount(const AutoOrderedRefCount&) = delete;
-  AutoOrderedRefCount& operator=(const AutoOrderedRefCount&) = delete;
+// destruction is something a recording notes (a task posted, a route closed, a
+// lock taken), the thread which destroys one while recording has to be the one
+// which destroys it when replaying. One lock serves all of them.
+//
+// Increments are not ordered. An increment needs no ordering as long as it is
+// made by a thread which already holds a reference, or under a lock which also
+// covers dropping the reference it is copied from. It then cannot move past the
+// decrement of the reference it came from, so no replay can reach zero at an
+// earlier decrement than the recording did.
+//
+// What this orders is the decrements, not which threads make them. A holder
+// whose own destruction thread is settled by a race the recording says nothing
+// about drops its reference from either thread, and the driver records the
+// thread which acquires an ordered lock, so a decrement made there can mismatch
+// or wait for a thread which never arrives. Two such holders are known and are
+// not covered: the ThreadSafeProxy above SharedRemoteBase::RemoteWrapper, and
+// the parcels a Mojo message holds above ipcz' NodeLink. ipcz' Router
+// destructor passes events through rather than rely on this lock, for the same
+// reason.
+//
+// Nothing is ordered where events are disallowed or passed through, or before
+// Initialize(). A last reference dropped there is still settled by the race,
+// which is what the leak-references gates on those destruction paths cover.
+struct AutoOrderedRelease {
+  AutoOrderedRelease();
+  ~AutoOrderedRelease();
+  AutoOrderedRelease(const AutoOrderedRelease&) = delete;
+  AutoOrderedRelease& operator=(const AutoOrderedRelease&) = delete;
   int id_;
 };
 

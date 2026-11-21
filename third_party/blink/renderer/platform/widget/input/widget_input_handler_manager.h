@@ -343,10 +343,17 @@ class PLATFORM_EXPORT WidgetInputHandlerManager final
 
   // The WidgetInputHandlerHost is bound on the compositor task runner
   // but class can be called on the compositor and main thread.
-  base::Lock host_lock_;
+  //
+  // [RecordReplay] These locks are named, and so ordered among threads.
+  // ClearClient() resets the remotes on the main thread while callers on the
+  // input and compositor threads take copies of them, and whether a caller
+  // gets a copy or finds the remote already reset decides both what it does
+  // next and who drops the last reference to the remote's shared state. See
+  // mojo::SharedRemoteBase::RemoteWrapper::Release().
+  base::Lock host_lock_{"WidgetInputHandlerManager.host_lock_"};
   mojo::SharedRemote<mojom::blink::WidgetInputHandlerHost> host_
       GUARDED_BY(host_lock_);
-  base::Lock viz_host_lock_;
+  base::Lock viz_host_lock_{"WidgetInputHandlerManager.viz_host_lock_"};
   mojo::SharedRemote<mojom::blink::WidgetInputHandlerHost> viz_host_
       GUARDED_BY(viz_host_lock_);
 

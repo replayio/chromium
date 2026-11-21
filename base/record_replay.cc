@@ -407,7 +407,7 @@ void OrderedUnlock(int lock) {
   V8RecordReplayOrderedUnlock(lock);
 }
 
-// The lock AutoOrderedRefCount takes. Made on the main thread as the process
+// The lock AutoOrderedRelease takes. Made on the main thread as the process
 // starts, before any other thread exists.
 static int gRefCountLock;
 
@@ -417,7 +417,7 @@ void Initialize() {
   }
 }
 
-AutoOrderedRefCount::AutoOrderedRefCount()
+AutoOrderedRelease::AutoOrderedRelease()
     : id_(gRefCountLock && !AreEventsDisallowed() &&
                   !AreEventsPassedThrough() && !HasDivergedFromRecording()
               ? gRefCountLock
@@ -427,7 +427,7 @@ AutoOrderedRefCount::AutoOrderedRefCount()
   }
 }
 
-AutoOrderedRefCount::~AutoOrderedRefCount() {
+AutoOrderedRelease::~AutoOrderedRelease() {
   if (id_) {
     OrderedUnlock(id_);
   }

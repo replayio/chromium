@@ -181,7 +181,7 @@ int ChromeMain(int argc, const char** argv) {
 
   // The driver is attached and V8's bindings are set up. Makes what
   // base/record_replay needs on the main thread before any other thread
-  // exists (the ordered lock of recordreplay::AutoOrderedRefCount). Does
+  // exists (the ordered lock of recordreplay::AutoOrderedRelease). Does
   // nothing in a process that isn't recording or replaying.
   recordreplay::Initialize();
 

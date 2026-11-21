@@ -120,19 +120,26 @@ class SharedRemoteBase
     RemoteWrapper& operator=(const RemoteWrapper&) = delete;
 
     // [RecordReplay] Any thread holding the SharedRemote can drop the last
-    // reference, and whichever does posts the task that deletes this on its
-    // own sequence. Which thread that is has to be the same when replaying
-    // (e.g. a widget's input handler host, cleared on the main thread while
-    // the compositor thread lets go of its copy), so the count is ordered
-    // among threads. The deleting itself is outside the lock.
-    void AddRef() const {
-      recordreplay::AutoOrderedRefCount ordered;
-      base::RefCountedThreadSafe<RemoteWrapper, RemoteWrapperDeleter>::AddRef();
-    }
+    // reference, and whichever does decides whether this is deleted inline or
+    // through a task posted to the remote's own sequence. Upstream races it
+    // where WidgetInputHandlerManager::ClearClient() resets host_ on the main
+    // thread while an input thread caller still holds the copy
+    // GetWidgetInputHandlerHost() handed it. That manager's host locks are
+    // named for this: ordering them is what makes both sides agree on whether
+    // the copy was taken at all, and ordering the decrements then settles which
+    // thread drops the last reference. Increments are left alone, for the reason
+    // given at recordreplay::AutoOrderedRelease, and the deleting itself is
+    // outside the lock.
+    //
+    // The reference held by the ThreadSafeProxy behind the forwarder is dropped
+    // either by the thread which destroys the SharedRemoteBase or by the
+    // sequence which runs the last queued send, and nothing orders that choice,
+    // so the decrement it makes can still come from a thread the recording does
+    // not expect.
     void Release() const {
       bool last;
       {
-        recordreplay::AutoOrderedRefCount ordered;
+        recordreplay::AutoOrderedRelease ordered;
         last = base::subtle::RefCountedThreadSafeBase::Release();
       }
       if (last) {
