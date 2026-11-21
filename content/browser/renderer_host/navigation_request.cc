@@ -8703,13 +8703,14 @@ void NavigationRequest::SanitizeRedirectsForCommit(
   // not error pages, which is when ComputeErrorPageProcess() returns
   // kNotErrorPage below.
   //
-  // Two things a recording still misses. The browser has to read the
-  // environment, since it never loads the driver that answers
-  // IsRecordingOrReplaying() (base/record_replay.h), and the environment says
-  // nothing about the toolbar's per-tab recording mode, which marks a single
-  // renderer instead: recordings made that way report origins. Location
-  // headers are cut for every run below, so a recorded redirect can carry an
-  // origin in its Location beside a request URL that is whole.
+  // Three things to know. The browser has to read the environment, since it
+  // never loads the driver that answers IsRecordingOrReplaying()
+  // (base/record_replay.h), so a run that asks for a recording and then fails
+  // to load the driver counts as one here. The environment also says nothing
+  // about the toolbar's per-tab recording mode, which marks a single renderer
+  // instead, so recordings made that way report origins. Location headers are
+  // cut for every run below, so a recorded redirect can carry an origin in its
+  // Location beside a request URL that is whole.
   const bool keep_urls_for_recording =
       net_error_ == net::OK && recordreplay::IsRecordReplayRun();
   if (keep_urls_for_recording) {
