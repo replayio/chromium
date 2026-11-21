@@ -676,6 +676,9 @@ DocumentLoader::DocumentLoader(
               perfetto::Flow::FromPointer(this));
   DCHECK(frame_);
   DCHECK(params_);
+  for (const WebURL& navigation_url : params_->record_replay_navigation_urls) {
+    record_replay_navigation_urls_.push_back(KURL(navigation_url));
+  }
   is_secure_context_root_ = params_->is_secure_context_root;
   script_injection_policy_ = params_->script_injection_policy;
 
@@ -1633,11 +1636,19 @@ void DocumentLoader::HandleRedirect(
       probe::ToCoreProbeSink(GetFrame()), main_resource_identifier_, this,
       url_after_redirect, http_method_, http_body_.get());
   if (recordreplay::IsRecordingOrReplaying("notify-network")) {
+    // The URL this leg redirected to is the one the next leg was requested
+    // with. The last leg has no next entry, and its URL is the one being
+    // committed, which never gets sanitized.
+    const size_t next_url_index = ++record_replay_redirects_handled_;
+    const KURL& reported_url =
+        next_url_index < record_replay_navigation_urls_.size()
+            ? record_replay_navigation_urls_[next_url_index]
+            : url_after_redirect;
     ResourceRequest request = BuildRecordReplayNavigationRequest(
-        url_after_redirect, frame_.Get(), 0, http_method_, http_body_,
+        reported_url, frame_.Get(), 0, http_method_, http_body_,
         http_content_type_, referrer_);
     recordreplay::OnNetworkNavigationRedirect(main_resource_identifier_,
-                                              url_after_redirect,
+                                              reported_url,
                                               request,
                                               redirect_response);
   }
@@ -2182,9 +2193,12 @@ void DocumentLoader::StartLoadingInternal() {
   main_resource_identifier_ = CreateUniqueIdentifier();
 
   if (recordreplay::IsRecordingOrReplaying("notify-network")) {
+    const KURL& reported_url = record_replay_navigation_urls_.empty()
+                                   ? url_
+                                   : record_replay_navigation_urls_.front();
     ResourceRequest request = BuildRecordReplayNavigationRequest(
-        url_, frame_.Get(), main_resource_identifier_, http_method_, http_body_,
-        http_content_type_, referrer_);
+        reported_url, frame_.Get(), main_resource_identifier_, http_method_,
+        http_body_, http_content_type_, referrer_);
     recordreplay::OnNetworkPrepareRequest(nullptr, nullptr, request);
   }
 
