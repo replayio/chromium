@@ -2757,6 +2757,13 @@ void RenderFrameImpl::CommitNavigation(
   LogCommitHistograms(commit_params->commit_sent, is_main_frame_,
                       common_params->url, frame_token_);
 
+  // [RecordReplay] The whole URLs of a redirected navigation, which only this
+  // array carries. See NavigationRequest::SanitizeRedirectsForCommit.
+  std::vector<GURL> record_replay_navigation_urls;
+  if (recordreplay::IsRecordReplayRun()) {
+    record_replay_navigation_urls = commit_params->redirects;
+  }
+
   // Clear the `redirects` array to ensure it is not accidentally used somewhere
   // downstream of this code.
   if (base::FeatureList::IsEnabled(
@@ -2911,6 +2918,9 @@ void RenderFrameImpl::CommitNavigation(
 
   FillNavigationParamsRequest(*common_params, *commit_params,
                               navigation_params.get());
+  navigation_params->record_replay_navigation_urls.assign(
+      record_replay_navigation_urls.begin(),
+      record_replay_navigation_urls.end());
   if (!url_loader_client_endpoints &&
       common_params->url.SchemeIs(url::kDataScheme)) {
     // Normally, data urls will have |url_loader_client_endpoints| set.

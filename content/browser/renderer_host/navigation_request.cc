@@ -35,6 +35,7 @@
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/rand_util.h"
+#include "base/record_replay.h"
 #include "base/state_transitions.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
@@ -278,15 +279,8 @@ constexpr base::TimeDelta kCompositorLockTimeout = base::Milliseconds(150);
 // Flag to control whether redirect URLs are being sanitized before sending
 // them to the renderer process as part of the navigation.
 // See https://crbug.com/40095391.
-//
-// [RecordReplay] Off in this Chromium, with kSanitizeOriginalUrlDuringNavigation
-// (content/common/features.cc): a recording reports each hop of a redirected
-// navigation with its URL, as Chromium 108 let it. The renderer of a recorded
-// page is therefore told the cross-origin URLs a successful navigation passed
-// through, which stock Chromium now keeps from it. See
-// SanitizeRedirectsForCommit for what is still kept from it.
 BASE_FEATURE(kSanitizeRedirectUrlsDuringNavigation,
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Killswitch to replace the current NavigationEntry for same-URL navigations
 // recovering from an error document. See https://crbug.com/396645696.
@@ -8693,13 +8687,9 @@ void NavigationRequest::UpdateHistoryParamsInCommitNavigationParams() {
 void NavigationRequest::SanitizeRedirectsForCommit(
     blink::mojom::CommonNavigationParamsPtr& common_params,
     blink::mojom::CommitNavigationParamsPtr& commit_params) {
-  // [RecordReplay] The feature is off in this Chromium, and decides only
-  // whether a successful navigation's redirect URLs are cut to their origins.
-  // The error page of a failed, redirected subframe navigation that commits in
-  // its initiator's process still gets nothing but origins, and Location
-  // headers are still cut below: a recording needs neither.
-  const bool sanitize_redirect_urls =
-      base::FeatureList::IsEnabled(kSanitizeRedirectUrlsDuringNavigation);
+  if (!base::FeatureList::IsEnabled(kSanitizeRedirectUrlsDuringNavigation)) {
+    return;
+  }
 
   // TODO(crbug.com/40134629): Remove the sanitization once Subframe Error
   // Pages are isolated.
@@ -8713,18 +8703,42 @@ void NavigationRequest::SanitizeRedirectsForCommit(
 
   if (should_sanitize_final_url_for_error_page) {
     common_params->url = common_params->url.DeprecatedGetOriginAsURL();
-    commit_params->original_url =
-        commit_params->original_url.DeprecatedGetOriginAsURL();
   }
-
-  const bool sanitize_urls =
-      sanitize_redirect_urls || should_sanitize_final_url_for_error_page;
 
   // It is safe to convert GURL to an Origin and back in the code below because
   // we only want to discard the rest of the URL (e.g., path and params). The
   // actual underlying Origin is not needed, which could be inherited or opaque
   // in sandbox cases.
-  if (sanitize_urls) {
+  // [RecordReplay] A recording reports each request of a redirected navigation
+  // with its own URL, and this function cuts every URL the renderer is about to
+  // receive down to an origin. DevTools still shows the whole ones because the
+  // browser hands them to the DevTools agent on each hop, before this runs. The
+  // recorder lives in the renderer and has no such channel, and `redirects` is
+  // the only field that can serve as one: it holds the whole chain, and
+  // RenderFrameImpl::CommitNavigation clears it on arrival under
+  // blink::features::kRemoveCommitRedirectUrlsArray, so it hands the array to
+  // the recorder just above that clear and nothing a script can reach changes.
+  // The renderer's one other read of it, for an error page's
+  // pre_redirect_url_for_failed_navigations with that feature off, is on the
+  // path this leaves alone. `original_url`, `redirect_params` and the Location
+  // headers below, which the document, its replayed redirects and its
+  // performance entries are built from, stay sanitized. The browser's own
+  // commit_params_ is untouched either way, because the commit path sanitizes a
+  // clone of it. Upstream means to delete `redirects` (crbug.com/422803238),
+  // and when it goes the recorder needs its own field.
+  //
+  // Error pages are left out, because the renderer gives them
+  // kUnreachableWebDataURL and never replays their redirects, so the URLs would
+  // reach that process without reaching the recording. net_error_ is net::OK
+  // for exactly the commits that are not error pages.
+  //
+  // The browser has to read the environment, since it never loads the driver
+  // that answers IsRecordingOrReplaying() (base/record_replay.h), so a run that
+  // asks for a recording and then fails to load the driver counts as one here.
+  // The environment says nothing about the toolbar's per-tab recording mode,
+  // which marks a single renderer instead, so recordings made that way report
+  // origins.
+  if (net_error_ != net::OK || !recordreplay::IsRecordReplayRun()) {
     for (GURL& redirect : commit_params->redirects) {
       redirect = redirect.DeprecatedGetOriginAsURL();
     }
@@ -8736,7 +8750,7 @@ void NavigationRequest::SanitizeRedirectsForCommit(
   // if the error page commits in the initiator's process and the navigation was
   // redirected before failing, in which case that final URL may be cross-origin
   // to the receiving process and must be reduced to origin as well.
-  if (sanitize_urls && !commit_params->redirect_params.empty()) {
+  if (!commit_params->redirect_params.empty()) {
     base::span<blink::mojom::NavigationRedirectParamsPtr> redirect_params_span(
         commit_params->redirect_params);
     if (!should_sanitize_final_url_for_error_page) {

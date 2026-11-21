@@ -738,12 +738,8 @@ BASE_FEATURE(kSanitizeFailedSubframeNavigationUrls,
 // Controls whether the `original_url` contains the full URL or just the
 // sanitized origin when sent to the renderer on commit.
 // See https://crbug.com/495463654.
-//
-// [RecordReplay] Off in this Chromium. A recording reports each request of a
-// redirected navigation with its URL, which the renderer only has when the
-// browser gives it the first one whole, as Chromium 108 did.
 BASE_FEATURE(kSanitizeOriginalUrlDuringNavigation,
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 BASE_FEATURE(kServiceWorkerAvoidMainThreadForInitialization,
              base::FEATURE_ENABLED_BY_DEFAULT);
