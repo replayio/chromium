@@ -136,14 +136,23 @@ void PictureInPictureControllerImpl::EnterPictureInPicture(
     return;
   }
 
+  // Players that produce no frames have no surface to show.
+  video_element->GetWebMediaPlayer()->OnRequestPictureInPicture();
+  if (!video_element->GetWebMediaPlayer()->GetSurfaceId()) {
+    if (resolver) {
+      resolver->Reject(V8ThrowDOMException::CreateOrDie(
+          resolver->GetScriptState()->GetIsolate(),
+          DOMExceptionCode::kInvalidStateError, ""));
+    }
+
+    return;
+  }
+
   if (!EnsureService())
     return;
 
   if (video_element->GetDisplayType() == DisplayType::kFullscreen)
     Fullscreen::ExitFullscreen(*GetSupplementable());
-
-  video_element->GetWebMediaPlayer()->OnRequestPictureInPicture();
-  DCHECK(video_element->GetWebMediaPlayer()->GetSurfaceId().has_value());
 
   session_observer_receiver_.reset();
 

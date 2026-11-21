@@ -19,10 +19,12 @@
 #include "base/time/time.h"
 #include "media/base/audio_decoder_config.h"
 #include "media/base/demuxer.h"
+#include "media/base/demuxer_stream.h"
 #include "media/base/media_util.h"
 #include "media/base/pipeline_status.h"
 #include "media/base/ranges.h"
 #include "media/base/video_decoder_config.h"
+#include "media/base/video_transformation.h"
 #include "media/filters/chunk_demuxer.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/platform/media/webmediaplayer_delegate.h"
@@ -34,6 +36,7 @@
 #include "third_party/blink/public/platform/web_time_range.h"
 #include "third_party/blink/public/platform/web_url.h"
 #include "third_party/blink/renderer/platform/media/web_media_source_impl.h"
+#include "ui/gfx/geometry/size.h"
 #include "url/gurl.h"
 
 namespace blink {
@@ -48,6 +51,14 @@ constexpr double kUrlDurationSeconds = 10;
 constexpr double kStartFudgeSeconds = 1;
 
 constexpr double kInfinity = std::numeric_limits<double>::infinity();
+
+gfx::Size RotatedSize(media::VideoRotation rotation, const gfx::Size& size) {
+  if (rotation == media::VIDEO_ROTATION_90 ||
+      rotation == media::VIDEO_ROTATION_270) {
+    return gfx::Size(size.height(), size.width());
+  }
+  return size;
+}
 
 // A WebMediaSourceImpl that reports whether the stream is marked ended.
 class StubWebMediaSource : public WebMediaSource {
@@ -191,10 +202,11 @@ class StubWebMediaPlayer : public WebMediaPlayer,
     return true;
   }
 
-  // Without tracks, no frame or sample is ever expected.
-  bool HasVideo() const override { return false; }
-  bool HasAudio() const override { return false; }
-  gfx::Size NaturalSize() const override { return gfx::Size(); }
+  // Tracks are known for Media Source only. No frame or sample is ever
+  // produced.
+  bool HasVideo() const override { return has_video_; }
+  bool HasAudio() const override { return has_audio_; }
+  gfx::Size NaturalSize() const override { return natural_size_; }
   gfx::Size VisibleSize() const override { return gfx::Size(); }
 
   bool Paused() const override { return paused_; }
@@ -309,7 +321,22 @@ class StubWebMediaPlayer : public WebMediaPlayer,
       Fail(status.code());
       return;
     }
+    ReadMediaSourceTracks();
     OnMetadata();
+  }
+
+  // As media::PipelineImpl reports metadata: the first stream of each type.
+  void ReadMediaSourceTracks() {
+    for (media::DemuxerStream* stream : demuxer_->GetAllStreams()) {
+      if (stream->type() == media::DemuxerStream::AUDIO) {
+        has_audio_ = true;
+      } else if (stream->type() == media::DemuxerStream::VIDEO && !has_video_) {
+        has_video_ = true;
+        const media::VideoDecoderConfig config = stream->video_decoder_config();
+        natural_size_ = RotatedSize(config.video_transformation().rotation,
+                                    config.natural_size());
+      }
+    }
   }
 
   void OnProgress() { loading_progressed_ = true; }
@@ -498,6 +525,9 @@ class StubWebMediaPlayer : public WebMediaPlayer,
   GURL url_;
   NetworkState network_state_ = kNetworkStateEmpty;
   ReadyState ready_state_ = kReadyStateHaveNothing;
+  bool has_audio_ = false;
+  bool has_video_ = false;
+  gfx::Size natural_size_;
   bool loading_progressed_ = false;
   absl::optional<media::PipelineStatusCodes> error_;
 
