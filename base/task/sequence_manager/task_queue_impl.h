@@ -563,12 +563,10 @@ class BASE_EXPORT TaskQueueImpl : public TaskQueue {
 
   mutable base::internal::CheckedLock any_thread_lock_;
 
-
-  // This lock protects access to the handler callbacks, and is used in both ordered and unordered
-  // contexts.  In particular, this lock must only be used around the handler
-  // An empty name says this lock must never be ordered, which an unnamed lock
-  // gets anyway. Threads whose events are disallowed take it, so no replay can
-  // reproduce the order of its acquisitions.
+  // Protects the task-posted handlers and the queue below. The empty name says
+  // this lock must never be ordered, which an unnamed lock gets anyway. Threads
+  // whose events are disallowed take it, so no replay can reproduce the order of
+  // its acquisitions, and nothing it guards may reach the recording.
   mutable base::internal::CheckedLock unordered_lock_{""};
 
   TaskDeque record_replay_unordered_immediate_incoming_queue GUARDED_BY(unordered_lock_);
