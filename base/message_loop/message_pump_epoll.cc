@@ -6,10 +6,6 @@
 
 #include <sys/eventfd.h>
 
-#if BUILDFLAG(IS_LINUX)
-#include <dlfcn.h>
-#endif
-
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -172,12 +168,6 @@ void MessagePumpEpoll::EnableLocalWorkAfterReplayDiverges() {
   replay_wake_event_.emplace(WaitableEvent::ResetPolicy::AUTOMATIC,
                              WaitableEvent::InitialState::SIGNALED);
   replay_wake_event_->declare_only_used_while_idle();
-
-  // An outstanding native wait must return to Run() to observe divergence.
-  auto interrupt_poll = reinterpret_cast<void (*)()>(
-      dlsym(RTLD_DEFAULT, "RecordReplayInterruptPollOnDivergence"));
-  CHECK(interrupt_poll);
-  interrupt_poll();
 }
 #endif
 
