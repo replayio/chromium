@@ -698,6 +698,11 @@ class CORE_EXPORT DocumentLoader : public GarbageCollected<DocumentLoader>,
   DocumentToken token_;
   KURL url_;
   KURL original_url_;
+  // [RecordReplay] Copied from WebNavigationParams, see there. Read only by the
+  // recorder notifications in StartLoadingInternal() and HandleRedirect(), and
+  // indexed by the number of redirects handled so far.
+  Vector<KURL> record_replay_navigation_urls_;
+  size_t record_replay_redirects_handled_ = 0;
   AtomicString http_method_;
   // The referrer on the final request for this document.
   AtomicString referrer_;

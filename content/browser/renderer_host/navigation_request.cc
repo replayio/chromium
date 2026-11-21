@@ -8687,36 +8687,6 @@ void NavigationRequest::UpdateHistoryParamsInCommitNavigationParams() {
 void NavigationRequest::SanitizeRedirectsForCommit(
     blink::mojom::CommonNavigationParamsPtr& common_params,
     blink::mojom::CommitNavigationParamsPtr& commit_params) {
-  // [RecordReplay] A recording reports each request of a redirected navigation
-  // with its own URL, which the renderer only has if the browser sends those
-  // URLs whole. kSanitizeOriginalUrlDuringNavigation
-  // (content/common/features.cc) has already cut `original_url` to an origin by
-  // the time we get here, so a record/replay run puts it back from
-  // `original_url_`, which holds the same URL and is never sanitized, and
-  // leaves the redirect URLs below alone. The restore belongs above the early
-  // return because the feature it undoes is not the one that return tests.
-  //
-  // Error pages keep upstream's behaviour. The renderer gives them
-  // kUnreachableWebDataURL and never replays their redirects, so whole URLs
-  // would reach a process that must not see them without reaching the
-  // recording either. net_error_ is net::OK for exactly the commits that are
-  // not error pages, which is when ComputeErrorPageProcess() returns
-  // kNotErrorPage below.
-  //
-  // Three things to know. The browser has to read the environment, since it
-  // never loads the driver that answers IsRecordingOrReplaying()
-  // (base/record_replay.h), so a run that asks for a recording and then fails
-  // to load the driver counts as one here. The environment also says nothing
-  // about the toolbar's per-tab recording mode, which marks a single renderer
-  // instead, so recordings made that way report origins. Location headers are
-  // cut for every run below, so a recorded redirect can carry an origin in its
-  // Location beside a request URL that is whole.
-  const bool keep_urls_for_recording =
-      net_error_ == net::OK && recordreplay::IsRecordReplayRun();
-  if (keep_urls_for_recording) {
-    commit_params->original_url = original_url_;
-  }
-
   if (!base::FeatureList::IsEnabled(kSanitizeRedirectUrlsDuringNavigation)) {
     return;
   }
@@ -8739,7 +8709,32 @@ void NavigationRequest::SanitizeRedirectsForCommit(
   // we only want to discard the rest of the URL (e.g., path and params). The
   // actual underlying Origin is not needed, which could be inherited or opaque
   // in sandbox cases.
-  if (!keep_urls_for_recording) {
+  // [RecordReplay] A recording reports each request of a redirected navigation
+  // with its own URL, and this function cuts every URL the renderer is about to
+  // receive down to an origin. DevTools still shows the whole ones because the
+  // browser hands them to the DevTools agent on each hop, before this runs. The
+  // recorder lives in the renderer and has no such channel, and `redirects` is
+  // the only field that can serve as one: it holds the whole chain, and the
+  // renderer clears it on arrival under
+  // blink::features::kRemoveCommitRedirectUrlsArray and reads it nowhere else,
+  // so RenderFrameImpl::CommitNavigation hands it to the recorder there and
+  // nothing a script can reach changes. `original_url`, `redirect_params` and
+  // the Location headers below, which the document and its performance entries
+  // are built from, stay sanitized. Upstream means to delete `redirects`
+  // (crbug.com/422803238), and when it goes the recorder needs its own field.
+  //
+  // Error pages are left out, because the renderer gives them
+  // kUnreachableWebDataURL and never replays their redirects, so the URLs would
+  // reach that process without reaching the recording. net_error_ is net::OK
+  // for exactly the commits that are not error pages.
+  //
+  // The browser has to read the environment, since it never loads the driver
+  // that answers IsRecordingOrReplaying() (base/record_replay.h), so a run that
+  // asks for a recording and then fails to load the driver counts as one here.
+  // The environment says nothing about the toolbar's per-tab recording mode,
+  // which marks a single renderer instead, so recordings made that way report
+  // origins.
+  if (net_error_ != net::OK || !recordreplay::IsRecordReplayRun()) {
     for (GURL& redirect : commit_params->redirects) {
       redirect = redirect.DeprecatedGetOriginAsURL();
     }
@@ -8751,7 +8746,7 @@ void NavigationRequest::SanitizeRedirectsForCommit(
   // if the error page commits in the initiator's process and the navigation was
   // redirected before failing, in which case that final URL may be cross-origin
   // to the receiving process and must be reduced to origin as well.
-  if (!keep_urls_for_recording && !commit_params->redirect_params.empty()) {
+  if (!commit_params->redirect_params.empty()) {
     base::span<blink::mojom::NavigationRedirectParamsPtr> redirect_params_span(
         commit_params->redirect_params);
     if (!should_sanitize_final_url_for_error_page) {

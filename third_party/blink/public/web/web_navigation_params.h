@@ -387,6 +387,12 @@ struct BLINK_EXPORT WebNavigationParams {
   // TODO(dgozman): we are only interested in the final values instead of
   // all information about redirects.
   std::vector<RedirectInfo> redirects;
+  // [RecordReplay] The URL each leg of a redirected navigation was requested
+  // with, in order and whole, starting with the URL the navigation began at.
+  // `url` and the `new_url`s above are cut down to an origin by the time they
+  // reach the renderer, so a recording reports these instead. Empty unless
+  // recording. See NavigationRequest::SanitizeRedirectsForCommit.
+  std::vector<WebURL> record_replay_navigation_urls;
   // The final response for the main resource. This will be used to determine
   // the type of resulting document.
   WebURLResponse response;
