@@ -395,6 +395,7 @@ class GPU_COMMAND_BUFFER_CLIENT_EXPORT SharedImageInterface
  private:
   friend class ArcSharedImageInterface;
   friend class ClientSharedImageInterface;
+  friend class RecordReplaySharedImageInterface;
   friend class SharedImageInterfaceInProcessBase;
   friend class TestSharedImageInterface;
   friend class media::MockSharedImageInterface;

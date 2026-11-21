@@ -55,6 +55,7 @@
 #include "components/viz/common/gpu/raster_context_provider.h"
 #include "components/viz/service/display/record_replay_render.h"
 #include "gpu/command_buffer/client/raster_interface.h"
+#include "gpu/command_buffer/client/record_replay_shared_image_interface.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
 
 #include "base/record_replay.h"
@@ -90,8 +91,11 @@ class RecordReplayRepaintFrameSink : public LayerTreeFrameSink,
  public:
   explicit RecordReplayRepaintFrameSink(
       scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner)
-      : LayerTreeFrameSink(nullptr, nullptr, std::move(compositor_task_runner),
-                           nullptr) {}
+      : LayerTreeFrameSink(
+            nullptr,
+            nullptr,
+            std::move(compositor_task_runner),
+            base::MakeRefCounted<gpu::RecordReplaySharedImageInterface>()) {}
 
   bool BindToClient(LayerTreeFrameSinkClient* client) override {
     if (!LayerTreeFrameSink::BindToClient(client)) {

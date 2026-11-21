@@ -68,6 +68,8 @@ source_set("client_sources") {
     "gpu_control.h",
     "mapped_memory.cc",
     "mapped_memory.h",
+    "record_replay_shared_image_interface.cc",
+    "record_replay_shared_image_interface.h",
     "ring_buffer.cc",
     "ring_buffer.h",
     "shared_image_interface.cc",
