@@ -30,11 +30,6 @@
 #include "third_party/blink/renderer/platform/scheduler/worker/worker_scheduler_proxy.h"
 #include "third_party/blink/renderer/platform/scheduler/worker/worker_thread_scheduler.h"
 
-#if BUILDFLAG(IS_LINUX)
-#include "base/message_loop/message_pump_for_io.h"
-#include "base/record_replay.h"
-#endif
-
 namespace blink {
 
 std::unique_ptr<NonMainThread> NonMainThread::CreateThread(
@@ -190,16 +185,8 @@ void NonMainThreadImpl::SimpleThreadImpl::Run() {
 
   auto scoped_sequence_manager = std::move(sequence_manager_);
   auto scoped_internal_task_queue = std::move(internal_task_queue_);
-  auto pump = base::MessagePump::Create(message_pump_type_);
-#if BUILDFLAG(IS_LINUX)
-  if (thread_->thread_type_ == ThreadType::kCompositorThread &&
-      message_pump_type_ == base::MessagePumpType::IO &&
-      recordreplay::IsRecordingOrReplaying()) {
-    static_cast<base::MessagePumpForIO*>(pump.get())
-        ->EnableLocalWorkAfterReplayDiverges();
-  }
-#endif
-  scoped_sequence_manager->BindToMessagePump(std::move(pump));
+  scoped_sequence_manager->BindToMessagePump(
+      base::MessagePump::Create(message_pump_type_));
 
   base::RunLoop run_loop;
   run_loop_ = &run_loop;

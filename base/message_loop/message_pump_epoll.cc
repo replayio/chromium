@@ -23,7 +23,6 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/posix/eintr_wrapper.h"
-#include "base/record_replay.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
 #include "base/trace_event/heap_profiler.h"
@@ -160,16 +159,6 @@ MessagePumpEpoll::MessagePumpEpoll() {
 }
 
 MessagePumpEpoll::~MessagePumpEpoll() = default;
-
-#if BUILDFLAG(IS_LINUX)
-void MessagePumpEpoll::EnableLocalWorkAfterReplayDiverges() {
-  // Recheck the queue once at the transition. A post before divergence may
-  // already have signaled the recorded eventfd and coalesced later wakeups.
-  replay_wake_event_.emplace(WaitableEvent::ResetPolicy::AUTOMATIC,
-                             WaitableEvent::InitialState::SIGNALED);
-  replay_wake_event_->declare_only_used_while_idle();
-}
-#endif
 
 void MessagePumpEpoll::InitializeFeatures() {
   // Relaxed memory order since no memory access depends on value.
@@ -314,12 +303,6 @@ void MessagePumpEpoll::Quit() {
 }
 
 void MessagePumpEpoll::ScheduleWork() {
-#if BUILDFLAG(IS_LINUX)
-  if (replay_wake_event_ && recordreplay::HasDivergedFromRecording()) {
-    replay_wake_event_->Signal();
-    return;
-  }
-#endif
   const uint64_t value = 1;
   ssize_t n = HANDLE_EINTR(write(wake_event_.get(), &value, sizeof(value)));
 
@@ -464,11 +447,6 @@ void MessagePumpEpoll::UnregisterInterest(
 
 bool MessagePumpEpoll::WaitForEpollEvents(TimeDelta timeout) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-#if BUILDFLAG(IS_LINUX)
-  if (replay_wake_event_ && recordreplay::HasDivergedFromRecording()) {
-    return replay_wake_event_->TimedWait(timeout);
-  }
-#endif
 
   // `timeout` has microsecond resolution, but timeouts accepted by epoll_wait()
   // are integral milliseconds. Round up to the next millisecond.
