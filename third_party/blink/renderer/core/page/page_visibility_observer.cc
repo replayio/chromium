@@ -27,13 +27,19 @@ void PageVisibilityObserver::SetPage(Page* page) {
   if (page == page_)
     return;
 
-  if (page_)
+  // The page also holds a strong mirror of its observers, so moving to
+  // another page has to release the old page's entry.
+  if (page_) {
     page_->PageVisibilityObserverSet().erase(this);
+    page_->RecordReplayReleaseVisibilityObserver(this);
+  }
 
   page_ = page;
 
-  if (page_)
+  if (page_) {
     page_->PageVisibilityObserverSet().insert(this);
+    page_->RecordReplayRetainVisibilityObserver(this);
+  }
 }
 
 void PageVisibilityObserver::Trace(Visitor* visitor) const {
