@@ -453,6 +453,16 @@ static cc::ProxyMain* RepaintCompositorProxy() {
 static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
   CHECK(IsMainThread());
 
+  // This repaint blocks on the compositor thread, which can be inside a
+  // synchronous mojo call it entered before this child diverged: a GPU channel
+  // flush for the sync tokens of the resources it was drawing with
+  // (GpuChannelHost::VerifyFlush). A diverged child gets no replies, so that
+  // call would never return and the compositor would never take the repaint's
+  // commit. Releasing the calls in flight lets it finish the draw it was in
+  // and get to this one. Whether that earlier draw can end up answering this
+  // repaint is the question at gRepaintEvent below.
+  recordreplay::SignalInFlightSyncCalls();
+
   gCurrentCompositorProxy = RepaintCompositorProxy();
   if (!gCurrentCompositorProxy)
     return nullptr;
@@ -503,6 +513,19 @@ static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
   gRepaintFramesSubmitted = 0;
   gRepaintFramesForOtherSurface = 0;
   gRepaintFramesPainted = 0;
+  // From here a draw that finishes encodes its frame as this repaint's result
+  // (OnPaintFinished), so what keeps an earlier draw from answering matters.
+  // Usually the commit above does: BeginMainFrameWithBlocking(..., true)
+  // returns only once the impl thread has run NotifyReadyToCommitOnImpl, which
+  // it cannot reach until the draw it was inside has returned.
+  //
+  // It does not hold when the commit is skipped: force_blocking sets
+  // skip_commit = !root_layer() and that branch returns without waiting, so
+  // for a page with no layers a draw already in flight can be the result.
+  // Answering with the tree the compositor last drew is that path's intent,
+  // but if no window owns the paint surface the frame can be of a window this
+  // repaint did not pick. Closing that would need a blocking round trip to the
+  // impl thread before this line.
   gRepaintEvent = event.get();
 
   // Trigger a new frame on the compositor thread.
