@@ -157,6 +157,20 @@ bool CanArmDataPipeTrigger(DataPipe& pipe,
 // trap is armed, each of its Triggers has installed a unique ipcz trap to watch
 // for its conditions.
 struct MojoTrap::Trigger : public base::RefCountedThreadSafe<Trigger> {
+  // [RecordReplay] Decrements are ordered among threads, as ObjectBase's are
+  // and for the same reason: see there. The last drop releases this trigger's
+  // reference to the data pipe it watches.
+  void Release() const {
+    bool last;
+    {
+      recordreplay::AutoOrderedRelease ordered;
+      last = base::subtle::RefCountedThreadSafeBase::Release();
+    }
+    if (last) {
+      base::DefaultRefCountedThreadSafeTraits<Trigger>::Destruct(this);
+    }
+  }
+
   // Constructs a new trigger for the given MojoTrap to observe `handle` for
   // any of `signals` to be satisfied. `context` is the opaque context value
   // given to the corresponding MojoAddTrigger() call. If `data_pipe` is

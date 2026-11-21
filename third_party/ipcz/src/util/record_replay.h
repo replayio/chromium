@@ -49,6 +49,11 @@ inline int CreateOrderedLock(const char* name) {
   return IsRecordable() ? ::recordreplay::CreateOrderedLock(name) : 0;
 }
 
+// Orders one reference count decrement among threads. See
+// recordreplay::AutoOrderedRelease: one lock serves the counts of ipcz'
+// objects and of the Mojo driver's objects.
+using AutoOrderedRelease = ::recordreplay::AutoOrderedRelease;
+
 }  // namespace ipcz::replay
 
 #endif  // IPCZ_SRC_UTIL_RECORD_REPLAY_H_

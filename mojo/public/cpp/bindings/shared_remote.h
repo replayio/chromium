@@ -114,56 +114,32 @@ class SharedRemoteBase
                   scoped_refptr<base::SequencedTaskRunner> task_runner)
         : task_runner_(std::move(task_runner)),
           remote_(std::move(remote), task_runner_),
-          associated_group_(*remote_.internal_state()->associated_group()) {
-      // [RecordReplay] See Release(). A wrapper made where the recording
-      // cannot be added to gets no lock. CreateOrderedLock() reads its id out
-      // of the recording, and a region that passes events through hands back
-      // the raw counter when recording and zero when replaying, so the two
-      // sides would disagree about whether this wrapper is ordered.
-      if (recordreplay::IsRecordingOrReplaying() &&
-          !recordreplay::AreEventsDisallowed() &&
-          !recordreplay::AreEventsPassedThrough() &&
-          !recordreplay::HasDivergedFromRecording()) {
-        record_replay_release_ordered_lock_id_ =
-            recordreplay::CreateOrderedLock("RemoteWrapper");
-      }
-    }
+          associated_group_(*remote_.internal_state()->associated_group()) {}
 
     RemoteWrapper(const RemoteWrapper&) = delete;
     RemoteWrapper& operator=(const RemoteWrapper&) = delete;
 
     // [RecordReplay] Any thread holding the SharedRemote can drop the last
     // reference, and whichever does decides whether this is deleted inline or
-    // through a DeleteSoon posted to the remote's own sequence. Upstream races
-    // it where WidgetInputHandlerManager::ClearClient() resets host_ on the
-    // main thread while an input-thread caller still holds the copy
-    // GetWidgetInputHandlerHost() handed it. Which thread gets there last has
-    // to be the same when replaying, so decrements are ordered among threads
-    // by this wrapper's own lock. Increments are left alone, because only the
-    // thread that reaches zero is in question, and the deleting itself happens
+    // through a task posted to the remote's own sequence. Upstream races it
+    // where WidgetInputHandlerManager::ClearClient() resets host_ on the main
+    // thread while an input thread caller still holds the copy
+    // GetWidgetInputHandlerHost() handed it. That manager's host locks are
+    // named for this: ordering them is what makes both sides agree on whether
+    // the copy was taken at all, and ordering the decrements then settles which
+    // thread drops the last reference. Increments are left alone, for the reason
+    // given at recordreplay::AutoOrderedRelease, and the deleting itself is
     // outside the lock.
     //
-    // A decrement where the recording cannot be added to is not ordered, so a
-    // last reference dropped by the collector is still decided by the race.
-    // DeleteOnCorrectThread()'s leak-references gate is what covers that case,
-    // not this. Skipping the acquisition there also keeps the driver's
-    // OrderedLock from taking its own global lock and warning about it.
+    // The reference held by the ThreadSafeProxy behind the forwarder is dropped
+    // either by the thread which destroys the SharedRemoteBase or by the
+    // sequence which runs the last queued send, and nothing orders that choice,
+    // so the decrement it makes can still come from a thread the recording does
+    // not expect.
     void Release() const {
-      const int ordered_lock =
-          record_replay_release_ordered_lock_id_ &&
-                  !recordreplay::AreEventsDisallowed() &&
-                  !recordreplay::AreEventsPassedThrough() &&
-                  !recordreplay::HasDivergedFromRecording()
-              ? record_replay_release_ordered_lock_id_
-              : 0;
-      if (!ordered_lock) {
-        base::RefCountedThreadSafe<RemoteWrapper,
-                                   RemoteWrapperDeleter>::Release();
-        return;
-      }
       bool last;
       {
-        recordreplay::AutoOrderedLock ordered(ordered_lock);
+        recordreplay::AutoOrderedRelease ordered;
         last = base::subtle::RefCountedThreadSafeBase::Release();
       }
       if (last) {
@@ -262,11 +238,6 @@ class SharedRemoteBase
     const scoped_refptr<base::SequencedTaskRunner> task_runner_;
     RemoteType remote_;
     AssociatedGroup associated_group_;
-
-    // [RecordReplay] Orders reference count decrements. Zero in a process that
-    // is neither recording nor replaying, and for a wrapper made where the
-    // recording cannot be added to. See Release().
-    int record_replay_release_ordered_lock_id_ = 0;
   };
 
   struct RemoteWrapperDeleter {

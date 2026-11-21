@@ -11,6 +11,7 @@
 
 #include "base/containers/span.h"
 #include "base/memory/ref_counted.h"
+#include "base/record_replay.h"
 #include "base/memory/scoped_refptr.h"
 #include "build/build_config.h"
 #include "mojo/core/ipcz_api.h"
@@ -27,6 +28,24 @@ class MOJO_SYSTEM_IMPL_EXPORT ObjectBase
     : public base::RefCountedThreadSafe<ObjectBase> {
  public:
   REQUIRE_ADOPTION_FOR_REFCOUNTED_TYPE();
+
+  // [RecordReplay] A driver object's last reference is dropped by whichever
+  // thread gets there last, and destroying one is something a recording notes:
+  // a data pipe closes its portal and so an ipcz route, and a transport calls
+  // the embedder's error handler. Which thread that is has to be the same when
+  // replaying, so decrements are ordered among threads, as ipcz' own counts
+  // are. Increments are left alone, for the reason given at
+  // recordreplay::AutoOrderedRelease. The destroying itself is outside the lock.
+  void Release() const {
+    bool last;
+    {
+      recordreplay::AutoOrderedRelease ordered;
+      last = base::subtle::RefCountedThreadSafeBase::Release();
+    }
+    if (last) {
+      base::DefaultRefCountedThreadSafeTraits<ObjectBase>::Destruct(this);
+    }
+  }
 
   enum Type : uint32_t {
     // An ipcz transport endpoint.

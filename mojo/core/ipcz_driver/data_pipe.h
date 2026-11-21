@@ -13,6 +13,7 @@
 
 #include "base/containers/span.h"
 #include "base/memory/ref_counted.h"
+#include "base/record_replay.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/synchronization/lock.h"
 #include "mojo/core/ipcz_driver/object.h"
@@ -65,6 +66,20 @@ class DataPipe : public Object<DataPipe> {
   // ownership and access.
   class PortalWrapper : public base::RefCountedThreadSafe<PortalWrapper> {
    public:
+    // [RecordReplay] Decrements are ordered among threads, as ObjectBase's
+    // are and for the same reason: see there. The last drop closes the portal,
+    // and so an ipcz route.
+    void Release() const {
+      bool last;
+      {
+        recordreplay::AutoOrderedRelease ordered;
+        last = base::subtle::RefCountedThreadSafeBase::Release();
+      }
+      if (last) {
+        base::DefaultRefCountedThreadSafeTraits<PortalWrapper>::Destruct(this);
+      }
+    }
+
     explicit PortalWrapper(ScopedIpczHandle portal);
     PortalWrapper(const PortalWrapper&) = delete;
     void operator=(const PortalWrapper&) = delete;
