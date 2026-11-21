@@ -8714,14 +8714,18 @@ void NavigationRequest::SanitizeRedirectsForCommit(
   // receive down to an origin. DevTools still shows the whole ones because the
   // browser hands them to the DevTools agent on each hop, before this runs. The
   // recorder lives in the renderer and has no such channel, and `redirects` is
-  // the only field that can serve as one: it holds the whole chain, and the
-  // renderer clears it on arrival under
-  // blink::features::kRemoveCommitRedirectUrlsArray and reads it nowhere else,
-  // so RenderFrameImpl::CommitNavigation hands it to the recorder there and
-  // nothing a script can reach changes. `original_url`, `redirect_params` and
-  // the Location headers below, which the document and its performance entries
-  // are built from, stay sanitized. Upstream means to delete `redirects`
-  // (crbug.com/422803238), and when it goes the recorder needs its own field.
+  // the only field that can serve as one: it holds the whole chain, and
+  // RenderFrameImpl::CommitNavigation clears it on arrival under
+  // blink::features::kRemoveCommitRedirectUrlsArray, so it hands the array to
+  // the recorder just above that clear and nothing a script can reach changes.
+  // The renderer's one other read of it, for an error page's
+  // pre_redirect_url_for_failed_navigations with that feature off, is on the
+  // path this leaves alone. `original_url`, `redirect_params` and the Location
+  // headers below, which the document, its replayed redirects and its
+  // performance entries are built from, stay sanitized. The browser's own
+  // commit_params_ is untouched either way, because the commit path sanitizes a
+  // clone of it. Upstream means to delete `redirects` (crbug.com/422803238),
+  // and when it goes the recorder needs its own field.
   //
   // Error pages are left out, because the renderer gives them
   // kUnreachableWebDataURL and never replays their redirects, so the URLs would
