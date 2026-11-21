@@ -19,6 +19,8 @@
 #include <string.h>
 #endif
 
+#include "base/record_replay_isolated_draw_asserts.h"
+
 namespace base {
 class Lock;
 class ConditionVariable;
@@ -80,6 +82,7 @@ class BASE_EXPORT LockImpl {
 };
 
 void LockImpl::Lock() {
+  recordreplay::IsolatedDrawAssert("base::Lock", __builtin_return_address(0));
   // The ScopedLockAcquireActivity in LockInternalWithTracking() (not inlined
   // here because of circular includes) is relatively expensive and so its
   // actions can become significant due to the very large number of locks that

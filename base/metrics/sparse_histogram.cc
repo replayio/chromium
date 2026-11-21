@@ -20,6 +20,8 @@
 #include "base/synchronization/lock.h"
 #include "base/values.h"
 
+#include "base/record_replay_isolated_draw_asserts.h"
+
 namespace base {
 
 typedef HistogramBase::Count Count;
@@ -110,6 +112,7 @@ void SparseHistogram::Add(Sample value) {
 }
 
 void SparseHistogram::AddCount(Sample value, int count) {
+  recordreplay::IsolatedDrawAssertName("histogram sample", histogram_name());
   if (count <= 0) {
     NOTREACHED();
     return;

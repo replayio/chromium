@@ -44,4 +44,8 @@ void ImageProvider::ScopedResult::DestroyDecode() {
     std::move(destruction_callback_).Run();
 }
 
+bool ImageProvider::RecordReplaySnapshotsAllFilters() const {
+  return false;
+}
+
 }  // namespace cc
