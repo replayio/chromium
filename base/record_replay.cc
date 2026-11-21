@@ -248,7 +248,11 @@ bool IsRecordReplayRun() {
     if (getenv("RECORD_REPLAY_DONT_RECORD")) {
       return false;
     }
-    return !!getenv("RECORD_ALL_CONTENT");
+    // Emptying the variable is how a launcher asks for no recording, as
+    // @replayio/playwright's RECORD_REPLAY_NO_RECORD does. Every launcher that
+    // wants one sets it to 1.
+    const char* all_content = getenv("RECORD_ALL_CONTENT");
+    return all_content && *all_content;
   }();
   return is_run;
 }
