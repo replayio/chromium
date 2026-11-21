@@ -13,6 +13,7 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/no_destructor.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "base/task/current_thread.h"
 #include "base/task/single_thread_task_runner.h"
@@ -370,6 +371,13 @@ bool IsDirectReceiverSupported() {
   // ChannelPosix can only carry file descriptors. Affects tvOS only.
   return false;
 #else
+  // A direct receiver puts its thread on an I/O pump, which waits in a
+  // recorded epoll_wait. A thread parked there when a replay diverges never
+  // runs the tasks the replay posts to it, while a default pump's wait can
+  // still be signaled.
+  if (recordreplay::IsRecordingOrReplaying()) {
+    return false;
+  }
   return true;
 #endif
 }
