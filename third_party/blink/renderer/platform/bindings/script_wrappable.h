@@ -211,6 +211,11 @@ class PLATFORM_EXPORT ScriptWrappable
 
   int RecordReplayId() const { return record_replay_id_; }
 
+  // Set when recording or replaying for an object whose wrapper a scavenge
+  // must not drop, because a new one could be created in another realm.
+  bool RecordReplayKeepWrapper() const { return record_replay_keep_wrapper_; }
+  void SetRecordReplayKeepWrapper() { record_replay_keep_wrapper_ = true; }
+
   // Avoid pointer-based hashes for ScriptWrappable.
   // TODO: [RUN-1741] Remove this.
   unsigned GetHash() const { return (unsigned)record_replay_id_; }
@@ -238,7 +243,11 @@ class PLATFORM_EXPORT ScriptWrappable
 
   // A deterministic ID is used for deterministically iterating collections of
   // ScriptWrappables in many places.
-  int record_replay_id_ = 0;
+  // Bit fields share the ID's four bytes, so that subclasses don't move their
+  // fields out of this class's tail padding.
+  unsigned record_replay_id_ : 31 = 0;
+
+  unsigned record_replay_keep_wrapper_ : 1 = false;
 
   // These classes are exceptionally allowed to directly interact with the main
   // world wrapper.
