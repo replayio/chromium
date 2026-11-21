@@ -38,8 +38,6 @@ void TaskSource::Transaction::UpdatePriority(TaskPriority priority) {
   task_source_->traits_.UpdatePriority(priority);
   task_source_->thread_type_racy_.store(TaskPriorityToThreadType(priority),
                                         std::memory_order_relaxed);
-  task_source_->priority_racy_.store(task_source_->traits_.priority(),
-                                     std::memory_order_relaxed);
 }
 
 ThreadType TaskSource::Transaction::thread_type() const {
@@ -71,13 +69,32 @@ void TaskSource::ClearDelayedHeapHandle() {
   delayed_pq_heap_handle_ = HeapHandle();
 }
 
-TaskPriority TaskSource::priority_racy() const {
-  // Record/replay priority value instead of ordering reads/writes.
-  TaskPriority priority = priority_racy_.load(std::memory_order_relaxed);
-  if (recordreplay::AreEventsDisallowed())
-    return priority;
-  return (TaskPriority)recordreplay::RecordReplayValue("TaskSource::priority_racy",
-                                                       (uintptr_t)priority);
+// [RecordReplay] Record the thread type instead of ordering the reads and
+// writes of it: the sort keys of the priority queues are built from this read,
+// so a read that saw another thread's UpdatePriority would reorder a queue on
+// a replay. The recording belongs on the accessor rather than at the call
+// sites, so that a read site added later cannot pick up an unrecorded load.
+//
+// RecordReplayValueIfAllowed rather than a bare AreEventsDisallowed() check.
+// The driver hands back the live value either way, but the helper skips the
+// call and with it the RecordedValueEventsPassedThrough warning that a worker
+// reading inside a pass-through region would raise on every read.
+//
+// Two limitations this accepts. With nothing being recorded a read pays an
+// out-of-line call where upstream inlines a relaxed load, and there is no
+// cheaper gate to put in the header, because the only inlinable recording flag
+// is defined in v8 and declared in no header base can include. And the read in
+// ThreadPoolImpl::ShouldYield() is on a path kept lock-free on purpose, so it
+// does not sit behind a lock the way the posting path's read does.
+//
+// Recording this read does not make a yield decision deterministic on its own,
+// because ThreadGroup::ShouldYield() mixes in an unordered read of its own
+// max_allowed_sort_key_. Chromium 108 was the same.
+ThreadType TaskSource::thread_type_racy() const {
+  const ThreadType thread_type =
+      thread_type_racy_.load(std::memory_order_relaxed);
+  return (ThreadType)recordreplay::RecordReplayValueIfAllowed(
+      "TaskSource::thread_type_racy", (uintptr_t)thread_type);
 }
 
 TaskSource::TaskSource(const TaskTraits& traits,
@@ -88,7 +105,6 @@ TaskSource::TaskSource(const TaskTraits& traits,
       thread_type_racy_(EffectiveThreadType(traits,
                                             originating_thread_type,
                                             inherit_by_default)),
-      priority_racy_(traits.priority()),
       originating_thread_type_(originating_thread_type),
       inherit_by_default_(inherit_by_default),
       lock_(recordreplay::AreEventsDisallowed() ? nullptr : "TaskSource.lock_"),
