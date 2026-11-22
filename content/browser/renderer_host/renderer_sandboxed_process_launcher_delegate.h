@@ -23,6 +23,8 @@ class CONTENT_EXPORT RendererSandboxedProcessLauncherDelegate
     : public SandboxedProcessLauncherDelegate {
  public:
   RendererSandboxedProcessLauncherDelegate() = default;
+  explicit RendererSandboxedProcessLauncherDelegate(bool record_replay_records)
+      : record_replay_records_(record_replay_records) {}
 
   ~RendererSandboxedProcessLauncherDelegate() override = default;
 
@@ -36,6 +38,10 @@ class CONTENT_EXPORT RendererSandboxedProcessLauncherDelegate
 
   // sandbox::policy::SandboxDelegate:
   sandbox::mojom::Sandbox GetSandboxType() override;
+
+ private:
+  // Whether the renderer will record. Only GetZygote() reads it.
+  [[maybe_unused]] const bool record_replay_records_ = false;
 };
 
 #if BUILDFLAG(IS_WIN)

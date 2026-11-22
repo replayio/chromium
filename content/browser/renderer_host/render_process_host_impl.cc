@@ -446,8 +446,16 @@ SiteProcessMap* GetSiteProcessMapForBrowserContext(BrowserContext* context) {
   return new_map_ptr;
 }
 
-static inline bool MaybeRecordingOrReplaying() {
-  return true;
+// [RecordReplay] Whether a renderer makes a recording, which it settles for
+// itself at startup in RecordReplayShouldRecord
+// (chrome/app/record_replay_main.cc), so the browser reaches the same answer
+// from the same inputs.
+static bool RecordReplayRendererRecords(RenderProcessHost* process) {
+  if (recordreplay::RecordingDisabled() || process->IsPdf()) {
+    return false;
+  }
+  return recordreplay::RecordsAllContent() ||
+         process->IsRecordReplayForRecording();
 }
 
 class RenderProcessHostIsReadyObserver : public RenderProcessHostObserver {
@@ -1979,7 +1987,10 @@ bool RenderProcessHostImpl::Init() {
 #endif
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-  int flags = (renderer_prefix.empty() && !MaybeRecordingOrReplaying())
+  // A recording renderer is started by Chrome's real path, because the driver
+  // finds the install directory from argv[0].
+  int flags = (renderer_prefix.empty() &&
+               !RecordReplayRendererRecords(this))
     ? (ChildProcessHost::CHILD_ALLOW_SELF | ChildProcessHost::CHILD_RENDERER)
     : ChildProcessHost::CHILD_RENDERER;
 #elif BUILDFLAG(IS_MAC)
@@ -2147,7 +2158,8 @@ bool RenderProcessHostImpl::Init() {
             *cmd_line, IsPdf(), IsJitDisabled());
 #else
     std::unique_ptr<SandboxedProcessLauncherDelegate> sandbox_delegate =
-        std::make_unique<RendererSandboxedProcessLauncherDelegate>();
+        std::make_unique<RendererSandboxedProcessLauncherDelegate>(
+            RecordReplayRendererRecords(this));
 #endif
 
     tracing_config_memory_region_ =
@@ -3872,7 +3884,7 @@ void RenderProcessHostImpl::AppendRendererCommandLine(
   if (!base::CommandLine::ForCurrentProcess()
            ->GetSwitchValueNative(switches::kRendererCmdPrefix)
            .empty() ||
-      MaybeRecordingOrReplaying()) {
+      RecordReplayRendererRecords(this)) {
     command_line->AppendSwitch(switches::kNoZygote);
   }
 
