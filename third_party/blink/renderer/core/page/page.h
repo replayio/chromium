@@ -480,6 +480,19 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
     return page_visibility_observer_set_;
   }
 
+  // Keep an observer alive while this page observes it, under
+  // leak-references, as HeapObserverList does for the observer lists it holds.
+  // The set below holds only WeakMembers, so without the mirror an observer
+  // collected between registering and the next visibility transition stops
+  // being notified, and whether that happens can differ between recording and
+  // replaying. No PageVisibilityObserver can reach that state today: every one
+  // of them is also kept alive either by the context lifecycle observer list,
+  // which has a mirror of its own, or by an owner that outlives the page. So
+  // this is the container's own guarantee rather than a fix for a loss that is
+  // reachable now.
+  void RecordReplayRetainVisibilityObserver(PageVisibilityObserver* observer);
+  void RecordReplayReleaseVisibilityObserver(PageVisibilityObserver* observer);
+
   void SetPageLifecycleState(mojom::blink::PageLifecycleStatePtr);
   const mojom::blink::PageLifecycleStatePtr& GetPageLifecycleState() {
     return lifecycle_state_;
@@ -612,6 +625,8 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
   const Member<PageScaleConstraintsSet> page_scale_constraints_set_;
   HeapLinkedHashSet<WeakMember<PageVisibilityObserver>>
       page_visibility_observer_set_;
+  HeapHashSet<Member<PageVisibilityObserver>>
+      replay_strong_page_visibility_observers_;
   const Member<PointerLockController> pointer_lock_controller_;
   Member<ScrollingCoordinator> scrolling_coordinator_;
   const Member<BrowserControls> browser_controls_;
