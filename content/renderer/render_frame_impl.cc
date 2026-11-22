@@ -2757,11 +2757,21 @@ void RenderFrameImpl::CommitNavigation(
   LogCommitHistograms(commit_params->commit_sent, is_main_frame_,
                       common_params->url, frame_token_);
 
-  // [RecordReplay] The whole URLs of a redirected navigation, which only this
-  // array carries. See NavigationRequest::SanitizeRedirectsForCommit.
-  std::vector<GURL> record_replay_navigation_urls;
-  if (recordreplay::IsRecordReplayRun()) {
-    record_replay_navigation_urls = commit_params->redirects;
+  // [RecordReplay] The whole URL each request of this navigation was made
+  // with, which only this array carries, and which every other renderer
+  // receives cut down to an origin. The array can begin with the redirects of
+  // an earlier navigation, while `redirect_params` covers only the redirects
+  // this navigation made, so this navigation's own URLs are the last
+  // `redirect_params` entries of it. See
+  // NavigationRequest::SanitizeRedirectsForCommit.
+  std::vector<GURL> record_replay_whole_urls;
+  if (recordreplay::IsRecordingOrReplaying("notify-network")) {
+    const size_t redirect_count = commit_params->redirect_params.size();
+    if (redirect_count && commit_params->redirects.size() >= redirect_count) {
+      const auto whole_urls =
+          base::span(commit_params->redirects).last(redirect_count);
+      record_replay_whole_urls.assign(whole_urls.begin(), whole_urls.end());
+    }
   }
 
   // Clear the `redirects` array to ensure it is not accidentally used somewhere
@@ -2918,9 +2928,6 @@ void RenderFrameImpl::CommitNavigation(
 
   FillNavigationParamsRequest(*common_params, *commit_params,
                               navigation_params.get());
-  navigation_params->record_replay_navigation_urls.assign(
-      record_replay_navigation_urls.begin(),
-      record_replay_navigation_urls.end());
   if (!url_loader_client_endpoints &&
       common_params->url.SchemeIs(url::kDataScheme)) {
     // Normally, data urls will have |url_loader_client_endpoints| set.
@@ -2942,6 +2949,20 @@ void RenderFrameImpl::CommitNavigation(
         GetTaskRunner(blink::TaskType::kInternalLoading),
         CreateResourceLoadInfoNotifierWrapper(), !frame_->Parent(),
         navigation_params.get(), frame_->IsAdFrame());
+  }
+
+  // [RecordReplay] Hand each whole URL to the leg it was requested at, which
+  // can only happen here, with both the URLs and the filled-in redirects at
+  // hand. A navigation whose two arrays disagree reports the sanitized URLs
+  // rather than the wrong ones.
+  if (!record_replay_whole_urls.empty() &&
+      record_replay_whole_urls.size() == navigation_params->redirects.size()) {
+    navigation_params->record_replay_whole_start_url =
+        record_replay_whole_urls.front();
+    for (size_t i = 1; i < record_replay_whole_urls.size(); i++) {
+      navigation_params->redirects[i - 1].record_replay_whole_new_url =
+          record_replay_whole_urls[i];
+    }
   }
 
   // The MHTML mime type should be same as the one we check in the browser

@@ -618,11 +618,7 @@ class CORE_EXPORT DocumentLoader : public GarbageCollected<DocumentLoader>,
 
   // Process a redirect to update the redirect chain, current URL, referrer,
   // etc.
-  // [RecordReplay] redirect_index is the leg's position in params_->redirects,
-  // which is how the recorder notification finds the URL this leg was requested
-  // with. See StartLoadingInternal(), the only caller.
-  void HandleRedirect(const WebNavigationParams::RedirectInfo& redirect,
-                      size_t redirect_index);
+  void HandleRedirect(const WebNavigationParams::RedirectInfo& redirect);
   void HandleResponse();
 
   void InitializeEmptyResponse();

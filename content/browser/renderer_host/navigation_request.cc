@@ -22,6 +22,7 @@
 #include "base/debug/alias.h"
 #include "base/debug/crash_logging.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/environment.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
 #include "base/functional/bind.h"
@@ -35,7 +36,6 @@
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/rand_util.h"
-#include "base/record_replay.h"
 #include "base/state_transitions.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
@@ -1166,6 +1166,25 @@ EmbedderIsolationInfo ResolveEmbedderIsolationInfo(
     }
   }
   return EmbedderIsolationInfo::CreateNone();
+}
+
+// [RecordReplay] Whether the renderer a navigation is about to commit in makes
+// a recording. A renderer settles that for itself at startup, in
+// RecordReplayShouldRecord (chrome/app/record_replay_main.cc), from two inputs
+// the browser has to consult separately: a recording started from the toolbar
+// marks one WebContents, which reaches its process as
+// RenderProcessFlags::kRecordReplayForRecording, while a run that records all
+// content marks nothing at all and says so only in the environment that every
+// process inherits.
+bool RendererRecords(RenderFrameHostImpl* render_frame_host) {
+  static const bool records_all_content = [] {
+    std::unique_ptr<base::Environment> env = base::Environment::Create();
+    return env->HasVar("RECORD_ALL_CONTENT") &&
+           !env->HasVar("RECORD_REPLAY_DONT_RECORD");
+  }();
+  return records_all_content ||
+         static_cast<RenderProcessHostImpl*>(render_frame_host->GetProcess())
+             ->IsRecordReplayForRecording();
 }
 
 }  // namespace
@@ -8731,14 +8750,7 @@ void NavigationRequest::SanitizeRedirectsForCommit(
   // kUnreachableWebDataURL and never replays their redirects, so the URLs would
   // reach that process without reaching the recording. net_error_ is net::OK
   // for exactly the commits that are not error pages.
-  //
-  // The browser has to read the environment, since it never loads the driver
-  // that answers IsRecordingOrReplaying() (base/record_replay.h), so a run that
-  // asks for a recording and then fails to load the driver counts as one here.
-  // The environment says nothing about the toolbar's per-tab recording mode,
-  // which marks a single renderer instead, so recordings made that way report
-  // origins.
-  if (net_error_ != net::OK || !recordreplay::IsRecordReplayRun()) {
+  if (net_error_ != net::OK || !RendererRecords(GetRenderFrameHost())) {
     for (GURL& redirect : commit_params->redirects) {
       redirect = redirect.DeprecatedGetOriginAsURL();
     }
