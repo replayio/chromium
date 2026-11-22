@@ -446,11 +446,16 @@ SiteProcessMap* GetSiteProcessMapForBrowserContext(BrowserContext* context) {
   return new_map_ptr;
 }
 
-// Every renderer records in a record/replay run, and otherwise only the ones
-// for tabs started for recording do. The renderer makes the same decision when
-// it starts.
-static bool RecordReplayRendererRecords(bool for_recording) {
-  return recordreplay::IsRecordReplayRun() || for_recording;
+// [RecordReplay] Whether a renderer makes a recording, which it settles for
+// itself at startup in RecordReplayShouldRecord
+// (chrome/app/record_replay_main.cc), so the browser reaches the same answer
+// from the same inputs.
+static bool RecordReplayRendererRecords(RenderProcessHost* process) {
+  if (recordreplay::RecordingDisabled() || process->IsPdf()) {
+    return false;
+  }
+  return recordreplay::RecordsAllContent() ||
+         process->IsRecordReplayForRecording();
 }
 
 class RenderProcessHostIsReadyObserver : public RenderProcessHostObserver {
@@ -1985,7 +1990,7 @@ bool RenderProcessHostImpl::Init() {
   // A recording renderer is started by Chrome's real path, because the driver
   // finds the install directory from argv[0].
   int flags = (renderer_prefix.empty() &&
-               !RecordReplayRendererRecords(IsRecordReplayForRecording()))
+               !RecordReplayRendererRecords(this))
     ? (ChildProcessHost::CHILD_ALLOW_SELF | ChildProcessHost::CHILD_RENDERER)
     : ChildProcessHost::CHILD_RENDERER;
 #elif BUILDFLAG(IS_MAC)
@@ -2154,7 +2159,7 @@ bool RenderProcessHostImpl::Init() {
 #else
     std::unique_ptr<SandboxedProcessLauncherDelegate> sandbox_delegate =
         std::make_unique<RendererSandboxedProcessLauncherDelegate>(
-            RecordReplayRendererRecords(IsRecordReplayForRecording()));
+            RecordReplayRendererRecords(this));
 #endif
 
     tracing_config_memory_region_ =
@@ -3879,7 +3884,7 @@ void RenderProcessHostImpl::AppendRendererCommandLine(
   if (!base::CommandLine::ForCurrentProcess()
            ->GetSwitchValueNative(switches::kRendererCmdPrefix)
            .empty() ||
-      RecordReplayRendererRecords(IsRecordReplayForRecording())) {
+      RecordReplayRendererRecords(this)) {
     command_line->AppendSwitch(switches::kNoZygote);
   }
 
