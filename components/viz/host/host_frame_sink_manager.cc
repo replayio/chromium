@@ -111,7 +111,7 @@ bool HostFrameSinkManager::IsFrameSinkIdRegistered(
   return iter != frame_sink_data_map_.end() && iter->second.client != nullptr;
 }
 
-bool HostFrameSinkManager::HasCompositorFrameSink(
+bool HostFrameSinkManager::HasCreatedCompositorFrameSink(
     const FrameSinkId& frame_sink_id) const {
   auto iter = frame_sink_data_map_.find(frame_sink_id);
   return iter != frame_sink_data_map_.end() &&

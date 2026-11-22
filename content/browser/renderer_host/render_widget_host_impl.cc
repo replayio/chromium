@@ -196,8 +196,8 @@ namespace {
 
 constexpr int kMaxSnapshotCopyRetries = 5;
 
-// How long a snapshot waits for the renderer to create its frame sink again
-// after the GPU process is lost. A new GPU process takes well under a second.
+// How long after its first parked failure a snapshot waits for the renderer to
+// create its frame sink again, which needs a new GPU process.
 constexpr base::TimeDelta kSnapshotFrameSinkTimeout = base::Seconds(5);
 
 constexpr gfx::Rect kInvalidScreenRect(std::numeric_limits<int>::max(),
@@ -641,6 +641,9 @@ viz::FrameSinkId RenderWidgetHostImpl::DefaultFrameSinkId(
 
 void RenderWidgetHostImpl::SetView(RenderWidgetHostViewBase* view) {
   synthetic_gesture_controller_.reset();
+  // A parked snapshot and the frame sink it waits for belong to the old view.
+  FailSnapshotAwaitingFrameSink();
+  has_requested_frame_sink_ = false;
 
   if (view) {
     view_ = view->GetWeakPtr();
@@ -4071,7 +4074,7 @@ void RenderWidgetHostImpl::OnSnapshotFromSurfaceReceived(
       base::FeatureList::IsEnabled(features::kCDPScreenshotNewSurface) &&
       view_ && view_is_frame_sink_id_owner_ && has_requested_frame_sink_ &&
       host_frame_sink_manager &&
-      !host_frame_sink_manager->HasCompositorFrameSink(
+      !host_frame_sink_manager->HasCreatedCompositorFrameSink(
           view_->GetFrameSinkId())) {
     snapshot_awaiting_frame_sink_ =
         std::max(snapshot_awaiting_frame_sink_.value_or(0), snapshot_id);
@@ -4263,7 +4266,8 @@ void RenderWidgetHostImpl::MaybeDispatchBufferedFrameSinkRequest() {
   has_requested_frame_sink_ = true;
 
   // The copy travels to Viz on the same pipe as the frame sink's creation, so
-  // Viz has processed the creation when it gets the copy.
+  // Viz has processed the creation when it gets the copy. A new frame sink
+  // always gets a new frame, so the copy doesn't need to ask for one.
   if (std::optional<int> snapshot_id =
           std::exchange(snapshot_awaiting_frame_sink_, std::nullopt)) {
     snapshot_frame_sink_timer_.Stop();

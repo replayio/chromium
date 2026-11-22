@@ -1635,7 +1635,8 @@ class CONTENT_EXPORT RenderWidgetHostImpl
   // unless `snapshot_frame_sink_timer_` fails it first.
   std::optional<int> snapshot_awaiting_frame_sink_;
   base::OneShotTimer snapshot_frame_sink_timer_;
-  // Whether this widget has sent a request to create its frame sink.
+  // Whether this widget has sent a request to create a frame sink for its
+  // current view.
   bool has_requested_frame_sink_ = false;
 
   // Indicates whether this RenderWidgetHost thinks is focused. This is trying
