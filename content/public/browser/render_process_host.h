@@ -297,6 +297,10 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Listener,
   // content.
   virtual bool IsPdf() = 0;
 
+  // [RecordReplay] Whether this process records the pages it loads because a
+  // recording was started for the WebContents it was launched for.
+  virtual bool IsRecordReplayForRecording() = 0;
+
   // Returns the storage partition associated with this process.
   virtual StoragePartition* GetStoragePartition() = 0;
 

@@ -256,9 +256,7 @@ class CONTENT_EXPORT RenderProcessHostImpl
   bool AreV8OptimizationsDisabled() override;
   bool DisallowV8FeatureFlagOverrides() override;
   bool IsPdf() override;
-  bool IsRecordReplayForRecording() {
-    return !!(flags_ & RenderProcessFlags::kRecordReplayForRecording);
-  }
+  bool IsRecordReplayForRecording() override;
   StoragePartitionImpl* GetStoragePartition() override;
   bool Shutdown(int exit_code) override;
   bool ShutdownRequested() override;

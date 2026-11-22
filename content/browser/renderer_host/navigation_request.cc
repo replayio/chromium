@@ -1177,8 +1177,7 @@ EmbedderIsolationInfo ResolveEmbedderIsolationInfo(
 // RenderProcessFlags::kRecordReplayForRecording, and a pdf renderer records
 // nothing however it was asked for.
 bool RendererRecords(RenderFrameHostImpl* render_frame_host) {
-  RenderProcessHostImpl* process =
-      static_cast<RenderProcessHostImpl*>(render_frame_host->GetProcess());
+  RenderProcessHost* process = render_frame_host->GetProcess();
   if (recordreplay::RecordingDisabled() || process->IsPdf()) {
     return false;
   }
@@ -8749,10 +8748,21 @@ void NavigationRequest::SanitizeRedirectsForCommit(
   // kUnreachableWebDataURL and never replays their redirects, so the URLs would
   // reach that process without reaching the recording. net_error_ is net::OK
   // for exactly the commits that are not error pages.
-  if (net_error_ != net::OK || !RendererRecords(GetRenderFrameHost())) {
-    for (GURL& redirect : commit_params->redirects) {
-      redirect = redirect.DeprecatedGetOriginAsURL();
-    }
+  base::span<GURL> redirects_to_sanitize(commit_params->redirects);
+  if (net_error_ == net::OK && HasRenderFrameHost() &&
+      RendererRecords(GetRenderFrameHost())) {
+    // `redirects` can begin with the redirects of an earlier request, which
+    // this navigation never made and the recorder never reports, so only its
+    // own requests, the last `redirect_params` entries, are left whole. A
+    // navigation that has not picked its renderer yet, which only a test
+    // reaches here, is sanitized like any other.
+    const size_t own_requests = std::min(commit_params->redirect_params.size(),
+                                         redirects_to_sanitize.size());
+    redirects_to_sanitize = redirects_to_sanitize.first(
+        redirects_to_sanitize.size() - own_requests);
+  }
+  for (GURL& redirect : redirects_to_sanitize) {
+    redirect = redirect.DeprecatedGetOriginAsURL();
   }
 
   // In the redirect_params vector, the last entry contains the URL we are going

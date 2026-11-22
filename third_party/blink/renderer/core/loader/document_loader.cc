@@ -1637,10 +1637,9 @@ void DocumentLoader::HandleRedirect(
     // when it is cross-origin, so the recorder reports the whole one the
     // browser sent with it. The last leg carries none, and its URL is the one
     // being committed, which never gets cut down.
-    const KURL reported_url =
-        redirect.record_replay_whole_new_url.IsEmpty()
-            ? url_after_redirect
-            : KURL(redirect.record_replay_whole_new_url);
+    const KURL reported_url = redirect.record_replay_whole_new_url.IsEmpty()
+                                  ? url_after_redirect
+                                  : KURL(redirect.record_replay_whole_new_url);
     ResourceRequest request = BuildRecordReplayNavigationRequest(
         reported_url, frame_.Get(), 0, http_method_, http_body_,
         http_content_type_, referrer_);
