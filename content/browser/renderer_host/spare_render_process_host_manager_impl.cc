@@ -459,7 +459,7 @@ RenderProcessHost* SpareRenderProcessHostManagerImpl::WarmupSpare(
   // [RecordReplay] Every renderer makes a recording when all content is
   // recorded. A spare one would make one of no page, and the browser stops it
   // at shutdown before it has written its end.
-  if (recordreplay::IsRecordReplayRun()) {
+  if (recordreplay::RecordsAllContent()) {
     return nullptr;
   }
 

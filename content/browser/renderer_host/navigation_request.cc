@@ -22,7 +22,6 @@
 #include "base/debug/alias.h"
 #include "base/debug/crash_logging.h"
 #include "base/debug/dump_without_crashing.h"
-#include "base/environment.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
 #include "base/functional/bind.h"
@@ -36,6 +35,7 @@
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/rand_util.h"
+#include "base/record_replay.h"
 #include "base/state_transitions.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
@@ -1169,22 +1169,21 @@ EmbedderIsolationInfo ResolveEmbedderIsolationInfo(
 }
 
 // [RecordReplay] Whether the renderer a navigation is about to commit in makes
-// a recording. A renderer settles that for itself at startup, in
-// RecordReplayShouldRecord (chrome/app/record_replay_main.cc), from two inputs
-// the browser has to consult separately: a recording started from the toolbar
-// marks one WebContents, which reaches its process as
-// RenderProcessFlags::kRecordReplayForRecording, while a run that records all
-// content marks nothing at all and says so only in the environment that every
-// process inherits.
+// a recording, which it settles for itself at startup in
+// RecordReplayShouldRecord (chrome/app/record_replay_main.cc). The browser has
+// to reach the same answer from the same inputs: a run that records all
+// content records every renderer, a recording started from the toolbar marks
+// only the process it records, which reaches that process as
+// RenderProcessFlags::kRecordReplayForRecording, and a pdf renderer records
+// nothing however it was asked for.
 bool RendererRecords(RenderFrameHostImpl* render_frame_host) {
-  static const bool records_all_content = [] {
-    std::unique_ptr<base::Environment> env = base::Environment::Create();
-    return env->HasVar("RECORD_ALL_CONTENT") &&
-           !env->HasVar("RECORD_REPLAY_DONT_RECORD");
-  }();
-  return records_all_content ||
-         static_cast<RenderProcessHostImpl*>(render_frame_host->GetProcess())
-             ->IsRecordReplayForRecording();
+  RenderProcessHostImpl* process =
+      static_cast<RenderProcessHostImpl*>(render_frame_host->GetProcess());
+  if (recordreplay::RecordingDisabled() || process->IsPdf()) {
+    return false;
+  }
+  return recordreplay::RecordsAllContent() ||
+         process->IsRecordReplayForRecording();
 }
 
 }  // namespace

@@ -281,10 +281,13 @@ static __attribute__((noinline)) void BusyWait() {
 }
 
 static bool RecordReplayRecordingDisabled(bool cmdline_for_recording) {
-  if (getenv("RECORD_REPLAY_DONT_RECORD") && getenv("RECORD_REPLAY_WAIT_AT_DONT_RECORD")) {
-    BusyWait();
+  if (recordreplay::RecordingDisabled()) {
+    if (getenv("RECORD_REPLAY_WAIT_AT_DONT_RECORD")) {
+      BusyWait();
+    }
+    return true;
   }
-  return !recordreplay::IsRecordReplayRun() && !cmdline_for_recording;
+  return !recordreplay::RecordsAllContent() && !cmdline_for_recording;
 }
 
 // Return whether the current process should be recorded. May update the arguments.
