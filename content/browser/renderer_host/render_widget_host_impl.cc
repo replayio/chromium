@@ -641,8 +641,20 @@ viz::FrameSinkId RenderWidgetHostImpl::DefaultFrameSinkId(
 
 void RenderWidgetHostImpl::SetView(RenderWidgetHostViewBase* view) {
   synthetic_gesture_controller_.reset();
-  // A parked snapshot and the frame sink it waits for belong to the old view.
-  FailSnapshotAwaitingFrameSink();
+  // A parked snapshot waits for a frame sink requested for the old view, so it
+  // fails. Its callback may use the view, which can be mid-teardown here, so it
+  // runs from a task.
+  if (std::optional<int> snapshot_id =
+          std::exchange(snapshot_awaiting_frame_sink_, std::nullopt)) {
+    snapshot_frame_sink_timer_.Stop();
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE,
+        base::BindOnce(&RenderWidgetHostImpl::OnSnapshotFromSurfaceReceived,
+                       weak_factory_.GetWeakPtr(), *snapshot_id,
+                       kMaxSnapshotCopyRetries,
+                       CopyFromSurfaceResult(base::unexpected(
+                           CopyFromSurfaceError::kFrameGone))));
+  }
   has_requested_frame_sink_ = false;
 
   if (view) {
@@ -4266,8 +4278,8 @@ void RenderWidgetHostImpl::MaybeDispatchBufferedFrameSinkRequest() {
   has_requested_frame_sink_ = true;
 
   // The copy travels to Viz on the same pipe as the frame sink's creation, so
-  // Viz has processed the creation when it gets the copy. A new frame sink
-  // always gets a new frame, so the copy doesn't need to ask for one.
+  // Viz has processed the creation when it gets the copy. The renderer commits
+  // a new frame for its new frame sink, and the copy waits for it.
   if (std::optional<int> snapshot_id =
           std::exchange(snapshot_awaiting_frame_sink_, std::nullopt)) {
     snapshot_frame_sink_timer_.Stop();
