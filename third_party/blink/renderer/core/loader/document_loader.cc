@@ -676,9 +676,6 @@ DocumentLoader::DocumentLoader(
               perfetto::Flow::FromPointer(this));
   DCHECK(frame_);
   DCHECK(params_);
-  for (const WebURL& navigation_url : params_->record_replay_navigation_urls) {
-    record_replay_navigation_urls_.push_back(KURL(navigation_url));
-  }
   is_secure_context_root_ = params_->is_secure_context_root;
   script_injection_policy_ = params_->script_injection_policy;
 
@@ -1636,14 +1633,13 @@ void DocumentLoader::HandleRedirect(
       probe::ToCoreProbeSink(GetFrame()), main_resource_identifier_, this,
       url_after_redirect, http_method_, http_body_.get());
   if (recordreplay::IsRecordingOrReplaying("notify-network")) {
-    // The URL this leg redirected to is the one the next leg was requested
-    // with. The last leg has no next entry, and its URL is the one being
-    // committed, which never gets sanitized.
-    const size_t next_url_index = ++record_replay_redirects_handled_;
-    const KURL& reported_url =
-        next_url_index < record_replay_navigation_urls_.size()
-            ? record_replay_navigation_urls_[next_url_index]
-            : url_after_redirect;
+    // url_after_redirect is this leg's new_url, which is cut down to an origin
+    // when it is cross-origin, so the recorder reports the whole one the
+    // browser sent with it. The last leg carries none, and its URL is the one
+    // being committed, which never gets cut down.
+    const KURL reported_url = redirect.record_replay_whole_new_url.IsEmpty()
+                                  ? url_after_redirect
+                                  : KURL(redirect.record_replay_whole_new_url);
     ResourceRequest request = BuildRecordReplayNavigationRequest(
         reported_url, frame_.Get(), 0, http_method_, http_body_,
         http_content_type_, referrer_);
@@ -2193,9 +2189,13 @@ void DocumentLoader::StartLoadingInternal() {
   main_resource_identifier_ = CreateUniqueIdentifier();
 
   if (recordreplay::IsRecordingOrReplaying("notify-network")) {
-    const KURL& reported_url = record_replay_navigation_urls_.empty()
-                                   ? url_
-                                   : record_replay_navigation_urls_.front();
+    // url_ is the navigation's original URL cut down to an origin when the
+    // navigation was redirected, so the recorder reports the whole one the
+    // browser sent with it.
+    const KURL reported_url =
+        params_->record_replay_whole_start_url.IsEmpty()
+            ? url_
+            : KURL(params_->record_replay_whole_start_url);
     ResourceRequest request = BuildRecordReplayNavigationRequest(
         reported_url, frame_.Get(), main_resource_identifier_, http_method_,
         http_body_, http_content_type_, referrer_);

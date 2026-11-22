@@ -240,6 +240,14 @@ void MockRenderProcessHost::SetIsPdf(bool is_pdf) {
   is_pdf_ = is_pdf;
 }
 
+bool MockRenderProcessHost::IsRecordReplayForRecording() {
+  return false;
+}
+
+void MockRenderProcessHost::SendRecordReplayBrowserEvent(
+    const std::string& name,
+    base::Value&& value) {}
+
 void MockRenderProcessHost::OnMediaStreamAdded() {}
 
 void MockRenderProcessHost::OnMediaStreamRemoved() {}

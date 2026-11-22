@@ -3757,6 +3757,10 @@ bool RenderProcessHostImpl::IsPdf() {
   return !!(flags_ & RenderProcessFlags::kPdf);
 }
 
+bool RenderProcessHostImpl::IsRecordReplayForRecording() {
+  return !!(flags_ & RenderProcessFlags::kRecordReplayForRecording);
+}
+
 bool RenderProcessHostImpl::ShouldPauseChannelUntilProcessLaunched() {
   if (IsForGuestsOnly()) {
     // GuestView initialization requires WebViewRendererState, which is created

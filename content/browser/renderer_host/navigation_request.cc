@@ -1168,6 +1168,23 @@ EmbedderIsolationInfo ResolveEmbedderIsolationInfo(
   return EmbedderIsolationInfo::CreateNone();
 }
 
+// [RecordReplay] Whether the renderer a navigation is about to commit in makes
+// a recording, which it settles for itself at startup in
+// RecordReplayShouldRecord (chrome/app/record_replay_main.cc). The browser has
+// to reach the same answer from the same inputs: a run that records all
+// content records every renderer, a recording started from the toolbar marks
+// only the process it records, which reaches that process as
+// RenderProcessFlags::kRecordReplayForRecording, and a pdf renderer records
+// nothing however it was asked for.
+bool RendererRecords(RenderFrameHostImpl* render_frame_host) {
+  RenderProcessHost* process = render_frame_host->GetProcess();
+  if (recordreplay::RecordingDisabled() || process->IsPdf()) {
+    return false;
+  }
+  return recordreplay::RecordsAllContent() ||
+         process->IsRecordReplayForRecording();
+}
+
 }  // namespace
 
 NavigationRequest::PrerenderActivationNavigationState::
@@ -8731,17 +8748,21 @@ void NavigationRequest::SanitizeRedirectsForCommit(
   // kUnreachableWebDataURL and never replays their redirects, so the URLs would
   // reach that process without reaching the recording. net_error_ is net::OK
   // for exactly the commits that are not error pages.
-  //
-  // The browser has to read the environment, since it never loads the driver
-  // that answers IsRecordingOrReplaying() (base/record_replay.h), so a run that
-  // asks for a recording and then fails to load the driver counts as one here.
-  // The environment says nothing about the toolbar's per-tab recording mode,
-  // which marks a single renderer instead, so recordings made that way report
-  // origins.
-  if (net_error_ != net::OK || !recordreplay::IsRecordReplayRun()) {
-    for (GURL& redirect : commit_params->redirects) {
-      redirect = redirect.DeprecatedGetOriginAsURL();
-    }
+  base::span<GURL> redirects_to_sanitize(commit_params->redirects);
+  if (net_error_ == net::OK && HasRenderFrameHost() &&
+      RendererRecords(GetRenderFrameHost())) {
+    // `redirects` can begin with the redirects of an earlier request, which
+    // this navigation never made and the recorder never reports, so only its
+    // own requests, the last `redirect_params` entries, are left whole. A
+    // navigation that has not picked its renderer yet, which only a test
+    // reaches here, is sanitized like any other.
+    const size_t own_requests = std::min(commit_params->redirect_params.size(),
+                                         redirects_to_sanitize.size());
+    redirects_to_sanitize = redirects_to_sanitize.first(
+        redirects_to_sanitize.size() - own_requests);
+  }
+  for (GURL& redirect : redirects_to_sanitize) {
+    redirect = redirect.DeprecatedGetOriginAsURL();
   }
 
   // In the redirect_params vector, the last entry contains the URL we are going

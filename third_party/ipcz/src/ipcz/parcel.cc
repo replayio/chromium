@@ -54,7 +54,7 @@ void Parcel::AllocateData(size_t num_bytes,
   // its channel, in a call whose output is in the recording, as every message
   // did with the legacy Mojo core; and a recorded node allocates no blocks for
   // parcel data, so nothing has to be recorded for the allocation.
-  if (::recordreplay::IsRecordReplayRun() ||
+  if (::recordreplay::RecordsAllContent() ||
       ::recordreplay::IsRecordingOrReplaying()) {
     memory = nullptr;
   }

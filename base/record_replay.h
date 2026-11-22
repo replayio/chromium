@@ -40,10 +40,17 @@ bool IsMainThread();
 bool IsRecordingOrReplaying(const char* feature = nullptr,
                             const char* subfeature = nullptr);
 
-// Whether the current process is part of a record/replay run. Unlike
-// IsRecordingOrReplaying(), this is env-derived and so stays correct in the
-// browser process, which never loads the driver.
-bool IsRecordReplayRun();
+// Whether this run records every page it loads, which it says only in the
+// environment that every process inherits. A recording started from the
+// toolbar instead marks the one renderer it records on that process's command
+// line, so neither input on its own answers whether some process records.
+// Unlike IsRecordingOrReplaying(), both of these are env-derived and so stay
+// correct in the browser process, which never loads the driver.
+bool RecordsAllContent();
+
+// Whether recording is turned off for this run, which overrides every way a
+// recording can be asked for.
+bool RecordingDisabled();
 
 bool IsRecording();
 bool IsReplaying();

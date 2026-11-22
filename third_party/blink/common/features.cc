@@ -2533,7 +2533,7 @@ bool IsPersistentCacheForCodeCacheEnabled() {
   //     the browser's test-only persistent CodeCacheHost, which CHECK_IS_TEST()-aborts.
   //   - Checked here so host selection (both sides) and the process-wide backend
   //     (GeneratedCodeCacheContext) agree on the non-persistent path.
-  if (recordreplay::IsRecordReplayRun()) {
+  if (recordreplay::RecordsAllContent()) {
     return false;
   }
 

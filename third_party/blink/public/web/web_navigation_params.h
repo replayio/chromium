@@ -382,17 +382,21 @@ struct BLINK_EXPORT WebNavigationParams {
     // When navigation is restarted due to a Critical-CH header this stores the
     // time at which the the restart was initiated.
     base::TimeTicks critical_ch_restart_time;
+    // [RecordReplay] The whole URL of `new_url`, which arrives cut down to an
+    // origin when it is cross-origin. Empty unless recording, and on the last
+    // redirect, whose URL is the one being committed and is never cut down.
+    // See NavigationRequest::SanitizeRedirectsForCommit.
+    WebURL record_replay_whole_new_url;
   };
   // Redirects which happened while fetching the main resource.
   // TODO(dgozman): we are only interested in the final values instead of
   // all information about redirects.
   std::vector<RedirectInfo> redirects;
-  // [RecordReplay] The URL each leg of a redirected navigation was requested
-  // with, in order and whole, starting with the URL the navigation began at.
-  // `url` and the `new_url`s above are cut down to an origin by the time they
-  // reach the renderer, so a recording reports these instead. Empty unless
-  // recording. See NavigationRequest::SanitizeRedirectsForCommit.
-  std::vector<WebURL> record_replay_navigation_urls;
+  // [RecordReplay] The whole URL the navigation's first request was made with.
+  // `url` holds the original URL cut down to an origin when the navigation was
+  // redirected. Empty unless recording. See
+  // NavigationRequest::SanitizeRedirectsForCommit.
+  WebURL record_replay_whole_start_url;
   // The final response for the main resource. This will be used to determine
   // the type of resulting document.
   WebURLResponse response;

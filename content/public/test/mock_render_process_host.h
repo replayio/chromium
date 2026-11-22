@@ -102,6 +102,9 @@ class MockRenderProcessHost : public RenderProcessHost {
   bool DisallowV8FeatureFlagOverrides() override;
   bool IsPdf() override;
   void SetIsPdf(bool is_pdf);
+  bool IsRecordReplayForRecording() override;
+  void SendRecordReplayBrowserEvent(const std::string& name,
+                                    base::Value&& value) override;
   void OnMediaStreamAdded() override;
   void OnMediaStreamRemoved() override;
   void OnForegroundServiceWorkerAdded() override;
