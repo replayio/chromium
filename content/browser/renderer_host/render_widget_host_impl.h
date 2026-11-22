@@ -1627,6 +1627,9 @@ class CONTENT_EXPORT RenderWidgetHostImpl
   using PendingSnapshotMap = std::map<int, GetSnapshotFromBrowserCallback>;
   PendingSnapshotMap pending_browser_snapshots_;
   PendingSnapshotMap pending_surface_browser_snapshots_;
+  // The newest surface snapshot whose copy failed while Viz had no frame sink
+  // for the view. Its copy is sent again once the frame sink is created.
+  std::optional<int> snapshot_awaiting_frame_sink_;
 
   // Indicates whether this RenderWidgetHost thinks is focused. This is trying
   // to match what the renderer process knows. It is different from

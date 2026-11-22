@@ -4054,6 +4054,19 @@ void RenderWidgetHostImpl::OnSnapshotFromSurfaceReceived(
     int retry_count,
     const content::CopyFromSurfaceResult& result) {
   static constexpr int kMaxRetries = 5;
+  // Viz drops a copy for a frame sink it doesn't have, which is the case from
+  // the loss of the GPU process until the renderer creates its frame sink
+  // again. A retry can only succeed after that, so it waits for
+  // MaybeDispatchBufferedFrameSinkRequest() instead of running now.
+  viz::HostFrameSinkManager* host_frame_sink_manager =
+      GetHostFrameSinkManager();
+  if (!result.has_value() && GetView() && host_frame_sink_manager &&
+      !host_frame_sink_manager->HasCompositorFrameSink(
+          GetView()->GetFrameSinkId())) {
+    snapshot_awaiting_frame_sink_ =
+        std::max(snapshot_awaiting_frame_sink_.value_or(0), snapshot_id);
+    return;
+  }
   // A copy in flight when the renderer exited fails after the view is gone, so
   // there is nothing to retry from.
   if (!result.has_value() && retry_count < kMaxRetries && GetView()) {
@@ -4103,6 +4116,7 @@ void RenderWidgetHostImpl::OnSnapshotReceived(int snapshot_id,
 }
 
 void RenderWidgetHostImpl::FailPendingSnapshots() {
+  snapshot_awaiting_frame_sink_.reset();
   // Take the maps first so callbacks can request new snapshots.
   PendingSnapshotMap surface_snapshots =
       std::exchange(pending_surface_browser_snapshots_, {});
@@ -4217,6 +4231,16 @@ void RenderWidgetHostImpl::MaybeDispatchBufferedFrameSinkRequest() {
   std::move(create_frame_sink_callback_)
       .Run(delegate_->GetCompositorFrameSinkGroupingId(),
            view_->GetFrameSinkId());
+
+  // The copy travels to Viz on the same pipe as the frame sink's creation, so
+  // Viz has the frame sink when it gets the copy.
+  if (std::optional<int> snapshot_id =
+          std::exchange(snapshot_awaiting_frame_sink_, std::nullopt)) {
+    view_->CopyFromSurface(
+        gfx::Rect(), gfx::Size(), base::TimeDelta(),
+        base::BindOnce(&RenderWidgetHostImpl::OnSnapshotFromSurfaceReceived,
+                       weak_factory_.GetWeakPtr(), *snapshot_id, 0));
+  }
 }
 
 void RenderWidgetHostImpl::MaybeRequestNonEmptyCompositorFrameNotification() {
