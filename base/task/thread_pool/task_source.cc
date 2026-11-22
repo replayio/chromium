@@ -87,9 +87,10 @@ void TaskSource::ClearDelayedHeapHandle() {
 // ThreadPoolImpl::ShouldYield() is on a path kept lock-free on purpose, so it
 // does not sit behind a lock the way the posting path's read does.
 //
-// Recording this read does not make a yield decision deterministic on its own,
-// because ThreadGroup::ShouldYield() mixes in an unordered read of its own
-// max_allowed_sort_key_, which is not recorded.
+// Recording this read does not make a yield decision deterministic on its own.
+// JobTaskSource::ShouldYield() reads join_flag_, a plain atomic, with no
+// ordering and no recorded value, and that read decides whether the thread
+// type is consulted at all.
 ThreadType TaskSource::thread_type_racy() const {
   const ThreadType thread_type =
       thread_type_racy_.load(std::memory_order_relaxed);
