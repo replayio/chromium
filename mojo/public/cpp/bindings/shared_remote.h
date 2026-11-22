@@ -125,17 +125,21 @@ class SharedRemoteBase
     // where WidgetInputHandlerManager::ClearClient() resets host_ on the main
     // thread while an input thread caller still holds the copy
     // GetWidgetInputHandlerHost() handed it. That manager's host locks are
-    // named for this: ordering them is what makes both sides agree on whether
-    // the copy was taken at all, and ordering the decrements then settles which
-    // thread drops the last reference. Increments are left alone, for the reason
-    // given at recordreplay::AutoOrderedRelease, and the deleting itself is
-    // outside the lock.
+    // named for this, so both sides agree on whether the copy was taken at all.
+    // Increments are left alone, for the reason given at
+    // recordreplay::AutoOrderedRelease, and the deleting itself is outside the
+    // lock.
     //
-    // The reference held by the ThreadSafeProxy behind the forwarder is dropped
-    // either by the thread which destroys the SharedRemoteBase or by the
-    // sequence which runs the last queued send, and nothing orders that choice,
-    // so the decrement it makes can still come from a thread the recording does
-    // not expect.
+    // Ordering these decrements does not settle which thread makes them, and
+    // neither of the two holders above this one settles it either. The
+    // SharedRemoteBase which owns wrapper_ counts its own references without
+    // ordering them, so the last reference to it goes to whichever of the copy
+    // holder and ClearClient() gets there second, and that thread is then the
+    // one which makes the ordered decrement here. The ThreadSafeProxy behind
+    // the forwarder holds a further reference, dropped either by the thread
+    // which destroys the SharedRemoteBase or by the sequence which runs the
+    // last queued send. A replay which reaches this decrement from the other
+    // thread waits for a thread that never arrives.
     void Release() const {
       bool last;
       {

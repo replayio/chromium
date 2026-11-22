@@ -106,24 +106,34 @@ struct AutoOrderedLock {
 // which destroys it when replaying. One lock serves all of them.
 //
 // Increments are not ordered. An increment needs no ordering as long as it is
-// made by a thread which already holds a reference, or under a lock which also
-// covers dropping the reference it is copied from. It then cannot move past the
-// decrement of the reference it came from, so no replay can reach zero at an
-// earlier decrement than the recording did.
+// made by a thread which already holds a reference, or under an ordered lock
+// which also covers dropping the reference it is copied from. An unordered lock
+// is not enough, because the order of the copy and that drop is then no part of
+// the recording. A pinned increment cannot move past the decrement of the
+// reference it came from, so no replay can reach zero at an earlier decrement
+// than the recording did.
 //
-// What this orders is the decrements, not which threads make them. A holder
-// whose own destruction thread is settled by a race the recording says nothing
-// about drops its reference from either thread, and the driver records the
-// thread which acquires an ordered lock, so a decrement made there can mismatch
-// or wait for a thread which never arrives. Two such holders are known and are
-// not covered: the ThreadSafeProxy above SharedRemoteBase::RemoteWrapper, and
-// the parcels a Mojo message holds above ipcz' NodeLink. ipcz' Router
-// destructor passes events through rather than rely on this lock, for the same
-// reason.
+// What this orders is the decrements, not which threads make them, and it asks
+// more of a replay than the destruction itself does. Destroying an object needs
+// only its last decrement to come from the thread the recording destroyed it
+// on, while an ordered lock needs every decrement to come from the thread which
+// made it when recording. A holder whose own destruction thread is settled by a
+// race the recording says nothing about drops its reference from either thread,
+// and the driver records the thread which acquires an ordered lock, so a
+// decrement made there can mismatch or wait for a thread which never arrives.
+// Three such holders are known and are not covered: SharedRemoteBase, which
+// counts its own references without ordering them, and the ThreadSafeProxy,
+// both above SharedRemoteBase::RemoteWrapper, and the parcels a Mojo message
+// holds above ipcz' NodeLink, which is the holder every inbound message goes
+// through. ipcz' Router destructor passes events through rather than rely on
+// this lock for the same reason, and the references its members drop once that
+// scope has ended are ordered from a thread the recording has not settled.
 //
 // Nothing is ordered where events are disallowed or passed through, or before
 // Initialize(). A last reference dropped there is still settled by the race,
 // which is what the leak-references gates on those destruction paths cover.
+// Initialize() is called from ChromeMain, so a process which starts some other
+// way orders none of these decrements at all.
 struct AutoOrderedRelease {
   AutoOrderedRelease();
   ~AutoOrderedRelease();
