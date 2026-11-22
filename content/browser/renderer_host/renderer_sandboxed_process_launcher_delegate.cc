@@ -35,9 +35,6 @@
 namespace content {
 
 #if BUILDFLAG(USE_ZYGOTE)
-static inline bool MaybeRecordingOrReplaying() {
-  return true;
-}
 ZygoteCommunication* RendererSandboxedProcessLauncherDelegate::GetZygote() {
   const base::CommandLine& browser_command_line =
       *base::CommandLine::ForCurrentProcess();
@@ -45,8 +42,9 @@ ZygoteCommunication* RendererSandboxedProcessLauncherDelegate::GetZygote() {
       browser_command_line.GetSwitchValueNative(switches::kRendererCmdPrefix);
   if (!renderer_prefix.empty())
     return nullptr;
-  // Zygotes are not used to spawn recording processes.
-  if (MaybeRecordingOrReplaying())
+  // A process forked from the zygote never runs Chrome's main(), where a
+  // recording renderer attaches the record/replay driver.
+  if (record_replay_records_)
     return nullptr;
   return GetGenericZygote();
 }
