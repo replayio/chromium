@@ -36,6 +36,7 @@
 #include "base/metrics/histogram.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/trace_event/trace_event.h"
@@ -647,6 +648,15 @@ void AudioDestination::SetDeviceState(DeviceState state) {
   }
 }
 
+uint32_t AudioDestination::CurrentSessionId() const {
+  uint32_t session_id = session_id_.load(std::memory_order_acquire);
+  if (recordreplay::IsRecordingOrReplaying("audio-session-id")) {
+    session_id = static_cast<uint32_t>(
+        recordreplay::RecordReplayValue("AudioSessionId", session_id));
+  }
+  return session_id;
+}
+
 void AudioDestination::RequestRenderWait(
     size_t frames_requested,
     size_t frames_to_render,
@@ -657,7 +667,7 @@ void AudioDestination::RequestRenderWait(
     uint32_t session_id,
     bool has_unexpected_fifo_underrun_occurred) {
   bool success = false;
-  if (session_id == session_id_.load(std::memory_order_acquire)) {
+  if (session_id == CurrentSessionId()) {
     success = RequestRender(frames_requested, frames_to_render, delay,
                             delay_timestamp, glitch_info, request_timestamp,
                             session_id, has_unexpected_fifo_underrun_occurred);
@@ -668,7 +678,7 @@ void AudioDestination::RequestRenderWait(
   // RequestRender was executing. If it changed, we must treat this as a
   // state-change underrun and avoid signaling to prevent waking up subsequent
   // sessions early.
-  if (session_id != session_id_.load(std::memory_order_acquire)) {
+  if (session_id != CurrentSessionId()) {
     is_state_change_underrun_in_bypass_mode_.store(true,
                                                    std::memory_order_relaxed);
   } else {

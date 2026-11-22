@@ -191,6 +191,19 @@ class PLATFORM_EXPORT AudioDestination final
 
   void SetDeviceState(DeviceState);
 
+  // The current render session, taken from the recording while recording or
+  // replaying. `session_id_` is incremented on the main thread under
+  // `device_state_lock_`, but the reads that decide whether a posted render
+  // still belongs to the live session take no lock, so a replay can read a
+  // value the recording never saw at that point and render a quantum the
+  // recording discarded, or discard one it rendered.
+  //
+  // The read after the bypass wait in Render() is deliberately left as a plain
+  // load. Its only effect is the state-change underrun flag, and recording a
+  // value there would make the recording depend on which of the two wait
+  // events was signalled first.
+  uint32_t CurrentSessionId() const;
+
   // The actual render request to the WebAudio destination node. This method
   // can be invoked on both AudioDeviceThread (single-thread rendering) and
   // AudioWorkletThread (dual-thread rendering).
