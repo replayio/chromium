@@ -625,10 +625,10 @@ void TaskTracker::DecrementNumItemsBlockingShutdown() {
 }
 
 void TaskTracker::DecrementNumIncompleteTaskSources() {
-  // [RecordReplay] This race is deliberately left unrecorded, as Chromium 108
-  // leaves it. The thread that wins it only takes flush_lock_, which is
-  // unnamed and so unordered, and broadcasts flush_cv_, which upstream notes
-  // is only waited upon in FlushForTesting().
+  // [RecordReplay] This race is deliberately left unrecorded. The thread that
+  // wins it only takes flush_lock_, which is unnamed and so unordered, and
+  // broadcasts flush_cv_, which upstream notes is only waited upon in
+  // FlushForTesting().
   const auto prev_num_incomplete_task_sources =
       num_incomplete_task_sources_.fetch_sub(1);
   DCHECK_GE(prev_num_incomplete_task_sources, 1);

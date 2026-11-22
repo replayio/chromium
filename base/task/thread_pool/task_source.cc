@@ -89,7 +89,7 @@ void TaskSource::ClearDelayedHeapHandle() {
 //
 // Recording this read does not make a yield decision deterministic on its own,
 // because ThreadGroup::ShouldYield() mixes in an unordered read of its own
-// max_allowed_sort_key_. Chromium 108 was the same.
+// max_allowed_sort_key_, which is not recorded.
 ThreadType TaskSource::thread_type_racy() const {
   const ThreadType thread_type =
       thread_type_racy_.load(std::memory_order_relaxed);
