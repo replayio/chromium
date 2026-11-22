@@ -618,7 +618,11 @@ class CORE_EXPORT DocumentLoader : public GarbageCollected<DocumentLoader>,
 
   // Process a redirect to update the redirect chain, current URL, referrer,
   // etc.
-  void HandleRedirect(const WebNavigationParams::RedirectInfo& redirect);
+  // [RecordReplay] redirect_index is the leg's position in params_->redirects,
+  // which is how the recorder notification finds the URL this leg was requested
+  // with. See StartLoadingInternal(), the only caller.
+  void HandleRedirect(const WebNavigationParams::RedirectInfo& redirect,
+                      size_t redirect_index);
   void HandleResponse();
 
   void InitializeEmptyResponse();
@@ -698,11 +702,6 @@ class CORE_EXPORT DocumentLoader : public GarbageCollected<DocumentLoader>,
   DocumentToken token_;
   KURL url_;
   KURL original_url_;
-  // [RecordReplay] Copied from WebNavigationParams, see there. Read only by the
-  // recorder notifications in StartLoadingInternal() and HandleRedirect(), and
-  // indexed by the number of redirects handled so far.
-  Vector<KURL> record_replay_navigation_urls_;
-  size_t record_replay_redirects_handled_ = 0;
   AtomicString http_method_;
   // The referrer on the final request for this document.
   AtomicString referrer_;

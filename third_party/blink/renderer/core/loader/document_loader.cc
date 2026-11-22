@@ -676,9 +676,6 @@ DocumentLoader::DocumentLoader(
               perfetto::Flow::FromPointer(this));
   DCHECK(frame_);
   DCHECK(params_);
-  for (const WebURL& navigation_url : params_->record_replay_navigation_urls) {
-    record_replay_navigation_urls_.push_back(KURL(navigation_url));
-  }
   is_secure_context_root_ = params_->is_secure_context_root;
   script_injection_policy_ = params_->script_injection_policy;
 
@@ -1615,7 +1612,8 @@ void DocumentLoader::FinishedLoading(base::TimeTicks finish_time) {
 }
 
 void DocumentLoader::HandleRedirect(
-    const WebNavigationParams::RedirectInfo& redirect) {
+    const WebNavigationParams::RedirectInfo& redirect,
+    size_t redirect_index) {
   const ResourceResponse& redirect_response =
       redirect.redirect_response.ToResourceResponse();
   const KURL& url_before_redirect = redirect_response.CurrentRequestUrl();
@@ -1639,11 +1637,11 @@ void DocumentLoader::HandleRedirect(
     // The URL this leg redirected to is the one the next leg was requested
     // with. The last leg has no next entry, and its URL is the one being
     // committed, which never gets sanitized.
-    const size_t next_url_index = ++record_replay_redirects_handled_;
-    const KURL& reported_url =
-        next_url_index < record_replay_navigation_urls_.size()
-            ? record_replay_navigation_urls_[next_url_index]
-            : url_after_redirect;
+    const auto& navigation_urls = params_->record_replay_navigation_urls;
+    const size_t next_url_index = redirect_index + 1;
+    const KURL reported_url = next_url_index < navigation_urls.size()
+                                  ? KURL(navigation_urls[next_url_index])
+                                  : url_after_redirect;
     ResourceRequest request = BuildRecordReplayNavigationRequest(
         reported_url, frame_.Get(), 0, http_method_, http_body_,
         http_content_type_, referrer_);
@@ -2193,9 +2191,9 @@ void DocumentLoader::StartLoadingInternal() {
   main_resource_identifier_ = CreateUniqueIdentifier();
 
   if (recordreplay::IsRecordingOrReplaying("notify-network")) {
-    const KURL& reported_url = record_replay_navigation_urls_.empty()
-                                   ? url_
-                                   : record_replay_navigation_urls_.front();
+    const auto& navigation_urls = params_->record_replay_navigation_urls;
+    const KURL reported_url =
+        navigation_urls.empty() ? url_ : KURL(navigation_urls.front());
     ResourceRequest request = BuildRecordReplayNavigationRequest(
         reported_url, frame_.Get(), main_resource_identifier_, http_method_,
         http_body_, http_content_type_, referrer_);
@@ -2217,8 +2215,11 @@ void DocumentLoader::StartLoadingInternal() {
                                    main_resource_identifier_, this, url_,
                                    http_method_, http_body_.get());
 
+  // [RecordReplay] HandleRedirect reports the leg's own URL to the recorder and
+  // finds it by position in params_->record_replay_navigation_urls.
+  size_t redirect_index = 0;
   for (const WebNavigationParams::RedirectInfo& redirect : params_->redirects) {
-    HandleRedirect(redirect);
+    HandleRedirect(redirect, redirect_index++);
   }
 
   ApplyClientHintsConfig(params_->enabled_client_hints);
