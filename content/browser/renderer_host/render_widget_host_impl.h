@@ -1293,6 +1293,9 @@ class CONTENT_EXPORT RenderWidgetHostImpl
   // they would be taken from goes away with the renderer.
   void FailPendingSnapshots();
 
+  // Completes the snapshot waiting for a frame sink with an empty image.
+  void FailSnapshotAwaitingFrameSink();
+
   // This is called after the renderer attempts to focus content eligible for
   // handwriting via mojom::blink::FrameWidget::OnStartStylusWriting. If content
   // eligible for stylus handwriting has focus, then `focus_result` will be set,
@@ -1627,9 +1630,13 @@ class CONTENT_EXPORT RenderWidgetHostImpl
   using PendingSnapshotMap = std::map<int, GetSnapshotFromBrowserCallback>;
   PendingSnapshotMap pending_browser_snapshots_;
   PendingSnapshotMap pending_surface_browser_snapshots_;
-  // The newest surface snapshot whose copy failed while Viz had no frame sink
-  // for the view. Its copy is sent again once the frame sink is created.
+  // The newest surface snapshot whose copy failed after Viz lost the view's
+  // frame sink. Its copy is sent again once the frame sink is created again,
+  // unless `snapshot_frame_sink_timer_` fails it first.
   std::optional<int> snapshot_awaiting_frame_sink_;
+  base::OneShotTimer snapshot_frame_sink_timer_;
+  // Whether this widget has sent a request to create its frame sink.
+  bool has_requested_frame_sink_ = false;
 
   // Indicates whether this RenderWidgetHost thinks is focused. This is trying
   // to match what the renderer process knows. It is different from

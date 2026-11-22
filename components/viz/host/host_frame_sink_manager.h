@@ -109,9 +109,9 @@ class VIZ_HOST_EXPORT HostFrameSinkManager
   // InvalidateFrameSinkId() has not been called.
   bool IsFrameSinkIdRegistered(const FrameSinkId& frame_sink_id) const;
 
-  // Returns true if a CompositorFrameSink was created for |frame_sink_id| and
-  // still exists. It doesn't after the connection to Viz is lost, until the
-  // client creates it again.
+  // Returns true if a CompositorFrameSink was created for |frame_sink_id|
+  // since it was registered and since the connection to Viz was last lost.
+  // Viz may still have destroyed it, e.g. when its client disconnected.
   bool HasCompositorFrameSink(const FrameSinkId& frame_sink_id) const;
 
   // Requests a one-shot notification for when Viz activates a CompositorFrame
