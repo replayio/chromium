@@ -80,11 +80,12 @@ void TaskSource::ClearDelayedHeapHandle() {
 // call and with it the RecordedValueEventsPassedThrough warning that a worker
 // reading inside a pass-through region would raise on every read.
 //
-// Two limitations this accepts. With nothing being recorded a read pays an
-// out-of-line call where upstream inlines a relaxed load, and there is no
-// cheaper gate to put in the header, because the only inlinable recording flag
-// is defined in v8 and declared in no header base can include. And the read in
-// ThreadPoolImpl::ShouldYield() is on a path kept lock-free on purpose, so it
+// Two limitations this accepts. With nothing being recorded a read still goes
+// through this accessor and RecordReplayValueIfAllowed where upstream inlines
+// a relaxed load, and no cheaper gate can go in the header because the only
+// inlinable recording flag is a definition in v8's api.cc that no header
+// declares. And ThreadPoolImpl::ShouldYield() pays it twice a poll, directly
+// and again through GetSortKey(), on a path kept lock-free on purpose, so it
 // does not sit behind a lock the way the posting path's read does.
 //
 // Recording this read does not make a yield decision deterministic on its own.
