@@ -65,6 +65,8 @@ steps:
               secret-id: engflow-key
     env:
       REPLAY_JOB_TIMEOUT_MINUTES: *timeout
+      # The buckets' region, so the upload does not depend on the agent's AWS config.
+      AWS_DEFAULT_REGION: us-east-2
     # build-runtime=true: shared heavy-build capacity (Node + Chromium).
     # runtimeType=chromiumbuild: the host keeps a Chromium checkout per version
     # (checkout.sh); a job prepares its version's when the host has none.
@@ -126,10 +128,7 @@ steps:
       export ENGFLOW_CERT_FILE="$$WS/engflow.crt" ENGFLOW_KEY_FILE="$$WS/engflow.key"
       .ci-boot/replay_build_scripts/ci/job.sh
 
-  # The backend's test/chromium-recording suite, with the runtime the build step
-  # made. Master's step, with one difference: the runtime and its symbols come
-  # from the build step's Buildkite artifacts, because a rebase build is not
-  # uploaded to S3 / static.replay.io for the backend to download by build id.
+  # e2e=true: only linux class with Replay Chromium runtime libs (libnss3); can_replay lacks them.
   - label: "📝 Chromium Recording Tests (linux-x86_64)"
     key: "chromium-recording-linux-x86_64"
     depends_on:
@@ -137,7 +136,6 @@ steps:
     timeout_in_minutes: 30
     # In-house suite expected to pass deterministically: take shared e2e agents before E2E jobs.
     priority: 1
-    # e2e=true: only linux class with Replay Chromium runtime libs (libnss3); can_replay lacks them.
     agents:
       - "e2e=true"
     plugins:
@@ -159,8 +157,8 @@ steps:
       trap 'rm -rf "$$WORKDIR" "$$TMPDIR"' EXIT
       export RECORD_REPLAY_DIRECTORY="$$WORKDIR/replay"
       BACKEND_DIR="$$WORKDIR/backend"
-      mkdir -p "$$BACKEND_DIR" "$$RECORD_REPLAY_DIRECTORY" "$$WORKDIR/runtime"
-      buildkite-agent artifact download "build_id/linux/x86_64/*" "$$WORKDIR/"
+      mkdir -p "$$BACKEND_DIR" "$$RECORD_REPLAY_DIRECTORY"
+      buildkite-agent artifact download build_id/linux/x86_64/backend_rev "$$WORKDIR/"
       PIN="$$(cat "$$WORKDIR/build_id/linux/x86_64/backend_rev")"
       test -n "$$PIN"
       git -C "$$BACKEND_DIR" init
@@ -170,19 +168,9 @@ steps:
       # LinkerZombieLeak: sweep before tests + always after (even on failure).
       "$$BACKEND_DIR/scripts/kill-linker-processes.sh"
       trap '"$$BACKEND_DIR/scripts/kill-linker-processes.sh"; rm -rf "$$WORKDIR" "$$TMPDIR"' EXIT
+      buildkite-agent artifact download build_id/linux/x86_64/build_id "$$WORKDIR/"
       BUILD_ID="$$(cat "$$WORKDIR/build_id/linux/x86_64/build_id")"
       test -n "$$BUILD_ID"
-      # This build's runtime instead of a download: the backend takes
-      # REPLAY_CHROMIUM_EXECUTABLE_PATH ahead of the build id (resolveRecordBinary),
-      # and reads <build id>.symbols.tgz from REPLAY_SYMBOLS_DIR instead of
-      # storage. The linker's symbols, which build-driver-linker uploads, it
-      # still downloads into the same directory.
-      tar -xJf "$$WORKDIR/build_id/linux/x86_64/$$BUILD_ID.tar.xz" -C "$$WORKDIR/runtime"
-      mkdir -p "$$WORKDIR/symbols"
-      mv "$$WORKDIR/build_id/linux/x86_64/$$BUILD_ID.symbols.tgz" "$$WORKDIR/symbols/"
-      export REPLAY_SYMBOLS_DIR="$$WORKDIR/symbols"
-      export REPLAY_CHROMIUM_EXECUTABLE_PATH="$$WORKDIR/runtime/replay-chromium/chrome"
-      test -x "$$REPLAY_CHROMIUM_EXECUTABLE_PATH"
       cd "$$BACKEND_DIR"
       unset REPLAY_LOCAL_DRIVER_DIR || true
       # e2e pods still ship Node 18; Dockerfile.buildkite-e2e-agent installs the backend's Node

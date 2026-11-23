@@ -19,9 +19,9 @@
 #   logs/failed-steps.txt       one line per failed step
 #   logs/siso_failure_summary   siso's own report of each failure
 #   logs/siso_output.gz, logs/siso_failed_commands.sh
-#   build_id/linux/x86_64/build_id, build_id/linux/x86_64/<build id>.tar.xz
-#   build_id/linux/x86_64/<build id>.symbols.tgz   chrome's symbols, in the
-#                               archive master uploads to S3 symbols/
+#   build_id/linux/x86_64/{build_id,<build id>.symbols.tgz,pak-sizes,entries}
+#                               upload_build_artifacts.mjs writes these once it
+#                               has uploaded the build and its symbols to S3
 #   build_id/linux/x86_64/backend_rev   the backend commit this build embeds a
 #                               driver of, for the steps that test it
 set -euo pipefail
@@ -89,11 +89,9 @@ if [ "$status" != 0 ]; then
   exit "$status"
 fi
 
-echo "--- :package: package"
-"$dir/build-in-container.sh" --require-synced -- /ci/container/package.sh "/chromium/jobs/$job/build_id/linux/x86_64"
-# With the tree's node: the image's is too old for the script's modules.
-"$dir/build-in-container.sh" --require-synced -- /chromium/src/third_party/node/linux/node-linux-x64/bin/node \
-  replay_build_scripts/symbols_archive.mjs "/chromium/jobs/$job/build_id/linux/x86_64"
+echo "--- :s3: upload"
+# build_id/ goes into this job's directory, where the upload below reads it.
+BUILDKITE_BUILD_CHECKOUT_PATH=$out "$dir/upload-artifacts.sh"
 # Next to build_id: the backend that steps testing this build must use.
 echo "$BACKEND_REV" > "$out/build_id/linux/x86_64/backend_rev"
 ( cd "$out" && buildkite-agent artifact upload "build_id/linux/x86_64/**" )
