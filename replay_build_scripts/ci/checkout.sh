@@ -196,6 +196,15 @@ sync() {
   ensure_prepared "$k" "$commit"
   reclaim "$k"
   r=$(require "$k")
+  # One sync of a key at a time on this machine; under it, a git lock file in
+  # the key's repositories is a leftover (see clear_git_locks).
+  local sync_lock
+  exec {sync_lock}>"$(checkouts_dir)/.$k.sync.lock"
+  if ! flock -n "$sync_lock"; then
+    echo "--- waiting for another job's sync of '$k'"
+    flock "$sync_lock"
+  fi
+  clear_git_locks "$r/src/.git" "$r/backend/.git"
   echo "--- checkout '$k' at $r -> $commit"
   # The fork goes to the commit being built, the Replay forks of v8, skia,
   # webrtc and boringssl to their DEPS revisions, and the backend to
@@ -227,6 +236,23 @@ sync() {
   echo "--- gclient sync and hooks"
   "$dir/build-in-container.sh" --root "$r" -- \
     bash -c 'cd /chromium && gclient sync -D --with_branch_heads && gclient runhooks'
+  exec {sync_lock}>&-
+}
+
+# A git command killed while it writes (a job cancelled during its fetch) leaves
+# its lock file, and every later git command that writes that repository fails
+# on it ("Unable to create '.../shallow.lock': File exists"). Only a sync writes
+# a key's repositories, one at a time, so the caller holding the key's sync lock
+# finds no lock file there but such leftovers.
+clear_git_locks() {
+  local g f
+  for g in "$@"; do
+    [ -d "$g" ] || continue
+    while IFS= read -r -d '' f; do
+      echo "checkout: removing $f, left by a git command that did not finish"
+      rm -f "$f"
+    done < <(find "$g" -path "$g/objects" -prune -o -type f -name '*.lock' -print0)
+  done
 }
 
 backend_rev() {
