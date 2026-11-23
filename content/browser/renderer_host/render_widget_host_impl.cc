@@ -194,6 +194,13 @@ using blink::WebMouseWheelEvent;
 namespace content {
 namespace {
 
+constexpr int kMaxSnapshotCopyRetries = 5;
+
+// Snapshots that wait for the renderer to create its frame sink again, which
+// needs a new GPU process first, fail this long after the first of them started
+// waiting, unless their copy completes first.
+constexpr base::TimeDelta kSnapshotFrameSinkTimeout = base::Seconds(5);
+
 constexpr gfx::Rect kInvalidScreenRect(std::numeric_limits<int>::max(),
                                        std::numeric_limits<int>::max(),
                                        0,
@@ -635,6 +642,17 @@ viz::FrameSinkId RenderWidgetHostImpl::DefaultFrameSinkId(
 
 void RenderWidgetHostImpl::SetView(RenderWidgetHostViewBase* view) {
   synthetic_gesture_controller_.reset();
+  // A snapshot waiting for the old view's frame sink can't be sent again, so it
+  // fails. Its callback may use the old view, which can be mid-teardown here,
+  // so it runs from a task.
+  if (std::optional<int> snapshot_id =
+          std::exchange(snapshot_awaiting_frame_sink_, std::nullopt)) {
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE,
+        base::BindOnce(&RenderWidgetHostImpl::CompleteSurfaceSnapshots,
+                       weak_factory_.GetWeakPtr(), *snapshot_id, gfx::Image()));
+  }
+  has_requested_frame_sink_ = false;
 
   if (view) {
     view_ = view->GetWeakPtr();
@@ -4053,12 +4071,44 @@ void RenderWidgetHostImpl::OnSnapshotFromSurfaceReceived(
     int snapshot_id,
     int retry_count,
     const content::CopyFromSurfaceResult& result) {
-  static constexpr int kMaxRetries = 5;
+  // With kCDPScreenshotNewSurface the copy is sent without waiting for a
+  // frame, so it fails if the GPU process dies first. Viz then drops every copy
+  // for the view until the renderer creates its frame sink in the new GPU
+  // process, so the retry waits for MaybeDispatchBufferedFrameSinkRequest()
+  // instead of running now. A failure that arrives before HostFrameSinkManager
+  // has seen the lost connection is still retried right away.
+  viz::HostFrameSinkManager* host_frame_sink_manager =
+      GetHostFrameSinkManager();
+  const bool snapshot_pending =
+      !pending_surface_browser_snapshots_.empty() &&
+      pending_surface_browser_snapshots_.begin()->first <= snapshot_id;
+  const bool wait_for_frame_sink =
+      !result.has_value() && retry_count < kMaxSnapshotCopyRetries &&
+      snapshot_pending &&
+      base::FeatureList::IsEnabled(features::kCDPScreenshotNewSurface) &&
+      view_ && view_is_frame_sink_id_owner_ && has_requested_frame_sink_ &&
+      host_frame_sink_manager &&
+      !host_frame_sink_manager->HasCreatedCompositorFrameSink(
+          view_->GetFrameSinkId());
+  if (wait_for_frame_sink) {
+    snapshot_awaiting_frame_sink_ =
+        std::max(snapshot_awaiting_frame_sink_.value_or(0), snapshot_id);
+    snapshot_frame_sink_deadline_id_ =
+        std::max(snapshot_frame_sink_deadline_id_, snapshot_id);
+    if (!snapshot_frame_sink_timer_.IsRunning()) {
+      snapshot_frame_sink_timer_.Start(
+          FROM_HERE, kSnapshotFrameSinkTimeout,
+          base::BindOnce(&RenderWidgetHostImpl::FailSnapshotsAwaitingFrameSink,
+                         base::Unretained(this)));
+    }
+    return;
+  }
   // A copy in flight when the renderer exited fails after the view is gone, so
   // there is nothing to retry from.
-  if (!result.has_value() && retry_count < kMaxRetries && GetView()) {
+  if (!result.has_value() && retry_count < kMaxSnapshotCopyRetries &&
+      snapshot_pending && GetView()) {
     GetView()->CopyFromSurface(
-        gfx::Rect(), gfx::Size(), base::TimeDelta(),
+        gfx::Rect(), gfx::Size(), SnapshotCopyTimeout(snapshot_id),
         base::BindOnce(&RenderWidgetHostImpl::OnSnapshotFromSurfaceReceived,
                        weak_factory_.GetWeakPtr(), snapshot_id,
                        retry_count + 1));
@@ -4069,16 +4119,33 @@ void RenderWidgetHostImpl::OnSnapshotFromSurfaceReceived(
   if (result.has_value()) {
     image = gfx::Image::CreateFrom1xBitmap(result->bitmap);
   }
+  CompleteSurfaceSnapshots(snapshot_id, image);
+}
+
+void RenderWidgetHostImpl::CompleteSurfaceSnapshots(int snapshot_id,
+                                                    const gfx::Image& image) {
   // Any pending snapshots with a lower ID than the one received are considered
-  // to be implicitly complete, and returned the same snapshot data.
+  // to be implicitly complete, and returned the same snapshot data. They are
+  // taken out first, so the deadline check below sees what stays pending and
+  // callbacks may re-enter.
+  PendingSnapshotMap completed;
   auto it = pending_surface_browser_snapshots_.begin();
-  while (it != pending_surface_browser_snapshots_.end()) {
-    if (it->first <= snapshot_id) {
-      std::move(it->second).Run(image);
-      pending_surface_browser_snapshots_.erase(it++);
-    } else {
-      ++it;
-    }
+  while (it != pending_surface_browser_snapshots_.end() &&
+         it->first <= snapshot_id) {
+    completed.insert(pending_surface_browser_snapshots_.extract(it++));
+  }
+  // Once none of the snapshots that waited for a frame sink is pending, the
+  // next loss of the frame sink gets its own deadline.
+  if (snapshot_frame_sink_deadline_id_ &&
+      (pending_surface_browser_snapshots_.empty() ||
+       pending_surface_browser_snapshots_.begin()->first >
+           snapshot_frame_sink_deadline_id_)) {
+    snapshot_frame_sink_deadline_id_ = 0;
+    snapshot_awaiting_frame_sink_.reset();
+    snapshot_frame_sink_timer_.Stop();
+  }
+  for (auto& [id, callback] : completed) {
+    std::move(callback).Run(image);
   }
 }
 
@@ -4102,7 +4169,28 @@ void RenderWidgetHostImpl::OnSnapshotReceived(int snapshot_id,
 #endif
 }
 
+base::TimeDelta RenderWidgetHostImpl::SnapshotCopyTimeout(
+    int snapshot_id) const {
+  // A zero timeout means none.
+  if (!snapshot_frame_sink_timer_.IsRunning() ||
+      snapshot_id > snapshot_frame_sink_deadline_id_) {
+    return base::TimeDelta();
+  }
+  return std::max(
+      snapshot_frame_sink_timer_.desired_run_time() - base::TimeTicks::Now(),
+      base::Milliseconds(1));
+}
+
+void RenderWidgetHostImpl::FailSnapshotsAwaitingFrameSink() {
+  // This also fails a snapshot whose copy was sent again but hasn't come back,
+  // e.g. because the renderer created its frame sink but drew nothing.
+  CompleteSurfaceSnapshots(snapshot_frame_sink_deadline_id_, gfx::Image());
+}
+
 void RenderWidgetHostImpl::FailPendingSnapshots() {
+  snapshot_awaiting_frame_sink_.reset();
+  snapshot_frame_sink_deadline_id_ = 0;
+  snapshot_frame_sink_timer_.Stop();
   // Take the maps first so callbacks can request new snapshots.
   PendingSnapshotMap surface_snapshots =
       std::exchange(pending_surface_browser_snapshots_, {});
@@ -4217,6 +4305,20 @@ void RenderWidgetHostImpl::MaybeDispatchBufferedFrameSinkRequest() {
   std::move(create_frame_sink_callback_)
       .Run(delegate_->GetCompositorFrameSinkGroupingId(),
            view_->GetFrameSinkId());
+
+  has_requested_frame_sink_ = true;
+
+  // The copy travels to Viz on the same pipe as the frame sink's creation, so
+  // Viz has processed the creation when it gets the copy, which then waits for
+  // a frame from the renderer. `snapshot_frame_sink_timer_` keeps running in
+  // case none comes, and the copy carries the time left as its Viz timeout.
+  if (std::optional<int> snapshot_id =
+          std::exchange(snapshot_awaiting_frame_sink_, std::nullopt)) {
+    view_->CopyFromSurface(
+        gfx::Rect(), gfx::Size(), SnapshotCopyTimeout(*snapshot_id),
+        base::BindOnce(&RenderWidgetHostImpl::OnSnapshotFromSurfaceReceived,
+                       weak_factory_.GetWeakPtr(), *snapshot_id, 0));
+  }
 }
 
 void RenderWidgetHostImpl::MaybeRequestNonEmptyCompositorFrameNotification() {

@@ -1293,6 +1293,17 @@ class CONTENT_EXPORT RenderWidgetHostImpl
   // they would be taken from goes away with the renderer.
   void FailPendingSnapshots();
 
+  // Runs the callbacks of the surface snapshots up to `snapshot_id`, and ends
+  // the frame sink deadline once none of the snapshots it covers is pending.
+  void CompleteSurfaceSnapshots(int snapshot_id, const gfx::Image& image);
+
+  // The Viz timeout for a copy of `snapshot_id`: the time left until the frame
+  // sink deadline if it covers the snapshot, and none otherwise.
+  base::TimeDelta SnapshotCopyTimeout(int snapshot_id) const;
+
+  // Completes the snapshots waiting for a frame sink with an empty image.
+  void FailSnapshotsAwaitingFrameSink();
+
   // This is called after the renderer attempts to focus content eligible for
   // handwriting via mojom::blink::FrameWidget::OnStartStylusWriting. If content
   // eligible for stylus handwriting has focus, then `focus_result` will be set,
@@ -1627,6 +1638,16 @@ class CONTENT_EXPORT RenderWidgetHostImpl
   using PendingSnapshotMap = std::map<int, GetSnapshotFromBrowserCallback>;
   PendingSnapshotMap pending_browser_snapshots_;
   PendingSnapshotMap pending_surface_browser_snapshots_;
+  // The newest snapshot id whose surface copy failed after Viz lost the view's
+  // frame sink. Its copy is sent again once the frame sink is created again.
+  std::optional<int> snapshot_awaiting_frame_sink_;
+  // The newest snapshot that waited for a frame sink. Snapshots up to it fail
+  // when `snapshot_frame_sink_timer_` fires, if their copy hasn't completed.
+  int snapshot_frame_sink_deadline_id_ = 0;
+  base::OneShotTimer snapshot_frame_sink_timer_;
+  // Whether this widget has sent a request to create a frame sink for its
+  // current view.
+  bool has_requested_frame_sink_ = false;
 
   // Indicates whether this RenderWidgetHost thinks is focused. This is trying
   // to match what the renderer process knows. It is different from

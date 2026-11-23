@@ -111,6 +111,13 @@ bool HostFrameSinkManager::IsFrameSinkIdRegistered(
   return iter != frame_sink_data_map_.end() && iter->second.client != nullptr;
 }
 
+bool HostFrameSinkManager::HasCreatedCompositorFrameSink(
+    const FrameSinkId& frame_sink_id) const {
+  auto iter = frame_sink_data_map_.find(frame_sink_id);
+  return iter != frame_sink_data_map_.end() &&
+         iter->second.has_created_compositor_frame_sink;
+}
+
 void HostFrameSinkManager::RequestNonEmptyFrameNotification(
     const FrameSinkId& frame_sink_id,
     base::OnceClosure on_non_empty_frame) {
