@@ -453,14 +453,15 @@ static cc::ProxyMain* RepaintCompositorProxy() {
 static char* PaintWhenDiverged(const char* mime_type, int jpeg_quality) {
   CHECK(IsMainThread());
 
-  // This repaint blocks on the compositor thread, which can be inside a
-  // synchronous mojo call it entered before this child diverged: a GPU channel
-  // flush for the sync tokens of the resources it was drawing with
-  // (GpuChannelHost::VerifyFlush). A diverged child gets no replies, so that
-  // call would never return and the compositor would never take the repaint's
-  // commit. Releasing the calls in flight lets it finish the draw it was in
-  // and get to this one. Whether that earlier draw can end up answering this
-  // repaint is the question at gRepaintEvent below.
+  // This repaint needs the compositor sequence to run the commit below, and
+  // that sequence can be blocked inside a synchronous mojo call it entered
+  // before this child diverged: a GPU channel flush for the sync tokens of the
+  // resources it was drawing with (GpuChannelHost::VerifyFlush). A diverged
+  // child gets no replies, so the call would never return, the sequence would
+  // run no further task, and the commit would never be taken. Releasing the
+  // calls in flight lets it finish that draw and reach this one. Whether the
+  // earlier draw can end up answering this repaint is the question at
+  // gRepaintEvent below.
   recordreplay::SignalInFlightSyncCalls();
 
   gCurrentCompositorProxy = RepaintCompositorProxy();

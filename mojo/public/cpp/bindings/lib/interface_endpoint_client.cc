@@ -347,8 +347,8 @@ void ThreadSafeInterfaceEndpointClientProxy::SendMessageWithResponder(
 
   // [RecordReplay] List the event for as long as this call is in flight, so a
   // replay that diverges while the reply is outstanding releases the wait below
-  // instead of leaving it for ever. Only the cross-sequence calls get here, and
-  // they are the ones that wait on an event of their own.
+  // instead of blocking this sequence for ever. Only cross-sequence calls reach
+  // here, and they are the ones that wait on an event of their own.
   const bool record_replay_listed = recordreplay::IsReplaying();
   if (record_replay_listed) {
     recordreplay::ListInFlightSyncCall(&response->event);
