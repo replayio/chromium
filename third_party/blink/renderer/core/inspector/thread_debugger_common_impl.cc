@@ -129,11 +129,10 @@ void ThreadDebuggerCommonImpl::ExternalAsyncTaskFinished(
 
 unsigned ThreadDebuggerCommonImpl::PromiseRejected(
     v8::Local<v8::Context> context,
-    const String& error_message,
+    const String& message,
     v8::Local<v8::Value> exception,
     std::unique_ptr<SourceLocation> location) {
   const String default_message = kUncaughtInPromise;
-  String message = PromiseRejectionMessage(error_message);
 
   ReportConsoleMessage(
       ToExecutionContext(context), mojom::ConsoleMessageSource::kJavaScript,

@@ -34,7 +34,7 @@ class ThreadDebuggerCommonImpl : public ThreadDebugger {
   void AsyncTaskStarted(void* task) override;
   void AsyncTaskFinished(void* task) override;
   unsigned PromiseRejected(v8::Local<v8::Context>,
-                           const String& error_message,
+                           const String& message,
                            v8::Local<v8::Value> exception,
                            std::unique_ptr<SourceLocation>) override;
   void PromiseRejectionRevoked(v8::Local<v8::Context>,

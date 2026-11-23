@@ -3169,6 +3169,7 @@ void RecordReplayOnPromiseRejectionRevoked(int bookmark) {
     return;
   }
 
+  // Only replaying collects annotation contents; the recorder ignores them.
   std::string contents;
   if (recordreplay::IsReplaying()) {
     base::Value::Dict info;

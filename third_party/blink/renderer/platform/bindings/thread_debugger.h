@@ -41,8 +41,10 @@ class PLATFORM_EXPORT ThreadDebugger : public v8_inspector::V8InspectorClient {
   virtual void AllAsyncTasksCanceled() = 0;
   virtual void AsyncTaskStarted(void* task) = 0;
   virtual void AsyncTaskFinished(void* task) = 0;
+  // |message| is the console text, see
+  // ThreadDebuggerCommonImpl::PromiseRejectionMessage.
   virtual unsigned PromiseRejected(v8::Local<v8::Context>,
-                                   const String& error_message,
+                                   const String& message,
                                    v8::Local<v8::Value> exception,
                                    std::unique_ptr<SourceLocation>) = 0;
   virtual void PromiseRejectionRevoked(v8::Local<v8::Context>,
