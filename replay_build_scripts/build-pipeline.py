@@ -60,21 +60,18 @@ def driver_step(pin, driver_revision):
 def generate_buildkite_pipeline(pin):
     """Generates a Buildkite pipeline with a dynamic commit hash in JSON format."""
 
-    # driver_revision is the first 12 characters of the commit hash.
-    driver_revision = pin.commit[:12]
     pipeline = {
         "steps": [
-            driver_step(pin, driver_revision),
             {
-                # No pin in env: chromium-build reads it from the commit, as
-                # every other way of starting it must.
+                # CI vehicle: chromium-build has no build step whose artifact
+                # carries the pin, so the recording step takes it from env.
                 "trigger": "chromium-build",
                 "build": {
+                    "env": {"REPLAY_BACKEND_REV": pin.commit},
                     "message": "${BUILDKITE_MESSAGE}",
                     "branch": "${BUILDKITE_BRANCH}",
                     "commit": "${BUILDKITE_COMMIT}",
                 },
-                "depends_on": ["build-driver-linker"],
             },
         ]
     }
