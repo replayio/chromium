@@ -240,107 +240,132 @@ steps:
       npx --yes pnpm@10.11.0 install --frozen-lockfile
       npx tsx src/build/buildRuntime.ts test-chromium-recording --build-id "$$BUILD_ID"
 
-  # - label: "🔨 Chromium (mac-x86_64)"
-  #   key: "build-chromium-mac-x86_64"
-  #   timeout_in_minutes: 360
-  #   plugins:
-  #     - thedyrt/skip-checkout#v0.1.1:
-  #         cd: /Users/administrator/chromium/src
-  #     - seek-oss/aws-sm#v2.3.1:
-  #         region: us-east-2
-  #         env:
-  #           BUILDEVENT_APIKEY: honeycomb-api-key
-  #           BUILDEVENT_BUILDKITE_API_TOKEN: buildkite-api-token-buildevents
-  #         file:
-  #           - path: "/Users/administrator/chromium/engflow.crt"
-  #             secret-id: engflow-certificate
-  #           - path: "/Users/administrator/chromium/engflow.key"
-  #             secret-id: engflow-key
-  #     - replayio/buildevents#76b6f57: ~
-  #   commands:
-  #     - "be_cmd git-fetch-origin -- git fetch origin"
-  #     - "be_cmd git-reset-branch -- git reset --hard origin/$BUILDKITE_BRANCH"
-  #     - "be_cmd clean-artifacts-dir -- node replay_build_scripts/clean_artifacts.mjs"
-  #     - "be_cmd update-all-repos -- node replay_build_scripts/update-all-repos.mjs"
-  #     - "be_cmd chromium-build -- node buildMac.mjs"
-  #     - "be_cmd upload-artifacts -- node replay_build_scripts/upload_build_artifacts.mjs"
-  #   env:
-  #     RECORD_REPLAY_BACKEND_DIR: /Users/administrator/chromium/backend
-  #     RBE_service: simpsonite.cluster.engflow.com:443
-  #     RBE_service_no_auth: "true"
-  #     RBE_use_application_default_credentials: "true"
-  #     RBE_tls_client_auth_cert: /Users/administrator/chromium/engflow.crt
-  #     RBE_tls_client_auth_key: /Users/administrator/chromium/engflow.key
-  #   agents:
-  #     - "runtimeType=chromiumbuild"
-  #     - "os=macos"
-  #     - "queue=runtime"
-  #   artifact_paths:
-  #     - "build_id/macOS/x86_64/**"
-  # - label: "🔨 Chromium (mac-arm64)"
-  #   key: "build-chromium-mac-arm64"
-  #   timeout_in_minutes: 360
-  #   plugins:
-  #     - thedyrt/skip-checkout#v0.1.1:
-  #         cd: /Users/administrator/chromium/src
-  #     - seek-oss/aws-sm#v2.3.1:
-  #         region: us-east-2
-  #         env:
-  #           BUILDEVENT_APIKEY: honeycomb-api-key
-  #           BUILDEVENT_BUILDKITE_API_TOKEN: buildkite-api-token-buildevents
-  #         file:
-  #           - path: "/Users/administrator/chromium/engflow.crt"
-  #             secret-id: engflow-certificate
-  #           - path: "/Users/administrator/chromium/engflow.key"
-  #             secret-id: engflow-key
-  #     - replayio/buildevents#76b6f57: ~
-  #   commands:
-  #     - "be_cmd git-fetch-origin -- git fetch origin"
-  #     - "be_cmd git-reset-branch -- git reset --hard origin/$BUILDKITE_BRANCH"
-  #     - "be_cmd clean-artifacts-dir -- node replay_build_scripts/clean_artifacts.mjs"
-  #     - "be_cmd update-all-repos -- node replay_build_scripts/update-all-repos.mjs"
-  #     - "be_cmd chromium-build -- node buildMac.mjs"
-  #     - "be_cmd upload-artifacts -- node replay_build_scripts/upload_build_artifacts.mjs"
-  #   env:
-  #     REPLAY_BUILD_ARM: true
-  #     RECORD_REPLAY_BACKEND_DIR: /Users/administrator/chromium/backend
-  #     RBE_service: simpsonite.cluster.engflow.com:443
-  #     RBE_service_no_auth: "true"
-  #     RBE_use_application_default_credentials: "true"
-  #     RBE_tls_client_auth_cert: /Users/administrator/chromium/engflow.crt
-  #     RBE_tls_client_auth_key: /Users/administrator/chromium/engflow.key
-  #   agents:
-  #     - "runtimeType=chromiumbuild"
-  #     - "os=macos"
-  #     - "queue=runtime"
-  #   artifact_paths:
-  #     - "build_id/macOS/arm64/**"
+  # macOS: one build per architecture, both on a Mac agent. The steps work like
+  # the Linux one, against the agent's per-version checkout (checkout.sh), but
+  # build on the host rather than in an image: mac-host.sh pins depot_tools and
+  # Xcode instead, and checks that the agent has what README.md, "macOS
+  # agents", lists before anything touches a checkout. Both architectures share
+  # the key's checkout (out/Release and out/Release-ARM), so a Mac runs one
+  # agent.
+  - label: "🔨 Chromium (mac-x86_64)"
+    key: "build-chromium-mac-x86_64"
+    timeout_in_minutes: 360
+    plugins: &mac-build-plugins
+      - thedyrt/skip-checkout#v0.1.1: ~
+      - seek-oss/aws-sm#v2.3.1:
+          region: us-east-2
+          env:
+            BUILDEVENT_APIKEY: honeycomb-api-key
+            BUILDEVENT_BUILDKITE_API_TOKEN: buildkite-api-token-buildevents
+          file:
+            - path: "engflow.crt"
+              secret-id: engflow-certificate
+            - path: "engflow.key"
+              secret-id: engflow-key
+      - replayio/buildevents#76b6f57: ~
+    env:
+      RBE_service: simpsonite.cluster.engflow.com:443
+      RBE_service_no_auth: "true"
+      RBE_use_application_default_credentials: "true"
+      AWS_DEFAULT_REGION: us-east-2
+    agents: &mac-build-agents
+      - "queue=macos"
+      - "os=macos"
+    artifact_paths:
+      - "build_id/macOS/x86_64/**"
+    # The Linux step's command up to the checkout, which explains each part,
+    # without the build containers a Mac does not have.
+    command: &mac-build-command |
+      set -euo pipefail
+      # The GitHub reads below need GNU timeout, which mac-host.sh --check
+      # cannot report until they have fetched it.
+      timeout --version 2>/dev/null | grep -q GNU || { echo "timeout on PATH is not GNU's: replay_build_scripts/ci/README.md, macOS agents" >&2; exit 1; }
+      rm -rf "$${BUILDKITE_BUILD_CHECKOUT_PATH:-$$PWD}/build_id"
+      trap 'rm -f "$$PWD/engflow.crt" "$$PWD/engflow.key"' EXIT
+      export RBE_tls_client_auth_cert="$$PWD/engflow.crt"
+      export RBE_tls_client_auth_key="$$PWD/engflow.key"
+      case "$$(git --version)" in *\ 1.*|*\ 2.[0-9].*|*\ 2.1[0-9].*|*\ 2.2[0-4].*) echo "$$(git --version): too old for a partial fetch (2.25+)" >&2; exit 1;; esac
+      BOOT_REF="$$BUILDKITE_COMMIT"
+      if [ "$$BOOT_REF" = "HEAD" ]; then BOOT_REF="$${BUILDKITE_BRANCH:?no commit or branch to fetch}"; fi
+      github() {
+        local attempt
+        for attempt in 1 2 3 4 5; do
+          if be_cmd bootstrap-scripts -- timeout --foreground 900 "$$@"; then return 0; fi
+          if [ "$$attempt" = 5 ]; then
+            echo "reading $$BOOT_REF from GitHub failed: $$*" >&2
+            return 1
+          fi
+          sleep $$((attempt * 60))
+        done
+      }
+      rm -rf .ci-boot
+      git init -q .ci-boot
+      git -C .ci-boot remote add origin "$$BUILDKITE_REPO"
+      git -C .ci-boot config extensions.partialClone origin
+      git -C .ci-boot config remote.origin.promisor true
+      git -C .ci-boot config remote.origin.partialclonefilter blob:none
+      git -C .ci-boot config core.sparseCheckout true
+      printf '/replay_build_scripts/\n/chrome/VERSION\n' > .ci-boot/.git/info/sparse-checkout
+      github git -C .ci-boot fetch -q --filter=blob:none --depth 1 origin "$$BOOT_REF"
+      github git -C .ci-boot checkout -q -f --detach FETCH_HEAD
+      test -x .ci-boot/replay_build_scripts/ci/checkout.sh
+      echo "scripts: .ci-boot is $$(git -C .ci-boot rev-parse HEAD)"
+      if [ "$$BUILDKITE_COMMIT" = "HEAD" ] && [ -z "$${CHROMIUM_REVISION:-}" ]; then
+        CHROMIUM_REVISION=$$(git -C .ci-boot rev-parse --verify HEAD)
+        export CHROMIUM_REVISION
+      fi
+      SCRIPTS=.ci-boot/replay_build_scripts
+      be_cmd check-host -- "$$SCRIPTS/ci/mac-host.sh" --check
+      KEY=$$("$$SCRIPTS/ci/checkout.sh" key)
+      echo "checkout key: $$KEY"
+      exec {KEY_USE}>"$$("$$SCRIPTS/ci/checkout.sh" use-lock "$$KEY")"
+      flock -s "$$KEY_USE"
+      be_cmd checkout-sync -- "$$SCRIPTS/ci/checkout.sh" sync
+      BACKEND_REV=$$("$$SCRIPTS/ci/checkout.sh" backend-rev)
+      DRIVER_REVISION=$${BACKEND_REV:0:12}
+      export DRIVER_REVISION
+      be_cmd chromium-build -- "$$SCRIPTS/ci/mac-host.sh"
+      be_cmd upload-artifacts -- "$$SCRIPTS/ci/upload-artifacts.sh"
+      ARCH=x86_64
+      if [ -n "$${REPLAY_BUILD_ARM:-}" ]; then ARCH=arm64; fi
+      echo "$$BACKEND_REV" > "$${BUILDKITE_BUILD_CHECKOUT_PATH:-$$PWD}/build_id/macOS/$$ARCH/backend_rev"
 
-  # - label: "🕵️‍♀️ Verify MacOS cross-arch build integrity"
-  #   key: "verify-cross-arch-pak-sizes"
-  #   commands:
-  #     - "be_cmd download-macos-arm64-gclient_entries -- buildkite-agent artifact download build_id/macOS/arm64/entries ."
-  #     - "be_cmd download-macos-x86_64-gclient_entries -- buildkite-agent artifact download build_id/macOS/x86_64/entries ."
-  #     - "be_cmd macos-diff-gclient-entries -- diff -u build_id/macOS/arm64/entries build_id/macOS/x86_64/entries"
-  #     - "be_cmd download-macos-arm64-pak-sizes -- buildkite-agent artifact download build_id/macOS/arm64/pak-sizes ."
-  #     - "be_cmd download-macos-x86_64-pak-sizes -- buildkite-agent artifact download build_id/macOS/x86_64/pak-sizes ."
-  #     - "be_cmd macos-diff-pak-sizes -- diff -u build_id/macOS/arm64/pak-sizes build_id/macOS/x86_64/pak-sizes"
-  #   depends_on:
-  #     - "build-chromium-mac-x86_64"
-  #     - "build-chromium-mac-arm64"
-  #   plugins:
-  #     - thedyrt/skip-checkout#v0.1.1:
-  #         cd: /home/ubuntu/chromium/src
-  #     - seek-oss/aws-sm#v2.3.1:
-  #         region: us-east-2
-  #         env:
-  #           BUILDEVENT_APIKEY: honeycomb-api-key
-  #           BUILDEVENT_BUILDKITE_API_TOKEN: buildkite-api-token-buildevents
-  #     - replayio/buildevents#76b6f57: ~
-  #   agents:
-  #     - "runtimeType=chromiumbuild"
-  #     - "os=linux"
-  #     - "queue=runtime"
+  - label: "🔨 Chromium (mac-arm64)"
+    key: "build-chromium-mac-arm64"
+    timeout_in_minutes: 360
+    plugins: *mac-build-plugins
+    env:
+      REPLAY_BUILD_ARM: "true"
+      RBE_service: simpsonite.cluster.engflow.com:443
+      RBE_service_no_auth: "true"
+      RBE_use_application_default_credentials: "true"
+      AWS_DEFAULT_REGION: us-east-2
+    agents: *mac-build-agents
+    artifact_paths:
+      - "build_id/macOS/arm64/**"
+    command: *mac-build-command
+
+  # An arm recording replays with the x86_64 build, on the Linux replay hosts:
+  # the backend installs <build id>.dmg for any macOS build id, and the two
+  # architectures share their build ids. So the two builds must come from the
+  # same dependencies and carry the same resources, which this compares.
+  - label: "🕵️‍♀️ Verify MacOS cross-arch build integrity"
+    key: "verify-cross-arch-pak-sizes"
+    depends_on:
+      - "build-chromium-mac-x86_64"
+      - "build-chromium-mac-arm64"
+    plugins:
+      - thedyrt/skip-checkout#v0.1.1: ~
+    agents:
+      - "queue=light"
+    command: |
+      set -euo pipefail
+      for arch in arm64 x86_64; do
+        buildkite-agent artifact download "build_id/macOS/$$arch/entries" .
+        buildkite-agent artifact download "build_id/macOS/$$arch/pak-sizes" .
+      done
+      diff -u build_id/macOS/arm64/entries build_id/macOS/x86_64/entries
+      diff -u build_id/macOS/arm64/pak-sizes build_id/macOS/x86_64/pak-sizes
 
   # # - label: "📝 Live Tests"
   # #   trigger: "testing-runtime-e2e"

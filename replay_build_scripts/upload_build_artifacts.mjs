@@ -613,7 +613,9 @@ function computeBuildId(
   // Download the archive for this driver revision, using the latest version
   // if no revision was specified.
   let driverJSONStr = "";
-  const driverJSONFile = `${currentPlatform()}-recordreplay.json`;
+  // The driver this build embedded (build.js): an arm build's is its own.
+  const archSuffix = buildArm ? "-arm" : "";
+  const driverJSONFile = `${currentPlatform()}-recordreplay${archSuffix}.json`;
 
   const driverRevisionIsSet = !!driverRevision;
 
@@ -624,13 +626,13 @@ function computeBuildId(
     );
     driverJSONStr = fs.readFileSync(driverJSONFileFull, "utf8");
   } else {
-    const driverFile = `${currentPlatform()}-recordreplay.${driverExtension()}`;
-    const driverArchive = `${currentPlatform()}-recordreplay.tgz`;
+    const driverFile = `${currentPlatform()}-recordreplay${archSuffix}.${driverExtension()}`;
+    const driverArchive = `${currentPlatform()}-recordreplay${archSuffix}.tgz`;
 
     if (driverRevisionIsSet) {
       const downloadArchive = `${currentPlatform()}-recordreplay-${driverRevision
         .trim()
-        .substring(0, 12)}.tgz`;
+        .substring(0, 12)}${archSuffix}.tgz`;
       const downloadUrl = `https://static.replay.io/downloads/${downloadArchive}`;
       spawnChecked(
         "curl",

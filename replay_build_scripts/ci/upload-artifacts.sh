@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Upload the build artifacts of this key's checkout.
 #
 # upload_build_artifacts.mjs reads out/Release and the backend checkout relative
@@ -9,11 +9,17 @@
 #
 # It runs in the tools image, not the build image: it needs the agent's AWS
 # identity and buildkite-agent, and it writes into the job's workspace
-# (BUILDKITE_BUILD_CHECKOUT_PATH), which is where artifact_paths look.
+# (BUILDKITE_BUILD_CHECKOUT_PATH), which is where artifact_paths look. A Mac
+# has no tools image, and packages the app with its own hdiutil: there it runs
+# on the host.
 set -euo pipefail
 dir=$(dirname "$(readlink -f "$0")")
 root=$("$dir/checkout.sh" require)
 
 cd "$root/src"
+tools=("$dir/in-tools-image.sh" "$root")
+if [ "$(uname -s)" = Darwin ]; then
+  tools=()
+fi
 RECORD_REPLAY_BACKEND_DIR="$root/backend" \
-  exec "$dir/in-tools-image.sh" "$root" node replay_build_scripts/upload_build_artifacts.mjs "$@"
+  exec ${tools[@]+"${tools[@]}"} node replay_build_scripts/upload_build_artifacts.mjs "$@"

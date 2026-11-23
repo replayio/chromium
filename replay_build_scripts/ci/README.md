@@ -24,6 +24,7 @@ changed.
 | `bootstrap.sh` | puts this commit's scripts on disk in a few seconds, before any checkout is involved, for steps without a checkout of their own (the Chromium step does the same fetch inline). |
 | `sync-repos.mjs`, `upload-artifacts.sh` | the pipeline's sync and upload steps, against the key's checkout instead of the current directory. |
 | `tools.Dockerfile`, `in-tools-image.sh` | the image those two run in, as the agent's user with its home, network and AWS identity, so an agent needs only docker, git, the aws CLI and buildkite-agent. |
+| `mac-host.sh` | the macOS counterpart of `build-in-container.sh`: runs the build (or gclient) on the host, with depot_tools and Xcode pinned instead of imaged. A Mac runs everything else on the host as well. |
 
 The build image's node is 8.10 (bionic), so anything `build.js` or these
 scripts run inside it has to work there: no `fs.rmSync`, no recursive
@@ -207,3 +208,49 @@ gone, every copy fails over to `require`'s message.
 `checkout.sh adopt [--move] <dir> [key]` is also how a tree that already exists
 somewhere else becomes a key's, which is the cheap way to give a milestone a
 checkout without `gclient sync`.
+
+## macOS agents
+
+A Mac builds both macOS architectures, one step each
+(`.buildkite/pipeline.yml`), in the same per-version checkouts. It has no
+images: Xcode and the SDK exist only on the host, so `mac-host.sh` runs gclient
+and the build there and `upload-artifacts.sh` runs the upload there. The
+build's inputs stay pinned by the tree:
+
+- depot_tools is the build image's pin (`ARG DEPOT_TOOLS_REVISION` in the
+  `Dockerfile`), cloned once per pin into `<checkouts dir>/.depot_tools/`.
+- The SDK is the one `mac_*_args.gn` name (`mac_sdk_official_version`). Those
+  args build with `use_system_xcode = false`, which reads Xcode from
+  `build/mac_files/xcode_binaries` in the checkout; `mac-host.sh` links that to
+  the Xcode in `REPLAY_MAC_XCODE` and refuses to run if it lacks that SDK.
+  Google's builders get the same layout from a CIPD package only Googlers can
+  read, which `build/mac_toolchain.py` skips for everyone else.
+
+What a Mac must have, which `mac-host.sh --check` (the first thing each step
+runs) verifies:
+
+- Xcode 14.1 (it ships `MacOSX13.0.sdk`), with its license accepted
+  (`sudo xcodebuild -license accept`), at `/Applications/Xcode-14.1.0.app` or
+  wherever `REPLAY_MAC_XCODE` says. Its tools (`actool`, `libtool`) run during
+  the build, so a macOS that still runs Xcode 14.1 is the safe choice: macOS 13.
+- Homebrew's bash, coreutils, findutils and flock first on `PATH`, with the GNU
+  tools unprefixed (their `gnubin` directories): these scripts use bash 4
+  syntax and GNU options. git 2.46 or newer (depot_tools), node, the aws CLI.
+- buildkite-agent with `tags="queue=macos,os=macos,arch=<arm64|x86_64>"`,
+  `spawn=1` (both architectures share a checkout), and `shell` set to
+  Homebrew's bash (`"/opt/homebrew/bin/bash -e -c"`, `/usr/local` on Intel);
+  its environment hook sets `PATH` as above.
+- An SSH key that reads `replayio/chromium` and `replayio/backend`, and AWS
+  credentials that read the step's Secrets Manager entries and write the build
+  buckets `upload_build_artifacts.mjs` uploads to.
+- The same Mac builds the backend's macOS drivers, which these builds embed
+  (`build-driver-linker.yml` in replayio/backend, on `queue=macos` too). Those
+  steps also want pnpm and the deploy rights of `src/build/build-recorder.ts`
+  there.
+- The space for one version's checkout and both of its out dirs, and
+  `CHROMIUM_CHECKOUTS_MIN_FREE_GB` (150 GB) on top: about 350 GB.
+
+An Apple Silicon Mac builds the x86_64 build too (Chromium cross-compiles), and
+compiles run on EngFlow either way: `configure_reclient.py` sets up Linux
+remotes for a Mac host.
+

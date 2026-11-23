@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # One Chromium checkout per Chromium version, each with all of its own state.
 #
 # Until now every build on the agent ran in /home/ubuntu/chromium: one checkout,
@@ -35,6 +35,8 @@
 #
 #   checkout.sh key                 the key for the tree this script came from
 #   checkout.sh root [key]          where that key's state lives
+#   checkout.sh checkouts-dir       where every key's state, and the state they
+#                                   share, lives
 #   checkout.sh git-cache           where the shared DEPS mirrors live
 #   checkout.sh require [key]       fail unless that key is prepared
 #   checkout.sh sync                fetch and reset this key's tree to the build's
@@ -75,6 +77,33 @@ checkouts_dir() {
 # gclient's mirrors of the DEPS repositories, shared by every version.
 git_cache() {
   echo "${GIT_CACHE_PATH:-$(checkouts_dir)/.git-cache}"
+}
+
+# A Mac has neither image: Xcode and the SDK exist only on the host. There,
+# what the images run on Linux runs on the host, gclient and the build through
+# mac-host.sh, which pins depot_tools and Xcode instead (README.md, "macOS
+# agents").
+on_mac() {
+  [ "$(uname -s)" = Darwin ]
+}
+
+# The script that runs gclient and the build in a key's checkout:
+#   "$(build_env)" --root <key's directory> -- <command>
+# runs <command> in <key's directory>/src.
+build_env() {
+  if on_mac; then
+    echo "$dir/mac-host.sh"
+  else
+    echo "$dir/build-in-container.sh"
+  fi
+}
+
+# What runs the sync and upload steps' node: the tools image, or on a Mac the
+# host's node.
+tools_env() {
+  if ! on_mac; then
+    printf '%s\n' "$dir/in-tools-image.sh" "$1"
+  fi
 }
 
 fork_url() {
@@ -201,11 +230,13 @@ sync() {
   # webrtc and boringssl to their DEPS revisions, and the backend to
   # REPLAY_BACKEND_REV. The backend pin is the commit's file, never env: a
   # build's inputs must not depend on how it was started.
+  local tools=()
+  mapfile -t tools < <(tools_env "$r")
   env -u REPLAY_BACKEND_REV \
     CHROMIUM_SRC_DIR="$r/src" \
     RECORD_REPLAY_BACKEND_DIR="$r/backend" \
     CHROMIUM_REVISION="$commit" \
-    "$dir/in-tools-image.sh" "$r" node "$dir/sync-repos.mjs"
+    ${tools[@]+"${tools[@]}"} node "$dir/sync-repos.mjs"
   # Then everything else DEPS names, at this commit's revisions. src is already
   # there, so gclient reads the DEPS of the commit being built.
   #
@@ -225,8 +256,8 @@ sync() {
   # case 0 of GitWrapper.update). src is the one thing it would not move, and it
   # is unmanaged here and synced above.
   echo "--- gclient sync and hooks"
-  "$dir/build-in-container.sh" --root "$r" -- \
-    bash -c 'cd /chromium && gclient sync -D --with_branch_heads && gclient runhooks'
+  "$(build_env)" --root "$r" -- \
+    bash -c 'cd .. && gclient sync -D --with_branch_heads && gclient runhooks'
 }
 
 backend_rev() {
@@ -433,6 +464,9 @@ lru() {
     fi
     echo "$(last_used "$k") key $k"
   done
+  if on_mac; then
+    return
+  fi
   local keep=("$("$dir/build-image.sh" ref)" "$("$dir/build-image.sh" --tools ref)")
   local repo ref
   for repo in "${keep[@]%:*}"; do
@@ -548,8 +582,8 @@ prepare_key() {
   # any version has a repository, a checkout clones it from disk, borrowing the
   # mirror's objects.
   echo "--- gclient sync and hooks"
-  "$dir/build-in-container.sh" --root "$r" -- \
-    bash -c 'cd /chromium && gclient sync -D --with_branch_heads && gclient runhooks'
+  "$(build_env)" --root "$r" -- \
+    bash -c 'cd .. && gclient sync -D --with_branch_heads && gclient runhooks'
   mkdir -p "$r/home"
   write_stamp "$k" "prepare${from:+ --from $from} $commit"
   trap - EXIT
@@ -641,6 +675,7 @@ wipe_out() {
 
 case ${1:-} in
   key) key ;;
+  checkouts-dir) checkouts_dir ;;
   git-cache) git_cache ;;
   root) shift; root "${1:-}" ;;
   require) shift; require "${1:-}" ;;
