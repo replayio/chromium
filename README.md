@@ -48,12 +48,13 @@ Structure](https://www.chromium.org/developers/how-tos/getting-around-the-chrome
    ```ini
    # src/out/Release/args.gn
 
+   use_siso = true
    use_remoteexec = true
+   use_reclient = false
    is_debug = false # we can't really use most debugging symbols right now
    dcheck_always_on = false # disable dchecks
-   enable_nacl = false  # no native targets
-   use_allocator = "none"
    use_allocator_shim = false
+   enable_backup_ref_ptr_support = false
    ```
    * The following setting may be helpful for looking at stack traces while recording.
      ```ini
