@@ -16,6 +16,7 @@
 #include "base/memory/ref_counted_delete_on_sequence.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
@@ -64,6 +65,30 @@ class DataPipeProducer::SequenceState
     owning_task_runner()->PostTask(
         FROM_HERE, base::BindOnce(&SequenceState::StartOnSequence, this,
                                   std::move(data_source)));
+  }
+
+  // [RecordReplay] The file sequence's tasks and the DataPipeProducer on the
+  // callback sequence each hold a reference, and either can drop the last one.
+  // On the file sequence that deletes this inline, elsewhere it posts a
+  // DeleteSoon, which reads the clock and takes the thread pool's locks. Which
+  // one happens has to be the same when replaying, so decrements are ordered
+  // among threads. The deleting itself is outside the lock.
+  void Release() const {
+    bool last;
+    {
+      recordreplay::AutoOrderedRefCount ordered;
+      last = base::subtle::RefCountedThreadSafeBase::Release();
+    }
+    if (last) {
+      // As RefCountedDeleteOnSequence::DestructOnSequence(), which is private.
+      base::SequencedTaskRunner* runner =
+          const_cast<SequenceState*>(this)->owning_task_runner();
+      if (runner->RunsTasksInCurrentSequence()) {
+        delete this;
+      } else {
+        runner->DeleteSoon(FROM_HERE, this);
+      }
+    }
   }
 
  private:
