@@ -2142,17 +2142,18 @@ static void HandleNetworkNavigationRedirectEvent(const base::DictValue& info) {
 
   EmitResponseEvent(previous_request_id, info);
 
-  // TODO: should we be inheriting the bookmark from the previous request?
-  const uint64_t bookmark = *previous_info.FindDouble("bookmark");
+  // The redirected hop's own bookmark, taken where the redirect was followed
+  // (OnNetworkNavigationRedirect). It has no initiator: DevTools' Network
+  // panel shows its redirect source instead, as for redirected subresources.
+  const uint64_t bookmark = *info.FindDouble("bookmark");
   recordreplay::OnNetworkRequest(redirected_request_id.c_str(), "http", bookmark);
 
   base::DictValue redirected_info;
-  CopyDictionaryProperty(redirected_info, previous_info, "bookmark");
+  CopyDictionaryProperty(redirected_info, info, "bookmark");
   CopyDictionaryProperty(redirected_info, info, "requestUrl");
   CopyDictionaryProperty(redirected_info, info, "requestHeaders");
   CopyDictionaryProperty(redirected_info, info, "requestMethod");
   CopyDictionaryProperty(redirected_info, previous_info, "requestCause");
-  CopyDictionaryProperty(redirected_info, previous_info, "initiator");
   CopyDictionaryProperty(redirected_info, previous_info, "replayInternal");
 
   base::DictValue event;
@@ -2161,7 +2162,6 @@ static void HandleNetworkNavigationRedirectEvent(const base::DictValue& info) {
   CopyDictionaryProperty(event, redirected_info, "requestHeaders");
   CopyDictionaryProperty(event, redirected_info, "requestMethod");
   CopyDictionaryProperty(event, redirected_info, "requestCause");
-  CopyDictionaryProperty(event, redirected_info, "initiator");
   CopyDictionaryProperty(event, redirected_info, "replayInternal");
   event.Set("redirectSourceId", previous_request_id);
   EmitNetworkRequestEvent(redirected_request_id, event);
