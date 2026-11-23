@@ -92,7 +92,9 @@ History::RecordReplayTraversalRequest() {
 // static
 int History::RecordReplayTraversalRequestNode(
     const base::UnguessableToken& token) {
-  return GetTraversalRequestNodes().at(String::FromUTF8(token.ToString()));
+  const TraversalRequestNodes& nodes = GetTraversalRequestNodes();
+  auto it = nodes.find(String::FromUTF8(token.ToString()));
+  return it == nodes.end() ? 0 : it->value;
 }
 
 History::History(LocalDOMWindow* window)

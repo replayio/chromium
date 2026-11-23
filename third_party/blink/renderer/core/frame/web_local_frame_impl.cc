@@ -92,11 +92,9 @@
 #include <numeric>
 #include <utility>
 
-#include "base/json/json_writer.h"
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/record_replay.h"
-#include "base/values.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
@@ -2628,12 +2626,12 @@ blink::mojom::CommitResult WebLocalFrameImpl::CommitSameDocumentNavigation(
 
   absl::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
-    info.Set("kind", "commitSameDocumentNavigation");
-    info.Set("browserInitiated", is_browser_initiated);
-    std::string json;
-    base::JSONWriter::Write(info, &json);
-    int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
+    int node_id = recordreplay::NewDependencyGraphNode(
+        is_browser_initiated
+            ? "{\"kind\":\"commitSameDocumentNavigation\","
+              "\"browserInitiated\":true}"
+            : "{\"kind\":\"commitSameDocumentNavigation\","
+              "\"browserInitiated\":false}");
     if (history_traversal_token) {
       if (int request_node_id = History::RecordReplayTraversalRequestNode(
               *history_traversal_token)) {
