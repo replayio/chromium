@@ -64,6 +64,7 @@
 #include "third_party/blink/renderer/core/display_lock/display_lock_document_state.h"
 #include "third_party/blink/renderer/core/dom/document_init.h"
 #include "third_party/blink/renderer/core/dom/events/add_event_listener_options_resolved.h"
+#include "third_party/blink/renderer/core/dom/events/event_dependency_scope.h"
 #include "third_party/blink/renderer/core/dom/events/event_dispatch_forbidden_scope.h"
 #include "third_party/blink/renderer/core/dom/events/scoped_event_queue.h"
 #include "third_party/blink/renderer/core/dom/frame_request_callback_collection.h"
@@ -2074,6 +2075,8 @@ DispatchEventResult LocalDOMWindow::DispatchEvent(Event& event,
 
   DEVTOOLS_TIMELINE_TRACE_EVENT("EventDispatch",
                                 inspector_event_dispatch_event::Data, event);
+  EventDependencyScope dependency(EventDependencyScope::Kind::kEmitEvent,
+                                  event);
   return FireEventListeners(event);
 }
 

@@ -33,6 +33,7 @@
 #include "third_party/blink/public/web/web_local_frame_client.h"
 #include "third_party/blink/renderer/core/accessibility/ax_object_cache.h"
 #include "third_party/blink/renderer/core/dom/element.h"
+#include "third_party/blink/renderer/core/dom/events/event_dependency_scope.h"
 #include "third_party/blink/renderer/core/dom/events/event_dispatch_forbidden_scope.h"
 #include "third_party/blink/renderer/core/dom/events/event_dispatch_result.h"
 #include "third_party/blink/renderer/core/dom/events/event_path.h"
@@ -62,8 +63,6 @@
 #include "third_party/blink/renderer/platform/keyboard_codes.h"
 #include "ui/events/keycodes/dom/keycode_converter.h"
 
-#include "base/json/json_writer.h"
-
 namespace blink {
 
 DispatchEventResult EventDispatcher::DispatchEvent(Node& node, Event& event) {
@@ -73,16 +72,8 @@ DispatchEventResult EventDispatcher::DispatchEvent(Node& node, Event& event) {
   DCHECK(!EventDispatchForbiddenScope::IsEventDispatchForbidden());
 #endif
 
-  absl::optional<recordreplay::AutoDependencyExecution> execute;
-  if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
-    info.Set("kind", "dispatchEvent");
-    info.Set("type", event.type().Utf8());
-    std::string json;
-    base::JSONWriter::Write(info, &json);
-    execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
-  }
-
+  EventDependencyScope dependency(EventDependencyScope::Kind::kDispatchEvent,
+                                  event);
   EventDispatcher dispatcher(node, event);
   return event.DispatchEvent(dispatcher);
 }
@@ -120,35 +111,27 @@ void EventDispatcher::DispatchSimulatedClick(
 
   nodes_dispatching_simulated_clicks->insert(&node);
 
+  auto dispatch = [&](const AtomicString& event_type) {
+    Event& event = *SimulatedEventUtil::CreateEvent(
+        event_type, node, underlying_event, creation_scope);
+    EventDependencyScope dependency(EventDependencyScope::Kind::kDispatchEvent,
+                                    event);
+    return EventDispatcher(node, event).Dispatch();
+  };
+
   Element* element = DynamicTo<Element>(node);
   bool prevent_mouse_events = false;
 
   if (creation_scope == SimulatedClickCreationScope::kFromAccessibility) {
-    DispatchEventResult dispatch_result =
-        EventDispatcher(node, *SimulatedEventUtil::CreateEvent(
-                                  event_type_names::kPointerdown, node,
-                                  underlying_event, creation_scope))
-            .Dispatch();
-    prevent_mouse_events =
-        dispatch_result == DispatchEventResult::kCanceledByEventHandler;
-    if (!prevent_mouse_events) {
-      EventDispatcher(node, *SimulatedEventUtil::CreateEvent(
-                                event_type_names::kMousedown, node,
-                                underlying_event, creation_scope))
-          .Dispatch();
-    }
+    prevent_mouse_events = dispatch(event_type_names::kPointerdown) ==
+                           DispatchEventResult::kCanceledByEventHandler;
+    if (!prevent_mouse_events)
+      dispatch(event_type_names::kMousedown);
     if (element)
       element->SetActive(true);
-    EventDispatcher(node, *SimulatedEventUtil::CreateEvent(
-                              event_type_names::kPointerup, node,
-                              underlying_event, creation_scope))
-        .Dispatch();
-    if (!prevent_mouse_events) {
-      EventDispatcher(node, *SimulatedEventUtil::CreateEvent(
-                                event_type_names::kMouseup, node,
-                                underlying_event, creation_scope))
-          .Dispatch();
-    }
+    dispatch(event_type_names::kPointerup);
+    if (!prevent_mouse_events)
+      dispatch(event_type_names::kMouseup);
   }
   // Some elements (e.g. the color picker) may set active state to true before
   // calling this method and expect the state to be reset during the call.
@@ -156,10 +139,7 @@ void EventDispatcher::DispatchSimulatedClick(
     element->SetActive(false);
 
   // Always send click.
-  EventDispatcher(
-      node, *SimulatedEventUtil::CreateEvent(event_type_names::kClick, node,
-                                             underlying_event, creation_scope))
-      .Dispatch();
+  dispatch(event_type_names::kClick);
 
   nodes_dispatching_simulated_clicks->erase(&node);
 }
