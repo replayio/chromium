@@ -130,16 +130,19 @@ class SharedRemoteBase
     // recordreplay::AutoOrderedRelease, and the deleting itself is outside the
     // lock.
     //
-    // Ordering these decrements does not settle which thread makes them, and
-    // neither of the two holders above this one settles it either. The
-    // SharedRemoteBase which owns wrapper_ counts its own references without
-    // ordering them, so the last reference to it goes to whichever of the copy
-    // holder and ClearClient() gets there second, and that thread is then the
-    // one which makes the ordered decrement here. The ThreadSafeProxy behind
-    // the forwarder holds a further reference, dropped either by the thread
-    // which destroys the SharedRemoteBase or by the sequence which runs the
-    // last queued send. A replay which reaches this decrement from the other
-    // thread waits for a thread that never arrives.
+    // That race cannot actually reach this decrement from the resetting
+    // thread. ClearClient() calls Disconnect() before it resets host_, and
+    // Disconnect() from off the remote's sequence posts a task bound to this
+    // wrapper, so a reference outlives the reset and is dropped on that
+    // sequence. A send which is still queued pins this wrapper the same way,
+    // through the ThreadSafeProxy that its posted task holds. So neither
+    // racing thread makes the last decrement here, and the SharedRemoteBase
+    // being destroyed elsewhere does not change that.
+    //
+    // What the ordering still covers is a last reference dropped off the
+    // remote's sequence by a holder which did not disconnect first, where
+    // DeleteOnCorrectThread() posts or leaks rather than deleting inline and
+    // two runs could choose differently. No caller known here does that.
     void Release() const {
       bool last;
       {

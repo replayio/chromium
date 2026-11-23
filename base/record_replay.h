@@ -121,13 +121,19 @@ struct AutoOrderedLock {
 // race the recording says nothing about drops its reference from either thread,
 // and the driver records the thread which acquires an ordered lock, so a
 // decrement made there can mismatch or wait for a thread which never arrives.
-// Three such holders are known and are not covered: SharedRemoteBase, which
-// counts its own references without ordering them, and the ThreadSafeProxy,
-// both above SharedRemoteBase::RemoteWrapper, and the parcels a Mojo message
+// One such holder is known and is not covered: the parcels a Mojo message
 // holds above ipcz' NodeLink, which is the holder every inbound message goes
-// through. ipcz' Router destructor passes events through rather than rely on
-// this lock for the same reason, and the references its members drop once that
-// scope has ended are ordered from a thread the recording has not settled.
+// through. Above SharedRemoteBase::RemoteWrapper the holders settle the thread
+// rather than leave it open, for the reason given there.
+//
+// ipcz' Router destructor passes events through so that the mutex it takes is
+// not ordered, on the grounds that the thread which drops a Router's last
+// reference can differ when replaying. This lock contradicts that. It is taken
+// in RefCountedBase::ReleaseImpl, which runs on that same thread just before
+// the destructor does, so a replay which disagrees waits there and never
+// reaches the scope the pass-through protects. ipcz' NodeLink destructor takes
+// an ordered mutex with no such scope, which assumes the opposite. The two
+// cannot both be right, and this lock decides it for them.
 //
 // Nothing is ordered where events are disallowed or passed through, or before
 // Initialize(). A last reference dropped there is still settled by the race,
