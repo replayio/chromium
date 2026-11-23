@@ -47,6 +47,21 @@ class CORE_EXPORT EventDependencyScope {
   absl::optional<recordreplay::AutoDependencyExecution> execute_;
 };
 
+// Dependency graph node eventQueueDispatch <-scheduler- eventQueueSchedule.
+class CORE_EXPORT EventQueueDispatchScope {
+  STACK_ALLOCATED();
+
+ public:
+  static int Schedule();
+
+  explicit EventQueueDispatchScope(int schedule_node_id);
+  EventQueueDispatchScope(const EventQueueDispatchScope&) = delete;
+  EventQueueDispatchScope& operator=(const EventQueueDispatchScope&) = delete;
+
+ private:
+  absl::optional<recordreplay::AutoDependencyExecution> execute_;
+};
+
 }  // namespace blink
 
 #endif  // THIRD_PARTY_BLINK_RENDERER_CORE_DOM_EVENTS_EVENT_DEPENDENCY_SCOPE_H_

@@ -27,6 +27,7 @@
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/core/event_target_names.h"
 #include "third_party/blink/renderer/core/events/error_event.h"
+#include "third_party/blink/renderer/core/frame/history.h"
 #include "third_party/blink/renderer/core/frame/history_util.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/html/forms/form_data.h"
@@ -664,8 +665,11 @@ NavigationResult* NavigationApi::traverseTo(ScriptState* script_state,
   GetSupplementable()
       ->GetFrame()
       ->GetLocalFrameHostRemote()
-      .NavigateToNavigationApiKey(key, LocalFrame::HasTransientUserActivation(
-                                           GetSupplementable()->GetFrame()));
+      .NavigateToNavigationApiKey(
+          key,
+          LocalFrame::HasTransientUserActivation(
+              GetSupplementable()->GetFrame()),
+          History::RecordReplayTraversalRequest());
   return ongoing_navigation->GetNavigationResult();
 }
 

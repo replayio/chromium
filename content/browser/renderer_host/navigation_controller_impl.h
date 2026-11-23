@@ -18,6 +18,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
+#include "base/unguessable_token.h"
 #include "build/build_config.h"
 #include "content/browser/renderer_host/back_forward_cache_impl.h"
 #include "content/browser/renderer_host/navigation_controller_delegate.h"
@@ -180,7 +181,10 @@ class CONTENT_EXPORT NavigationControllerImpl : public NavigationController {
   // Navigates to the specified offset from the "current entry" and marks the
   // navigations as initiated by the renderer.
   // |initiator_rfh| is the frame that requested the navigation.
-  void GoToOffsetFromRenderer(int offset, RenderFrameHostImpl* initiator_rfh);
+  void GoToOffsetFromRenderer(
+      int offset,
+      RenderFrameHostImpl* initiator_rfh,
+      const absl::optional<base::UnguessableToken>& history_traversal_token);
 
 #if BUILDFLAG(IS_ANDROID)
   // The difference between (Can)GoToOffsetWithSkipping and
@@ -233,8 +237,10 @@ class CONTENT_EXPORT NavigationControllerImpl : public NavigationController {
   // |entries_|, or due to a race condition) or compromised.
   // If a matching entry is found, navigate to that entry and proceed like any
   // other history navigation.
-  void NavigateToNavigationApiKey(RenderFrameHostImpl* initiator_rfh,
-                                  const std::string& key);
+  void NavigateToNavigationApiKey(
+      RenderFrameHostImpl* initiator_rfh,
+      const std::string& key,
+      const absl::optional<base::UnguessableToken>& history_traversal_token);
 
   // Whether this is the initial navigation in an unmodified new tab.  In this
   // case, we know there is no content displayed in the page.
@@ -544,18 +550,25 @@ class CONTENT_EXPORT NavigationControllerImpl : public NavigationController {
   // If this navigation originated from the navigation API, |navigation_api_key|
   // will be set and indicate the navigation api key that |initiator_rfh|
   // asked to be navigated to.
-  void GoToIndex(int index,
-                 RenderFrameHostImpl* initiator_rfh,
-                 const std::string* navigation_api_key);
+  // |history_traversal_token| is the renderer's Replay token for this request.
+  void GoToIndex(
+      int index,
+      RenderFrameHostImpl* initiator_rfh,
+      const std::string* navigation_api_key,
+      const absl::optional<base::UnguessableToken>& history_traversal_token);
 
   // Starts a navigation to an already existing pending NavigationEntry.
   // |initiator_rfh| is nullptr for browser-initiated navigations.
   // If this navigation originated from the navigation API, |navigation_api_key|
   // will be set and indicate the navigation api key that |initiator_rfh|
   // asked to be navigated to.
-  void NavigateToExistingPendingEntry(ReloadType reload_type,
-                                      RenderFrameHostImpl* initiator_rfh,
-                                      const std::string* navigation_api_key);
+  // |history_traversal_token| is the renderer's Replay token for this request;
+  // it is echoed to the frames that commit same-document.
+  void NavigateToExistingPendingEntry(
+      ReloadType reload_type,
+      RenderFrameHostImpl* initiator_rfh,
+      const std::string* navigation_api_key,
+      const absl::optional<base::UnguessableToken>& history_traversal_token);
 
   // Helper function used by FindFramesToNavigate to determine the appropriate
   // action to take for a particular frame while navigating to

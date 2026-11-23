@@ -6304,8 +6304,10 @@ void RenderFrameHostImpl::DispatchLoad() {
     proxy->GetAssociatedRemoteFrame()->DispatchLoadEventForFrameOwner();
 }
 
-void RenderFrameHostImpl::GoToEntryAtOffset(int32_t offset,
-                                            bool has_user_gesture) {
+void RenderFrameHostImpl::GoToEntryAtOffset(
+    int32_t offset,
+    bool has_user_gesture,
+    const absl::optional<base::UnguessableToken>& traversal_token) {
   OPTIONAL_TRACE_EVENT2("content", "RenderFrameHostImpl::GoToEntryAtOffset",
                         "render_frame_host", this, "offset", offset);
 
@@ -6322,12 +6324,15 @@ void RenderFrameHostImpl::GoToEntryAtOffset(int32_t offset,
 
   // All frames are allowed to navigate the global history.
   if (delegate_->IsAllowedToGoToEntryAtOffset(offset)) {
-    frame_tree_->controller().GoToOffsetFromRenderer(offset, this);
+    frame_tree_->controller().GoToOffsetFromRenderer(offset, this,
+                                                     traversal_token);
   }
 }
 
-void RenderFrameHostImpl::NavigateToNavigationApiKey(const std::string& key,
-                                                     bool has_user_gesture) {
+void RenderFrameHostImpl::NavigateToNavigationApiKey(
+    const std::string& key,
+    bool has_user_gesture,
+    const absl::optional<base::UnguessableToken>& traversal_token) {
   // Non-user initiated navigations coming from the renderer should be ignored
   // if there is an ongoing browser-initiated navigation.
   // See https://crbug.com/879965.
@@ -6338,7 +6343,8 @@ void RenderFrameHostImpl::NavigateToNavigationApiKey(const std::string& key,
           frame_tree_->root()->navigation_request(), has_user_gesture)) {
     return;
   }
-  frame_tree_->controller().NavigateToNavigationApiKey(this, key);
+  frame_tree_->controller().NavigateToNavigationApiKey(this, key,
+                                                       traversal_token);
 }
 
 void RenderFrameHostImpl::HandleAccessibilityFindInPageResult(

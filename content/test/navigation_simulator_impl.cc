@@ -1302,7 +1302,8 @@ bool NavigationSimulatorImpl::SimulateBrowserInitiatedStart() {
 bool NavigationSimulatorImpl::SimulateRendererInitiatedStart() {
   if (session_history_offset_) {
     static_cast<NavigationControllerImpl&>(web_contents_->GetController())
-        .GoToOffsetFromRenderer(session_history_offset_, render_frame_host_);
+        .GoToOffsetFromRenderer(session_history_offset_, render_frame_host_,
+                                absl::nullopt);
     request_ = render_frame_host_->frame_tree_node()->navigation_request();
     return true;
   }

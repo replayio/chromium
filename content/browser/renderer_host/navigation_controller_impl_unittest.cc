@@ -3736,7 +3736,7 @@ TEST_F(NavigationControllerTest, HistoryNavigate) {
   process()->sink().ClearMessages();
 
   // Simulate the page calling history.back(). It should create a pending entry.
-  main_test_rfh()->GoToEntryAtOffset(-1, false);
+  main_test_rfh()->GoToEntryAtOffset(-1, false, absl::nullopt);
   EXPECT_EQ(0, controller.GetPendingEntryIndex());
 
   // Also make sure we told the page to navigate.
@@ -3746,7 +3746,7 @@ TEST_F(NavigationControllerTest, HistoryNavigate) {
   process()->sink().ClearMessages();
 
   // Now test history.forward()
-  main_test_rfh()->GoToEntryAtOffset(2, false);
+  main_test_rfh()->GoToEntryAtOffset(2, false, absl::nullopt);
   EXPECT_EQ(2, controller.GetPendingEntryIndex());
 
   nav_url = GetLastNavigationURL();
@@ -3757,7 +3757,8 @@ TEST_F(NavigationControllerTest, HistoryNavigate) {
   controller.DiscardNonCommittedEntries();
 
   // Make sure an extravagant history.go() doesn't break.
-  main_test_rfh()->GoToEntryAtOffset(120, false);  // Out of bounds.
+  main_test_rfh()->GoToEntryAtOffset(120, false,
+                                     absl::nullopt);  // Out of bounds.
   EXPECT_EQ(-1, controller.GetPendingEntryIndex());
   // TODO(https://crbug.com/1232883): Figure out why HasNavigationRequest() is
   // true when back/forward cache is enabled.
@@ -4535,7 +4536,8 @@ TEST_F(NavigationControllerTest,
 
   // Attempte to provide the cross-site-instance key to
   // NavigateToNavigationApiKey(). No navigation should occur.
-  controller.NavigateToNavigationApiKey(main_test_rfh(), first_key);
+  controller.NavigateToNavigationApiKey(main_test_rfh(), first_key,
+                                        absl::nullopt);
   EXPECT_FALSE(controller.GetPendingEntry());
 }
 
@@ -4570,12 +4572,13 @@ TEST_F(NavigationControllerTest, NavigateToNavigationApiKey_KeyForWrongFrame) {
   FrameTreeNode* subframe_node =
       main_test_rfh()->frame_tree_node()->child_at(0);
   controller_impl().NavigateToNavigationApiKey(
-      subframe_node->current_frame_host(), first_main_key);
+      subframe_node->current_frame_host(), first_main_key, absl::nullopt);
   EXPECT_FALSE(controller_impl().GetPendingEntry());
 
   // Call NavigateToNavigationApiKey() on the main frame with the key from the
   // main frame. This time a navigation should begin.
-  controller_impl().NavigateToNavigationApiKey(main_test_rfh(), first_main_key);
+  controller_impl().NavigateToNavigationApiKey(main_test_rfh(), first_main_key,
+                                               absl::nullopt);
   EXPECT_TRUE(controller_impl().GetPendingEntry());
 }
 

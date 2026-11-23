@@ -94,6 +94,7 @@
 
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
@@ -186,6 +187,7 @@
 #include "third_party/blink/renderer/core/frame/deprecation/deprecation.h"
 #include "third_party/blink/renderer/core/frame/find_in_page.h"
 #include "third_party/blink/renderer/core/frame/frame_console.h"
+#include "third_party/blink/renderer/core/frame/history.h"
 #include "third_party/blink/renderer/core/frame/intervention.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame_client_impl.h"
@@ -2617,9 +2619,28 @@ blink::mojom::CommitResult WebLocalFrameImpl::CommitSameDocumentNavigation(
     bool is_client_redirect,
     bool has_transient_user_activation,
     const WebSecurityOrigin& initiator_origin,
-    bool is_browser_initiated) {
+    bool is_browser_initiated,
+    const absl::optional<base::UnguessableToken>& history_traversal_token) {
   DCHECK(GetFrame());
   DCHECK(!url.ProtocolIs("javascript"));
+
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    int node_id = recordreplay::NewDependencyGraphNode(
+        is_browser_initiated
+            ? "{\"kind\":\"commitSameDocumentNavigation\","
+              "\"browserInitiated\":true}"
+            : "{\"kind\":\"commitSameDocumentNavigation\","
+              "\"browserInitiated\":false}");
+    if (history_traversal_token) {
+      if (int request_node_id = History::RecordReplayTraversalRequestNode(
+              *history_traversal_token)) {
+        recordreplay::AddDependencyGraphEdge(
+            request_node_id, node_id, "{\"kind\":\"historyTraversal\"}");
+      }
+    }
+    execute.emplace(node_id);
+  }
 
   HistoryItem* history_item = item;
   return GetFrame()->Loader().GetDocumentLoader()->CommitSameDocumentNavigation(

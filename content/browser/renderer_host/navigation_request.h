@@ -461,6 +461,10 @@ class CONTENT_EXPORT NavigationRequest
 
   void set_was_discarded() { commit_params_->was_discarded = true; }
 
+  void set_history_traversal_token(const base::UnguessableToken& token) {
+    commit_params_->history_traversal_token = token;
+  }
+
   void set_net_error(net::Error net_error) { net_error_ = net_error; }
 
   const std::string& GetMimeType() {

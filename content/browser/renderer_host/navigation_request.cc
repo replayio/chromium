@@ -1281,7 +1281,8 @@ std::unique_ptr<NavigationRequest> NavigationRequest::CreateRendererInitiated(
           false /* should_load_data_url */,
           /*ancestor_or_self_has_cspee=*/
           frame_tree_node->AncestorOrSelfHasCSPEE(),
-          std::string() /* reduced_accept_language */);
+          std::string() /* reduced_accept_language */,
+          absl::nullopt /* history_traversal_token */);
 
   // CreateRendererInitiated() should only be triggered when the navigation is
   // initiated by a frame in the same process.
@@ -1411,7 +1412,8 @@ NavigationRequest::CreateForSynchronousRendererCommit(
           false /* should_load_data_url */,
           /*ancestor_or_self_has_cspee=*/
           frame_tree_node->AncestorOrSelfHasCSPEE(),
-          std::string() /* reduced_accept_language */);
+          std::string() /* reduced_accept_language */,
+          absl::nullopt /* history_traversal_token */);
   blink::mojom::BeginNavigationParamsPtr begin_params =
       blink::mojom::BeginNavigationParams::New();
   std::unique_ptr<NavigationRequest> navigation_request(new NavigationRequest(

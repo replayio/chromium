@@ -27,6 +27,8 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_FRAME_HISTORY_H_
 
 #include "base/gtest_prod_util.h"
+#include "base/unguessable_token.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/page_state/page_state.mojom-blink.h"
 #include "third_party/blink/public/web/web_frame_load_type.h"
 #include "third_party/blink/renderer/bindings/core/v8/serialization/serialized_script_value.h"
@@ -76,6 +78,13 @@ class CORE_EXPORT History final : public ScriptWrappable,
   String scrollRestoration(ExceptionState&);
 
   bool IsSameAsCurrentState(SerializedScriptValue*) const;
+
+  // Replay: token for a history traversal request to the browser, which echoes
+  // it in the same-document commit params of that traversal.
+  static absl::optional<base::UnguessableToken> RecordReplayTraversalRequest();
+  // Dependency graph node of the request with |token|, or 0.
+  static int RecordReplayTraversalRequestNode(
+      const base::UnguessableToken& token);
 
   void Trace(Visitor*) const override;
 

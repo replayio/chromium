@@ -370,7 +370,9 @@ class CORE_EXPORT WebLocalFrameImpl final
       bool is_client_redirect,
       bool has_transient_user_activation,
       const WebSecurityOrigin& initiator_origin,
-      bool is_browser_initiated) override;
+      bool is_browser_initiated,
+      const absl::optional<base::UnguessableToken>& history_traversal_token)
+      override;
   void SetIsNotOnInitialEmptyDocument() override;
   bool IsOnInitialEmptyDocument() override;
   bool WillStartNavigation(const WebNavigationInfo&) override;

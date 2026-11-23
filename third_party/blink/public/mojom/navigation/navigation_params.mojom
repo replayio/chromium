@@ -512,4 +512,8 @@ struct CommitNavigationParams {
   // language negotiation on the top-level document, all subresource requests
   // will inherit the Accept-Language header value of the top-level document.
   string reduced_accept_language;
+
+  // Replay: set on a same-document history traversal commit that a renderer
+  // requested; echoes that request's |traversal_token|.
+  mojo_base.mojom.UnguessableToken? history_traversal_token;
 };
