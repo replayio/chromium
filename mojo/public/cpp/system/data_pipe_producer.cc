@@ -14,6 +14,7 @@
 #include "base/location.h"
 #include "base/memory/ref_counted_delete_on_sequence.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
@@ -47,7 +48,16 @@ class DataPipeProducer::SequenceState
             std::move(file_task_runner)),
         callback_task_runner_(std::move(callback_task_runner)),
         producer_handle_(std::move(producer_handle)),
-        callback_(std::move(callback)) {}
+        callback_(std::move(callback)) {
+    // [RecordReplay] See Release(). CreateOrderedLock() takes its id from the
+    // recording, which under pass-through or after diverging differs between
+    // recording and replaying, so a state made there gets no lock on either
+    // side.
+    if (RecordReplayCanOrder()) {
+      record_replay_release_ordered_lock_id_ =
+          recordreplay::CreateOrderedLock("DataPipeProducer::SequenceState");
+    }
+  }
 
   SequenceState(const SequenceState&) = delete;
   SequenceState& operator=(const SequenceState&) = delete;
@@ -65,11 +75,48 @@ class DataPipeProducer::SequenceState
                                   std::move(data_source)));
   }
 
+  // [RecordReplay] The file sequence's tasks and the DataPipeProducer on the
+  // callback sequence each hold a reference, and either can drop the last one.
+  // On the file sequence that deletes this inline, elsewhere it posts a
+  // DeleteSoon, which reads the clock and takes the thread pool's locks. Which
+  // one happens has to be the same when replaying, so decrements are ordered
+  // among threads, as in NodeChannel::Release(). The deleting itself is outside
+  // the lock.
+  void Release() {
+    if (!record_replay_release_ordered_lock_id_ || !RecordReplayCanOrder()) {
+      base::RefCountedDeleteOnSequence<SequenceState>::Release();
+      return;
+    }
+
+    bool last_reference;
+    {
+      recordreplay::AutoOrderedLock ordered(
+          record_replay_release_ordered_lock_id_);
+      last_reference = base::subtle::RefCountedThreadSafeBase::Release();
+    }
+    if (!last_reference)
+      return;
+
+    // Same as RefCountedDeleteOnSequence::DestructOnSequence(), which is
+    // private.
+    if (owning_task_runner()->RunsTasksInCurrentSequence())
+      delete this;
+    else
+      owning_task_runner()->DeleteSoon(FROM_HERE, this);
+  }
+
  private:
   friend class base::DeleteHelper<SequenceState>;
   friend class base::RefCountedDeleteOnSequence<SequenceState>;
 
   ~SequenceState() = default;
+
+  static bool RecordReplayCanOrder() {
+    return recordreplay::IsRecordingOrReplaying() &&
+           !recordreplay::AreEventsDisallowed() &&
+           !recordreplay::AreEventsPassedThrough() &&
+           !recordreplay::HasDivergedFromRecording();
+  }
 
   void StartOnSequence(std::unique_ptr<DataSource> data_source) {
     data_source_ = std::move(data_source);
@@ -175,6 +222,11 @@ class DataPipeProducer::SequenceState
 
   base::Lock lock_;
   bool is_cancelled_ GUARDED_BY(lock_) = false;
+
+  // [RecordReplay] Orders reference count decrements; see Release(). Zero in a
+  // process that is neither recording nor replaying, and for a state made where
+  // the recording cannot be added to.
+  int record_replay_release_ordered_lock_id_ = 0;
 };
 
 DataPipeProducer::DataPipeProducer(ScopedDataPipeProducerHandle producer)
