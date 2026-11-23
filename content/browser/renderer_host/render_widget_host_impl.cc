@@ -4075,16 +4075,16 @@ void RenderWidgetHostImpl::OnSnapshotFromSurfaceReceived(
   // frame, so it fails if the GPU process dies first. Viz then drops every copy
   // for the view until the renderer creates its frame sink in the new GPU
   // process, so the retry waits for MaybeDispatchBufferedFrameSinkRequest()
-  // instead of running now. A failure that arrives before HostFrameSinkManager
-  // has seen the lost connection is still retried right away.
+  // instead of running now. Waiting doesn't count as a retry, so even the last
+  // retry waits. A failure that arrives before HostFrameSinkManager has seen
+  // the lost connection is retried right away.
   viz::HostFrameSinkManager* host_frame_sink_manager =
       GetHostFrameSinkManager();
   const bool snapshot_pending =
       !pending_surface_browser_snapshots_.empty() &&
       pending_surface_browser_snapshots_.begin()->first <= snapshot_id;
   const bool wait_for_frame_sink =
-      !result.has_value() && retry_count < kMaxSnapshotCopyRetries &&
-      snapshot_pending &&
+      !result.has_value() && snapshot_pending &&
       base::FeatureList::IsEnabled(features::kCDPScreenshotNewSurface) &&
       view_ && view_is_frame_sink_id_owner_ && has_requested_frame_sink_ &&
       host_frame_sink_manager &&
