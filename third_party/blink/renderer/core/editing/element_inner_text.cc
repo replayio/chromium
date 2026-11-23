@@ -6,6 +6,8 @@
 
 #include <algorithm>
 
+#include "base/record_replay.h"
+#include "third_party/blink/renderer/core/css/style_engine.h"
 #include "third_party/blink/renderer/core/display_lock/display_lock_utilities.h"
 #include "third_party/blink/renderer/core/dom/node_traversal.h"
 #include "third_party/blink/renderer/core/dom/text.h"
@@ -500,6 +502,15 @@ void ElementInnerTextCollector::Result::FlushRequiredLineBreak() {
 }  // anonymous namespace
 
 String Element::innerText(TextVisitor* visitor) {
+  // Replay commands can run inside a layout tree rebuild, from a style recalc
+  // or a container query's layout, where a new LayoutText has no parent yet and
+  // the layout can't be updated. The collector needs a complete layout tree, so
+  // this reads the text as for an element that isn't rendered.
+  if (recordreplay::IsInReplayCode() &&
+      GetDocument().GetStyleEngine().InRebuildLayoutTree()) {
+    const bool convert_brs_to_newlines = false;
+    return textContent(convert_brs_to_newlines, visitor);
+  }
   // We need to update layout, since |ElementInnerTextCollector()| uses line
   // boxes in the layout tree.
   GetDocument().UpdateStyleAndLayoutForNode(this,
