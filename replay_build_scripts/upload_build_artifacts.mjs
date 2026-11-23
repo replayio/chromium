@@ -12,7 +12,7 @@ import {
   getBackendDir,
   getArtifactDir,
 } from "./common.mjs";
-import { buildSymbolsArchive } from "./symbolication.mjs";
+import { readSymbols } from "./symbolication.mjs";
 
 const DEFAULT_BUCKET_NAME = "recordreplay-us-east-2";
 const S3Bucket = process.env.RECORDREPLAY_BUCKET || DEFAULT_BUCKET_NAME;
@@ -739,6 +739,42 @@ function recordGClientEntries(options) {
   fs.writeFileSync(entriesFile, output);
 
   return entriesFile;
+}
+
+async function buildSymbolsArchive(
+  buildId,
+  objectDirectory,
+  libraries,
+  useArm,
+  pdbs = []
+) {
+  const json = {};
+  for (let i = 0; i < libraries.length; i++) {
+    const lib = libraries[i];
+    const name = path.basename(lib);
+    const file = path.join(objectDirectory, lib);
+    assert(fs.existsSync(file), `Missing binary for symbols archive ${file}`);
+    let pdbFile;
+    if (pdbs[i]) {
+      pdbFile = path.join(objectDirectory, pdbs[i]);
+      assert(
+        fs.existsSync(pdbFile),
+        `Missing PDB for symbols archive ${pdbFile}`
+      );
+    }
+    const symbols = await readSymbols(file, pdbFile);
+    json[name] = symbols;
+  }
+
+  const archSuffix = useArm ? "-arm" : "";
+
+  const jsonFile = `${buildId}${archSuffix}.symbols.json`;
+  const archiveFile = `${buildId}${archSuffix}.symbols.tgz`;
+  fs.writeFileSync(jsonFile, JSON.stringify(json));
+  spawnChecked("tar", ["-czf", archiveFile, jsonFile]);
+  fs.unlinkSync(jsonFile);
+
+  return archiveFile;
 }
 
 const buildIdExtension =

@@ -1,8 +1,7 @@
 #!/bin/bash
 # One Buildkite job: build Chromium at this commit, upload the logs and,
-# if it built, publish the runtime as master does. Runs on the agent, from the
-# job's own clone of this directory (.buildkite/pipeline.yml); "this commit" is
-# that clone's HEAD.
+# if it built, the runtime. Runs on the agent, from the job's own clone of
+# this directory (.buildkite/pipeline.yml); "this commit" is that clone's HEAD.
 #
 # Environment (set on the Buildkite build, not in pipeline.yml: a step's env
 # would override it):
@@ -21,9 +20,8 @@
 #   logs/siso_failure_summary   siso's own report of each failure
 #   logs/siso_output.gz, logs/siso_failed_commands.sh
 #   build_id/linux/x86_64/{build_id,<build id>.symbols.tgz,pak-sizes,entries}
-#                               master's upload_build_artifacts.mjs writes these
-#                               once it has uploaded <build id>.tar.xz and the
-#                               symbols to S3 (static.replay.io/downloads/)
+#                               upload_build_artifacts.mjs writes these once it
+#                               has uploaded the build and its symbols to S3
 #   build_id/linux/x86_64/backend_rev   the backend commit this build embeds a
 #                               driver of, for the steps that test it
 set -euo pipefail
@@ -92,12 +90,8 @@ if [ "$status" != 0 ]; then
 fi
 
 echo "--- :s3: upload"
-# master's upload step (ci/upload-artifacts.sh there): the tree's own
-# upload_build_artifacts.mjs packages out/Release, uploads it and its symbols to
-# S3, annotates the build and writes build_id/ under BUILDKITE_BUILD_CHECKOUT_PATH,
-# here the job directory. In the tools image, for the agent's AWS identity.
-( cd "$CHECKOUT_ROOT/src" &&
-  BUILDKITE_BUILD_CHECKOUT_PATH=$out "$dir/in-tools-image.sh" node replay_build_scripts/upload_build_artifacts.mjs )
+# build_id/ goes into this job's directory, where the upload below reads it.
+BUILDKITE_BUILD_CHECKOUT_PATH=$out "$dir/upload-artifacts.sh"
 # Next to build_id: the backend that steps testing this build must use.
 echo "$BACKEND_REV" > "$out/build_id/linux/x86_64/backend_rev"
 ( cd "$out" && buildkite-agent artifact upload "build_id/linux/x86_64/**" )

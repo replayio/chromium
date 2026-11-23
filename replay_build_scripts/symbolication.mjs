@@ -1,9 +1,8 @@
 import readline from "readline";
 import { spawn } from "child_process";
-import * as fs from "fs";
 import * as path from "path";
 
-import { assert, spawnChecked, toNumber, getBackendDir } from "./common.mjs";
+import { toNumber, getBackendDir } from "./common.mjs";
 
 export async function readSymbols(file, pdbFile) {
   let symbols = {};
@@ -60,46 +59,6 @@ export async function readSymbols(file, pdbFile) {
     }
   }
   return symbols;
-}
-
-// Writes <buildId>[-arm].symbols.tgz into the current directory and returns its
-// name: one <buildId>[-arm].symbols.json mapping each library's base name to its
-// symbols. The backend looks a build's symbols up under this name (symbols/ in
-// storage, or REPLAY_SYMBOLS_DIR).
-export async function buildSymbolsArchive(
-  buildId,
-  objectDirectory,
-  libraries,
-  useArm,
-  pdbs = []
-) {
-  const json = {};
-  for (let i = 0; i < libraries.length; i++) {
-    const lib = libraries[i];
-    const name = path.basename(lib);
-    const file = path.join(objectDirectory, lib);
-    assert(fs.existsSync(file), `Missing binary for symbols archive ${file}`);
-    let pdbFile;
-    if (pdbs[i]) {
-      pdbFile = path.join(objectDirectory, pdbs[i]);
-      assert(
-        fs.existsSync(pdbFile),
-        `Missing PDB for symbols archive ${pdbFile}`
-      );
-    }
-    const symbols = await readSymbols(file, pdbFile);
-    json[name] = symbols;
-  }
-
-  const archSuffix = useArm ? "-arm" : "";
-
-  const jsonFile = `${buildId}${archSuffix}.symbols.json`;
-  const archiveFile = `${buildId}${archSuffix}.symbols.tgz`;
-  fs.writeFileSync(jsonFile, JSON.stringify(json));
-  spawnChecked("tar", ["-czf", archiveFile, jsonFile]);
-  fs.unlinkSync(jsonFile);
-
-  return archiveFile;
 }
 
 // Get the start virtual address of the text section from a PDB file.
