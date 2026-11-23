@@ -54,6 +54,9 @@ class MockPendingScript : public PendingScript {
   MOCK_CONST_METHOD0(IsExternal, bool());
   MOCK_CONST_METHOD0(WasCanceled, bool());
   MOCK_CONST_METHOD0(UrlForTracing, KURL());
+  recordreplay::ConsumedNetworkRequest ConsumedRequest() const override {
+    return recordreplay::ConsumedNetworkRequest::Unknown();
+  }
   MOCK_METHOD0(RemoveFromMemoryCache, void());
   MOCK_METHOD0(ExecuteScriptBlock, void());
 

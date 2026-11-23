@@ -36,6 +36,7 @@
 #include "base/dcheck_is_on.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/record_replay_network_request.h"
 #include "base/time/time.h"
 #include "base/timer/elapsed_timer.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
@@ -1932,6 +1933,17 @@ class CORE_EXPORT Document : public ContainerNode,
     return ignore_destructive_write_module_script_count_;
   }
 
+  // The network request whose response is the document's content, for
+  // recording/replaying. None until a navigation or XHR sets it, again on
+  // document.open().
+  recordreplay::ConsumedNetworkRequest RecordReplayContentRequest() const {
+    return record_replay_content_request_;
+  }
+  void SetRecordReplayContentRequest(
+      recordreplay::ConsumedNetworkRequest request) {
+    record_replay_content_request_ = request;
+  }
+
  protected:
   void ClearXMLVersion() { xml_version_ = String(); }
 
@@ -2414,6 +2426,9 @@ class CORE_EXPORT Document : public ContainerNode,
 
   // IDs for dependency graph nodes which the load event depends on.
   Vector<int> record_replay_load_event_dependency_nodes_;
+
+  recordreplay::ConsumedNetworkRequest record_replay_content_request_ =
+      recordreplay::ConsumedNetworkRequest::None();
 
   // Objects and embeds depend on "being rendered" for delaying the load event.
   // This is a document-wide flag saying that we have incremented the

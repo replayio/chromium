@@ -89,6 +89,10 @@ class ImageResource::ImageResourceInfoImpl final
   const ResourceResponse& GetResponse() const override {
     return resource_->GetResponse();
   }
+  recordreplay::ConsumedNetworkRequest ConsumedRequest() const override {
+    return recordreplay::ConsumedNetworkRequest::Request(
+        resource_->InspectorId());
+  }
   bool IsCacheValidator() const override {
     return resource_->IsCacheValidator();
   }

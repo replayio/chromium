@@ -60,6 +60,7 @@
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
 #include "base/json/json_writer.h"
+#include "base/record_replay_network_request.h"
 
 namespace blink {
 
@@ -383,18 +384,31 @@ void Resource::FinishAsError(const ResourceError& error,
   }
 }
 
+void Resource::SetStatus(ResourceStatus status) {
+  status_ = status;
+  if (IsLoaded() && recordreplay::DependencyGraphEnabled()) {
+    NewFinishedDependencyGraphNode();
+  }
+}
+
+int Resource::NewFinishedDependencyGraphNode() {
+  base::Value::Dict info;
+  info.Set("kind", "resourceFinished");
+  info.Set("url", Url().GetString().Utf8());
+  recordreplay::SetConsumedRequestId(
+      info, recordreplay::ConsumedNetworkRequest::Request(InspectorId()));
+  std::string json;
+  base::JSONWriter::Write(info, &json);
+  int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
+  record_replay_dependency_node_ids_.push_back(node_id);
+  return node_id;
+}
+
 void Resource::Finish(base::TimeTicks load_response_end,
                       base::SingleThreadTaskRunner* task_runner) {
   absl::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::DependencyGraphEnabled()) {
-    base::Value::Dict info;
-    info.Set("kind", "resourceFinished");
-    info.Set("url", Url().GetString().Utf8());
-    std::string json;
-    base::JSONWriter::Write(info, &json);
-    int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
-    record_replay_dependency_node_ids_.push_back(node_id);
-    execute.emplace(node_id);
+    execute.emplace(NewFinishedDependencyGraphNode());
   }
 
   DCHECK(!is_revalidating_);
@@ -614,6 +628,8 @@ void Resource::DidAddClient(ResourceClient* client) {
       base::Value::Dict info;
       info.Set("kind", "resourceAlreadyLoaded");
       info.Set("url", Url().GetString().Utf8());
+      recordreplay::SetConsumedRequestId(
+          info, recordreplay::ConsumedNetworkRequest::Request(InspectorId()));
       std::string json;
       base::JSONWriter::Write(info, &json);
       int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
