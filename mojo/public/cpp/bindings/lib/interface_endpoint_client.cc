@@ -345,6 +345,15 @@ void ThreadSafeInterfaceEndpointClientProxy::SendMessageWithResponder(
     sync_calls->pending_responses.push_back(response.get());
   }
 
+  // [RecordReplay] List the event for as long as this call is in flight, so a
+  // replay that diverges while the reply is outstanding releases the wait below
+  // instead of blocking this sequence for ever. Only cross-sequence calls reach
+  // here, and they are the ones that wait on an event of their own.
+  const bool record_replay_listed = recordreplay::IsReplaying();
+  if (record_replay_listed) {
+    recordreplay::ListInFlightSyncCall(&response->event);
+  }
+
   SyncCallRestrictions::AssertSyncCallAllowed();
 
   if (allow_interrupt) {
@@ -365,6 +374,10 @@ void ThreadSafeInterfaceEndpointClientProxy::SendMessageWithResponder(
   {
     base::AutoLock l(sync_calls->lock);
     std::erase(sync_calls->pending_responses, response.get());
+  }
+
+  if (record_replay_listed) {
+    recordreplay::UnlistInFlightSyncCall(&response->event);
   }
 
   if (response->received) {

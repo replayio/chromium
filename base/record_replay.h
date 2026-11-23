@@ -26,6 +26,7 @@
 
 namespace base {
   class DictValue;
+  class WaitableEvent;
 }
 
 namespace recordreplay {
@@ -212,6 +213,44 @@ struct AutoPassThroughEventsIfDisallowed {
 // of causing downstream divergences.
 bool HasDivergedFromRecording();
 bool AllowSideEffects();
+
+// The completion event of a cross-process synchronous mojo call, listed for as
+// long as the call is in flight. Replies come from the recording, so a diverged
+// child gets none: a thread already inside such a call waits on an event
+// nothing will ever signal, and the sequence it is on runs nothing else
+// meanwhile. Once the divergence has happened ListInFlightSyncCall signals the
+// event as it lists it, so a call started afterwards returns unanswered instead
+// of blocking, and a call made as the divergence happens is released by
+// whichever side reaches it first.
+void ListInFlightSyncCall(base::WaitableEvent* event);
+void UnlistInFlightSyncCall(base::WaitableEvent* event);
+
+// Releases every listed call, so the sequences blocked in them run tasks again.
+// Their callers see the call as having got no reply, which is the only answer a
+// diverged child has.
+//
+// This exists for the repaint in
+// components/viz/service/display/record_replay_render.cc, its only caller: a
+// repaint is what a diverged replay is asked for, and it needs the compositor
+// sequence to run its commit. That sequence can be blocked in one of these
+// calls from a draw it began before the divergence. Every listed call goes and
+// not the compositor's alone, because a repaint needs the raster workers and
+// pending-tree activation too, and releasing one sequence's calls brings the
+// hang back.
+//
+// Whether "no reply" is a safe answer is the callee's to know, and only
+// GpuChannelHost::VerifyFlush says so today. A callee that mishandles it needs
+// its own handling, the way VerifyFlush has it.
+// CommandBufferProxyImpl::WaitForGetOffsetInRange and WaitForTokenInRange are
+// the known examples: both reach OnGpuSyncReplyError(), which loses the GPU
+// context, and a diverged renderer cannot make a replacement frame sink, so a
+// repaint there draws nothing instead of hanging. Neither has been seen on
+// this path.
+//
+// Same-sequence sync calls are never listed, and a divergence can still strand
+// them: they wait through controller_->SyncWatch() on the sequence's own sync
+// handle registry, not on a completion event this could signal.
+void SignalInFlightSyncCalls();
 
 void RegisterPointer(const char* name, const void* ptr);
 void UnregisterPointer(const void* ptr);

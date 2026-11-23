@@ -323,6 +323,10 @@ void GpuChannelHost::VerifyFlush(uint32_t deferred_message_id) {
   // software resource it hands the compositor. The frame a repaint draws is
   // drawn in this process, from the resource's own memory, so nothing waits on
   // the other side having seen the flush.
+  //
+  // This only catches a call that starts after the divergence. A thread
+  // already waiting in one when the child diverged is released by
+  // recordreplay::SignalInFlightSyncCalls() instead.
   if (recordreplay::HasDivergedFromRecording()) {
     return;
   }

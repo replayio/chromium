@@ -4,6 +4,9 @@
 
 #include "base/record_replay.h"
 #include "base/json/json_writer.h"
+#include "base/no_destructor.h"
+#include "base/synchronization/lock.h"
+#include "base/synchronization/waitable_event.h"
 #include "base/values.h"
 
 #include <stdarg.h>
@@ -526,6 +529,48 @@ bool HasDivergedFromRecording() {
 
 bool AllowSideEffects() {
   return V8RecordReplayAllowSideEffects();
+}
+
+static base::Lock& InFlightSyncCallLock() {
+  // The empty name states that this lock is never ordered (see
+  // LockImpl::LockImpl). It is taken only when replaying, so it guards nothing
+  // a recording contains, and nothing recorded or ordered may run under it
+  // before the divergence. What runs under it today keeps to that: the
+  // vector's own accesses and its allocation (the driver does not order
+  // mutexes taken inside malloc), the atomic load in
+  // HasDivergedFromRecording(), and WaitableEvent::Signal(), whose ordered
+  // kernel lock is only ever taken from here after the divergence, where the
+  // driver ignores acquire ordering.
+  static base::NoDestructor<base::Lock> lock("");
+  return *lock;
+}
+
+static std::vector<base::WaitableEvent*>& InFlightSyncCalls() {
+  static base::NoDestructor<std::vector<base::WaitableEvent*>> events;
+  return *events;
+}
+
+void ListInFlightSyncCall(base::WaitableEvent* event) {
+  base::AutoLock locked(InFlightSyncCallLock());
+  InFlightSyncCalls().push_back(event);
+  // Read under the lock SignalInFlightSyncCalls takes, so a divergence that
+  // happens while this call is being made is seen either here or there.
+  if (HasDivergedFromRecording()) {
+    event->Signal();
+  }
+}
+
+void UnlistInFlightSyncCall(base::WaitableEvent* event) {
+  base::AutoLock locked(InFlightSyncCallLock());
+  std::erase(InFlightSyncCalls(), event);
+}
+
+void SignalInFlightSyncCalls() {
+  CHECK(HasDivergedFromRecording());
+  base::AutoLock locked(InFlightSyncCallLock());
+  for (base::WaitableEvent* event : InFlightSyncCalls()) {
+    event->Signal();
+  }
 }
 
 void RegisterPointer(const char* name, const void* ptr) {
