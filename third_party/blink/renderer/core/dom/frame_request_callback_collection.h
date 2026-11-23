@@ -35,6 +35,12 @@ class CORE_EXPORT FrameCallback : public GarbageCollected<FrameCallback>,
   void SetUseLegacyTimeBase(bool use_legacy_time_base) {
     use_legacy_time_base_ = use_legacy_time_base;
   }
+  int RecordReplayDependencyGraphNodeId() const {
+    return record_replay_dependency_graph_node_id_;
+  }
+  void SetRecordReplayDependencyGraphNodeId(int node_id) {
+    record_replay_dependency_graph_node_id_ = node_id;
+  }
 
   probe::AsyncTaskContext* async_task_context() { return &async_task_context_; }
 
@@ -45,6 +51,8 @@ class CORE_EXPORT FrameCallback : public GarbageCollected<FrameCallback>,
   int id_ = 0;
   bool is_cancelled_ = false;
   bool use_legacy_time_base_ = false;
+  // FrameCallbackDependencyScope::Schedule() of the latest registration.
+  int record_replay_dependency_graph_node_id_ = 0;
   probe::AsyncTaskContext async_task_context_;
 };
 
