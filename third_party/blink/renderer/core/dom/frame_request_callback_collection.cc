@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/core/dom/frame_request_callback_collection.h"
 
+#include "third_party/blink/renderer/core/dom/frame_callback_dependency_scope.h"
 #include "third_party/blink/renderer/core/frame/web_feature.h"
 #include "third_party/blink/renderer/core/inspector/inspector_trace_events.h"
 #include "third_party/blink/renderer/core/probe/core_probes.h"
@@ -22,6 +23,8 @@ FrameRequestCallbackCollection::RegisterFrameCallback(FrameCallback* callback) {
   FrameRequestCallbackCollection::CallbackId id = ++next_callback_id_;
   callback->SetIsCancelled(false);
   callback->SetId(id);
+  callback->SetRecordReplayDependencyGraphNodeId(
+      FrameCallbackDependencyScope::Schedule());
   frame_callbacks_.push_back(callback);
 
   DEVTOOLS_TIMELINE_TRACE_EVENT_INSTANT("RequestAnimationFrame",
@@ -85,6 +88,8 @@ void FrameRequestCallbackCollection::ExecuteFrameCallbacks(
                         WebFeature::kAnimationFrameCancelledWithinFrame);
       continue;
     }
+    FrameCallbackDependencyScope dependency_scope(
+        callback->RecordReplayDependencyGraphNodeId());
     DEVTOOLS_TIMELINE_TRACE_EVENT("FireAnimationFrame",
                                   inspector_animation_frame_event::Data,
                                   context_, callback->Id());
@@ -119,10 +124,6 @@ void V8FrameCallback::Trace(blink::Visitor* visitor) const {
 }
 
 void V8FrameCallback::Invoke(double highResTime) {
-  recordreplay::AutoMarkerDependencyExecution execute(
-    "ScriptExecution", "V8FrameCallback::Invoke"
-  );
-
   callback_->InvokeAndReportException(nullptr, highResTime);
 }
 
