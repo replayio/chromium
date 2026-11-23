@@ -43,7 +43,7 @@ namespace blink {
 ScopedEventQueue* ScopedEventQueue::instance_ = nullptr;
 
 ScopedEventQueue::ScopedEventQueue()
-    : queued_events_(MakeGarbageCollected<HeapVector<QueuedEvent>>()),
+    : queued_events_(MakeGarbageCollected<HeapVector<ScopedQueuedEvent>>()),
       scoping_level_(0) {}
 
 ScopedEventQueue::~ScopedEventQueue() {
@@ -60,15 +60,15 @@ void ScopedEventQueue::Initialize() {
 
 void ScopedEventQueue::EnqueueEvent(Event& event) {
   if (ShouldQueueEvents()) {
-    queued_events_->push_back(
-        QueuedEvent{&event, EventQueueDispatchScope::ScheduleIfCaused()});
+    queued_events_->push_back(ScopedQueuedEvent{
+        &event, EventQueueDispatchScope::ScheduleIfCaused()});
   } else {
     DispatchEvent(event);
   }
 }
 
 void ScopedEventQueue::DispatchAllEvents() {
-  HeapVector<QueuedEvent> queued_events;
+  HeapVector<ScopedQueuedEvent> queued_events;
   queued_events.swap(*queued_events_);
 
   for (auto& queued_event : queued_events) {
