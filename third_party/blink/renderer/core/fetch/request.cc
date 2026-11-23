@@ -1069,6 +1069,11 @@ std::string Request::GetUrl() const {
   return url().GetString().Utf8();
 }
 
+recordreplay::ConsumedNetworkRequest Request::GetConsumedRequest() const {
+  // A request's body is sent, not received.
+  return recordreplay::ConsumedNetworkRequest::None();
+}
+
 mojom::blink::RequestContextType Request::GetRequestContextType() const {
   if (!request_) {
     return mojom::blink::RequestContextType::UNSPECIFIED;

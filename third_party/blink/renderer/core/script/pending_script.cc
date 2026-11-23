@@ -43,6 +43,7 @@
 #include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
 
 #include "base/json/json_writer.h"
+#include "base/record_replay_network_request.h"
 
 namespace blink {
 
@@ -182,6 +183,8 @@ void PendingScript::ExecuteScriptBlock() {
 
   const bool was_canceled = WasCanceled();
   const bool is_external = IsExternal();
+  const recordreplay::ConsumedNetworkRequest consumed_request =
+      ConsumedRequest();
   const bool created_during_document_write = WasCreatedDuringDocumentWrite();
   const base::TimeTicks parser_blocking_load_start_time =
       ParserBlockingLoadStartTime();
@@ -195,6 +198,7 @@ void PendingScript::ExecuteScriptBlock() {
     info.Set("kind", "executeScriptBlock");
     if (script)
       info.Set("url", script->SourceUrl().GetString().Utf8());
+    recordreplay::SetConsumedRequestId(info, consumed_request);
     std::string json;
     base::JSONWriter::Write(info, &json);
     int node_id = recordreplay::NewDependencyGraphNode(json.c_str());

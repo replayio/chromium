@@ -596,6 +596,10 @@ std::string Response::GetUrl() const {
   return url().Utf8();
 }
 
+recordreplay::ConsumedNetworkRequest Response::GetConsumedRequest() const {
+  return response_->ConsumedRequest();
+}
+
 void Response::Trace(Visitor* visitor) const {
   ScriptWrappable::Trace(visitor);
   ActiveScriptWrappable<Response>::Trace(visitor);

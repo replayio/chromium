@@ -212,15 +212,7 @@ class PLATFORM_EXPORT Resource : public GarbageCollected<Resource>,
   bool IsUnusedPreload() const { return is_unused_preload_; }
 
   ResourceStatus GetStatus() const { return status_; }
-  void SetStatus(ResourceStatus status) {
-    status_ = status;
-
-    if (IsLoaded()) {
-      record_replay_dependency_node_ids_.push_back(
-        recordreplay::NewDependencyGraphNode("{\"kind\":\"resourceFinished\"}")
-      );
-    }
-  }
+  void SetStatus(ResourceStatus status);
 
   size_t size() const { return EncodedSize() + DecodedSize() + OverheadSize(); }
 
@@ -601,6 +593,9 @@ class PLATFORM_EXPORT Resource : public GarbageCollected<Resource>,
   // TODO(crbug.com/1127971): Remove this once the decision is made to partition
   // the cache using either Network Isolation Key or scoped to per-document.
   std::set<net::SchemefulSite> existing_top_frame_sites_in_cache_;
+
+  // A resourceFinished node, which resourceAlreadyLoaded nodes follow.
+  int NewFinishedDependencyGraphNode();
 
   Vector<int> record_replay_dependency_node_ids_;
 };

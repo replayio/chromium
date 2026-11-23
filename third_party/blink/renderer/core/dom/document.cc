@@ -357,6 +357,7 @@
 #include "third_party/blink/renderer/platform/wtf/text/text_encoding_registry.h"
 
 #include "base/json/json_writer.h"
+#include "base/record_replay_network_request.h"
 
 #ifndef NDEBUG
 using WeakDocumentSet = blink::HeapHashSet<blink::WeakMember<blink::Document>>;
@@ -2272,6 +2273,7 @@ void Document::UpdateStyle() {
     base::Value::Dict info;
     info.Set("kind", "documentUpdateStyle");
     info.Set("url", Url().GetString().Utf8());
+    recordreplay::SetConsumedRequestId(info, RecordReplayContentRequest());
     std::string json;
     base::JSONWriter::Write(info, &json);
     execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
@@ -3343,6 +3345,9 @@ void Document::open(LocalDOMWindow* entered_window,
     }
   }
 
+  // Its content now comes from script.
+  record_replay_content_request_ =
+      recordreplay::ConsumedNetworkRequest::None();
   open();
 }
 
@@ -7228,6 +7233,7 @@ void Document::FinishedParsing() {
     base::Value::Dict info;
     info.Set("kind", "documentFinishedParsing");
     info.Set("url", Url().GetString().Utf8());
+    recordreplay::SetConsumedRequestId(info, RecordReplayContentRequest());
     std::string json;
     base::JSONWriter::Write(info, &json);
     execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));

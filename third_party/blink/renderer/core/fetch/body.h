@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_FETCH_BODY_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_FETCH_BODY_H_
 
+#include "base/record_replay_network_request.h"
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
@@ -63,6 +64,8 @@ class CORE_EXPORT Body : public ExecutionContextClient {
 
   // Needed when recording/replaying for annotating dependency graph nodes.
   virtual std::string GetUrl() const = 0;
+  // The network request delivering the body.
+  virtual recordreplay::ConsumedNetworkRequest GetConsumedRequest() const = 0;
 
   // Body consumption algorithms will reject with a TypeError in a number of
   // error conditions. This method wraps those up into one call which throws
