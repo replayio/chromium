@@ -452,11 +452,11 @@ void ElementInnerTextCollector::Result::FlushRequiredLineBreak() {
 }  // anonymous namespace
 
 String Element::innerText() {
-  // A pause can be inside a layout tree rebuild, from a style recalc or a
-  // container query's layout, where a new LayoutText has no parent yet and the
-  // layout can't be updated. The collector needs a complete layout tree, so
+  // Replay commands can run inside a layout tree rebuild, from a style recalc
+  // or a container query's layout, where a new LayoutText has no parent yet and
+  // the layout can't be updated. The collector needs a complete layout tree, so
   // this reads the text as for an element that isn't rendered.
-  if (recordreplay::IsReplaying() &&
+  if (recordreplay::IsInReplayCode() &&
       GetDocument().GetStyleEngine().InRebuildLayoutTree()) {
     return textContent();
   }
