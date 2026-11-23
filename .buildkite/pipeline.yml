@@ -57,4 +57,6 @@ steps:
       node --version
       # packageManager pnpm@10.11.0; agents lack global npm write (EACCES).
       npx --yes pnpm@10.11.0 install --frozen-lockfile
-      npx tsx src/build/buildRuntime.ts test-chromium-recording --build-id "$$BUILD_ID" --filter tests/octane
+      # Stock Chromium of the suite's Playwright, for the stack depth probe.
+      (cd test/chromium-recording && npx playwright install chromium)
+      npx tsx src/build/buildRuntime.ts test-chromium-recording --build-id "$$BUILD_ID" --filter tests/octane/react-swap-surface/stack-depth.test.ts
