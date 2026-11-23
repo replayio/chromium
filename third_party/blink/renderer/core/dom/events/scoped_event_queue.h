@@ -56,12 +56,22 @@ class CORE_EXPORT ScopedEventQueue {
   bool ShouldQueueEvents() const { return scoping_level_ > 0; }
 
  private:
+  struct QueuedEvent {
+    DISALLOW_NEW();
+
+   public:
+    void Trace(Visitor* visitor) const { visitor->Trace(event); }
+
+    Member<Event> event;
+    int record_replay_scheduled_node_id;
+  };
+
   ScopedEventQueue();
   static void Initialize();
   void DispatchAllEvents();
   void DispatchEvent(Event&) const;
 
-  Persistent<HeapVector<Member<Event>>> queued_events_;
+  Persistent<HeapVector<QueuedEvent>> queued_events_;
   unsigned scoping_level_;
 
   static ScopedEventQueue* instance_;
