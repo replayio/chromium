@@ -4108,7 +4108,7 @@ void RenderWidgetHostImpl::OnSnapshotFromSurfaceReceived(
   if (!result.has_value() && retry_count < kMaxSnapshotCopyRetries &&
       snapshot_pending && GetView()) {
     GetView()->CopyFromSurface(
-        gfx::Rect(), gfx::Size(), SnapshotCopyTimeout(),
+        gfx::Rect(), gfx::Size(), SnapshotCopyTimeout(snapshot_id),
         base::BindOnce(&RenderWidgetHostImpl::OnSnapshotFromSurfaceReceived,
                        weak_factory_.GetWeakPtr(), snapshot_id,
                        retry_count + 1));
@@ -4126,7 +4126,8 @@ void RenderWidgetHostImpl::CompleteSurfaceSnapshots(int snapshot_id,
                                                     const gfx::Image& image) {
   // Any pending snapshots with a lower ID than the one received are considered
   // to be implicitly complete, and returned the same snapshot data. They are
-  // taken out first so callbacks can request new snapshots.
+  // taken out first, so the deadline check below sees what stays pending and
+  // callbacks may re-enter.
   PendingSnapshotMap completed;
   auto it = pending_surface_browser_snapshots_.begin();
   while (it != pending_surface_browser_snapshots_.end() &&
@@ -4168,9 +4169,11 @@ void RenderWidgetHostImpl::OnSnapshotReceived(int snapshot_id,
 #endif
 }
 
-base::TimeDelta RenderWidgetHostImpl::SnapshotCopyTimeout() const {
+base::TimeDelta RenderWidgetHostImpl::SnapshotCopyTimeout(
+    int snapshot_id) const {
   // A zero timeout means none.
-  if (!snapshot_frame_sink_timer_.IsRunning()) {
+  if (!snapshot_frame_sink_timer_.IsRunning() ||
+      snapshot_id > snapshot_frame_sink_deadline_id_) {
     return base::TimeDelta();
   }
   return std::max(
@@ -4312,7 +4315,7 @@ void RenderWidgetHostImpl::MaybeDispatchBufferedFrameSinkRequest() {
   if (std::optional<int> snapshot_id =
           std::exchange(snapshot_awaiting_frame_sink_, std::nullopt)) {
     view_->CopyFromSurface(
-        gfx::Rect(), gfx::Size(), SnapshotCopyTimeout(),
+        gfx::Rect(), gfx::Size(), SnapshotCopyTimeout(*snapshot_id),
         base::BindOnce(&RenderWidgetHostImpl::OnSnapshotFromSurfaceReceived,
                        weak_factory_.GetWeakPtr(), *snapshot_id, 0));
   }

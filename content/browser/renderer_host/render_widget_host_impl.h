@@ -1297,9 +1297,9 @@ class CONTENT_EXPORT RenderWidgetHostImpl
   // the frame sink deadline once none of the snapshots it covers is pending.
   void CompleteSurfaceSnapshots(int snapshot_id, const gfx::Image& image);
 
-  // The Viz timeout for a snapshot copy: the time left until the frame sink
-  // deadline while it runs, and none otherwise.
-  base::TimeDelta SnapshotCopyTimeout() const;
+  // The Viz timeout for a copy of `snapshot_id`: the time left until the frame
+  // sink deadline if it covers the snapshot, and none otherwise.
+  base::TimeDelta SnapshotCopyTimeout(int snapshot_id) const;
 
   // Completes the snapshots waiting for a frame sink with an empty image.
   void FailSnapshotsAwaitingFrameSink();
