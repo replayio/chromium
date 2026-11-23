@@ -1638,7 +1638,7 @@ class CONTENT_EXPORT RenderWidgetHostImpl
   using PendingSnapshotMap = std::map<int, GetSnapshotFromBrowserCallback>;
   PendingSnapshotMap pending_browser_snapshots_;
   PendingSnapshotMap pending_surface_browser_snapshots_;
-  // The newest surface snapshot whose copy failed after Viz lost the view's
+  // The newest snapshot id whose surface copy failed after Viz lost the view's
   // frame sink. Its copy is sent again once the frame sink is created again.
   std::optional<int> snapshot_awaiting_frame_sink_;
   // The newest snapshot that waited for a frame sink. Snapshots up to it fail
