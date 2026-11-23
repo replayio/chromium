@@ -197,8 +197,8 @@ namespace {
 constexpr int kMaxSnapshotCopyRetries = 5;
 
 // Snapshots that wait for the renderer to create its frame sink again, which
-// needs a new GPU process first, fail at most this long after the first of them
-// started waiting.
+// needs a new GPU process first, fail this long after the first of them started
+// waiting, unless their copy completes first.
 constexpr base::TimeDelta kSnapshotFrameSinkTimeout = base::Seconds(5);
 
 constexpr gfx::Rect kInvalidScreenRect(std::numeric_limits<int>::max(),
@@ -4108,7 +4108,7 @@ void RenderWidgetHostImpl::OnSnapshotFromSurfaceReceived(
   if (!result.has_value() && retry_count < kMaxSnapshotCopyRetries &&
       snapshot_pending && GetView()) {
     GetView()->CopyFromSurface(
-        gfx::Rect(), gfx::Size(), base::TimeDelta(),
+        gfx::Rect(), gfx::Size(), SnapshotCopyTimeout(),
         base::BindOnce(&RenderWidgetHostImpl::OnSnapshotFromSurfaceReceived,
                        weak_factory_.GetWeakPtr(), snapshot_id,
                        retry_count + 1));
@@ -4124,14 +4124,6 @@ void RenderWidgetHostImpl::OnSnapshotFromSurfaceReceived(
 
 void RenderWidgetHostImpl::CompleteSurfaceSnapshots(int snapshot_id,
                                                     const gfx::Image& image) {
-  // The snapshots that waited for a frame sink complete here at the latest, so
-  // the next loss of the frame sink gets its own deadline.
-  if (snapshot_frame_sink_deadline_id_ &&
-      snapshot_id >= snapshot_frame_sink_deadline_id_) {
-    snapshot_frame_sink_deadline_id_ = 0;
-    snapshot_awaiting_frame_sink_.reset();
-    snapshot_frame_sink_timer_.Stop();
-  }
   // Any pending snapshots with a lower ID than the one received are considered
   // to be implicitly complete, and returned the same snapshot data. They are
   // taken out first so callbacks can request new snapshots.
@@ -4140,6 +4132,16 @@ void RenderWidgetHostImpl::CompleteSurfaceSnapshots(int snapshot_id,
   while (it != pending_surface_browser_snapshots_.end() &&
          it->first <= snapshot_id) {
     completed.insert(pending_surface_browser_snapshots_.extract(it++));
+  }
+  // Once none of the snapshots that waited for a frame sink is pending, the
+  // next loss of the frame sink gets its own deadline.
+  if (snapshot_frame_sink_deadline_id_ &&
+      (pending_surface_browser_snapshots_.empty() ||
+       pending_surface_browser_snapshots_.begin()->first >
+           snapshot_frame_sink_deadline_id_)) {
+    snapshot_frame_sink_deadline_id_ = 0;
+    snapshot_awaiting_frame_sink_.reset();
+    snapshot_frame_sink_timer_.Stop();
   }
   for (auto& [id, callback] : completed) {
     std::move(callback).Run(image);
@@ -4164,6 +4166,16 @@ void RenderWidgetHostImpl::OnSnapshotReceived(int snapshot_id,
     GetWakeLock()->CancelWakeLock();
   }
 #endif
+}
+
+base::TimeDelta RenderWidgetHostImpl::SnapshotCopyTimeout() const {
+  // A zero timeout means none.
+  if (!snapshot_frame_sink_timer_.IsRunning()) {
+    return base::TimeDelta();
+  }
+  return std::max(
+      snapshot_frame_sink_timer_.desired_run_time() - base::TimeTicks::Now(),
+      base::Milliseconds(1));
 }
 
 void RenderWidgetHostImpl::FailSnapshotsAwaitingFrameSink() {
@@ -4296,14 +4308,11 @@ void RenderWidgetHostImpl::MaybeDispatchBufferedFrameSinkRequest() {
   // The copy travels to Viz on the same pipe as the frame sink's creation, so
   // Viz has processed the creation when it gets the copy, which then waits for
   // a frame from the renderer. `snapshot_frame_sink_timer_` keeps running in
-  // case none comes, and Viz drops the copy when it fires.
+  // case none comes, and the copy carries the time left as its Viz timeout.
   if (std::optional<int> snapshot_id =
           std::exchange(snapshot_awaiting_frame_sink_, std::nullopt)) {
     view_->CopyFromSurface(
-        gfx::Rect(), gfx::Size(),
-        std::max(snapshot_frame_sink_timer_.desired_run_time() -
-                     base::TimeTicks::Now(),
-                 base::Milliseconds(1)),
+        gfx::Rect(), gfx::Size(), SnapshotCopyTimeout(),
         base::BindOnce(&RenderWidgetHostImpl::OnSnapshotFromSurfaceReceived,
                        weak_factory_.GetWeakPtr(), *snapshot_id, 0));
   }

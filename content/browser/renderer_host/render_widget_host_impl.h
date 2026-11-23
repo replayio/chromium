@@ -1293,8 +1293,13 @@ class CONTENT_EXPORT RenderWidgetHostImpl
   // they would be taken from goes away with the renderer.
   void FailPendingSnapshots();
 
-  // Runs the callbacks of the surface snapshots up to `snapshot_id`.
+  // Runs the callbacks of the surface snapshots up to `snapshot_id`, and ends
+  // the frame sink deadline once none of the snapshots it covers is pending.
   void CompleteSurfaceSnapshots(int snapshot_id, const gfx::Image& image);
+
+  // The Viz timeout for a snapshot copy: the time left until the frame sink
+  // deadline while it runs, and none otherwise.
+  base::TimeDelta SnapshotCopyTimeout() const;
 
   // Completes the snapshots waiting for a frame sink with an empty image.
   void FailSnapshotsAwaitingFrameSink();
