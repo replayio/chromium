@@ -28,6 +28,7 @@
 
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
+#include "third_party/blink/renderer/core/dom/events/event_dependency_scope.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/probe/core_probes.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
@@ -64,9 +65,7 @@ bool EventQueue::EnqueueEvent(const base::Location& from_here, Event& event) {
   scoped_refptr<base::SingleThreadTaskRunner> task_runner =
       GetExecutionContext()->GetTaskRunner(task_type_);
 
-  int node_id = recordreplay::NewDependencyGraphNode(
-    "{\"kind\":\"eventQueueSchedule\"}"
-  );
+  int node_id = EventQueueDispatchScope::Schedule();
 
   // Pass the event as a weak persistent so that GC can collect an event-related
   // object like IDBTransaction as soon as possible.
@@ -99,16 +98,7 @@ void EventQueue::DispatchEvent(Event* event, int record_replay_scheduled_node_id
 
   DCHECK(GetExecutionContext());
 
-  absl::optional<recordreplay::AutoDependencyExecution> execute;
-  if (recordreplay::DependencyGraphEnabled()) {
-    int node_id = recordreplay::NewDependencyGraphNode(
-      "{\"kind\":\"eventQueueDispatch\"}"
-    );
-    recordreplay::AddDependencyGraphEdge(
-      record_replay_scheduled_node_id, node_id, "{\"kind\":\"scheduler\"}"
-    );
-    execute.emplace(node_id);
-  }
+  EventQueueDispatchScope dependency_scope(record_replay_scheduled_node_id);
 
   probe::AsyncTask async_task(GetExecutionContext(),
                               event->async_task_context());

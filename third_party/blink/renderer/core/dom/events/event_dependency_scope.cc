@@ -61,4 +61,19 @@ void EventDependencyScope::Begin() {
   execute_.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
 }
 
+int EventQueueDispatchScope::Schedule() {
+  return recordreplay::NewDependencyGraphNode(
+      "{\"kind\":\"eventQueueSchedule\"}");
+}
+
+EventQueueDispatchScope::EventQueueDispatchScope(int schedule_node_id) {
+  if (!recordreplay::DependencyGraphEnabled())
+    return;
+  int node_id = recordreplay::NewDependencyGraphNode(
+      "{\"kind\":\"eventQueueDispatch\"}");
+  recordreplay::AddDependencyGraphEdge(schedule_node_id, node_id,
+                                       "{\"kind\":\"scheduler\"}");
+  execute_.emplace(node_id);
+}
+
 }  // namespace blink
