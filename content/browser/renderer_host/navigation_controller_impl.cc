@@ -916,7 +916,8 @@ void NavigationControllerImpl::Reload(ReloadType reload_type,
   // location.reload() goes through BeginNavigation, so all reloads triggered
   // via this codepath are browser initiated.
   NavigateToExistingPendingEntry(reload_type, nullptr /* initiator_frame */,
-                                 nullptr /* navigation_api_key */);
+                                 nullptr /* navigation_api_key */,
+                                 absl::nullopt /* history_traversal_token */);
 }
 
 void NavigationControllerImpl::CancelPendingReload() {
@@ -1153,13 +1154,15 @@ void NavigationControllerImpl::GoForward() {
 
 void NavigationControllerImpl::GoToIndex(int index) {
   GoToIndex(index, nullptr /* initiator_frame */,
-            nullptr /* navigation_api_key */);
+            nullptr /* navigation_api_key */,
+            absl::nullopt /* history_traversal_token */);
 }
 
 void NavigationControllerImpl::GoToIndex(
     int index,
     RenderFrameHostImpl* initiator_rfh,
-    const std::string* navigation_api_key) {
+    const std::string* navigation_api_key,
+    const absl::optional<base::UnguessableToken>& history_traversal_token) {
   SCOPED_CRASH_KEY_NUMBER("nav_reentrancy_caller1", "GoToIndex_index", index);
   TRACE_EVENT0("browser,navigation,benchmark",
                "NavigationControllerImpl::GoToIndex");
@@ -1188,7 +1191,7 @@ void NavigationControllerImpl::GoToIndex(
   pending_entry_->SetTransitionType(ui::PageTransitionFromInt(
       pending_entry_->GetTransitionType() | ui::PAGE_TRANSITION_FORWARD_BACK));
   NavigateToExistingPendingEntry(ReloadType::NONE, initiator_rfh,
-                                 navigation_api_key);
+                                 navigation_api_key, history_traversal_token);
 }
 
 void NavigationControllerImpl::GoToOffset(int offset) {
@@ -1201,13 +1204,14 @@ void NavigationControllerImpl::GoToOffset(int offset) {
 
 void NavigationControllerImpl::GoToOffsetFromRenderer(
     int offset,
-    RenderFrameHostImpl* initiator_rfh) {
+    RenderFrameHostImpl* initiator_rfh,
+    const absl::optional<base::UnguessableToken>& history_traversal_token) {
   // Note: This is actually reached in unit tests.
   if (!CanGoToOffset(offset))
     return;
 
   GoToIndex(GetIndexForOffset(offset), initiator_rfh,
-            nullptr /* navigation_api_key */);
+            nullptr /* navigation_api_key */, history_traversal_token);
 }
 
 #if BUILDFLAG(IS_ANDROID)
@@ -3116,7 +3120,8 @@ void NavigationControllerImpl::PruneOldestSkippableEntryIfFull() {
 void NavigationControllerImpl::NavigateToExistingPendingEntry(
     ReloadType reload_type,
     RenderFrameHostImpl* initiator_rfh,
-    const std::string* navigation_api_key) {
+    const std::string* navigation_api_key,
+    const absl::optional<base::UnguessableToken>& history_traversal_token) {
   TRACE_EVENT0("navigation",
                "NavigationControllerImpl::NavigateToExistingPendingEntry");
   DCHECK(pending_entry_);
@@ -3192,6 +3197,11 @@ void NavigationControllerImpl::NavigateToExistingPendingEntry(
     // as those should've queued a different-document load in the main frame.
     DCHECK(!is_forced_reload);
     DCHECK_EQ(reload_type, ReloadType::NONE);
+  }
+
+  if (history_traversal_token) {
+    for (auto& request : same_document_loads)
+      request->set_history_traversal_token(*history_traversal_token);
   }
 
   // If the initiator is top-navigation sandboxed, then track whether this
@@ -3949,7 +3959,8 @@ NavigationControllerImpl::CreateNavigationRequestFromLoadParams(
           GURL() /* fallback_srcdoc_baseurl_value */,
           false /* should_load_data_url */,
           /*ancestor_or_self_has_cspee=*/node->AncestorOrSelfHasCSPEE(),
-          std::string() /* reduced_accept_language */);
+          std::string() /* reduced_accept_language */,
+          absl::nullopt /* history_traversal_token */);
 #if BUILDFLAG(IS_ANDROID)
   if (ValidateDataURLAsString(params.data_url_as_string)) {
     commit_params->data_url_as_string = params.data_url_as_string->data();
@@ -4172,7 +4183,8 @@ void NavigationControllerImpl::LoadIfNecessary() {
   if (pending_entry_) {
     NavigateToExistingPendingEntry(ReloadType::NONE,
                                    nullptr /* initiator_frame */,
-                                   nullptr /* navigation_api_key */);
+                                   nullptr /* navigation_api_key */,
+                                   absl::nullopt /* history_traversal_token */);
   } else if (last_committed_entry_index_ != -1 &&
              !GetLastCommittedEntry()
                   ->IsInitialEntryNotForSynchronousAboutBlank()) {
@@ -4180,7 +4192,8 @@ void NavigationControllerImpl::LoadIfNecessary() {
     pending_entry_index_ = last_committed_entry_index_;
     NavigateToExistingPendingEntry(ReloadType::NONE,
                                    nullptr /* initiator_frame */,
-                                   nullptr /* navigation_api_key */);
+                                   nullptr /* navigation_api_key */,
+                                   absl::nullopt /* history_traversal_token */);
   } else {
     // We should never navigate to an existing initial NavigationEntry that is
     // the initial NavigationEntry for the initial empty document that hasn't
@@ -4709,7 +4722,8 @@ NavigationControllerImpl::ShouldNavigateToEntryForNavigationApiKey(
 
 void NavigationControllerImpl::NavigateToNavigationApiKey(
     RenderFrameHostImpl* initiator_rfh,
-    const std::string& key) {
+    const std::string& key,
+    const absl::optional<base::UnguessableToken>& history_traversal_token) {
   FrameTreeNode* node = initiator_rfh->frame_tree_node();
   FrameNavigationEntry* current_entry =
       GetLastCommittedEntry()->GetFrameEntry(node);
@@ -4725,7 +4739,7 @@ void NavigationControllerImpl::NavigateToNavigationApiKey(
     if (result == HistoryNavigationAction::kStopLooking)
       break;
     if (result != HistoryNavigationAction::kKeepLooking) {
-      GoToIndex(i, initiator_rfh, &key);
+      GoToIndex(i, initiator_rfh, &key, history_traversal_token);
       return;
     }
   }
@@ -4735,7 +4749,7 @@ void NavigationControllerImpl::NavigateToNavigationApiKey(
     if (result == HistoryNavigationAction::kStopLooking)
       break;
     if (result != HistoryNavigationAction::kKeepLooking) {
-      GoToIndex(i, initiator_rfh, &key);
+      GoToIndex(i, initiator_rfh, &key, history_traversal_token);
       return;
     }
   }

@@ -148,7 +148,10 @@ class RenderFrameHostImplForHistoryBackInterceptor
  public:
   using RenderFrameHostImpl::RenderFrameHostImpl;
 
-  void GoToEntryAtOffset(int32_t offset, bool has_user_gesture) override {
+  void GoToEntryAtOffset(int32_t offset,
+                         bool has_user_gesture,
+                         const absl::optional<base::UnguessableToken>&
+                             traversal_token) override {
     if (quit_handler_)
       std::move(quit_handler_).Run();
   }

@@ -26,6 +26,7 @@
 #include "third_party/blink/renderer/core/frame/history.h"
 
 #include "base/metrics/histogram_functions.h"
+#include "base/record_replay.h"
 #include "third_party/blink/public/mojom/use_counter/metrics/web_feature.mojom-shared.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
@@ -46,6 +47,8 @@
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
+#include "third_party/blink/renderer/platform/wtf/hash_map.h"
+#include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_view.h"
 
 namespace blink {
@@ -62,7 +65,35 @@ void ReportURLChange(LocalDOMWindow* window,
     heuristics->SawURLChange(script_state, url);
   }
 }
+
+using TraversalRequestNodes = HashMap<String, int>;
+
+TraversalRequestNodes& GetTraversalRequestNodes() {
+  DEFINE_STATIC_LOCAL(TraversalRequestNodes, nodes, ());
+  return nodes;
+}
 }  // namespace
+
+// static
+absl::optional<base::UnguessableToken>
+History::RecordReplayTraversalRequest() {
+  if (!recordreplay::IsRecordingOrReplaying())
+    return absl::nullopt;
+  base::UnguessableToken token = base::UnguessableToken::Create();
+  if (recordreplay::DependencyGraphEnabled()) {
+    int node_id = recordreplay::NewDependencyGraphNode(
+        "{\"kind\":\"historyTraversalRequest\"}");
+    GetTraversalRequestNodes().Set(String::FromUTF8(token.ToString()),
+                                   node_id);
+  }
+  return token;
+}
+
+// static
+int History::RecordReplayTraversalRequestNode(
+    const base::UnguessableToken& token) {
+  return GetTraversalRequestNodes().at(String::FromUTF8(token.ToString()));
+}
 
 History::History(LocalDOMWindow* window)
     : ExecutionContextClient(window), last_state_object_requested_(nullptr) {}

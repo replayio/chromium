@@ -8,6 +8,8 @@
 #include <memory>
 
 #include "base/callback.h"
+#include "base/unguessable_token.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/blink/public/web/web_document_loader.h"
 #include "third_party/blink/public/web/web_frame_load_type.h"
@@ -54,7 +56,9 @@ class WebNavigationControl : public WebLocalFrame {
       bool is_client_redirect,
       bool has_transient_user_activation,
       const WebSecurityOrigin& initiator_origin,
-      bool is_browser_initiated) = 0;
+      bool is_browser_initiated,
+      const absl::optional<base::UnguessableToken>&
+          history_traversal_token) = 0;
 
   // Override the normal rules that determine whether the frame is on the
   // initial empty document or not. Used to propagate state when this frame has
