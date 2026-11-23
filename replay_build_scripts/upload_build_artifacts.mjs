@@ -398,8 +398,12 @@ async function main(options) {
 }
 
 function buildIdToBuildIdSubset(buildId) {
-  const buildIdParts = buildId.split("-");
-  return `${buildIdParts[2]}-${buildIdParts[3]}-${buildIdParts[4]}`;
+  // The subset is the build id without its `<platform>-chromium-` prefix: the release
+  // pipelines rebuild the full id as `linux-chromium-${BUILD_ID_SUBSET}`. Everything
+  // after those two fields belongs in it, including the `-dev` suffix a branch build
+  // carries -- naming three fields dropped that suffix, so the subset printed for a
+  // branch build pointed at an artifact that was never uploaded.
+  return buildId.split("-").slice(2).join("-");
 }
 
 function buildkiteStuff(
@@ -440,7 +444,11 @@ function buildkiteStuff(
   );
 
   const buildIdSubset = buildIdToBuildIdSubset(buildId);
-  const buildIdMessage = `# Build ID subset \n\n_Copy this when you're releasing this build and the release pipeline asks you for the build ID subset_\n\n\`${buildIdSubset}\`\n`;
+  const buildIdMessage =
+    `# Build ID subset \n\n_Copy this when you're releasing this build and the release pipeline asks you for the build ID subset_\n\n\`${buildIdSubset}\`\n` +
+    (buildIdSubset.endsWith("-dev")
+      ? `\n_This is a branch build: the \`-dev\` is part of the subset. Without it the release pipelines look for an artifact that was never uploaded._\n`
+      : "");
   spawnChecked(
     "buildkite-agent",
     [
