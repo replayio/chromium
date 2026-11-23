@@ -150,12 +150,6 @@ steps:
     env:
       PLAYWRIGHT_HEADLESS: "true"
       CI: "1"
-      # Playwright reads the stdout/stderr of the browser and its child
-      # processes and prints it only under this: the driver's log
-      # (@replayio/playwright records with RECORD_REPLAY_VERBOSE), Chromium's
-      # fatal messages and stack dumps. A crashed recording is reported by the
-      # backend harness itself (tmp/crashes artifact and annotation).
-      DEBUG: "pw:browser"
     command: |
       set -euo pipefail
       WORKDIR=$$(mktemp -d "/tmp/chromium-recording-$${BUILDKITE_JOB_ID}.XXXXXX")
