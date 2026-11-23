@@ -3131,38 +3131,71 @@ void OnNewWindowAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8
   );
 }
 
-static ErrorEvent* gCurrentErrorEvent;
+// Error being reported to the driver, read by getCurrentError.
+struct RecordReplayError {
+  const String& message;
+  const SourceLocation& location;
+};
 
-void RecordReplayOnErrorEvent(ErrorEvent* error_event) {
+static const RecordReplayError* gCurrentError;
+
+static void RecordReplayOnError(int bookmark, const RecordReplayError& error) {
   if (!v8::IsMainThread()) {
     return;
   }
 
-  CHECK(!gCurrentErrorEvent);
-  gCurrentErrorEvent = error_event;
+  CHECK(!gCurrentError);
+  gCurrentError = &error;
 
-  size_t bookmark = error_event->record_replay_bookmark();
   V8RecordReplayOnConsoleMessage(bookmark);
 
-  gCurrentErrorEvent = nullptr;
+  gCurrentError = nullptr;
+}
+
+void RecordReplayOnErrorEvent(ErrorEvent* error_event) {
+  RecordReplayOnError(error_event->record_replay_bookmark(),
+                      {error_event->message(), *error_event->Location()});
+}
+
+void RecordReplayOnPromiseRejection(int bookmark,
+                                    const String& message,
+                                    const SourceLocation& location) {
+  RecordReplayOnError(bookmark, {message, location});
+}
+
+void RecordReplayOnPromiseRejectionRevoked(int bookmark) {
+  if (!recordreplay::IsRecordingOrReplaying() || !v8::IsMainThread() ||
+      !bookmark) {
+    return;
+  }
+
+  // Only replaying collects annotation contents; the recorder ignores them.
+  std::string contents;
+  if (recordreplay::IsReplaying()) {
+    base::Value::Dict info;
+    info.Set("bookmark", bookmark);
+    base::JSONWriter::Write(info, &contents);
+  }
+  recordreplay::OnAnnotation("ConsoleMessageRevoked", contents.c_str());
 }
 
 static void GetCurrentError(const v8::FunctionCallbackInfo<v8::Value>& args) {
-  if (!gCurrentErrorEvent) {
+  if (!gCurrentError) {
     return;
   }
 
   v8::Isolate* isolate = args.GetIsolate();
   v8::Local<v8::Object> rv = v8::Object::New(isolate);
+  const SourceLocation& location = gCurrentError->location;
 
   SetDataProperty(isolate, rv, "message",
-                  ToV8String(isolate, gCurrentErrorEvent->message().Utf8().c_str()));
+                  ToV8String(isolate, gCurrentError->message.Utf8().c_str()));
   SetDataProperty(isolate, rv, "filename",
-                  ToV8String(isolate, gCurrentErrorEvent->filename().Utf8().c_str()));
-  SetDataProperty(isolate, rv, "line", v8::Number::New(isolate, gCurrentErrorEvent->lineno()));
-  SetDataProperty(isolate, rv, "column", v8::Number::New(isolate, gCurrentErrorEvent->colno()));
+                  ToV8String(isolate, location.Url().Utf8().c_str()));
+  SetDataProperty(isolate, rv, "line", v8::Number::New(isolate, location.LineNumber()));
+  SetDataProperty(isolate, rv, "column", v8::Number::New(isolate, location.ColumnNumber()));
   SetDataProperty(isolate, rv, "scriptId",
-                  v8::Number::New(isolate, gCurrentErrorEvent->Location()->ScriptId()));
+                  v8::Number::New(isolate, location.ScriptId()));
 
   args.GetReturnValue().Set(rv);
 }

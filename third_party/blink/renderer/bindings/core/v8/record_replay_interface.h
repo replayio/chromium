@@ -64,6 +64,16 @@ void InstallRecordReplayGlobals(v8::Isolate* isolate,
 // Notify the driver that we're adding an error to the console.
 void RecordReplayOnErrorEvent(ErrorEvent* error_event);
 
+// Notify the driver that we're adding an unhandled promise rejection to the
+// console. |bookmark| is that of the rejection's message.
+void RecordReplayOnPromiseRejection(int bookmark,
+                                    const String& message,
+                                    const SourceLocation& location);
+
+// Notify the driver that the console message of the unhandled rejection at
+// |bookmark| is withdrawn: the promise got a handler.
+void RecordReplayOnPromiseRejectionRevoked(int bookmark);
+
 // Notify our blink bindings that the page that was running our script(s) is
 //   about to reset, and its ExecutionContext and our V8 debugger session with it.
 // From this point forward, command handling is not possible anymore
