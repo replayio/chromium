@@ -1057,17 +1057,28 @@ void EventTarget::EnqueueEvent(Event& event, TaskType task_type) {
   if (!context)
     return;
   event.async_task_context()->Schedule(context, event.type());
+  int node_id = recordreplay::NewDependencyGraphNode(
+      "{\"kind\":\"eventQueueSchedule\"}");
   context->GetTaskRunner(task_type)->PostTask(
       FROM_HERE,
       WTF::BindOnce(&EventTarget::DispatchEnqueuedEvent, WrapPersistent(this),
-                    WrapPersistent(&event), WrapPersistent(context)));
+                    WrapPersistent(&event), WrapPersistent(context), node_id));
 }
 
 void EventTarget::DispatchEnqueuedEvent(Event* event,
-                                        ExecutionContext* context) {
+                                        ExecutionContext* context,
+                                        int record_replay_scheduled_node_id) {
   if (!GetExecutionContext()) {
     event->async_task_context()->Cancel();
     return;
+  }
+  absl::optional<recordreplay::AutoDependencyExecution> execute;
+  if (recordreplay::DependencyGraphEnabled()) {
+    int node_id = recordreplay::NewDependencyGraphNode(
+        "{\"kind\":\"eventQueueDispatch\"}");
+    recordreplay::AddDependencyGraphEdge(record_replay_scheduled_node_id,
+                                         node_id, "{\"kind\":\"scheduler\"}");
+    execute.emplace(node_id);
   }
   probe::AsyncTask async_task(context, event->async_task_context());
   DispatchEvent(*event, "EventTarget::DispatchEnqueuedEvent");

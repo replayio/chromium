@@ -235,7 +235,9 @@ class CORE_EXPORT EventTarget : public ScriptWrappable {
                          EventListenerVector*,
                          EventListenerVector*);
 
-  void DispatchEnqueuedEvent(Event*, ExecutionContext*);
+  void DispatchEnqueuedEvent(Event*,
+                             ExecutionContext*,
+                             int record_replay_scheduled_node_id);
 
   friend class EventListenerIterator;
 };
