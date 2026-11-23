@@ -891,8 +891,8 @@ void V8Initializer::InitializeMainThread(
   V8PerIsolateData::From(isolate)->SetThreadDebugger(
       std::make_unique<MainThreadDebugger>(isolate));
 
-  // Replay: instrumented JS before the first checkpoint can start the
-  // recording.
+  // Replay: instrumented JS before the handlers are ready can make its window
+  // the root frame.
   V8RecordReplaySetInstrumentedScriptBeforeFirstCheckpointCallback(
       RecordReplayOnInstrumentedScriptBeforeFirstCheckpoint);
 

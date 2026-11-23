@@ -241,7 +241,7 @@ void InitPaintCallback() {
 
 void OnCommitPaint() {
   // Record/replay state has to be initialized before the first paint
-  // starts, as a checkpoint must have been taken.
+  // starts, as paints are recorded once the handlers are ready.
   if (blink::RecordReplayStateEnsureInitialized()) {
     gCurrentPaintBookmark = V8RecordReplayPaintStart();
   } else {

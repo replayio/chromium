@@ -883,6 +883,7 @@ void RenderThreadImpl::InitializeWebKit(mojo::BinderMap* binders) {
 
   blink::Initialize(blink_platform_impl_.get(), binders,
                     main_thread_scheduler_.get());
+  blink::RecordReplayOnBlinkInitialized();
 
   v8::Isolate* isolate = blink::MainThreadIsolate();
   isolate->SetAddCrashKeyCallback(AddCrashKey);

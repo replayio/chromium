@@ -12,13 +12,17 @@
 #include "v8/include/v8.h"
 
 namespace blink {
+// Called once Blink initialized the main thread's isolate, before any JS runs:
+// takes the first checkpoint of the recording.
+void RecordReplayOnBlinkInitialized();
+
 // Initialize command state after the first context is created, but before the
-// first checkpoint in the recording is created.
+// handlers are ready.
 void InitializeRecordReplay(
   const char* processType,
   v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context);
 
-// Do any remaining initialization after the first checkpoint is created.
+// Do any remaining initialization after the handlers are ready.
 void InitializeRecordReplayAfterCheckpoint();
 
 // Whether `frame`'s window can run replay scripts: recording/replaying, an
@@ -30,11 +34,11 @@ bool RecordReplayIsReplayWindow(LocalFrame* frame);
 bool RecordReplayHasRootFrame();
 
 // Called by V8 when JS of an instrumented script is about to run before the
-//   first checkpoint, with the context it runs in (see
+//   handlers are ready, with the context it runs in (see
 //   V8RecordReplaySetInstrumentedScriptBeforeFirstCheckpointCallback).
 //   JS running in the tab's initial about:blank (setContent, evaluations, init
-//   scripts, an app iframe in it) makes that about:blank the root frame and
-//   starts the recording before it runs. Defined in local_window_proxy.cc.
+//   scripts, an app iframe in it) makes that about:blank the root frame before
+//   it runs. Defined in local_window_proxy.cc.
 void RecordReplayOnInstrumentedScriptBeforeFirstCheckpoint(v8::Isolate* isolate,
                                                    v8::Local<v8::Context> context);
 
@@ -44,11 +48,11 @@ void RecordReplayOnInstrumentedScriptBeforeFirstCheckpoint(v8::Isolate* isolate,
 bool RecordReplayIsRootFrame(LocalFrame* frame);
 
 // Initialize everything that needs to be initialized with every root frame,
-// before the first Checkpoint.
+// before the handlers are ready.
 void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context);
 
 // Initialize everything that needs to be initialized with every root frame,
-// after the first Checkpoint.
+// after the handlers are ready.
 void OnRootFrameInitAfterCheckpoint(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8::Context> context);
 
 // Initialize everything that depends on other initialization steps but

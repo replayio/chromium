@@ -2966,9 +2966,18 @@ void InitializeRecordReplay(
   V8RecordReplayAddMetadata(metadata.c_str());
 }
 
+void RecordReplayOnBlinkInitialized() {
+  if (!recordreplay::IsRecordingOrReplaying()) {
+    return;
+  }
+  // Retain last-resort font before first checkpoint for post-diverge PF inject.
+  FontCache::WarmReplayLastResortFont();
+  recordreplay::NewCheckpoint();
+}
+
 void InitializeRecordReplayAfterCheckpoint() {
   // The first replay window does this even when it isn't a root frame and so
-  // takes no checkpoint; the first root frame takes it later
+  // doesn't ready the handlers; the first root frame does later
   // (LocalWindowProxy::Initialize).
   static bool initialized = false;
   if (initialized) {
@@ -3033,9 +3042,6 @@ void OnRootFrameInit(v8::Isolate* isolate, LocalFrame* localFrame, v8::Local<v8:
 
   // NOTE: The root `LocalFrame` can change over time.
   gRootLocalFrame = localFrame;
-
-  // Retain last-resort font before first checkpoint for post-diverge PF inject.
-  FontCache::WarmReplayLastResortFont();
 
   // 1. Reset paint surface so that paints to the new root's surface are not ignored.
   // See: https://linear.app/replay/issue/RUN-2400

@@ -78,6 +78,8 @@
 #include "base/record_replay.h"
 #include "third_party/blink/renderer/controller/dev_tools_frontend_impl.h"
 
+extern "C" void V8RecordReplayHandlersReady();
+
 namespace blink {
 
 void LocalWindowProxy::Trace(Visitor* visitor) const {
@@ -249,9 +251,9 @@ void LocalWindowProxy::Initialize() {
     // Whether this is the relative root frame of this process.
     bool isMainFrame = RecordReplayIsRootFrame(GetFrame());
 
-    // The first root frame takes the first checkpoint, before any of its JS
-    // runs, even when another window initialized the state: a non-root first
-    // window can't take it, as checkpoints need the root frame's context.
+    // The first root frame readies the handlers, before any of its JS runs,
+    // even when another window initialized the state: a non-root first window
+    // can't, as the handlers need the root frame's context.
     bool firstRootFrame = isMainFrame && !RecordReplayHasRootFrame();
 
     if (initGlobally) {
@@ -267,7 +269,7 @@ void LocalWindowProxy::Initialize() {
 
       // After creating the first main-world context that is associated with a
       // non-empty origin, we are ready to set up the state used to process
-      // driver commands when recording/replaying, and to create checkpoints.
+      // driver commands when recording/replaying.
       InitializeRecordReplay(
         RecordReplayGetProcessType(
           GetFrame(),
@@ -278,20 +280,19 @@ void LocalWindowProxy::Initialize() {
     }
 
     if (isMainFrame) {
-      // Root-level navigation event, initially happens before
-      // first checkpoint.
+      // Root-level navigation event, initially happens before the handlers
+      // are ready.
       OnRootFrameInit(GetIsolate(), GetFrame(), context);
     }
 
     if (initGlobally || firstRootFrame) {
-      // Create the first checkpoint at which execution can pause.
-      recordreplay::NewCheckpoint();
+      V8RecordReplayHandlersReady();
       // Initialize some more.
       InitializeRecordReplayAfterCheckpoint();
     }
     
     if (isMainFrame) {
-      // Root-level navigation event, after first checkpoint.
+      // Root-level navigation event, after the handlers are ready.
       OnRootFrameInitAfterCheckpoint(GetIsolate(), GetFrame(), context);
     }
 
@@ -729,8 +730,8 @@ void RecordReplayOnInstrumentedScriptBeforeFirstCheckpoint(
     v8::Isolate* isolate,
     v8::Local<v8::Context> context) {
   // The replay scripts run below, and creating the main world's context can run
-  // JS too: none of it starts the recording again (embedder JS run while that
-  // context is created runs before the first checkpoint).
+  // JS too: none of it makes a root frame again (embedder JS run while that
+  // context is created runs before the handlers are ready).
   static bool starting = false;
   if (starting || !recordreplay::IsRecordingOrReplaying("commands") ||
       RecordReplayHasRootFrame()) {
@@ -763,7 +764,7 @@ void RecordReplayOnInstrumentedScriptBeforeFirstCheckpoint(
         isolate, top, main_context);
   }
   OnRootFrameInit(isolate, top, main_context);
-  recordreplay::NewCheckpoint();
+  V8RecordReplayHandlersReady();
   InitializeRecordReplayAfterCheckpoint();
   OnRootFrameInitAfterCheckpoint(isolate, top, main_context);
   OnNewWindowAfterCheckpoint(isolate, top, main_context);
