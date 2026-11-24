@@ -57,6 +57,7 @@
 #include "third_party/blink/renderer/core/html/forms/html_input_element.h"
 #include "third_party/blink/renderer/core/html/forms/html_text_area_element.h"
 #include "third_party/blink/renderer/core/input/event_handler.h"
+#include "third_party/blink/renderer/core/input/host_input_dependency_scope.h"
 #include "third_party/blink/renderer/core/input_type_names.h"
 #include "third_party/blink/renderer/core/keywords.h"
 #include "third_party/blink/renderer/core/layout/layout_object.h"
@@ -80,6 +81,22 @@ bool NeedsIncrementalInsertion(const LocalFrame& frame,
     return false;
 
   return true;
+}
+
+// The edit of a composition update or confirm.
+void InsertCompositionText(LocalFrame& frame,
+                           const String& text,
+                           TypingCommand::Options options,
+                           TypingCommand::TextCompositionType composition_type,
+                           bool is_incremental_insertion) {
+  // Calling |TypingCommand::insertText()| with empty text will result in an
+  // incorrect ending selection. We need to delete selection first.
+  // https://crbug.com/693481
+  if (text.empty())
+    TypingCommand::DeleteSelection(*frame.GetDocument(), 0);
+  frame.GetDocument()->UpdateStyleAndLayout(DocumentUpdateReason::kEditing);
+  TypingCommand::InsertText(*frame.GetDocument(), text, options,
+                            composition_type, is_incremental_insertion);
 }
 
 AtomicString GetInputModeAttribute(Element* element) {
@@ -464,16 +481,17 @@ void InputMethodController::InsertTextDuringCompositionWithEvents(
   const bool is_incremental_insertion = NeedsIncrementalInsertion(frame, text);
 
   switch (composition_type) {
-    case TypingCommand::TextCompositionType::kTextCompositionUpdate:
+    case TypingCommand::TextCompositionType::kTextCompositionUpdate: {
+      HostInputDependencyScope dependency_scope(
+          HostInputDependencyScope::Operation::kCompositionUpdate);
+      InsertCompositionText(frame, text, options, composition_type,
+                            is_incremental_insertion);
+      break;
+    }
     case TypingCommand::TextCompositionType::kTextCompositionConfirm:
-      // Calling |TypingCommand::insertText()| with empty text will result in an
-      // incorrect ending selection. We need to delete selection first.
-      // https://crbug.com/693481
-      if (text.empty())
-        TypingCommand::DeleteSelection(*frame.GetDocument(), 0);
-      frame.GetDocument()->UpdateStyleAndLayout(DocumentUpdateReason::kEditing);
-      TypingCommand::InsertText(*frame.GetDocument(), text, options,
-                                composition_type, is_incremental_insertion);
+      // No host input step: the edit nests a textInput dispatch.
+      InsertCompositionText(frame, text, options, composition_type,
+                            is_incremental_insertion);
       break;
     case TypingCommand::TextCompositionType::kTextCompositionCancel:
       // TODO(editing-dev): Use TypingCommand::insertText after TextEvent was
