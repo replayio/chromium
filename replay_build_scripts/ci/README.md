@@ -235,7 +235,7 @@ drivers are built ahead, with `BUILD_MAC=1` on that build-driver-linker build.
 
 The Macs are replayio/backend's `queue=macos` pool
 (`pulumi/build-machines/elastic_build_pool.ts`), which comes up when a job waits
-and sets each Mac up from AWS's macOS 13 image. What a Mac must have, which the
+and sets each Mac up from AWS's macOS 15 image. What a Mac must have, which the
 pool provides and `mac-host.sh --check` (the first thing each step runs)
 verifies:
 
