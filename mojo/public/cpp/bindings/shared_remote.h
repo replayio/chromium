@@ -134,7 +134,8 @@ class SharedRemoteBase
     // the remote's sequence posts a task bound to this wrapper, and a queued
     // send pins it through the ThreadSafeProxy, so while either is outstanding
     // a reset cannot drop the last reference. Once both have run the resetting
-    // thread can: ~SharedRemoteBase destroys forwarder_ before wrapper_, so it
+    // thread can, if it runs ~SharedRemoteBase and nothing else still holds
+    // the proxy: that destructor destroys forwarder_ before wrapper_, so it
     // drops the proxy's reference and then the direct one. SetVizHost()
     // resets a live remote without disconnecting at all, and
     // OnVizHostDisconnected() resets without a Disconnect() call too, so
