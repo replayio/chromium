@@ -72,7 +72,8 @@ class DataPipeProducer::SequenceState
   // On the file sequence that deletes this inline, elsewhere it posts a
   // DeleteSoon, which reads the clock and takes the thread pool's locks. Which
   // one happens has to be the same when replaying, so decrements are ordered
-  // among threads. The deleting itself is outside the lock.
+  // among threads. Increments are left alone, for the reason given at
+  // recordreplay::AutoOrderedRelease. The deleting itself is outside the lock.
   void Release() {
     if (!recordreplay::IsRecordingOrReplaying()) {
       base::RefCountedDeleteOnSequence<SequenceState>::Release();
@@ -81,7 +82,7 @@ class DataPipeProducer::SequenceState
 
     bool last_reference;
     {
-      recordreplay::AutoOrderedRefCount ordered;
+      recordreplay::AutoOrderedRelease ordered;
       last_reference = base::subtle::RefCountedThreadSafeBase::Release();
     }
     if (!last_reference) {
