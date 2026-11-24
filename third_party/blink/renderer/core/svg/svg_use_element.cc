@@ -42,6 +42,7 @@
 #include "third_party/blink/renderer/core/svg/svg_svg_element.h"
 #include "third_party/blink/renderer/core/svg/svg_symbol_element.h"
 #include "third_party/blink/renderer/core/svg/svg_title_element.h"
+#include "third_party/blink/renderer/core/svg/svg_use_shadow_tree_dependency_scope.h"
 #include "third_party/blink/renderer/core/svg_names.h"
 #include "third_party/blink/renderer/core/xlink_names.h"
 #include "third_party/blink/renderer/core/xml/parser/xml_document_parser.h"
@@ -285,11 +286,14 @@ static bool IsDisallowedElement(const Element& element) {
 
 void SVGUseElement::ScheduleShadowTreeRecreation() {
   needs_shadow_tree_recreation_ = true;
+  record_replay_scheduled_node_id_ =
+      SVGUseShadowTreeDependencyScope::ScheduleIfCaused();
   GetDocument().ScheduleUseShadowTreeUpdate(*this);
 }
 
 void SVGUseElement::CancelShadowTreeRecreation() {
   needs_shadow_tree_recreation_ = false;
+  record_replay_scheduled_node_id_ = 0;
   GetDocument().UnscheduleUseShadowTreeUpdate(*this);
 }
 
@@ -335,6 +339,7 @@ void SVGUseElement::BuildPendingResource() {
     DCHECK(!needs_shadow_tree_recreation_);
     return;  // Already replaced by rebuilding ancestor.
   }
+  const int record_replay_scheduled_node_id = record_replay_scheduled_node_id_;
   CancelShadowTreeRecreation();
 
   recordreplay::Assert(
@@ -350,6 +355,8 @@ void SVGUseElement::BuildPendingResource() {
 
   recordreplay::Assert("[RUN-2313] SVGUseElement::BuildPendingResource C");
 
+  SVGUseShadowTreeDependencyScope dependency_scope(
+      record_replay_scheduled_node_id);
   DetachShadowTree();
   ClearResourceReference();
 

@@ -338,6 +338,8 @@ blink_core_sources_svg = [
   "svg_uri_reference.h",
   "svg_use_element.cc",
   "svg_use_element.h",
+  "svg_use_shadow_tree_dependency_scope.cc",
+  "svg_use_shadow_tree_dependency_scope.h",
   "svg_view_element.cc",
   "svg_view_element.h",
   "svg_view_spec.cc",

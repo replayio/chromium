@@ -123,6 +123,9 @@ class SVGUseElement final : public SVGGraphicsElement,
   bool element_url_is_local_;
   bool have_fired_load_event_;
   bool needs_shadow_tree_recreation_;
+  // SVGUseShadowTreeDependencyScope::ScheduleIfCaused() of the pending
+  // recreation.
+  int record_replay_scheduled_node_id_ = 0;
   Member<IdTargetObserver> target_id_observer_;
 
   FRIEND_TEST_ALL_PREFIXES(SVGUseElementTest,
