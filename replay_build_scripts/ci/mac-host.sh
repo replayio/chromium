@@ -158,10 +158,7 @@ cache=$("$dir/checkout.sh" git-cache)
 mkdir -p "$cache"
 export GIT_CACHE_PATH=$cache
 export DEPOT_TOOLS_UPDATE=0
-# python3 is depot_tools' own, as python3.8 is in the build image: Homebrew's,
-# which the agent's PATH has, comes without setuptools, and DEPS hooks import
-# pkg_resources (build/mac_toolchain.py).
-export PATH=$depot/python-bin:$depot:$PATH
+export PATH=$depot:$PATH
 # The EngFlow cert and key stay where the job put them, outside the checkout.
 if [ -n "${RBE_service:-}" ] &&
   { [ -z "${RBE_tls_client_auth_cert:-}" ] || [ -z "${RBE_tls_client_auth_key:-}" ]; }; then

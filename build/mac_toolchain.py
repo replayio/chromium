@@ -20,7 +20,6 @@ the full revision, e.g. 9A235.
 
 import argparse
 import os
-import pkg_resources
 import platform
 import plistlib
 import shutil
@@ -152,6 +151,10 @@ def InstallXcodeBinaries():
     current_license_plist = LoadPList(current_license_path)
     xcode_version = current_license_plist.get(
         'IDEXcodeVersionForAgreedToGMLicense')
+    # Replay: imported here, where it is used. gclient runs this hook with the
+    # python3 of its own vpython environment, which lacks setuptools, and a Mac
+    # outside Google never gets here.
+    import pkg_resources
     if (xcode_version is not None and pkg_resources.parse_version(xcode_version)
         >= pkg_resources.parse_version(cipd_xcode_version)):
       should_overwrite_license = False
