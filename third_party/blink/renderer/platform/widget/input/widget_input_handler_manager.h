@@ -347,9 +347,11 @@ class PLATFORM_EXPORT WidgetInputHandlerManager final
   // [RecordReplay] These locks are named, and so ordered among threads.
   // ClearClient() resets the remotes on the main thread while callers on the
   // input and compositor threads take copies of them, and whether a caller
-  // gets a copy or finds the remote already reset decides both what it does
-  // next and who drops the last reference to the remote's shared state. See
-  // mojo::SharedRemoteBase::RemoteWrapper::Release().
+  // gets a copy or finds the remote already reset decides what it does next.
+  // SetVizHost() and OnVizHostDisconnected() reset without disconnecting
+  // first. Which thread then drops the last reference to the shared state is a
+  // further question, settled only as far as
+  // mojo::SharedRemoteBase::RemoteWrapper::Release() says it is.
   base::Lock host_lock_{"WidgetInputHandlerManager.host_lock_"};
   mojo::SharedRemote<mojom::blink::WidgetInputHandlerHost> host_
       GUARDED_BY(host_lock_);
