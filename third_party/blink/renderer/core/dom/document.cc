@@ -3211,7 +3211,11 @@ void Document::UpdateStyleAndLayout(DocumentUpdateReason reason) {
   // are not allowed.
   // We are doing something while replaying that didn't happen while recording and
   // isn't supposed to interact with the recording, like getting object previews.
-  if (!recordreplay::AllowSideEffects() || recordreplay::AreEventsDisallowed())
+  // A pause that has diverged from the recording can lay out, as repaints do,
+  // so its commands see the page as it is at the pause.
+  if (!recordreplay::AllowSideEffects() ||
+      (recordreplay::AreEventsDisallowed() &&
+       !recordreplay::HasDivergedFromRecording()))
     return;
 
   bool is_potentially_clean =
