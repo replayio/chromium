@@ -30,6 +30,11 @@ bool IsRecording();
 bool IsReplaying();
 char* GetRecordingId();
 void FinishRecording();
+// Lets a main thread blocked waiting on another thread finish the recording
+// when that is requested: |callback(data)| must wake the wait, which then calls
+// MaybeTerminate(nullptr, nullptr) to finish the recording if requested and to
+// clear the callback.
+void MaybeTerminate(void (*callback)(void*), void* data);
 
 void Print(const char* format, ...);
 void Diagnostic(const char* format, ...);
