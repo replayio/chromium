@@ -30,19 +30,16 @@ class MOJO_SYSTEM_IMPL_EXPORT ObjectBase
   REQUIRE_ADOPTION_FOR_REFCOUNTED_TYPE();
 
   // [RecordReplay] A driver object's last reference is dropped by whichever
-  // thread gets there last, and closing one (a data pipe's, from a trap event
-  // on the IO thread or from its owner's thread; a transport's) takes locks
-  // and sends things a recording notes. Which thread that is has to be the
-  // same when replaying, so the count is ordered among threads, as ipcz's own
-  // counts are. The destroying itself is outside the lock.
-  void AddRef() const {
-    recordreplay::AutoOrderedRefCount ordered;
-    base::RefCountedThreadSafe<ObjectBase>::AddRef();
-  }
+  // thread gets there last, and destroying one is something a recording notes:
+  // a data pipe closes its portal and so an ipcz route, and a transport calls
+  // the embedder's error handler. Which thread that is has to be the same when
+  // replaying, so decrements are ordered among threads, as ipcz' own counts
+  // are. Increments are left alone, for the reason given at
+  // recordreplay::AutoOrderedRelease. The destroying itself is outside the lock.
   void Release() const {
     bool last;
     {
-      recordreplay::AutoOrderedRefCount ordered;
+      recordreplay::AutoOrderedRelease ordered;
       last = base::subtle::RefCountedThreadSafeBase::Release();
     }
     if (last) {

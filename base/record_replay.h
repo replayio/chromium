@@ -32,7 +32,7 @@ namespace base {
 namespace recordreplay {
 
 // Creates what this file needs made on the main thread before any other
-// thread exists (see AutoOrderedRefCount). Called once the driver is attached.
+// thread exists (see AutoOrderedRelease). Called once the driver is attached.
 void Initialize();
 
 // Whether the calling thread is the one the driver attached on.
@@ -113,17 +113,56 @@ struct AutoOrderedLock {
   int id_;
 };
 
-// Orders one reference count operation among threads. For the few kinds of
+// Orders one reference count decrement among threads. For the few kinds of
 // object whose last reference any of several threads can drop, and whose
-// destruction is something a recording notes (a task posted, a lock taken):
-// the thread that destroys one when recording isn't always the one that does
-// when replaying. One lock serves all of them. Nothing is ordered where events
-// are disallowed or passed through, or before Initialize().
-struct AutoOrderedRefCount {
-  AutoOrderedRefCount();
-  ~AutoOrderedRefCount();
-  AutoOrderedRefCount(const AutoOrderedRefCount&) = delete;
-  AutoOrderedRefCount& operator=(const AutoOrderedRefCount&) = delete;
+// destruction is something a recording notes (a task posted, a route closed, a
+// lock taken), the thread which destroys one while recording has to be the one
+// which destroys it when replaying. One lock serves all of them.
+//
+// Increments are not ordered, and need not be. A replay which reached zero at
+// an earlier decrement than the recording did would have to make the later
+// decrements through references copied from one already dropped, which is a use
+// after free the code does not commit, so with the decrements replayed in their
+// recorded order zero is reached at the same one. What an ordered lock over a
+// copy still buys is that the copy happens at all, so that both runs make the
+// same set of decrements, and that was as true when the increments were ordered
+// as it is now.
+//
+// What this orders is the decrements, not which threads make them, and it asks
+// more of a replay than the destruction itself does. Destroying an object needs
+// only its last decrement to come from the thread the recording destroyed it
+// on, while an ordered lock needs every decrement to come from the thread which
+// made it when recording. A holder whose own destruction thread is settled by a
+// race the recording says nothing about drops its reference from either thread,
+// and the driver records the thread which acquires an ordered lock, so a
+// decrement made there can mismatch or wait for a thread which never arrives.
+// Three such holders are known and are not covered. SharedRemoteBase and the
+// ThreadSafeProxy it creates each count their own references without ordering
+// them above SharedRemoteBase::RemoteWrapper, which is described where that
+// wrapper's decrement is ordered. The parcels a Mojo message holds above ipcz'
+// NodeLink, in Parcel::remote_source_, are dropped by whichever thread
+// destroys that message, which nothing settles.
+//
+// ipcz' Router destructor passes events through so that the mutex it takes is
+// not ordered, on the grounds that the thread which drops a Router's last
+// reference can differ when replaying. With these decrements ordered that
+// thread is reproducible, so the scope guards an acquisition the recorded
+// thread was going to make anyway. OrderedMutex orders nothing of its own where
+// events are disallowed, passed through or diverged, so neither that destructor
+// nor ipcz' NodeLink destructor is exposed in those states, which is why the
+// latter needs no such scope.
+//
+// Nothing is ordered where events are disallowed or passed through, or before
+// Initialize(). A last reference dropped there is still settled by the race.
+// The leak-references gates in RemoteWrapper::DeleteOnCorrectThread() and
+// Router::CloseRoute() cover those two paths and no others.
+// Initialize() is called from ChromeMain, so a process which starts some other
+// way orders none of these decrements at all.
+struct AutoOrderedRelease {
+  AutoOrderedRelease();
+  ~AutoOrderedRelease();
+  AutoOrderedRelease(const AutoOrderedRelease&) = delete;
+  AutoOrderedRelease& operator=(const AutoOrderedRelease&) = delete;
   int id_;
 };
 

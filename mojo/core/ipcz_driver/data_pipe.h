@@ -66,16 +66,13 @@ class DataPipe : public Object<DataPipe> {
   // ownership and access.
   class PortalWrapper : public base::RefCountedThreadSafe<PortalWrapper> {
    public:
-    // [RecordReplay] Ordered among threads, as ObjectBase's count is and for
-    // the same reason: see there.
-    void AddRef() const {
-      recordreplay::AutoOrderedRefCount ordered;
-      base::RefCountedThreadSafe<PortalWrapper>::AddRef();
-    }
+    // [RecordReplay] Decrements are ordered among threads, as ObjectBase's
+    // are and for the same reason: see there. The last drop closes the portal,
+    // and so an ipcz route.
     void Release() const {
       bool last;
       {
-        recordreplay::AutoOrderedRefCount ordered;
+        recordreplay::AutoOrderedRelease ordered;
         last = base::subtle::RefCountedThreadSafeBase::Release();
       }
       if (last) {

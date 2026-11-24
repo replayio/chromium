@@ -120,19 +120,42 @@ class SharedRemoteBase
     RemoteWrapper& operator=(const RemoteWrapper&) = delete;
 
     // [RecordReplay] Any thread holding the SharedRemote can drop the last
-    // reference, and whichever does posts the task that deletes this on its
-    // own sequence. Which thread that is has to be the same when replaying
-    // (e.g. a widget's input handler host, cleared on the main thread while
-    // the compositor thread lets go of its copy), so the count is ordered
-    // among threads. The deleting itself is outside the lock.
-    void AddRef() const {
-      recordreplay::AutoOrderedRefCount ordered;
-      base::RefCountedThreadSafe<RemoteWrapper, RemoteWrapperDeleter>::AddRef();
-    }
+    // reference, and whichever does decides whether this is deleted inline or
+    // through a task posted to the remote's own sequence. Upstream races it
+    // where WidgetInputHandlerManager::ClearClient() resets host_ on the main
+    // thread while an input thread caller still holds the copy
+    // GetWidgetInputHandlerHost() handed it. That manager's host locks are
+    // named for this, so both sides agree on whether the copy was taken at all.
+    // Increments are left alone, for the reason given at
+    // recordreplay::AutoOrderedRelease, and the deleting itself is outside the
+    // lock.
+    //
+    // Disconnecting first does not decide the thread. Disconnect() from off
+    // the remote's sequence posts a task bound to this wrapper, and a queued
+    // send pins it through the ThreadSafeProxy, so while either is outstanding
+    // a reset cannot drop the last reference. Once both have run the resetting
+    // thread can, if it runs ~SharedRemoteBase and nothing else still holds
+    // the proxy: that destructor destroys forwarder_ before wrapper_, so it
+    // drops the proxy's reference and then the direct one. SetVizHost()
+    // resets a live remote without disconnecting at all, and
+    // OnVizHostDisconnected() resets without a Disconnect() call too, so
+    // neither posts a task which pins this wrapper. Which thread arrives last
+    // is what this ordering settles, by replaying the decrements from the
+    // threads which made them.
+    //
+    // It settles that only as far as both runs make those decrements from the
+    // same threads, and the two holders above this one do not guarantee it.
+    // Neither SharedRemoteBase nor the ThreadSafeProxy orders its own count,
+    // and the copy the getter handed out is dropped after the lock was
+    // released, so a replay where that copy outlives the reset runs
+    // ~SharedRemoteBase, and the decrements under it, on the caller's thread
+    // instead of the resetting one, where they can mismatch or wait for a
+    // thread which never arrives. Closing that needs those two counts
+    // settled, which is not done here.
     void Release() const {
       bool last;
       {
-        recordreplay::AutoOrderedRefCount ordered;
+        recordreplay::AutoOrderedRelease ordered;
         last = base::subtle::RefCountedThreadSafeBase::Release();
       }
       if (last) {
