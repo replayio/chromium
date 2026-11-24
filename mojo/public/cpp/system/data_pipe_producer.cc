@@ -73,21 +73,27 @@ class DataPipeProducer::SequenceState
   // DeleteSoon, which reads the clock and takes the thread pool's locks. Which
   // one happens has to be the same when replaying, so decrements are ordered
   // among threads. The deleting itself is outside the lock.
-  void Release() const {
-    bool last;
+  void Release() {
+    if (!recordreplay::IsRecordingOrReplaying()) {
+      base::RefCountedDeleteOnSequence<SequenceState>::Release();
+      return;
+    }
+
+    bool last_reference;
     {
       recordreplay::AutoOrderedRefCount ordered;
-      last = base::subtle::RefCountedThreadSafeBase::Release();
+      last_reference = base::subtle::RefCountedThreadSafeBase::Release();
     }
-    if (last) {
-      // As RefCountedDeleteOnSequence::DestructOnSequence(), which is private.
-      base::SequencedTaskRunner* runner =
-          const_cast<SequenceState*>(this)->owning_task_runner();
-      if (runner->RunsTasksInCurrentSequence()) {
-        delete this;
-      } else {
-        runner->DeleteSoon(FROM_HERE, this);
-      }
+    if (!last_reference) {
+      return;
+    }
+
+    // Same as RefCountedDeleteOnSequence::DestructOnSequence(), which is
+    // private.
+    if (owning_task_runner()->RunsTasksInCurrentSequence()) {
+      delete this;
+    } else {
+      owning_task_runner()->DeleteSoon(FROM_HERE, this);
     }
   }
 
