@@ -57,6 +57,7 @@
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/exported/web_page_popup_impl.h"
 #include "third_party/blink/renderer/core/frame/web_local_frame_impl.h"
+#include "third_party/blink/renderer/core/input/host_input_dependency_scope.h"
 #include "third_party/blink/renderer/core/page/event_with_hit_test_results.h"
 #include "third_party/blink/renderer/core/page/viewport_description.h"
 #include "third_party/blink/renderer/platform/graphics/apply_viewport_changes.h"
@@ -1016,6 +1017,9 @@ class CORE_EXPORT WebFrameWidgetImpl
   // keyPress events to be suppressed if the associated keyDown event was
   // handled.
   bool suppress_next_keypress_event_ = false;
+  // The input action of the key down the next keypress pairs with.
+  InputActionHolder record_replay_key_down_action_{
+      InputActionPairing::kKeyDownChar};
 
   // Whether drag and drop is supported by this widget. When disabled
   // any drag operation that is started will be canceled immediately.
