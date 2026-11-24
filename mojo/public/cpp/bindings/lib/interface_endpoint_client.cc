@@ -383,6 +383,15 @@ void ThreadSafeInterfaceEndpointClientProxy::SendMessageWithResponder(
   if (response->received) {
     std::ignore = responder->Accept(&response->message);
   }
+
+  // [RecordReplay] Whichever thread drops the last reference to `response`
+  // destroys the reply, and closing its handle takes ordered ipcz reference
+  // count operations. The thread that signalled the reply races this one for
+  // that last reference, so the reply is destroyed here, where the call was
+  // made, while this thread still holds its reference.
+  if (recordreplay::IsRecordingOrReplaying()) {
+    response->message.Reset();
+  }
 }
 
 InterfaceEndpointClient::InterfaceEndpointClient(
