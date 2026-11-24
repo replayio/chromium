@@ -135,10 +135,12 @@ class SharedRemoteBase
     // send pins it through the ThreadSafeProxy, so while either is outstanding
     // a reset cannot drop the last reference. Once both have run the resetting
     // thread can: ~SharedRemoteBase destroys forwarder_ before wrapper_, so it
-    // drops the proxy's reference and then the direct one. SetVizHost() and
-    // OnVizHostDisconnected() reset a live remote without disconnecting at
-    // all. Which thread arrives last is what this ordering settles, by
-    // replaying the decrements from the threads which made them.
+    // drops the proxy's reference and then the direct one. SetVizHost()
+    // resets a live remote without disconnecting at all, and
+    // OnVizHostDisconnected() resets without a Disconnect() call too, so
+    // neither posts a task which pins this wrapper. Which thread arrives last
+    // is what this ordering settles, by replaying the decrements from the
+    // threads which made them.
     //
     // It settles that only as far as both runs make those decrements from the
     // same threads, and the two holders above this one do not guarantee it.
@@ -146,9 +148,9 @@ class SharedRemoteBase
     // and the copy the getter handed out is dropped after the lock was
     // released, so a replay where that copy outlives the reset runs
     // ~SharedRemoteBase, and the decrements under it, on the caller's thread
-    // instead of the resetting one, where they wait for a thread which never
-    // arrives. Closing that needs those two counts settled, which is not done
-    // here.
+    // instead of the resetting one, where they can mismatch or wait for a
+    // thread which never arrives. Closing that needs those two counts
+    // settled, which is not done here.
     void Release() const {
       bool last;
       {

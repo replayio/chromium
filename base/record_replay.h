@@ -126,12 +126,17 @@ struct AutoOrderedLock {
 // ThreadSafeProxy it creates each count their own references without ordering
 // them above SharedRemoteBase::RemoteWrapper, which is described where that
 // wrapper's decrement is ordered. The parcels a Mojo message holds above ipcz'
-// NodeLink are dropped by whichever thread destroys the message.
+// NodeLink, in Parcel::remote_source_, are dropped by whichever thread
+// destroys that message, which nothing settles.
 //
 // ipcz' Router destructor passes events through so that the mutex it takes is
 // not ordered, on the grounds that the thread which drops a Router's last
-// reference can differ when replaying. With these decrements ordered that is so
-// only where the decrement itself is not, which is the case below.
+// reference can differ when replaying. With these decrements ordered that
+// thread is reproducible, so the scope guards an acquisition the recorded
+// thread was going to make anyway. OrderedMutex orders nothing of its own where
+// events are disallowed, passed through or diverged, so neither that destructor
+// nor ipcz' NodeLink destructor is exposed in those states, which is why the
+// latter needs no such scope.
 //
 // Nothing is ordered where events are disallowed or passed through, or before
 // Initialize(). A last reference dropped there is still settled by the race.
