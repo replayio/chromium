@@ -559,19 +559,12 @@ blink::mojom::blink::DevToolsMessagePtr DevToolsSession::FinalizeMessage(
   // the message contents to match up.
   if (recordreplay::IsRecordingOrReplaying("values", "DevToolsSession::FinalizeMessage") &&
       !recordreplay::AreEventsUnavailable()) {
-    // With assertions on, the start of each message, so that a replay that
-    // sends one the recording didn't says which.
-    if (recordreplay::HasAsserts()) {
-      std::string start;
-      for (size_t i = 0; i < message_to_send.size() && start.size() < 90; i++) {
-        const char c = static_cast<char>(message_to_send[i]);
-        if (c >= 0x20 && c < 0x7f && c != '%') {
-          start.push_back(c);
-        }
-      }
-      recordreplay::Assert("DevToolsSession::FinalizeMessage %d %s",
-                           call_id.value_or(-1), start.c_str());
-    }
+    // The call id says which response a replay sends that the recording
+    // didn't. The contents can't be asserted: besides the variation above,
+    // some responses report state that legitimately differs when replaying,
+    // such as Runtime.getHeapUsage's heap sizes.
+    recordreplay::Assert("DevToolsSession::FinalizeMessage %d",
+                         call_id.value_or(-1));
     size_t nbytes = recordreplay::RecordReplayValue("DevToolsSession::FinalizeMessage",
                                                     message_to_send.size());
     message_to_send.resize(nbytes);
