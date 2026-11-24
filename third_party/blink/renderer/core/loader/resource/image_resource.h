@@ -84,8 +84,6 @@ class CORE_EXPORT ImageResource final
   void NotifyStartLoad() override;
   void ResponseReceived(const ResourceResponse&) override;
   void AppendData(const char*, size_t) override;
-  void Finish(base::TimeTicks finish_time,
-              base::SingleThreadTaskRunner*) override;
   void FinishAsError(const ResourceError&,
                      base::SingleThreadTaskRunner*) override;
 
@@ -106,6 +104,9 @@ class CORE_EXPORT ImageResource final
   void Trace(Visitor*) const override;
 
  private:
+  void FinishInternal(base::TimeTicks finish_time,
+                      base::SingleThreadTaskRunner*) override;
+
   enum class MultipartParsingState : uint8_t {
     kWaitingForFirstPart,
     kParsingFirstPart,
