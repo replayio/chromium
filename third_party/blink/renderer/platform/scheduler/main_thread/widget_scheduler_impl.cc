@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/platform/scheduler/main_thread/widget_scheduler_impl.h"
 
 #include "base/feature_list.h"
+#include "base/record_replay.h"
 #include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_scheduler_impl.h"
 
@@ -24,6 +25,9 @@ WidgetSchedulerImpl::WidgetSchedulerImpl(
       delegate_(delegate) {
   DCHECK(render_widget_signals_);
 
+  // Pointer registration is needed for sorting in MainThreadSchedulerImpl.
+  recordreplay::RegisterPointer("WidgetSchedulerImpl", this);
+
   // main_thread_scheduler_ may be null in some tests.
   if (main_thread_scheduler_) {
     input_task_queue_ = main_thread_scheduler->NewTaskQueue(
@@ -41,7 +45,9 @@ WidgetSchedulerImpl::WidgetSchedulerImpl(
   render_widget_signals_->IncNumVisibleRenderWidgets();
 }
 
-WidgetSchedulerImpl::~WidgetSchedulerImpl() = default;
+WidgetSchedulerImpl::~WidgetSchedulerImpl() {
+  recordreplay::UnregisterPointer(this);
+}
 
 void WidgetSchedulerImpl::WillShutdown() {
   if (main_thread_scheduler_) {
