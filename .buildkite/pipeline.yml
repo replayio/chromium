@@ -247,8 +247,14 @@ steps:
   # agents", lists before anything touches a checkout. Both architectures share
   # the key's checkout (out/Release and out/Release-ARM), so a Mac runs one
   # agent.
+  #
+  # Only on the base branches, or with BUILD_MAC=1: a Mac is billed by the day
+  # while it runs (replayio/backend pulumi/build-machines). The same condition
+  # decides in replay_build_scripts/build-pipeline.py whether these builds need
+  # the macOS drivers of REPLAY_BACKEND_REV.
   - label: "🔨 Chromium (mac-x86_64)"
     key: "build-chromium-mac-x86_64"
+    if: &mac-builds build.branch == "master" || build.branch == "rebase/157/working" || build.env("BUILD_MAC") == "1"
     timeout_in_minutes: 360
     plugins: &mac-build-plugins
       - thedyrt/skip-checkout#v0.1.1: ~
@@ -332,6 +338,7 @@ steps:
 
   - label: "🔨 Chromium (mac-arm64)"
     key: "build-chromium-mac-arm64"
+    if: *mac-builds
     timeout_in_minutes: 360
     plugins: *mac-build-plugins
     env:
@@ -351,6 +358,7 @@ steps:
   # same dependencies and carry the same resources, which this compares.
   - label: "🕵️‍♀️ Verify MacOS cross-arch build integrity"
     key: "verify-cross-arch-pak-sizes"
+    if: *mac-builds
     depends_on:
       - "build-chromium-mac-x86_64"
       - "build-chromium-mac-arm64"
@@ -374,21 +382,23 @@ steps:
   # #     - "build-chromium-mac-x86_64"
   # #     - "build-chromium-mac-arm64"
 
-  # - label: "📝 E2E Tests (macos-arm64)"
-  #   trigger: "runtime-fe-end-to-end-tests"
-  #   depends_on:
-  #     - "build-chromium-mac-x86_64"
-  #     - "build-chromium-mac-arm64"
-  #   build:
-  #     env:
-  #       OS: "macos"
-  #       ARCH: "arm64"
-  #       RECORD_REPLAY_METADATA_SOURCE_COMMIT_TITLE: "${BUILDKITE_MESSAGE}"
-  #       RECORD_REPLAY_METADATA_SOURCE_COMMIT_ID: "${BUILDKITE_COMMIT}"
-  #       RECORD_REPLAY_METADATA_SOURCE_BRANCH: "${BUILDKITE_BRANCH}"
-  #       RECORD_REPLAY_METADATA_SOURCE_MERGE_ID: "${BUILDKITE_PULL_REQUEST}"
-  #       RUNTIME_REPO: "${BUILDKITE_PULL_REQUEST_REPO}"
-  #       CI: "1"
+  # On the Mac: the tests record there and replay in the cloud.
+  - label: "📝 E2E Tests (macos-arm64)"
+    trigger: "runtime-fe-end-to-end-tests"
+    if: *mac-builds
+    depends_on:
+      - "build-chromium-mac-x86_64"
+      - "build-chromium-mac-arm64"
+    build:
+      env:
+        OS: "macos"
+        ARCH: "arm64"
+        RECORD_REPLAY_METADATA_SOURCE_COMMIT_TITLE: "${BUILDKITE_MESSAGE}"
+        RECORD_REPLAY_METADATA_SOURCE_COMMIT_ID: "${BUILDKITE_COMMIT}"
+        RECORD_REPLAY_METADATA_SOURCE_BRANCH: "${BUILDKITE_BRANCH}"
+        RECORD_REPLAY_METADATA_SOURCE_MERGE_ID: "${BUILDKITE_PULL_REQUEST}"
+        RUNTIME_REPO: "${BUILDKITE_PULL_REQUEST_REPO}"
+        CI: "1"
 
   # TODO: re-enable buildevents watch once builds are stable
   # - wait: ~

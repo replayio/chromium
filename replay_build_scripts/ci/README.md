@@ -226,8 +226,18 @@ build's inputs stay pinned by the tree:
   Google's builders get the same layout from a CIPD package only Googlers can
   read, which `build/mac_toolchain.py` skips for everyone else.
 
-What a Mac must have, which `mac-host.sh --check` (the first thing each step
-runs) verifies:
+The steps run on `master` and `rebase/157/working`, and on any build started
+with `BUILD_MAC=1`: a Mac is billed by the day while it is up. A build that
+runs them needs the macOS drivers of its `REPLAY_BACKEND_REV`, which
+`build-pipeline.py` has build-driver-linker build when they are missing. The
+whole build, Linux too, then waits for the Mac: a pin bump avoids that when its
+drivers are built ahead, with `BUILD_MAC=1` on that build-driver-linker build.
+
+The Macs are replayio/backend's `queue=macos` pool
+(`pulumi/build-machines/elastic_build_pool.ts`), which comes up when a job waits
+and sets each Mac up from AWS's macOS 13 image. What a Mac must have, which the
+pool provides and `mac-host.sh --check` (the first thing each step runs)
+verifies:
 
 - Xcode 14.1 (it ships `MacOSX13.0.sdk`), with its license accepted
   (`sudo xcodebuild -license accept`), at `/Applications/Xcode-14.1.0.app` or
@@ -252,5 +262,7 @@ runs) verifies:
 
 An Apple Silicon Mac builds the x86_64 build too (Chromium cross-compiles), and
 compiles run on EngFlow either way: `configure_reclient.py` sets up Linux
-remotes for a Mac host.
+remotes for a Mac host. The Intel Mac that built these until June rebuilt
+Chromium nearly from scratch in 37 minutes (chromium-build 4469: 36,168 remote
+executions, no local fallback).
 
