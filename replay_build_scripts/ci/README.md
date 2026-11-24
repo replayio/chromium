@@ -243,8 +243,8 @@ verifies:
   says: what `build/xcode_binaries.yaml` lists, taken from Xcode 12.4, with the
   `MacOSX13.0.sdk` the args name added. It is what the old macOS builder built
   with. A Chromium version whose build needs a newer SDK needs a new package
-  and new args. The macOS 13 the pool runs is the closest it offers to that
-  Xcode.
+  and new args. The pool runs macOS 15, the oldest Homebrew still supports,
+  which is as close to that Xcode as it gets.
 - The Command Line Tools, for the backend's macOS driver: the hermetic Xcode
   has no compiler, and Chromium brings its own.
 - Homebrew's bash, coreutils, findutils and flock first on `PATH`, with the GNU
