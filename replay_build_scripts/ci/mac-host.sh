@@ -14,13 +14,16 @@
 #   next to the keys that belongs to none of them (checkout.sh never removes
 #   state whose name begins with a dot).
 # - The SDK that replay_build_scripts/mac_*_args.gn name with
-#   mac_sdk_official_version, from the Xcode that $REPLAY_MAC_XCODE points at.
-#   Those args build with use_system_xcode = false, which reads Xcode from
-#   build/mac_files/xcode_binaries in the checkout, and this links that path to
-#   the pinned Xcode. In that mode gn reads Xcode's version from its plists
-#   rather than asking xcodebuild, so an Xcode older than the host's macOS
-#   still serves (Google's builders get the same layout from an internal CIPD
-#   package, which build/mac_toolchain.py skips for everyone else).
+#   mac_sdk_official_version, from the hermetic Xcode that $REPLAY_MAC_XCODE
+#   points at. Those args build with use_system_xcode = false, which reads
+#   Xcode from build/mac_files/xcode_binaries in the checkout, and this links
+#   that path to the pinned one. In that mode gn reads Xcode's version from its
+#   plists rather than asking xcodebuild, so an Xcode older than the host's
+#   macOS still serves. Google's builders get that layout, what
+#   build/xcode_binaries.yaml lists, from an internal CIPD package, which
+#   build/mac_toolchain.py skips for everyone else. Ours was made from Xcode
+#   12.4 with the macOS 13.0 SDK added (replayio/backend
+#   pulumi/build-machines, which installs it on the Macs).
 #
 # Everything else the host provides is listed in README.md, "macOS agents".
 set -euo pipefail
@@ -54,10 +57,10 @@ check_host() {
   xcode >/dev/null
 }
 
-# The Xcode the build reads its SDK and tools from: $REPLAY_MAC_XCODE, which
-# must hold the SDK version the args files name.
+# The hermetic Xcode the build reads its SDK and tools from: $REPLAY_MAC_XCODE,
+# which must hold the SDK version the args files name.
 xcode() {
-  local app=${REPLAY_MAC_XCODE:-/Applications/Xcode-14.1.0.app} sdk
+  local app=${REPLAY_MAC_XCODE:-/opt/hermetic_xcode} sdk
   sdk=$(sed -n 's/^ *mac_sdk_official_version *= *"\([^"]*\)".*/\1/p' \
     "$dir/../mac_arm64_args.gn" "$dir/../mac_x86_64_args.gn" | sort -u)
   if [ -z "$sdk" ] || [ "$(echo "$sdk" | wc -l)" -ne 1 ]; then
@@ -65,7 +68,7 @@ xcode() {
   fi
   local path="$app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX$sdk.sdk"
   if [ ! -f "$app/Contents/version.plist" ] || [ ! -d "$path" ]; then
-    fail "the args need MacOSX$sdk.sdk, which $app does not have. Install an Xcode that ships it (Xcode 14.1 for 13.0) and point REPLAY_MAC_XCODE at it"
+    fail "the args need MacOSX$sdk.sdk, which $app does not have: point REPLAY_MAC_XCODE at a hermetic Xcode that holds it (README.md, macOS agents)"
   fi
   echo "$app"
 }
@@ -155,7 +158,6 @@ cache=$("$dir/checkout.sh" git-cache)
 mkdir -p "$cache"
 export GIT_CACHE_PATH=$cache
 export DEPOT_TOOLS_UPDATE=0
-export DEVELOPER_DIR=$app/Contents/Developer
 export PATH=$depot:$PATH
 # The EngFlow cert and key stay where the job put them, outside the checkout.
 if [ -n "${RBE_service:-}" ] &&
@@ -164,5 +166,5 @@ if [ -n "${RBE_service:-}" ] &&
 fi
 
 cd "$root/src"
-echo "\$ ${cmd[*]}   (in $PWD, Xcode $app, depot_tools $depot)"
+echo "\$ ${cmd[*]}   (in $PWD, hermetic Xcode $app, depot_tools $depot)"
 exec "${cmd[@]}"

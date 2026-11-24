@@ -239,10 +239,14 @@ and sets each Mac up from AWS's macOS 13 image. What a Mac must have, which the
 pool provides and `mac-host.sh --check` (the first thing each step runs)
 verifies:
 
-- Xcode 14.1 (it ships `MacOSX13.0.sdk`), with its license accepted
-  (`sudo xcodebuild -license accept`), at `/Applications/Xcode-14.1.0.app` or
-  wherever `REPLAY_MAC_XCODE` says. Its tools (`actool`, `libtool`) run during
-  the build, so a macOS that still runs Xcode 14.1 is the safe choice: macOS 13.
+- The hermetic Xcode, at `/opt/hermetic_xcode` or wherever `REPLAY_MAC_XCODE`
+  says: what `build/xcode_binaries.yaml` lists, taken from Xcode 12.4, with the
+  `MacOSX13.0.sdk` the args name added. It is what the old macOS builder built
+  with. A Chromium version whose build needs a newer SDK needs a new package
+  and new args. The macOS 13 the pool runs is the closest it offers to that
+  Xcode.
+- The Command Line Tools, for the backend's macOS driver: the hermetic Xcode
+  has no compiler, and Chromium brings its own.
 - Homebrew's bash, coreutils, findutils and flock first on `PATH`, with the GNU
   tools unprefixed (their `gnubin` directories): these scripts use bash 4
   syntax and GNU options. git 2.46 or newer (depot_tools), node, the aws CLI.
