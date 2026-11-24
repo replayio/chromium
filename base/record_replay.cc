@@ -37,6 +37,8 @@ namespace recordreplay {
         (const char* json), (json), int, 0)                             \
   Macro(V8RecordReplayDependencyGraphCauseExecutionNode,                \
         (), (), int, 0)                                                 \
+  Macro(V8RecordReplayDependencyGraphNodelessExecutionCount,            \
+        (), (), size_t, 0)                                              \
   Macro(V8RecordReplayAllowSideEffects, (), (), bool, true)             \
   Macro(V8RecordReplayPointerId, (const void* ptr), (ptr), int, 0)      \
   Macro(V8RecordReplayIdPointer, (int id), (id), void*, nullptr)        \
@@ -545,6 +547,10 @@ void EndDependencyExecution() {
 
 int DependencyGraphCauseExecutionNode() {
   return V8RecordReplayDependencyGraphCauseExecutionNode();
+}
+
+size_t DependencyGraphNodelessExecutionCount() {
+  return V8RecordReplayDependencyGraphNodelessExecutionCount();
 }
 
 AutoMarkerDependencyExecution::AutoMarkerDependencyExecution(const char* reason, const char* name) {

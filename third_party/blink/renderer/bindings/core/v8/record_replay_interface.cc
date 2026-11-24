@@ -3313,10 +3313,29 @@ void RecordReplayEventListener::Trace(Visitor* visitor) const {
   EventListener::Trace(visitor);
 }
 
+// Every domMutation node has a cause execution. Replay diagnostic, gated like
+// V8's DependencyGraphMissingExecution check in Execution::Invoke.
+static void CheckDOMMutationHasCauseExecution(const char* type) {
+  if (!recordreplay::IsReplaying() || recordreplay::AreEventsDisallowed() ||
+      recordreplay::DependencyGraphCauseExecutionNode()) {
+    return;
+  }
+  static bool show_warning = !!getenv("RECORD_REPLAY_WARN_MISSING_EXECUTION");
+  if (show_warning) {
+    recordreplay::Warning(
+        "DependencyGraphMissingDOMExecution",
+        {{"mutationType", type},
+         {"openExecutions",
+          recordreplay::DependencyGraphNodelessExecutionCount()}});
+  }
+}
+
 int RecordReplayOnDOMMutation(Node& target, const char* type) {
   if (!recordreplay::DependencyGraphEnabled()) {
     return -1;
   }
+
+  CheckDOMMutationHasCauseExecution(type);
 
   base::Value::Dict info;
   info.Set("kind", "domMutation");

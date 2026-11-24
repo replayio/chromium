@@ -339,6 +339,10 @@ void EndDependencyExecution();
 // only dependency graph calls on it.
 int DependencyGraphCauseExecutionNode();
 
+// Open executions without a node (id 0). Same replay-time contract as
+// DependencyGraphCauseExecutionNode.
+size_t DependencyGraphNodelessExecutionCount();
+
 struct AutoDependencyExecution {
   AutoDependencyExecution(int node) {
     BeginDependencyExecution(node);
