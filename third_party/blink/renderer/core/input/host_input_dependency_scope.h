@@ -25,8 +25,8 @@ enum class InputActionPairing {
 };
 
 // Dependency graph node hostInput{operation} spanning a step the browser takes
-// on user input: the handling of a host input event, or a sub-step outside any
-// event dispatch.
+// on user input: the handling of a host input event or of a widget's text
+// input call, or a sub-step outside any event dispatch.
 class CORE_EXPORT HostInputDependencyScope {
   STACK_ALLOCATED();
 
@@ -40,11 +40,21 @@ class CORE_EXPORT HostInputDependencyScope {
     kCompositionUpdate,
   };
 
+  // Text input calls of a widget.
+  enum class TextStep {
+    // CommitText: committed text, of an IME or Input.insertText.
+    kCommit,
+    kSetComposition,
+    kFinishComposing,
+  };
+
   explicit HostInputDependencyScope(Operation);
   // The step of a host input event a widget handles, with the event's typed
   // fields; nothing for an event which is no step. A step which starts an
   // input action takes a bookmark, the action's point, also while recording.
   explicit HostInputDependencyScope(const WebInputEvent&);
+  // The step of a text input call; a commit starts an input action, as above.
+  explicit HostInputDependencyScope(TextStep);
   HostInputDependencyScope(const HostInputDependencyScope&) = delete;
   HostInputDependencyScope& operator=(const HostInputDependencyScope&) = delete;
   ~HostInputDependencyScope();
@@ -57,13 +67,16 @@ class CORE_EXPORT HostInputDependencyScope {
  private:
   friend class InputActionHolder;
 
-  // The scope of the innermost host input event a widget handles. Main thread
-  // only: widgets handle input there.
+  void EnterEventScope();
+  void OpenStep(int node_id);
+
+  // The scope of the innermost host input event or text input call a widget
+  // handles. Main thread only: widgets handle input there.
   static const HostInputDependencyScope* current_event_scope_;
 
   bool is_event_scope_ = false;
   const HostInputDependencyScope* outer_event_scope_ = nullptr;
-  // 0: the event is no step, or the graph is disabled.
+  // 0: no step, or the graph is disabled.
   int step_node_id_ = 0;
   // The pairing state the step writes (a start step) or reads (a continuation
   // step).

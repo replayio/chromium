@@ -3453,6 +3453,8 @@ bool WebFrameWidgetImpl::SetComposition(
   if (!controller)
     return false;
 
+  HostInputDependencyScope dependency_scope(
+      HostInputDependencyScope::TextStep::kSetComposition);
   return controller->SetComposition(
       text, ime_text_spans,
       replacement_range.IsValid()
@@ -3470,6 +3472,8 @@ void WebFrameWidgetImpl::CommitText(
   WebInputMethodController* controller = GetActiveWebInputMethodController();
   if (!controller)
     return;
+  HostInputDependencyScope dependency_scope(
+      HostInputDependencyScope::TextStep::kCommit);
   controller->CommitText(
       text, ime_text_spans,
       replacement_range.IsValid()
@@ -3483,6 +3487,8 @@ void WebFrameWidgetImpl::FinishComposingText(bool keep_selection) {
   WebInputMethodController* controller = GetActiveWebInputMethodController();
   if (!controller)
     return;
+  HostInputDependencyScope dependency_scope(
+      HostInputDependencyScope::TextStep::kFinishComposing);
   controller->FinishComposingText(
       keep_selection ? WebInputMethodController::kKeepSelection
                      : WebInputMethodController::kDoNotKeepSelection);
