@@ -13,6 +13,7 @@
 #include "third_party/blink/renderer/core/dom/synchronous_mutation_observer.h"
 #include "third_party/blink/renderer/core/events/pointer_event_factory.h"
 #include "third_party/blink/renderer/core/input/boundary_event_dispatcher.h"
+#include "third_party/blink/renderer/core/input/host_input_dependency_scope.h"
 #include "third_party/blink/renderer/core/page/event_with_hit_test_results.h"
 #include "third_party/blink/renderer/platform/timer.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
@@ -227,6 +228,10 @@ class CORE_EXPORT MouseEventManager final
   unsigned svg_pan_ : 1;
   unsigned captures_dragging_ : 1;
   unsigned mouse_down_may_start_drag_ : 1;
+
+  // The input action of the press mouse_pressed_ is set by.
+  InputActionHolder record_replay_press_action_{
+      InputActionPairing::kMousePressRelease};
 
   Member<Node> mouse_press_node_;
 
