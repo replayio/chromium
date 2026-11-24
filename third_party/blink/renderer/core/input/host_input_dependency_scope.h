@@ -57,7 +57,8 @@ class CORE_EXPORT HostInputDependencyScope {
  private:
   friend class InputActionHolder;
 
-  // The scope of the innermost host input event a widget handles.
+  // The scope of the innermost host input event a widget handles. Main thread
+  // only: widgets handle input there.
   static const HostInputDependencyScope* current_event_scope_;
 
   bool is_event_scope_ = false;

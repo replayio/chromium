@@ -6,6 +6,7 @@
 
 #include <string>
 
+#include "base/check.h"
 #include "base/json/json_writer.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/values.h"
@@ -14,6 +15,7 @@
 #include "third_party/blink/public/common/input/web_mouse_event.h"
 #include "third_party/blink/public/mojom/frame/user_activation_notification_type.mojom-blink.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
+#include "third_party/blink/renderer/platform/wtf/wtf.h"
 #include "ui/events/keycodes/dom/dom_code.h"
 #include "ui/events/keycodes/dom/keycode_converter.h"
 
@@ -248,6 +250,7 @@ HostInputDependencyScope::HostInputDependencyScope(Operation operation) {
 
 HostInputDependencyScope::HostInputDependencyScope(const WebInputEvent& event)
     : is_event_scope_(true), outer_event_scope_(current_event_scope_) {
+  DCHECK(IsMainThread());
   current_event_scope_ = this;
   absl::optional<StepOperation> operation = StepOperationOf(event);
   if (!operation)
@@ -283,6 +286,7 @@ void HostInputDependencyScope::RecordUserActivation(
 }
 
 void InputActionHolder::Hold() {
+  DCHECK(IsMainThread());
   const HostInputDependencyScope* step =
       HostInputDependencyScope::current_event_scope_;
   action_node_id_ =
@@ -299,6 +303,7 @@ void InputActionHolder::Hold(const LocalFrame& frame) {
 }
 
 void InputActionHolder::Consume() const {
+  DCHECK(IsMainThread());
   const HostInputDependencyScope* step =
       HostInputDependencyScope::current_event_scope_;
   if (!action_node_id_ || !step || step->consumes_ != pairing_)
