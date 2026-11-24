@@ -35,6 +35,7 @@ void FinishRecording();
 // MaybeTerminate(nullptr, nullptr) to finish the recording if requested and to
 // clear the callback.
 void MaybeTerminate(void (*callback)(void*), void* data);
+bool IsMainThread();
 
 void Print(const char* format, ...);
 void Diagnostic(const char* format, ...);

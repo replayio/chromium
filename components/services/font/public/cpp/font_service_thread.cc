@@ -25,11 +25,13 @@ namespace {
 // font service reply never runs that task, because the browser no longer
 // answers, and Chromium kills the renderer before the recording is finished.
 // As in SyncHandleRegistry::Wait, the recorder wakes this wait and the
-// recording is finished from here. Leaving the wait clears the recorder's one
+// recording is finished from here. Other threads don't hold up the finish, so
+// they wait as upstream does. Leaving the wait clears the recorder's one
 // callback, so a lookup nested in an outer SyncHandleRegistry::Wait leaves
 // that outer wait unwakeable, as nested SyncHandleRegistry waits already do.
 void RecordReplayWaitForReply(base::WaitableEvent& done_event) {
-  if (!recordreplay::IsRecordingOrReplaying()) {
+  if (!recordreplay::IsRecordingOrReplaying() ||
+      !recordreplay::IsMainThread()) {
     done_event.Wait();
     return;
   }
@@ -38,7 +40,13 @@ void RecordReplayWaitForReply(base::WaitableEvent& done_event) {
       [](void* data) { static_cast<base::WaitableEvent*>(data)->Signal(); },
       &quit_event);
   base::WaitableEvent* events[] = {&done_event, &quit_event};
-  base::WaitableEvent::WaitMany(events, 2);
+  if (base::WaitableEvent::WaitMany(events, 2) == 1) {
+    // Finishes the recording and doesn't return, unless it can't be finished
+    // here. The font service task still signals done_event, which lives on
+    // the caller's stack, so the wait goes on until it does.
+    recordreplay::MaybeTerminate(nullptr, nullptr);
+    done_event.Wait();
+  }
   recordreplay::MaybeTerminate(nullptr, nullptr);
 }
 
