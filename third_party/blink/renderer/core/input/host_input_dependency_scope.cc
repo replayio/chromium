@@ -6,6 +6,7 @@
 
 #include <string>
 
+#include "base/check.h"
 #include "base/json/json_writer.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/values.h"
@@ -13,6 +14,8 @@
 #include "third_party/blink/public/common/input/web_keyboard_event.h"
 #include "third_party/blink/public/common/input/web_mouse_event.h"
 #include "third_party/blink/public/mojom/frame/user_activation_notification_type.mojom-blink.h"
+#include "third_party/blink/renderer/core/frame/local_frame.h"
+#include "third_party/blink/renderer/platform/wtf/wtf.h"
 #include "ui/events/keycodes/dom/dom_code.h"
 #include "ui/events/keycodes/dom/keycode_converter.h"
 
@@ -83,6 +86,21 @@ absl::optional<StepOperation> StepOperationOf(const WebInputEvent& event) {
     case WebInputEvent::Type::kChar:
       return StepOperation::kChar;
     default:
+      return absl::nullopt;
+  }
+}
+
+absl::optional<InputActionPairing> PairingOf(const WebInputEvent& event) {
+  switch (event.GetType()) {
+    case WebInputEvent::Type::kMouseDown:
+    case WebInputEvent::Type::kMouseUp:
+      return InputActionPairing::kMousePressRelease;
+    case WebInputEvent::Type::kRawKeyDown:
+    case WebInputEvent::Type::kKeyDown:
+    case WebInputEvent::Type::kChar:
+      return InputActionPairing::kKeyDownChar;
+    default:
+      // A key up: Blink keeps no key down -> key up state.
       return absl::nullopt;
   }
 }
@@ -217,6 +235,10 @@ int NewNode(const base::Value::Dict& info) {
 
 }  // namespace
 
+// static
+const HostInputDependencyScope* HostInputDependencyScope::current_event_scope_ =
+    nullptr;
+
 HostInputDependencyScope::HostInputDependencyScope(Operation operation) {
   if (!recordreplay::DependencyGraphEnabled())
     return;
@@ -226,16 +248,30 @@ HostInputDependencyScope::HostInputDependencyScope(Operation operation) {
   execute_.emplace(NewNode(info));
 }
 
-HostInputDependencyScope::HostInputDependencyScope(const WebInputEvent& event) {
+HostInputDependencyScope::HostInputDependencyScope(const WebInputEvent& event)
+    : is_event_scope_(true), outer_event_scope_(current_event_scope_) {
+  DCHECK(IsMainThread());
+  current_event_scope_ = this;
   absl::optional<StepOperation> operation = StepOperationOf(event);
   if (!operation)
     return;
+  StepClass step_class = StepClassOf(*operation);
   absl::optional<uint64_t> bookmark;
-  if (StepClassOf(*operation) == StepClass::kStart)
+  if (step_class == StepClass::kStart)
     bookmark = NewActionBookmark();
   if (!recordreplay::DependencyGraphEnabled())
     return;
-  execute_.emplace(NewNode(StepInfo(event, *operation, bookmark)));
+  step_node_id_ = NewNode(StepInfo(event, *operation, bookmark));
+  if (step_class == StepClass::kStart)
+    holds_ = PairingOf(event);
+  else
+    consumes_ = PairingOf(event);
+  execute_.emplace(step_node_id_);
+}
+
+HostInputDependencyScope::~HostInputDependencyScope() {
+  if (is_event_scope_)
+    current_event_scope_ = outer_event_scope_;
 }
 
 // static
@@ -247,6 +283,33 @@ void HostInputDependencyScope::RecordUserActivation(
   info.Set("kind", "userActivation");
   info.Set("notificationType", NotificationTypeName(notification_type));
   NewNode(info);
+}
+
+void InputActionHolder::Hold() {
+  DCHECK(IsMainThread());
+  const HostInputDependencyScope* step =
+      HostInputDependencyScope::current_event_scope_;
+  action_node_id_ =
+      (step && step->holds_ == pairing_) ? step->step_node_id_ : 0;
+}
+
+void InputActionHolder::Hold(const LocalFrame& frame) {
+  // The local root's state alone pairs each press and release of its widget;
+  // the step also writes and reads the state of the frames below it
+  // (EventHandler::PassMousePressEventToSubframe,
+  // EventHandler::PassMouseReleaseEventToSubframe).
+  if (frame.IsLocalRoot())
+    Hold();
+}
+
+void InputActionHolder::Consume() const {
+  DCHECK(IsMainThread());
+  const HostInputDependencyScope* step =
+      HostInputDependencyScope::current_event_scope_;
+  if (!action_node_id_ || !step || step->consumes_ != pairing_)
+    return;
+  recordreplay::AddDependencyGraphEdge(action_node_id_, step->step_node_id_,
+                                       "{\"kind\":\"inputActionStep\"}");
 }
 
 }  // namespace blink

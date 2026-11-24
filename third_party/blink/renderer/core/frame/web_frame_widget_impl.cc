@@ -719,6 +719,7 @@ WebInputEventResult WebFrameWidgetImpl::HandleKeyEvent(
   // event and a keyUp event. We reset this flag here as this is a new keyDown
   // event.
   suppress_next_keypress_event_ = false;
+  record_replay_key_down_action_.Hold();
 
   // If there is a popup open, it should be the one processing the event,
   // not the page.
@@ -1086,6 +1087,8 @@ WebInputEventResult WebFrameWidgetImpl::HandleCharEvent(
   // only applies to the current keyPress event.
   bool suppress = suppress_next_keypress_event_;
   suppress_next_keypress_event_ = false;
+  record_replay_key_down_action_.Consume();
+  record_replay_key_down_action_.Drop();
 
   // If there is a popup open, it should be the one processing the event,
   // not the page.
