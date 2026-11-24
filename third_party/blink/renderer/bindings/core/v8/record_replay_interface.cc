@@ -3314,8 +3314,9 @@ void RecordReplayEventListener::Trace(Visitor* visitor) const {
 }
 
 // Every domMutation node has a cause execution. Replay diagnostic, gated like
-// V8's DependencyGraphMissingExecution check in Execution::Invoke.
-static void CheckDOMMutationHasCauseExecution(const char* type) {
+// V8's DependencyGraphMissingExecution check in Execution::Invoke. Called after
+// the node's creation, which leaves the execution stack unchanged.
+static void CheckDOMMutationHasCauseExecution(int node_id, const char* type) {
   if (!recordreplay::IsReplaying() || recordreplay::AreEventsDisallowed() ||
       recordreplay::DependencyGraphCauseExecutionNode()) {
     return;
@@ -3324,7 +3325,8 @@ static void CheckDOMMutationHasCauseExecution(const char* type) {
   if (show_warning) {
     recordreplay::Warning(
         "DependencyGraphMissingDOMExecution",
-        {{"mutationType", type},
+        {{"nodeId", node_id},
+         {"mutationType", type},
          {"openExecutions",
           recordreplay::DependencyGraphNodelessExecutionCount()}});
   }
@@ -3335,15 +3337,15 @@ int RecordReplayOnDOMMutation(Node& target, const char* type) {
     return -1;
   }
 
-  CheckDOMMutationHasCauseExecution(type);
-
   base::Value::Dict info;
   info.Set("kind", "domMutation");
   info.Set("mutationType", type);
   info.Set("mutationNode", target.RecordReplayId());
   std::string json;
   base::JSONWriter::Write(info, &json);
-  return recordreplay::NewDependencyGraphNode(json.c_str());
+  int node_id = recordreplay::NewDependencyGraphNode(json.c_str());
+  CheckDOMMutationHasCauseExecution(node_id, type);
+  return node_id;
 }
 
 }  // namespace blink
