@@ -19,43 +19,37 @@
 
 #include "base/record_replay.h"
 
-namespace recordreplay {
-// Not declared in base/record_replay.h: see SyncHandleRegistry::Wait.
-void MaybeTerminate(void (*callback)(void*), void* data);
-}  // namespace recordreplay
-
 namespace font_service {
 namespace internal {
 
 namespace {
 
-// Waits for a reply from the font service. The reply, and the news that the
-// service has gone, both come through the IO thread, and a renderer's IO
-// thread stops for good when the browser goes away: it asks the main thread
-// to finish the recording and waits. A main thread waiting here for a font
-// would then never wake, and the recording would never be finished. So the IO
-// thread can wake this wait, as it can a sync mojo call (see
-// SyncHandleRegistry::Wait), and the recording is finished from here.
-void WaitForFontService(base::WaitableEvent* done_event) {
+// When the browser goes away, the IO thread posts the main thread a task that
+// finishes the recording and then sleeps. A main thread waiting here for a
+// font service reply never runs that task, because the browser no longer
+// answers, and Chromium kills the renderer before the recording is finished.
+// As in SyncHandleRegistry::Wait, the recorder wakes this wait and the
+// recording is finished from here. Other threads don't hold up the finish, so
+// they wait as upstream does. Leaving the wait clears the recorder's one
+// callback, so a lookup nested in an outer SyncHandleRegistry::Wait leaves
+// that outer wait unwakeable, as nested SyncHandleRegistry waits already do.
+void RecordReplayWaitForReply(base::WaitableEvent& done_event) {
   if (!recordreplay::IsRecordingOrReplaying() ||
       !recordreplay::IsMainThread()) {
-    done_event->Wait();
+    done_event.Wait();
     return;
   }
   base::WaitableEvent quit_event;
   recordreplay::MaybeTerminate(
       [](void* data) { static_cast<base::WaitableEvent*>(data)->Signal(); },
       &quit_event);
-  base::WaitableEvent* events[] = {done_event, &quit_event};
-  bool woken = false;
-  while (!woken) {
-    if (base::WaitableEvent::WaitMany(events) == 0) {
-      break;
-    }
-    woken = true;
-    // Finishes the recording, and doesn't return, if that was asked for.
+  base::WaitableEvent* events[] = {&done_event, &quit_event};
+  if (base::WaitableEvent::WaitMany(events) == 1) {
+    // Finishes the recording and doesn't return, unless it can't be finished
+    // here. The font service task still signals done_event, which lives on
+    // the caller's stack, so the wait goes on until it does.
     recordreplay::MaybeTerminate(nullptr, nullptr);
-    done_event->Wait();
+    done_event.Wait();
   }
   recordreplay::MaybeTerminate(nullptr, nullptr);
 }
@@ -109,7 +103,7 @@ bool FontServiceThread::MatchFamilyName(
       base::BindOnce(&FontServiceThread::MatchFamilyNameImpl, this, &done_event,
                      family_name, requested_style, &out_valid,
                      out_font_identity, out_family_name, out_style));
-  WaitForFontService(&done_event);
+  RecordReplayWaitForReply(done_event);
 
   base::UmaHistogramMicrosecondsTimes(
       "Blink.Fonts.FontServiceThread.MatchFamilyNameTime", timer.Elapsed());
@@ -137,7 +131,7 @@ bool FontServiceThread::FallbackFontForCharacter(
                      &done_event, character, std::move(locale), &out_valid,
                      out_font_identity, out_family_name, out_is_bold,
                      out_is_italic));
-  WaitForFontService(&done_event);
+  RecordReplayWaitForReply(done_event);
 
   return out_valid;
 }
@@ -161,7 +155,7 @@ bool FontServiceThread::FontRenderStyleForStrike(
       base::BindOnce(&FontServiceThread::FontRenderStyleForStrikeImpl, this,
                      &done_event, family, size, is_bold, is_italic,
                      device_scale_factor, &out_valid, out_font_render_style));
-  WaitForFontService(&done_event);
+  RecordReplayWaitForReply(done_event);
   return out_valid;
 }
 
@@ -181,7 +175,7 @@ bool FontServiceThread::MatchFontByPostscriptNameOrFullFontName(
           &FontServiceThread::MatchFontByPostscriptNameOrFullFontNameImpl, this,
           &done_event, &out_valid, std::move(postscript_name_or_full_font_name),
           out_identity));
-  WaitForFontService(&done_event);
+  RecordReplayWaitForReply(done_event);
   return out_valid;
 }
 
@@ -204,7 +198,7 @@ void FontServiceThread::MatchFontWithFallback(
       base::BindOnce(&FontServiceThread::MatchFontWithFallbackImpl, this,
                      &done_event, std::move(family), is_bold, is_italic,
                      charset, fallback_family_type, out_font_file_handle));
-  WaitForFontService(&done_event);
+  RecordReplayWaitForReply(done_event);
 }
 #endif  // BUILDFLAG(ENABLE_PDF)
 
@@ -224,7 +218,7 @@ scoped_refptr<MappedFontFile> FontServiceThread::OpenStream(
   task_runner_->PostTask(
       FROM_HERE, base::BindOnce(&FontServiceThread::OpenStreamImpl, this,
                                 &done_event, &stream_file, identity.fID));
-  WaitForFontService(&done_event);
+  RecordReplayWaitForReply(done_event);
 
   base::UmaHistogramMicrosecondsTimes(
       "Blink.Fonts.FontServiceThread.OpenStreamTime", timer.Elapsed());

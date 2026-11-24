@@ -18,14 +18,6 @@
 
 #include "base/record_replay.h"
 
-namespace recordreplay {
-
-// Used to make sure we finish recordings on the main thread, even if we're
-// blocked in a sync event.
-void MaybeTerminate(void (*callback)(void*), void* data);
-
-} // namespace recordreplay
-
 namespace mojo {
 
 SyncHandleRegistry::Subscription::Subscription(base::OnceClosure remove_closure,
