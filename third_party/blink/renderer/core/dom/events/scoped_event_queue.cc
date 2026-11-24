@@ -34,6 +34,7 @@
 
 #include "base/memory/ptr_util.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
+#include "third_party/blink/renderer/core/dom/events/event_dependency_scope.h"
 #include "third_party/blink/renderer/core/dom/events/event_dispatcher.h"
 #include "third_party/blink/renderer/core/dom/events/event_target.h"
 
@@ -42,7 +43,7 @@ namespace blink {
 ScopedEventQueue* ScopedEventQueue::instance_ = nullptr;
 
 ScopedEventQueue::ScopedEventQueue()
-    : queued_events_(MakeGarbageCollected<HeapVector<Member<Event>>>()),
+    : queued_events_(MakeGarbageCollected<HeapVector<ScopedQueuedEvent>>()),
       scoping_level_(0) {}
 
 ScopedEventQueue::~ScopedEventQueue() {
@@ -58,18 +59,23 @@ void ScopedEventQueue::Initialize() {
 }
 
 void ScopedEventQueue::EnqueueEvent(Event& event) {
-  if (ShouldQueueEvents())
-    queued_events_->push_back(event);
-  else
+  if (ShouldQueueEvents()) {
+    queued_events_->push_back(ScopedQueuedEvent{
+        &event, EventQueueDispatchScope::ScheduleIfCaused()});
+  } else {
     DispatchEvent(event);
+  }
 }
 
 void ScopedEventQueue::DispatchAllEvents() {
-  HeapVector<Member<Event>> queued_events;
+  HeapVector<ScopedQueuedEvent> queued_events;
   queued_events.swap(*queued_events_);
 
-  for (auto& event : queued_events)
-    DispatchEvent(*event);
+  for (auto& queued_event : queued_events) {
+    EventQueueDispatchScope dependency_scope(
+        queued_event.record_replay_scheduled_node_id);
+    DispatchEvent(*queued_event.event);
+  }
 }
 
 void ScopedEventQueue::DispatchEvent(Event& event) const {

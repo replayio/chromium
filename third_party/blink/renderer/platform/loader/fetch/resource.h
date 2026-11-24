@@ -248,9 +248,9 @@ class PLATFORM_EXPORT Resource : public GarbageCollected<Resource>,
   bool IsLoadEventBlockingResourceType() const;
 
   // Computes the status of an object after loading. Updates the expire date on
-  // the cache entry file
-  virtual void Finish(base::TimeTicks finish_time,
-                      base::SingleThreadTaskRunner*);
+  // the cache entry file. Runs FinishInternal() inside the resourceFinished
+  // dependency graph execution.
+  void Finish(base::TimeTicks finish_time, base::SingleThreadTaskRunner*);
   void FinishForTest() { Finish(base::TimeTicks(), nullptr); }
 
   virtual scoped_refptr<const SharedBuffer> ResourceBuffer() const {
@@ -445,6 +445,10 @@ class PLATFORM_EXPORT Resource : public GarbageCollected<Resource>,
 
   virtual void NotifyDataReceived(const char* data, size_t size);
   virtual void NotifyFinished();
+
+  // The finish step of Finish(). An override ends with the base step.
+  virtual void FinishInternal(base::TimeTicks finish_time,
+                              base::SingleThreadTaskRunner*);
 
   void MarkClientFinished(ResourceClient*);
 

@@ -13,6 +13,8 @@ blink_core_sources_input = [
   "event_handling_util.h",
   "gesture_manager.cc",
   "gesture_manager.h",
+  "host_input_dependency_scope.cc",
+  "host_input_dependency_scope.h",
   "input_device_capabilities.cc",
   "input_device_capabilities.h",
   "keyboard_event_manager.cc",
