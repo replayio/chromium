@@ -23,11 +23,14 @@ namespace blink {
 
 namespace {
 
-// The step of a host input event.
+// The step of a host input event or of a text input call.
 enum class StepOperation {
   kPress,
   kRelease,
   kChar,
+  kTextCommit,
+  kCompositionSet,
+  kCompositionFinish,
 };
 
 enum class StepClass {
@@ -35,6 +38,8 @@ enum class StepClass {
   kStart,
   // A later step of an input action.
   kContinuation,
+  // A step of no input action.
+  kPlain,
 };
 
 const char* OperationName(HostInputDependencyScope::Operation operation) {
@@ -54,16 +59,37 @@ const char* StepOperationName(StepOperation operation) {
       return "release";
     case StepOperation::kChar:
       return "char";
+    case StepOperation::kTextCommit:
+      return "textCommit";
+    case StepOperation::kCompositionSet:
+      return "compositionSet";
+    case StepOperation::kCompositionFinish:
+      return "compositionFinish";
   }
 }
 
 StepClass StepClassOf(StepOperation operation) {
   switch (operation) {
     case StepOperation::kPress:
+    case StepOperation::kTextCommit:
       return StepClass::kStart;
     case StepOperation::kRelease:
     case StepOperation::kChar:
       return StepClass::kContinuation;
+    case StepOperation::kCompositionSet:
+    case StepOperation::kCompositionFinish:
+      return StepClass::kPlain;
+  }
+}
+
+StepOperation StepOperationOf(HostInputDependencyScope::TextStep text_step) {
+  switch (text_step) {
+    case HostInputDependencyScope::TextStep::kCommit:
+      return StepOperation::kTextCommit;
+    case HostInputDependencyScope::TextStep::kSetComposition:
+      return StepOperation::kCompositionSet;
+    case HostInputDependencyScope::TextStep::kFinishComposing:
+      return StepOperation::kCompositionFinish;
   }
 }
 
@@ -157,17 +183,27 @@ void SetKeyFields(const WebKeyboardEvent& event,
   }
 }
 
-base::Value::Dict StepInfo(const WebInputEvent& event,
-                           StepOperation operation,
-                           absl::optional<uint64_t> bookmark) {
-  base::Value::Dict info;
-  info.Set("kind", "hostInput");
-  info.Set("operation", StepOperationName(operation));
+void SetEventFields(const WebInputEvent& event,
+                    StepOperation operation,
+                    base::Value::Dict& info) {
   if (WebInputEvent::IsMouseEventType(event.GetType())) {
     SetMouseFields(static_cast<const WebMouseEvent&>(event), info);
   } else {
     SetKeyFields(static_cast<const WebKeyboardEvent&>(event), operation, info);
   }
+}
+
+// Of the text steps, only a commit names a device.
+void SetTextFields(StepOperation operation, base::Value::Dict& info) {
+  if (operation == StepOperation::kTextCommit)
+    info.Set("device", "ime");
+}
+
+base::Value::Dict StepInfo(StepOperation operation,
+                           absl::optional<uint64_t> bookmark) {
+  base::Value::Dict info;
+  info.Set("kind", "hostInput");
+  info.Set("operation", StepOperationName(operation));
   if (bookmark)
     info.Set("bookmark", base::checked_cast<int>(*bookmark));
   return info;
@@ -186,6 +222,12 @@ absl::optional<uint64_t> NewActionBookmark() {
   if (!bookmark)
     return absl::nullopt;
   return bookmark;
+}
+
+absl::optional<uint64_t> StepBookmark(StepOperation operation) {
+  if (StepClassOf(operation) != StepClass::kStart)
+    return absl::nullopt;
+  return NewActionBookmark();
 }
 
 const char* NotificationTypeName(
@@ -248,30 +290,55 @@ HostInputDependencyScope::HostInputDependencyScope(Operation operation) {
   execute_.emplace(NewNode(info));
 }
 
-HostInputDependencyScope::HostInputDependencyScope(const WebInputEvent& event)
-    : is_event_scope_(true), outer_event_scope_(current_event_scope_) {
-  DCHECK(IsMainThread());
-  current_event_scope_ = this;
+HostInputDependencyScope::HostInputDependencyScope(const WebInputEvent& event) {
+  EnterEventScope();
   absl::optional<StepOperation> operation = StepOperationOf(event);
   if (!operation)
     return;
-  StepClass step_class = StepClassOf(*operation);
-  absl::optional<uint64_t> bookmark;
-  if (step_class == StepClass::kStart)
-    bookmark = NewActionBookmark();
+  absl::optional<uint64_t> bookmark = StepBookmark(*operation);
   if (!recordreplay::DependencyGraphEnabled())
     return;
-  step_node_id_ = NewNode(StepInfo(event, *operation, bookmark));
-  if (step_class == StepClass::kStart)
-    holds_ = PairingOf(event);
-  else
-    consumes_ = PairingOf(event);
-  execute_.emplace(step_node_id_);
+  base::Value::Dict info = StepInfo(*operation, bookmark);
+  SetEventFields(event, *operation, info);
+  OpenStep(NewNode(info));
+  switch (StepClassOf(*operation)) {
+    case StepClass::kStart:
+      holds_ = PairingOf(event);
+      break;
+    case StepClass::kContinuation:
+      consumes_ = PairingOf(event);
+      break;
+    case StepClass::kPlain:
+      break;
+  }
+}
+
+HostInputDependencyScope::HostInputDependencyScope(TextStep text_step) {
+  EnterEventScope();
+  StepOperation operation = StepOperationOf(text_step);
+  absl::optional<uint64_t> bookmark = StepBookmark(operation);
+  if (!recordreplay::DependencyGraphEnabled())
+    return;
+  base::Value::Dict info = StepInfo(operation, bookmark);
+  SetTextFields(operation, info);
+  OpenStep(NewNode(info));
 }
 
 HostInputDependencyScope::~HostInputDependencyScope() {
   if (is_event_scope_)
     current_event_scope_ = outer_event_scope_;
+}
+
+void HostInputDependencyScope::EnterEventScope() {
+  DCHECK(IsMainThread());
+  is_event_scope_ = true;
+  outer_event_scope_ = current_event_scope_;
+  current_event_scope_ = this;
+}
+
+void HostInputDependencyScope::OpenStep(int node_id) {
+  step_node_id_ = node_id;
+  execute_.emplace(node_id);
 }
 
 // static
