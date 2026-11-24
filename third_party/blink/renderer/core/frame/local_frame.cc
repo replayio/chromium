@@ -148,6 +148,7 @@
 #include "third_party/blink/renderer/core/html/media/html_video_element.h"
 #include "third_party/blink/renderer/core/html/plugin_document.h"
 #include "third_party/blink/renderer/core/input/event_handler.h"
+#include "third_party/blink/renderer/core/input/host_input_dependency_scope.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
 #include "third_party/blink/renderer/core/inspector/inspector_issue_reporter.h"
 #include "third_party/blink/renderer/core/inspector/inspector_issue_storage.h"
@@ -2356,6 +2357,7 @@ bool LocalFrame::ConsumeTransientUserActivation(
 void LocalFrame::NotifyUserActivation(
     mojom::blink::UserActivationNotificationType notification_type,
     bool need_browser_verification) {
+  HostInputDependencyScope::RecordUserActivation(notification_type);
   mojom::blink::UserActivationUpdateType update_type =
       need_browser_verification
           ? mojom::blink::UserActivationUpdateType::
