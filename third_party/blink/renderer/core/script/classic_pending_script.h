@@ -72,6 +72,7 @@ class CORE_EXPORT ClassicPendingScript final
   bool IsExternal() const override { return is_external_; }
   bool WasCanceled() const override;
   KURL UrlForTracing() const override;
+  recordreplay::ConsumedNetworkRequest ConsumedRequest() const override;
   void DisposeInternal() override;
 
   // ScriptCacheConsumerClient:

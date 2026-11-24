@@ -89,6 +89,10 @@ class ImageResource::ImageResourceInfoImpl final
   const ResourceResponse& GetResponse() const override {
     return resource_->GetResponse();
   }
+  recordreplay::ConsumedNetworkRequest ConsumedRequest() const override {
+    return recordreplay::ConsumedNetworkRequest::Request(
+        resource_->InspectorId());
+  }
   bool IsCacheValidator() const override {
     return resource_->IsCacheValidator();
   }
@@ -396,8 +400,8 @@ void ImageResource::NotifyStartLoad() {
   GetContent()->NotifyStartLoad();
 }
 
-void ImageResource::Finish(base::TimeTicks load_finish_time,
-                           base::SingleThreadTaskRunner* task_runner) {
+void ImageResource::FinishInternal(base::TimeTicks load_finish_time,
+                                   base::SingleThreadTaskRunner* task_runner) {
   if (multipart_parser_) {
     if (!ErrorOccurred())
       multipart_parser_->Finish();
@@ -412,7 +416,7 @@ void ImageResource::Finish(base::TimeTicks load_finish_time,
     // https://docs.google.com/document/d/1v0yTAZ6wkqX2U_M6BNIGUJpM1s0TIw1VsqpxoL7aciY/edit?usp=sharing
     ClearData();
   }
-  Resource::Finish(load_finish_time, task_runner);
+  Resource::FinishInternal(load_finish_time, task_runner);
 }
 
 void ImageResource::FinishAsError(const ResourceError& error,

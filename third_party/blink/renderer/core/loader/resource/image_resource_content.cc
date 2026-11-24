@@ -46,6 +46,9 @@ class NullImageResourceInfo final
   const KURL& Url() const override { return url_; }
   base::TimeTicks LoadResponseEnd() const override { return base::TimeTicks(); }
   const ResourceResponse& GetResponse() const override { return response_; }
+  recordreplay::ConsumedNetworkRequest ConsumedRequest() const override {
+    return recordreplay::ConsumedNetworkRequest::None();
+  }
   bool IsCacheValidator() const override { return false; }
   bool IsAccessAllowed(
       DoesCurrentFrameHaveSingleSecurityOrigin) const override {
@@ -707,6 +710,11 @@ bool ImageResourceContent::HasDevicePixelRatioHeaderValue() const {
 
 const ResourceResponse& ImageResourceContent::GetResponse() const {
   return info_->GetResponse();
+}
+
+recordreplay::ConsumedNetworkRequest ImageResourceContent::ConsumedRequest()
+    const {
+  return info_->ConsumedRequest();
 }
 
 absl::optional<ResourceError> ImageResourceContent::GetResourceError() const {

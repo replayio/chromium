@@ -126,6 +126,7 @@ class CORE_EXPORT Response final : public ScriptWrappable,
   String InternalMIMEType() const;
 
   std::string GetUrl() const override;
+  recordreplay::ConsumedNetworkRequest GetConsumedRequest() const override;
 
   const Vector<KURL>& InternalURLList() const;
 

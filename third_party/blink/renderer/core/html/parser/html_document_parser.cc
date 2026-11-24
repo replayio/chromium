@@ -77,6 +77,7 @@
 
 #include "base/json/json_writer.h"
 #include "base/record_replay.h"
+#include "base/record_replay_network_request.h"
 
 // V8 API for HTML parsing activity that will be reported to the record/replay driver.
 extern "C" void V8RecordReplayHTMLParseStart(void* token, const char* url);
@@ -837,6 +838,14 @@ void HTMLDocumentParser::ForcePlaintextForTextDocument() {
   token_producer_->ForcePlaintext();
 }
 
+// A fragment parser consumes no request.
+static recordreplay::ConsumedNetworkRequest ParserConsumedRequest(
+    const Document& document,
+    bool parsing_fragment) {
+  return parsing_fragment ? recordreplay::ConsumedNetworkRequest::None()
+                          : document.RecordReplayContentRequest();
+}
+
 bool HTMLDocumentParser::PumpTokenizer() {
   DCHECK(!GetDocument()->IsPrefetchOnly());
   DCHECK(!IsStopped());
@@ -847,6 +856,8 @@ bool HTMLDocumentParser::PumpTokenizer() {
     base::Value::Dict info;
     info.Set("kind", "documentPumpTokenizer");
     info.Set("url", GetDocument()->Url().GetString().Utf8());
+    recordreplay::SetConsumedRequestId(
+        info, ParserConsumedRequest(*GetDocument(), IsParsingFragment()));
     std::string json;
     base::JSONWriter::Write(info, &json);
     execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));
@@ -1138,6 +1149,8 @@ void HTMLDocumentParser::Append(const String& input_source) {
     base::Value::Dict info;
     info.Set("kind", "documentAppendString");
     info.Set("url", GetDocument()->Url().GetString().Utf8());
+    recordreplay::SetConsumedRequestId(
+        info, ParserConsumedRequest(*GetDocument(), IsParsingFragment()));
     info.Set("length", (int)input_source.Utf8().length());
     std::string json;
     base::JSONWriter::Write(info, &json);

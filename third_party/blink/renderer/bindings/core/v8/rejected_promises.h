@@ -35,7 +35,8 @@ class RejectedPromises final : public RefCounted<RejectedPromises> {
                              v8::PromiseRejectMessage,
                              const String& error_message,
                              std::unique_ptr<SourceLocation>,
-                             SanitizeScriptErrors);
+                             SanitizeScriptErrors,
+                             int record_replay_bookmark);
   void HandlerAdded(v8::PromiseRejectMessage);
 
   void ProcessQueue();

@@ -48,6 +48,10 @@
 
 namespace blink {
 
+namespace {
+const char kUncaughtInPromise[] = "Uncaught (in promise)";
+}  // namespace
+
 ThreadDebuggerCommonImpl::ThreadDebuggerCommonImpl(v8::Isolate* isolate)
     : ThreadDebugger(isolate), isolate_(isolate) {
   RecordReplayRegisterV8Inspector(v8_inspector_.get(), isolate);
@@ -125,15 +129,10 @@ void ThreadDebuggerCommonImpl::ExternalAsyncTaskFinished(
 
 unsigned ThreadDebuggerCommonImpl::PromiseRejected(
     v8::Local<v8::Context> context,
-    const String& error_message,
+    const String& message,
     v8::Local<v8::Value> exception,
     std::unique_ptr<SourceLocation> location) {
-  const String default_message = "Uncaught (in promise)";
-  String message = error_message;
-  if (message.empty())
-    message = default_message;
-  else if (message.StartsWith("Uncaught "))
-    message = message.Substring(0, 8) + " (in promise)" + message.Substring(8);
+  const String default_message = kUncaughtInPromise;
 
   ReportConsoleMessage(
       ToExecutionContext(context), mojom::ConsoleMessageSource::kJavaScript,
@@ -144,6 +143,18 @@ unsigned ThreadDebuggerCommonImpl::PromiseRejected(
       ToV8InspectorStringView(message), ToV8InspectorStringView(url),
       location->LineNumber(), location->ColumnNumber(),
       location->TakeStackTrace(), location->ScriptId());
+}
+
+// static
+String ThreadDebuggerCommonImpl::PromiseRejectionMessage(
+    const String& error_message) {
+  if (error_message.empty())
+    return kUncaughtInPromise;
+  if (error_message.StartsWith("Uncaught ")) {
+    return error_message.Substring(0, 8) + " (in promise)" +
+           error_message.Substring(8);
+  }
+  return error_message;
 }
 
 void ThreadDebuggerCommonImpl::PromiseRejectionRevoked(

@@ -42,6 +42,7 @@
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 
 #include "base/json/json_writer.h"
+#include "base/record_replay_network_request.h"
 
 namespace blink {
 
@@ -239,6 +240,8 @@ void RawResource::ResponseReceived(const ResourceResponse& response) {
     base::Value::Dict info;
     info.Set("kind", "resourceResponseReceived");
     info.Set("url", Url().GetString().Utf8());
+    recordreplay::SetConsumedRequestId(
+        info, recordreplay::ConsumedNetworkRequest::Request(InspectorId()));
     std::string json;
     base::JSONWriter::Write(info, &json);
     execute.emplace(recordreplay::NewDependencyGraphNode(json.c_str()));

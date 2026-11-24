@@ -66,8 +66,14 @@ int EventQueueDispatchScope::Schedule() {
       "{\"kind\":\"eventQueueSchedule\"}");
 }
 
+int EventQueueDispatchScope::ScheduleIfCaused() {
+  if (!recordreplay::DependencyGraphCauseExecutionNode())
+    return 0;
+  return Schedule();
+}
+
 EventQueueDispatchScope::EventQueueDispatchScope(int schedule_node_id) {
-  if (!recordreplay::DependencyGraphEnabled())
+  if (!schedule_node_id)
     return;
   int node_id = recordreplay::NewDependencyGraphNode(
       "{\"kind\":\"eventQueueDispatch\"}");

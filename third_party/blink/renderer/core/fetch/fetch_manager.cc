@@ -11,6 +11,7 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/record_replay.h"
+#include "base/record_replay_network_request.h"
 #include "base/strings/strcat.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/unguessable_token.h"
@@ -384,7 +385,7 @@ bool FetchManager::Loader::WillFollowRedirect(
 }
 
 void FetchManager::Loader::DidReceiveResponse(
-    uint64_t,
+    uint64_t identifier,
     const ResourceResponse& response) {
   // Verify that we're dealing with the URL we expect (which could be an
   // HTTPS-upgraded variant of `url_list_.back()`.
@@ -431,6 +432,8 @@ void FetchManager::Loader::DidReceiveResponse(
       execution_context_, response_type, url_list_,
       fetch_request_data_->Method(), fetch_request_data_->Credentials(),
       response);
+  response_data->SetConsumedRequest(
+      recordreplay::ConsumedNetworkRequest::Request(identifier));
 
   FetchResponseData* tainted_response = nullptr;
   switch (response_type) {
