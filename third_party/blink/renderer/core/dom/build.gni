@@ -155,6 +155,8 @@ blink_core_sources_dom = [
   "focused_element_change_observer.h",
   "focusgroup_flags.cc",
   "focusgroup_flags.h",
+  "frame_callback_dependency_scope.cc",
+  "frame_callback_dependency_scope.h",
   "frame_request_callback_collection.cc",
   "frame_request_callback_collection.h",
   "global_event_handlers.h",

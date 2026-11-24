@@ -39,6 +39,7 @@
 #include "third_party/blink/renderer/core/html/html_image_element.h"
 #include "third_party/blink/renderer/core/input/event_handler.h"
 #include "third_party/blink/renderer/core/input/event_handling_util.h"
+#include "third_party/blink/renderer/core/input/host_input_dependency_scope.h"
 #include "third_party/blink/renderer/core/input/input_device_capabilities.h"
 #include "third_party/blink/renderer/core/input/keyboard_event_manager.h"
 #include "third_party/blink/renderer/core/layout/hit_test_result.h"
@@ -581,6 +582,9 @@ WebInputEventResult MouseEventManager::HandleMouseFocus(
   Page* const page = frame_->GetPage();
   if (!page)
     return WebInputEventResult::kNotHandled;
+
+  HostInputDependencyScope dependency_scope(
+      HostInputDependencyScope::Operation::kMouseFocus);
 
   // If focus shift is blocked, we eat the event. Note we should never
   // clear swallowEvent if the page already set it (e.g., by canceling

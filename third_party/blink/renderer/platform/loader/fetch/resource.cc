@@ -411,6 +411,11 @@ void Resource::Finish(base::TimeTicks load_response_end,
     execute.emplace(NewFinishedDependencyGraphNode());
   }
 
+  FinishInternal(load_response_end, task_runner);
+}
+
+void Resource::FinishInternal(base::TimeTicks load_response_end,
+                              base::SingleThreadTaskRunner* task_runner) {
   DCHECK(!is_revalidating_);
   load_response_end_ = load_response_end;
   if (!ErrorOccurred())

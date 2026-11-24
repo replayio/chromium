@@ -53,7 +53,11 @@ class CORE_EXPORT EventQueueDispatchScope {
 
  public:
   static int Schedule();
+  // Schedule() iff there is a cause execution, else 0: a host-queued event
+  // keeps its top-level dispatch.
+  static int ScheduleIfCaused();
 
+  // Node ids are >= 1. Schedule node id 0 = no schedule node: no dispatch node.
   explicit EventQueueDispatchScope(int schedule_node_id);
   EventQueueDispatchScope(const EventQueueDispatchScope&) = delete;
   EventQueueDispatchScope& operator=(const EventQueueDispatchScope&) = delete;

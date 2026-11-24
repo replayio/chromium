@@ -40,6 +40,17 @@
 
 namespace blink {
 
+struct ScopedQueuedEvent {
+  DISALLOW_NEW();
+
+ public:
+  void Trace(Visitor* visitor) const { visitor->Trace(event); }
+
+  Member<Event> event = nullptr;
+  // EventQueueDispatchScope::ScheduleIfCaused().
+  int record_replay_scheduled_node_id = 0;
+};
+
 class CORE_EXPORT ScopedEventQueue {
   USING_FAST_MALLOC(ScopedEventQueue);
 
@@ -61,7 +72,7 @@ class CORE_EXPORT ScopedEventQueue {
   void DispatchAllEvents();
   void DispatchEvent(Event&) const;
 
-  Persistent<HeapVector<Member<Event>>> queued_events_;
+  Persistent<HeapVector<ScopedQueuedEvent>> queued_events_;
   unsigned scoping_level_;
 
   static ScopedEventQueue* instance_;
@@ -78,5 +89,7 @@ class EventQueueScope {
 };
 
 }  // namespace blink
+
+WTF_ALLOW_CLEAR_UNUSED_SLOTS_WITH_MEM_FUNCTIONS(blink::ScopedQueuedEvent)
 
 #endif  // THIRD_PARTY_BLINK_RENDERER_CORE_DOM_EVENTS_SCOPED_EVENT_QUEUE_H_

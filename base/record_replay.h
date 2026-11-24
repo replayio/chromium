@@ -334,6 +334,15 @@ void AddDependencyGraphEdge(int source, int target, const char* json);
 void BeginDependencyExecution(int node);
 void EndDependencyExecution();
 
+// Innermost open execution with a node, as the backend assigns
+// executionParent; 0 if there is none. Replay-time data, not recorded: gate
+// only dependency graph calls on it.
+int DependencyGraphCauseExecutionNode();
+
+// Open executions without a node (id 0). Same replay-time contract as
+// DependencyGraphCauseExecutionNode.
+size_t DependencyGraphNodelessExecutionCount();
+
 struct AutoDependencyExecution {
   AutoDependencyExecution(int node) {
     BeginDependencyExecution(node);
