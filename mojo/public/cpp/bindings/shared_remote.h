@@ -151,7 +151,8 @@ class SharedRemoteBase
     // ~SharedRemoteBase, and the decrements under it, on the caller's thread
     // instead of the resetting one, where they can mismatch or wait for a
     // thread which never arrives. Closing that needs those two counts
-    // settled, which is not done here.
+    // settled, which is not done here and is not what ordering them would do:
+    // the reason is at recordreplay::AutoOrderedRelease.
     void Release() const {
       bool last;
       {
