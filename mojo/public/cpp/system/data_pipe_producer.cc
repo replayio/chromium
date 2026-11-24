@@ -49,11 +49,9 @@ class DataPipeProducer::SequenceState
         callback_task_runner_(std::move(callback_task_runner)),
         producer_handle_(std::move(producer_handle)),
         callback_(std::move(callback)) {
-    // [RecordReplay] See Release(). CreateOrderedLock() takes its id from the
-    // recording, which under pass-through or after diverging differs between
-    // recording and replaying, so a state made there gets no lock on either
-    // side.
-    if (RecordReplayCanOrder()) {
+    // [RecordReplay] See Release().
+    if (recordreplay::IsRecordingOrReplaying() &&
+        !recordreplay::AreEventsDisallowed()) {
       record_replay_release_ordered_lock_id_ =
           recordreplay::CreateOrderedLock("DataPipeProducer::SequenceState");
     }
@@ -83,7 +81,7 @@ class DataPipeProducer::SequenceState
   // among threads, as in NodeChannel::Release(). The deleting itself is outside
   // the lock.
   void Release() {
-    if (!record_replay_release_ordered_lock_id_ || !RecordReplayCanOrder()) {
+    if (!record_replay_release_ordered_lock_id_) {
       base::RefCountedDeleteOnSequence<SequenceState>::Release();
       return;
     }
@@ -110,13 +108,6 @@ class DataPipeProducer::SequenceState
   friend class base::RefCountedDeleteOnSequence<SequenceState>;
 
   ~SequenceState() = default;
-
-  static bool RecordReplayCanOrder() {
-    return recordreplay::IsRecordingOrReplaying() &&
-           !recordreplay::AreEventsDisallowed() &&
-           !recordreplay::AreEventsPassedThrough() &&
-           !recordreplay::HasDivergedFromRecording();
-  }
 
   void StartOnSequence(std::unique_ptr<DataSource> data_source) {
     data_source_ = std::move(data_source);
@@ -223,9 +214,8 @@ class DataPipeProducer::SequenceState
   base::Lock lock_;
   bool is_cancelled_ GUARDED_BY(lock_) = false;
 
-  // [RecordReplay] Orders reference count decrements; see Release(). Zero in a
-  // process that is neither recording nor replaying, and for a state made where
-  // the recording cannot be added to.
+  // [RecordReplay] Orders reference count decrements, see Release(). Zero in a
+  // process that is neither recording nor replaying.
   int record_replay_release_ordered_lock_id_ = 0;
 };
 
