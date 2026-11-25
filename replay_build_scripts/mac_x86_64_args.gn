@@ -1,5 +1,7 @@
 import("//replay_build_scripts/base_args.gn")
 
+# Xcode from build/mac_files/xcode_binaries, which the CI makes from Apple's
+# Command Line Tools, and the SDK there, which build.cjs names
+# (replay_build_scripts/ci/mac-host.sh).
 use_system_xcode = false
-mac_sdk_official_version = "13.0"
 target_cpu = "x64"

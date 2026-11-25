@@ -24,9 +24,22 @@ def read_pin(file_path):
     return BackendPin(commit=fields[0], branch=fields[1] if len(fields) > 1 else "master")
 
 
-def driver_archive_present(driver_revision):
-    """DriverBuildCheck: True if linux driver archive for this rev is already on S3."""
-    url = f"https://static.replay.io/downloads/linux-recordreplay-{driver_revision}.tgz"
+# The branch chromium-build builds macOS on without BUILD_MAC=1: the condition
+# of the macOS steps in .buildkite/pipeline.yml.
+MAC_BRANCHES = ("main",)
+
+
+def builds_mac():
+    """True if this build's chromium-build builds macOS too."""
+    return (
+        os.environ.get("BUILDKITE_BRANCH") in MAC_BRANCHES
+        or os.environ.get("BUILD_MAC") == "1"
+    )
+
+
+def driver_archive_present(archive):
+    """DriverBuildCheck: True if this driver archive is already on S3."""
+    url = f"https://static.replay.io/downloads/{archive}"
     req = urllib.request.Request(url, method="HEAD")
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
@@ -35,27 +48,37 @@ def driver_archive_present(driver_revision):
         return False
 
 
-def driver_step(pin, driver_revision):
-    """trigger build-driver-linker, or DriverBuildCheck noop if archive already on S3."""
-    if driver_archive_present(driver_revision):
+def driver_step(pin, driver_revision, mac):
+    """trigger build-driver-linker for the archives this build needs that are
+    not on S3 yet, or DriverBuildCheck noop if all are there."""
+    linux = f"linux-recordreplay-{driver_revision}.tgz"
+    macs = [f"macOS-recordreplay-{driver_revision}{suffix}.tgz" for suffix in ("", "-arm")]
+    linux_present = driver_archive_present(linux)
+    mac_missing = mac and not all(driver_archive_present(archive) for archive in macs)
+    if linux_present and not mac_missing:
+        present = " ".join([linux, *(macs if mac else [])])
         return {
-            "label": "DriverBuildCheck (archive present)",
+            "label": "DriverBuildCheck (archives present)",
             "key": "build-driver-linker",
-            "command": (
-                f'echo "DriverBuildCheck: linux-recordreplay-{driver_revision}.tgz already on S3"'
-            ),
+            "command": f'echo "DriverBuildCheck: {present} already on S3"',
             "agents": ["deploy=true"],
             "plugins": [{"thedyrt/skip-checkout#v0.1.1": None}],
         }
-    return {
-        "trigger": "build-driver-linker",
-        "key": "build-driver-linker",
-        "build": {
-            "commit": pin.commit,
-            "branch": pin.branch,
-            "message": "Triggered from chromium: ${BUILDKITE_MESSAGE}",
-        },
+    # build-driver-linker builds the macOS pieces only with BUILD_MAC=1, on a
+    # Mac, and leaves out the Linux ones with SKIP_LINUX=1.
+    env = {}
+    if mac_missing:
+        env["BUILD_MAC"] = "1"
+    if linux_present:
+        env["SKIP_LINUX"] = "1"
+    build = {
+        "commit": pin.commit,
+        "branch": pin.branch,
+        "message": "Triggered from chromium: ${BUILDKITE_MESSAGE}",
     }
+    if env:
+        build["env"] = env
+    return {"trigger": "build-driver-linker", "key": "build-driver-linker", "build": build}
 
 
 def generate_buildkite_pipeline(pin):
@@ -72,9 +95,12 @@ def generate_buildkite_pipeline(pin):
     test_case = os.environ.get("REPLAY_157_TEST_CASE")
     if test_case:
         env["REPLAY_157_TEST_CASE"] = test_case
+    # The macOS steps' condition, on a branch other than main.
+    if os.environ.get("BUILD_MAC") == "1":
+        env["BUILD_MAC"] = "1"
     pipeline = {
         "steps": [
-            driver_step(pin, driver_revision),
+            driver_step(pin, driver_revision, builds_mac()),
             {
                 "trigger": "chromium-build",
                 "build": {

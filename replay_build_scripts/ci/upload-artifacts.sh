@@ -9,11 +9,16 @@
 #
 # It runs in the tools image, not the build image: it needs the agent's AWS
 # identity and buildkite-agent, and it writes into the job's workspace
-# (BUILDKITE_BUILD_CHECKOUT_PATH), which is where artifact_paths look.
+# (BUILDKITE_BUILD_CHECKOUT_PATH), which is where artifact_paths look. On a Mac,
+# which has no images, it runs on the host, which has node, aws and
+# buildkite-agent (mac-host.sh checks).
 set -euo pipefail
 dir=$(dirname "$(readlink -f "$0")")
 root=$("$dir/checkout.sh" root)
 
 cd "$root/src"
-RECORD_REPLAY_BACKEND_DIR="$root/backend" \
-  exec "$dir/in-tools-image.sh" "$root" node replay_build_scripts/upload_build_artifacts.mjs "$@"
+export RECORD_REPLAY_BACKEND_DIR="$root/backend"
+if [ "$(uname -s)" = Darwin ]; then
+  exec node replay_build_scripts/upload_build_artifacts.mjs "$@"
+fi
+exec "$dir/in-tools-image.sh" "$root" node replay_build_scripts/upload_build_artifacts.mjs "$@"

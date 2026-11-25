@@ -167,6 +167,10 @@ lru() {
     fi
     echo "$(last_used "$k") key $k"
   done
+  # A Mac builds on the host: it has no images.
+  if [ "$HOST_OS" != linux ]; then
+    return 0
+  fi
   keep=$("$dir/build-image.sh" ref)
   while read -r r; do
     if [ "$r" != "$keep" ]; then
@@ -384,6 +388,17 @@ prefetch_fork_pins() {
   done < "$pins"
 }
 
+# ./gclient, for the OS of this host: a Mac checks out the macOS DEPS.
+install_gclient() {
+  if [ "$HOST_OS" = linux ]; then
+    cp "$dir/gclient" "$CHECKOUT_ROOT/.gclient"
+    return
+  fi
+  sed 's/^target_os = \["linux"\]$/target_os = ["mac"]/' "$dir/gclient" > "$CHECKOUT_ROOT/.gclient"
+  grep -q '^target_os = \["mac"\]$' "$CHECKOUT_ROOT/.gclient" ||
+    die "$dir/gclient has no target_os = [\"linux\"] line to make a macOS one of"
+}
+
 sync() {
   local commit url src=$CHECKOUT_ROOT/src was
   commit=$(git -C "$repo" rev-parse HEAD)
@@ -421,16 +436,16 @@ sync() {
     # what changed: src has no other refs, and fetch negotiates from refs.
     git -C "$src" update-ref refs/ci/fetched "$commit"
   fi
-  cp "$dir/gclient" "$CHECKOUT_ROOT/.gclient"
+  install_gclient
   echo "--- checkout $CHECKOUT_ROOT -> $commit"
   # Removed first and written last, so that a sync killed in the middle leaves a
   # checkout that says so.
   rm -f "$CHECKOUT_SYNCED"
-  # Two container runs with a host fetch between them: the first puts src at the
-  # commit and writes down what its DEPS pin, the second resolves those DEPS.
-  "$dir/build-in-container.sh" -- /ci/container/sync.sh checkout "$FORK_URL" "$commit"
+  # Two runs with a host fetch between them: the first puts src at the commit
+  # and writes down what its DEPS pin, the second resolves those DEPS.
+  "$BUILD_ENV" -- "$BUILD_ENV_CI_DIR/container/sync.sh" checkout "$FORK_URL" "$commit"
   prefetch_fork_pins
-  "$dir/build-in-container.sh" -- /ci/container/sync.sh deps
+  "$BUILD_ENV" -- "$BUILD_ENV_CI_DIR/container/sync.sh" deps
   cat > "$CHECKOUT_SYNCED" <<EOF
 commit=$commit
 synced=$(date -u +%Y-%m-%dT%H:%M:%SZ)

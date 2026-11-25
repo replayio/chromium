@@ -29,6 +29,12 @@ const options = {
   sisoLocalJobs: countFromEnv("REPLAY_SISO_LOCAL_JOBS"),
   // siso `-config` names, e.g. to run more step kinds remotely.
   sisoConfig: process.env.REPLAY_SISO_CONFIG,
+  // A CI build on a Mac agent, which builds on the host
+  // (replay_build_scripts/ci/mac-host.sh): checked as one in the build image is.
+  ciHostBuild: !!process.env.REPLAY_CI_HOST_BUILD,
+  // The SDK mac-host.sh made build/mac_files/xcode_binaries with.
+  macSdkVersion: process.env.REPLAY_MAC_SDK_VERSION,
+  macSdkBuildVersion: process.env.REPLAY_MAC_SDK_BUILD_VERSION,
 };
 
 const outdir = options.buildArm ? "out/Release-ARM" : "out/Release";
@@ -60,7 +66,7 @@ function main() {
 // Otherwise: fatal: unsafe repository ('/chromium/src' is owned by someone
 // else). The build image has a --system safe.directory already.
 function trustRepository() {
-  if (buildImageOfContainer()) {
+  if (ciBuild()) {
     return;
   }
   spawnChecked(
@@ -173,6 +179,11 @@ function checkBuildImage() {
   }
 }
 
+// A CI build: in the build image, or on a Mac agent's host.
+function ciBuild() {
+  return !!buildImageOfContainer() || options.ciHostBuild;
+}
+
 function buildImageOfContainer() {
   try {
     return fs.readFileSync("/etc/chromium-build-image", "utf8").trim();
@@ -202,7 +213,7 @@ function buildImageOfCheckout() {
 // anything else before a step runs: the hook's default is Google's RBE, and
 // the agent cannot compile Chromium itself.
 function checkRemoteExecution() {
-  if (!buildImageOfContainer()) {
+  if (!ciBuild()) {
     return;
   }
   const sisoEnv = readSisoEnv();
@@ -250,18 +261,35 @@ function readSisoEnv() {
   return entries;
 }
 
-// The out dir's configuration comes from the repo. In the build image the
-// out dir is CI's own, so args.gn is always the import; elsewhere an existing
-// args.gn is somebody's own and is left alone.
+// The out dir's configuration comes from the repo. In CI the out dir is CI's
+// own, so args.gn is always the import; elsewhere an existing args.gn is
+// somebody's own and is left alone.
 function prepareOutDir() {
   fs.mkdirSync(outdir, { recursive: true });
   const argsFile = path.join(outdir, "args.gn");
-  if (buildImageOfContainer() || !fs.existsSync(argsFile)) {
+  if (ciBuild() || !fs.existsSync(argsFile)) {
     writeFileSyncIfChanged(
       argsFile,
-      `import("//replay_build_scripts/${argsName()}")\n`
+      `import("//replay_build_scripts/${argsName()}")\n${macSdkArgs()}`
     );
   }
+}
+
+// The SDK in build/mac_files/xcode_binaries, which use_system_xcode = false
+// builds with. gn picks the official or the universal pair by the Xcode
+// version that directory names, so both are set.
+function macSdkArgs() {
+  if (currentPlatform() != "macOS" || !options.macSdkVersion) {
+    return "";
+  }
+  const version = JSON.stringify(options.macSdkVersion);
+  const build = JSON.stringify(options.macSdkBuildVersion || "");
+  return (
+    `mac_sdk_official_version = ${version}\n` +
+    `mac_sdk_official_build_version = ${build}\n` +
+    `mac_sdk_official_universal_version = ${version}\n` +
+    `mac_sdk_official_universal_build_version = ${build}\n`
+  );
 }
 
 function argsName() {
@@ -311,7 +339,7 @@ function buildToolArgs() {
   if (options.maxFailures !== undefined) {
     args.push("-k", String(options.maxFailures));
   }
-  if (buildImageOfContainer()) {
+  if (ciBuild()) {
     // --strict_remote: a remote step never falls back to the agent's CPUs,
     // and no REAPI backend at all is an error.
     args.push("--strict_remote=true", "-failure_summary", SISO_FAILURE_SUMMARY);

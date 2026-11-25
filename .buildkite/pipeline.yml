@@ -52,7 +52,7 @@ steps:
     # The plugins and versions master's build step uses, so the agent needs
     # nothing new. No repository checkout: the job works from a ~70 MB clone of
     # replay_build_scripts/ci, which the command fetches first.
-    plugins:
+    plugins: &build-plugins
       - thedyrt/skip-checkout#v0.1.1: ~
       - seek-oss/aws-sm#v2.3.1:
           region: us-east-2
@@ -75,7 +75,7 @@ steps:
       - "queue=runtime"
       - "runtimeType=chromiumbuild"
     # Artifacts are uploaded by job.sh itself, from the checkout's job directory.
-    command: |
+    command: &build-command |
       set -euo pipefail
       WS="$$PWD"
       trap 'rm -rf "$$WS/engflow.crt" "$$WS/engflow.key" "$$WS/.ci-boot"' EXIT
@@ -127,6 +127,95 @@ steps:
       echo "scripts: .ci-boot is $$(git -C .ci-boot rev-parse HEAD)"
       export ENGFLOW_CERT_FILE="$$WS/engflow.crt" ENGFLOW_KEY_FILE="$$WS/engflow.key"
       .ci-boot/replay_build_scripts/ci/job.sh
+
+  # macOS: one build per architecture, both on the Mac agent, with the Linux
+  # step's command. job.sh builds on the host there rather than in an image:
+  # mac-host.sh pins depot_tools and makes Xcode from the Command Line Tools
+  # instead. Both architectures share the key's checkout (out/Release and
+  # out/Release-ARM), and so one concurrency group.
+  #
+  # Only on main, or with BUILD_MAC=1: a Mac is billed by the day while it runs
+  # (replayio/backend pulumi/build-machines). The same condition decides in
+  # replay_build_scripts/build-pipeline.py whether these builds need the macOS
+  # drivers of REPLAY_BACKEND_REV. Soft-failing: the Linux build is the one
+  # releases and the other tests depend on.
+  - label: "🔨 Chromium (macOS-arm64)"
+    key: "build-chromium-macos-arm64"
+    if: &mac-builds build.branch == "main" || build.env("BUILD_MAC") == "1"
+    soft_fail: true
+    timeout_in_minutes: *timeout
+    concurrency: 1
+    concurrency_group: &mac-group "chromium-build/m157/macos"
+    plugins: *build-plugins
+    env:
+      REPLAY_JOB_TIMEOUT_MINUTES: *timeout
+      AWS_DEFAULT_REGION: us-east-2
+      REPLAY_BUILD_ARM: "1"
+    agents: &mac-agents
+      - "queue=macos"
+      - "os=macos"
+    command: *build-command
+
+  - label: "🔨 Chromium (macOS-x86_64)"
+    key: "build-chromium-macos-x86_64"
+    if: *mac-builds
+    soft_fail: true
+    timeout_in_minutes: *timeout
+    concurrency: 1
+    concurrency_group: *mac-group
+    plugins: *build-plugins
+    env:
+      REPLAY_JOB_TIMEOUT_MINUTES: *timeout
+      AWS_DEFAULT_REGION: us-east-2
+    agents: *mac-agents
+    command: *build-command
+
+  # An arm recording replays with the x86_64 build, on the Linux replay hosts:
+  # the backend installs <build id>.dmg for any macOS build id, and the two
+  # architectures share their build ids. So the two builds must come from the
+  # same dependencies and carry the same resources, which this compares.
+  - label: "🕵️‍♀️ Verify macOS cross-arch build integrity"
+    key: "verify-macos-cross-arch"
+    if: *mac-builds
+    soft_fail: true
+    depends_on:
+      - "build-chromium-macos-arm64"
+      - "build-chromium-macos-x86_64"
+    plugins:
+      - thedyrt/skip-checkout#v0.1.1: ~
+    agents:
+      - "queue=light"
+    command: |
+      set -euo pipefail
+      for arch in arm64 x86_64; do
+        buildkite-agent artifact download "build_id/macOS/$$arch/entries" .
+        buildkite-agent artifact download "build_id/macOS/$$arch/pak-sizes" .
+      done
+      diff -u build_id/macOS/arm64/entries build_id/macOS/x86_64/entries
+      diff -u build_id/macOS/arm64/pak-sizes build_id/macOS/x86_64/pak-sizes
+
+  # On the Mac: the tests record there and replay in the cloud. Not
+  # runtime-fe-end-to-end-tests, as the Linux ones: replayio/devtools' macOS
+  # step there targets agents that no longer exist (queue=runtime,
+  # runtimeType=test), where its job would wait for good. testing-runtime-e2e
+  # (replayio/backend .buildkite/runtime-e2e-tests.yml) runs them on queue=macos.
+  - label: "📝 E2E Tests (macOS-arm64)"
+    trigger: "testing-runtime-e2e"
+    if: *mac-builds
+    soft_fail: true
+    depends_on:
+      - "build-chromium-macos-arm64"
+      - "build-chromium-macos-x86_64"
+    build:
+      env:
+        OS: "macos"
+        ARCH: "arm64"
+        RECORD_REPLAY_METADATA_SOURCE_COMMIT_TITLE: "${BUILDKITE_MESSAGE}"
+        RECORD_REPLAY_METADATA_SOURCE_COMMIT_ID: "${BUILDKITE_COMMIT}"
+        RECORD_REPLAY_METADATA_SOURCE_BRANCH: "${BUILDKITE_BRANCH}"
+        RECORD_REPLAY_METADATA_SOURCE_MERGE_ID: "${BUILDKITE_PULL_REQUEST}"
+        RUNTIME_REPO: "${BUILDKITE_PULL_REQUEST_REPO}"
+        CI: "1"
 
   # e2e=true: only linux class with Replay Chromium runtime libs (libnss3); can_replay lacks them.
   # The devtools e2e suite against this build. It resolves which build to test
