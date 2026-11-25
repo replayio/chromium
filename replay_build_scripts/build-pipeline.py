@@ -48,29 +48,7 @@ def driver_archive_present(archive):
         return False
 
 
-def driver_step(pin, driver_revision, mac):
-    """trigger build-driver-linker for the archives this build needs that are
-    not on S3 yet, or DriverBuildCheck noop if all are there."""
-    linux = f"linux-recordreplay-{driver_revision}.tgz"
-    macs = [f"macOS-recordreplay-{driver_revision}{suffix}.tgz" for suffix in ("", "-arm")]
-    linux_present = driver_archive_present(linux)
-    mac_missing = mac and not all(driver_archive_present(archive) for archive in macs)
-    if linux_present and not mac_missing:
-        present = " ".join([linux, *(macs if mac else [])])
-        return {
-            "label": "DriverBuildCheck (archives present)",
-            "key": "build-driver-linker",
-            "command": f'echo "DriverBuildCheck: {present} already on S3"',
-            "agents": ["deploy=true"],
-            "plugins": [{"thedyrt/skip-checkout#v0.1.1": None}],
-        }
-    # build-driver-linker builds the macOS pieces only with BUILD_MAC=1, on a
-    # Mac, and leaves out the Linux ones with SKIP_LINUX=1.
-    env = {}
-    if mac_missing:
-        env["BUILD_MAC"] = "1"
-    if linux_present:
-        env["SKIP_LINUX"] = "1"
+def driver_build(pin, env):
     build = {
         "commit": pin.commit,
         "branch": pin.branch,
@@ -78,7 +56,48 @@ def driver_step(pin, driver_revision, mac):
     }
     if env:
         build["env"] = env
-    return {"trigger": "build-driver-linker", "key": "build-driver-linker", "build": build}
+    return build
+
+
+def driver_step(pin, driver_revision):
+    """trigger build-driver-linker, or DriverBuildCheck noop if archive already on S3."""
+    archive = f"linux-recordreplay-{driver_revision}.tgz"
+    if driver_archive_present(archive):
+        return {
+            "label": "DriverBuildCheck (archive present)",
+            "key": "build-driver-linker",
+            "command": f'echo "DriverBuildCheck: {archive} already on S3"',
+            "agents": ["deploy=true"],
+            "plugins": [{"thedyrt/skip-checkout#v0.1.1": None}],
+        }
+    return {
+        "trigger": "build-driver-linker",
+        "key": "build-driver-linker",
+        "build": driver_build(pin, {}),
+    }
+
+
+def mac_driver_steps(pin, driver_revision):
+    """build-driver-linker for the macOS archives when they are missing.
+
+    A build of its own, which nothing here waits for: it needs the Mac, which
+    can take hours to come up, and the Linux build does not need it.
+    chromium-build's macOS steps wait for the archives instead
+    (.buildkite/pipeline.yml), without holding the Mac that builds them.
+    build-driver-linker builds the macOS pieces only with BUILD_MAC=1, and leaves
+    out the Linux ones with SKIP_LINUX=1.
+    """
+    archives = [f"macOS-recordreplay-{driver_revision}{suffix}.tgz" for suffix in ("", "-arm")]
+    if all(driver_archive_present(archive) for archive in archives):
+        return []
+    return [
+        {
+            "trigger": "build-driver-linker",
+            "key": "build-driver-linker-macos",
+            "async": True,
+            "build": driver_build(pin, {"BUILD_MAC": "1", "SKIP_LINUX": "1"}),
+        }
+    ]
 
 
 def generate_buildkite_pipeline(pin):
@@ -100,7 +119,8 @@ def generate_buildkite_pipeline(pin):
         env["BUILD_MAC"] = "1"
     pipeline = {
         "steps": [
-            driver_step(pin, driver_revision, builds_mac()),
+            driver_step(pin, driver_revision),
+            *(mac_driver_steps(pin, driver_revision) if builds_mac() else []),
             {
                 "trigger": "chromium-build",
                 "build": {

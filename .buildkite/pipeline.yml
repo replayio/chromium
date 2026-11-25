@@ -139,9 +139,41 @@ steps:
   # replay_build_scripts/build-pipeline.py whether these builds need the macOS
   # drivers of REPLAY_BACKEND_REV. Soft-failing: the Linux build is the one
   # releases and the other tests depend on.
+  #
+  # build-pipeline.py starts the build of missing macOS drivers without waiting
+  # for it, because it needs the Mac, which can take hours to come up. This
+  # waits for those archives on a light agent, leaving the Mac to that build,
+  # so the Linux build never waits for the Mac. Without
+  # DRIVER_REVISION (a build not started by build-pipeline.py) there is nothing
+  # to wait for: job.sh reads the pin from the commit.
+  - label: "⏳ macOS drivers"
+    key: "macos-drivers"
+    if: &mac-builds build.branch == "main" || build.env("BUILD_MAC") == "1"
+    soft_fail: true
+    timeout_in_minutes: 300
+    plugins:
+      - thedyrt/skip-checkout#v0.1.1: ~
+    agents:
+      - "queue=light"
+    command: |
+      set -euo pipefail
+      if [ -z "$${DRIVER_REVISION:-}" ]; then
+        echo "no DRIVER_REVISION on this build: nothing to wait for"
+        exit 0
+      fi
+      for archive in "macOS-recordreplay-$$DRIVER_REVISION.tgz" "macOS-recordreplay-$$DRIVER_REVISION-arm.tgz"; do
+        until curl -sfI "https://static.replay.io/downloads/$$archive" > /dev/null; do
+          echo "waiting for $$archive"
+          sleep 120
+        done
+        echo "$$archive is there"
+      done
+
   - label: "🔨 Chromium (macOS-arm64)"
     key: "build-chromium-macos-arm64"
-    if: &mac-builds build.branch == "main" || build.env("BUILD_MAC") == "1"
+    if: *mac-builds
+    depends_on:
+      - "macos-drivers"
     soft_fail: true
     timeout_in_minutes: *timeout
     concurrency: 1
@@ -159,6 +191,8 @@ steps:
   - label: "🔨 Chromium (macOS-x86_64)"
     key: "build-chromium-macos-x86_64"
     if: *mac-builds
+    depends_on:
+      - "macos-drivers"
     soft_fail: true
     timeout_in_minutes: *timeout
     concurrency: 1

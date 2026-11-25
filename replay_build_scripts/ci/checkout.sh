@@ -237,6 +237,16 @@ ensure_root() {
   touch "$CHECKOUT_STAMP"
 }
 
+# The process that has <file> open, or nothing: /proc on Linux, lsof on a Mac,
+# which has no /proc.
+holder_of() {
+  if [ "$HOST_OS" = linux ]; then
+    find /proc/[0-9]*/fd -maxdepth 1 -lname "$1" -print -quit 2>/dev/null || true
+  else
+    { lsof -t -- "$1" 2>/dev/null || true; } | head -n 1
+  fi
+}
+
 # A fetch that was killed (canceled job, timeout) leaves its partial pack as
 # tmp_pack_* in the repository's objects/pack, and nothing removes it: the
 # checkouts never gc, and a full fetch of the fork is ~56 GB. Every repository
@@ -249,7 +259,7 @@ remove_stale_tmp_packs() {
   started=$(mktemp)
   while IFS= read -r -d '' pack; do
     while IFS= read -r -d '' file; do
-      holder=$(find /proc/[0-9]*/fd -maxdepth 1 -lname "$file" -print -quit 2>/dev/null || true)
+      holder=$(holder_of "$file")
       if [ -n "$holder" ]; then
         echo "keeping $file: open ($holder)"
         continue
@@ -277,7 +287,7 @@ remove_stale_git_locks() {
   [ -d "$CHECKOUT_ROOT/src" ] || return 0
   while IFS= read -r -d '' git_dir; do
     while IFS= read -r -d '' file; do
-      holder=$(find /proc/[0-9]*/fd -maxdepth 1 -lname "$file" -print -quit 2>/dev/null || true)
+      holder=$(holder_of "$file")
       if [ -n "$holder" ]; then
         die "$file is open ($holder): another git is running in ${git_dir%/.git}"
       fi

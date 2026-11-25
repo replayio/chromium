@@ -57,7 +57,8 @@ fail() {
 }
 
 # The scripts here assume GNU userland (find -printf, stat -c, df -BG,
-# readlink -m, timeout --foreground, flock) and bash 4.1+ (exec {fd}>...).
+# readlink -m, timeout --foreground, sed's \| and \x, flock) and bash 4.1+
+# (exec {fd}>...).
 # macOS ships BSD tools and bash 3.2, so the agent puts Homebrew's GNU tools and
 # bash first on PATH.
 check_host() {
@@ -65,9 +66,9 @@ check_host() {
     fail "bash $BASH_VERSION: the CI scripts need bash 5 (Homebrew's) first on PATH"
   fi
   local tool
-  for tool in find stat df date readlink timeout; do
+  for tool in find stat df date readlink timeout sed; do
     "$tool" --version 2>/dev/null | grep -q GNU ||
-      fail "$tool on PATH is not GNU's: put Homebrew's coreutils and findutils gnubin first on PATH"
+      fail "$tool on PATH is not GNU's: put Homebrew's coreutils, findutils and gnu-sed gnubin first on PATH"
   done
   for tool in flock git node python3 rsync aws buildkite-agent; do
     command -v "$tool" >/dev/null || fail "no $tool on PATH"
@@ -183,7 +184,7 @@ install_xcode() {
     elif ! grep -qxF "$path" <<<"$XCODE_OPTIONAL"; then
       missing+=("$path")
     fi
-  done < <(sed -n 's/^ *- \(file\|dir\): /\1 /p' "$list")
+  done < <(sed -nE 's/^ *- (file|dir): /\1 /p' "$list")
   if [ ${#missing[@]} -gt 0 ]; then
     rm -rf "$tmp"
     fail "the Command Line Tools in $CLT lack what build/xcode_binaries.yaml lists: ${missing[*]}"
@@ -254,10 +255,12 @@ if [ "$engflow" = 1 ]; then
   RBE_tls_client_auth_key=$(readlink -f "$key")
   export RBE_tls_client_auth_cert RBE_tls_client_auth_key
 fi
-if [ -n "${REPLAY_JOB_TIMEOUT_MINUTES:-}" ]; then
-  cmd=(timeout --signal=TERM --kill-after=60s "${REPLAY_JOB_TIMEOUT_MINUTES}m" "${cmd[@]}")
-fi
 
+# No timeout of its own, unlike build-in-container.sh, whose deadline stops the
+# container before Buildkite's does. Here the command stays in the job's
+# process group, so Buildkite's timeout and a cancel reach all of it. A timeout
+# would move it to a group of its own, and a cancelled job's sync or build
+# would run on into the next job's.
 cd "$CHECKOUT_ROOT/src"
 echo "\$ ${cmd[*]}   (in $PWD, depot_tools $depot)"
 exec "${cmd[@]}"

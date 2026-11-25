@@ -36,7 +36,7 @@ Paths relative to the repository root.
 | File | Purpose |
 |---|---|
 | `.buildkite/pipeline.yml` | the build steps, the record -> replay step and the triggers of the e2e suites: plugins, agent tags, the cert through aws-sm with an EXIT trap, the backend pin read from the build's `backend_rev` artifact. The default priority, a concurrency group per OS, the timeout exported to the job. The macOS steps (section 11) run on `main` or with `BUILD_MAC=1`. No windows or buildevents steps. The logic lives in `ci/job.sh`; only the script fetch of step 2 is inline |
-| `replay_build_scripts/build-pipeline.py` | the pipeline `runtime-build-and-test` uploads: build-driver-linker for the driver archives the build needs that are not on static.replay.io yet (the macOS ones too when the macOS steps run), then `chromium-build` |
+| `replay_build_scripts/build-pipeline.py` | the pipeline `runtime-build-and-test` uploads: build-driver-linker for the Linux driver archive when it is not on static.replay.io yet, then `chromium-build`. When the macOS steps run and their archives are missing, also a build-driver-linker build of those, which nothing waits for: the macOS steps wait for its archives on a light agent (`macos-drivers`), so the Linux build never waits for the Mac |
 | `replay_build_scripts/ci/mac-host.sh` | the macOS counterpart of `build-in-container.sh` (section 11) |
 | `replay_build_scripts/ci/mac/angle-runtime-shaders.patch` | applied to `third_party/angle` after a Mac's sync (section 11) |
 | `replay_build_scripts/ci/config.sh` | the key and the paths, images and container names that follow from it, the disk minima, the guards `valid_key`, `assert_isolated_root`, `require_free_gb`, and the retry helper `github_read`. The key is worked out once, when the file is sourced, rather than per call |
@@ -303,7 +303,10 @@ platform and wrapper of
 `configure_reclient` hook writes that file and downloads the Linux clang those
 workers run. Links run on the Mac.
 
+A Mac job has no timeout of its own: the command stays in the job's process
+group, so Buildkite's step timeout and a cancel stop all of it.
+
 What the agent provides, which `mac-host.sh` checks before anything runs: bash
-5, GNU coreutils and findutils first on PATH, `flock`, git 2.46 or newer,
+5, GNU coreutils, findutils and sed first on PATH, `flock`, git 2.46 or newer,
 `node`, `python3`, `rsync`, `aws`, `buildkite-agent`, and the Command Line
 Tools.
