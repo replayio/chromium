@@ -27,6 +27,7 @@
 #include "third_party/blink/renderer/modules/mediastream/media_stream.h"
 #include "third_party/blink/renderer/modules/permissions/permission_utils.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_listener.h"
+#include "third_party/blink/renderer/modules/webaudio/audio_scheduled_source_handler.h"
 #include "third_party/blink/renderer/modules/webaudio/media_element_audio_source_node.h"
 #include "third_party/blink/renderer/modules/webaudio/media_stream_audio_destination_node.h"
 #include "third_party/blink/renderer/modules/webaudio/media_stream_audio_source_node.h"
@@ -272,6 +273,8 @@ void AudioContext::Uninitialize() {
   DCHECK_NE(hardware_context_count, 0u);
   SendLogMessage(String::Format("%s", __func__));
   --hardware_context_count;
+  // Drop schedule binders before ReleaseActiveSourceNodes / pending QuantumEdge.
+  source_schedule_table_.Clear();
   StopRendering();
   DidClose();
   RecordAutoplayMetrics();
@@ -741,11 +744,15 @@ bool AudioContext::HandlePreRenderTasks(const AudioIOPosition* output_position,
   if (TryLock()) {
     GetDeferredTaskHandler().HandleDeferredTasks();
 
-    ResolvePromisesForUnpause();
+    // MainThreadSubstitute: under R/R ThinRender this method is unreachable;
+    // also disable TryLock-driven resume / stoppable (QuantumEdge owns them).
+    if (!recordreplay::IsRecordingOrReplaying()) {
+      ResolvePromisesForUnpause();
 
-    // Check to see if source nodes can be stopped because the end time has
-    // passed.
-    HandleStoppableSourceNodes();
+      // Check to see if source nodes can be stopped because the end time has
+      // passed.
+      HandleStoppableSourceNodes();
+    }
 
     // Update the dirty state of the listener.
     listener()->UpdateState();
@@ -835,6 +842,77 @@ void AudioContext::ResolvePromisesForUnpause() {
     is_resolving_resume_promises_ = true;
     ScheduleMainThreadCleanup();
   }
+}
+
+void AudioContext::EnqueueQuantumEdge() {
+  DCHECK(IsAudioThread());
+  if (quantum_edge_pending_.exchange(true, std::memory_order_acq_rel)) {
+    return;
+  }
+  if (!task_runner_) {
+    quantum_edge_pending_.store(false, std::memory_order_release);
+    return;
+  }
+  PostCrossThreadTask(
+      *task_runner_, FROM_HERE,
+      CrossThreadBindOnce(&AudioContext::PerformDeferredMainDelivery,
+                          WrapCrossThreadPersistent(this)));
+}
+
+void AudioContext::PerformDeferredMainDelivery() {
+  DCHECK(IsMainThread());
+
+  if (!GetExecutionContext() || IsContextCleared()) {
+    quantum_edge_pending_.store(false, std::memory_order_release);
+    return;
+  }
+
+  // Clear before FireDues so AT Advances during delivery can post a follow-up
+  // edge (coalesce must not stall dues until an unrelated later Advance).
+  quantum_edge_pending_.store(false, std::memory_order_release);
+
+  {
+    GraphAutoLocker locker(this);
+
+    // Resume resolve once (RetireRule).
+    if (!is_resolving_resume_promises_ && resume_resolvers_.size() > 0) {
+      is_resolving_resume_promises_ = true;
+      for (auto& resolver : resume_resolvers_) {
+        if (ContextState() == kClosed) {
+          resolver->Reject(MakeGarbageCollected<DOMException>(
+              DOMExceptionCode::kInvalidStateError,
+              "Cannot resume a context that has been closed"));
+        } else {
+          SetContextState(kRunning);
+          resolver->Resolve();
+        }
+      }
+      resume_resolvers_.clear();
+      is_resolving_resume_promises_ = false;
+    }
+  }
+
+  // Closing / Tear-down: ReleaseActiveSourceNodes owns BreakConnection.
+  if (IsContextCleared() || !IsDestinationInitialized() || !destination()) {
+    return;
+  }
+
+  // Fire SourceScheduleTable dues under DueRule + RetireRule.
+  source_schedule_table_.FireDues(
+      destination()->GetAudioDestinationHandler().CurrentSampleFrame());
+}
+
+void AudioContext::FinishSourceOnMainThread(
+    AudioScheduledSourceHandler* source) {
+  DCHECK(IsMainThread());
+  AssertGraphOwner();
+  DCHECK(source);
+  auto* active = GetDeferredTaskHandler().GetActiveSourceHandlers();
+  if (!active->Contains(source)) {
+    return;
+  }
+  source->BreakConnectionWithLock();
+  active->erase(source);
 }
 
 AudioIOPosition AudioContext::OutputPosition() const {
