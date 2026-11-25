@@ -31,7 +31,7 @@ Scope: Linux x86_64, build only, the elastic build pool's `queue=runtime` hosts 
 
 ## 2. Files
 
-Paths relative to the repository root. Origin: M = replayio/chromium `master`, 147 = `rebase/147/working`, 158 = BLamy/chromium `chromium-158-buildkite`, new.
+Paths relative to the repository root. Origin: M = the 108 line, now `108.0.5359.0-replay` (it developed on `master`, which was removed when this line took over), 147 = `rebase/147/working`, 158 = BLamy/chromium `chromium-158-buildkite`, new.
 
 | File | Purpose | Origin | Delta vs origin |
 |---|---|---|---|
@@ -110,22 +110,24 @@ Paths relative to the repository root. Origin: M = replayio/chromium `master`, 1
 
 Reclaim is the one exception. A pool host's volume holds every version that has
 built on it, so a job short of space removes the least recently used keys and
-its own line's images that no job is using. Both lines do this, to each other's
-keys as much as their own, and a removal needs the key's use lock exclusively,
-so neither can take a checkout the other is building in.
+its own line's images that no job is using. A removal needs the key's use lock
+exclusively, so no line can take a checkout another is building in. The 108 line
+no longer has a branch to build from, so in practice only this line reclaims
+today, but its scripts still behave as described below if that branch is ever
+built again.
 
 Mirror check (another version's job cannot reach this one's objects):
-- master's stale-container filter is `name=^/?chromium-build-<its key>-`, and the
+- The 108 line's stale-container filter is `name=^/?chromium-build-<its key>-`, and the
   keys are milestones, so it does not match this version's containers. Run by
   hand with no key it filters on `chromium-build-` alone and would match them;
-  master's own step always passes its key.
-  - `master:replay_build_scripts/remove-stale-build-containers.sh`
+  its own step always passes its key.
+  - `108.0.5359.0-replay:replay_build_scripts/remove-stale-build-containers.sh`
 - Keys differ whenever the milestones do, and `link_legacy_checkout` is gone (replayio/chromium#1648).
-  - `master:replay_build_scripts/ci/checkout.sh`
-- master's reclaim removes this key when its volume runs low, and cannot while a
+  - `108.0.5359.0-replay:replay_build_scripts/ci/checkout.sh`
+- That line's reclaim removes this key when its volume runs low, and cannot while a
   job holds that key's use lock, which `job.sh` holds for the whole job. `sync`
   converges from any state, so the next build fetches and syncs again.
-  - `master:replay_build_scripts/ci/checkout.sh` (`lru`, `unused`)
+  - `108.0.5359.0-replay:replay_build_scripts/ci/checkout.sh` (`lru`, `unused`)
 
 Not present by construction: `git gc` (and auto-gc disabled where git runs), host package installs, `docker prune`, `docker rmi` of another repository's images, `cd` outside workspace and `<key>/jobs/<job>`.
 
@@ -184,9 +186,9 @@ Never accessed: `/home/ubuntu/chromium` and `/home/ubuntu/depot_tools` (both gon
 |---|---|
 | Agent slot (one job at a time per host, several hosts per pool) | `timeout_in_minutes: 240`; `priority: -1` (a queued production job runs first); `concurrency: 1`, group `chromium-build/m157/linux-x86_64` -- the key, written out because Buildkite resolves the group before any script runs, and bounding the key rather than the host: two builds of one key would otherwise run on two hosts, each syncing its own copy of that checkout; no preemption of a running job |
 | CPU / RAM, only if a container outlives its job | signal handlers remove the container; `timeout <job timeout>` inside the container; `--cpu-shares 128`; `--oom-score-adj 500`; the next job of that key removes leftovers |
-| Disk volume | below 150 GB free before the first prepare, or 60 GB before any build, remove the least recently used keys and this line's images that no job is using, then refuse if it is still short; 20 GB on the docker root before an image build. Master's jobs do the same, this key included |
+| Disk volume | below 150 GB free before the first prepare, or 60 GB before any build, remove the least recently used keys and this line's images that no job is using, then refuse if it is still short; 20 GB on the docker root before an image build. The 108 line's jobs do the same, this key included |
 | Docker daemon, layer store, base-image pulls | additive only (new image, new containers) |
-| Job workspace directory, Buildkite pipeline `chromium-build`, plugin checkouts (`skip-checkout#v0.1.1`, `aws-sm#v2.3.1`: the versions master uses) | own file names, removed on exit |
+| Job workspace directory, Buildkite pipeline `chromium-build`, plugin checkouts (`skip-checkout#v0.1.1`, `aws-sm#v2.3.1`: the versions the 108 line uses) | own file names, removed on exit |
 | EngFlow cluster `simpsonite.cluster.engflow.com:443`, instance `default`; secrets `engflow-certificate`, `engflow-key` | executor capacity shared; CAS / action cache content-addressed |
 | Network egress | — |
 | S3 `recordreplay-us-east-2`, `recordreplay-us-east-2-dev` (`builds/`, `symbols/`), `recordreplay-website` (`downloads/`) | every object is named by the build id, which carries the commit and `-dev` for a branch build |
@@ -243,7 +245,7 @@ Not shared: checkout, out dir, gclient/cipd state, depot_tools, git object cache
 
 - Failure line format: `siso/build/cmd_output_log.go` (`"%s%s: %s %q %s\n"`, result `FAILED`).
 - The runtime itself is on S3 / static.replay.io (`<build id>.tar.xz`). The record -> replay step has the backend download it by build id.
-- Build id: master's `computeBuildId`, suffix `-dev` (branch ≠ pipeline default branch).
+- Build id: `replay_build_scripts/upload_build_artifacts.mjs` (`buildIdExtension`), suffix `-dev` when the branch is not the pipeline's default branch. `main` is `chromium-build`'s default, so a build of this line carries no suffix and the release pipelines take its id as it stands; a build of any other branch still gets `-dev`.
 
 ## 10. Verification performed (local, no CI, no real docker)
 
@@ -285,9 +287,9 @@ Not shared: checkout, out dir, gclient/cipd state, depot_tools, git object cache
   this key, this tree's image and every name beginning with a dot
   (`.git-cache`) are never candidates; nothing is removed, and nothing printed,
   while the volume is above the minimum.
-- Lock, trash and image-mark paths equal master's: `<keys>/.<key>.use`,
+- Lock, trash and image-mark paths equal the 108 line's: `<keys>/.<key>.use`,
   `<keys>/.removing.XXXXXX`, `<keys>/.images/<ref>`, with `<keys>` the same
-  `$HOME/chromium-checkouts` (master also honours `CHROMIUM_CHECKOUTS_DIR`,
+  `$HOME/chromium-checkouts` (that line also honours `CHROMIUM_CHECKOUTS_DIR`,
   which CI does not set). That is what makes each line's reclaim see the
   other's jobs.
 - A build, a reclaim on a pool host, the image rebuild a changed Dockerfile
