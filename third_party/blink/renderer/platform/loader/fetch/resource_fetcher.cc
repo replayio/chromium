@@ -2408,6 +2408,36 @@ static int NewDependencyGraphNodeWithInfo(const base::Value::Dict& info) {
   return recordreplay::NewDependencyGraphNode(json.c_str());
 }
 
+// The node whose execution queues a stale revalidation. At loader finish: the
+// stale resource's finish, whose execution has ended. At memory cache reuse:
+// the reusing fetch's open execution.
+static absl::optional<int> StaleRevalidationQueueNodeId(
+    const Resource* stale_resource,
+    bool memory_cache_reuse) {
+  if (!memory_cache_reuse)
+    return stale_resource->LastFinishedDependencyGraphNodeId();
+  if (int node_id = recordreplay::DependencyGraphCauseExecutionNode())
+    return node_id;
+  return absl::nullopt;
+}
+
+static void AddStaleRevalidationScheduleEdges(const Resource* stale_resource,
+                                              bool memory_cache_reuse,
+                                              int schedule_node_id) {
+  // The stored entry.
+  if (absl::optional<int> finished_node_id =
+          stale_resource->LastFinishedDependencyGraphNodeId()) {
+    recordreplay::AddDependencyGraphEdge(*finished_node_id, schedule_node_id,
+                                         "{\"kind\":\"staleResource\"}");
+  }
+  if (absl::optional<int> queue_node_id =
+          StaleRevalidationQueueNodeId(stale_resource, memory_cache_reuse)) {
+    recordreplay::AddDependencyGraphEdge(
+        *queue_node_id, schedule_node_id,
+        "{\"kind\":\"staleRevalidationQueue\"}");
+  }
+}
+
 void ResourceFetcher::ScheduleStaleRevalidate(
     Resource* stale_resource,
     absl::optional<uint64_t> reuse_inspector_id) {
@@ -2431,12 +2461,8 @@ void ResourceFetcher::ScheduleStaleRevalidate(
     if (reuse_request_id)
       info.Set("reuseRequestId", *reuse_request_id);
     node_id = NewDependencyGraphNodeWithInfo(info);
-    // The stale resource's finish: at loader finish, its execution has ended.
-    if (absl::optional<int> finished_node_id =
-            stale_resource->LastFinishedDependencyGraphNodeId()) {
-      recordreplay::AddDependencyGraphEdge(*finished_node_id, node_id,
-                                           "{\"kind\":\"staleResource\"}");
-    }
+    AddStaleRevalidationScheduleEdges(stale_resource,
+                                      reuse_inspector_id.has_value(), node_id);
   }
   freezable_task_runner_->PostTask(
       FROM_HERE,
