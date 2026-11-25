@@ -35,7 +35,7 @@ Paths relative to the repository root.
 
 | File | Purpose |
 |---|---|
-| `.buildkite/pipeline.yml` | the build step and the record -> replay step: plugins, agent tags, the cert through aws-sm with an EXIT trap, the backend pin read from the build's `backend_rev` artifact. Linux only, `priority: -1`, a concurrency group, the timeout exported to the job. The logic lives in `ci/job.sh`; only the script fetch of step 2 is inline |
+| `.buildkite/pipeline.yml` | the build step and the record -> replay step: plugins, agent tags, the cert through aws-sm with an EXIT trap, the backend pin read from the build's `backend_rev` artifact. Linux only, the default priority, a concurrency group, the timeout exported to the job. The logic lives in `ci/job.sh`; only the script fetch of step 2 is inline |
 | `replay_build_scripts/build-pipeline.py` | no-op pipeline for `runtime-build-and-test` (`{"steps": ["wait"]}`): no triggers, no file reads |
 | `replay_build_scripts/ci/config.sh` | the key and the paths, images and container names that follow from it, the disk minima, the guards `valid_key`, `assert_isolated_root`, `require_free_gb`, and the retry helper `github_read`. The key is worked out once, when the file is sourced, rather than per call |
 | `replay_build_scripts/ci/bootstrap.sh` | step 2 as a file, for steps that fetch it and run it; the `chromium-build` settings step refuses a commit without it. Sparse paths `ci/` and `chrome/VERSION` (the key), the ref an argument, repo-local `gc.auto 0` |
@@ -169,7 +169,7 @@ Never accessed: `/home/ubuntu/chromium` and `/home/ubuntu/depot_tools` (both gon
 
 | Shared | Bound |
 |---|---|
-| Agent slot (one job at a time per host, several hosts per pool) | `timeout_in_minutes: 240`; `priority: -1` (any other job queued for the pool is picked first); `concurrency: 1`, group `chromium-build/m157/linux-x86_64` -- the key, written out because Buildkite resolves the group before any script runs, and bounding the key rather than the host: two builds of one key would otherwise run on two hosts, each syncing its own copy of that checkout; no preemption of a running job |
+| Agent slot (one job at a time per host, several hosts per pool) | `timeout_in_minutes: 240`; the default priority, so a queued build of this line is not passed over for another job on the pool, while a rebase lane lowers its own; `concurrency: 1`, group `chromium-build/m157/linux-x86_64` -- the key, written out because Buildkite resolves the group before any script runs, and bounding the key rather than the host: two builds of one key would otherwise run on two hosts, each syncing its own copy of that checkout; no preemption of a running job |
 | CPU / RAM, only if a container outlives its job | signal handlers remove the container; `timeout <job timeout>` inside the container; `--cpu-shares 128`; `--oom-score-adj 500`; the next job of that key removes leftovers |
 | Disk volume | below 150 GB free before the first prepare, or 60 GB before any build, remove the least recently used keys and this version's images that no job is using, then refuse if it is still short; 20 GB on the docker root before an image build. Another version's jobs reclaim on the same terms, this key included |
 | Docker daemon, layer store, base-image pulls | additive only (new image, new containers) |
