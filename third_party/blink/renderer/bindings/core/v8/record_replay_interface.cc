@@ -2070,6 +2070,7 @@ static void HandleNetworkPrepareRequestEvent(const base::DictionaryValue& info) 
   CopyDictionaryProperty(event, info, "requestCause");
   CopyDictionaryProperty(event, info, "initiator");
   CopyDictionaryProperty(event, info, "replayInternal");
+  CopyDictionaryProperty(event, info, "staleRevalidationOf");
   if (redirect_source_id) {
     event.SetString("redirectSourceId", *redirect_source_id);
   }
