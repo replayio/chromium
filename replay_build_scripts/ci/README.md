@@ -1,4 +1,4 @@
-# Chromium CI build setup on a rebase branch: design
+# Chromium CI build setup: design
 
 Scope: Linux x86_64, build only, the elastic build pool's `queue=runtime` hosts (replayio/backend `pulumi/build-machines/elastic_build_pool.ts`), Buildkite pipeline `chromium-build`.
 
@@ -12,7 +12,7 @@ Scope: Linux x86_64, build only, the elastic build pool's `queue=runtime` hosts 
 | 2a | host | the key: `MAJOR` of the clone's `chrome/VERSION`, or `CHROMIUM_CHECKOUT_KEY`, rejected unless it names a directory | `ci/config.sh` |
 | 2b | host | take the key's use lock, shared, for the whole job: another script line's reclaim then leaves this checkout alone | `ci/job.sh`, `ci/checkout.sh use-lock` |
 | 3 | host | remove containers named `chromium-build-<key>-*` | `ci/remove-stale-build-containers.sh` |
-| 4 | host | guards (root identity); below the minimum free space, remove the least recently used checkouts and this line's images that no job is using, then refuse if it is still short; create the key's directory + stamp if missing, touch the stamp; remove `tmp_pack_*` of killed fetches (older than this run, open by no process) in the checkout's repositories; remove the lockfiles a killed git left in those repositories, failing if a process still has one open; fetch the commit (depth 1) into `<root>/src` over the agent's SSH identity, unless it is already complete there, retried; install `.gclient` | `ci/checkout.sh sync` |
+| 4 | host | guards (root identity); below the minimum free space, remove the least recently used checkouts and this version's images that no job is using, then refuse if it is still short; create the key's directory + stamp if missing, touch the stamp; remove `tmp_pack_*` of killed fetches (older than this run, open by no process) in the checkout's repositories; remove the lockfiles a killed git left in those repositories, failing if a process still has one open; fetch the commit (depth 1) into `<root>/src` over the agent's SSH identity, unless it is already complete there, retried; install `.gclient` | `ci/checkout.sh sync` |
 | 4a | host | with `CHROMIUM_CHECKOUT_FROM`, and only when this key has no checkout: that key's working files copied and every `.git` hardlinked, holding its use lock | `ci/checkout.sh` (`seed_from`) |
 | 4b | host | `DRIVER_REVISION` from the synced checkout's `REPLAY_BACKEND_REV`, ignoring build env | `ci/job.sh` |
 | 5 | host | build image `chromium-build:<Dockerfile hash>-u<uid>` if absent, and mark it used | `ci/build-image.sh ensure` |
@@ -31,53 +31,51 @@ Scope: Linux x86_64, build only, the elastic build pool's `queue=runtime` hosts 
 
 ## 2. Files
 
-Paths relative to the repository root. Origin: M = the 108 line, now `108.0.5359.0-replay` (it developed on `master`, which was removed when this line took over), 147 = `rebase/147/working`, 158 = BLamy/chromium `chromium-158-buildkite`, new.
+Paths relative to the repository root.
 
-| File | Purpose | Origin | Delta vs origin |
-|---|---|---|---|
-| `.buildkite/pipeline.yml` | one build step; the record -> replay step | M (step shape, plugins, agent tags, cert via aws-sm + EXIT trap, backend pin from the build's `backend_rev` artifact), 158 (concurrency group) | no mac/windows/E2E/buildevents steps; `priority: -1` and a concurrency group; timeout exported to the job; logic moved to `ci/job.sh`, except step 2 (script fetch), inline |
-| `replay_build_scripts/build-pipeline.py` | no-op pipeline for `runtime-build-and-test` (`{"steps": ["wait"]}`) | M (file name, invocation contract) | no triggers, no file reads |
-| `replay_build_scripts/ci/config.sh` | the key and the paths, images and container names that follow from it, the disk minima, the guards `valid_key`, `assert_isolated_root`, `require_free_gb`, and the retry helper `github_read` | new, M (`version_major`, the `CHROMIUM_CHECKOUT_KEY` override, `valid_key`) | the key is worked out once, when the file is sourced, rather than per call |
-| `replay_build_scripts/ci/bootstrap.sh` | step 2 as a file, for steps that fetch it and run it; the `chromium-build` settings step refuses a commit without it | M | sparse paths `ci/` and `chrome/VERSION` (the key), not `replay_build_scripts/` whole; ref is an argument; repo-local `gc.auto 0` |
-| `replay_build_scripts/ci/job.sh` | job driver: use lock → stale containers → sync → backend pin → build → logs → upload | 158 (inline pipeline command), M (use lock held for the job, `DRIVER_REVISION` from the commit, `backend_rev` artifact, `upload-artifacts.sh`) | script instead of YAML; artifacts staged under `<key>/jobs/<job>`; siso logs; default keep-going; the pin is read from the checkout, not a backend clone of its own |
-| `replay_build_scripts/ci/checkout.sh` | `root`, `sync`, `synced`, `seed-from`, `wipe`, `wipe-out`, `reclaim`, `use-lock`, `image-used` | M + 158 | removed: `link_legacy_checkout`, `adopt`, `nearest_src`, the shared `.git-cache`, the backend checkout, the delete-on-failure trap; all git moved into the container, except the src fetch. `sync` converges from any state, and `.replay-synced` records the last one that finished. `seed_from` is M's `prepare --from`, in `sync`'s no-checkout-yet branch rather than a `prepare` of its own, and holding the source's use lock, which M does not. `prefetch_fork_pins` has no counterpart on M, which resolves DEPS once per checkout and so rarely moves a pin in one. Taken from M unchanged in behaviour: `use_lock`, `use`, `unused`, `valid_key`, `last_used`, `remove_key`, `image_mark`, `image_used`, `lru`, `reclaim` -- the lock, trash and mark paths are M's, so each line's reclaim sees the other's jobs |
-| `replay_build_scripts/ci/container/sync.sh` | in-image, in two phases: `checkout` of the commit the host fetched plus the fork pins it declares, then `deps` for gclient sync, hooks and `LASTCHANGE` | 158 (`checkout.sh sync` inline `bash -c`) | idempotent `git init`; no fetch; local `origin/HEAD`; default gclient jobs; split so the host can fetch the pins between the phases |
-| `replay_build_scripts/ci/gclient` | `.gclient` solution; `custom_vars` for the `configure_siso` hook | 147 (`replay.gclient`), 158 (`.gclient` heredoc) | fork URL; `reapi_backend_config_path` names a file that exists; no `rbe_instance` |
-| `replay_build_scripts/ci/build-image.sh` | image tag/ref/ensure/build; `--tools` for the tools image | 158, M (`image-used` on `ensure` and `build`, `--tools` and its `chromium-tools:<tag>` ref) | the uid the build image is built for is part of its tag; disk guard on docker root |
-| `replay_build_scripts/ci/build-in-container.sh` | `docker run` wrapper; `--require-synced` for anything but the sync itself | M + 158 | fixed root (no `--root`); `/ci` read-only mount; cert mount only with `--engflow`; no `.git-cache` mount; no local-driver mount; `--oom-score-adj`; in-container deadline |
-| `replay_build_scripts/ci/remove-stale-build-containers.sh` | remove `chromium-build-<key>-*` containers | 158 | prefix from `config.sh`, which carries the key; no key argument |
-| `replay_build_scripts/upload_build_artifacts.mjs` | package, upload to S3 / static.replay.io, annotate, write `build_id/` | M | none |
-| `replay_build_scripts/ci/upload-artifacts.sh` | runs `upload_build_artifacts.mjs` in the checkout, in the tools image | M | `checkout.sh root` (this line's `checkout.sh` has no `require`) |
-| `replay_build_scripts/ci/in-tools-image.sh` | `docker run` of the tools image as the agent's user, on the host network, with `$HOME`, `<root>`, the cwd and the job workspace mounted at their host paths, the agent's `buildkite-agent`, and `BUILDKITE*`, `AWS_*`, `REPLAY_*`, `DRIVER_REVISION` … passed through | M | no `.git-cache` mount (this line has none) |
-| `replay_build_scripts/ci/tools.Dockerfile` | tools image: node, `awscli`, `binutils`, `git`, `xz-utils` | M | none: a host that builds both lines has one `chromium-tools:<tag>` image |
-| `replay_build_scripts/ci/Dockerfile` | build image | 158, M (depot_tools' gsutil fetched at build time) | `CHROMIUM_TAG=157.0.8103.0`; depot_tools `96b9c092…` (the revision 157 `DEPS` pins for `src/third_party/depot_tools`); system `gc.auto 0`; no `chmod -R a+rX /depot_tools` (the image is built for the uid that runs it, so the `chown` covers it) |
-| `build.cjs` | in-container build script | M (`build.js`: driver embed, build id, image check, `args.gn` import), 158 (`.cjs`, max-failures switch) | reclient + ninja-state healing removed; siso remote-exec check; siso flags; env parsed into one options object |
-| `replay_build_scripts/base_args.gn` | gn args | 147 | `use_allocator = "none"` dropped (not a declared arg at 157) |
-| `replay_build_scripts/linux_args.gn` | imports `base_args.gn` | 147 | none |
-| `build/config/siso/backend_config/replay_engflow.star` | siso backend: platform properties for EngFlow | 147 (same path) | `configs` function dropped (returned `[]` for a non-Google address) |
+| File | Purpose |
+|---|---|
+| `.buildkite/pipeline.yml` | the build step and the record -> replay step: plugins, agent tags, the cert through aws-sm with an EXIT trap, the backend pin read from the build's `backend_rev` artifact. Linux only, `priority: -1`, a concurrency group, the timeout exported to the job. The logic lives in `ci/job.sh`; only the script fetch of step 2 is inline |
+| `replay_build_scripts/build-pipeline.py` | no-op pipeline for `runtime-build-and-test` (`{"steps": ["wait"]}`): no triggers, no file reads |
+| `replay_build_scripts/ci/config.sh` | the key and the paths, images and container names that follow from it, the disk minima, the guards `valid_key`, `assert_isolated_root`, `require_free_gb`, and the retry helper `github_read`. The key is worked out once, when the file is sourced, rather than per call |
+| `replay_build_scripts/ci/bootstrap.sh` | step 2 as a file, for steps that fetch it and run it; the `chromium-build` settings step refuses a commit without it. Sparse paths `ci/` and `chrome/VERSION` (the key), the ref an argument, repo-local `gc.auto 0` |
+| `replay_build_scripts/ci/job.sh` | job driver: use lock → stale containers → sync → backend pin → build → logs → upload. Holds the use lock for the whole job, takes `DRIVER_REVISION` from the built commit, stages artifacts under `<key>/jobs/<job>`, collects siso logs, keeps going by default, and reads the backend pin from the checkout rather than from a clone of its own |
+| `replay_build_scripts/ci/checkout.sh` | `root`, `sync`, `synced`, `seed-from`, `wipe`, `wipe-out`, `reclaim`, `use-lock`, `image-used`. There is no shared `.git-cache` and no backend checkout, and every git command runs in the container except the src fetch. `sync` converges from any state, and `.replay-synced` records the last one that finished. `seed_from` runs in `sync`'s no-checkout-yet branch and holds the source key's use lock. `prefetch_fork_pins` fetches a moved fork pin with the agent's identity |
+| `replay_build_scripts/ci/container/sync.sh` | in-image, in two phases: `checkout` of the commit the host fetched plus the fork pins it declares, then `deps` for gclient sync, hooks and `LASTCHANGE`. Idempotent `git init`, no fetch, a local `origin/HEAD`, and the split exists so the host can fetch the pins between the phases |
+| `replay_build_scripts/ci/gclient` | `.gclient` solution with the fork URL; `custom_vars` for the `configure_siso` hook, where `reapi_backend_config_path` names a file that exists and no `rbe_instance` is set |
+| `replay_build_scripts/ci/build-image.sh` | image tag/ref/ensure/build, marking the image used; `--tools` for the `chromium-tools:<tag>` image. The uid the build image is built for is part of its tag, and the docker root has its own disk guard |
+| `replay_build_scripts/ci/build-in-container.sh` | `docker run` wrapper; `--require-synced` for anything but the sync itself. Fixed root, `/ci` mounted read-only, the cert mounted only with `--engflow`, `--oom-score-adj`, and a deadline inside the container |
+| `replay_build_scripts/ci/remove-stale-build-containers.sh` | remove `chromium-build-<key>-*` containers, with the prefix from `config.sh`, which carries the key, so it takes no key argument |
+| `replay_build_scripts/upload_build_artifacts.mjs` | package, upload to S3 / static.replay.io, annotate, write `build_id/` |
+| `replay_build_scripts/ci/upload-artifacts.sh` | runs `upload_build_artifacts.mjs` in the checkout, in the tools image, resolving the root with `checkout.sh root` |
+| `replay_build_scripts/ci/in-tools-image.sh` | `docker run` of the tools image as the agent's user, on the host network, with `$HOME`, `<root>`, the cwd and the job workspace mounted at their host paths, the agent's `buildkite-agent`, and `BUILDKITE*`, `AWS_*`, `REPLAY_*`, `DRIVER_REVISION` … passed through |
+| `replay_build_scripts/ci/tools.Dockerfile` | tools image: node, `awscli`, `binutils`, `git`, `xz-utils`. Every version that builds on a host shares one `chromium-tools:<tag>` image |
+| `replay_build_scripts/ci/Dockerfile` | build image: `CHROMIUM_TAG=157.0.8103.0`, depot_tools `96b9c092…` (the revision `DEPS` pins for `src/third_party/depot_tools`) with its gsutil fetched at build time, system `gc.auto 0`, and built for the uid that runs it, so a `chown` covers what a `chmod -R` otherwise would |
+| `build.cjs` | in-container build script: driver embed, build id, image check, `args.gn` import, the siso remote-exec check, the siso flags and the max-failures switch, with the environment parsed into one options object |
+| `replay_build_scripts/base_args.gn` | gn args |
+| `replay_build_scripts/linux_args.gn` | imports `base_args.gn` |
+| `build/config/siso/backend_config/replay_engflow.star` | siso backend: platform properties for EngFlow, and no `configs` function |
 
 - `use_allocator` no-op claim:
   - upstream `base/allocator/partition_allocator/partition_alloc.gni` @157.0.8103.0: `use_partition_alloc_as_malloc = use_partition_alloc && use_allocator_shim && …`; no `use_allocator` declaration
-- `configs` equivalence claim:
-  - siso sets `flags["reapi_address"]` to the effective address unconditionally: `siso/subcmd/ninja/config.go` (`initConfigFlags`) @ build `b521b230cb7c56c821235e498285cf8e548a73ee`
-  - 147's `__configs` returns `[]` when that address is not Google's: `rebase/147/working:build/config/siso/backend_config/replay_engflow.star`
-- 147 mismatch resolved: one backend file (`replay_engflow.star`, in the directory `configure_siso.py` resolves relative names against), referenced only from `ci/gclient`; applied only by the upstream hook.
+- No-`configs` claim: such a function would be dead code here, because siso sets `flags["reapi_address"]` to the effective address unconditionally, and a `configs` function returns nothing for an address that is not Google's.
+  - `siso/subcmd/ninja/config.go` (`initConfigFlags`) @ build `b521b230cb7c56c821235e498285cf8e548a73ee`
+- One backend file only (`replay_engflow.star`, in the directory `configure_siso.py` resolves relative names against), referenced from `ci/gclient` alone and applied by the upstream hook alone.
   - upstream `build/config/siso/configure_siso.py` @157.0.8103.0 (`--reapi_backend_config_path`: "relative to backend_config dir or absolute path")
 - `.cjs` requirement:
   - upstream `package.json` @157.0.8103.0: `"type": "module"`
 
-### Inherited 147 files the branch should delete (not used by this setup)
+### Files in the tree this setup does not use, and should lose
 
 | File | Reason |
 |---|---|
 | `buildLinux.mjs` | mounts `$HOME/chromium` and `$HOME/depot_tools` into `chromium-build-new` |
-| `Dockerfile.build`, `BUCK` | (re)build the image named `chromium-build-new` (108's legacy image name) |
+| `Dockerfile.build`, `BUCK` | (re)build an image named `chromium-build-new`, which nothing here builds in or refers to |
 | `build.js` | superseded by `build.cjs`; fails under `"type": "module"` |
 | `replay_build_scripts/install-siso-config.sh`, `replay.gclient`, `siso.sisorc`, `backend.star` | superseded by `ci/gclient` + hook + `build.cjs` flags; second copy of the backend config |
-| `replay_build_scripts/update-all-repos.mjs`, `update-chromium-repo.mjs` | operate on the current directory's checkout + `RECORD_REPLAY_BACKEND_DIR`; steps of the 147 pipeline |
+| `replay_build_scripts/update-all-repos.mjs`, `update-chromium-repo.mjs` | operate on the current directory's checkout plus `RECORD_REPLAY_BACKEND_DIR`; no step here runs them |
 
-- Source of the list: `/home/domi/replay/chromium/_rebase157/merge/chromium_new.txt`
-- Not touched: `buildMac.mjs`, `buildWindows.mjs`, `mac_*_args.gn`, `windows_args.gn`, `.github/workflows/*` (all `workflow_dispatch` only).
+- Not touched: `buildMac.mjs`, `buildWindows.mjs`, `mac_*_args.gn`, `windows_args.gn` -- this setup builds Linux only, so the platforms they serve are outside its scope rather than superseded by it.
 
 ### Branch prerequisites (outside these files)
 
@@ -95,7 +93,7 @@ Paths relative to the repository root. Origin: M = the 108 line, now `108.0.5359
 | Docker image | `chromium-build:<this Dockerfile's hash>-u<uid>`; `chromium-tools:<hash>` for the upload | `chromium-build:<its Dockerfile's hash>` | the tag is the Dockerfile's hash, so a version's builds only ever run in the image its own tree describes; reclaim can remove any of them, and docker refuses one a container uses |
 | Containers | `chromium-build-<key>-<job>-<pid>` | `chromium-build-<its key>-<job>` | `CONTAINER_PREFIX` carries the key; removal filter `name=^/?chromium-build-<key>-` |
 | Workspace files | `engflow.{crt,key}`, `.ci-boot/` | the same names, in the same workspace of the same pipeline | a host runs one job at a time, the `aws-sm` plugin writes the cert afresh for each, and the EXIT trap removes exactly these three |
-| Free space on the shared volume | reclaims the least recently used keys and this line's images that no job is using, then refuses | the same, for its own images | `reclaim` takes a key's use lock exclusively, so a checkout a job is using is skipped and reported; this key and this tree's image are never candidates |
+| Free space on the shared volume | reclaims the least recently used keys and this version's images that no job is using, then refuses | the same, for its own images | `reclaim` takes a key's use lock exclusively, so a checkout a job is using is skipped and reported; this key and this tree's image are never candidates |
 | git config | image `/etc/gitconfig` (`safe.directory`, `gc.auto 0`); repo-local `gc.auto 0` in `.ci-boot` and `<root>/src` | host `~/.gitconfig` | no `git config --global/--system` on the host |
 
 `assert_isolated_root` (`replay_build_scripts/ci/config.sh`), called by every entry point before any use of the root:
@@ -110,24 +108,11 @@ Paths relative to the repository root. Origin: M = the 108 line, now `108.0.5359
 
 Reclaim is the one exception. A pool host's volume holds every version that has
 built on it, so a job short of space removes the least recently used keys and
-its own line's images that no job is using. A removal needs the key's use lock
-exclusively, so no line can take a checkout another is building in. The 108 line
-no longer has a branch to build from, so in practice only this line reclaims
-today, but its scripts still behave as described below if that branch is ever
-built again.
-
-Mirror check (another version's job cannot reach this one's objects):
-- The 108 line's stale-container filter is `name=^/?chromium-build-<its key>-`, and the
-  keys are milestones, so it does not match this version's containers. Run by
-  hand with no key it filters on `chromium-build-` alone and would match them;
-  its own step always passes its key.
-  - `108.0.5359.0-replay:replay_build_scripts/remove-stale-build-containers.sh`
-- Keys differ whenever the milestones do, and `link_legacy_checkout` is gone (replayio/chromium#1648).
-  - `108.0.5359.0-replay:replay_build_scripts/ci/checkout.sh`
-- That line's reclaim removes this key when its volume runs low, and cannot while a
-  job holds that key's use lock, which `job.sh` holds for the whole job. `sync`
-  converges from any state, so the next build fetches and syncs again.
-  - `108.0.5359.0-replay:replay_build_scripts/ci/checkout.sh` (`lru`, `unused`)
+the images of its own version that no job is using. A removal needs the key's
+use lock exclusively, and `job.sh` holds that lock, shared, for the whole job,
+so a checkout a job is building in is skipped and reported rather than taken.
+Losing a key between builds costs only time: `sync` converges from any state,
+so the next build fetches and syncs again.
 
 Not present by construction: `git gc` (and auto-gc disabled where git runs), host package installs, `docker prune`, `docker rmi` of another repository's images, `cd` outside workspace and `<key>/jobs/<job>`.
 
@@ -180,18 +165,18 @@ Never accessed: `/home/ubuntu/chromium` and `/home/ubuntu/depot_tools` (both gon
 
 `docker run` arguments: `-v <root>:/chromium`, `-v <ws>/.ci-boot/replay_build_scripts/ci:/ci:ro`, `-w /chromium/src`, `--user <uid>:<gid>`, `-e HOME=/chromium/home`, `--cpu-shares 128`, `--oom-score-adj 500`; build only: `-v <cert>:/engflow/client.crt:ro`, `-v <key>:/engflow/client.key:ro`, `-e RBE_tls_client_auth_cert`, `-e RBE_tls_client_auth_key`; pass-through env: `BUILDKITE`, `BUILDKITE_BRANCH`, `BUILDKITE_PIPELINE_DEFAULT_BRANCH`, `LOCAL_DEVELOPER_BUILD_EXTENSION`, `DRIVER_REVISION`, `REPLAY_BUILD_MAX_FAILURES`, `REPLAY_SISO_LOCAL_JOBS`, `REPLAY_SISO_CONFIG`.
 
-## 6. Shared with 108 builds / not shared
+## 6. Shared with other builds on the pool / not shared
 
 | Shared | Bound |
 |---|---|
-| Agent slot (one job at a time per host, several hosts per pool) | `timeout_in_minutes: 240`; `priority: -1` (a queued production job runs first); `concurrency: 1`, group `chromium-build/m157/linux-x86_64` -- the key, written out because Buildkite resolves the group before any script runs, and bounding the key rather than the host: two builds of one key would otherwise run on two hosts, each syncing its own copy of that checkout; no preemption of a running job |
+| Agent slot (one job at a time per host, several hosts per pool) | `timeout_in_minutes: 240`; `priority: -1` (any other job queued for the pool is picked first); `concurrency: 1`, group `chromium-build/m157/linux-x86_64` -- the key, written out because Buildkite resolves the group before any script runs, and bounding the key rather than the host: two builds of one key would otherwise run on two hosts, each syncing its own copy of that checkout; no preemption of a running job |
 | CPU / RAM, only if a container outlives its job | signal handlers remove the container; `timeout <job timeout>` inside the container; `--cpu-shares 128`; `--oom-score-adj 500`; the next job of that key removes leftovers |
-| Disk volume | below 150 GB free before the first prepare, or 60 GB before any build, remove the least recently used keys and this line's images that no job is using, then refuse if it is still short; 20 GB on the docker root before an image build. The 108 line's jobs do the same, this key included |
+| Disk volume | below 150 GB free before the first prepare, or 60 GB before any build, remove the least recently used keys and this version's images that no job is using, then refuse if it is still short; 20 GB on the docker root before an image build. Another version's jobs reclaim on the same terms, this key included |
 | Docker daemon, layer store, base-image pulls | additive only (new image, new containers) |
-| Job workspace directory, Buildkite pipeline `chromium-build`, plugin checkouts (`skip-checkout#v0.1.1`, `aws-sm#v2.3.1`: the versions the 108 line uses) | own file names, removed on exit |
+| Job workspace directory, Buildkite pipeline `chromium-build`, plugin checkouts (`skip-checkout#v0.1.1`, `aws-sm#v2.3.1`) | own file names, removed on exit |
 | EngFlow cluster `simpsonite.cluster.engflow.com:443`, instance `default`; secrets `engflow-certificate`, `engflow-key` | executor capacity shared; CAS / action cache content-addressed |
 | Network egress | — |
-| S3 `recordreplay-us-east-2`, `recordreplay-us-east-2-dev` (`builds/`, `symbols/`), `recordreplay-website` (`downloads/`) | every object is named by the build id, which carries the commit and `-dev` for a branch build |
+| S3 `recordreplay-us-east-2`, `recordreplay-us-east-2-dev` (`builds/`, `symbols/`), `recordreplay-website` (`downloads/`) | every object is named by the build id, which carries the commit, and `-dev` when the build is not of the pipeline's default branch |
 | The agent's GitHub SSH identity (steps 2, 4 and 6a) | reads retried; GitHub queues authenticated reads of the fork network under load. Step 6a exists so that a moved fork pin is read with this identity rather than by gclient, which would fetch every branch of that fork anonymously |
 
 Not shared: checkout, out dir, gclient/cipd state, depot_tools, git object caches, container HOME (siso/vpython caches), image, container names, siso state.
@@ -210,9 +195,9 @@ Not shared: checkout, out dir, gclient/cipd state, depot_tools, git object cache
 - siso flags (CI image only): `--strict_remote=true`, `-failure_summary siso_failure_summary`, `-k <REPLAY_BUILD_MAX_FAILURES>`, optional `-local_jobs=<n>`, `-config <names>`.
   - `siso/subcmd/ninja/config.go` (`k`: "keep going until N jobs fail (0 means inifinity)"; `strict_remote`; `failure_summary`; `local_jobs`; `config`)
   - `--strict_remote` without a REAPI backend is an error: `siso/subcmd/ninja/ninja.go` ("no reapi specified, but remote is requested as --strict_remote")
-- Not from 147's `siso.sisorc`: `--local_jobs=1`. Default here = siso's (CPU count); links are bounded by gn's link pool, which siso honours.
+- `--local_jobs` is left at siso's default (the CPU count); links are bounded by gn's link pool, which siso honours.
   - `siso/build/limits.go` (`Local: numCPU`), `siso/build/builder.go` (`poolSemas`)
-- Step classes remote vs local: C/C++ compiles remote; mojo, blink bindings, proto, grit, nasm, typescript, v8, rust steps remote only under siso config `googlechrome`, which this backend (like 147's) does not enable → local on the agent's 4 CPUs. Switch: `REPLAY_SISO_CONFIG=googlechrome`.
+- Step classes remote vs local: C/C++ compiles remote; mojo, blink bindings, proto, grit, nasm, typescript, v8, rust steps remote only under siso config `googlechrome`, which this backend does not enable → local on the agent's 4 CPUs. Switch: `REPLAY_SISO_CONFIG=googlechrome`.
   - upstream `build/config/siso/{mojo,blink_all,proto_linux,grit,nasm_linux,typescript_all,v8,rust}.star`, `config.star` @157.0.8103.0
 - Pre-build refusal in the image (`build.cjs` `checkRemoteExecution`): `.sisoenv` missing, `SISO_PROJECT` set, no `SISO_REAPI_ADDRESS`, `backend.star` ≠ `replay_engflow.star`, cert/key file missing; plus image hash ≠ tree's Dockerfile hash (`checkBuildImage`).
 
@@ -245,7 +230,7 @@ Not shared: checkout, out dir, gclient/cipd state, depot_tools, git object cache
 
 - Failure line format: `siso/build/cmd_output_log.go` (`"%s%s: %s %q %s\n"`, result `FAILED`).
 - The runtime itself is on S3 / static.replay.io (`<build id>.tar.xz`). The record -> replay step has the backend download it by build id.
-- Build id: `replay_build_scripts/upload_build_artifacts.mjs` (`buildIdExtension`), suffix `-dev` when the branch is not the pipeline's default branch. `main` is `chromium-build`'s default, so a build of this line carries no suffix and the release pipelines take its id as it stands; a build of any other branch still gets `-dev`.
+- Build id: `replay_build_scripts/upload_build_artifacts.mjs` (`buildIdExtension`), suffix `-dev` when the branch is not the pipeline's default branch. `main` is `chromium-build`'s default, so a build of it carries no suffix and the release pipelines take its id as it stands; a build of any other branch still gets `-dev`.
 
 ## 10. Verification performed (local, no CI, no real docker)
 
@@ -287,10 +272,5 @@ Not shared: checkout, out dir, gclient/cipd state, depot_tools, git object cache
   this key, this tree's image and every name beginning with a dot
   (`.git-cache`) are never candidates; nothing is removed, and nothing printed,
   while the volume is above the minimum.
-- Lock, trash and image-mark paths equal the 108 line's: `<keys>/.<key>.use`,
-  `<keys>/.removing.XXXXXX`, `<keys>/.images/<ref>`, with `<keys>` the same
-  `$HOME/chromium-checkouts` (that line also honours `CHROMIUM_CHECKOUTS_DIR`,
-  which CI does not set). That is what makes each line's reclaim see the
-  other's jobs.
 - A build, a reclaim on a pool host, the image rebuild a changed Dockerfile
   implies, and the record -> replay step reading `backend_rev` run on CI only.
