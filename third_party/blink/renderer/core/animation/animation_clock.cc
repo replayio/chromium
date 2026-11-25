@@ -72,6 +72,13 @@ base::TimeTicks AnimationClock::CurrentTime() {
   if (task_for_which_time_was_calculated_ == currently_running_task_)
     return time_;
 
+  // Code running with events disallowed, such as a GC prologue in an unordered
+  // task, reads a clock that isn't recorded. When replaying, that is the replay
+  // host's clock, and advancing to it would leave the animations ahead of every
+  // later recorded frame time. Such code sees the time already set instead.
+  if (recordreplay::AreEventsDisallowed())
+    return time_;
+
   // Otherwise, we may need to dynamically update our own time. Again see the
   // comments on |SetAllowedToDynamicallyUpdateTime|.
   const base::TimeTicks current_time = clock_->NowTicks();
