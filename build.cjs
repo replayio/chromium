@@ -27,6 +27,8 @@ const options = {
   maxFailures: countFromEnv("REPLAY_BUILD_MAX_FAILURES"),
   // Parallel local steps; siso's default is the CPU count.
   sisoLocalJobs: countFromEnv("REPLAY_SISO_LOCAL_JOBS"),
+  // Parallel remote actions outside CI; see buildToolArgs.
+  sisoRemoteJobs: countFromEnv("REPLAY_SISO_REMOTE_JOBS"),
   // siso `-config` names, e.g. to run more step kinds remotely.
   sisoConfig: process.env.REPLAY_SISO_CONFIG,
 };
@@ -36,6 +38,8 @@ const archSuffix = options.buildArm ? "-arm" : "";
 const sisoDir = path.join(__dirname, "build", "config", "siso");
 // Relative to the out dir. siso appends to it.
 const SISO_FAILURE_SUMMARY = "siso_failure_summary";
+// Concurrent remote actions a developer's build asks for; see buildToolArgs.
+const DEVELOPER_REMOTE_JOBS = 50;
 
 main();
 
@@ -315,6 +319,27 @@ function buildToolArgs() {
     // --strict_remote: a remote step never falls back to the agent's CPUs,
     // and no REAPI backend at all is an error.
     args.push("--strict_remote=true", "-failure_summary", SISO_FAILURE_SUMMARY);
+  }
+  if (!buildImageOfContainer()) {
+    // siso asks for 80 concurrent remote actions per CPU, which is 2,880 on a
+    // 36-core workstation and far more than this cluster runs at once. The
+    // surplus sits queued until each step's two-minute timeout expires, and
+    // siso then compiles it locally, having waited for nothing. Measured on a
+    // burst of 218 dirty v8 TUs: 50 jobs, no timeouts, 88 s; 200 jobs, 45
+    // timeouts, 171 s; siso's default, 8,068 timeouts inside a 45-minute
+    // `chrome` build whose actual work was 8,076 compiles.
+    //
+    // CI keeps siso's default: it runs with --strict_remote, where a timeout
+    // fails the build instead of hiding in the wall clock, and none of this was
+    // measured on an agent.
+    args.push(`-remote_jobs=${options.sisoRemoteJobs || DEVELOPER_REMOTE_JOBS}`);
+    // Upload what this build compiles locally, so the next build of the same
+    // sources -- another tree, another session, a rebuild after a branch switch
+    // -- reads it from the cache. Measured: four TUs compiled in 20 s, then
+    // served from the cache in 3 s. Only locally executed steps are uploaded,
+    // and a step's digest covers the tree's own hermetic toolchain, so a result
+    // can only ever be read back for the same action.
+    args.push("-re_cache_enable_write");
   }
   if (options.sisoLocalJobs !== undefined) {
     args.push(`-local_jobs=${options.sisoLocalJobs}`);
