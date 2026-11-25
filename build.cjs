@@ -27,8 +27,10 @@ const options = {
   maxFailures: countFromEnv("REPLAY_BUILD_MAX_FAILURES"),
   // Parallel local steps; siso's default is the CPU count.
   sisoLocalJobs: countFromEnv("REPLAY_SISO_LOCAL_JOBS"),
-  // Parallel remote actions outside CI; see buildToolArgs.
+  // Parallel remote actions, and whether locally built results are uploaded.
+  // Both outside CI only, both off unless asked for; see buildToolArgs.
   sisoRemoteJobs: countFromEnv("REPLAY_SISO_REMOTE_JOBS"),
+  sisoCacheUpload: !!process.env.REPLAY_SISO_CACHE_UPLOAD,
   // siso `-config` names, e.g. to run more step kinds remotely.
   sisoConfig: process.env.REPLAY_SISO_CONFIG,
 };
@@ -38,8 +40,6 @@ const archSuffix = options.buildArm ? "-arm" : "";
 const sisoDir = path.join(__dirname, "build", "config", "siso");
 // Relative to the out dir. siso appends to it.
 const SISO_FAILURE_SUMMARY = "siso_failure_summary";
-// Concurrent remote actions a developer's build asks for; see buildToolArgs.
-const DEVELOPER_REMOTE_JOBS = 50;
 
 main();
 
@@ -207,139 +207,28 @@ function buildImageOfCheckout() {
 // the agent cannot compile Chromium itself.
 function checkRemoteExecution() {
   if (!buildImageOfContainer()) {
-    return;
-  }
-  const sisoEnv = readSisoEnv();
-  if (sisoEnv.SISO_PROJECT || !sisoEnv.SISO_REAPI_ADDRESS) {
-    throw new Error(
-      `build/config/siso/.sisoenv does not name a non-Google REAPI backend ` +
-        `(${JSON.stringify(sisoEnv)}): .gclient custom_vars are missing`
-    );
-  }
-  const backendDir = path.join(sisoDir, "backend_config");
-  const installed = readFileOrNull(path.join(backendDir, "backend.star"));
-  const ours = fs.readFileSync(path.join(backendDir, "replay_engflow.star"), "utf8");
-  if (installed !== ours) {
-    throw new Error(
-      `build/config/siso/backend_config/backend.star is not replay_engflow.star: ` +
-        `gclient runhooks has not run with this checkout's .gclient`
-    );
-  }
-  for (const name of ["RBE_tls_client_auth_cert", "RBE_tls_client_auth_key"]) {
-    const file = process.env[name];
-    if (!file || !fs.existsSync(file)) {
-      throw new Error(`${name} does not name a file: no EngFlow client pair`);
-    }
-  }
-  console.log(
-    `Remote execution: ${sisoEnv.SISO_REAPI_ADDRESS} instance ${sisoEnv.SISO_REAPI_INSTANCE}`
-  );
-}
-
-// KEY=VALUE lines, written by build/config/siso/configure_siso.py.
-function readSisoEnv() {
-  const text = readFileOrNull(path.join(sisoDir, ".sisoenv"));
-  if (text === null) {
-    throw new Error(
-      `build/config/siso/.sisoenv is missing: gclient runhooks has not run`
-    );
-  }
-  const entries = {};
-  for (const line of text.split("\n")) {
-    const eq = line.indexOf("=");
-    if (eq > 0) {
-      entries[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
-    }
-  }
-  return entries;
-}
-
-// The out dir's configuration comes from the repo. In the build image the
-// out dir is CI's own, so args.gn is always the import; elsewhere an existing
-// args.gn is somebody's own and is left alone.
-function prepareOutDir() {
-  fs.mkdirSync(outdir, { recursive: true });
-  const argsFile = path.join(outdir, "args.gn");
-  if (buildImageOfContainer() || !fs.existsSync(argsFile)) {
-    writeFileSyncIfChanged(
-      argsFile,
-      `import("//replay_build_scripts/${argsName()}")\n`
-    );
-  }
-}
-
-function argsName() {
-  switch (currentPlatform()) {
-    case "linux":
-      return "linux_args.gn";
-    case "windows":
-      return "windows_args.gn";
-    case "macOS":
-      return options.buildArm ? "mac_arm64_args.gn" : "mac_x86_64_args.gn";
-  }
-}
-
-// only lint when not in buildkite (since buildkite does the linting at a different stage)
-function lintOutsideCI() {
-  if (options.inBuildkite) {
-    return;
-  }
-  console.log(`Linting replay js blobs...`);
-  spawnChecked("npm", ["ci"], {
-    cwd: path.join(__dirname, "replay_build_scripts"),
-    stdio: "inherit",
-  });
-  spawnChecked("node", [path.join("replay_build_scripts", "lint.mjs")], {
-    stdio: "inherit",
-  });
-}
-
-function build() {
-  console.log(`Building...`);
-  const summary = path.join(outdir, SISO_FAILURE_SUMMARY);
-  if (fs.existsSync(summary)) {
-    fs.unlinkSync(summary);
-  }
-  // make the windows build verbose so we can see what's going on
-  const platformArgs = currentPlatform() == "windows" ? ["-v"] : [];
-  spawnChecked(
-    tool("autoninja"),
-    [...platformArgs, "-C", outdir, ...buildToolArgs(), "chrome"],
-    { stdio: "inherit" }
-  );
-}
-
-// autoninja passes these on to `siso ninja` (use_siso in args.gn).
-function buildToolArgs() {
-  const args = [];
-  if (options.maxFailures !== undefined) {
-    args.push("-k", String(options.maxFailures));
-  }
-  if (buildImageOfContainer()) {
-    // --strict_remote: a remote step never falls back to the agent's CPUs,
-    // and no REAPI backend at all is an error.
-    args.push("--strict_remote=true", "-failure_summary", SISO_FAILURE_SUMMARY);
-  }
-  if (!buildImageOfContainer()) {
-    // siso asks for 80 concurrent remote actions per CPU, which is 2,880 on a
-    // 36-core workstation and far more than this cluster runs at once. The
-    // surplus sits queued until each step's two-minute timeout expires, and
-    // siso then compiles it locally, having waited for nothing. Measured on a
-    // burst of 218 dirty v8 TUs: 50 jobs, no timeouts, 88 s; 200 jobs, 45
-    // timeouts, 171 s; siso's default, 8,068 timeouts inside a 45-minute
-    // `chrome` build whose actual work was 8,076 compiles.
+    // Two knobs for a developer build, both off unless the environment asks.
     //
-    // CI keeps siso's default: it runs with --strict_remote, where a timeout
-    // fails the build instead of hiding in the wall clock, and none of this was
-    // measured on an agent.
-    args.push(`-remote_jobs=${options.sisoRemoteJobs || DEVELOPER_REMOTE_JOBS}`);
-    // Upload what this build compiles locally, so the next build of the same
-    // sources -- another tree, another session, a rebuild after a branch switch
-    // -- reads it from the cache. Measured: four TUs compiled in 20 s, then
-    // served from the cache in 3 s. Only locally executed steps are uploaded,
-    // and a step's digest covers the tree's own hermetic toolchain, so a result
-    // can only ever be read back for the same action.
-    args.push("-re_cache_enable_write");
+    // REPLAY_SISO_REMOTE_JOBS caps concurrent remote actions. siso's own
+    // default is 80 per CPU, which is more than this cluster runs at once: the
+    // surplus queues until a step's two-minute timeout expires and then
+    // compiles locally. A cap stops that waiting, but it also stops the local
+    // cores taking the overflow, because siso keeps one fast-local slot
+    // (SISO_LIMITS fastlocal=), so whether a cap is faster depends on the size
+    // of the burst and is not settled. 0 means siso's default. Needs a backend:
+    // autoninja runs `siso ninja --offline` when use_remoteexec is false, and
+    // siso then refuses a positive -remote_jobs.
+    if (options.sisoRemoteJobs) {
+      args.push(`-remote_jobs=${options.sisoRemoteJobs}`);
+    }
+    // REPLAY_SISO_CACHE_UPLOAD uploads the results of locally executed steps,
+    // so the next build of the same sources reads them back. CI reads the same
+    // cache instance, a local step runs unsandboxed, and a step's key covers
+    // only the inputs siso declared, so this stays opt-in until whoever owns
+    // that cache signs it off.
+    if (options.sisoCacheUpload) {
+      args.push("-re_cache_enable_write");
+    }
   }
   if (options.sisoLocalJobs !== undefined) {
     args.push(`-local_jobs=${options.sisoLocalJobs}`);
