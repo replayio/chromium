@@ -129,6 +129,23 @@ steps:
       .ci-boot/replay_build_scripts/ci/job.sh
 
   # e2e=true: only linux class with Replay Chromium runtime libs (libnss3); can_replay lacks them.
+  # The devtools e2e suite against this build. It resolves which build to test
+  # from BUILDKITE_TRIGGERED_FROM_BUILD_*, which Buildkite sets for a trigger
+  # step, so the branch default in its build-reason script is not involved.
+  - label: "📝 E2E Tests (linux-x86_64)"
+    trigger: "runtime-fe-end-to-end-tests"
+    depends_on:
+      - "build-chromium-linux-x86_64"
+    build:
+      env:
+        OS: "linux"
+        ARCH: "x86_64"
+        RECORD_REPLAY_METADATA_SOURCE_COMMIT_TITLE: "${BUILDKITE_MESSAGE}"
+        RECORD_REPLAY_METADATA_SOURCE_COMMIT_ID: "${BUILDKITE_COMMIT}"
+        RECORD_REPLAY_METADATA_SOURCE_BRANCH: "${BUILDKITE_BRANCH}"
+        RECORD_REPLAY_METADATA_SOURCE_MERGE_ID: "${BUILDKITE_PULL_REQUEST}"
+        RUNTIME_REPO: "${BUILDKITE_PULL_REQUEST_REPO}"
+
   - label: "📝 Chromium Recording Tests (linux-x86_64)"
     key: "chromium-recording-linux-x86_64"
     depends_on:

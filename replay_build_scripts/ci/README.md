@@ -1,6 +1,6 @@
 # Chromium CI build setup: design
 
-Scope: Linux x86_64, build only, the elastic build pool's `queue=runtime` hosts (replayio/backend `pulumi/build-machines/elastic_build_pool.ts`), Buildkite pipeline `chromium-build`.
+Scope: Linux x86_64, the elastic build pool's `queue=runtime` hosts (replayio/backend `pulumi/build-machines/elastic_build_pool.ts`), Buildkite pipeline `chromium-build`.
 
 ## 1. Job flow
 
@@ -35,7 +35,7 @@ Paths relative to the repository root.
 
 | File | Purpose |
 |---|---|
-| `.buildkite/pipeline.yml` | the build step and the record -> replay step: plugins, agent tags, the cert through aws-sm with an EXIT trap, the backend pin read from the build's `backend_rev` artifact. Linux only, the default priority, a concurrency group, the timeout exported to the job. The logic lives in `ci/job.sh`; only the script fetch of step 2 is inline |
+| `.buildkite/pipeline.yml` | the build step, the record -> replay step and the trigger of the devtools e2e suite: plugins, agent tags, the cert through aws-sm with an EXIT trap, the backend pin read from the build's `backend_rev` artifact. Linux only, the default priority, a concurrency group, the timeout exported to the job. No mac, windows or buildevents steps. The logic lives in `ci/job.sh`; only the script fetch of step 2 is inline |
 | `replay_build_scripts/build-pipeline.py` | no-op pipeline for `runtime-build-and-test` (`{"steps": ["wait"]}`): no triggers, no file reads |
 | `replay_build_scripts/ci/config.sh` | the key and the paths, images and container names that follow from it, the disk minima, the guards `valid_key`, `assert_isolated_root`, `require_free_gb`, and the retry helper `github_read`. The key is worked out once, when the file is sourced, rather than per call |
 | `replay_build_scripts/ci/bootstrap.sh` | step 2 as a file, for steps that fetch it and run it; the `chromium-build` settings step refuses a commit without it. Sparse paths `ci/` and `chrome/VERSION` (the key), the ref an argument, repo-local `gc.auto 0` |
