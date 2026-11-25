@@ -452,8 +452,8 @@ void OnNetworkNavigationRedirect(uint64_t inspector_id,
   BrowserEvent("Network.NavigationRedirect", dict);
 }
 
-// The served response's identity: a cache hit and the response that stored
-// the entry share responseTime.
+// The served response's identity: a cache hit shares responseTime with the
+// response that stored the entry, or with the 304 that updated it last.
 static void NewNetworkReceiveResponseNode(
     const std::string& request_id,
     const blink::ResourceResponse& response,
@@ -464,13 +464,15 @@ static void NewNetworkReceiveResponseNode(
   if (!response.ResponseTime().is_null()) {
     info.Set("responseTime", response.ResponseTime().ToJsTimeIgnoringNull());
   }
-  info.Set("networkAccessed", response.NetworkAccessed());
-  info.Set("asyncRevalidationRequested",
-           response.AsyncRevalidationRequested());
   if (memory_cache_inspector_id) {
     SetConsumedRequestId(
         info, "cachedRequestId",
         ConsumedNetworkRequest::Request(*memory_cache_inspector_id));
+  } else {
+    // At memory cache reuse, of the cached resource's request.
+    info.Set("networkAccessed", response.NetworkAccessed());
+    info.Set("asyncRevalidationRequested",
+             response.AsyncRevalidationRequested());
   }
   std::string json;
   base::JSONWriter::Write(info, &json);
