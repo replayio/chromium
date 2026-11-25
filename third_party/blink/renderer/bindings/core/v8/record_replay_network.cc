@@ -51,17 +51,23 @@ static const char* HttpVersionToString(blink::ResourceResponse::HTTPVersion vers
 }
 
 struct ReplayNetworkRequestState {
-  size_t redirect_count = 0;
   bool has_form_body = false;
   std::string form_body;
   // Initiated by a Replay-injected script: not app traffic.
   bool replay_internal = false;
 };
 
+// Redirects followed, by the original inspector identifier. Kept past the
+// request's finish: staleRevalidationOf names a finished request.
+static std::unordered_map<uint64_t, size_t>& GetReplayNetworkRedirectCounts() {
+  static auto* redirect_counts = new std::unordered_map<uint64_t, size_t>();
+  return *redirect_counts;
+}
+
 // This is keyed by the original inspector identifier. It tracks producer-side
-// request-chain state used to derive replay request ids and preserve request
-// body data for redirected hops when Blink no longer exposes the redirected
-// body on the prepared ResourceRequest.
+// request-chain state used to preserve request body data for redirected hops
+// when Blink no longer exposes the redirected body on the prepared
+// ResourceRequest.
 static std::unordered_map<uint64_t, ReplayNetworkRequestState>*
     gReplayNetworkRequestStates = nullptr;
 
@@ -87,13 +93,13 @@ static std::string NetworkRequestIdForIdentifier(uint64_t identifier) {
            (unsigned long)identifier);
   std::string root_request_id(request_id);
 
-  auto& request_states = GetReplayNetworkRequestStates();
-  auto it = request_states.find(identifier);
-  if (it == request_states.end() || it->second.redirect_count == 0) {
+  const auto& redirect_counts = GetReplayNetworkRedirectCounts();
+  auto it = redirect_counts.find(identifier);
+  if (it == redirect_counts.end()) {
     return root_request_id;
   }
 
-  return root_request_id + ":" + std::to_string(it->second.redirect_count);
+  return root_request_id + ":" + std::to_string(it->second);
 }
 
 static std::string RecordReplayNetworkRequestId(uint64_t inspector_id) {
@@ -107,7 +113,7 @@ std::string NetworkRequestId(uint64_t inspector_id) {
 
 static void RecordReplayNetworkIncrementRedirectCount(uint64_t inspector_id) {
   const uint64_t identifier = RecordReplayNetworkInspectorId(inspector_id);
-  GetReplayNetworkRequestStates()[identifier].redirect_count++;
+  GetReplayNetworkRedirectCounts()[identifier]++;
 }
 
 static void RecordReplayNetworkClearRequestState(uint64_t inspector_id) {

@@ -213,6 +213,7 @@ std::unique_ptr<ResourceRequest> ResourceRequestHead::CreateRedirectRequest(
   request->SetPurposeHeader(GetPurposeHeader());
   request->SetUkmSourceId(GetUkmSourceId());
   request->SetInspectorId(InspectorId());
+  request->revalidated_stale_inspector_id_ = RevalidatedStaleInspectorId();
   request->SetFromOriginDirtyStyleSheet(IsFromOriginDirtyStyleSheet());
   request->SetRecursivePrefetchToken(RecursivePrefetchToken());
   request->SetFetchLikeAPI(IsFetchLikeAPI());
