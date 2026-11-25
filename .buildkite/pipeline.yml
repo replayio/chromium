@@ -34,9 +34,9 @@ steps:
     # keep another version's waiting. A build that times out is continued by the
     # next one: the out dir and siso's state stay in the checkout.
     timeout_in_minutes: &timeout 240
-    # Below the default (0): a queued production build is picked before a queued
-    # rebase one.
-    priority: -1
+    # Left at the default (0). A queued production build is picked before a
+    # queued rebase one, and this line is the production one, so it does not
+    # yield: a rebase lane lowers the priority in its own copy of this file.
     # One build of this key at a time. Without this, two builds of one key are
     # dispatched to two hosts of the pool, each holding its own copy of that
     # key's checkout and syncing it; the use lock a job takes is a file on one
