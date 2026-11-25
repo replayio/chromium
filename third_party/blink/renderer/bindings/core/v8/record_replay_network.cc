@@ -452,16 +452,51 @@ void OnNetworkNavigationRedirect(uint64_t inspector_id,
   BrowserEvent("Network.NavigationRedirect", dict);
 }
 
-void OnNetworkReceiveResponse(uint64_t inspector_id,
-                              const blink::ResourceResponse& response,
-                              absl::optional<bool> response_from_cache) {
+// The served response's identity: a cache hit and the response that stored
+// the entry share responseTime.
+static void NewNetworkReceiveResponseNode(
+    const std::string& request_id,
+    const blink::ResourceResponse& response,
+    absl::optional<uint64_t> memory_cache_inspector_id) {
+  base::Value::Dict info;
+  info.Set("kind", "networkReceiveResponse");
+  info.Set("requestId", request_id);
+  if (!response.ResponseTime().is_null()) {
+    info.Set("responseTime", response.ResponseTime().ToJsTimeIgnoringNull());
+  }
+  info.Set("networkAccessed", response.NetworkAccessed());
+  info.Set("asyncRevalidationRequested",
+           response.AsyncRevalidationRequested());
+  if (memory_cache_inspector_id) {
+    SetConsumedRequestId(
+        info, "cachedRequestId",
+        ConsumedNetworkRequest::Request(*memory_cache_inspector_id));
+  }
+  std::string json;
+  base::JSONWriter::Write(info, &json);
+  recordreplay::NewDependencyGraphNode(json.c_str());
+}
+
+void OnNetworkReceiveResponse(
+    uint64_t inspector_id,
+    const blink::ResourceResponse& response,
+    absl::optional<uint64_t> memory_cache_inspector_id) {
   if (!ShouldEmitRecordReplayNetworkBrowserEvents()) {
     return;
   }
 
   blink::ScriptForbiddenScope::AllowUserAgentScript allow_script;
+  const uint64_t identifier = RecordReplayNetworkInspectorId(inspector_id);
+  std::string requestId = NetworkRequestIdForIdentifier(identifier);
+
+  if (recordreplay::DependencyGraphEnabled() &&
+      !IsReplayInternalRequest(identifier)) {
+    NewNetworkReceiveResponseNode(requestId, response,
+                                  memory_cache_inspector_id);
+  }
+
   base::DictionaryValue dict;
-  dict.SetString("requestId", RecordReplayNetworkRequestId(inspector_id));
+  dict.SetString("requestId", requestId);
   const char* http_version = HttpVersionToString(response.HttpVersion());
   base::ListValue headers;
   for (auto header : response.HttpHeaderFields()) {
@@ -475,7 +510,7 @@ void OnNetworkReceiveResponse(uint64_t inspector_id,
   dict.SetDoubleKey("responseStatus", response.HttpStatusCode());
   dict.SetString("responseStatusText", response.HttpStatusText().Utf8());
   dict.SetBoolean("responseFromCache",
-                  response_from_cache.value_or(response.WasCached()));
+                  memory_cache_inspector_id || response.WasCached());
   BrowserEvent("Network.DidReceiveResponse", dict);
 }
 

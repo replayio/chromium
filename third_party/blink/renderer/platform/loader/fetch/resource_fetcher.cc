@@ -618,8 +618,9 @@ void ResourceFetcher::DidLoadResourceFromMemoryCache(
       request.InspectorId(), request, resource->GetResponse(), resource,
       ResourceLoadObserver::ResponseSource::kFromMemoryCache);
 
-  recordreplay::OnNetworkReceiveResponse(request.InspectorId(), resource->GetResponse(),
-                                         /* response_from_cache = */ true);
+  recordreplay::OnNetworkReceiveResponse(request.InspectorId(),
+                                         resource->GetResponse(),
+                                         resource->InspectorId());
 
   if (recordreplay::ShouldEmitRecordReplayNetworkBrowserEvents()) {
     if (scoped_refptr<const SharedBuffer> resource_buffer =

@@ -45,9 +45,12 @@ void OnNetworkNavigationRedirect(uint64_t inspector_id,
                                  const blink::ResourceRequest& request,
                                  const blink::ResourceResponse& redirect_response);
 
-void OnNetworkReceiveResponse(uint64_t inspector_id,
-                              const blink::ResourceResponse& response,
-                              absl::optional<bool> response_from_cache = absl::nullopt);
+// |memory_cache_inspector_id|: the cached resource's request, at memory cache
+// reuse.
+void OnNetworkReceiveResponse(
+    uint64_t inspector_id,
+    const blink::ResourceResponse& response,
+    absl::optional<uint64_t> memory_cache_inspector_id = absl::nullopt);
 
 void OnNetworkReceiveData(uint64_t inspector_id, const char* data, int length);
 
