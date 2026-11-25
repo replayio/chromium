@@ -143,6 +143,19 @@ struct AutoOrderedLock {
 // NodeLink, in Parcel::remote_source_, are dropped by whichever thread
 // destroys that message, which nothing settles.
 //
+// Ordering those holders' own counts would not close that. A count is settled
+// by ordering it only if every reference to it is dropped by a thread the
+// recording settles, and a SharedRemote's references are the copies the rest of
+// the process keeps: temporaries at a call site, members of garbage-collected
+// objects, a reference a worker thread holds for as long as it has a socket.
+// Whether such a copy is taken at all can turn on a lock nobody named, as
+// P2PSocketDispatcher's does, and then the two runs make different sets of
+// decrements, which this lock's stream cannot absorb. Where a holder like that
+// has actually cost a replay, the remedy was the one in
+// ThreadSafeInterfaceEndpointClientProxy::SendMessageWithResponder: destroy the
+// object on a definite thread while recording or replaying, which asks nothing
+// of any count.
+//
 // ipcz' Router destructor passes events through so that the mutex it takes is
 // not ordered, on the grounds that the thread which drops a Router's last
 // reference can differ when replaying. With these decrements ordered that
