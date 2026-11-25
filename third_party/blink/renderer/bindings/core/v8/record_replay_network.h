@@ -7,6 +7,8 @@
 
 // Methods for notifying the recorder about activity related to network requests.
 
+#include <string>
+
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "base/record_replay.h"
 
@@ -24,6 +26,10 @@ struct WebURLError;
 namespace recordreplay {
 
 bool ShouldEmitRecordReplayNetworkBrowserEvents();
+
+// The requestId of a request's network events. Records a value: call only if
+// ShouldEmitRecordReplayNetworkBrowserEvents().
+std::string NetworkRequestId(uint64_t inspector_id);
 
 void OnNetworkPrepareRequest(const blink::Document* document,
                              const blink::Resource* resource,

@@ -335,6 +335,13 @@ class PLATFORM_EXPORT Resource : public GarbageCollected<Resource>,
   bool StaleRevalidationStarted() const { return stale_revalidation_started_; }
   void SetStaleRevalidationStarted() { stale_revalidation_started_ = true; }
 
+  // The latest resourceFinished node.
+  absl::optional<int> LastFinishedDependencyGraphNodeId() const {
+    if (record_replay_dependency_node_ids_.empty())
+      return absl::nullopt;
+    return record_replay_dependency_node_ids_.back();
+  }
+
   const IntegrityMetadataSet& IntegrityMetadata() const {
     return options_.integrity_metadata;
   }

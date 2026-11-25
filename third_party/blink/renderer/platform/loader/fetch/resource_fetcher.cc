@@ -98,6 +98,9 @@
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
 
+#include "base/json/json_writer.h"
+#include "base/record_replay_network_request.h"
+#include "base/values.h"
 #include "third_party/blink/renderer/bindings/core/v8/record_replay_network.h"
 
 namespace blink {
@@ -1188,7 +1191,7 @@ Resource* ResourceFetcher::RequestResource(FetchParameters& params,
     case RevalidationPolicy::kUse:
       if (resource_request.AllowsStaleResponse() &&
           resource->ShouldRevalidateStaleResponse()) {
-        ScheduleStaleRevalidate(resource);
+        ScheduleStaleRevalidate(resource, resource_request.InspectorId());
       }
 
       break;
@@ -2038,7 +2041,7 @@ void ResourceFetcher::HandleLoaderFinish(Resource* resource,
     // eg. network stack returning a resource with max-age=0.
     if (resource->GetResourceRequest().AllowsStaleResponse() &&
         resource->StaleRevalidationRequested()) {
-      ScheduleStaleRevalidate(resource);
+      ScheduleStaleRevalidate(resource, absl::nullopt);
     }
   }
   if (resource_load_observer_) {
@@ -2386,12 +2389,55 @@ void ResourceFetcher::StopFetchingIncludingKeepaliveLoaders() {
   StopFetchingInternal(StopFetchingTarget::kIncludingKeepaliveLoaders);
 }
 
-void ResourceFetcher::ScheduleStaleRevalidate(Resource* stale_resource) {
+// Dependency graph node info naming the stale resource.
+static base::Value::Dict StaleRevalidationNodeInfo(
+    const char* kind,
+    const Resource* stale_resource) {
+  base::Value::Dict info;
+  info.Set("kind", kind);
+  info.Set("url", stale_resource->Url().GetString().Utf8());
+  recordreplay::SetConsumedRequestId(
+      info,
+      recordreplay::ConsumedNetworkRequest::Request(stale_resource->InspectorId()));
+  return info;
+}
+
+static int NewDependencyGraphNodeWithInfo(const base::Value::Dict& info) {
+  std::string json;
+  base::JSONWriter::Write(info, &json);
+  return recordreplay::NewDependencyGraphNode(json.c_str());
+}
+
+void ResourceFetcher::ScheduleStaleRevalidate(
+    Resource* stale_resource,
+    absl::optional<uint64_t> reuse_inspector_id) {
   if (stale_resource->StaleRevalidationStarted())
     return;
   stale_resource->SetStaleRevalidationStarted();
 
-  int node_id = recordreplay::NewDependencyGraphNode("{\"kind\":\"scheduleRevalidateStaleResource\"}");
+  // Outside the dependency graph check: it records a value.
+  absl::optional<std::string> reuse_request_id;
+  if (reuse_inspector_id &&
+      recordreplay::ShouldEmitRecordReplayNetworkBrowserEvents()) {
+    reuse_request_id = recordreplay::NetworkRequestId(*reuse_inspector_id);
+  }
+
+  int node_id = 0;
+  if (recordreplay::DependencyGraphEnabled()) {
+    base::Value::Dict info = StaleRevalidationNodeInfo(
+        "scheduleRevalidateStaleResource", stale_resource);
+    info.Set("scheduleSite",
+             reuse_inspector_id ? "memoryCacheReuse" : "loaderFinish");
+    if (reuse_request_id)
+      info.Set("reuseRequestId", *reuse_request_id);
+    node_id = NewDependencyGraphNodeWithInfo(info);
+    // The stale resource's finish: at loader finish, its execution has ended.
+    if (absl::optional<int> finished_node_id =
+            stale_resource->LastFinishedDependencyGraphNodeId()) {
+      recordreplay::AddDependencyGraphEdge(*finished_node_id, node_id,
+                                           "{\"kind\":\"staleResource\"}");
+    }
+  }
   freezable_task_runner_->PostTask(
       FROM_HERE,
       WTF::BindOnce(&ResourceFetcher::RevalidateStaleResource,
@@ -2402,7 +2448,8 @@ void ResourceFetcher::RevalidateStaleResource(Resource* stale_resource,
                                               int record_replay_scheduled_node_id) {
   absl::optional<recordreplay::AutoDependencyExecution> execute;
   if (recordreplay::DependencyGraphEnabled()) {
-    int node_id = recordreplay::NewDependencyGraphNode("{\"kind\":\"revalidateStaleResource\"}");
+    int node_id = NewDependencyGraphNodeWithInfo(
+        StaleRevalidationNodeInfo("revalidateStaleResource", stale_resource));
     recordreplay::AddDependencyGraphEdge(
       record_replay_scheduled_node_id, node_id,
       "{\"kind\":\"scheduler\"}"
@@ -2419,6 +2466,8 @@ void ResourceFetcher::RevalidateStaleResource(Resource* stale_resource,
   request.CopyHeadFrom(stale_resource->GetResourceRequest());
   FetchParameters params(std::move(request), nullptr /* world */);
   params.SetStaleRevalidation(true);
+  params.MutableResourceRequest().SetRevalidatedStaleInspectorId(
+      stale_resource->InspectorId());
   params.MutableResourceRequest().SetSkipServiceWorker(true);
   // Stale revalidation resource requests should be very low regardless of
   // the |type|.

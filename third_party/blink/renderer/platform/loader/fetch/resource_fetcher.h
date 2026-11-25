@@ -442,7 +442,9 @@ class PLATFORM_EXPORT ResourceFetcher
                               bool is_static_data,
                               bool same_top_frame_site_resource_cached) const;
 
-  void ScheduleStaleRevalidate(Resource* stale_resource);
+  // |reuse_inspector_id|: the reusing request, at memory cache reuse.
+  void ScheduleStaleRevalidate(Resource* stale_resource,
+                               absl::optional<uint64_t> reuse_inspector_id);
   void RevalidateStaleResource(Resource* stale_resource, int record_replay_scheduled_node_id);
 
   void WarnUnusedPreloads();

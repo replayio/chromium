@@ -35,9 +35,15 @@ void RegisterReplayInternalNetworkRequest(uint64_t inspector_id) {
 
 void SetConsumedRequestId(base::Value::Dict& info,
                           ConsumedNetworkRequest request) {
+  SetConsumedRequestId(info, "requestId", request);
+}
+
+void SetConsumedRequestId(base::Value::Dict& info,
+                          base::StringPiece key,
+                          ConsumedNetworkRequest request) {
   switch (request.kind()) {
     case ConsumedNetworkRequest::Kind::kNone:
-      info.Set("requestId", base::Value());
+      info.Set(key, base::Value());
       return;
     case ConsumedNetworkRequest::Kind::kUnknown:
       return;
@@ -51,9 +57,9 @@ void SetConsumedRequestId(base::Value::Dict& info,
   const auto& request_ids = NetworkRequestIds();
   auto it = request_ids.find(inspector_id);
   if (it != request_ids.end()) {
-    info.Set("requestId", it->second);
+    info.Set(key, it->second);
   } else if (ReplayInternalNetworkRequests().count(inspector_id)) {
-    info.Set("requestId", base::Value());
+    info.Set(key, base::Value());
   }
 }
 

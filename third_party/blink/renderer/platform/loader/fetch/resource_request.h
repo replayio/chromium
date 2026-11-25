@@ -397,6 +397,15 @@ class PLATFORM_EXPORT ResourceRequestHead {
   void SetAllowStaleResponse(bool value) { allow_stale_response_ = value; }
   bool AllowsStaleResponse() const { return allow_stale_response_; }
 
+  // A stale revalidation request: the inspector id of the stale resource's
+  // request.
+  void SetRevalidatedStaleInspectorId(uint64_t inspector_id) {
+    revalidated_stale_inspector_id_ = inspector_id;
+  }
+  const absl::optional<uint64_t>& RevalidatedStaleInspectorId() const {
+    return revalidated_stale_inspector_id_;
+  }
+
   const absl::optional<base::UnguessableToken>& GetDevToolsToken() const {
     return devtools_token_;
   }
@@ -598,6 +607,7 @@ class PLATFORM_EXPORT ResourceRequestHead {
 
   bool upgrade_if_insecure_ = false;
   bool is_revalidating_ = false;
+  absl::optional<uint64_t> revalidated_stale_inspector_id_;
 
   bool is_automatic_upgrade_ = false;
 

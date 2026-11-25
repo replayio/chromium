@@ -11,6 +11,7 @@
 #include <string>
 
 #include "base/check.h"
+#include "base/strings/string_piece.h"
 #include "base/values.h"
 
 namespace recordreplay {
@@ -63,6 +64,11 @@ void RegisterReplayInternalNetworkRequest(uint64_t inspector_id);
 // Sets a consumer node's requestId: the request's id; null if it consumes no
 // request of the graph; absent if unknown, including off the main thread.
 void SetConsumedRequestId(base::Value::Dict& info,
+                          ConsumedNetworkRequest request);
+
+// As above, for another field naming a request.
+void SetConsumedRequestId(base::Value::Dict& info,
+                          base::StringPiece key,
                           ConsumedNetworkRequest request);
 
 }  // namespace recordreplay

@@ -101,6 +101,10 @@ static std::string RecordReplayNetworkRequestId(uint64_t inspector_id) {
       RecordReplayNetworkInspectorId(inspector_id));
 }
 
+std::string NetworkRequestId(uint64_t inspector_id) {
+  return RecordReplayNetworkRequestId(inspector_id);
+}
+
 static void RecordReplayNetworkIncrementRedirectCount(uint64_t inspector_id) {
   const uint64_t identifier = RecordReplayNetworkInspectorId(inspector_id);
   GetReplayNetworkRequestStates()[identifier].redirect_count++;
@@ -342,6 +346,11 @@ void OnNetworkPrepareRequest(const blink::Document* document,
   }
   if (request_state.replay_internal) {
     dict.SetBoolean("replayInternal", true);
+  }
+  if (const absl::optional<uint64_t>& stale_inspector_id =
+          request.RevalidatedStaleInspectorId()) {
+    dict.SetString("staleRevalidationOf",
+                   RecordReplayNetworkRequestId(*stale_inspector_id));
   }
 
   // Only the chain's first request has an initiator. DevTools' Network panel
