@@ -258,6 +258,33 @@ remove_stale_tmp_packs() {
   rm -f "$started"
 }
 
+# Every lockfile a killed git left behind, anywhere in this checkout. A cancelled
+# job is SIGKILLed, and a git that does not reach its own cleanup leaves the lock
+# it held: shallow.lock fails every later --depth fetch, index.lock a checkout,
+# config.lock a `git config`, packed-refs.lock and refs/**/*.lock an update-ref.
+# A git dir holds them at its top level and under refs/; objects/ is
+# remove_stale_tmp_packs' business.
+#
+# A lock a process still has open is fatal rather than skipped: it means another
+# git is running in this key's checkout, which the use lock is there to prevent,
+# and the sync about to run would race with it.
+remove_stale_git_locks() {
+  local git_dir file holder
+  [ -d "$CHECKOUT_ROOT/src" ] || return 0
+  while IFS= read -r -d '' git_dir; do
+    while IFS= read -r -d '' file; do
+      holder=$(find /proc/[0-9]*/fd -maxdepth 1 -lname "$file" -print -quit 2>/dev/null || true)
+      if [ -n "$holder" ]; then
+        die "$file is open ($holder): another git is running in ${git_dir%/.git}"
+      fi
+      echo "removing stale $file"
+      rm -f "$file"
+    done < <(find "$git_dir" -maxdepth 1 -type f -name '*.lock' -print0
+             find "$git_dir/refs" -type f -name '*.lock' -print0 2>/dev/null)
+  done < <(find "$CHECKOUT_ROOT/src" -path "$CHECKOUT_ROOT/src/out" -prune -o \
+    -type d -name .git -print0 -prune)
+}
+
 # seed_from <key>: fill this key's checkout from another key's, for a version
 # the host has no checkout of yet. The working files are copied, because a
 # gclient hook that overwrites one in place must not write into the key this was
@@ -358,7 +385,7 @@ prefetch_fork_pins() {
 }
 
 sync() {
-  local commit url src=$CHECKOUT_ROOT/src lock holder was
+  local commit url src=$CHECKOUT_ROOT/src was
   commit=$(git -C "$repo" rev-parse HEAD)
   url=$(git -C "$repo" config remote.origin.url) || die "no remote.origin.url in $repo"
   # Held for this run as well as by the job, if there is one: both holds are
@@ -375,23 +402,13 @@ sync() {
     fi
   fi
   remove_stale_tmp_packs
+  remove_stale_git_locks
   # src's commit is fetched here, on the host, over the remote this script's
   # clone came from: the agent's SSH identity. The container has none, and
   # GitHub throttles anonymous reads of this fork network (HTTP 429). One
   # commit, no history: the fork's history is ~56 GB and a build reads none.
   [ -d "$src/.git" ] || git init -q "$src"
   git -C "$src" config gc.auto 0
-  # A fetch killed by SIGKILL leaves shallow.lock, and every later --depth
-  # fetch then fails. Removed unless a process has it open.
-  lock=$src/.git/shallow.lock
-  if [ -e "$lock" ]; then
-    holder=$(find /proc/[0-9]*/fd -maxdepth 1 -lname "$lock" -print -quit 2>/dev/null || true)
-    if [ -n "$holder" ]; then
-      die "$lock is open ($holder): another fetch is running in $src"
-    fi
-    echo "removing stale $lock"
-    rm -f "$lock"
-  fi
   # Skipped when the commit and every object of its tree are present: a killed
   # fetch of fewer than fetch.unpackLimit objects leaves loose objects without
   # the rest.
