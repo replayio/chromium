@@ -257,7 +257,7 @@ steps:
     key: "chromium-recording-dependency-graph-linux-x86_64"
     env:
       <<: *chromium-recording-env
-      CHROMIUM_RECORDING_FILTER: "tests/dependency-graph"
+      CHROMIUM_RECORDING_FILTER: "tests/dependency-graph/wanted-chains"
       # Each recording's graph entries, uploaded as dependencies-<recordingId>.json.
       SAVE_DEPENDENCY_GRAPH_ENTRIES: "1"
 

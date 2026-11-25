@@ -99,6 +99,7 @@
 #include "third_party/blink/renderer/core/html/portal/portal_contents.h"
 #include "third_party/blink/renderer/core/input/context_menu_allowed_scope.h"
 #include "third_party/blink/renderer/core/input/event_handler.h"
+#include "third_party/blink/renderer/core/input/host_input_dependency_scope.h"
 #include "third_party/blink/renderer/core/input/touch_action_util.h"
 #include "third_party/blink/renderer/core/layout/deferred_shaping_controller.h"
 #include "third_party/blink/renderer/core/layout/hit_test_location.h"
@@ -718,6 +719,7 @@ WebInputEventResult WebFrameWidgetImpl::HandleKeyEvent(
   // event and a keyUp event. We reset this flag here as this is a new keyDown
   // event.
   suppress_next_keypress_event_ = false;
+  record_replay_key_down_action_.Hold();
 
   // If there is a popup open, it should be the one processing the event,
   // not the page.
@@ -1085,6 +1087,8 @@ WebInputEventResult WebFrameWidgetImpl::HandleCharEvent(
   // only applies to the current keyPress event.
   bool suppress = suppress_next_keypress_event_;
   suppress_next_keypress_event_ = false;
+  record_replay_key_down_action_.Consume();
+  record_replay_key_down_action_.Drop();
 
   // If there is a popup open, it should be the one processing the event,
   // not the page.
@@ -2580,6 +2584,8 @@ WebInputEventResult WebFrameWidgetImpl::HandleInputEvent(
   if (IgnoreInputEvents())
     return WebInputEventResult::kNotHandled;
 
+  HostInputDependencyScope dependency_scope(input_event);
+
   base::AutoReset<const WebInputEvent*> current_event_change(
       &CurrentInputEvent::current_input_event_, &input_event);
   UIEventWithKeyState::ClearNewTabModifierSetFromIsolatedWorld();
@@ -3447,6 +3453,8 @@ bool WebFrameWidgetImpl::SetComposition(
   if (!controller)
     return false;
 
+  HostInputDependencyScope dependency_scope(
+      HostInputDependencyScope::TextStep::kSetComposition);
   return controller->SetComposition(
       text, ime_text_spans,
       replacement_range.IsValid()
@@ -3464,6 +3472,8 @@ void WebFrameWidgetImpl::CommitText(
   WebInputMethodController* controller = GetActiveWebInputMethodController();
   if (!controller)
     return;
+  HostInputDependencyScope dependency_scope(
+      HostInputDependencyScope::TextStep::kCommit);
   controller->CommitText(
       text, ime_text_spans,
       replacement_range.IsValid()
@@ -3477,6 +3487,8 @@ void WebFrameWidgetImpl::FinishComposingText(bool keep_selection) {
   WebInputMethodController* controller = GetActiveWebInputMethodController();
   if (!controller)
     return;
+  HostInputDependencyScope dependency_scope(
+      HostInputDependencyScope::TextStep::kFinishComposing);
   controller->FinishComposingText(
       keep_selection ? WebInputMethodController::kKeepSelection
                      : WebInputMethodController::kDoNotKeepSelection);
