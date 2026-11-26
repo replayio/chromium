@@ -458,7 +458,15 @@ void HttpNetworkTransaction::SetQuicServerInfo(
 
 bool HttpNetworkTransaction::GetLoadTimingInfo(
     LoadTimingInfo* load_timing_info) const {
-  if (!stream_ || !stream_->GetLoadTimingInfo(load_timing_info))
+  const bool has_timing =
+      stream_ && stream_->GetLoadTimingInfo(load_timing_info);
+  // Replay: reported whether or not the stream has timing.
+  if (session_->params().record_replay_wire_id) {
+    std::string wire_id;
+    if (request_headers_.GetHeader(kRecordReplayWireIdHeader, &wire_id))
+      load_timing_info->wire_id = std::move(wire_id);
+  }
+  if (!has_timing)
     return false;
 
   load_timing_info->proxy_resolve_start =
@@ -466,11 +474,6 @@ bool HttpNetworkTransaction::GetLoadTimingInfo(
   load_timing_info->proxy_resolve_end = proxy_info_.proxy_resolve_end_time();
   load_timing_info->send_start = send_start_time_;
   load_timing_info->send_end = send_end_time_;
-  if (session_->params().record_replay_wire_id) {
-    std::string wire_id;
-    if (request_headers_.GetHeader(kRecordReplayWireIdHeader, &wire_id))
-      load_timing_info->wire_id = std::move(wire_id);
-  }
   return true;
 }
 
