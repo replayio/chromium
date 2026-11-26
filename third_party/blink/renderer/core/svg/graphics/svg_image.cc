@@ -107,18 +107,6 @@ SVGImage::SVGImage(ImageObserver* observer, bool is_multipart)
 }
 
 SVGImage::~SVGImage() {
-  // Leak the agent_group_scheduler_, even when the image goes away outside of
-  // GC (e.g. when it fails to decode). The scheduler would otherwise be
-  // finalized at whichever GC collects it, and finalizing it removes it from
-  // the main thread scheduler's agent group schedulers and hands its task
-  // queues to the main thread scheduler, which checks them after every task.
-  // See https://linear.app/replay/issue/RUN-2056#comment-f827701f.
-  // AgentGroupScheduler is an Oilpan GarbageCollected object, so the member is
-  // a Persistent (no .release()). Root it forever via an intentionally-leaked
-  // heap Persistent so the object is never finalized.
-  if (recordreplay::EnterLeakMemory("SVGImage"))
-    new Persistent<AgentGroupScheduler>(agent_group_scheduler_);
-
   if (document_host_) {
     // Leak the document host and its Page during nondeterministic GC sweep:
     // Shutdown() calls Page::WillBeDestroyed(), which would erase the page from

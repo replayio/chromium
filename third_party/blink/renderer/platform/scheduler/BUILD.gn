@@ -101,6 +101,8 @@ blink_platform_sources("scheduler") {
     "main_thread/page_visibility_state.h",
     "main_thread/pending_user_input.cc",
     "main_thread/pending_user_input.h",
+    "main_thread/record_replay_agent_group_scheduler_releases.cc",
+    "main_thread/record_replay_agent_group_scheduler_releases.h",
     "main_thread/performance_helper.cc",
     "main_thread/performance_helper.h",
     "main_thread/policy_updater.cc",
