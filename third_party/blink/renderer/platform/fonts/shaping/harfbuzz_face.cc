@@ -678,6 +678,7 @@ HarfBuzzFontData* HarfBuzzFontCache::GetOrCreate(
     hb::unique_ptr<hb_face_t> face = CreateFace(platform_data);
     result.stored_value->value =
         CreateHarfBuzzFontData(face.get(), platform_data->Typeface());
+    RecordReplayHold(unique_id, result.stored_value->value);
   }
   return result.stored_value->value.Get();
 }
