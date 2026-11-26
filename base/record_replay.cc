@@ -245,17 +245,6 @@ bool IsRecordingOrReplaying(const char* feature, const char* subfeature) {
   return V8IsRecordingOrReplaying(feature, subfeature);
 }
 
-bool RecordsAllContent() {
-  static const bool records_all_content =
-      !RecordingDisabled() && !!getenv("RECORD_ALL_CONTENT");
-  return records_all_content;
-}
-
-bool RecordingDisabled() {
-  static const bool disabled = !!getenv("RECORD_REPLAY_DONT_RECORD");
-  return disabled;
-}
-
 bool IsRecording() {
   return V8IsRecording();
 }

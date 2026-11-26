@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstdlib>
 #include <initializer_list>
 #include <memory>
 #include <string>
@@ -41,17 +42,27 @@ bool IsMainThread();
 bool IsRecordingOrReplaying(const char* feature = nullptr,
                             const char* subfeature = nullptr);
 
+// Whether recording is turned off for this run, which overrides every way a
+// recording can be asked for.
+//
+// This and RecordsAllContent() are inline because the macOS launcher
+// (chrome/app/chrome_exe_main_mac.cc) calls them and does not link //base.
+inline bool RecordingDisabled() {
+  static const bool disabled = !!getenv("RECORD_REPLAY_DONT_RECORD");
+  return disabled;
+}
+
 // Whether this run records every page it loads, which it says only in the
 // environment that every process inherits. A recording started from the
 // toolbar instead marks the one renderer it records on that process's command
 // line, so neither input on its own answers whether some process records.
 // Unlike IsRecordingOrReplaying(), both of these are env-derived and so stay
 // correct in the browser process, which never loads the driver.
-bool RecordsAllContent();
-
-// Whether recording is turned off for this run, which overrides every way a
-// recording can be asked for.
-bool RecordingDisabled();
+inline bool RecordsAllContent() {
+  static const bool records_all_content =
+      !RecordingDisabled() && !!getenv("RECORD_ALL_CONTENT");
+  return records_all_content;
+}
 
 bool IsRecording();
 bool IsReplaying();
