@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/platform/bindings/record_replay_gc_release.h"
 
+#include "base/auto_reset.h"
 #include "base/numerics/safe_conversions.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 
@@ -67,11 +68,13 @@ bool RecordReplayGCRelease::OnCollected(int id) {
 
 // static
 void RecordReplayGCRelease::ForcePoll(v8::Isolate* isolate) {
-  // Clearing kept objects ends with a GC poll. It is only allowed between
-  // script jobs, so a task nested in script (e.g. one a paused debugger runs)
-  // does not poll here.
-  if (From(isolate) && !isolate->InContext()) {
-    isolate->ClearKeptObjects();
+  // Only the releases, not V8's GC poll: that one also clears WeakRefs, which
+  // only happens between script jobs, and a task nested in script (e.g. one a
+  // paused debugger runs) has to see the releases too.
+  RecordReplayGCRelease* releases = From(isolate);
+  if (releases && releases->IsActive() &&
+      !recordreplay::AreEventsDisallowed()) {
+    releases->Poll();
   }
 }
 
@@ -82,6 +85,11 @@ void RecordReplayGCRelease::WillBeDestroyed() {
 }
 
 void RecordReplayGCRelease::Poll() {
+  // A release can reach ForcePoll(), whose poll does nothing on both sides.
+  if (polling_) {
+    return;
+  }
+  base::AutoReset<bool> polling(&polling_, true);
   Vector<int> ids;
   ids.swap(collected_);
   ids.resize(base::checked_cast<wtf_size_t>(
