@@ -154,12 +154,14 @@ class NGShapeCache : public GarbageCollected<NGShapeCache>,
     visitor->Trace(weak_map_);
     visitor->Trace(strong_map_);
     visitor->Trace(primary_font_);
+    RecordReplayTrace(visitor);
   }
 
   void Dispose() {
     if (memory_consumer_registration_) {
       memory_consumer_registration_->Dispose();
     }
+    RecordReplayDispose();
   }
 
   void OnUpdateMemoryLimit() override {}
@@ -177,12 +179,10 @@ class NGShapeCache : public GarbageCollected<NGShapeCache>,
       return shape_result_func().shape_result;
     }
 
-    // The collector clears weak entries at points a replay doesn't reproduce,
-    // and shaping a text again can make a Skia strike, which is recorded. So
-    // while recording or replaying the results are held, up to `kMaxSize`.
-    if (RuntimeEnabledFeatures::MemoryConsumerForNGShapeCacheEnabled() ||
-        recordreplay::IsRecordingOrReplaying()) {
+    if (RuntimeEnabledFeatures::MemoryConsumerForNGShapeCacheEnabled()) {
       return GetOrCreateImpl(strong_map_, key, shape_result_func);
+    } else if (recordreplay::IsRecordingOrReplaying()) {
+      return RecordReplayGetOrCreate(key, shape_result_func);
     } else {
       return GetOrCreateImpl(weak_map_, key, shape_result_func);
     }
@@ -266,9 +266,58 @@ class NGShapeCache : public GarbageCollected<NGShapeCache>,
     return shape_result;
   }
 
+  // The collector clears weak entries at points a replay doesn't reproduce,
+  // and shaping a text again can make a Skia strike, which is recorded. So
+  // while recording or replaying each cached result is tracked with
+  // RecordReplayGCRelease: the recording's GC notes the results it collected,
+  // and their entries leave the cache at the next GC poll on both sides, with
+  // the replay keeping the results alive until then. A lookup of a tracked key
+  // forces that poll first, so it sees the same entries on both sides.
+  template <typename ShapeResultFunc>
+  const ShapeResult* RecordReplayGetOrCreate(
+      const ShapeCacheKey& key,
+      const ShapeResultFunc& shape_result_func) {
+    if (!RecordReplayPrepareLookup(key)) {
+      return shape_result_func().shape_result;
+    }
+    const auto it = weak_map_.find(key);
+    if (it != weak_map_.end() && it->value) {
+      FontPerformance::AddShapeCacheHit();
+      return it->value.Get();
+    }
+    FontPerformance::AddShapeCacheMiss();
+    const auto [shape_result, can_cache] = shape_result_func();
+    if (can_cache && !shape_result->HasFallbackFonts(primary_font_)) {
+      RecordReplayInsert(key, shape_result);
+    }
+    return shape_result;
+  }
+
+  // Returns whether the cache can be used, after polling when `key` is
+  // tracked.
+  bool RecordReplayPrepareLookup(const ShapeCacheKey& key);
+  void RecordReplayInsert(const ShapeCacheKey& key,
+                          const ShapeResult* shape_result);
+  void RecordReplayRelease(const ShapeCacheKey& key, uint64_t token);
+  void RecordReplayTrace(Visitor* visitor) const;
+  void RecordReplayProcessWeak(const LivenessBroker& broker);
+  void RecordReplayDispose();
+
+  struct RecordReplayEntry {
+    // Tells this entry's release from one for an earlier entry of the key.
+    uint64_t token;
+    int id;
+    // When recording: the result until the GC collects it.
+    UntracedMember<const ShapeResult> result;
+  };
+
   WeakMap weak_map_;
   StrongMap strong_map_;
   Member<const SimpleFontData> primary_font_;
+  // Its size is the same on both sides, unlike `weak_map_`'s, so it bounds the
+  // cache.
+  HashMap<ShapeCacheKey, RecordReplayEntry> record_replay_entries_;
+  uint64_t record_replay_next_token_ = 1;
 
   std::unique_ptr<MemoryConsumerRegistration> memory_consumer_registration_;
 };
