@@ -305,10 +305,7 @@ class PLATFORM_EXPORT MainThreadSchedulerImpl
 
   void RemoveAgentGroupScheduler(AgentGroupSchedulerImpl*);
   // See RecordReplayAgentGroupSchedulerReleases.
-  bool RecordReplayDeferAgentGroupSchedulerDispose(
-      int scheduler_id,
-      scoped_refptr<MainThreadTaskQueue> default_task_queue,
-      scoped_refptr<MainThreadTaskQueue> compositor_task_queue);
+  bool RecordReplayOnAgentGroupSchedulerCollected(int scheduler_id);
   void RecordReplayForgetAgentGroupScheduler(AgentGroupSchedulerImpl*);
   void AddPageScheduler(PageSchedulerImpl*);
   void RemovePageScheduler(PageSchedulerImpl*);

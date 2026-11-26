@@ -2608,14 +2608,11 @@ void MainThreadSchedulerImpl::AddAgentGroupScheduler(
   }
 }
 
-bool MainThreadSchedulerImpl::RecordReplayDeferAgentGroupSchedulerDispose(
-    int scheduler_id,
-    scoped_refptr<MainThreadTaskQueue> default_task_queue,
-    scoped_refptr<MainThreadTaskQueue> compositor_task_queue) {
+bool MainThreadSchedulerImpl::RecordReplayOnAgentGroupSchedulerCollected(
+    int scheduler_id) {
   return record_replay_agent_group_scheduler_releases_ &&
-         record_replay_agent_group_scheduler_releases_->DeferDispose(
-             scheduler_id, std::move(default_task_queue),
-             std::move(compositor_task_queue));
+         record_replay_agent_group_scheduler_releases_->OnCollected(
+             scheduler_id);
 }
 
 void MainThreadSchedulerImpl::RecordReplayForgetAgentGroupScheduler(

@@ -64,18 +64,12 @@ AgentGroupSchedulerImpl::~AgentGroupSchedulerImpl() {
 }
 
 void AgentGroupSchedulerImpl::Dispose() {
+  // See RecordReplayAgentGroupSchedulerReleases.
   if (recordreplay::IsRecordingOrReplaying() &&
-      (record_replay_detached_task_queues_ ||
-       main_thread_scheduler_->RecordReplayDeferAgentGroupSchedulerDispose(
-           record_replay_id_, default_task_queue_, compositor_task_queue_))) {
+      main_thread_scheduler_->RecordReplayOnAgentGroupSchedulerCollected(
+          record_replay_id_)) {
     return;
   }
-  default_task_queue_->DetachTaskQueue();
-  compositor_task_queue_->DetachTaskQueue();
-}
-
-void AgentGroupSchedulerImpl::RecordReplayDetachTaskQueues() {
-  record_replay_detached_task_queues_ = true;
   default_task_queue_->DetachTaskQueue();
   compositor_task_queue_->DetachTaskQueue();
 }

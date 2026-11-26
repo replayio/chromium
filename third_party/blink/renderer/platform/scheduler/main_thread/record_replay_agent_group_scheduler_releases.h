@@ -10,6 +10,7 @@
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
 #include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/heap/persistent.h"
+#include "third_party/blink/renderer/platform/wtf/hash_map.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "v8/include/replayio.h"
 
@@ -29,12 +30,15 @@ class MainThreadTaskQueue;
 // don't happen at the recording's points, so it would take those locks at
 // different points and hang.
 //
-// So the recording's GC defers the detach to the next GC poll, and the replay
-// keeps every scheduler alive until the poll naming it. Both then detach its
-// task queues at that poll. The recording's GC still drops the scheduler from
-// the main thread scheduler's weak set of agent group schedulers. That set is
-// only read after a poll, see MainThreadSchedulerImpl::PerformMicrotaskCheckpoint,
-// where the replay drops the same schedulers.
+// So, as with FinalizationRegistries (see v8/src/replay/finalization-registry.h),
+// the GC only notes what it collected, and the release runs at the poll on
+// both sides, from what is kept here for each scheduler. The recording's GC
+// notes the schedulers it collects. The replay keeps every scheduler alive, and
+// at the poll releases the ones the recording names. The recording's GC still
+// drops a scheduler from the main thread scheduler's weak set of agent group
+// schedulers. That set is only read after a poll, see
+// MainThreadSchedulerImpl::PerformMicrotaskCheckpoint, where the replay drops
+// the same schedulers.
 //
 // The poll does nothing where events are unavailable, so a checkpoint there
 // still reads a set the recording's GC may already have changed. Schedulers
@@ -48,10 +52,8 @@ class RecordReplayAgentGroupSchedulerReleases final
 
   void OnAdded(AgentGroupSchedulerImpl& scheduler);
   // Called from the scheduler's pre-finalizer. Returns whether the poll
-  // detaches the queues instead.
-  bool DeferDispose(int scheduler_id,
-                    scoped_refptr<MainThreadTaskQueue> default_task_queue,
-                    scoped_refptr<MainThreadTaskQueue> compositor_task_queue);
+  // releases the scheduler instead.
+  bool OnCollected(int scheduler_id);
 
   // v8::replayio::ReplayGCPollParticipant:
   bool IsActive() const override { return true; }
@@ -59,16 +61,18 @@ class RecordReplayAgentGroupSchedulerReleases final
   void Poll() override;
 
  private:
-  struct Collected {
-    int scheduler_id;
+  struct TaskQueues {
     scoped_refptr<MainThreadTaskQueue> default_task_queue;
     scoped_refptr<MainThreadTaskQueue> compositor_task_queue;
   };
 
   const raw_ref<MainThreadSchedulerImpl> main_thread_scheduler_;
-  // When recording: the schedulers the GC collected since the last poll.
-  Vector<Collected> collected_;
-  // When replaying: the schedulers the recording's GC has not collected yet.
+  // The task queues of every scheduler with an id which has not been released.
+  HashMap<int, TaskQueues> task_queues_;
+  // When recording: the ids of the schedulers the GC collected since the last
+  // poll.
+  Vector<int> collected_;
+  // When replaying: the schedulers which have not been released.
   Persistent<GCedHeapHashMap<int, Member<AgentGroupSchedulerImpl>>> alive_;
 };
 
