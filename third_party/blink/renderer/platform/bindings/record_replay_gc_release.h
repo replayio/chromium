@@ -37,7 +37,8 @@ namespace blink {
 //   when recording and alive when replaying.
 //
 // The GC poll runs at microtask checkpoints which had work to do. Code which
-// reads state the GC changes can call ForcePoll() first.
+// reads state the GC changes can call ForcePoll() first, which runs the
+// releases at once, also inside script.
 class PLATFORM_EXPORT RecordReplayGCRelease final
     : public V8PerIsolateData::UserData,
       public v8::replayio::ReplayGCPollParticipant {
@@ -91,6 +92,7 @@ class PLATFORM_EXPORT RecordReplayGCRelease final
   HashMap<int, Release> releases_;
   // When recording: the objects the GC collected since the last poll.
   Vector<int> collected_;
+  bool polling_ = false;
 };
 
 }  // namespace blink
