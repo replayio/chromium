@@ -456,6 +456,20 @@ void OnNetworkNavigationRedirect(uint64_t inspector_id,
   BrowserEvent("Network.NavigationRedirect", dict);
 }
 
+static const char* ServiceWorkerResponseSourceToString(
+    network::mojom::FetchResponseSource source) {
+  switch (source) {
+    case network::mojom::FetchResponseSource::kUnspecified:
+      return "unspecified";
+    case network::mojom::FetchResponseSource::kNetwork:
+      return "network";
+    case network::mojom::FetchResponseSource::kHttpCache:
+      return "http-cache";
+    case network::mojom::FetchResponseSource::kCacheStorage:
+      return "cache-storage";
+  }
+}
+
 // The served response's identity: a cache hit shares responseTime with the
 // response that stored the entry, or with the 304 that updated it last.
 static void NewNetworkReceiveResponseNode(
@@ -480,6 +494,11 @@ static void NewNetworkReceiveResponseNode(
     const String& wire_id = response.RecordReplayWireId();
     info.Set("wireId",
              wire_id.IsNull() ? base::Value() : base::Value(wire_id.Utf8()));
+    info.Set("serviceWorkerResponseSource",
+             response.WasFetchedViaServiceWorker()
+                 ? base::Value(ServiceWorkerResponseSourceToString(
+                       response.GetServiceWorkerResponseSource()))
+                 : base::Value());
   }
   std::string json;
   base::JSONWriter::Write(info, &json);
