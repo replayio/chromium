@@ -51,4 +51,7 @@ struct LoadTimingInfo {
   // If the response is not provided by the service worker, kept empty.
   // If respondWith() was not called, kept empty.
   mojo_base.mojom.TimeTicks service_worker_respond_with_settled;
+
+  // Replay: the x-replay-wire-id request header sent for the response, if any.
+  string? wire_id;
 };

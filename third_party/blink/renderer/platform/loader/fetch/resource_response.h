@@ -403,6 +403,12 @@ class PLATFORM_EXPORT ResourceResponse final {
     is_signed_exchange_inner_response_ = is_signed_exchange_inner_response;
   }
 
+  const String& RecordReplayWireId() const { return record_replay_wire_id_; }
+
+  void SetRecordReplayWireId(const String& wire_id) {
+    record_replay_wire_id_ = wire_id;
+  }
+
   bool WasInPrefetchCache() const { return was_in_prefetch_cache_; }
 
   void SetWasInPrefetchCache(bool was_in_prefetch_cache) {
@@ -639,6 +645,10 @@ class PLATFORM_EXPORT ResourceResponse final {
   // The URL of WebBundle this response was loaded from. This value is only
   // populated for resources loaded from a WebBundle.
   KURL web_bundle_url_;
+
+  // Replay: the x-replay-wire-id request header the network service sent for
+  // this response. Null if it sent none.
+  String record_replay_wire_id_;
 
   absl::optional<net::AuthChallengeInfo> auth_challenge_info_;
 

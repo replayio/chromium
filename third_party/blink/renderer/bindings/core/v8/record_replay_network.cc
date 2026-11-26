@@ -447,6 +447,10 @@ void OnNetworkNavigationRedirect(uint64_t inspector_id,
     dict.SetDoubleKey("responseStatus", redirect_response.HttpStatusCode());
     dict.SetString("responseStatusText", redirect_response.HttpStatusText().Utf8());
     dict.SetBoolean("responseFromCache", redirect_response.WasCached());
+    // A navigation's redirect hop has no networkReceiveResponse node.
+    if (!redirect_response.RecordReplayWireId().IsNull()) {
+      dict.SetString("wireId", redirect_response.RecordReplayWireId().Utf8());
+    }
   }
 
   BrowserEvent("Network.NavigationRedirect", dict);
@@ -473,6 +477,9 @@ static void NewNetworkReceiveResponseNode(
     info.Set("networkAccessed", response.NetworkAccessed());
     info.Set("asyncRevalidationRequested",
              response.AsyncRevalidationRequested());
+    const String& wire_id = response.RecordReplayWireId();
+    info.Set("wireId",
+             wire_id.IsNull() ? base::Value() : base::Value(wire_id.Utf8()));
   }
   std::string json;
   base::JSONWriter::Write(info, &json);

@@ -2027,6 +2027,7 @@ static void EmitResponseEvent(const std::string& request_id,
   CopyDictionaryProperty(event, info, "responseStatus");
   CopyDictionaryProperty(event, info, "responseStatusText");
   CopyDictionaryProperty(event, info, "responseFromCache");
+  CopyDictionaryProperty(event, info, "wireId");
   EmitNetworkRequestEvent(request_id, event);
 }
 

@@ -7,8 +7,11 @@
 
 #include <stdint.h>
 
+#include <string>
+
 #include "base/time/time.h"
 #include "net/base/net_export.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace net {
 
@@ -198,6 +201,11 @@ struct NET_EXPORT LoadTimingInfo {
   // is not closed by the server.
   base::TimeTicks push_start;
   base::TimeTicks push_end;
+
+  // Replay: the x-replay-wire-id request header sent for the response, see
+  // HttpNetworkSessionParams::record_replay_wire_id. One per wire attempt. Not
+  // set when the response was read from the cache without a network request.
+  absl::optional<std::string> wire_id;
 };
 
 }  // namespace net

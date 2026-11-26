@@ -116,7 +116,7 @@ network::mojom::LoadTimingInfo ToMojoLoadTiming(
       load_timing.push_end, load_timing.service_worker_start_time,
       load_timing.service_worker_ready_time,
       load_timing.service_worker_fetch_start,
-      load_timing.service_worker_respond_with_settled);
+      load_timing.service_worker_respond_with_settled, load_timing.wire_id);
 }
 
 // TODO(crbug.com/862940): Use KURL here.
@@ -726,6 +726,11 @@ void WebURLLoader::PopulateURLResponse(
   response->SetRequestId(request_id);
   response->SetIsSignedExchangeInnerResponse(
       head.is_signed_exchange_inner_response);
+  // A signed exchange's inner response was not the answer to a request sent.
+  if (head.load_timing.wire_id && !head.is_signed_exchange_inner_response) {
+    response->SetRecordReplayWireId(
+        WebString::FromUTF8(*head.load_timing.wire_id));
+  }
   response->SetWasInPrefetchCache(head.was_in_prefetch_cache);
   response->SetWasCookieInRequest(head.was_cookie_in_request);
   response->SetRecursivePrefetchToken(head.recursive_prefetch_token);

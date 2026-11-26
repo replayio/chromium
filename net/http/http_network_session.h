@@ -167,6 +167,10 @@ struct NET_EXPORT HttpNetworkSessionParams {
 
   bool key_auth_cache_server_entries_by_network_anonymization_key = false;
 
+  // Replay: if true, every request sent carries a random x-replay-wire-id
+  // header, reported back as LoadTimingInfo::wire_id.
+  bool record_replay_wire_id = false;
+
   // If true, enable sending PRIORITY_UPDATE frames until SETTINGS frame
   // arrives.  After SETTINGS frame arrives, do not send PRIORITY_UPDATE
   // frames any longer if SETTINGS_DEPRECATE_HTTP2_PRIORITIES is missing or

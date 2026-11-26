@@ -244,6 +244,7 @@ class BLINK_PLATFORM_EXPORT WebURLResponse {
   void SetEncodedBodyLength(int64_t);
 
   void SetIsSignedExchangeInnerResponse(bool);
+  void SetRecordReplayWireId(const WebString&);
   void SetWasInPrefetchCache(bool);
   void SetWasCookieInRequest(bool);
   void SetRecursivePrefetchToken(const absl::optional<base::UnguessableToken>&);

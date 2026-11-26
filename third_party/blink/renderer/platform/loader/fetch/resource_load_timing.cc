@@ -86,7 +86,7 @@ network::mojom::blink::LoadTimingInfoPtr ResourceLoadTiming::ToMojo() const {
           /*receive_non_informational_headers_start=*/base::TimeTicks::Now(),
           /*first_early_hints_time=*/base::TimeTicks::Now(), push_start_,
           push_end_, worker_start_, worker_ready_, worker_fetch_start_,
-          worker_respond_with_settled_);
+          worker_respond_with_settled_, /*wire_id=*/String());
   return timing;
 }
 

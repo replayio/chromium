@@ -18,6 +18,7 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/sparse_histogram.h"
+#include "base/rand_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/time/time.h"
@@ -95,6 +96,10 @@ const size_t kMaxRetryAttempts = 2;
 // multi-leg authentication), they may be triggered automatically. To avoid
 // looping forever, bound the number of restarts.
 const size_t kMaxRestarts = 32;
+
+// Replay: names one wire attempt to the server that receives it, see
+// HttpNetworkSessionParams::record_replay_wire_id.
+const char kRecordReplayWireIdHeader[] = "x-replay-wire-id";
 
 void SetProxyInfoInReponse(const ProxyInfo& proxy_info,
                            HttpResponseInfo* response_info) {
@@ -461,6 +466,11 @@ bool HttpNetworkTransaction::GetLoadTimingInfo(
   load_timing_info->proxy_resolve_end = proxy_info_.proxy_resolve_end_time();
   load_timing_info->send_start = send_start_time_;
   load_timing_info->send_end = send_end_time_;
+  if (session_->params().record_replay_wire_id) {
+    std::string wire_id;
+    if (request_headers_.GetHeader(kRecordReplayWireIdHeader, &wire_id))
+      load_timing_info->wire_id = std::move(wire_id);
+  }
   return true;
 }
 
@@ -1027,6 +1037,13 @@ int HttpNetworkTransaction::BuildRequestHeaders(
         &request_headers_);
 
   request_headers_.MergeFrom(request_->extra_headers);
+
+  if (session_->params().record_replay_wire_id) {
+    uint8_t wire_id[16];
+    base::RandBytes(wire_id, sizeof(wire_id));
+    request_headers_.SetHeader(kRecordReplayWireIdHeader,
+                               base::ToLowerASCII(base::HexEncode(wire_id)));
+  }
 
   response_.did_use_http_auth =
       request_headers_.HasHeader(HttpRequestHeaders::kAuthorization) ||

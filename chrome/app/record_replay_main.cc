@@ -258,6 +258,12 @@ static __attribute__((noinline)) void BusyWait() {
   while (x) {}
 }
 
+// Whether the network service marks each request with a wire id, see
+// switches::kRecordReplayWireId.
+static bool RecordReplayWireIdEnabled() {
+  return getenv("RECORD_ALL_CONTENT") && !getenv("RECORD_REPLAY_DONT_RECORD");
+}
+
 static bool RecordReplayRecordingDisabled(bool cmdline_for_recording) {
   // When RECORD_REPLAY_DONT_RECORD is set we don't record.
   if (getenv("RECORD_REPLAY_DONT_RECORD")) {
@@ -296,6 +302,9 @@ static bool RecordReplayShouldRecord(int* pargc, const char*** pargv) {
   // Append required switches, see below.
   command_line->AppendSwitch("no-sandbox");
   command_line->AppendSwitch("disable-gpu");
+  if (RecordReplayWireIdEnabled()) {
+    command_line->AppendSwitch("record-replay-wire-id");
+  }
 
 #else // !BUILDFLAG(IS_WIN)
 
@@ -326,7 +335,7 @@ static bool RecordReplayShouldRecord(int* pargc, const char*** pargv) {
 
   // If there is no type, this is the main process. Add a couple command line
   // arguments which are required to record/replay.
-  const char** nargv = new const char*[*pargc + 3];
+  const char** nargv = new const char*[*pargc + 4];
   memcpy(nargv, *pargv, *pargc * sizeof(char*));
   *pargv = nargv;
 
@@ -337,8 +346,11 @@ static bool RecordReplayShouldRecord(int* pargc, const char*** pargv) {
   // Recording/replaying currently requires software rendering.
   (*pargv)[*pargc + 1] = strdup("--disable-gpu");
 
-  (*pargv)[*pargc + 2] = nullptr;
   *pargc += 2;
+  if (RecordReplayWireIdEnabled()) {
+    (*pargv)[(*pargc)++] = strdup("--record-replay-wire-id");
+  }
+  (*pargv)[*pargc] = nullptr;
 
 #endif // !BUILDFLAG(IS_WIN)
 

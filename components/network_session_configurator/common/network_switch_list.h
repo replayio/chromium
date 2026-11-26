@@ -72,3 +72,7 @@ NETWORK_SWITCH(kHttp2GreaseFrameType, "http2-grease-frame-type")
 // afterwards.  Only affects HTTP/2 request streams, not proxy or bidirectional
 // streams.
 NETWORK_SWITCH(kHttp2EndStreamWithDataFrame, "http2-end-stream-with-data-frame")
+
+// Replay: mark every HTTP request with a random x-replay-wire-id header. Set by
+// the browser process when its renderers are recorded.
+NETWORK_SWITCH(kRecordReplayWireId, "record-replay-wire-id")

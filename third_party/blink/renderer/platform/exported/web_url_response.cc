@@ -389,6 +389,10 @@ void WebURLResponse::SetIsSignedExchangeInnerResponse(
       is_signed_exchange_inner_response);
 }
 
+void WebURLResponse::SetRecordReplayWireId(const WebString& wire_id) {
+  resource_response_->SetRecordReplayWireId(wire_id);
+}
+
 void WebURLResponse::SetWasInPrefetchCache(bool was_in_prefetch_cache) {
   resource_response_->SetWasInPrefetchCache(was_in_prefetch_cache);
 }

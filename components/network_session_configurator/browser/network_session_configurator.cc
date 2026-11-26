@@ -792,6 +792,10 @@ void ParseCommandLineAndFieldTrials(const base::CommandLine& command_line,
         GetSwitchValueAsInt(command_line, switches::kTestingFixedHttpsPort);
   }
 
+  if (command_line.HasSwitch(switches::kRecordReplayWireId)) {
+    params->record_replay_wire_id = true;
+  }
+
   if (command_line.HasSwitch(switches::kHostRules)) {
     params->host_mapping_rules.SetRulesFromString(
         command_line.GetSwitchValueASCII(switches::kHostRules));

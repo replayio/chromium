@@ -136,6 +136,11 @@ struct COMPONENT_EXPORT(NETWORK_CPP_BASE)
     return obj.service_worker_respond_with_settled;
   }
 
+  static const absl::optional<std::string>& wire_id(
+      const net::LoadTimingInfo& obj) {
+    return obj.wire_id;
+  }
+
   static bool Read(network::mojom::LoadTimingInfoDataView obj,
                    net::LoadTimingInfo* output);
 };

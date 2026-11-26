@@ -44,7 +44,8 @@ bool StructTraits<network::mojom::LoadTimingInfoDataView, net::LoadTimingInfo>::
          data.ReadServiceWorkerReadyTime(&out->service_worker_ready_time) &&
          data.ReadServiceWorkerFetchStart(&out->service_worker_fetch_start) &&
          data.ReadServiceWorkerRespondWithSettled(
-             &out->service_worker_respond_with_settled);
+             &out->service_worker_respond_with_settled) &&
+         data.ReadWireId(&out->wire_id);
 }
 
 }  // namespace mojo
