@@ -62,6 +62,8 @@ class PLATFORM_EXPORT AgentGroupSchedulerImpl : public AgentGroupScheduler {
   void PerformMicrotaskCheckpoint();
 
   void Dispose();
+  // See RecordReplayGCRelease.
+  void RecordReplayTrackRelease();
 
   // Associate a page scheduler which was not created by `CreatePageScheduler()`
   // with this agent group scheduler.
@@ -89,8 +91,6 @@ class PLATFORM_EXPORT AgentGroupSchedulerImpl : public AgentGroupScheduler {
   int RecordReplayId() const { return record_replay_id_; }
 
  private:
-  friend class RecordReplayAgentGroupSchedulerReleases;
-
   scoped_refptr<MainThreadTaskQueue> default_task_queue_;
   scoped_refptr<base::SingleThreadTaskRunner> default_task_runner_;
   scoped_refptr<MainThreadTaskQueue> compositor_task_queue_;
@@ -106,6 +106,7 @@ class PLATFORM_EXPORT AgentGroupSchedulerImpl : public AgentGroupScheduler {
           "compatible with blink::HashMap");
   bool is_updating_policy_ = false;
   int record_replay_id_ = 0;
+  int record_replay_release_id_ = 0;
 };
 
 }  // namespace scheduler

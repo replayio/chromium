@@ -49,6 +49,7 @@
 #include "third_party/blink/public/platform/scheduler/web_renderer_process_type.h"
 #include "third_party/blink/public/platform/web_input_event_result.h"
 #include "third_party/blink/renderer/platform/bindings/parkable_string_manager.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_gc_release.h"
 #include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
 #include "third_party/blink/renderer/platform/instrumentation/resource_coordinator/renderer_resource_coordinator.h"
@@ -62,7 +63,6 @@
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_impl.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/page_scheduler_impl.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/pending_user_input.h"
-#include "third_party/blink/renderer/platform/scheduler/main_thread/record_replay_agent_group_scheduler_releases.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/task_type_names.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/use_case.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/widget_scheduler_impl.h"
@@ -1285,15 +1285,9 @@ void MainThreadSchedulerImpl::PerformMicrotaskCheckpoint() {
   if (isolate())
     EventLoop::PerformIsolateGlobalMicrotasksCheckpoint(isolate());
 
-  // The checkpoint above only reaches the GC poll when it had work to do. Poll
-  // here too, so that the agent group schedulers the recording's GC collected
-  // are gone from the set below in the replay as well. Clearing kept objects
-  // is only allowed between script jobs, so a task nested in script (e.g. one
-  // a paused debugger runs) does not poll here.
-  if (record_replay_agent_group_scheduler_releases_ && isolate() &&
-      !isolate()->InContext()) {
-    isolate()->ClearKeptObjects();
-  }
+  // So that the agent group schedulers the recording's GC collected are gone
+  // from the set below in the replay as well.
+  RecordReplayGCRelease::ForcePoll(isolate());
   REPLAY_ASSERT(
       "[RUN-2056-2298] MainThreadSchedulerImpl::PerformMicrotaskCheckpoint %d %d %u",
       recordreplay::PointerId(this), !!isolate(),
@@ -2465,10 +2459,6 @@ AgentGroupScheduler* MainThreadSchedulerImpl::GetCurrentAgentGroupScheduler() {
 
 void MainThreadSchedulerImpl::SetV8Isolate(v8::Isolate* isolate) {
   ThreadSchedulerBase::SetV8Isolate(isolate);
-  if (record_replay_agent_group_scheduler_releases_) {
-    v8::replayio::AddReplayGCPollParticipant(
-        isolate, record_replay_agent_group_scheduler_releases_);
-  }
 }
 
 v8::Isolate* MainThreadSchedulerImpl::Isolate() {
@@ -2595,24 +2585,8 @@ void MainThreadSchedulerImpl::AddAgentGroupScheduler(
   DCHECK(is_new_entry);
 
   if (recordreplay::IsRecordingOrReplaying()) {
-    if (!record_replay_agent_group_scheduler_releases_) {
-      record_replay_agent_group_scheduler_releases_ =
-          new RecordReplayAgentGroupSchedulerReleases(*this);
-      if (isolate()) {
-        v8::replayio::AddReplayGCPollParticipant(
-            isolate(), record_replay_agent_group_scheduler_releases_);
-      }
-    }
-    record_replay_agent_group_scheduler_releases_->OnAdded(
-        *agent_group_scheduler);
+    agent_group_scheduler->RecordReplayTrackRelease();
   }
-}
-
-bool MainThreadSchedulerImpl::RecordReplayOnAgentGroupSchedulerCollected(
-    int scheduler_id) {
-  return record_replay_agent_group_scheduler_releases_ &&
-         record_replay_agent_group_scheduler_releases_->OnCollected(
-             scheduler_id);
 }
 
 void MainThreadSchedulerImpl::RecordReplayForgetAgentGroupScheduler(

@@ -14,6 +14,7 @@
 #include "third_party/blink/renderer/platform/scheduler/public/dummy_schedulers.h"
 
 #include "base/record_replay.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_gc_release.h"
 
 namespace blink {
 namespace scheduler {
@@ -64,14 +65,41 @@ AgentGroupSchedulerImpl::~AgentGroupSchedulerImpl() {
 }
 
 void AgentGroupSchedulerImpl::Dispose() {
-  // See RecordReplayAgentGroupSchedulerReleases.
-  if (recordreplay::IsRecordingOrReplaying() &&
-      main_thread_scheduler_->RecordReplayOnAgentGroupSchedulerCollected(
-          record_replay_id_)) {
+  if (RecordReplayGCRelease::OnCollected(record_replay_release_id_)) {
     return;
   }
   default_task_queue_->DetachTaskQueue();
   compositor_task_queue_->DetachTaskQueue();
+}
+
+namespace {
+
+void RecordReplayReleaseAgentGroupScheduler(
+    MainThreadSchedulerImpl* main_thread_scheduler,
+    scoped_refptr<MainThreadTaskQueue> default_task_queue,
+    scoped_refptr<MainThreadTaskQueue> compositor_task_queue,
+    AgentGroupSchedulerImpl* agent_group_scheduler) {
+  // What AgentGroupSchedulerImpl::Dispose() does upstream.
+  default_task_queue->DetachTaskQueue();
+  compositor_task_queue->DetachTaskQueue();
+  // Only alive when replaying. The recording's GC already dropped it from the
+  // main thread scheduler's weak set of agent group schedulers.
+  if (agent_group_scheduler) {
+    main_thread_scheduler->RecordReplayForgetAgentGroupScheduler(
+        agent_group_scheduler);
+  }
+}
+
+}  // namespace
+
+void AgentGroupSchedulerImpl::RecordReplayTrackRelease() {
+  // Detaching the task queues makes the main thread scheduler check them under
+  // their locks after every task, so the GC must not decide when that happens.
+  record_replay_release_id_ = RecordReplayGCRelease::Track(
+      main_thread_scheduler_->Isolate(), this,
+      blink::BindOnce(&RecordReplayReleaseAgentGroupScheduler,
+               blink::Unretained(&*main_thread_scheduler_), default_task_queue_,
+               compositor_task_queue_, WrapWeakPersistent(this)));
 }
 
 std::unique_ptr<PageScheduler> AgentGroupSchedulerImpl::CreatePageScheduler(

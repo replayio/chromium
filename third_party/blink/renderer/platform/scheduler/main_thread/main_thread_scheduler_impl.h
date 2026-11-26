@@ -98,7 +98,6 @@ class AgentGroupSchedulerImpl;
 class CPUTimeBudgetPool;
 class FrameSchedulerImpl;
 class PageSchedulerImpl;
-class RecordReplayAgentGroupSchedulerReleases;
 class WebRenderWidgetSchedulingState;
 class WidgetSchedulerImpl;
 
@@ -304,8 +303,7 @@ class PLATFORM_EXPORT MainThreadSchedulerImpl
   scoped_refptr<base::sequence_manager::TaskQueue> NewTaskQueueForTest();
 
   void RemoveAgentGroupScheduler(AgentGroupSchedulerImpl*);
-  // See RecordReplayAgentGroupSchedulerReleases.
-  bool RecordReplayOnAgentGroupSchedulerCollected(int scheduler_id);
+  // See RecordReplayGCRelease.
   void RecordReplayForgetAgentGroupScheduler(AgentGroupSchedulerImpl*);
   void AddPageScheduler(PageSchedulerImpl*);
   void RemovePageScheduler(PageSchedulerImpl*);
@@ -929,10 +927,6 @@ class PLATFORM_EXPORT MainThreadSchedulerImpl
 
   PollableThreadSafeFlag policy_may_need_update_;
   WeakPersistent<AgentGroupScheduler> current_agent_group_scheduler_;
-  // Made when the first agent group scheduler is added while recording or
-  // replaying. It is never deleted, as the isolate's GC poll may outlive this.
-  raw_ptr<RecordReplayAgentGroupSchedulerReleases>
-      record_replay_agent_group_scheduler_releases_ = nullptr;
 
   PerformanceHelper performance_helper_;
 
