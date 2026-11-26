@@ -141,40 +141,28 @@ steps:
   # instead. Both architectures share the key's checkout (out/Release and
   # out/Release-ARM), and so one concurrency group.
   #
-  # build-pipeline.py also starts the build of missing macOS drivers, without
-  # waiting for it. This waits for those archives on a light agent, leaving the
-  # Mac to that build. Without DRIVER_REVISION (a build not started by
-  # build-pipeline.py) there is nothing to wait for: job.sh reads the pin from
-  # the commit.
-  - label: "⏳ macOS drivers"
+  # When the macOS drivers of REPLAY_BACKEND_REV are missing, build-pipeline.py
+  # has this build build them first (REPLAY_MAC_DRIVERS=build). A build without
+  # it leaves this step out, and the steps that depend on it run at once: job.sh
+  # reads the pin from the commit.
+  - label: "🔨 macOS drivers"
     key: "macos-drivers"
-    if: &mac-builds build.env("REPLAY_MAC_BUILD") == "1"
-    soft_fail: true
-    timeout_in_minutes: 300
-    plugins:
-      - thedyrt/skip-checkout#v0.1.1: ~
-    agents:
-      - "queue=light"
-    command: |
-      set -euo pipefail
-      if [ -z "$${DRIVER_REVISION:-}" ]; then
-        echo "no DRIVER_REVISION on this build: nothing to wait for"
-        exit 0
-      fi
-      for archive in "macOS-recordreplay-$$DRIVER_REVISION.tgz" "macOS-recordreplay-$$DRIVER_REVISION-arm.tgz"; do
-        until curl -sfI "https://static.replay.io/downloads/$$archive" > /dev/null; do
-          echo "waiting for $$archive"
-          sleep 120
-        done
-        echo "$$archive is there"
-      done
+    if: build.env("REPLAY_MAC_BUILD") == "1" && build.env("REPLAY_MAC_DRIVERS") == "build"
+    trigger: "build-driver-linker"
+    build:
+      commit: "${REPLAY_BACKEND_REV}"
+      branch: "${REPLAY_BACKEND_BRANCH}"
+      message: "Triggered from chromium: ${BUILDKITE_MESSAGE}"
+      # The macOS pieces only.
+      env:
+        BUILD_MAC: "1"
+        SKIP_LINUX: "1"
 
   - label: "🔨 Chromium (macOS-arm64)"
     key: "build-chromium-macos-arm64"
-    if: *mac-builds
+    if: &mac-builds build.env("REPLAY_MAC_BUILD") == "1"
     depends_on:
       - "macos-drivers"
-    soft_fail: true
     timeout_in_minutes: *timeout
     concurrency: 1
     concurrency_group: &mac-group "chromium-build/m157/macos"
@@ -193,7 +181,6 @@ steps:
     if: *mac-builds
     depends_on:
       - "macos-drivers"
-    soft_fail: true
     timeout_in_minutes: *timeout
     concurrency: 1
     concurrency_group: *mac-group
@@ -211,7 +198,6 @@ steps:
   - label: "🕵️‍♀️ Verify macOS cross-arch build integrity"
     key: "verify-macos-cross-arch"
     if: *mac-builds
-    soft_fail: true
     depends_on:
       - "build-chromium-macos-arm64"
       - "build-chromium-macos-x86_64"
@@ -236,7 +222,6 @@ steps:
   - label: "📝 E2E Tests (macOS-arm64)"
     trigger: "testing-runtime-e2e"
     if: *mac-builds
-    soft_fail: true
     depends_on:
       - "build-chromium-macos-arm64"
       - "build-chromium-macos-x86_64"

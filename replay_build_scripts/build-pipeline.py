@@ -83,36 +83,24 @@ def mac_steps(pin, env):
     whatever waits for this build need none of it. REPLAY_MAC_BUILD=1 selects
     the macOS steps of .buildkite/pipeline.yml instead of the Linux ones.
 
-    When the macOS drivers of the pin are missing, a build-driver-linker build of
-    them starts too, which nothing waits for either: the macOS build waits for
-    their archives on a light agent (macos-drivers), without holding the Mac that
-    builds them. build-driver-linker builds the macOS pieces only with
-    BUILD_MAC=1, and leaves out the Linux ones with SKIP_LINUX=1.
+    When the macOS drivers of the pin are missing, REPLAY_MAC_DRIVERS=build has
+    that build build them first, with build-driver-linker.
 
-    soft_fail: a failure to create either build does not fail this one.
+    soft_fail: a failure to create the build does not fail this one.
     """
-    steps = []
+    env = {**env, "REPLAY_MAC_BUILD": "1"}
     archives = [f"macOS-recordreplay-{pin.commit[:12]}{suffix}.tgz" for suffix in ("", "-arm")]
     if not all(driver_archive_present(archive) for archive in archives):
-        steps.append(
-            {
-                "trigger": "build-driver-linker",
-                "key": "build-driver-linker-macos",
-                "async": True,
-                "soft_fail": True,
-                "build": driver_build(pin, {"BUILD_MAC": "1", "SKIP_LINUX": "1"}),
-            }
-        )
-    steps.append(
+        env.update(REPLAY_MAC_DRIVERS="build", REPLAY_BACKEND_BRANCH=pin.branch)
+    return [
         {
             "trigger": "chromium-build",
             "label": "chromium-build (macOS)",
             "async": True,
             "soft_fail": True,
-            "build": chromium_build({**env, "REPLAY_MAC_BUILD": "1"}),
+            "build": chromium_build(env),
         }
-    )
-    return steps
+    ]
 
 
 def chromium_build(env):
