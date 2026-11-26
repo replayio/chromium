@@ -64,24 +64,22 @@ AgentGroupSchedulerImpl::~AgentGroupSchedulerImpl() {
   CHECK(page_schedulers_.empty());
 }
 
-void AgentGroupSchedulerImpl::Dispose() {
-  if (RecordReplayGCRelease::OnCollected(record_replay_release_id_)) {
-    return;
-  }
-  default_task_queue_->DetachTaskQueue();
-  compositor_task_queue_->DetachTaskQueue();
-}
-
 namespace {
+
+// Dispose()'s upstream body, which the release also runs. The release can't
+// call Dispose() because the scheduler is already collected when recording.
+void RecordReplayDetachTaskQueues(MainThreadTaskQueue& default_task_queue,
+                                  MainThreadTaskQueue& compositor_task_queue) {
+  default_task_queue.DetachTaskQueue();
+  compositor_task_queue.DetachTaskQueue();
+}
 
 void RecordReplayReleaseAgentGroupScheduler(
     MainThreadSchedulerImpl* main_thread_scheduler,
     scoped_refptr<MainThreadTaskQueue> default_task_queue,
     scoped_refptr<MainThreadTaskQueue> compositor_task_queue,
     AgentGroupSchedulerImpl* agent_group_scheduler) {
-  // What AgentGroupSchedulerImpl::Dispose() does upstream.
-  default_task_queue->DetachTaskQueue();
-  compositor_task_queue->DetachTaskQueue();
+  RecordReplayDetachTaskQueues(*default_task_queue, *compositor_task_queue);
   // Only alive when replaying. The recording's GC already dropped it from the
   // main thread scheduler's weak set of agent group schedulers.
   if (agent_group_scheduler) {
@@ -91,6 +89,13 @@ void RecordReplayReleaseAgentGroupScheduler(
 }
 
 }  // namespace
+
+void AgentGroupSchedulerImpl::Dispose() {
+  if (RecordReplayGCRelease::OnCollected(record_replay_release_id_)) {
+    return;
+  }
+  RecordReplayDetachTaskQueues(*default_task_queue_, *compositor_task_queue_);
+}
 
 void AgentGroupSchedulerImpl::RecordReplayTrackRelease() {
   // Detaching the task queues makes the main thread scheduler check them under
