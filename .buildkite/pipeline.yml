@@ -16,9 +16,9 @@
 #
 # Per-build switches are env of the Buildkite build (replay_build_scripts/ci/job.sh):
 #   REPLAY_BUILD_MAX_FAILURES (0: keep going, the default; 1: stop at the first
-#   error), REPLAY_SISO_LOCAL_JOBS, REPLAY_SISO_CONFIG, CHROMIUM_CHECKOUT_KEY
-#   for an experiment that wants a checkout of its own, and
-#   CHROMIUM_CHECKOUT_FROM to copy a first checkout from a key the host has.
+#   error), REPLAY_SISO_LOCAL_JOBS, REPLAY_SISO_REMOTE_JOBS, REPLAY_SISO_CONFIG,
+#   CHROMIUM_CHECKOUT_KEY for an experiment that wants a checkout of its own,
+#   and CHROMIUM_CHECKOUT_FROM to copy a first checkout from a key the host has.
 #   The driver and the backend are not among them: they come from the commit's
 #   REPLAY_BACKEND_REV.
 # They are deliberately not given defaults in a step `env` here: step env

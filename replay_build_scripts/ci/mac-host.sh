@@ -245,6 +245,11 @@ export DEPOT_TOOLS_UPDATE=0 PATH=$depot:$PATH
 export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=gc.auto GIT_CONFIG_VALUE_0=0
 # build.cjs: hold this build to what it checks in the build image.
 export REPLAY_CI_HOST_BUILD=1
+# A Mac misses the cache Linux builds fill, so nearly every step runs remotely.
+# At siso's default here, 5120 remote steps at once, EngFlow kept steps queued
+# past their deadline and lost track of others, and --strict_remote gives such
+# a step no local fallback: most of a build failed that way.
+export REPLAY_SISO_REMOTE_JOBS=${REPLAY_SISO_REMOTE_JOBS:-500}
 if [ "$engflow" = 1 ]; then
   cert=${ENGFLOW_CERT_FILE:?ENGFLOW_CERT_FILE is not set}
   key=${ENGFLOW_KEY_FILE:?ENGFLOW_KEY_FILE is not set}

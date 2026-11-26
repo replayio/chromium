@@ -9,6 +9,8 @@
 #                               0 (default): keep going, report every failure.
 #                               1: stop at the first error.
 #   REPLAY_SISO_LOCAL_JOBS      parallel local steps (default: siso's, the CPU count)
+#   REPLAY_SISO_REMOTE_JOBS     parallel remote steps (default: siso's on Linux,
+#                               500 on a Mac: mac-host.sh)
 #   REPLAY_SISO_CONFIG          siso -config names (default: none)
 # From the pipeline step:
 #   ENGFLOW_CERT_FILE, ENGFLOW_KEY_FILE   EngFlow mTLS client cert and key

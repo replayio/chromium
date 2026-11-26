@@ -27,6 +27,8 @@ const options = {
   maxFailures: countFromEnv("REPLAY_BUILD_MAX_FAILURES"),
   // Parallel local steps; siso's default is the CPU count.
   sisoLocalJobs: countFromEnv("REPLAY_SISO_LOCAL_JOBS"),
+  // Parallel remote steps; siso's default grows with the CPU count.
+  sisoRemoteJobs: countFromEnv("REPLAY_SISO_REMOTE_JOBS"),
   // siso `-config` names, e.g. to run more step kinds remotely.
   sisoConfig: process.env.REPLAY_SISO_CONFIG,
   // A CI build on a Mac agent, which builds on the host
@@ -346,6 +348,9 @@ function buildToolArgs() {
   }
   if (options.sisoLocalJobs !== undefined) {
     args.push(`-local_jobs=${options.sisoLocalJobs}`);
+  }
+  if (options.sisoRemoteJobs !== undefined) {
+    args.push(`-remote_jobs=${options.sisoRemoteJobs}`);
   }
   if (options.sisoConfig) {
     args.push("-config", options.sisoConfig);
