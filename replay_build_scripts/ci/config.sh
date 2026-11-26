@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Identity of this Chromium version's CI state on a build agent, and the guards
 # every script here applies before touching it. Sourced, never executed.
 #

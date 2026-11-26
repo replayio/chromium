@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Run a command in this key's checkout on a macOS agent: the macOS counterpart
 # of build-in-container.sh, with the same arguments.
 #

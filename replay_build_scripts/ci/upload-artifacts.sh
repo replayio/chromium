@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Upload the build artifacts of this key's checkout.
 #
 # upload_build_artifacts.mjs reads out/Release and the backend checkout relative

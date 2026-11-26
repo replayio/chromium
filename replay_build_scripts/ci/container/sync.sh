@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # In the build image, or on a Mac agent (mac-host.sh): put <root>/src at
 # <commit>, which checkout.sh fetched on the host, and everything its DEPS pins (the Replay forks of v8, skia,
 # webrtc and boringssl included) at that commit's revisions. <fork url> is
@@ -85,6 +85,15 @@ sync_deps() {
   if [ "$DEPS_OS" = mac ]; then
     echo "--- ANGLE: internal shaders compiled at startup"
     git -C "$ANGLE_DIR" apply "$ANGLE_PATCH"
+    # siso compiles a Mac's C++ remotely only with the Linux clang and the
+    # wrapper this generates (build/config/siso/clang_mac.star). The DEPS hook
+    # that runs it skips the work unless RBE_service is set, which the EngFlow
+    # setup here does not use.
+    echo "--- remote compilation from a Mac"
+    python3 src/third_party/reclient_configs/configure_reclient.py --src_dir=src --force
+    # It writes the wrapper as a plain file, and siso hands the workers the
+    # file's mode along with it.
+    chmod +x src/buildtools/reclient_cfgs/chromium-browser-clang/clang_remote_wrapper
   fi
 
   cd "$ROOT/src"

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # One Chromium checkout per Chromium version on a build agent: one directory,
 # CHECKOUT_ROOT (config.sh), holding everything a build of that version keeps
 # there. The version is the key, read from chrome/VERSION (config.sh).
