@@ -222,6 +222,7 @@ class PLATFORM_EXPORT V8PerIsolateData final {
     enum class Key : uint32_t {
       kProfileGroup,
       kCanvasResourceTracker,
+      kRecordReplayGCRelease,
       kNumberOfKeys
     };
 

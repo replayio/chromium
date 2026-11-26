@@ -303,6 +303,8 @@ class PLATFORM_EXPORT MainThreadSchedulerImpl
   scoped_refptr<base::sequence_manager::TaskQueue> NewTaskQueueForTest();
 
   void RemoveAgentGroupScheduler(AgentGroupSchedulerImpl*);
+  // See RecordReplayGCRelease.
+  void RecordReplayForgetAgentGroupScheduler(AgentGroupSchedulerImpl*);
   void AddPageScheduler(PageSchedulerImpl*);
   void RemovePageScheduler(PageSchedulerImpl*);
 

@@ -14,6 +14,7 @@
 #include "third_party/blink/renderer/platform/scheduler/public/dummy_schedulers.h"
 
 #include "base/record_replay.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_gc_release.h"
 
 namespace blink {
 namespace scheduler {
@@ -63,9 +64,47 @@ AgentGroupSchedulerImpl::~AgentGroupSchedulerImpl() {
   CHECK(page_schedulers_.empty());
 }
 
+namespace {
+
+// Dispose()'s upstream body, which the release also runs. The release can't
+// call Dispose() because the scheduler is already collected when recording.
+void RecordReplayDetachTaskQueues(MainThreadTaskQueue& default_task_queue,
+                                  MainThreadTaskQueue& compositor_task_queue) {
+  default_task_queue.DetachTaskQueue();
+  compositor_task_queue.DetachTaskQueue();
+}
+
+void RecordReplayReleaseAgentGroupScheduler(
+    MainThreadSchedulerImpl* main_thread_scheduler,
+    scoped_refptr<MainThreadTaskQueue> default_task_queue,
+    scoped_refptr<MainThreadTaskQueue> compositor_task_queue,
+    AgentGroupSchedulerImpl* agent_group_scheduler) {
+  RecordReplayDetachTaskQueues(*default_task_queue, *compositor_task_queue);
+  // Only alive when replaying. The recording's GC already dropped it from the
+  // main thread scheduler's weak set of agent group schedulers.
+  if (agent_group_scheduler) {
+    main_thread_scheduler->RecordReplayForgetAgentGroupScheduler(
+        agent_group_scheduler);
+  }
+}
+
+}  // namespace
+
 void AgentGroupSchedulerImpl::Dispose() {
-  default_task_queue_->DetachTaskQueue();
-  compositor_task_queue_->DetachTaskQueue();
+  if (RecordReplayGCRelease::OnCollected(record_replay_release_id_)) {
+    return;
+  }
+  RecordReplayDetachTaskQueues(*default_task_queue_, *compositor_task_queue_);
+}
+
+void AgentGroupSchedulerImpl::RecordReplayTrackRelease() {
+  // Detaching the task queues makes the main thread scheduler check them under
+  // their locks after every task, so the GC must not decide when that happens.
+  record_replay_release_id_ = RecordReplayGCRelease::Track(
+      main_thread_scheduler_->Isolate(), this,
+      blink::BindOnce(&RecordReplayReleaseAgentGroupScheduler,
+               blink::Unretained(&*main_thread_scheduler_), default_task_queue_,
+               compositor_task_queue_, WrapWeakPersistent(this)));
 }
 
 std::unique_ptr<PageScheduler> AgentGroupSchedulerImpl::CreatePageScheduler(
