@@ -25,6 +25,7 @@
 
 #include "third_party/blink/renderer/core/css/css_font_face_source.h"
 
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/css/css_font_face.h"
 #include "third_party/blink/renderer/platform/fonts/font_cache_key.h"
 #include "third_party/blink/renderer/platform/fonts/font_description.h"
@@ -57,8 +58,31 @@ const SimpleFontData* CSSFontFaceSource::GetFontData(
   if (result.is_new_entry) {
     result.stored_value->value =
         CreateFontData(font_description, font_selection_capabilities);
+    if (result.stored_value->value) {
+      RecordReplayHold(key, result.stored_value->value);
+    }
   }
   return result.stored_value->value.Get();
+}
+
+void CSSFontFaceSource::RecordReplayHold(const FontCacheKey& key,
+                                         const SimpleFontData* font_data) {
+  if (!recordreplay::IsRecordingOrReplaying()) {
+    return;
+  }
+  // See the header.
+  static const wtf_size_t kMaxHeld = 1024;
+  record_replay_held_.push_back(font_data);
+  record_replay_keys_.push_back(key);
+  while (record_replay_held_.size() > kMaxHeld) {
+    auto it = font_data_table_.find(record_replay_keys_.front());
+    if (it != font_data_table_.end() &&
+        it->value == record_replay_held_.front()) {
+      font_data_table_.erase(it);
+    }
+    record_replay_held_.pop_front();
+    record_replay_keys_.pop_front();
+  }
 }
 
 }  // namespace blink
