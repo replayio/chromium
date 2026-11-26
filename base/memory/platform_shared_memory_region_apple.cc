@@ -187,7 +187,7 @@ PlatformSharedMemoryRegion::CheckPlatformHandlePermissionsCorrespondToMode(
   // consistent. If any checks fail while recording then the process would have
   // crashed anyways.
   if (recordreplay::IsReplaying())
-    return true;
+    return ok();
 
   if (is_read_only != expected_read_only) {
     return unexpected(expected_read_only ? TakeError::kExpectedReadOnlyButNot

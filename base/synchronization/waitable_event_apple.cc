@@ -9,6 +9,7 @@
 
 #include <limits>
 #include <memory>
+#include <optional>
 
 #include "base/apple/mach_logging.h"
 #include "base/containers/span.h"
@@ -62,7 +63,7 @@ WaitableEvent::WaitableEvent(ResetPolicy reset_policy,
 }
 
 void WaitableEvent::Reset() {
-  absl::optional<recordreplay::AutoDisallowEvents> disallow;
+  std::optional<recordreplay::AutoDisallowEvents> disallow;
   if (!record_replay_ordered_lock_id_)
     disallow.emplace("WaitableEvent::Reset");
   else
@@ -94,7 +95,7 @@ void WaitableEvent::SignalImpl() {
 }
 
 bool WaitableEvent::IsSignaled() const {
-  absl::optional<recordreplay::AutoDisallowEvents> disallow;
+  std::optional<recordreplay::AutoDisallowEvents> disallow;
   if (!record_replay_ordered_lock_id_)
     disallow.emplace("WaitableEvent::IsSignaled");
 

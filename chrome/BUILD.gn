@@ -561,6 +561,10 @@ if (is_win) {
     deps = [
       "//base:compiler_specific",
       "//base/allocator:early_zone_registration_apple",
+
+      # Replay: record_replay_main.cc includes base/record_replay.h, whose
+      # raw_ptr.h is PartitionAlloc's.
+      "//base/allocator/partition_allocator/src/partition_alloc:raw_ptr",
       "//build:branding_buildflags",
       "//build/config/compiler:compiler_buildflags",
       "//chrome/common:buildflags",
@@ -822,6 +826,10 @@ if (is_win) {
       deps = [
         "//base:compiler_specific",
         "//base/allocator:early_zone_registration_apple",
+
+        # Replay: record_replay_main.cc includes base/record_replay.h, whose
+        # raw_ptr.h is PartitionAlloc's.
+        "//base/allocator/partition_allocator/src/partition_alloc:raw_ptr",
         "//build:branding_buildflags",
         "//build/config/compiler:compiler_buildflags",
         "//chrome/common:version_header",
