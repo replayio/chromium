@@ -258,28 +258,28 @@ static __attribute__((noinline)) void BusyWait() {
   while (x) {}
 }
 
+// Whether a renderer is recorded: every renderer under RECORD_ALL_CONTENT,
+// else only one launched with --record-replay-for-recording.
+static bool RecordReplayRecordingEnabled(bool cmdline_for_recording) {
+  // When RECORD_REPLAY_DONT_RECORD is set we don't record.
+  return !getenv("RECORD_REPLAY_DONT_RECORD") &&
+         (getenv("RECORD_ALL_CONTENT") || cmdline_for_recording);
+}
+
 // Whether the network service marks each request with a wire id, see
 // switches::kRecordReplayWireId: only when every renderer of this browser is
-// recorded, see RecordReplayRecordingDisabled. A renderer recorded per tab
-// (--record-replay-for-recording) gets no wire ids.
+// recorded. A renderer recorded per tab (--record-replay-for-recording) gets
+// no wire ids.
 static bool RecordReplayWireIdEnabled() {
-  return getenv("RECORD_ALL_CONTENT") && !getenv("RECORD_REPLAY_DONT_RECORD");
+  return RecordReplayRecordingEnabled(/*cmdline_for_recording=*/false);
 }
 
 static bool RecordReplayRecordingDisabled(bool cmdline_for_recording) {
-  // When RECORD_REPLAY_DONT_RECORD is set we don't record.
-  if (getenv("RECORD_REPLAY_DONT_RECORD")) {
-    if (getenv("RECORD_REPLAY_WAIT_AT_DONT_RECORD"))
-      BusyWait();
-    return true;
+  if (getenv("RECORD_REPLAY_DONT_RECORD") &&
+      getenv("RECORD_REPLAY_WAIT_AT_DONT_RECORD")) {
+    BusyWait();
   }
-  if (getenv("RECORD_ALL_CONTENT")) {
-    return false;
-  }
-  if (cmdline_for_recording) {
-    return false;
-  }
-  return true;
+  return !RecordReplayRecordingEnabled(cmdline_for_recording);
 }
 
 // Return whether the current process should be recorded. May update the arguments.

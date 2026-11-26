@@ -448,9 +448,9 @@ void OnNetworkNavigationRedirect(uint64_t inspector_id,
     dict.SetString("responseStatusText", redirect_response.HttpStatusText().Utf8());
     dict.SetBoolean("responseFromCache", redirect_response.WasCached());
     // A navigation's redirect hop has no networkReceiveResponse node.
-    if (!redirect_response.RecordReplayWireId().IsNull()) {
-      dict.SetString("wireId", redirect_response.RecordReplayWireId().Utf8());
-    }
+    const String& wire_id = redirect_response.RecordReplayWireId();
+    dict.SetKey("wireId", wire_id.IsNull() ? base::Value()
+                                           : base::Value(wire_id.Utf8()));
   }
 
   BrowserEvent("Network.NavigationRedirect", dict);
