@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "cc/paint/paint_filter.h"
+#include "cc/paint/record_replay_image_capture.h"
 
 namespace mojo {
 
@@ -24,8 +25,12 @@ StructTraits<viz::mojom::PaintFilterDataView, sk_sp<cc::PaintFilter>>::data(
                            true /* enable_security_constraints */);
   writer.Write(filter.get(), SkM44());
 
-  if (writer.size() == 0)
+  if (writer.size() == 0) {
+    if (cc::RecordReplayCapturingImages()) {
+      cc::RecordReplayNoteUnsentFilter(filter.get());
+    }
     return std::nullopt;
+  }
 
   memory.resize(writer.size());
   return memory;

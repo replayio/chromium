@@ -39,6 +39,7 @@
 #include "base/notreached.h"
 #include "base/pickle.h"
 #include "base/rand_util.h"
+#include "base/record_replay.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
@@ -1144,6 +1145,14 @@ void FeatureList::VisitFeaturesAndParams(FeatureVisitor& visitor,
 void FeatureList::RegisterFeatureAccess(
     const Feature& feature,
     Feature::FeatureStateCache logging_mask) {
+  // [RecordReplay] Code that runs with recorded events disallowed, such as
+  // Replay's in-process draws, which only run when replaying, doesn't count as
+  // a feature's first access: that logs a histogram sample, and then a
+  // recorded thread's first access wouldn't.
+  if (recordreplay::IsRecordingOrReplaying() &&
+      recordreplay::AreEventsDisallowed()) {
+    return;
+  }
   Feature::FeatureStateCache expected =
       feature.cached_value.load(std::memory_order_relaxed);
 

@@ -8,6 +8,8 @@
 #include <atomic>
 #include <type_traits>
 
+#include "base/record_replay_isolated_draw_asserts.h"
+
 namespace base {
 
 // AtomicSequenceNumberT is a thread safe increasing sequence number generator.
@@ -23,7 +25,11 @@ class AtomicSequenceNumberT {
 
   // Returns an increasing sequence number starts from 0 for each call.
   // This function can be called from any thread without data race.
-  inline T GetNext() { return seq_.fetch_add(1, std::memory_order_relaxed); }
+  inline T GetNext() {
+    recordreplay::IsolatedDrawAssert("AtomicSequenceNumber",
+                                     __builtin_return_address(0));
+    return seq_.fetch_add(1, std::memory_order_relaxed);
+  }
 
  private:
   std::atomic<T> seq_{0};

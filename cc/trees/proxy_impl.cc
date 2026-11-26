@@ -251,6 +251,10 @@ ProxyImpl::~ProxyImpl() {
   // holding while still on the compositor thread. This also ensures any
   // callbacks holding a ProxyImpl pointer are cancelled.
   smoothness_priority_expiration_notifier_.Shutdown();
+
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    recordreplay::OnCompositorDestroyed(this);
+  }
 }
 
 void ProxyImpl::InitializeMutatorOnImpl(
@@ -529,7 +533,8 @@ void ProxyImpl::NotifyReadyToCommitOnImpl(
               });
 
   if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
-    recordreplay::OnReadyToCommit();
+    recordreplay::OnReadyToCommit(this, commit_state->source_frame_number,
+                                  commit_state->record_replay_paint_bookmark);
 
     // A commit after diverging from the recording is a repaint's. The
     // recording can end with the compositor's frame sink lost, e.g. when its
@@ -995,10 +1000,6 @@ void ProxyImpl::ScheduledActionCommit() {
   auto* commit_state = data_for_commit_->commit_state.get();
   auto* unsafe_state = data_for_commit_->unsafe_state.get();
 
-  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
-    recordreplay::OnCommitOnImpl();
-  }
-
   host_impl_->BeginCommit(commit_state->source_frame_number,
                           commit_state->trace_id);
   host_impl_->FinishCommit(*commit_state, *unsafe_state);
@@ -1031,9 +1032,6 @@ void ProxyImpl::ScheduledActionPostCommit() {
 }
 
 void ProxyImpl::ScheduledActionActivateSyncTree() {
-  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
-    recordreplay::OnActivateOnImpl();
-  }
   if (host_impl_->sync_tree() &&
       host_impl_->sync_tree()->source_frame_number() !=
           host_impl_->active_tree()->source_frame_number()) {
@@ -1095,6 +1093,12 @@ DrawResult ProxyImpl::DrawInternal(bool forced_draw) {
       });
 
   base::AutoReset<bool> mark_inside(&inside_draw_, true);
+
+  // [RecordReplay] Paint bookmarks are finished by frames drawing their commits.
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    recordreplay::OnDrawSourceFrame(
+        this, host_impl_->active_tree()->source_frame_number());
+  }
 
   // This method is called on a forced draw, regardless of whether we are able
   // to produce a frame, as the calling site on main thread is blocked until its

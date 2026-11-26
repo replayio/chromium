@@ -30,22 +30,32 @@ namespace recordreplay {
 // Initialize relevant render logic.
 void InitPaintCallback();
 
-// Called on the main thread when changes have been committed to the layer tree
-// and the thread is about to block until the compositor thread is ready to commit.
-void OnCommitPaint();
+// Called on the main thread when changes have been committed to the layer tree,
+// before they are handed to the compositor thread. Returns the bookmark of the
+// paint it starts, which the commit carries, or 0.
+size_t OnCommitPaint();
 
 // Called on the compositor thread when the main thread's notification about
-// the commit.
-void OnReadyToCommit();
+// the commit, whose tree has the given source frame number, carrying the
+// bookmark OnCommitPaint returned.
+void OnReadyToCommit(const void* compositor,
+                     int source_frame_number,
+                     size_t bookmark);
 
-// Called on the compositor thread when it has committed the tree it last
-// heard was ready, and when it has activated the tree it last committed.
-void OnCommitOnImpl();
-void OnActivateOnImpl();
+// Called on the compositor thread before drawing the active tree, which has
+// the given source frame number.
+void OnDrawSourceFrame(const void* compositor, int source_frame_number);
+
+// Called on the compositor thread when the compositor is destroyed.
+void OnCompositorDestroyed(const void* compositor);
 
 // Called when a CompositorFrame is being submitted to the GPU process.
 void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
                            const viz::CompositorFrame& frame);
+
+// Called after a frame passed to SubmitCompositorFrame has been sent to the
+// GPU process, which destroys the frame.
+void FinishSubmittedCompositorFrame();
 
 // Called to populate a bitmap with information for the given resource in the current frame.
 // The pixels are those of the software shared image the resource carries.
