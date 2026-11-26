@@ -563,8 +563,9 @@ if (is_win) {
       "//base/allocator:early_zone_registration_apple",
 
       # Replay: record_replay_main.cc includes base/record_replay.h, whose
-      # raw_ptr.h is PartitionAlloc's.
-      "//base/allocator/partition_allocator/src/partition_alloc:raw_ptr",
+      # raw_ptr.h is PartitionAlloc's. Only its headers: linking PartitionAlloc
+      # brings frameworks that verify_libraries does not allow in a helper.
+      "//base/allocator/partition_allocator/src/partition_alloc:build_config",
       "//build:branding_buildflags",
       "//build/config/compiler:compiler_buildflags",
       "//chrome/common:buildflags",
@@ -828,8 +829,10 @@ if (is_win) {
         "//base/allocator:early_zone_registration_apple",
 
         # Replay: record_replay_main.cc includes base/record_replay.h, whose
-        # raw_ptr.h is PartitionAlloc's.
-        "//base/allocator/partition_allocator/src/partition_alloc:raw_ptr",
+        # raw_ptr.h is PartitionAlloc's. Only its headers: linking
+        # PartitionAlloc brings frameworks that verify_libraries does not allow
+        # in a helper.
+        "//base/allocator/partition_allocator/src/partition_alloc:build_config",
         "//build:branding_buildflags",
         "//build/config/compiler:compiler_buildflags",
         "//chrome/common:version_header",
