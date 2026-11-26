@@ -259,10 +259,11 @@ static __attribute__((noinline)) void BusyWait() {
 }
 
 // Whether the network service marks each request with a wire id, see
-// switches::kRecordReplayWireId: whenever a renderer of this browser can be
-// recorded, see RecordReplayRecordingDisabled.
+// switches::kRecordReplayWireId: only when every renderer of this browser is
+// recorded, see RecordReplayRecordingDisabled. A renderer recorded per tab
+// (--record-replay-for-recording) gets no wire ids.
 static bool RecordReplayWireIdEnabled() {
-  return !getenv("RECORD_REPLAY_DONT_RECORD");
+  return getenv("RECORD_ALL_CONTENT") && !getenv("RECORD_REPLAY_DONT_RECORD");
 }
 
 static bool RecordReplayRecordingDisabled(bool cmdline_for_recording) {
