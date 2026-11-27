@@ -19,6 +19,8 @@
 
 #include "third_party/blink/renderer/core/css/media_query_matcher.h"
 
+#include "base/record_replay.h"
+
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/metrics/document_update_reason.h"
 #include "third_party/blink/public/mojom/favicon/favicon_url.mojom-blink.h"
@@ -30,8 +32,10 @@
 #include "third_party/blink/renderer/core/css/media_query_list_listener.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver.h"
 #include "third_party/blink/renderer/core/dom/document.h"
+#include "third_party/blink/renderer/core/execution_context/agent.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_gc_release.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
 namespace blink {
@@ -142,6 +146,10 @@ void MediaQueryMatcher::MediaFeaturesChanged() {
         /*update_theme_color_cache=*/false);
   }
 
+  if (recordreplay::IsRecordingOrReplaying()) {
+    // Leaves the lists the recording's GC collected (see MediaQueryList).
+    RecordReplayGCRelease::ForcePoll(document_->GetAgent().isolate());
+  }
   HeapVector<Member<MediaQueryListListener>> listeners_to_notify;
   for (const auto& list : media_lists_) {
     if (list->MediaFeaturesChanged(&listeners_to_notify)) {

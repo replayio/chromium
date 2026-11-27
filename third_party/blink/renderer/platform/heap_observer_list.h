@@ -94,6 +94,12 @@ class PLATFORM_EXPORT HeapObserverList final {
   // Returns true if the list is being iterated over.
   bool IsIteratingOverObservers() const { return mutation_state_ != kAllowAll; }
 
+  // Drops the reference which keeps an observer alive while recording or
+  // replaying, for an observer whose collection replays some other way.
+  void RecordReplayLetCollect(ObserverType* observer) {
+    replay_observers_strong_.erase(observer);
+  }
+
   // Removes all the observers from this list.
   void Clear() {
     CHECK(mutation_state_ & kAllowRemoval);
