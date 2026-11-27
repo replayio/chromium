@@ -8,6 +8,7 @@
 
 #include "base/auto_reset.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback_helpers.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/record_replay.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_throw_dom_exception.h"
@@ -37,6 +38,22 @@
 
 namespace blink {
 
+namespace {
+
+// Bodies and their loader clients never leave their context's observers, and
+// would otherwise keep the response alive until the context is destroyed. A
+// body whose signal can still abort stays alive anyway, as its abort algorithm
+// holds it strongly.
+void RecordReplayLetCollectObserver(
+    ExecutionContextLifecycleObserver* observer) {
+  if (ExecutionContext* context = observer->GetExecutionContext()) {
+    context->RecordReplayLetCollect(context->GetIsolate(), observer,
+                                    base::DoNothing());
+  }
+}
+
+}  // namespace
+
 class BodyStreamBuffer::LoaderClient final
     : public GarbageCollected<LoaderClient>,
       public ExecutionContextLifecycleObserver,
@@ -47,7 +64,9 @@ class BodyStreamBuffer::LoaderClient final
                FetchDataLoader::Client* client)
       : ExecutionContextLifecycleObserver(execution_context),
         buffer_(buffer),
-        client_(client) {}
+        client_(client) {
+    RecordReplayLetCollectObserver(this);
+  }
   LoaderClient(const LoaderClient&) = delete;
   LoaderClient& operator=(const LoaderClient&) = delete;
 
@@ -139,7 +158,9 @@ BodyStreamBuffer::BodyStreamBuffer(
       signal_(signal),
       cached_metadata_handler_(cached_metadata_handler),
       side_data_blob_(std::move(side_data_blob)),
-      made_from_readable_stream_(false) {}
+      made_from_readable_stream_(false) {
+  RecordReplayLetCollectObserver(this);
+}
 
 void BodyStreamBuffer::Init() {
   DCHECK(consumer_);
@@ -186,6 +207,7 @@ BodyStreamBuffer::BodyStreamBuffer(
       side_data_blob_(std::move(side_data_blob)),
       made_from_readable_stream_(true) {
   DCHECK(stream_);
+  RecordReplayLetCollectObserver(this);
 }
 
 scoped_refptr<BlobDataHandle> BodyStreamBuffer::DrainAsBlobDataHandle(
