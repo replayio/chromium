@@ -210,8 +210,8 @@ static void FinishIgnoredFramePaint();
 static const void* gDrawingCompositor;
 static const void* gSubmittingCompositor;
 
-// Whether a paint is being finished without pixels (FinishPaintWithoutPixels).
-static bool gFinishingWithoutPixels;
+// Whether a paint is being finished unchanged (FinishPaintUnchanged).
+static bool gFinishingUnchanged;
 static void SetDeviceViewportSize(const gfx::Size& size);
 
 // What a frame's draw does depends on its contents, and so do the recorded
@@ -497,10 +497,10 @@ static char* PaintCallback(const char* mime_type, int jpeg_quality) {
     return PaintWhenDiverged(mime_type, jpeg_quality);
   }
 
-  if (gFinishingWithoutPixels) {
-    // An empty result tells the linker that the paint was finished without
-    // pixels and shows the paint before it, unlike no result, which means its
-    // pixels aren't available. It is freed like any other result.
+  if (gFinishingUnchanged) {
+    // An empty result tells the linker that the paint was finished unchanged
+    // and shows the paint before it, unlike no result, which means its pixels
+    // aren't available. It is freed like any other result.
     return strdup("");
   }
 
@@ -545,7 +545,7 @@ static char* PaintCallback(const char* mime_type, int jpeg_quality) {
 static size_t gLastCommitBookmark;
 
 // Whether |gLastCommitBookmark|'s paint was finished, by a sent frame, or
-// without pixels when its frame was ignored or its compositor destroyed, and
+// unchanged when its frame was ignored or its compositor destroyed, and
 // the compositor whose frame drew its commit. Only used on the compositor
 // thread.
 static bool gLastCommitBookmarkFinished = true;
@@ -567,13 +567,13 @@ static std::deque<PendingCommitPaint>& PendingCommitPaints() {
 // Paints of commits whose trees no sent frame showed: replaced before any
 // frame drew them, drawn by frames that weren't sent (an aborted draw, a
 // surface that isn't drawn) or left by a destroyed compositor. They are
-// finished without pixels once that's known, so that they show the paint
+// finished unchanged once that's known, so that they show the paint
 // before them, which the screen still showed, and aren't among the started
 // paints the linker reports pending at the end of a paints run.
-static void FinishPaintWithoutPixels(size_t bookmark) {
-  gFinishingWithoutPixels = true;
+static void FinishPaintUnchanged(size_t bookmark) {
+  gFinishingUnchanged = true;
   V8RecordReplayPaintFinished(bookmark);
-  gFinishingWithoutPixels = false;
+  gFinishingUnchanged = false;
 }
 
 void InitPaintCallback() {
@@ -611,7 +611,7 @@ void OnDrawSourceFrame(const void* compositor, int source_frame_number) {
       continue;
     }
     if (bookmark) {
-      FinishPaintWithoutPixels(bookmark);
+      FinishPaintUnchanged(bookmark);
     }
     bookmark = it->bookmark;
     it = PendingCommitPaints().erase(it);
@@ -620,7 +620,7 @@ void OnDrawSourceFrame(const void* compositor, int source_frame_number) {
     size_t last = gLastCommitBookmark;
     if (last && !gLastCommitBookmarkFinished) {
       IsolatedDrawNote("paint bookmark without a sent frame", compositor);
-      FinishPaintWithoutPixels(last);
+      FinishPaintUnchanged(last);
     }
     gLastCommitBookmark = bookmark;
     gLastCommitBookmarkFinished = false;
@@ -636,7 +636,7 @@ void OnCompositorDestroyed(const void* compositor) {
       ++it;
       continue;
     }
-    FinishPaintWithoutPixels(it->bookmark);
+    FinishPaintUnchanged(it->bookmark);
     it = PendingCommitPaints().erase(it);
   }
   // Nor is its last drawn commit's paint finished by another compositor's
@@ -646,7 +646,7 @@ void OnCompositorDestroyed(const void* compositor) {
     size_t last = gLastCommitBookmark;
     if (last && !gLastCommitBookmarkFinished) {
       IsolatedDrawNote("paint bookmark of a destroyed compositor", compositor);
-      FinishPaintWithoutPixels(last);
+      FinishPaintUnchanged(last);
     }
     gLastCommitBookmark = 0;
     gLastCommitBookmarkFinished = true;
@@ -672,19 +672,19 @@ static void SetDeviceViewportSize(const gfx::Size& size) {
 }
 
 // A commit drawn by a frame of a surface that isn't drawn was never on screen,
-// so its paint is finished without pixels when that frame is ignored.
+// so its paint is finished unchanged when that frame is ignored.
 static void FinishIgnoredFramePaint() {
   size_t last = gLastCommitBookmark;
   if (last && !gLastCommitBookmarkFinished &&
       gLastCommitCompositor == gDrawingCompositor) {
-    FinishPaintWithoutPixels(last);
+    FinishPaintUnchanged(last);
     gLastCommitBookmarkFinished = true;
   }
 }
 
 static void FinishPaints() {
   // Only the frames of the compositor that drew the commit finish its paint.
-  // Another compositor's drawn commit was finished without pixels when its
+  // Another compositor's drawn commit was finished unchanged when its
   // frame was ignored, or, if its draw sent no frame, is when any compositor
   // draws its next commit or that compositor is destroyed; until then it stays
   // pending, also through frames of other compositors without a new commit.
