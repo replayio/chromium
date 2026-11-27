@@ -94,7 +94,12 @@ DOMScheduler::DOMScheduler(ExecutionContext* context)
   CHECK(context->GetScheduler());
   CreateFixedPriorityTaskQueues(context, WebSchedulingQueueType::kTaskQueue,
                                 fixed_priority_task_queues_);
-  DomSchedulerRetainer().Retain(this);
+  // Only frame schedulers run the release, and the retainer's set has to stay
+  // on the main thread's heap. A worker's scheduler would be left in the set
+  // after the worker's heap is gone.
+  if (IsMainThread()) {
+    DomSchedulerRetainer().Retain(this);
+  }
   // A weak reference: the retainer keeps the scheduler alive until the release
   // runs while recording/replaying, and has nothing to release otherwise.
   context->GetScheduler()->SetReplaySchedulingOwnerRelease(BindOnce(
