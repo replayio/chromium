@@ -341,7 +341,11 @@ IntersectionObserver::IntersectionObserver(
       hit_node_cb_(std::move(params.hit_node_cb)) {
   if (params.root) {
     // The GC collecting the root would disconnect the observer at a point
-    // which doesn't replay.
+    // which doesn't replay. Keeping the root alive costs only a detached
+    // subtree per observer. RecordReplayGCRelease could disconnect the observer
+    // at a GC poll instead, but reads of a detached root would then have to
+    // replay whether the recording still had it, as prototyped in
+    // https://github.com/replayio/chromium/pull/1784.
     if (recordreplay::IsRecordingOrReplaying("leak-references",
                                              "IntersectionObserver")) {
       replay_strong_root_ = params.root;
