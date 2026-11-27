@@ -32,6 +32,7 @@
 #include "third_party/blink/renderer/core/page/chrome_client.h"
 #include "third_party/blink/renderer/core/timing/dom_window_performance.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_gc_release.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/timer.h"
 
@@ -342,9 +343,11 @@ IntersectionObserver::IntersectionObserver(
   if (params.root) {
     // The GC collecting the root would disconnect the observer at a point
     // which doesn't replay.
-    if (recordreplay::IsRecordingOrReplaying("leak-references",
-                                             "IntersectionObserver")) {
-      replay_strong_root_ = params.root;
+    if (ExecutionContext* context = delegate.GetExecutionContext()) {
+      record_replay_release_id_ = RecordReplayGCRelease::Track(
+          context->GetIsolate(), params.root,
+          BindOnce(&IntersectionObserver::RecordReplayReleaseRoot,
+                   WrapWeakPersistent(this)));
     }
     if (params.root->IsDocumentNode()) {
       To<Document>(params.root)
@@ -371,10 +374,33 @@ IntersectionObserver::IntersectionObserver(
 void IntersectionObserver::ProcessCustomWeakness(const LivenessBroker& info) {
   // For explicit-root observers, if the root element disappears for any reason,
   // any remaining obsevations must be dismantled.
-  if (root() && !info.IsHeapObjectAlive(root()))
+  if (root() && !info.IsHeapObjectAlive(root())) {
     root_ = nullptr;
-  if (!RootIsImplicit() && !root())
+    RecordReplayGCRelease::OnCollected(record_replay_release_id_);
+  }
+  if (!RootIsImplicit() && !root() && !record_replay_release_id_)
     disconnect();
+}
+
+Node* IntersectionObserver::RecordReplayRoot() const {
+  // Only a root which no attached frame's document holds can be collected.
+  // The recording's GC clears root_ when it collects the root, while the replay
+  // keeps the root until the release disconnects the observer, so reads of
+  // such a root replay whether the recording still had it.
+  if (recordreplay::AreEventsDisallowed() ||
+      (root_ && root_->isConnected() && root_->GetDocument().GetFrame())) {
+    return root_.Get();
+  }
+  return recordreplay::RecordReplayValue("IntersectionObserver::root",
+                                         !!root_)
+             ? root_.Get()
+             : nullptr;
+}
+
+void IntersectionObserver::RecordReplayReleaseRoot() {
+  record_replay_release_id_ = 0;
+  root_ = nullptr;
+  disconnect();
 }
 
 bool IntersectionObserver::RootIsValid() const {
@@ -523,7 +549,6 @@ void IntersectionObserver::Trace(Visitor* visitor) const {
   visitor->Trace(delegate_);
   visitor->Trace(observations_);
   visitor->Trace(replay_strong_observations_);
-  visitor->Trace(replay_strong_root_);
   visitor->Trace(active_observations_);
   ScriptWrappable::Trace(visitor);
   ExecutionContextClient::Trace(visitor);

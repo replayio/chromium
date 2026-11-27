@@ -173,7 +173,9 @@ class CORE_EXPORT IntersectionObserver final
       ExceptionState& = ASSERT_NO_EXCEPTION);
 
   // API attributes.
-  Node* root() const { return root_.Get(); }
+  Node* root() const {
+    return record_replay_release_id_ ? RecordReplayRoot() : root_.Get();
+  }
   String rootMargin() const;
   String scrollMargin() const;
   const Vector<float>& thresholds() const { return thresholds_; }
@@ -251,6 +253,8 @@ class CORE_EXPORT IntersectionObserver final
  private:
   bool NeedsDelivery() const { return !active_observations_.empty(); }
   void ProcessCustomWeakness(const LivenessBroker&);
+  Node* RecordReplayRoot() const;
+  void RecordReplayReleaseRoot();
 
   const Member<IntersectionObserverDelegate> delegate_;
 
@@ -259,7 +263,9 @@ class CORE_EXPORT IntersectionObserver final
 
   // We use UntracedMember<> here to do custom weak processing.
   UntracedMember<Node> root_;
-  Member<Node> replay_strong_root_;
+  // When recording or replaying with an explicit root: the GC release which
+  // disconnects the observer once the recording's GC collected the root.
+  int record_replay_release_id_ = 0;
 
   // Replay: v147 reduced HeapLinkedHashSet to <T, Traits>; carry the
   // deterministic pointer-id hashing via the Traits argument (WeakMember
