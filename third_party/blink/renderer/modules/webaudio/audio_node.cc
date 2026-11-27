@@ -40,6 +40,7 @@
 #include "third_party/blink/renderer/modules/webaudio/script_processor_handler.h"
 #include "third_party/blink/renderer/platform/bindings/exception_messages.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_gc_release.h"
 #include "third_party/blink/renderer/platform/wtf/text/format.h"
 #include "third_party/blink/renderer/platform/wtf/text/strcat.h"
 
@@ -76,6 +77,12 @@ void AudioNode::Dispose() {
           this, Handler().GetNodeType(), handler_.get(),
           context()->currentTime());
 #endif
+  if (RecordReplayGCRelease::OnCollected(record_replay_release_id_)) {
+    // The release keeps its own reference to the handler.
+    handler_ = nullptr;
+    ReportWillBeDestroyed();
+    return;
+  }
   if (recordreplay::AreEventsDisallowed() &&
       recordreplay::IsRecordingOrReplaying("leak-references",
                                            "AudioNode::Dispose")) {
@@ -342,7 +349,52 @@ void AudioNode::RecordReplayUpdateConnected() {
   for (const auto& params : connected_params_) {
     connected |= params && !params->empty();
   }
+  // A script processor's handler reads whether its node is alive whenever it
+  // renders, so the node stays held while connected.
+  if (connected && !record_replay_release_id_ &&
+      Handler().GetNodeType() !=
+          AudioHandler::NodeType::kNodeTypeScriptProcessor) {
+    ExecutionContext* execution_context = context()->GetExecutionContext();
+    record_replay_release_id_ = RecordReplayGCRelease::Track(
+        execution_context ? execution_context->GetIsolate() : nullptr, this,
+        blink::BindOnce(&AudioNode::RecordReplayDisposeCollected,
+                 WrapWeakPersistent(context()), WrapWeakPersistent(this),
+                 handler_));
+  }
+  if (record_replay_release_id_) {
+    return;
+  }
   context()->RecordReplaySetConnectedNode(this, connected);
+}
+
+// static
+void AudioNode::RecordReplayDisposeCollected(
+    BaseAudioContext* context,
+    AudioNode* node,
+    scoped_refptr<AudioHandler> handler) {
+  // Only alive when replaying. Its Dispose() later must not destroy the
+  // handler outside the graph lock.
+  if (node) {
+    node->handler_ = nullptr;
+  }
+  // The recording's GC can collect the context with the node, and the replay
+  // still has it.
+  if (!recordreplay::RecordReplayValue(
+          "AudioNode::RecordReplayDisposeCollected", !!context)) {
+    // As for the handlers of a context being destroyed (see
+    // DeferredTaskHandler::RecordReplayLeakDisposedHandlers).
+    handler->AddRef();
+    return;
+  }
+  // What Dispose() does outside the GC.
+  DeferredTaskHandler::GraphAutoLocker locker(context->GetDeferredTaskHandler());
+  handler->Dispose();
+  if (context->IsPullingAudioGraph() ||
+      context->ContextState() != V8AudioContextState::Enum::kClosed) {
+    context->GetDeferredTaskHandler().AddRenderingOrphanHandler(
+        std::move(handler));
+  }
+  handler = nullptr;
 }
 
 void AudioNode::disconnect() {
