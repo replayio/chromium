@@ -96,10 +96,12 @@
 #include "third_party/blink/renderer/core/svg/graphics/svg_image_chrome_client.h"
 #include "third_party/blink/renderer/core/svg/svg_document_resource_tracker.h"
 #include "third_party/blink/renderer/core/svg/svg_resource_scheduler_registry.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_gc_release.h"
 #include "third_party/blink/renderer/platform/bindings/source_location.h"
 #include "third_party/blink/renderer/platform/graphics/paint/drawing_recorder.h"
 #include "third_party/blink/renderer/platform/heap/disallow_new_wrapper.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/heap/prefinalizer.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_fetcher.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/scheduler/public/agent_group_scheduler.h"
@@ -830,6 +832,10 @@ void Page::SetVisibilityState(
   if (is_initial_state)
     return;
 
+  // Drops the observers the recording's GC collected and the replay still has.
+  if (recordreplay::IsRecordingOrReplaying()) {
+    RecordReplayGCRelease::ForcePoll(GetAgentGroupScheduler().Isolate());
+  }
   HeapVector<Member<PageVisibilityObserver>> observers;
   for (auto& observer : page_visibility_observer_set_) {
     observers.push_back(observer);
@@ -1330,18 +1336,58 @@ void Page::AcceptLanguagesChanged() {
     frames[i]->DomWindow()->AcceptLanguagesChanged();
 }
 
+// Collected together with the one observer whose entry holds it.
+class RecordReplayVisibilityObserverCollection final
+    : public GarbageCollected<RecordReplayVisibilityObserverCollection> {
+  USING_PRE_FINALIZER(RecordReplayVisibilityObserverCollection, Dispose);
+
+ public:
+  void Dispose() { RecordReplayGCRelease::OnCollected(release_id_); }
+  void Trace(Visitor*) const {}
+
+  int release_id_ = 0;
+};
+
 void Page::RecordReplayRetainVisibilityObserver(
     PageVisibilityObserver* observer) {
-  if (recordreplay::IsRecordingOrReplaying("leak-references",
-                                           "PageVisibilityObserverSet"))
+  if (!recordreplay::IsRecordingOrReplaying("leak-references",
+                                            "PageVisibilityObserverSet")) {
+    return;
+  }
+  auto* collection =
+      MakeGarbageCollected<RecordReplayVisibilityObserverCollection>();
+  // The observer is collected when recording and alive when replaying. The
+  // collection check skips an observer which left this page, and maybe came
+  // back with a new entry, before its old entry was collected.
+  collection->release_id_ = RecordReplayGCRelease::Track(
+      GetAgentGroupScheduler().Isolate(), observer,
+      BindOnce(
+          [](Page* page, PageVisibilityObserver* observer,
+             RecordReplayVisibilityObserverCollection* collection) {
+            if (!page || !observer) {
+              return;
+            }
+            auto& collections =
+                page->replay_page_visibility_observer_collections_;
+            auto it = collections.find(observer);
+            if (it != collections.end() && it->value == collection) {
+              collections.erase(it);
+              page->page_visibility_observer_set_.erase(observer);
+            }
+          },
+          WrapWeakPersistent(this), WrapWeakPersistent(observer),
+          WrapWeakPersistent(collection)));
+  if (!collection->release_id_) {
     replay_strong_page_visibility_observers_.insert(observer);
+    return;
+  }
+  replay_page_visibility_observer_collections_.Set(observer, collection);
 }
 
 void Page::RecordReplayReleaseVisibilityObserver(
     PageVisibilityObserver* observer) {
-  if (recordreplay::IsRecordingOrReplaying("leak-references",
-                                           "PageVisibilityObserverSet"))
-    replay_strong_page_visibility_observers_.erase(observer);
+  replay_page_visibility_observer_collections_.erase(observer);
+  replay_strong_page_visibility_observers_.erase(observer);
 }
 
 void Page::Trace(Visitor* visitor) const {
@@ -1354,6 +1400,7 @@ void Page::Trace(Visitor* visitor) const {
   visitor->Trace(context_menu_controller_);
   visitor->Trace(page_scale_constraints_set_);
   visitor->Trace(page_visibility_observer_set_);
+  visitor->Trace(replay_page_visibility_observer_collections_);
   visitor->Trace(replay_strong_page_visibility_observers_);
   visitor->Trace(pointer_lock_controller_);
   visitor->Trace(scrolling_coordinator_);
@@ -1433,6 +1480,7 @@ void Page::WillBeDestroyed() {
     observer->ObserverSetWillBeCleared();
   }
   page_visibility_observer_set_.clear();
+  replay_page_visibility_observer_collections_.clear();
   replay_strong_page_visibility_observers_.clear();
 
   if (recordreplay::AreEventsDisallowed("Page::WillBeDestroyed")) {
