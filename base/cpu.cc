@@ -14,6 +14,7 @@
 #include "base/containers/span.h"
 #include "base/containers/span_writer.h"
 #include "base/memory/protected_memory.h"
+#include "base/record_replay.h"
 #include "build/build_config.h"
 
 #if defined(ARCH_CPU_ARM_FAMILY) && \
@@ -154,7 +155,14 @@ DEFINE_PROTECTED_DATA base::ProtectedMemory<CPU> g_cpu_instance;
 
 void CPU::Initialize() {
 #if BUILDFLAG(IS_MAC)
-  is_running_in_vm_ = mac::IsVirtualMachine();
+  // [RecordReplay] A CPU describes the processor the code runs on, which in a
+  // replay of an arm64 recording is the x86_64 one of the replay. x86_64 code
+  // also gets the instance where arm64 code doesn't, so the sysctlbyname()
+  // asking whether this is a virtual machine is left out when recording or
+  // replaying: neither then makes a call the other doesn't.
+  if (!recordreplay::IsRecordingOrReplaying()) {
+    is_running_in_vm_ = mac::IsVirtualMachine();
+  }
 #endif
 
 #if defined(ARCH_CPU_X86_FAMILY)
