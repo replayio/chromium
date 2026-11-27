@@ -28,7 +28,10 @@ LocalSVGResource* SVGTreeScopeResources::ResourceForId(const AtomicString& id) {
   // shrinking the `resources_` map.
   auto* new_entry = MakeGarbageCollected<LocalSVGResource>(*tree_scope_, id);
   resources_.Set(id, new_entry);
-  replay_strong_resources_.insert(id, new_entry);
+  if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                           "SVGTreeScopeResources")) {
+    replay_strong_resources_.insert(id, new_entry);
+  }
   return new_entry;
 }
 
