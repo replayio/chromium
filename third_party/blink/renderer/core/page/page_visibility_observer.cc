@@ -27,8 +27,8 @@ void PageVisibilityObserver::SetPage(Page* page) {
   if (page == page_)
     return;
 
-  // The page also holds a strong mirror of its observers, so moving to
-  // another page has to release the old page's entry.
+  // The page also tracks its observers while recording or replaying, so moving
+  // to another page has to release the old page's entry.
   if (page_) {
     page_->PageVisibilityObserverSet().erase(this);
     page_->RecordReplayReleaseVisibilityObserver(this);

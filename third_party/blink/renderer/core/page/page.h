@@ -52,6 +52,7 @@
 #include "third_party/blink/renderer/core/inspector/inspector_issue_storage.h"
 #include "third_party/blink/renderer/core/page/page_visibility_observer.h"
 #include "third_party/blink/renderer/core/page/viewport_description.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_linked_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
@@ -93,6 +94,7 @@ class PageScaleConstraintsSet;
 class PluginData;
 class PointerLockController;
 class PreferenceOverrides;
+class RecordReplayVisibilityObserverCollection;
 class ScopedPagePauser;
 class ScrollingCoordinator;
 class ScrollbarTheme;
@@ -480,16 +482,10 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
     return page_visibility_observer_set_;
   }
 
-  // Keep an observer alive while this page observes it, under
-  // leak-references, as HeapObserverList does for the observer lists it holds.
-  // The set below holds only WeakMembers, so without the mirror an observer
-  // collected between registering and the next visibility transition stops
-  // being notified, and whether that happens can differ between recording and
-  // replaying. No PageVisibilityObserver can reach that state today: every one
-  // of them is also kept alive either by the context lifecycle observer list,
-  // which has a mirror of its own, or by an owner that outlives the page. So
-  // this is the container's own guarantee rather than a fix for a loss that is
-  // reachable now.
+  // While recording or replaying, the GC collecting an observer drops it from
+  // the weak set above at a point which doesn't replay, and the next visibility
+  // transition notifies it on one side only. RecordReplayGCRelease drops it at
+  // a GC poll instead.
   void RecordReplayRetainVisibilityObserver(PageVisibilityObserver* observer);
   void RecordReplayReleaseVisibilityObserver(PageVisibilityObserver* observer);
 
@@ -625,6 +621,11 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
   const Member<PageScaleConstraintsSet> page_scale_constraints_set_;
   HeapLinkedHashSet<WeakMember<PageVisibilityObserver>>
       page_visibility_observer_set_;
+  // Each observer's entry dies with it, and its value reports the collection.
+  HeapHashMap<WeakMember<PageVisibilityObserver>,
+              Member<RecordReplayVisibilityObserverCollection>>
+      replay_page_visibility_observer_collections_;
+  // Observers registered where RecordReplayGCRelease can't track them.
   HeapHashSet<Member<PageVisibilityObserver>>
       replay_strong_page_visibility_observers_;
   const Member<PointerLockController> pointer_lock_controller_;
