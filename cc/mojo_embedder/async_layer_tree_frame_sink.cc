@@ -275,6 +275,10 @@ void AsyncLayerTreeFrameSink::SubmitCompositorFrame(
       local_surface_id_, std::move(frame), std::move(hit_test_region_list), 0);
 
   ExportFrameTiming();
+
+  if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
+    recordreplay::FinishSubmittedCompositorFrame();
+  }
 }
 
 void AsyncLayerTreeFrameSink::DidNotProduceFrame(const viz::BeginFrameAck& ack,
