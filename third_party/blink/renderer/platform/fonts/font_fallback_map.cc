@@ -11,6 +11,7 @@ namespace blink {
 void FontFallbackMap::Trace(Visitor* visitor) const {
   visitor->Trace(font_selector_);
   visitor->Trace(fallback_list_for_description_);
+  visitor->Trace(record_replay_held_);
   FontCacheClient::Trace(visitor);
   FontSelectorClient::Trace(visitor);
 }
@@ -27,8 +28,30 @@ FontFallbackList* FontFallbackMap::Get(
   if (add_result.is_new_entry) {
     add_result.stored_value->value =
         MakeGarbageCollected<FontFallbackList>(font_selector_);
+    RecordReplayHold(font_description, add_result.stored_value->value);
   }
   return add_result.stored_value->value;
+}
+
+void FontFallbackMap::RecordReplayHold(const FontDescription& font_description,
+                                       FontFallbackList* fallback_list) {
+  if (!recordreplay::IsRecordingOrReplaying()) {
+    return;
+  }
+  // See the header.
+  static const wtf_size_t kMaxHeld = 1024;
+  record_replay_held_.push_back(fallback_list);
+  record_replay_descriptions_.push_back(font_description);
+  while (record_replay_held_.size() > kMaxHeld) {
+    auto it = fallback_list_for_description_.find(
+        record_replay_descriptions_.front());
+    if (it != fallback_list_for_description_.end() &&
+        it->value == record_replay_held_.front()) {
+      fallback_list_for_description_.erase(it);
+    }
+    record_replay_held_.pop_front();
+    record_replay_descriptions_.pop_front();
+  }
 }
 
 void FontFallbackMap::InvalidateAll() {
@@ -42,6 +65,8 @@ void FontFallbackMap::InvalidateAll() {
   for (auto& entry : fallback_list_for_description_)
     entry.value->MarkInvalid();
   fallback_list_for_description_.clear();
+  record_replay_held_.clear();
+  record_replay_descriptions_.clear();
 }
 
 template <typename Predicate>

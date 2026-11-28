@@ -29,6 +29,7 @@
 
 #include "base/functional/bind.h"
 #include "base/functional/callback.h"
+#include "base/record_replay.h"
 #include "third_party/blink/renderer/core/css/cascade_layer_map.h"
 #include "third_party/blink/renderer/core/css/css_font_face.h"
 #include "third_party/blink/renderer/core/css/css_font_selector.h"
@@ -58,13 +59,41 @@ bool CSSSegmentedFontFace::IsValid() const {
       });
 }
 
+void CSSSegmentedFontFace::RecordReplayClearHeld() {
+  record_replay_held_.clear();
+  record_replay_keys_.clear();
+}
+
+void CSSSegmentedFontFace::RecordReplayHold(
+    const FontCacheKey& key,
+    const SegmentedFontData* font_data) {
+  if (!recordreplay::IsRecordingOrReplaying()) {
+    return;
+  }
+  // See the header.
+  static const wtf_size_t kMaxHeld = 1024;
+  record_replay_held_.push_back(font_data);
+  record_replay_keys_.push_back(key);
+  while (record_replay_held_.size() > kMaxHeld) {
+    auto it = font_data_table_.find(record_replay_keys_.front());
+    if (it != font_data_table_.end() &&
+        it->value == record_replay_held_.front()) {
+      font_data_table_.erase(it);
+    }
+    record_replay_held_.pop_front();
+    record_replay_keys_.pop_front();
+  }
+}
+
 void CSSSegmentedFontFace::FontFaceInvalidated() {
   font_data_table_.clear();
+  RecordReplayClearHeld();
 }
 
 void CSSSegmentedFontFace::AddFontFace(FontFace* font_face,
                                        bool css_connected) {
   font_data_table_.clear();
+  RecordReplayClearHeld();
   font_face->CssFontFace()->AddSegmentedFontFace(this);
   font_faces_->Insert(font_face, css_connected);
 }
@@ -75,6 +104,7 @@ bool CSSSegmentedFontFace::RemoveFontFace(FontFace* font_face) {
   }
 
   font_data_table_.clear();
+  RecordReplayClearHeld();
   font_face->CssFontFace()->RemoveSegmentedFontFace(this);
   return true;
 }
@@ -138,6 +168,7 @@ const FontData* CSSSegmentedFontFace::GetFontData(
   });
 
   if (created_font_data->NumFaces()) {
+    RecordReplayHold(key, created_font_data);
     font_data_table_.insert(std::move(key), created_font_data);
     return created_font_data;
   }
@@ -190,6 +221,7 @@ void CSSSegmentedFontFace::Match(const String& text,
 
 void CSSSegmentedFontFace::Trace(Visitor* visitor) const {
   visitor->Trace(font_data_table_);
+  visitor->Trace(record_replay_held_);
   visitor->Trace(font_faces_);
 }
 

@@ -139,6 +139,11 @@ class MODULES_EXPORT AudioNode : public EventTarget,
   bool DisconnectFromOutputIfConnected(unsigned output_index, AudioParam&);
   // Updates whether the context keeps this node alive for its connections.
   void RecordReplayUpdateConnected();
+  // Disposes the handler of a connected node at the GC poll after the
+  // recording's GC collected the node (see RecordReplayGCRelease).
+  static void RecordReplayDisposeCollected(BaseAudioContext* context,
+                                           AudioNode* node,
+                                           scoped_refptr<AudioHandler> handler);
 
   // https://chromium.googlesource.com/chromium/src/+/refs/heads/main/docs/media/capture/README.md#logs
   void SendLogMessage(const String& function_name, const String& message);
@@ -146,6 +151,7 @@ class MODULES_EXPORT AudioNode : public EventTarget,
   Member<BaseAudioContext> context_;
   scoped_refptr<DeferredTaskHandler> deferred_task_handler_;
   scoped_refptr<AudioHandler> handler_;
+  int record_replay_release_id_ = 0;
 
   // Represents audio node graph with Oilpan references. N-th HeapHashSet
   // represents a set of AudioNode objects connected to this AudioNode's N-th

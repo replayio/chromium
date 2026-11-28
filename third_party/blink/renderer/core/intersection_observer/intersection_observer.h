@@ -259,6 +259,7 @@ class CORE_EXPORT IntersectionObserver final
 
   // We use UntracedMember<> here to do custom weak processing.
   UntracedMember<Node> root_;
+  Member<Node> replay_strong_root_;
 
   // Replay: v147 reduced HeapLinkedHashSet to <T, Traits>; carry the
   // deterministic pointer-id hashing via the Traits argument (WeakMember

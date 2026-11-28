@@ -535,8 +535,9 @@ void ProxyMain::BeginMainFrameWithBlocking(
   // [RecordReplay] The paint's bookmark comes before WillCommit: a repaint
   // while paused at it runs a nested main frame, whose commit would otherwise
   // wait for this frame's commit, which isn't posted until after the bookmark.
+  size_t record_replay_paint_bookmark = 0;
   if (recordreplay::IsRecordingOrReplaying("notify-paints")) {
-    recordreplay::OnCommitPaint();
+    record_replay_paint_bookmark = recordreplay::OnCommitPaint();
   }
   bool has_updates = (final_pipeline_stage_ == COMMIT_PIPELINE_STAGE);
 
@@ -556,6 +557,7 @@ void ProxyMain::BeginMainFrameWithBlocking(
 
   if (commit_state.get()) {
     commit_state->trace_id = begin_main_frame_state->trace_id;
+    commit_state->record_replay_paint_bookmark = record_replay_paint_bookmark;
   } else {
     completion_event->Signal();
     layer_tree_host_->DidBeginMainFrame();

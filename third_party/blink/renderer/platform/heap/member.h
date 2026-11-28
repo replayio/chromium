@@ -330,6 +330,25 @@ template <typename T>
 using RawPtrHashRecordReplayRegisteredPointerId =
     PointerIdHashTraitsMixin<T, HashTraits<T*>>;
 
+// Replay intervention: raw-pointer keys hashed by RecordReplayId(), for types
+// outside the cppgc heap. MemberHashRecordReplayId would store such keys as
+// compressed Members, which cannot represent an address outside the cage.
+template <typename T>
+struct RawPtrHashRecordReplayId : HashTraits<T*> {
+  static unsigned GetHash(T* key) {
+    if (recordreplay::IsRecordingOrReplaying("pointer-ids")) {
+      int id = key->RecordReplayId();
+      if (id > 0) {
+        return blink::GetHash(id);
+      }
+      // Ids are allowed to be zero if we've diverged from the recording.
+      CHECK(recordreplay::HasDivergedFromRecording());
+    }
+    return HashTraits<T*>::GetHash(key);
+  }
+  static constexpr bool kIsRecordReplayDeterministicHash = true;
+};
+
 }  // namespace blink
 
 namespace blink {

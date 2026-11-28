@@ -29,7 +29,9 @@
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/web_feature.h"
 #include "third_party/blink/renderer/core/layout/layout_embedded_object.h"
+#include "third_party/blink/renderer/platform/heap/persistent.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
+#include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace blink {
 
@@ -44,6 +46,20 @@ MediaQueryList::MediaQueryList(ExecutionContext* context,
       matches_(false) {
   matcher_->AddMediaQueryList(this);
   UpdateMatches();
+  if (!context) {
+    return;
+  }
+  // A list never leaves its context's observers. The release leaves the
+  // matcher, which the replay would otherwise keep evaluating it in.
+  context->RecordReplayLetCollect(
+      context->GetIsolate(), this,
+      BindOnce(
+          [](MediaQueryList* list) {
+            if (list) {
+              list->matcher_->RemoveMediaQueryList(list);
+            }
+          },
+          WrapWeakPersistent(this)));
 }
 
 MediaQueryList::~MediaQueryList() = default;

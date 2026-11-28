@@ -46,6 +46,8 @@
 #include "base/values.h"
 #include "build/build_config.h"
 
+#include "base/record_replay_isolated_draw_asserts.h"
+
 namespace base {
 
 namespace {
@@ -594,6 +596,7 @@ void Histogram::Add(int value) {
 }
 
 void Histogram::AddCount(int value, int count) {
+  recordreplay::IsolatedDrawAssertName("histogram sample", histogram_name());
   DCHECK_EQ(0, ranges(0));
   DCHECK_EQ(kSampleType_MAX, ranges(bucket_count()));
 

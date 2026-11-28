@@ -10,9 +10,11 @@
 #include "third_party/blink/renderer/platform/fonts/font_description.h"
 #include "third_party/blink/renderer/platform/fonts/font_fallback_list.h"
 #include "third_party/blink/renderer/platform/fonts/font_selector_client.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_deque.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
+#include "third_party/blink/renderer/platform/wtf/deque.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
 namespace blink {
@@ -52,6 +54,18 @@ class PLATFORM_EXPORT FontFallbackMap : public FontCacheClient,
   const Member<FontSelector> font_selector_;
   HeapHashMap<FontDescription, WeakMember<FontFallbackList>>
       fallback_list_for_description_;
+
+  // `fallback_list_for_description_` is weak, and the collector clears an
+  // entry nothing else holds at a point which isn't the same on a replay.
+  // Whether `Get()` finds a list then differs, and a new list looks its fonts
+  // up again. So while recording or replaying the newest lists are held here,
+  // with their descriptions, and a list leaves the map when it leaves this
+  // list, whoever else still has it. The list is bounded, as a page can use
+  // thousands of font descriptions.
+  void RecordReplayHold(const FontDescription& font_description,
+                        FontFallbackList* fallback_list);
+  HeapDeque<Member<FontFallbackList>> record_replay_held_;
+  Deque<FontDescription> record_replay_descriptions_;
 
   int record_replay_id_;
 };

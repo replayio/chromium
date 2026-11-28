@@ -17,6 +17,7 @@
 #include "cc/paint/paint_image_builder.h"
 #include "cc/paint/paint_image_generator.h"
 #include "cc/paint/paint_record.h"
+#include "cc/paint/record_replay_ids.h"
 #include "cc/paint/skia_paint_image_generator.h"
 #include "cc/paint/texture_backing.h"
 #include "cc/paint/tone_map_util.h"
@@ -39,6 +40,8 @@ namespace cc {
 namespace {
 base::AtomicSequenceNumberT<int64_t> g_next_image_id;
 base::AtomicSequenceNumberT<int64_t> g_next_image_content_id;
+base::AtomicSequenceNumberT<int64_t> g_next_isolated_image_id;
+base::AtomicSequenceNumberT<int64_t> g_next_isolated_image_content_id;
 base::AtomicSequenceNumberT<int64_t> g_next_generator_client_id;
 }  // namespace
 
@@ -102,12 +105,13 @@ PaintImage::DecodingMode PaintImage::GetConservative(DecodingMode one,
 
 // static
 PaintImage::Id PaintImage::GetNextId() {
-  return g_next_image_id.GetNext();
+  return RecordReplayNextId(g_next_image_id, g_next_isolated_image_id);
 }
 
 // static
 PaintImage::ContentId PaintImage::GetNextContentId() {
-  return g_next_image_content_id.GetNext();
+  return RecordReplayNextId(g_next_image_content_id,
+                            g_next_isolated_image_content_id);
 }
 
 // static
@@ -255,8 +259,8 @@ void PaintImage::CreateSkImage() {
           cached_sk_image_->reinterpretColorSpace(SkColorSpace::MakeSRGB());
     }
   }
-  recordreplay::Assert("[RUN-1975-2225] PaintImage::CreateSkImage %d",
-                       !!cached_sk_image_);
+  recordreplay::AssertMaybeEventsDisallowed(
+      "[RUN-1975-2225] PaintImage::CreateSkImage %d", !!cached_sk_image_);
 }
 
 SkISize PaintImage::GetSupportedDecodeSize(const SkISize& requested_size,

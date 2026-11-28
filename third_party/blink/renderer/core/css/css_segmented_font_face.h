@@ -32,10 +32,12 @@
 #include "third_party/blink/renderer/platform/fonts/font_cache_key.h"
 #include "third_party/blink/renderer/platform/fonts/font_selection_types.h"
 #include "third_party/blink/renderer/platform/fonts/segmented_font_data.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_deque.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_linked_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/wtf/deque.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
@@ -119,6 +121,19 @@ class CSSSegmentedFontFace final
 
   HeapHashMap<FontCacheKey, WeakMember<const SegmentedFontData>>
       font_data_table_;
+
+  // `font_data_table_` is weak, and the collector clears an entry nothing else
+  // holds at a point which isn't the same on a replay. Whether `GetFontData()`
+  // finds the font data then differs, and new font data looks its faces up
+  // again. So while recording or replaying the newest entries are held here,
+  // with their keys, and an entry leaves the table when it leaves this list,
+  // whoever else still has it. The list is bounded, as each size of a font is
+  // an entry of its own, and each face holds a list of its own.
+  void RecordReplayHold(const FontCacheKey& key,
+                        const SegmentedFontData* font_data);
+  void RecordReplayClearHeld();
+  HeapDeque<Member<const SegmentedFontData>> record_replay_held_;
+  Deque<FontCacheKey> record_replay_keys_;
 
   // All non-CSS-connected FontFaces are stored after the CSS-connected ones.
   Member<FontFaceList> font_faces_;

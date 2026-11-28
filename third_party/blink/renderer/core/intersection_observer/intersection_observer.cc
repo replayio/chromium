@@ -340,6 +340,16 @@ IntersectionObserver::IntersectionObserver(
       expose_occluder_id_(params.expose_occluder_id),
       hit_node_cb_(std::move(params.hit_node_cb)) {
   if (params.root) {
+    // The GC collecting the root would disconnect the observer at a point
+    // which doesn't replay. Keeping the root alive costs only a detached
+    // subtree per observer. RecordReplayGCRelease could disconnect the observer
+    // at a GC poll instead, but reads of a detached root would then have to
+    // replay whether the recording still had it, as prototyped in
+    // https://github.com/replayio/chromium/pull/1784.
+    if (recordreplay::IsRecordingOrReplaying("leak-references",
+                                             "IntersectionObserver")) {
+      replay_strong_root_ = params.root;
+    }
     if (params.root->IsDocumentNode()) {
       To<Document>(params.root)
           ->EnsureDocumentExplicitRootIntersectionObserverData()
@@ -365,9 +375,7 @@ IntersectionObserver::IntersectionObserver(
 void IntersectionObserver::ProcessCustomWeakness(const LivenessBroker& info) {
   // For explicit-root observers, if the root element disappears for any reason,
   // any remaining obsevations must be dismantled.
-  if (root() && !info.IsHeapObjectAlive(root())
-    && !(recordreplay::AreEventsDisallowed() &&
-      recordreplay::FeatureEnabled("leak-references", "IntersectionObserver::ProcessCustomWeakness")))
+  if (root() && !info.IsHeapObjectAlive(root()))
     root_ = nullptr;
   if (!RootIsImplicit() && !root())
     disconnect();
@@ -519,6 +527,7 @@ void IntersectionObserver::Trace(Visitor* visitor) const {
   visitor->Trace(delegate_);
   visitor->Trace(observations_);
   visitor->Trace(replay_strong_observations_);
+  visitor->Trace(replay_strong_root_);
   visitor->Trace(active_observations_);
   ScriptWrappable::Trace(visitor);
   ExecutionContextClient::Trace(visitor);

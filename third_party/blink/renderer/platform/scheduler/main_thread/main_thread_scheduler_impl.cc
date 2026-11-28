@@ -49,6 +49,7 @@
 #include "third_party/blink/public/platform/scheduler/web_renderer_process_type.h"
 #include "third_party/blink/public/platform/web_input_event_result.h"
 #include "third_party/blink/renderer/platform/bindings/parkable_string_manager.h"
+#include "third_party/blink/renderer/platform/bindings/record_replay_gc_release.h"
 #include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
 #include "third_party/blink/renderer/platform/instrumentation/resource_coordinator/renderer_resource_coordinator.h"
@@ -1281,12 +1282,16 @@ void MainThreadSchedulerImpl::PerformMicrotaskCheckpoint() {
 
   // This will fallback to execute the microtask checkpoint for the
   // default EventLoop for the isolate.
+  if (isolate())
+    EventLoop::PerformIsolateGlobalMicrotasksCheckpoint(isolate());
+
+  // So that the agent group schedulers the recording's GC collected are gone
+  // from the set below in the replay as well.
+  RecordReplayGCRelease::ForcePoll(isolate());
   REPLAY_ASSERT(
       "[RUN-2056-2298] MainThreadSchedulerImpl::PerformMicrotaskCheckpoint %d %d %u",
       recordreplay::PointerId(this), !!isolate(),
       main_thread_only().agent_group_schedulers->size());
-  if (isolate())
-    EventLoop::PerformIsolateGlobalMicrotasksCheckpoint(isolate());
 
   // Perform a microtask checkpoint for each AgentSchedulingGroup. This
   // really should only be the ones that are not frozen but AgentSchedulingGroup
@@ -2578,6 +2583,15 @@ void MainThreadSchedulerImpl::AddAgentGroupScheduler(
       "[RUN-2056-2316] MainThreadSchedulerImpl::AddAgentGroupScheduler %d %d",
       agent_group_scheduler->RecordReplayId(), is_new_entry);
   DCHECK(is_new_entry);
+
+  if (recordreplay::IsRecordingOrReplaying()) {
+    agent_group_scheduler->RecordReplayTrackRelease();
+  }
+}
+
+void MainThreadSchedulerImpl::RecordReplayForgetAgentGroupScheduler(
+    AgentGroupSchedulerImpl* agent_group_scheduler) {
+  main_thread_only().agent_group_schedulers->erase(agent_group_scheduler);
 }
 
 void MainThreadSchedulerImpl::AddPageScheduler(

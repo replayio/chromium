@@ -525,15 +525,6 @@ LayoutObject::~LayoutObject() {
   DCHECK(being_destroyed_);
   DCHECK(is_destroyed_);
   InstanceCounters::DecrementCounter(InstanceCounters::kLayoutObjectCounter);
-
-  // If recording/replaying and in a nondeterministic execution, allow
-  // style_ to leak, since it may otherwise get destroyed in a
-  // non-deterministic fashion and remove itself from font-fallback-maps
-  // that are accessed deterministically.
-  // See https://linear.app/replay/issue/RUN-1758/fontfallbackmap-items-getting-removed-non-deterministically
-  if (recordreplay::AreEventsDisallowed("~LayoutObject")) {
-    (void) style_.Release();
-  }
 }
 
 bool LayoutObject::IsDescendantOf(const LayoutObject* obj) const {

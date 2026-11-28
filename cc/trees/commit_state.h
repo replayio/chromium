@@ -108,6 +108,8 @@ struct CC_EXPORT CommitState {
   gfx::InsetsF max_safe_area_insets;
   int hud_layer_id = Layer::INVALID_ID;
   int source_frame_number = 0;
+  // [RecordReplay] The paint started for this commit (OnCommitPaint).
+  size_t record_replay_paint_bookmark = 0;
   LayerSelection selection;
   LayerTreeDebugState debug_state;
   OverscrollBehavior overscroll_behavior;

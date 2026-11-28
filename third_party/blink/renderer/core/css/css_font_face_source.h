@@ -30,10 +30,12 @@
 #include "third_party/blink/renderer/core/css/font_display.h"
 #include "third_party/blink/renderer/platform/fonts/font_cache_key.h"
 #include "third_party/blink/renderer/platform/fonts/font_selection_types.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_deque.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
+#include "third_party/blink/renderer/platform/wtf/deque.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
 #include "third_party/blink/renderer/platform/wtf/linked_hash_set.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
@@ -100,6 +102,7 @@ class CORE_EXPORT CSSFontFaceSource
 
   virtual void Trace(Visitor* visitor) const {
     visitor->Trace(font_data_table_);
+    visitor->Trace(record_replay_held_);
   }
 
  protected:
@@ -108,7 +111,11 @@ class CORE_EXPORT CSSFontFaceSource
       const FontDescription&,
       const FontSelectionCapabilities&) = 0;
 
-  void ClearTable() { font_data_table_.clear(); }
+  void ClearTable() {
+    font_data_table_.clear();
+    record_replay_held_.clear();
+    record_replay_keys_.clear();
+  }
 
   // Report the font lookup for metrics collection. Only used for local font
   // face sources currently.
@@ -120,6 +127,18 @@ class CORE_EXPORT CSSFontFaceSource
       HeapHashMap<FontCacheKey, WeakMember<const SimpleFontData>>;
 
   FontDataTable font_data_table_;
+
+  // `font_data_table_` is weak, and the collector clears an entry nothing else
+  // holds at a point which isn't the same on a replay. Whether `GetFontData()`
+  // finds the font data then differs, and new font data makes a new Skia
+  // strike. So while recording or replaying the newest entries are held here,
+  // with their keys, and an entry leaves the table when it leaves this list,
+  // whoever else still has it. The list is bounded, as each size of a font is
+  // an entry of its own, and each source holds a list of its own.
+  void RecordReplayHold(const FontCacheKey& key,
+                        const SimpleFontData* font_data);
+  HeapDeque<Member<const SimpleFontData>> record_replay_held_;
+  Deque<FontCacheKey> record_replay_keys_;
 };
 
 }  // namespace blink

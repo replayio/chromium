@@ -32,6 +32,7 @@
 #include "base/memory_coordinator/memory_consumer.h"
 #include "base/memory_coordinator/memory_consumer_registry.h"
 #include "base/memory_coordinator/traits.h"
+#include "base/record_replay.h"
 #include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/platform/fonts/font_performance.h"
 #include "third_party/blink/renderer/platform/fonts/shaping/shape_result.h"
@@ -176,7 +177,11 @@ class NGShapeCache : public GarbageCollected<NGShapeCache>,
       return shape_result_func().shape_result;
     }
 
-    if (RuntimeEnabledFeatures::MemoryConsumerForNGShapeCacheEnabled()) {
+    // The collector clears weak entries at points a replay doesn't reproduce,
+    // and shaping a text again can make a Skia strike, which is recorded. So
+    // while recording or replaying the results are held, up to `kMaxSize`.
+    if (RuntimeEnabledFeatures::MemoryConsumerForNGShapeCacheEnabled() ||
+        recordreplay::IsRecordingOrReplaying()) {
       return GetOrCreateImpl(strong_map_, key, shape_result_func);
     } else {
       return GetOrCreateImpl(weak_map_, key, shape_result_func);

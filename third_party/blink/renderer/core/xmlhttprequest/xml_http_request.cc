@@ -32,6 +32,7 @@
 #include "base/auto_reset.h"
 #include "base/containers/span.h"
 #include "base/feature_list.h"
+#include "base/functional/callback_helpers.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/time/time.h"
 #include "net/base/mime_util.h"
@@ -291,6 +292,10 @@ XMLHttpRequest::XMLHttpRequest(ExecutionContext* context,
                                                 context->GetAgentClusterID())
                                           : nullptr) {
   recordreplay::RegisterPointer("XMLHttpRequest", this);
+  // A request never leaves its context's observers, and would otherwise keep
+  // its response alive until the context is destroyed.
+  context->RecordReplayLetCollect(context->GetIsolate(), this,
+                                  base::DoNothing());
 }
 
 XMLHttpRequest::~XMLHttpRequest() {

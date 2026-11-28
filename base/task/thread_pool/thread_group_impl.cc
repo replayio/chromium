@@ -266,6 +266,10 @@ class ThreadGroupImpl::WorkerDelegate : public WorkerThread::Delegate,
   // shutdown.
   bool incremented_max_tasks_for_shutdown_ GUARDED_BY(outer_->lock_) = false;
 
+  // [RecordReplay] Whether BlockingStarted() left the current blocking scope
+  // out of the bookkeeping because events were disallowed.
+  bool record_replay_ignored_blocking_ = false;
+
   // Verifies that specific calls are always made from the worker thread.
   THREAD_CHECKER(worker_thread_checker_);
 };
@@ -769,6 +773,19 @@ void ThreadGroupImpl::WorkerDelegate::BlockingStarted(
     return;
   }
 
+  // [RecordReplay] A scope entered with events disallowed, such as V8 waiting
+  // for a GC on a thread compiling a script, would change max_tasks_ and wake
+  // workers under a lock taken passed through, so not in a recorded order. The
+  // ordered workers decide from max_tasks_ whether to take a task or go idle,
+  // and a replay's GCs fall elsewhere, so such a scope is left out of the
+  // bookkeeping and gets no replacement worker. Tasks posted with events
+  // disallowed run in the unordered group, so the blocked thread does not wait
+  // for this group.
+  if (recordreplay::AreEventsDisallowed() && !outer_->RecordReplayUnordered()) {
+    record_replay_ignored_blocking_ = true;
+    return;
+  }
+
   worker_only().worker_thread_->MaybeBoostPriorityForShutdown();
 
   // WillBlock is always used when time overrides is active. crbug.com/1038867
@@ -816,6 +833,13 @@ void ThreadGroupImpl::WorkerDelegate::BlockingTypeUpgraded() {
     return;
   }
 
+  // [RecordReplay] See BlockingStarted().
+  if (record_replay_ignored_blocking_ ||
+      (recordreplay::AreEventsDisallowed() &&
+       !outer_->RecordReplayUnordered())) {
+    return;
+  }
+
   ScopedCommandsExecutor executor(outer_.get());
   CheckedAutoLock auto_lock(outer_->lock_);
 
@@ -838,6 +862,12 @@ void ThreadGroupImpl::WorkerDelegate::BlockingEnded() {
   DCHECK_CALLED_ON_VALID_THREAD(worker_thread_checker_);
   // Skip if this blocking scope happened outside of a RunTask.
   if (!read_worker().current_thread_type) {
+    return;
+  }
+
+  // [RecordReplay] See BlockingStarted().
+  if (record_replay_ignored_blocking_) {
+    record_replay_ignored_blocking_ = false;
     return;
   }
 

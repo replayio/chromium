@@ -13,13 +13,17 @@ namespace recordreplay {
 
 void InitPaintCallback() {}
 
-void OnCommitPaint() {}
+size_t OnCommitPaint() {
+  return 0;
+}
 
-void OnReadyToCommit() {}
+void OnReadyToCommit(const void* compositor,
+                     int source_frame_number,
+                     size_t bookmark) {}
 
-void OnCommitOnImpl() {}
+void OnDrawSourceFrame(const void* compositor, int source_frame_number) {}
 
-void OnActivateOnImpl() {}
+void OnCompositorDestroyed(const void* compositor) {}
 
 void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
                            const viz::CompositorFrame& frame) {}
@@ -27,6 +31,8 @@ void SubmitCompositorFrame(const viz::LocalSurfaceId& local_surface_id,
 bool PopulateSkBitmapWithResource(SkBitmap* sk_bitmap, viz::ResourceId resource_id) {
   return false;
 }
+
+void FinishSubmittedCompositorFrame() {}
 
 void OnPaintFinished(const SkPixmap& pixmap) {}
 

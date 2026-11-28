@@ -140,7 +140,8 @@ CodeCacheHost* ExecutionContext::GetCodeCacheHostFromContext(
 
 void ExecutionContext::SetIsInBackForwardCache(bool value) {
   if (!is_in_back_forward_cache_ && value) {
-    ContextLifecycleNotifier::observers().ForEachObserver(
+    RecordReplayForEachObserver(
+        "ExecutionContext::SetIsInBackForwardCache",
         [&](ContextLifecycleObserver* observer) {
           if (!observer->IsExecutionContextLifecycleObserver()) {
             return;
@@ -157,7 +158,8 @@ void ExecutionContext::SetLifecycleState(mojom::FrameLifecycleState state) {
   if (lifecycle_state_ == state)
     return;
   lifecycle_state_ = state;
-  ContextLifecycleNotifier::observers().ForEachObserver(
+  RecordReplayForEachObserver(
+      "ExecutionContext::SetLifecycleState",
       [&](ContextLifecycleObserver* observer) {
         if (!observer->IsExecutionContextLifecycleObserver())
           return;
