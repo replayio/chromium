@@ -105,6 +105,12 @@ bool WaitableEvent::IsSignaled() const {
 }
 
 bool WaitableEvent::IsDefinitelySignaled() const {
+  // Signaling threads set the estimate without ordering, so a replay can read a
+  // different value than the recording did and skip the IsSignaled() call the
+  // recording made.
+  if (recordreplay::IsRecordingOrReplaying()) {
+    return IsSignaled();
+  }
   return signal_estimate_.load(std::memory_order_relaxed) && IsSignaled();
 }
 
