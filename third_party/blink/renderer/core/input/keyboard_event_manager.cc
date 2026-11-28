@@ -8,6 +8,7 @@
 
 #include "base/auto_reset.h"
 #include "base/notreached.h"
+#include "base/record_replay.h"
 #include "build/build_config.h"
 #include "third_party/blink/public/common/input/web_input_event.h"
 #include "third_party/blink/public/mojom/frame/user_activation_notification_type.mojom-blink.h"
@@ -188,6 +189,17 @@ bool MapKeyCodeForScroll(int key_code,
   return true;
 }
 
+// [replay] Record a key event before it is dispatched to the page, so that its
+// point precedes the listeners it runs. The default handler would miss events
+// the page cancels and events whose target's default handler returns before
+// chaining to Node's, as a disabled input's does, though the key was pressed.
+void RecordKeyEvent(const KeyboardEvent& event) {
+  if (recordreplay::IsRecordingOrReplaying()) {
+    recordreplay::OnKeyEvent(event.type().Utf8().c_str(),
+                             event.key().Utf8().c_str(), false);
+  }
+}
+
 }  // namespace
 
 KeyboardEventManager::KeyboardEventManager(LocalFrame& frame,
@@ -324,6 +336,7 @@ WebInputEventResult KeyboardEventManager::KeyEvent(
       event->SetTarget(node);
       event->SetStopPropagation(!send_key_event);
 
+      RecordKeyEvent(*event);
       dispatch_result = node->DispatchEvent(*event, "KeyboardEventManager::KeyEvent #1");
       break;
     }
@@ -336,6 +349,8 @@ WebInputEventResult KeyboardEventManager::KeyEvent(
           web_event, frame_->GetDocument()->domWindow(), event_cancellable);
       event->SetTarget(node);
       event->SetStopPropagation(!send_key_event);
+      // Before access key handling, which can run focus and click listeners.
+      RecordKeyEvent(*event);
 
       // In IE, access keys are special, they are handled after default keydown
       // processing, but cannot be canceled - this is hard to match.  On Mac OS
@@ -407,6 +422,7 @@ WebInputEventResult KeyboardEventManager::KeyEvent(
       event->SetTarget(node);
       event->SetStopPropagation(!send_key_event);
 
+      RecordKeyEvent(*event);
       dispatch_result = node->DispatchEvent(*event, "KeyboardEventManager::KeyEvent #3");
       break;
     }
@@ -426,16 +442,6 @@ void KeyboardEventManager::CapsLockStateMayHaveChanged() {
 void KeyboardEventManager::DefaultKeyboardEventHandler(
     KeyboardEvent* event,
     Node* possible_focused_node) {
-
-  // [replay] capture keyboard events
-  if (event->type() == event_type_names::kKeydown ||
-      event->type() == event_type_names::kKeyup ||
-      event->type() == event_type_names::kKeypress) {
-    recordreplay::OnKeyEvent(event->type().Utf8().c_str(),
-                             event->key().Utf8().c_str(),
-                             false);
-  }
-
   if (event->type() == event_type_names::kKeydown) {
     const String& key = event->key();
     const bool is_process_key = event->keyCode() == kVKeyProcessKey;
