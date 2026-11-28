@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Identity of this Chromium version's CI state on a build agent, and the guards
 # every script here applies before touching it. Sourced, never executed.
 #
@@ -87,6 +87,19 @@ readonly CHECKOUT_SCHEME=1
 # is fetched from it: checkout.sh fetches src on the host, over the job clone's
 # remote (the agent's SSH identity), which the container does not have.
 readonly FORK_URL=https://github.com/replayio/chromium.git
+
+# Where the sync and the build run, and the path that runner gives this
+# directory: the build image on Linux, which mounts it at /ci, and the agent's
+# own environment on macOS, which has no image to build in (mac-host.sh).
+if [ "$(uname -s)" = Darwin ]; then
+  readonly HOST_OS=mac
+  readonly BUILD_ENV=$ci_dir/mac-host.sh
+  readonly BUILD_ENV_CI_DIR=$ci_dir
+else
+  readonly HOST_OS=linux
+  readonly BUILD_ENV=$ci_dir/build-in-container.sh
+  readonly BUILD_ENV_CI_DIR=/ci
+fi
 
 # The image is tagged with a hash of the Dockerfile and the uid it is built for,
 # so every version's builds run in the image its own tree describes and two

@@ -40,6 +40,7 @@
 #include "base/linux_util.h"
 #elif BUILDFLAG(IS_MAC)
 #include "base/apple/foundation_util.h"
+#include "base/record_replay.h"
 #include "base/strings/strcat.h"
 #include "content/browser/mac_helpers.h"
 #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
@@ -89,7 +90,13 @@ base::FilePath ChildProcessHost::GetChildPath(int flags) {
 #if BUILDFLAG(IS_MAC)
   if (base::apple::AmIBundled()) {
     std::string_view child_suffix;
-    if (base::FeatureList::IsEnabled(features::kAperitifHelpers)) {
+    // Replay: a renderer that may record starts through the regular renderer
+    // helper. Its launcher (chrome/app/chrome_exe_main_mac.cc) attaches the
+    // recorder, and the Aperitif helpers' launcher does not.
+    bool record_replay_renderer =
+        flags == CHILD_RENDERER && !recordreplay::RecordingDisabled();
+    if (base::FeatureList::IsEnabled(features::kAperitifHelpers) &&
+        !record_replay_renderer) {
       if (flags == CHILD_NORMAL) {
         child_suffix = " (Aperitif)";
       } else if (flags == CHILD_RENDERER) {

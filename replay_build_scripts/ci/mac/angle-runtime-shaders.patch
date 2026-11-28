@@ -1,0 +1,17 @@
+--- a/src/libANGLE/renderer/metal/metal_backend.gni
++++ b/src/libANGLE/renderer/metal/metal_backend.gni
+@@ -101,9 +101,12 @@
+ # explicit Metal toolchain via "angle_metal_toolchain_dir" opts in to
+ # precompiling the internal shaders anyway, which enables prebuilt internal
+ # shaders for iOS as well.
++#
++# Replay: only with an explicit Metal toolchain. Replay's Mac builds take their
++# SDK and tools from Apple's Command Line Tools, which have no Metal compiler
++# (replay_build_scripts/ci/mac-host.sh).
+ metal_internal_shader_compilation_supported =
+-    angle_has_build &&
+-    (angle_metal_toolchain_dir != "" || (!is_ios && target_os == host_os))
++    angle_has_build && angle_metal_toolchain_dir != ""
+ 
+ metal_internal_shaders_header =
+     "$root_gen_dir/angle/mtl_internal_shaders_metallib.h"

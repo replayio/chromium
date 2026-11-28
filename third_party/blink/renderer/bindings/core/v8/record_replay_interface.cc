@@ -1314,7 +1314,7 @@ static void SHA256DigestHex(const v8::FunctionCallbackInfo<v8::Value>& args) {
       // is in range for `i < 32`; `digestHex` is `new char[65]` and each
       // iteration writes 2 hex chars + NUL at offset `i*2` (max offset 62), so
       // it stays within the buffer.
-      UNSAFE_BUFFERS(sprintf(digestHex + i * 2, "%02x", digest[i]));
+      UNSAFE_BUFFERS(snprintf(digestHex + i * 2, 3, "%02x", digest[i]));
     }
   }
 

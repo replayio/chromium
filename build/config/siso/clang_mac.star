@@ -31,7 +31,8 @@ def __step_config(ctx, step_config):
             if k.startswith("label:action"):
                 continue
             largePlatform[k] = v
-        largePlatform["label:action_large"] = "1"
+        # Replay: EngFlow has no worker pool for large actions, and an action
+        # that asks for one waits in its queue until siso gives up on it.
         step_config["platforms"].update({
             "clang": rewrapper_config["platform"],
             "clang_large": largePlatform,

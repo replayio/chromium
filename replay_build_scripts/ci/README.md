@@ -1,6 +1,6 @@
 # Chromium CI build setup: design
 
-Scope: Linux x86_64, the elastic build pool's `queue=runtime` hosts (replayio/backend `pulumi/build-machines/elastic_build_pool.ts`), Buildkite pipeline `chromium-build`.
+Scope: Linux x86_64 on the elastic build pool's `queue=runtime` hosts, and macOS arm64 and x86_64 on its `queue=macos` Mac (replayio/backend `pulumi/build-machines/elastic_build_pool.ts`), Buildkite pipeline `chromium-build`. Sections 1 to 10 describe Linux; section 11 what a Mac does differently.
 
 ## 1. Job flow
 
@@ -35,8 +35,10 @@ Paths relative to the repository root.
 
 | File | Purpose |
 |---|---|
-| `.buildkite/pipeline.yml` | the build step, the record -> replay step and the trigger of the devtools e2e suite: plugins, agent tags, the cert through aws-sm with an EXIT trap, the backend pin read from the build's `backend_rev` artifact. Linux only, the default priority, a concurrency group, the timeout exported to the job. No mac, windows or buildevents steps. The logic lives in `ci/job.sh`; only the script fetch of step 2 is inline |
-| `replay_build_scripts/build-pipeline.py` | no-op pipeline for `runtime-build-and-test` (`{"steps": ["wait"]}`): no triggers, no file reads |
+| `.buildkite/pipeline.yml` | the build steps, the record -> replay step and the triggers of the e2e suites: plugins, agent tags, the cert through aws-sm with an EXIT trap, the backend pin read from the build's `backend_rev` artifact. The default priority, a concurrency group per OS, the timeout exported to the job. The macOS steps (section 11) run instead of the Linux ones in a build with `REPLAY_MAC_BUILD=1`. No windows or buildevents steps. The logic lives in `ci/job.sh`; only the script fetch of step 2 is inline |
+| `replay_build_scripts/build-pipeline.py` | the pipeline `runtime-build-and-test` uploads: build-driver-linker for the Linux driver archive when it is not on static.replay.io yet, then `chromium-build`. On `main` or with `BUILD_MAC=1`, also a `chromium-build` build of macOS (`REPLAY_MAC_BUILD=1`), which nothing waits for. When the macOS driver archives are missing, `REPLAY_MAC_DRIVERS=build` has that build trigger build-driver-linker for them first |
+| `replay_build_scripts/ci/mac-host.sh` | the macOS counterpart of `build-in-container.sh` (section 11) |
+| `replay_build_scripts/ci/mac/angle-runtime-shaders.patch` | applied to `third_party/angle` after a Mac's sync (section 11) |
 | `replay_build_scripts/ci/config.sh` | the key and the paths, images and container names that follow from it, the disk minima, the guards `valid_key`, `assert_isolated_root`, `require_free_gb`, and the retry helper `github_read`. The key is worked out once, when the file is sourced, rather than per call |
 | `replay_build_scripts/ci/bootstrap.sh` | step 2 as a file, for steps that fetch it and run it; the `chromium-build` settings step refuses a commit without it. Sparse paths `ci/` and `chrome/VERSION` (the key), the ref an argument, repo-local `gc.auto 0` |
 | `replay_build_scripts/ci/job.sh` | job driver: use lock → stale containers → sync → backend pin → build → logs → upload. Holds the use lock for the whole job, takes `DRIVER_REVISION` from the built commit, stages artifacts under `<key>/jobs/<job>`, collects siso logs, keeps going by default, and reads the backend pin from the checkout rather than from a clone of its own |
@@ -274,3 +276,39 @@ Not shared: checkout, out dir, gclient/cipd state, depot_tools, git object cache
   while the volume is above the minimum.
 - A build, a reclaim on a pool host, the image rebuild a changed Dockerfile
   implies, and the record -> replay step reading `backend_rev` run on CI only.
+
+## 11. macOS agents
+
+A Mac has no image to build in, so `config.sh` names `mac-host.sh` as the place
+the sync and the build run (`BUILD_ENV`). Everything else follows the Linux
+flow, with these differences:
+
+| What | Linux | macOS |
+|---|---|---|
+| sync and build run | in the build image | on the host, with `HOME=<root>/home`, `gc.auto 0` from the environment, and `CHROMIUM_ROOT=<root>` for `container/sync.sh` |
+| depot_tools | the image's, at the Dockerfile's `DEPOT_TOOLS_REVISION` | a clone at the same revision in `~/chromium-checkouts/.depot_tools/<revision>`, bootstrapped once |
+| Xcode | none | `src/build/mac_files/xcode_binaries`, made from the Command Line Tools in `/Library/Developer/CommandLineTools`: what `build/xcode_binaries.yaml` lists, their SDK as `MacOSX.sdk` and `MacOSX<version>.sdk`, and a `Contents/version.plist` naming their version. Made again when they or the list change. `build.cjs` gives gn their SDK version |
+| `.gclient` | `target_os = ["linux"]` | `target_os = ["mac"]`; `gclient revinfo --deps=mac` |
+| ANGLE | unchanged | `mac/angle-runtime-shaders.patch` applied after each sync and reverted before the next: the Command Line Tools have no Metal compiler, so ANGLE compiles its internal shaders when Chromium starts, as it does when cross-compiling |
+| upload | in the tools image | on the host |
+| artifacts | `build_id/linux/x86_64/` | `build_id/macOS/arm64/` (`REPLAY_BUILD_ARM=1`, `out/Release-ARM`) and `build_id/macOS/x86_64/` (`out/Release`) |
+| images and containers | yes | none |
+
+The Command Line Tools install without an Apple ID and come with the EC2 macOS
+images. The Mac's first boot updates them (replayio/backend
+`pulumi/build-machines`). Compiles run on EngFlow, as on Linux: siso's macOS
+config (`build/config/siso/clang_mac.star`) sends them to Linux workers with the
+platform and wrapper of
+`buildtools/reclient_cfgs/chromium-browser-clang/rewrapper_mac.cfg`. After the
+hooks, `container/sync.sh` runs `configure_reclient.py --force`, which writes that
+file and the wrapper and downloads the Linux clang those workers run: the
+`configure_reclient` hook skips all of it without `RBE_service`, which the
+EngFlow setup here does not set. Links run on the Mac.
+
+A Mac job has no timeout of its own: the command stays in the job's process
+group, so Buildkite's step timeout and a cancel stop all of it.
+
+What the agent provides, which `mac-host.sh` checks before anything runs: bash
+5 first on PATH (the scripts run `env bash`: macOS's `/bin/bash` is 3.2), GNU coreutils, findutils and sed first on PATH, `flock`, git 2.46 or newer,
+`node`, `python3`, `rsync`, `aws`, `buildkite-agent`, and the Command Line
+Tools.

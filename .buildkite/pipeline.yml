@@ -16,9 +16,9 @@
 #
 # Per-build switches are env of the Buildkite build (replay_build_scripts/ci/job.sh):
 #   REPLAY_BUILD_MAX_FAILURES (0: keep going, the default; 1: stop at the first
-#   error), REPLAY_SISO_LOCAL_JOBS, REPLAY_SISO_CONFIG, CHROMIUM_CHECKOUT_KEY
-#   for an experiment that wants a checkout of its own, and
-#   CHROMIUM_CHECKOUT_FROM to copy a first checkout from a key the host has.
+#   error), REPLAY_SISO_LOCAL_JOBS, REPLAY_SISO_REMOTE_JOBS, REPLAY_SISO_CONFIG,
+#   CHROMIUM_CHECKOUT_KEY for an experiment that wants a checkout of its own,
+#   and CHROMIUM_CHECKOUT_FROM to copy a first checkout from a key the host has.
 #   The driver and the backend are not among them: they come from the commit's
 #   REPLAY_BACKEND_REV.
 # They are deliberately not given defaults in a step `env` here: step env
@@ -30,6 +30,8 @@ env:
 steps:
   - label: "🔨 Chromium (linux-x86_64)"
     key: "build-chromium-linux-x86_64"
+    # A build with REPLAY_MAC_BUILD=1 builds macOS alone (below).
+    if: &linux-builds build.env("REPLAY_MAC_BUILD") != "1"
     # The agent runs one job at a time, so this is also how long this build can
     # keep another version's waiting. A build that times out is continued by the
     # next one: the out dir and siso's state stay in the checkout.
@@ -52,7 +54,7 @@ steps:
     # The plugins and versions master's build step uses, so the agent needs
     # nothing new. No repository checkout: the job works from a ~70 MB clone of
     # replay_build_scripts/ci, which the command fetches first.
-    plugins:
+    plugins: &build-plugins
       - thedyrt/skip-checkout#v0.1.1: ~
       - seek-oss/aws-sm#v2.3.1:
           region: us-east-2
@@ -75,7 +77,7 @@ steps:
       - "queue=runtime"
       - "runtimeType=chromiumbuild"
     # Artifacts are uploaded by job.sh itself, from the checkout's job directory.
-    command: |
+    command: &build-command |
       set -euo pipefail
       WS="$$PWD"
       trap 'rm -rf "$$WS/engflow.crt" "$$WS/engflow.key" "$$WS/.ci-boot"' EXIT
@@ -128,12 +130,119 @@ steps:
       export ENGFLOW_CERT_FILE="$$WS/engflow.crt" ENGFLOW_KEY_FILE="$$WS/engflow.key"
       .ci-boot/replay_build_scripts/ci/job.sh
 
+  # macOS: a build of its own, with REPLAY_MAC_BUILD=1, which
+  # replay_build_scripts/build-pipeline.py starts on main or with BUILD_MAC=1
+  # and nothing waits for: it needs the Mac, which can take hours to come up and
+  # is billed by the day while it runs (replayio/backend pulumi/build-machines).
+  #
+  # One build per architecture, both on the Mac agent, with the Linux step's
+  # command. job.sh builds on the host there rather than in an image:
+  # mac-host.sh pins depot_tools and makes Xcode from the Command Line Tools
+  # instead. Both architectures share the key's checkout (out/Release and
+  # out/Release-ARM), and so one concurrency group.
+  #
+  # When the macOS drivers of REPLAY_BACKEND_REV are missing, build-pipeline.py
+  # has this build build them first (REPLAY_MAC_DRIVERS=build). A build without
+  # it leaves this step out, and the steps that depend on it run at once: job.sh
+  # reads the pin from the commit.
+  - label: "🔨 macOS drivers"
+    key: "macos-drivers"
+    if: build.env("REPLAY_MAC_BUILD") == "1" && build.env("REPLAY_MAC_DRIVERS") == "build"
+    trigger: "build-driver-linker"
+    build:
+      commit: "${REPLAY_BACKEND_REV}"
+      branch: "${REPLAY_BACKEND_BRANCH}"
+      message: "Triggered from chromium: ${BUILDKITE_MESSAGE}"
+      # The macOS pieces only.
+      env:
+        BUILD_MAC: "1"
+        SKIP_LINUX: "1"
+
+  - label: "🔨 Chromium (macOS-arm64)"
+    key: "build-chromium-macos-arm64"
+    if: &mac-builds build.env("REPLAY_MAC_BUILD") == "1"
+    depends_on:
+      - "macos-drivers"
+    timeout_in_minutes: *timeout
+    concurrency: 1
+    concurrency_group: &mac-group "chromium-build/m157/macos"
+    plugins: *build-plugins
+    env:
+      REPLAY_JOB_TIMEOUT_MINUTES: *timeout
+      AWS_DEFAULT_REGION: us-east-2
+      REPLAY_BUILD_ARM: "1"
+    agents: &mac-agents
+      - "queue=macos"
+      - "os=macos"
+    command: *build-command
+
+  - label: "🔨 Chromium (macOS-x86_64)"
+    key: "build-chromium-macos-x86_64"
+    if: *mac-builds
+    depends_on:
+      - "macos-drivers"
+    timeout_in_minutes: *timeout
+    concurrency: 1
+    concurrency_group: *mac-group
+    plugins: *build-plugins
+    env:
+      REPLAY_JOB_TIMEOUT_MINUTES: *timeout
+      AWS_DEFAULT_REGION: us-east-2
+    agents: *mac-agents
+    command: *build-command
+
+  # An arm recording replays with the x86_64 build, on the Linux replay hosts:
+  # the backend installs <build id>.dmg for any macOS build id, and the two
+  # architectures share their build ids. So the two builds must come from the
+  # same dependencies and carry the same resources, which this compares.
+  - label: "🕵️‍♀️ Verify macOS cross-arch build integrity"
+    key: "verify-macos-cross-arch"
+    if: *mac-builds
+    depends_on:
+      - "build-chromium-macos-arm64"
+      - "build-chromium-macos-x86_64"
+    plugins:
+      - thedyrt/skip-checkout#v0.1.1: ~
+    agents:
+      - "queue=light"
+    command: |
+      set -euo pipefail
+      for arch in arm64 x86_64; do
+        buildkite-agent artifact download "build_id/macOS/$$arch/entries" .
+        buildkite-agent artifact download "build_id/macOS/$$arch/pak-sizes" .
+      done
+      diff -u build_id/macOS/arm64/entries build_id/macOS/x86_64/entries
+      diff -u build_id/macOS/arm64/pak-sizes build_id/macOS/x86_64/pak-sizes
+
+  # On the Mac: the tests record there and replay in the cloud. Not
+  # runtime-fe-end-to-end-tests, as the Linux ones: replayio/devtools' macOS
+  # step there targets agents that no longer exist (queue=runtime,
+  # runtimeType=test), where its job would wait for good. testing-runtime-e2e
+  # (replayio/backend .buildkite/runtime-e2e-tests.yml) runs them on queue=macos.
+  - label: "📝 E2E Tests (macOS-arm64)"
+    trigger: "testing-runtime-e2e"
+    if: *mac-builds
+    depends_on:
+      - "build-chromium-macos-arm64"
+      - "build-chromium-macos-x86_64"
+    build:
+      env:
+        OS: "macos"
+        ARCH: "arm64"
+        RECORD_REPLAY_METADATA_SOURCE_COMMIT_TITLE: "${BUILDKITE_MESSAGE}"
+        RECORD_REPLAY_METADATA_SOURCE_COMMIT_ID: "${BUILDKITE_COMMIT}"
+        RECORD_REPLAY_METADATA_SOURCE_BRANCH: "${BUILDKITE_BRANCH}"
+        RECORD_REPLAY_METADATA_SOURCE_MERGE_ID: "${BUILDKITE_PULL_REQUEST}"
+        RUNTIME_REPO: "${BUILDKITE_PULL_REQUEST_REPO}"
+        CI: "1"
+
   # e2e=true: only linux class with Replay Chromium runtime libs (libnss3); can_replay lacks them.
   # The devtools e2e suite against this build. It resolves which build to test
   # from BUILDKITE_TRIGGERED_FROM_BUILD_*, which Buildkite sets for a trigger
   # step, so the branch default in its build-reason script is not involved.
   - label: "📝 E2E Tests (linux-x86_64)"
     trigger: "runtime-fe-end-to-end-tests"
+    if: *linux-builds
     depends_on:
       - "build-chromium-linux-x86_64"
     build:
@@ -148,6 +257,7 @@ steps:
 
   - label: "📝 Chromium Recording Tests (linux-x86_64)"
     key: "chromium-recording-linux-x86_64"
+    if: *linux-builds
     depends_on:
       - "build-chromium-linux-x86_64"
     timeout_in_minutes: 30

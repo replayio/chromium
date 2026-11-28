@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # One Chromium checkout per Chromium version on a build agent: one directory,
 # CHECKOUT_ROOT (config.sh), holding everything a build of that version keeps
 # there. The version is the key, read from chrome/VERSION (config.sh).
@@ -167,6 +167,10 @@ lru() {
     fi
     echo "$(last_used "$k") key $k"
   done
+  # A Mac builds on the host: it has no images.
+  if [ "$HOST_OS" != linux ]; then
+    return 0
+  fi
   keep=$("$dir/build-image.sh" ref)
   while read -r r; do
     if [ "$r" != "$keep" ]; then
@@ -233,6 +237,16 @@ ensure_root() {
   touch "$CHECKOUT_STAMP"
 }
 
+# The process that has <file> open, or nothing: /proc on Linux, lsof on a Mac,
+# which has no /proc.
+holder_of() {
+  if [ "$HOST_OS" = linux ]; then
+    find /proc/[0-9]*/fd -maxdepth 1 -lname "$1" -print -quit 2>/dev/null || true
+  else
+    { lsof -t -- "$1" 2>/dev/null || true; } | head -n 1
+  fi
+}
+
 # A fetch that was killed (canceled job, timeout) leaves its partial pack as
 # tmp_pack_* in the repository's objects/pack, and nothing removes it: the
 # checkouts never gc, and a full fetch of the fork is ~56 GB. Every repository
@@ -245,7 +259,7 @@ remove_stale_tmp_packs() {
   started=$(mktemp)
   while IFS= read -r -d '' pack; do
     while IFS= read -r -d '' file; do
-      holder=$(find /proc/[0-9]*/fd -maxdepth 1 -lname "$file" -print -quit 2>/dev/null || true)
+      holder=$(holder_of "$file")
       if [ -n "$holder" ]; then
         echo "keeping $file: open ($holder)"
         continue
@@ -273,7 +287,7 @@ remove_stale_git_locks() {
   [ -d "$CHECKOUT_ROOT/src" ] || return 0
   while IFS= read -r -d '' git_dir; do
     while IFS= read -r -d '' file; do
-      holder=$(find /proc/[0-9]*/fd -maxdepth 1 -lname "$file" -print -quit 2>/dev/null || true)
+      holder=$(holder_of "$file")
       if [ -n "$holder" ]; then
         die "$file is open ($holder): another git is running in ${git_dir%/.git}"
       fi
@@ -384,6 +398,17 @@ prefetch_fork_pins() {
   done < "$pins"
 }
 
+# ./gclient, for the OS of this host: a Mac checks out the macOS DEPS.
+install_gclient() {
+  if [ "$HOST_OS" = linux ]; then
+    cp "$dir/gclient" "$CHECKOUT_ROOT/.gclient"
+    return
+  fi
+  sed 's/^target_os = \["linux"\]$/target_os = ["mac"]/' "$dir/gclient" > "$CHECKOUT_ROOT/.gclient"
+  grep -q '^target_os = \["mac"\]$' "$CHECKOUT_ROOT/.gclient" ||
+    die "$dir/gclient has no target_os = [\"linux\"] line to make a macOS one of"
+}
+
 sync() {
   local commit url src=$CHECKOUT_ROOT/src was
   commit=$(git -C "$repo" rev-parse HEAD)
@@ -421,16 +446,16 @@ sync() {
     # what changed: src has no other refs, and fetch negotiates from refs.
     git -C "$src" update-ref refs/ci/fetched "$commit"
   fi
-  cp "$dir/gclient" "$CHECKOUT_ROOT/.gclient"
+  install_gclient
   echo "--- checkout $CHECKOUT_ROOT -> $commit"
   # Removed first and written last, so that a sync killed in the middle leaves a
   # checkout that says so.
   rm -f "$CHECKOUT_SYNCED"
-  # Two container runs with a host fetch between them: the first puts src at the
-  # commit and writes down what its DEPS pin, the second resolves those DEPS.
-  "$dir/build-in-container.sh" -- /ci/container/sync.sh checkout "$FORK_URL" "$commit"
+  # Two runs with a host fetch between them: the first puts src at the commit
+  # and writes down what its DEPS pin, the second resolves those DEPS.
+  "$BUILD_ENV" -- "$BUILD_ENV_CI_DIR/container/sync.sh" checkout "$FORK_URL" "$commit"
   prefetch_fork_pins
-  "$dir/build-in-container.sh" -- /ci/container/sync.sh deps
+  "$BUILD_ENV" -- "$BUILD_ENV_CI_DIR/container/sync.sh" deps
   cat > "$CHECKOUT_SYNCED" <<EOF
 commit=$commit
 synced=$(date -u +%Y-%m-%dT%H:%M:%SZ)

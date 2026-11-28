@@ -24,9 +24,21 @@ def read_pin(file_path):
     return BackendPin(commit=fields[0], branch=fields[1] if len(fields) > 1 else "master")
 
 
-def driver_archive_present(driver_revision):
-    """DriverBuildCheck: True if linux driver archive for this rev is already on S3."""
-    url = f"https://static.replay.io/downloads/linux-recordreplay-{driver_revision}.tgz"
+# The branch macOS builds on without BUILD_MAC=1.
+MAC_BRANCHES = ("main",)
+
+
+def builds_mac():
+    """True if this build starts a macOS build of chromium-build too."""
+    return (
+        os.environ.get("BUILDKITE_BRANCH") in MAC_BRANCHES
+        or os.environ.get("BUILD_MAC") == "1"
+    )
+
+
+def driver_archive_present(archive):
+    """DriverBuildCheck: True if this driver archive is already on S3."""
+    url = f"https://static.replay.io/downloads/{archive}"
     req = urllib.request.Request(url, method="HEAD")
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
@@ -35,26 +47,68 @@ def driver_archive_present(driver_revision):
         return False
 
 
+def driver_build(pin, env):
+    build = {
+        "commit": pin.commit,
+        "branch": pin.branch,
+        "message": "Triggered from chromium: ${BUILDKITE_MESSAGE}",
+    }
+    if env:
+        build["env"] = env
+    return build
+
+
 def driver_step(pin, driver_revision):
     """trigger build-driver-linker, or DriverBuildCheck noop if archive already on S3."""
-    if driver_archive_present(driver_revision):
+    archive = f"linux-recordreplay-{driver_revision}.tgz"
+    if driver_archive_present(archive):
         return {
             "label": "DriverBuildCheck (archive present)",
             "key": "build-driver-linker",
-            "command": (
-                f'echo "DriverBuildCheck: linux-recordreplay-{driver_revision}.tgz already on S3"'
-            ),
+            "command": f'echo "DriverBuildCheck: {archive} already on S3"',
             "agents": ["deploy=true"],
             "plugins": [{"thedyrt/skip-checkout#v0.1.1": None}],
         }
     return {
         "trigger": "build-driver-linker",
         "key": "build-driver-linker",
-        "build": {
-            "commit": pin.commit,
-            "branch": pin.branch,
-            "message": "Triggered from chromium: ${BUILDKITE_MESSAGE}",
-        },
+        "build": driver_build(pin, {}),
+    }
+
+
+def mac_steps(pin, env):
+    """A chromium-build build of macOS, which nothing here waits for.
+
+    It needs the Mac, which can take hours to come up, and the Linux build and
+    whatever waits for this build need none of it. REPLAY_MAC_BUILD=1 selects
+    the macOS steps of .buildkite/pipeline.yml instead of the Linux ones.
+
+    When the macOS drivers of the pin are missing, REPLAY_MAC_DRIVERS=build has
+    that build build them first, with build-driver-linker.
+
+    soft_fail: a failure to create the build does not fail this one.
+    """
+    env = {**env, "REPLAY_MAC_BUILD": "1"}
+    archives = [f"macOS-recordreplay-{pin.commit[:12]}{suffix}.tgz" for suffix in ("", "-arm")]
+    if not all(driver_archive_present(archive) for archive in archives):
+        env.update(REPLAY_MAC_DRIVERS="build", REPLAY_BACKEND_BRANCH=pin.branch)
+    return [
+        {
+            "trigger": "chromium-build",
+            "label": "chromium-build (macOS)",
+            "async": True,
+            "soft_fail": True,
+            "build": chromium_build(env),
+        }
+    ]
+
+
+def chromium_build(env):
+    return {
+        "env": env,
+        "message": "${BUILDKITE_MESSAGE}",
+        "branch": "${BUILDKITE_BRANCH}",
+        "commit": "${BUILDKITE_COMMIT}",
     }
 
 
@@ -77,14 +131,10 @@ def generate_buildkite_pipeline(pin):
             driver_step(pin, driver_revision),
             {
                 "trigger": "chromium-build",
-                "build": {
-                    "env": env,
-                    "message": "${BUILDKITE_MESSAGE}",
-                    "branch": "${BUILDKITE_BRANCH}",
-                    "commit": "${BUILDKITE_COMMIT}",
-                },
+                "build": chromium_build(env),
                 "depends_on": ["build-driver-linker"],
             },
+            *(mac_steps(pin, env) if builds_mac() else []),
         ]
     }
     return json.dumps(pipeline, indent=4)

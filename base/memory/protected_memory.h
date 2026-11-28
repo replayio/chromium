@@ -86,6 +86,7 @@
 #include "base/memory/protected_memory_buildflags.h"
 #include "base/memory/raw_ref.h"
 #include "base/no_destructor.h"
+#include "base/record_replay.h"
 #include "base/synchronization/lock.h"
 #include "base/thread_annotations.h"
 #include "build/build_config.h"
@@ -399,7 +400,12 @@ class BASE_EXPORT AutoWritableMemoryInitializer
   AutoWritableMemoryInitializer() { CHECK(IsSectionStartPageAligned()); }
 #else
   AutoWritableMemoryInitializer() LOCKS_EXCLUDED(WriterData::writers_lock()) {
-    CHECK(IsSectionStartPageAligned());
+    // [RecordReplay] The section stays writable when recording or replaying
+    // (SetMemory in protected_memory_posix.cc), so where it starts doesn't
+    // matter. A replay of an arm64 macOS recording runs the x86_64 build, whose
+    // sections are laid out for 4 KB pages, with the recording's 16 KB ones.
+    CHECK(recordreplay::IsRecordingOrReplaying() ||
+          IsSectionStartPageAligned());
     // This doesn't need to be run on Windows, because the linker can pre-set
     // the memory to read-only.
     AutoLock auto_lock(WriterData::writers_lock());

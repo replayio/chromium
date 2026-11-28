@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # One Buildkite job: build Chromium at this commit, upload the logs and,
 # if it built, the runtime. Runs on the agent, from the job's own clone of
 # this directory (.buildkite/pipeline.yml); "this commit" is that clone's HEAD.
@@ -9,6 +9,8 @@
 #                               0 (default): keep going, report every failure.
 #                               1: stop at the first error.
 #   REPLAY_SISO_LOCAL_JOBS      parallel local steps (default: siso's, the CPU count)
+#   REPLAY_SISO_REMOTE_JOBS     parallel remote steps (default: siso's on Linux,
+#                               500 on a Mac: mac-host.sh)
 #   REPLAY_SISO_CONFIG          siso -config names (default: none)
 # From the pipeline step:
 #   ENGFLOW_CERT_FILE, ENGFLOW_KEY_FILE   EngFlow mTLS client cert and key
@@ -19,11 +21,13 @@
 #   logs/failed-steps.txt       one line per failed step
 #   logs/siso_failure_summary   siso's own report of each failure
 #   logs/siso_output.gz, logs/siso_failed_commands.sh
-#   build_id/linux/x86_64/{build_id,<build id>.symbols.tgz,pak-sizes,entries}
+#   build_id/<platform>/<arch>/{build_id,<build id>.symbols.tgz,pak-sizes,entries}
 #                               upload_build_artifacts.mjs writes these once it
 #                               has uploaded the build and its symbols to S3
-#   build_id/linux/x86_64/backend_rev   the backend commit this build embeds a
-#                               driver of, for the steps that test it
+#   build_id/<platform>/<arch>/backend_rev   the backend commit this build
+#                               embeds a driver of, for the steps that test it
+# <platform>/<arch>: linux/x86_64 on Linux; macOS/x86_64 on a Mac, or
+# macOS/arm64 with REPLAY_BUILD_ARM (build.cjs), each in an out dir of its own.
 set -euo pipefail
 dir=$(dirname "$(readlink -f "$0")")
 # shellcheck source=config.sh
@@ -38,7 +42,14 @@ export REPLAY_BUILD_MAX_FAILURES=${REPLAY_BUILD_MAX_FAILURES:-0}
 exec {key_use}>"$("$dir/checkout.sh" use-lock)"
 flock -s "$key_use"
 
-"$dir/remove-stale-build-containers.sh"
+if [ "$HOST_OS" = linux ]; then
+  "$dir/remove-stale-build-containers.sh"
+  platform=linux arch=x86_64 out_dir=out/Release
+elif [ -n "${REPLAY_BUILD_ARM:-}" ]; then
+  platform=macOS arch=arm64 out_dir=out/Release-ARM
+else
+  platform=macOS arch=x86_64 out_dir=out/Release
+fi
 "$dir/checkout.sh" sync
 
 # Driver and backend come from this commit's REPLAY_BACKEND_REV, however the
@@ -63,11 +74,11 @@ touch "$build_started"
 
 echo "--- :hammer: build"
 status=0
-"$dir/build-in-container.sh" --engflow --require-synced -- node build.cjs 2>&1 | tee "$logs/build.log" || status=$?
+"$BUILD_ENV" --engflow --require-synced -- node build.cjs 2>&1 | tee "$logs/build.log" || status=$?
 
 # siso's own logs, if this build wrote them.
 for name in siso_failure_summary siso_output siso_failed_commands.sh; do
-  file=$CHECKOUT_ROOT/src/out/Release/$name
+  file=$CHECKOUT_ROOT/src/$out_dir/$name
   if [ -f "$file" ] && [ "$file" -nt "$build_started" ]; then
     cp "$file" "$logs/$name"
   fi
@@ -93,6 +104,6 @@ echo "--- :s3: upload"
 # build_id/ goes into this job's directory, where the upload below reads it.
 BUILDKITE_BUILD_CHECKOUT_PATH=$out "$dir/upload-artifacts.sh"
 # Next to build_id: the backend that steps testing this build must use.
-echo "$BACKEND_REV" > "$out/build_id/linux/x86_64/backend_rev"
-( cd "$out" && buildkite-agent artifact upload "build_id/linux/x86_64/**" )
-echo "build id: $(cat "$out/build_id/linux/x86_64/build_id")"
+echo "$BACKEND_REV" > "$out/build_id/$platform/$arch/backend_rev"
+( cd "$out" && buildkite-agent artifact upload "build_id/$platform/$arch/**" )
+echo "build id: $(cat "$out/build_id/$platform/$arch/build_id")"

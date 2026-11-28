@@ -9,6 +9,7 @@
 
 #include <limits>
 #include <memory>
+#include <optional>
 
 #include "base/apple/mach_logging.h"
 #include "base/containers/span.h"
@@ -62,7 +63,7 @@ WaitableEvent::WaitableEvent(ResetPolicy reset_policy,
 }
 
 void WaitableEvent::Reset() {
-  absl::optional<recordreplay::AutoDisallowEvents> disallow;
+  std::optional<recordreplay::AutoDisallowEvents> disallow;
   if (!record_replay_ordered_lock_id_)
     disallow.emplace("WaitableEvent::Reset");
   else
@@ -94,7 +95,7 @@ void WaitableEvent::SignalImpl() {
 }
 
 bool WaitableEvent::IsSignaled() const {
-  absl::optional<recordreplay::AutoDisallowEvents> disallow;
+  std::optional<recordreplay::AutoDisallowEvents> disallow;
   if (!record_replay_ordered_lock_id_)
     disallow.emplace("WaitableEvent::IsSignaled");
 
@@ -104,6 +105,12 @@ bool WaitableEvent::IsSignaled() const {
 }
 
 bool WaitableEvent::IsDefinitelySignaled() const {
+  // Signaling threads set the estimate without ordering, so a replay can read a
+  // different value than the recording did and skip the IsSignaled() call the
+  // recording made.
+  if (recordreplay::IsRecordingOrReplaying()) {
+    return IsSignaled();
+  }
   return signal_estimate_.load(std::memory_order_relaxed) && IsSignaled();
 }
 
