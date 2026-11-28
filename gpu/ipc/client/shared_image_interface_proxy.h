@@ -146,7 +146,11 @@ class SharedImageInterfaceProxy {
 
   const raw_ptr<GpuChannelHost> host_;
   const int32_t route_id_;
-  base::Lock lock_;
+  // [RecordReplay] Ordered, because threads take GpuChannelHost's ordered
+  // deferred message lock while holding it. A replay that hands this lock out
+  // in another order than its recording did leaves its holder waiting for the
+  // ordered lock to go to a thread that is waiting for this one.
+  base::Lock lock_{"SharedImageInterfaceProxy.lock_"};
   uint64_t next_release_id_ GUARDED_BY(lock_) = 0;
   uint32_t last_flush_id_ GUARDED_BY(lock_) = 0;
 
