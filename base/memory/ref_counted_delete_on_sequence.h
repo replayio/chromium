@@ -10,6 +10,7 @@
 #include "base/check.h"
 #include "base/location.h"
 #include "base/memory/ref_counted.h"
+#include "base/record_replay.h"
 #include "base/task/sequenced_task_runner.h"
 
 namespace base {
@@ -53,7 +54,18 @@ class RefCountedDeleteOnSequence : public subtle::RefCountedThreadSafeBase {
   void AddRef() const { AddRefImpl(subtle::GetRefCountPreference<T>()); }
 
   void Release() const {
-    if (subtle::RefCountedThreadSafeBase::Release()) {
+    // [RecordReplay] The last reference is dropped by whichever thread gets
+    // there last, which deletes the object there or posts its deletion to the
+    // owning sequence, both of which a recording notes. Which thread that is
+    // has to be the same when replaying, so decrements are ordered among
+    // threads, as they are for Mojo's driver objects
+    // (mojo/core/ipcz_driver/object.h). The destroying is outside the lock.
+    bool last;
+    {
+      recordreplay::AutoOrderedRelease ordered;
+      last = subtle::RefCountedThreadSafeBase::Release();
+    }
+    if (last) {
       DestructOnSequence();
     }
   }
